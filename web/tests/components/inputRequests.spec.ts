@@ -238,7 +238,8 @@ describe('human input requests', () => {
     const wrapper = hub()
     await flushPromises()
     expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 0, incomplete: true }])
-    expect(wrapper.text()).toContain('first 100')
+    // A read that stopped early says the list changed under it, not that it has a ceiling.
+    expect(wrapper.text()).toContain('The list changed while it was read')
     await button(wrapper, 'Refresh').trigger('click')
     await flushPromises()
     // Unknown is said as unknown: a count withheld read as zero on the rail.

@@ -19,6 +19,7 @@ _EXPECTED_SECONDARY_CONTEXTS = {
         "space": ["planning-space", "work-item"],
     },
     "analytics": {"global": ["work-item"], "space": ["work-item"]},
+    "decisions": {"global": ["work-item"], "space": ["work-item"]},
     "memory": {"global": ["memory-resource"], "space": ["memory-resource", "work-item"]},
     "settings": {"global": ["work-item"], "space": ["work-item"]},
 }
@@ -190,12 +191,12 @@ class ModuleRegistryTests(unittest.TestCase):
         )
 
     def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
-        """The four modules, enabled and fixed, the same from every door."""
+        """The five modules, enabled and fixed, the same from every door."""
 
         payload = platform_modules.modules_payload()
         self.assertEqual("valkama-modules", payload["interface_version"])
         self.assertEqual(
-            ["analytics", "memory", "planning", "settings"],
+            ["analytics", "decisions", "memory", "planning", "settings"],
             [item["manifest"]["module_id"] for item in payload["modules"]],
         )
         for item in payload["modules"]:
@@ -221,7 +222,7 @@ class ModuleRegistryTests(unittest.TestCase):
         # A caller holding the answer cannot change the list behind it.
         payload["modules"][0]["manifest"]["title_key"] = "changed"
         payload["modules"].clear()
-        self.assertEqual(4, len(platform_modules.modules_payload()["modules"]))
+        self.assertEqual(5, len(platform_modules.modules_payload()["modules"]))
         self.assertNotEqual(
             "changed", platform_modules.modules_payload()["modules"][0]["manifest"]["title_key"]
         )

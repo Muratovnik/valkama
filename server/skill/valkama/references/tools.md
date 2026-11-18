@@ -48,16 +48,32 @@ says what it is:
   `awaiting_confirmation`, read from the work under it. In `triage`, `deferred`,
   `completed` or `cancelled` it shows its `state` like any item.
 - `acceptance` is why and when the work was accepted (`basis`: `owner`,
-  `assignment`, `inherited`, `label_rule`, `migrated`; `at`), null while it is
-  not. Work under goals and stages that are all accepted and open is accepted as
-  part of them (`inherited`); a claim of any other work accepts it (`assignment`).
+  `assignment`, `inherited`, `label_rule`, `agent`, `migrated`; `at`), null while
+  it is not. Work under goals and stages that are all accepted and open is accepted
+  as part of them (`inherited`); a claim of any other work accepts it
+  (`assignment`). `agent` is an agent's own decision where the owner's setting
+  leaves it to the agent: a goal you file with no parent is accepted at once on it,
+  or, where the owner decides, stays in `triage` and the answer says
+  `waits_for_owner` with the question they answer. A task you file or move under
+  goals and stages that are all accepted and open, or move out of `triage` into
+  accepted work under them, meets the owner's setting the same way: it is
+  `inherited`, or it waits for their answer, a new one or one moved out of `triage`
+  in `triage` under the goal and one moved under it where it was. While the owner's
+  question whether to do an item stands on it, or over an item with no basis, you
+  neither claim it nor move it anywhere but cancelled (`acceptance_question`). The
+  owner's summary of decisions marks work you accept on `assignment`, and your
+  claim of a task lying in `triage` under such goals and stages. A task lying in
+  `triage` outside them is accepted on `label_rule` when the call that files it, or
+  puts a label on it, gives it a label the owner's rule makes ready.
   Other work an agent files without a `state` stays in `triage` unless it sends
   `acceptance: "assignment"`, on the owner's word; an item with no basis moved to
   `ready`, `active`, `review`, `blocked` or `completed` without it is refused with
   `acceptance`, `force` or not. A move to `triage` takes the basis away. A goal or
   stage is accepted by a transition to `ready`, and accepted out of `triage` or
   `deferred` it accepts the work in `triage` under it, stopping at a deferred goal
-  or stage.
+  or stage. Your acceptance leaves out an item the owner is asked whether to do: it
+  stays in `triage` for their answer, the answer's `warnings` names it, and a goal or
+  stage left there keeps the work under it.
 - `started_at` is when work on it began, `waits_for` the open items blocking it,
   `cancelled_blockers`, only when there are any, the cancelled items still linked
   to block it,
@@ -89,10 +105,10 @@ await confirmation: check each and complete it, as the skill's Close section say
 
 | Tool | Also answers |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `waits_for_owner` (as `create_work_item` gives it) when the owner decides on one of its writes, `waits_for_sessions` (`action`, `point`, `sessions`, `until`) when a cancel waits for the sessions whose work it ends, `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `commits`, `links`, `projects`) |
 
 `claim_ready_work_item` takes the first workable task in the order of work —
@@ -143,6 +159,63 @@ its space's default project when it names none, `project_id`, `display_name`,
 was not read, so `root` and `display_name` are null). The projects of the item's
 space come first, its default one before the others, then the rest, each part by
 id. The claim does not depend on them.
+
+## Writes that wait for the owner
+
+The owner's participation setting, which only the server reads, decides at each of
+these points whether an agent's write is made at once or waits for the owner: a goal
+you file with no parent (`proposed_goal`), a task you file or move into accepted
+goals and stages (`task_in_goal`), a cancel of an item your own work did not file
+(`cancel_outside`) or of work other live sessions do (`cancel_shared`), a removal or
+rewording of a step of a goal or stage (`condition`), the completion of a goal,
+which confirms it (`goal_close`), and the put-off of an accepted one
+(`goal_defer`). Where the setting leaves it to you, the write is made and the
+owner's summary of decisions marks it. Act the same at any setting: the answer says
+which happened.
+
+A write that waits writes nothing of itself: the item stays as it was, and the
+answer's `waits_for_owner` is `{action, point, question, what}`, `what` saying the
+write as the summary would. The same write sent again while it waits answers the
+same and writes nothing; another write of that point on the item is refused with
+`[participation]` until its question is withdrawn. Your session follows the item
+from then on, unless it holds it. The owner's answer makes the write, as the
+owner's, if it still applies: the events that record it end with `as asked by`
+and your holder label, and the action ends `carried_out`, or `declined` on an
+answer that keeps things as they are. One that no longer applies ends `dropped`,
+with an `action_dropped` event `<point>: <why>`, and so does one whose item closes
+or merges, or that a person claims or moves meanwhile. Expiring the question,
+which only your session can do, takes the write back (`withdrawn`). A question
+Valkama asked itself, such as one about a put-off goal that came back, names
+`Valkama` as its asker and is withdrawn by no session.
+
+The question's `purpose` and the options of its choice field `answer`: `goal`
+(`do`, `later` with `until`, `drop` with `cancels`), `task` (`do`, `later`, `out`,
+`drop`), `cancel` (`cancel` with `cancels`, `keep`), `condition` (`allow`, `keep`)
+and `confirm` (`confirm`, `leave`); the option you asked for is recommended. Read
+whole, the question carries `action`: `id`, `point`, `asked_by`, `asked_at`,
+`reason`, `proposed` (the `until`, the steps `removed` and `rewritten`, or the
+`summary`), `outcome`, and for `goal` and `cancel` the `cancel_list` as it stands,
+with its `list_token`; the compact form carries `purpose` and `action.point`. A
+`cancel` or a `drop` over a list that changed since you asked is refused with
+`cancel_list` and the new list, for the owner to confirm.
+
+A cancel of work other live sessions do asks each of them a request of purpose
+`consent`, by a call of Valkama's for you. Where the owner leaves it to the agent,
+the answer is `waits_for_sessions` (`action`, `point`, `sessions`, `until`, a day
+on), and the cancel is made as Valkama's write once each agreed, moved its work
+out or ended, or goes to the owner on an objection or after the day; where the
+owner decides, they are asked beside the sessions. A cancel whose
+`transition.following` names an answered question of the owner on the item or
+above it follows that answer and waits only for the sessions. Asked yourself,
+answer with `answer_work_item_request`: `answers: {"answer": "agree"}`,
+`{"answer": "object", "reason": "…"}`, or `{"answer": "moved_out"}` once `move_out`
+took your task out of what the cancel closes.
+
+`checklist_reason`, up to 500 characters, says why a change of a goal's or stage's
+steps removes or rewrites one. A step sent by its `id` with `clarifies: true` and a
+new text only says the same better: it is written at once, at any setting, and the
+summary of decisions shows it. A call whose `transition` closes the item while
+another of its writes waits is refused whole with `close_with_waiting`.
 
 ## Claude Code's auto mode
 
@@ -398,7 +471,7 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 | an active state | a holder after the move: a claim on the item or on one of its steps; `force` does not carry this |
 | ready, active, review, blocked or completed, for an item with no basis | a basis of acceptance (`acceptance`), which `force` does not carry |
 | a deferred state | refused: put work off with `defer` |
-| anything but a cancelled state, for an agent, while the owner is asked whether to take put-off work up again | refused with `acceptance_question`, which `force` does not carry |
+| anything but a cancelled state, for an agent, out of triage or deferred, while the owner is asked whether to do the item or take it up again, on it or over an item with no basis | refused with `acceptance_question`, which `force` does not carry |
 | active, review or blocked, for a goal or stage | refused: a goal or stage is accepted (ready), completed or cancelled |
 | a triage state, for an accepted open goal or stage | refused: an accepted goal or stage is completed or cancelled |
 | a completed state, for a goal or stage never accepted, from triage or deferred | refused: a goal or stage that was not accepted is not done; not doing it is a cancellation |
@@ -416,7 +489,8 @@ A move to review warns, and is not refused, when the item has no `session` ref,
 no attached commit and no write a confirmed session made.
 An agent's move to a completed or cancelled state is also refused with
 `person_spoke` while a person acted on the item since an agent last wrote to it;
-the refusal names what they did. A `comment` sent in the same
+the refusal names what they did. The answer a cancel's `transition.following` names
+is left out; any other act still refuses it. A `comment` sent in the same
 `apply_work_item_changes` call does not lift it. An agent's move that completes an
 item or takes it out of review is refused with `question` while a question to the
 owner is open on it, `force` or not; cancelling is not.
@@ -448,8 +522,15 @@ match is weak, and an item with no attached commit cannot show.
 | `workflow_guard` with `[question]` | Wait for the owner's answer, or withdraw a question you asked. |
 | `workflow_guard` with `[children]` | Close, cancel or move out what is open under it; it then awaits confirmation. |
 | `cancel_list` | Read the list, then send the same transition with `cancels` set to `list_token`. |
-| `owner_only` | The owner answers this question in Valkama: leave it. |
-| `[purpose]` | A question with a purpose (review, confirm, return) takes one of its answers, and its answer is not changed or declined. |
+| `owner_only` | The owner answers this question in Valkama: leave it. Every question with a purpose but a `consent` request is theirs, and so is every question a waiting write carries. |
+| `not_asker` | Only the session that asked withdraws the question; one Valkama asked ends with the write that ends its wait. |
+| `[purpose]` | A question with a purpose (review, confirm, return, goal, task, cancel, condition), a `consent` request and a question a waiting write carries take one of their answers, and their answer is not changed or declined. |
+| `[participation]` | Another write of that point waits for the owner on the item: wait for the answer, or withdraw that question first. Send `following` only with a cancel, naming an answered question of the owner on the item or above it. |
+| `close_with_waiting` | Close the item after the answer, or send the waiting change in a call of its own. |
+| `[checklist]` naming `checklist_reason` | Say why the change removes or rewrites a step of the goal or stage, or send a step that only says the same better by its `id` with `clarifies: true`. |
+| `[decision]` | Recommend an answer in every required field, or ask a `question` when there is nothing to recommend. |
+| `[consent]` | Answer `agree`, `object` with a `reason`, or `moved_out` once `move_out` took your task out of what the cancel closes. |
+| `queue_off` | The refusal says `the owner hands out work in MAIN by hand: take the item they named with claim_work_item`: do that. |
 | `workflow_guard` or a claim refused with `[acceptance_question]` | Wait for the owner's answer, then take it. |
 | `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, or an open item other than this one and the goals and stages over it. |
 | `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
@@ -464,7 +545,8 @@ match is weak, and an item with no attached commit cannot show.
 ## Claims
 
 A claim is a lease on the session that took it: `live` while that session is
-active and showed a sign of life in the last 3 days, `stale` once it ended or
+active and showed a sign of life within the lease term of the item's space,
+`lease_quiet_days` (3 days unless the owner changed it), `stale` once it ended or
 went quiet, `unconfirmed` when no session was proved. A launch's claim is a
 lease of the session the launch started, which the launch proves
 (`source: launch`): it is `live` while the launched agent runs and follows the
@@ -473,7 +555,7 @@ or resumes it. On a fresh launch of a client that announces its own session once
 it runs, as Codex does, it is the launch's (`launch-…`): the agent's own session
 does not hold that claim, and a resume reattaches to the session the agent
 announced. An unconfirmed claim, the owner's own from the browser included,
-lapses after 3 days without an event on the item. An open question to the owner on the item stops the count of silence
+lapses after that many days without an event on the item. An open question to the owner on the item stops the count of silence
 for every hold on it; an end still counts. A session's claimed steps lapse with
 its lease. `claim_work_item` releases a stale or lapsed claim at once, and taking
 it over needs no `force`; a live or unconfirmed claim held by another needs
@@ -482,7 +564,7 @@ session alone for 12 hours after its end, so a resumed session reads `live` agai
 with its claims in place: until then `claim_ready_work_item` does not hand the
 item out and a server start does not release it. The history names why a claim
 was released: `session-ended`, `session-missing` or `lease-expired`, the last for
-3 quiet days. A step's claim lapses with its session by the same rules, and
+a quiet lease term. A step's claim lapses with its session by the same rules, and
 releasing a lapsed claim releases the steps its session holds there, each written
 as `checklist_released` with the step's text; a hold of the session making the
 call stays. The release marks every step the lapsed holder ticked
@@ -519,6 +601,43 @@ option of it (a verdict's word under a verdict); it leaves `group` out or repeat
 its parent's, and it is shown and answered only while the parent's answer holds
 that option. The fields of one question fit in 64 KiB as stored.
 
+### A review of many points
+
+A review of many points is one `verdict` field per proposal: the owner
+accepts it, puts it off or rejects it, and may comment on it or give an own
+variant. The steps or the ways of a point are a field `under` it,
+`{"field": "p4", "option": "accept"}`, which stands right after it and is shown
+and answered only while the point is accepted; a `group` per area replaces a
+field per executor. Everything the owner chooses from is an option: never a step
+in a label or a description, never `p4a` in a field shared by several points.
+Put `recommended`, with its `why`, wherever you have one: a button drafts from it.
+Two points, one with its steps and one with its way:
+
+```json
+[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
+  "options": [], "group": "Checks", "recommended": "accept",
+  "why": "All fourteen false alarms came from one rule."},
+ {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
+  "under": {"field": "p4", "option": "accept"},
+  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true,
+               "why": "The marks show which cases the narrower rule must keep."},
+              {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
+ {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
+  "required": false, "options": [], "group": "Web code", "recommended": "accept",
+  "why": "Six files passed 400 lines this month."},
+ {"id": "p13-way", "label": "How", "type": "choice", "required": true,
+  "under": {"field": "p13", "option": "accept"},
+  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
+               "why": "The rule already exists; no file moves."},
+              {"id": "split_first", "label": "Split the files first"}]}]
+```
+
+A field `under` a later field, a field of a type other than `verdict`, `choice` or
+`multi_choice`, a field that is itself under another, or an option its parent lacks
+is refused, naming the field and how to put it right.
+
+### Answering and reading a question
+
 `answer_work_item_request` takes `id`, `answers` (field id to answer),
 `expected_revision` and optionally `own` (field id to an own variant, at most 8000
 characters), `field_notes` (field id to a comment, at most 2000 characters),
@@ -547,7 +666,8 @@ open question changes nothing about it.
 The `questions` part of `get_work_item` is
 `{"total": 6, "open": 2, "items": […], "truncated": true, "addressed_open": 0}`, at
 most 5 items, the open ones first and then the newest closed; a request asked of an
-agent session stays out of them, and `addressed_open` counts the open ones.
+agent session stays out of them, and `addressed_open` counts the open ones. The card's
+`parts` counts them: read the part when you come back to an item that has open ones.
 `list_work_item_requests` takes `space`, `id` (one item), `status`,
 `answered_after` (an ISO timestamp with a timezone), `limit`, `offset`, `full` and
 `addressed`, and its page says `truncated` and `next_offset`. `addressed: true`
@@ -563,8 +683,14 @@ answer completes the item or returns it to ready, and withdrawing it, which only
 asking session does, returns it to ready too. The question Valkama asks to confirm a
 goal or stage nobody confirmed (purpose `confirm`) is the owner's too, and nobody
 withdraws it; the owner's answer completes it or leaves it to the next session that
-takes work in its space. With `answered_after` the oldest answer comes first, and a page runs
-past `limit` rather than part two answers of one time. Both give a compact form
+takes work in its space. So is every question of purpose `goal`, `task`, `cancel` or
+`condition`, and every question a write that waits for the owner carries, whatever its
+purpose ([Writes that wait for the owner](#writes-that-wait-for-the-owner)); none of
+them, nor a `consent` request, is declined or has its answer changed (`[purpose]`).
+With `answered_after` the oldest answer comes first, and a page runs past `limit`
+rather than part two answers of one time: to read answers in portions, keep the last
+`answered_at` you read, pass it as `answered_after`, and ask again while `truncated`
+is true; a changed answer comes again. Both give a compact form
 unless `full` is true:
 
 ```json
@@ -601,11 +727,14 @@ shown verdict fields given neither a verdict nor an own variant), which stand
 whole before any row. Its `answer` has a row only for a field under another, which
 carries `under` (the parent's id) and, for a `multi_choice`, `of` (how many
 options it offers) and no label, and for a verdict with a comment or an own
-variant. `previous` has the same shape.
+variant. `previous` has the same shape. Treat an undecided point as not decided,
+never as accepted; a point with its own variant is decided and in neither list.
 
 A list under a comment adds `comment_id` and `undecided`: `["items"]` while nothing
 on it is ticked, which a send with none ticked leaves it, and `[]` once something
-is. `previous` has it too.
+is. `previous` has it too. Treat `["items"]` as not decided, never as every option
+refused; `status` tells a list not sent yet (`pending`) from one sent empty
+(`answered`).
 
 `by_person` is true when the latest call that closed or changed the question came
 through Valkama's interface, false for any other call that answered, changed,
@@ -621,46 +750,12 @@ first, each with `version`, its parts, `answered_by`, `answered_at` and
 `by_person`), `by_person` and the rest of the record. `get_work_item_request` also
 gives `replies`, the question's whole thread, oldest first.
 
-### A review of many points
-
-A review of many points is one `verdict` field per proposal: the owner
-accepts it, puts it off or rejects it, and may comment on it or give an own
-variant. The steps or the ways of a point are a field `under` it,
-`{"field": "p4", "option": "accept"}`, which stands right after it and is shown
-and answered only while the point is accepted; a `group` per area replaces a
-field per executor. Everything the owner chooses from is an option: never a step
-in a label or a description, never `p4a` in a field shared by several points.
-Put `recommended`, with its `why`, wherever you have one: a button drafts from it.
-Two points, one with its steps and one with its way:
-
-```json
-[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
-  "options": [], "group": "Checks", "recommended": "accept",
-  "why": "All fourteen false alarms came from one rule."},
- {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
-  "under": {"field": "p4", "option": "accept"},
-  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true,
-               "why": "The marks show which cases the narrower rule must keep."},
-              {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
- {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
-  "required": false, "options": [], "group": "Web code", "recommended": "accept",
-  "why": "Six files passed 400 lines this month."},
- {"id": "p13-way", "label": "How", "type": "choice", "required": true,
-  "under": {"field": "p13", "option": "accept"},
-  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
-               "why": "The rule already exists; no file moves."},
-              {"id": "split_first", "label": "Split the files first"}]}]
-```
-
-A field `under` a later field, a field of a type other than `verdict`, `choice` or
-`multi_choice`, a field that is itself under another, or an option its parent lacks
-is refused, naming the field and how to put it right.
-
 ### Asking another session
 
-`create_work_item_request` with `addressees` (1 to 5 top-level session ids, as
-`participants`, `subscribers` and holders name them) asks those sessions instead of
-the owner: one request each, with the call's `kind`, `prompt`, `fields` and
+Ask a session when you need its answer before you go on — a choice, a yes or no —
+and only one that is working. `create_work_item_request` with `addressees` (1 to 5
+top-level session ids, as `participants`, `subscribers` and holders name them, the
+holder among them) asks those sessions instead of the owner: one request each, with the call's `kind`, `prompt`, `fields` and
 `expires_at`, and the answer is `{"requests": [{"request_id": "…", "addressee":
 "…"}]}`. Your session is the one that asked, whichever of its agents called. Each
 request wakes the session it asks; its answer wakes yours as `your question answered
@@ -669,7 +764,9 @@ with `invalid_request`, naming the session where there is one: a call that prove
 no agent session, an unknown session, one that ended or went quiet past its lease,
 your own, a subagent's, one named twice, more than 5 or none, and `execution_id` or
 `session_id` beside `addressees`. A session asks one other at most 3 times an hour:
-the fourth is refused with `ask_limit`. The batch's `questions` take `addressees` too, and answer with `requests`.
+the fourth is refused with `ask_limit`, so ask once with every field you need. For a
+free exchange, write a comment with `awaits_reply` instead. The batch's `questions`
+take `addressees` too, and answer with `requests`.
 
 ## Merging
 

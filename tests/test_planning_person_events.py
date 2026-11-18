@@ -993,6 +993,96 @@ class CloseGuardTests(Harness):
         )
 
 
+class FollowingAnAnswerTests(Harness):
+    """A cancel that names the owner's answer in `following` is not refused by that answer;
+    any other act of a person since the agent's last write still refuses it."""
+
+    def worked(self) -> None:
+        self.agent("claim_work_item", id=self.ref)
+        self.summary()
+
+    def cancel(self, following: str | None = None) -> dict:
+        transition: dict = {"state": "cancelled", "reason": "The owner dropped it"}
+        if following is not None:
+            transition["following"] = following
+        return self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            summary={"done": "Dropped", "next": "Nothing"},
+            transition=transition,
+        )
+
+    def answer(self, question: str, which: str) -> None:
+        self.person(
+            "/api/planning/request/answer",
+            id=question,
+            answers={"which": which},
+            expected_revision=0,
+        )
+
+    def test_a_cancel_following_the_answer_goes_through_without_a_write_between(self) -> None:
+        self.worked()
+        question = self.ask()["request_id"]
+        self.answer(question, "a")
+        self.assertEqual(["question_answered"], self.kinds())
+        answer = self.cancel(following=question)
+        self.assertEqual("cancelled", answer["state"]["key"])
+        self.assertNotIn("waits_for_owner", answer)
+
+    def test_another_act_of_a_person_after_the_answer_still_refuses_the_cancel(self) -> None:
+        self.worked()
+        question = self.ask()["request_id"]
+        self.answer(question, "a")
+        self.says("Keep the long road as well")
+        message = self.refused_agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            summary={"done": "Dropped", "next": "Nothing"},
+            transition={
+                "state": "cancelled",
+                "reason": "The owner dropped it",
+                "following": question,
+            },
+        )
+        self.assertIn("[person_spoke]", message)
+        self.assertIn("Keep the long road as well", message)
+        self.assertNotIn("The long road", message, "the answer named in following is left out")
+        self.assertEqual("dev", self.status())
+
+    def test_another_answer_after_the_named_one_refuses_it_and_the_named_one_is_left_out(
+        self,
+    ) -> None:
+        self.worked()
+        named = self.ask()["request_id"]
+        other = self.ask()["request_id"]
+        self.answer(named, "a")
+        self.answer(other, "b")
+        message = self.refused_agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            summary={"done": "Dropped", "next": "Nothing"},
+            transition={"state": "cancelled", "reason": "The owner dropped it", "following": named},
+        )
+        self.assertIn("[person_spoke]", message)
+        self.assertIn("The short road", message)
+        self.assertNotIn("The long road", message)
+        self.assertEqual("dev", self.status())
+
+    def test_a_cancel_without_following_is_still_refused_by_the_answer(self) -> None:
+        self.worked()
+        question = self.ask()["request_id"]
+        self.answer(question, "a")
+        message = self.refused_agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            summary={"done": "Dropped", "next": "Nothing"},
+            transition={"state": "cancelled", "reason": "The owner dropped it"},
+        )
+        self.assertIn("[person_spoke]", message)
+        self.assertIn("The long road", message)
+        self.assertEqual("dev", self.status())
+
+
 class AfterAPersonClosedTests(Harness):
     def test_the_next_write_on_a_cancelled_item_says_so_once(self) -> None:
         self.agent("claim_work_item", id=self.ref)

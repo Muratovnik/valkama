@@ -410,13 +410,19 @@ _STANDS = (
     " AND substr(v.last_seen, 1, 19) >= ?) OR (v.status = 'ended'"
     " AND substr(v.ended_at, 1, 19) > ?)))"
 )
-#: `subscriptions.QUIET_PERIOD`, `leases.ENDED_GRACE` and `leases.QUIET_PERIOD` in seconds,
-#: held equal by a test: the hook does not import the planning package to read three numbers.
+#: `subscriptions.QUIET_PERIOD` and `leases.ENDED_GRACE` in seconds, held equal by a
+#: test: the hook does not import the planning package to read two numbers.
 SUBSCRIPTION_QUIET_SECONDS = 14 * 24 * 3600
 ENDED_GRACE_SECONDS = 12 * 3600
 #: How long a session may be silent and still work on its tree (`watched`), as a
-#: participant may (`planning.leases.session_live`).
-LEASE_QUIET_SECONDS = 3 * 24 * 3600
+#: participant may (`planning.leases.session_live`): the common `lease_quiet_days` of
+#: the owner's participation setting (`lease_quiet_seconds`). Its default, least and
+#: most, held equal to `planning.participation.NUMBERS` by a test.
+LEASE_QUIET_DAYS = (3, 1, 60)
+_LEASE_QUIET = (
+    "SELECT value FROM participation_settings"
+    " WHERE planning_space_id IS NULL AND key = 'lease_quiet_days'"
+)
 _ITEMS = (
     "SELECT w.work_item_id, s.key, w.number, w.title, w.claim_ref, w.checklist, w.revision,"
     " (SELECT MAX(e.id) FROM work_item_events e WHERE e.work_item_id = w.work_item_id),"
@@ -640,13 +646,34 @@ def watched(conn: sqlite3.Connection, session_id: str) -> frozenset[str]:
     package, which it does not load to answer a tool call.
     """
 
-    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - LEASE_QUIET_SECONDS))
+    quiet = lease_quiet_seconds(conn)
+    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - quiet))
     if conn.execute(_LIVE, (session_id, since)).fetchone() is None:
         return frozenset()
     suffix = holder_suffix(session_id, None)
     return frozenset(
         str(row[0]) for row in conn.execute(_WATCHED, (session_id, suffix, MOST_DEPTH))
     )
+
+
+def lease_quiet_seconds(conn: sqlite3.Connection) -> int:
+    """The common quiet period of a lease in seconds, as `planning.participation` reads it.
+
+    A stored value its bounds refuse reads as no row, as there; so does a store
+    without the table.
+    """
+
+    import _sqlite3
+
+    try:
+        row = conn.execute(_LEASE_QUIET).fetchone()
+    except _sqlite3.OperationalError:
+        row = None
+    days, least, most = LEASE_QUIET_DAYS
+    text = "" if row is None else str(row[0])
+    if text.isdigit() and least <= int(text) <= most:
+        days = int(text)
+    return days * 24 * 3600
 
 
 class _Tree:
@@ -919,7 +946,8 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
 
     A list on a comment asked or withdrawn is no question (`_no_lists`). A request asked
     of a session is told on an item's own path only to the session that asked it, and
-    only what another session or a person made of it; the session asked hears it through
+    only what another session or a person made of it, so not its asking where Valkama's
+    call asked for this session's agent (a waiting action's); the session asked hears it through
     the tree's news (`_feed`), and nobody else hears it, its holders and those who follow
     the item included. Its asking by this session's own subagent is no question to the
     owner, so the orchestrator gets no line of it either. Its answer is the one the
@@ -938,6 +966,9 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
                 continue
             asker = person_events.author_of(conn, item, found)
             if asker is None or asker[0] != session_id:
+                continue
+            if found["kind"] == "question_asked":
+                # Valkama's call asked it for this session's agent: its own asking.
                 continue
             if found["kind"] == "question_answered":
                 found["answers"] = found["answered_you"] = True

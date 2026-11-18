@@ -80,6 +80,7 @@ export const en = {
       planning: 'Work',
       sessions: 'Sessions',
       analytics: 'Analytics',
+      decisions: 'Agent decisions',
       improvements: 'Improvements',
       skills: 'Skills',
       memory: 'Memory',

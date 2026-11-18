@@ -14,6 +14,7 @@ from server.executions import service as executions
 from server.planning import (
     api,
     calls,
+    exact_api,
     model,
     person_events,
     request_model,
@@ -21,6 +22,7 @@ from server.planning import (
     service,
     tools,
 )
+from tests.registry_fixtures import registry_bytes
 
 
 def field(identity: str = "reply", kind: str = "text", required: bool = True) -> dict:
@@ -440,6 +442,99 @@ class PlanningRequestTests(unittest.TestCase):
         self.assertIsNone(comments[-1]["checklist_item_text"])
 
 
+class OpenQuestionPagesTests(unittest.TestCase):
+    """The person's list of questions reads in pages of up to 200; a search keeps 100."""
+
+    PATH = "/api/modules/planning/requests"
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.path = str(Path(directory.name) / "store.sqlite3")
+        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        service.create_planning_space(self.conn, name="Requests", key="REQ")
+        self.item = service.create_work_item(self.conn, space="REQ", title="Pick a direction")
+        self.conn.commit()
+
+    def read(self, path: str, **parameters: str) -> dict:
+        found = exact_api.handle_get(
+            self.conn,
+            self.path,
+            path,
+            {name: [value] for name, value in parameters.items()},
+            registry_reader=lambda: registry_bytes([]),
+        )
+        assert found is not None
+        return found[1]
+
+    def refused(self, path: str, **parameters: str) -> tuple[int, str, str]:
+        with self.assertRaises(api.PlanningHttpError) as caught:
+            self.read(path, **parameters)
+        refusal = caught.exception
+        return refusal.status, refusal.code, refusal.message
+
+    def test_the_open_questions_read_in_pages(self) -> None:
+        service.create_planning_space(self.conn, name="Other", key="OTHER")
+        other = service.create_work_item(self.conn, space="OTHER", title="Choose a name")
+        # 250 open questions, the two spaces taking turns, each asked a second after the last.
+        asked = []
+        for index in range(250):
+            reference = (self.item if index % 2 else other)["reference"]
+            record = requests.create(
+                self.conn, reference, kind="question", prompt="What next?", fields=[field()]
+            )
+            at = f"2026-11-01T00:{index // 60:02d}:{index % 60:02d}.000000Z"
+            self.conn.execute(
+                "UPDATE work_item_requests SET created_at = ? WHERE request_id = ?",
+                (at, record["request_id"]),
+            )
+            asked.append(record["request_id"])
+        self.conn.commit()
+        newest_first = asked[::-1]
+
+        first = self.read(self.PATH, scope_kind="global", status="pending", limit="200")
+        second = self.read(
+            self.PATH, scope_kind="global", status="pending", limit="200", offset="200"
+        )
+        pages = [
+            (len(page["items"]), page["total"], page["has_more"], page["limit"])
+            for page in (first, second)
+        ]
+        self.assertEqual([(200, 250, True, 200), (50, 250, False, 200)], pages)
+        read = [entry["request"]["request_id"] for entry in first["items"] + second["items"]]
+        self.assertEqual(newest_first, read)
+        self.assertEqual(
+            {"REQ", "OTHER"},
+            {entry["target"]["space_ref"]["space_key"] for entry in second["items"]},
+        )
+        # A page asked for past the end is empty and says so.
+        past = self.read(self.PATH, scope_kind="global", status="pending", offset="250")
+        self.assertEqual(([], 250, False), (past["items"], past["total"], past["has_more"]))
+        self.assertEqual(
+            (400, "invalid_request", "limit must be between 1 and 200"),
+            self.refused(self.PATH, scope_kind="global", limit="201"),
+        )
+        self.assertEqual(
+            (400, "invalid_request", "offset must be a non-negative integer"),
+            self.refused(self.PATH, scope_kind="global", offset="-1"),
+        )
+
+    def test_a_search_keeps_its_ceiling_of_a_hundred(self) -> None:
+        path = "/api/modules/planning/search"
+        self.assertEqual(
+            (400, "invalid_request", "limit must be between 1 and 100"),
+            self.refused(path, q="direction", limit="101"),
+        )
+        found = self.read(path, q="direction", limit="100")
+        self.assertEqual(
+            [self.item["reference"]], [hit["item"]["reference"] for hit in found["items"]]
+        )
+
+
 #: Codex proves its session in `_meta`, the shortest door in a test.
 ASKER = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 
@@ -543,10 +638,10 @@ class ClosingEndsQuestionsTests(unittest.TestCase):
         asked = self.ask()
         other = str(service.create_work_item(self.conn, space="CLO", title="c")["reference"])
         elsewhere = requests.create(
-            self.conn, other, kind="decision", prompt="Keep it?", fields=[field()]
+            self.conn, other, kind="decision", prompt="Keep it?", fields=[field(required=False)]
         )["request_id"]
         decided = requests.create(
-            self.conn, self.ref, kind="decision", prompt="Ship?", fields=[field()]
+            self.conn, self.ref, kind="decision", prompt="Ship?", fields=[field(required=False)]
         )["request_id"]
         self.conn.commit()
         self.person(

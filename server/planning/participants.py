@@ -11,12 +11,13 @@ through it. A task has no participants; it has a holder.
 
 Live is one rule, whatever made the session a participant: the session half of a
 live lease (`leases.session_live`). It has a row, it has not ended or failed, and it
-was seen within `leases.QUIET_PERIOD`. An ended session works on nothing from the
-moment it ended, with no grace: its claim stands through `leases.ENDED_GRACE` in case
-it comes back, but it can neither hear nor answer. Resumed, it is a participant again
-while its claim or its subscription stands. A subscription outlives a silent session
-by its own rule and still carries the item's news to it when it returns, but makes
-no participant of it.
+was seen within the common quiet period of a lease (`leases.quiet_period`): a session
+works in several spaces, so no one space's period is its own. An ended session works
+on nothing from the moment it ended, with no grace: its claim stands through
+`leases.ENDED_GRACE` in case it comes back, but it can neither hear nor answer.
+Resumed, it is a participant again while its claim or its subscription stands. A
+subscription outlives a silent session by its own rule and still carries the item's
+news to it when it returns, but makes no participant of it.
 
 Nothing here is stored. The holders and the subscriptions are, and a second copy
 would drift from them, so every read derives the participants afresh. The steps'
@@ -31,7 +32,7 @@ import sqlite3
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
-from . import calls, item_tree, leases, model
+from . import calls, item_tree, leases, model, participation
 
 #: How many participants a container lists, and how many held tasks each names.
 MOST_PARTICIPANTS = 50
@@ -98,6 +99,16 @@ def sessions(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
     return [entry["session"] for entry in _live(conn, work_item_id, chain)]
 
 
+def working(conn: sqlite3.Connection, row: sqlite3.Row) -> list[str]:
+    """The live sessions that work on the item of `row` now: a goal's or a stage's
+    participants, and those that hold a task, by its claim or an open step of it."""
+
+    identity = str(row["work_item_id"])
+    if str(row["kind"]) == model.CONTAINER_KIND:
+        return sessions(conn, identity)
+    return [entry["session"] for entry in _live(conn, identity, ())]
+
+
 def heard(conn: sqlite3.Connection, work_item_id: str) -> bool:
     """Whether a live session hears this item: a participant of it or of any container over it.
 
@@ -153,6 +164,7 @@ def _live(conn: sqlite3.Connection, root: str, followed: Iterable[str]) -> list[
     if not found:
         return []
     rows = {str(row["id"]): row for row in conn.execute(_SESSIONS, (json.dumps(sorted(found)),))}
+    settings = participation.load(conn)
     listed = [
         {
             "session": session,
@@ -163,7 +175,7 @@ def _live(conn: sqlite3.Connection, root: str, followed: Iterable[str]) -> list[
             "last_seen": rows[session]["last_seen"],
         }
         for session, entry in found.items()
-        if leases.session_live(rows.get(session))
+        if leases.session_live(rows.get(session), settings=settings)
     ]
     listed.sort(key=lambda entry: (entry["label"], entry["session"]))
     return listed[:MOST_PARTICIPANTS]

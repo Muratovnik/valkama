@@ -268,7 +268,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         body = {
             **self.refs["primary"],
             "id": "SAME-1",
-            "kind": "decision",
+            "kind": "question",
             "prompt": "May this proceed?",
             "fields": [
                 {

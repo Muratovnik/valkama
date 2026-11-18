@@ -21,8 +21,8 @@ did. A record also says which open items block it, `waits_for`, by reference, an
 which cancelled ones are still linked to block it, `cancelled_blockers`.
 
 A tree also holds what the take-next queue asks of an item and the items over it
-(`queue.withheld`): each item's category, what blocks each, and which items an open
-question to the owner holds up.
+(`queue.withheld`): each item's category, what blocks each, which items an open
+question to the owner holds up, and which goals and stages wait to be cancelled.
 
 The rule is stated once, here, over a `Tree` of loaded facts, and every read asks
 it: one item's record loads the tree below that item, and a read of many items
@@ -85,6 +85,15 @@ _WAITS_IN_SPACES = _WAITS.format(
     " WHERE planning_space_id IN (SELECT value FROM json_each(?))"
 )
 _WAITS_ON_ITEMS = _WAITS.format(targets="SELECT value FROM json_each(?)")
+#: The items of the spaces named and the items named, each as one JSON array, whose
+#: cancel waits for the owner or for the sessions it asked (`pending`).
+_CANCELLING = (
+    "SELECT DISTINCT a.work_item_id FROM pending_actions a"
+    " JOIN work_items i ON i.work_item_id = a.work_item_id"
+    " WHERE a.outcome IS NULL AND a.point IN ('cancel_outside', 'cancel_shared')"
+    " AND (i.planning_space_id IN (SELECT value FROM json_each(?))"
+    " OR a.work_item_id IN (SELECT value FROM json_each(?)))"
+)
 
 
 def _facts(conn: sqlite3.Connection, query: str) -> str:
@@ -131,6 +140,9 @@ class Tree:
     #: The items an open question to the owner holds up (`questions.asked`); None
     #: where the tree was loaded without them, as for what a link's end derives.
     asked: frozenset[str] | None = None
+    #: The items whose cancel waits (`cancelling`); None where the tree was loaded
+    #: without them, as `asked`.
+    waiting_cancel: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         children: dict[str, list[str]] = {}
@@ -150,9 +162,19 @@ class Tree:
         children = self.children.get(identity, ())
         if not children and not node.lost_child:
             return "not_started"
-        if not any(not self.nodes[child].closed for child in children):
+        if not self._open_under(identity):
             return "awaiting_confirmation"
         return "in_progress" if self._first_start(identity) is not None else "not_started"
+
+    def confirmable(self, identity: str) -> bool:
+        """Whether completing the item now confirms it: an accepted open container with
+        nothing open under it, awaiting its confirmation or with nothing under it at all."""
+
+        node = self.nodes.get(identity)
+        return node is not None and node.accepted_open and not self._open_under(identity)
+
+    def _open_under(self, identity: str) -> bool:
+        return any(not self.nodes[child].closed for child in self.children.get(identity, ()))
 
     def started_at(self, identity: str) -> str | None:
         """When the item started: a task's own record, a container's earliest descendant's."""
@@ -211,6 +233,13 @@ class Tree:
             raise LookupError("this tree was loaded without the questions to the owner")
         return identity in self.asked
 
+    def cancel_waits(self, identity: str) -> bool:
+        """Whether a cancel of this item waits for the owner or for the sessions it asked."""
+
+        if self.waiting_cancel is None:
+            raise LookupError("this tree was loaded without the cancels that wait")
+        return identity in self.waiting_cancel
+
     def _first_start(self, identity: str) -> str | None:
         found: str | None = None
         pending = list(self.children.get(identity, ()))
@@ -256,8 +285,25 @@ def _waits(rows: Iterable[sqlite3.Row]) -> dict[str, dict[str, tuple[str, ...]]]
     }
 
 
+def cancelling(
+    conn: sqlite3.Connection, *, spaces: Iterable[str] = (), items: Iterable[str] = ()
+) -> frozenset[str]:
+    """The items of these spaces and these items whose cancel waits, in one read; none in
+    a store an earlier build wrote, which kept no write waiting."""
+
+    try:
+        rows = conn.execute(
+            _CANCELLING, (json.dumps(sorted(set(spaces))), json.dumps(sorted(set(items))))
+        ).fetchall()
+    except sqlite3.OperationalError as error:
+        if str(error) != "no such table: pending_actions":
+            raise
+        return frozenset()
+    return frozenset(str(row[0]) for row in rows)
+
+
 def of_spaces(conn: sqlite3.Connection, space_ids: Iterable[str]) -> Tree:
-    """Every item of these spaces: three statements, whatever the spaces hold."""
+    """Every item of these spaces: five statements, whatever the spaces hold."""
 
     named = sorted(set(space_ids))
     spaces = json.dumps(named)
@@ -267,6 +313,7 @@ def of_spaces(conn: sqlite3.Connection, space_ids: Iterable[str]) -> Tree:
         waits=blockers["waits"],
         cancelled=blockers["cancelled"],
         asked=questions.asked(conn, spaces=named),
+        waiting_cancel=cancelling(conn, spaces=named),
     )
 
 
@@ -381,4 +428,5 @@ def of_item(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> Tree:
         cancelled=blockers["cancelled"],
         over=over,
         asked=frozenset() if node.closed else questions.asked(conn, items=[identity]),
+        waiting_cancel=frozenset() if node.closed or not over else cancelling(conn, items=over),
     )

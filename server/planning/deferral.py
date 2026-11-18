@@ -16,8 +16,8 @@ the row in the same write.
   sends the waiting of a merged item to the item it merged into.
 - **Coming back.** `waiting` names who waits on items that close or go, and `due`
   what the clock or a close the service did not see has brought; `reach` marks a
-  condition that came for an item the owner is asked about instead (`asked` finds
-  that question).
+  condition that came for an item the owner is asked about instead
+  (`questions.acceptance_asked` finds that question).
 - **Reading.** `record` is the item's `deferred` field, `card` its short form on the
   card, and `returned` the field of an item that came back to triage.
 
@@ -37,7 +37,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from . import item_tree, leases, model, questions
+from . import item_tree, leases, model
 
 #: The tag of a refusal of putting work off.
 TAG = "deferral"
@@ -342,15 +342,6 @@ def reach(conn: sqlite3.Connection, work_item_id: str, at: str, *, gone: bool = 
             (at, work_item_id),
         )
     return not came
-
-
-def asked(conn: sqlite3.Connection, work_item_id: str) -> str | None:
-    """The id of the open question whether to take the item up again, or None."""
-
-    for row in questions.open_rows(conn, work_item_id):
-        if row["purpose"] == RETURN:
-            return str(row["request_id"])
-    return None
 
 
 def record(conn: sqlite3.Connection, work_item_id: str) -> dict | None:

@@ -142,14 +142,35 @@ _STEP = {
         },
     ]
 }
+_STEPS_SAID = (
+    "The steps, in order: text, or {text, done}. A step whose text"
+    " repeats one the item has is that step, keeping its item_id, claim and tick;"
+    " a step sent done=true that was not done is recorded as done by you, as a"
+    " tick would record it."
+)
 _STEPS = {
     "type": "array",
     "maxItems": model.MAX_CHECKLIST,
-    "description": "The steps, in order: text, or {text, done}. A step whose text"
-    " repeats one the item has is that step, keeping its item_id, claim and tick;"
-    " a step sent done=true that was not done is recorded as done by you, as a"
-    " tick would record it.",
+    "description": _STEPS_SAID,
     "items": _STEP,
+}
+#: The steps an edit sends, which may name a step by its item_id and say a new text only
+#: clarifies it.
+_EDITED_STEPS = {
+    **_STEPS,
+    "description": _STEPS_SAID
+    + " A step sent by its item_id as id is that step under a new text; clarifies: true"
+    " says the new text only clarifies its wording.",
+    "items": {
+        "anyOf": [
+            {"type": "string"},
+            {
+                "type": "object",
+                "properties": {"id": _STR, "text": _STR, "done": _BOOL, "clarifies": _BOOL},
+                "required": ["text"],
+            },
+        ]
+    },
 }
 #: Rows a list or a search answers with when the caller names no limit.
 COMPACT_LIMIT = 50
@@ -279,8 +300,8 @@ _TRANSITION_FORM = (
     " the list of what would close and a list_token (cancel_list): send the same"
     " transition with cancels set to that token to cancel it all; a list that changed"
     " meanwhile is refused again with the new one. Entering deferred is refused: use"
-    " defer. An agent moves an item the owner is asked whether to take up again only"
-    " to cancelled (acceptance_question)."
+    " defer. An agent moves an item the owner is asked whether to do or to take up"
+    " again only to cancelled (acceptance_question)."
     " A cancelled state needs only the summary, saying why the work stopped; its undone"
     " steps stay open. force carries a refusal through and records it, except executor,"
     " acceptance, deferred, children, question, review_question, cancel_list,"
@@ -292,7 +313,8 @@ _TRANSITION_FORM = (
     " ends the item's pending questions and lists, expired as item_completed or"
     " item_cancelled. Reopening restores no claim and no question. An"
     " agent's close is refused with person_spoke while a person acted on the item in"
-    " the interface since an agent last wrote to it; the refusal quotes it."
+    " the interface since an agent last wrote to it; the refusal quotes it. The answer a"
+    " cancel's transition.following names does not count there."
 )
 #: A list the owner ticks under a root comment, a report or a summary: a question of
 #: one multi_choice field that nobody waits for.
@@ -421,8 +443,10 @@ TOOLS = [
         " worked itself; once accepted it shows state null and its container_state."
         " Without state, an item under goals and stages that are all accepted and open"
         " is accepted as part of them; another an agent files starts in triage unless"
-        " acceptance accepts it. Accepted, a task starts in ready and a goal or stage"
-        " stands accepted at once. A named state meets the refusals a move there does,"
+        " acceptance accepts it. A goal you propose, or a task you file in an accepted"
+        " goal, may wait for the owner: the answer says waits_for_owner and the item"
+        " stays in triage until they answer. Accepted, a task starts in ready and a goal"
+        " or stage stands accepted at once. A named state meets the refusals a move there does,"
         " and a new item is never created in review, blocked, completed or cancelled:"
         " create it, then move it there with transition (new_item)."
         " A goal you create is followed for your session from the start, as subscribe"
@@ -552,8 +576,8 @@ TOOLS = [
         " open goal or stage shows state null and container_state: not_started,"
         " in_progress or awaiting_confirmation. workable says whether its space's queue may"
         " give it now and withheld why not: goal_or_stage, not_ready, held, waits,"
-        " question, no_start, ancestor_triage, ancestor_deferred, ancestor_waits or"
-        " ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
+        " question, no_start, ancestor_triage, ancestor_deferred, ancestor_cancelling,"
+        " ancestor_waits or ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
         " silent, or, for a claim no session proved, the owner's own included, if the item"
         " stays quiet; null while an open question to the owner stops that count. A"
         " checklist step with by_previous_holder was ticked by a holder whose claim"
@@ -738,7 +762,9 @@ TOOLS = [
         " their words about this work, to read before the next step, each text whole up to"
         " 1500 characters and marked cut past them."
         " It carries waiting when a person's words on a goal or stage above the work found"
-        " nobody working there: read them before you start.",
+        " nobody working there: read them before you start. Refused while the owner has not"
+        " answered whether the item, or the goal or stage over an item not yet accepted, is"
+        " to be done (acceptance_question).",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -762,6 +788,7 @@ TOOLS = [
         " session's folder (session_space in list_planning_spaces). within (a goal or"
         " stage, at any depth), label and project narrow it; project keeps the tasks that"
         " name that project. A task of any space is claimed by number with claim_work_item."
+        " Refused with queue_off where the owner hands out work by hand."
         " The claim starts the task as claim_work_item does. The answer names the root of"
         " each project the task changes in project_roots: read each one's instructions"
         " before editing it. Answers with nothing when no task is workable; a record's"
@@ -877,7 +904,16 @@ TOOLS = [
         " changed, and from_person when a person acted on the item since an agent"
         " last wrote, each text whole up to 1500 characters and marked cut past them."
         " The call is one write: its comment does not lift a closing"
-        " transition's person_spoke refusal.",
+        " transition's person_spoke refusal. Some writes are the owner's to make, by a"
+        " setting only the server reads: such a write is not made, the answer names it in"
+        " waits_for_owner with the question the owner answers, and the server makes it"
+        " then if it still applies. A cancel of work other sessions hold may wait for them"
+        " instead (waits_for_sessions). A call that closes the item while another of its"
+        " writes waits is refused whole. checklist_reason says why a step of a goal or stage"
+        " is removed or rewritten; a step sent by its id with clarifies: true only clarifies"
+        " its wording and is written at once. transition.following names the owner's answer a"
+        " cancel follows, which is no act of a person against that cancel. While the owner has not answered whether an item is to be done,"
+        " only a cancel moves it out of triage (acceptance_question).",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -964,8 +1000,14 @@ TOOLS = [
                 " instead. Leaving out a claimed or completed step is refused, naming"
                 " it; force discards it explicitly. applied.checklist lists every"
                 " item_id.",
-                "properties": {"items": _STEPS, "force": _FORCE},
+                "properties": {"items": _EDITED_STEPS, "force": _FORCE},
                 "required": ["items"],
+            },
+            "checklist_reason": {
+                "type": "string",
+                "maxLength": service.STEPS_REASON_LIMIT,
+                "description": "With checklist only: why it removes a step of a goal or stage,"
+                " or rewrites one without clarifies. Required then; the owner reads it.",
             },
             "checklist_ticks": {
                 "type": "array",
@@ -1162,6 +1204,14 @@ TOOLS = [
                         " as cancelled, the claims that ended as released and the work"
                         " nothing blocks any more as freed.",
                     },
+                    "following": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "With a cancel only: the request_id of the owner's"
+                        " answered question, on this item or a goal or stage over it, that"
+                        " the cancel follows from. Such a cancel asks the owner nothing, and"
+                        " that answer does not count as a person's act against it.",
+                    },
                 },
                 "required": ["state"],
             },
@@ -1287,8 +1337,9 @@ TOOLS.extend(
             "Ask for a human answer",
             "Create a typed question or decision on an item. The fields of one question fit in"
             " 64 KiB as stored. A review is a verdict field per proposal, its steps or ways in"
-            " a field under it, and a group per area. Does not change workflow or execution"
-            " lifecycle. addressees asks other agent sessions instead of the person: up to"
+            " a field under it, and a group per area. A decision recommends an answer in every"
+            " required field. It may come back answered by that recommendation: then act on"
+            " the answer. Does not change workflow or execution lifecycle. addressees asks other agent sessions instead of the person: up to"
             f" {requests.MOST_ADDRESSEES} top-level session ids, as participants, subscribers"
             " and holders name them. Each gets its own request, which wakes it; its answer"
             f" wakes you. A session is asked at most {requests.MOST_ASKS_PER_HOUR} times an"
@@ -1391,9 +1442,11 @@ TOOLS.extend(
             " answered only by that session, its conversation or any of its subagents; any other"
             " caller, the interface included, is refused with not_addressed. A request whose"
             " addressee ended or went quiet reads expired with session_gone. A question with a"
-            " purpose (review, confirm, return) carries its answer out in the same write, and"
-            " is never declined or changed. Only the owner answers it, in Valkama (owner_only),"
-            " and only the session that asked withdraws it (not_asker).",
+            " purpose (review, confirm, return, goal, task, cancel, condition), or one a waiting"
+            " write carries, carries its answer out in the same write, and is never declined or"
+            " changed. Only the owner answers it, in Valkama (owner_only),"
+            " and only the session that asked withdraws it (not_asker). A consent request is"
+            " answered once, by the session it asks.",
             WRITES,
             {
                 "id": _STR,
@@ -1435,7 +1488,9 @@ TOOLS.extend(
             "Explicitly withdraw a pending request, retaining its record. A request asked of a"
             " session, and a question with a purpose, are withdrawn only by the session that"
             " asked, from any of its agents; others are refused with not_asker. Withdrawing the"
-            " question of review returns its item to ready, started as it was.",
+            " question of review returns its item to ready, started as it was. Expiring the"
+            " question of a write that waits for the owner takes that write back; only the"
+            " session that asked can.",
             WRITES,
             {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
             ["id", "expected_revision"],

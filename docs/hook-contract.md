@@ -2123,10 +2123,13 @@ that holds a task decides:
    it goes nowhere, and the answer names those that fit, or every task of the
    level when none does;
 3. none at either level: it goes to the task the session last moved into a
-   review or completed state, within the last 30 minutes, by the same two
-   levels, when that task's projects hold the commit's project. Entering review
-   ends the claim, so a commit made just after it would otherwise find no task.
-   Otherwise the commit goes nowhere and stays among the commits on no card.
+   review or completed state, by the same two levels, when that task's projects
+   hold the commit's project. The move counts within the period the task's own
+   space sets in the participation setting `recent_close_minutes`, 30 minutes
+   by default; a newer move past its own space's period does not hide an older
+   one within its own. Entering review ends the claim, so a commit made just
+   after it would otherwise find no task. Otherwise the commit goes nowhere and
+   stays among the commits on no card.
 
 Only tasks: nobody holds a goal or a stage. An attachment gives the task the
 commit's project with the source `commits`, unless the task names it already.

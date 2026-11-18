@@ -37,7 +37,10 @@ const { t } = useI18n()
 
 /** What a block's top may lie past the line it is brought to and still have reached it. */
 const REACHED = 1
-/** The list stops at 100 requests, so the count's room is for three digits. */
+/**
+ * The list is read whole, so its count has no ceiling: the room is kept for three digits, and a
+ * fourth grows the count toward the title, moving nothing else.
+ */
 const WIDEST = 888
 /** Where a block is answered, before the comment's press that ends a question's label. */
 const ANSWER = 'input:not([disabled]):not([tabindex="-1"]), textarea:not([disabled])'

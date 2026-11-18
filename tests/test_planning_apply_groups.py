@@ -29,6 +29,23 @@ BATCH = "apply_work_item_changes"
 UPDATE = "/api/planning/work-item/update"
 COMMENT = "/api/planning/work-item/comment"
 QUESTION = {"kind": "question", "prompt": "Which path?", "fields": FIELDS}
+#: A decision: it recommends an answer in its one required field.
+DECISION = {
+    "kind": "decision",
+    "prompt": "Which path?",
+    "fields": [
+        {
+            "id": "path",
+            "label": "Which path?",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": "near", "label": "Near", "recommended": True},
+                {"id": "far", "label": "Far"},
+            ],
+        }
+    ],
+}
 SUMMARY = {"done": "The change", "next": "Nothing"}
 #: A move into review: it asks the owner what to check.
 REVIEW = {"state": "review", "to_check": "The path chosen"}
@@ -385,7 +402,7 @@ class CommentsGroupTests(BatchCase):
 
 class QuestionsGroupTests(BatchCase):
     def test_a_question_is_the_single_tools_question_and_is_named_in_applied(self) -> None:
-        asked = {**QUESTION, "kind": "decision", "expires_at": "2099-01-01T09:30:00Z"}
+        asked = {**DECISION, "expires_at": "2099-01-01T09:30:00Z"}
         single = self.agent("create_work_item_request", id=self.twin, author="one", **asked)
 
         answer = self.apply(author="one", questions=[asked, QUESTION])

@@ -34,8 +34,10 @@ level that holds anything decides:
   none holding its space's default one; with several such, or none, the commit
   goes nowhere and the answer names them, or every task held when none fits;
 - none at either level: to the task the session closed last, into review or
-  completed, within `RECENT_CLOSE`, the same two levels deciding, when its
-  projects hold the commit's; otherwise nowhere, and the answer recalls the rule.
+  completed, within the period its own space sets (`recent_close_minutes` of
+  the participation setting, 30 by default), the same two levels deciding, when
+  its projects hold the commit's; otherwise nowhere, and the answer recalls the
+  rule. The setting is read once for the whole write (`participation.load`).
 
 An attachment gives the task the commit's project with the source `commits`
 (`item_projects.put_from_commit`) and one `commit_attached` event, both signed
@@ -79,15 +81,26 @@ from typing import Any, TypeVar
 from .. import git_worktrees
 from ..hooks import commit_records, notify
 from ..projects import project_registry
-from . import calls, held, item_projects, leases, model, read_model, request_model, service
+from . import (
+    calls,
+    held,
+    item_projects,
+    leases,
+    model,
+    participation,
+    read_model,
+    request_model,
+    service,
+)
 
 #: The tool a client hook's own call is bound under (`calls.bind`): what it writes is
 #: Valkama's, and the session and agent of the commit live on the commit's row.
 HOOK_TOOL = "commit-hook"
 #: Who an attachment the server makes is signed by, in its row and its event.
 AUTHOR = calls.VALKAMA
-#: How long after the session closed a task a commit holding nothing still goes to it.
-RECENT_CLOSE = 30 * 60
+#: The number of the participation setting that says how many minutes after the session
+#: closed a task a commit holding nothing still goes to it, read by the task's space.
+CLOSE_PERIOD = "recent_close_minutes"
 #: The categories a close moves into: review, since entering it ends the claim, and
 #: completed. Cancelled work takes no commit.
 CLOSED_CATEGORIES = ("review", "completed")
@@ -98,8 +111,10 @@ SHORT_HASH = 9
 SUBJECT_LIMIT = 72
 
 #: The newest move of a session's confirmed call, or of one holder of it, into a state
-#: of `CLOSED_CATEGORIES` on a task, since a time; and how many whole minutes ago. A
-#: move logs the key of the state it reached, before `: ` and a note when there is one.
+#: of `CLOSED_CATEGORIES` on a task, within the period of the task's own space; and how
+#: many whole minutes ago. The period is in minutes: `:periods` maps each space that
+#: sets its own to it, and every other space reads `:period`, the common one. A move
+#: logs the key of the state it reached, before `: ` and a note when there is one.
 _RECENT = (
     "SELECT w.work_item_id, p.key, w.number,"
     " CAST((julianday(:now) - julianday(e.created_at)) * 1440 AS INTEGER)"
@@ -114,7 +129,8 @@ _RECENT = (
     " AND {agent} AND e.action = 'transitioned'"
     " AND st.category IN (SELECT value FROM json_each(:categories))"
     " AND w.kind IN (SELECT value FROM json_each(:kinds))"
-    " AND julianday(e.created_at) >= julianday(:now) - :window / 86400.0"
+    " AND julianday(e.created_at) >= julianday(:now) - coalesce("
+    "(SELECT value FROM json_each(:periods) WHERE key = w.planning_space_id), :period) / 1440.0"
     " AND julianday(e.created_at) <= julianday(:now)"
     " ORDER BY e.id DESC LIMIT 1"
 )
@@ -195,11 +211,15 @@ class _Level:
 
 
 class _Decision:
-    """The holds and the registry one `take` reads, each once, for every commit in it."""
+    """The holds and the registry one `take` reads, each once, for every commit in it;
+    `settings` is the write's one snapshot of the participation setting."""
 
-    def __init__(self, conn: sqlite3.Connection, hook: Hook) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, hook: Hook, settings: participation.Settings
+    ) -> None:
         self.conn = conn
         self.hook = hook
+        self.settings = settings
         self._holds: dict[tuple[str, str | None], list[_Task]] = {}
         self._listing: project_registry.RegistryResult | None = None
 
@@ -213,9 +233,9 @@ class _Decision:
         if key not in self._holds:
             session = self.hook.session_id
             rows = (
-                held.held_by_agents(self.conn, session)
+                held.held_by_agents(self.conn, session, settings=self.settings)
                 if level.holder == "agents"
-                else held.held_by_holder(self.conn, session, level.agent)
+                else held.held_by_holder(self.conn, session, level.agent, settings=self.settings)
             )
             tasks = [
                 _Task(
@@ -238,8 +258,11 @@ class _Decision:
         return any(root["project_id"] == project_id for root in roots)
 
     def recent(self, level: _Level) -> tuple[_Task, int] | None:
-        """The task this level closed last within `RECENT_CLOSE`, and how many minutes ago."""
+        """The task this level closed last within the period its own space sets, and how
+        many minutes ago: a newer close past its space's period hides no older one within
+        its own."""
 
+        spaces = (space for space in self.settings.own_values if space is not None)
         found = self.conn.execute(
             _RECENT.format(agent=_AGENT_CLAUSES[level.holder]),
             {
@@ -250,7 +273,10 @@ class _Decision:
                 "agent": level.agent,
                 "categories": json.dumps(CLOSED_CATEGORIES),
                 "kinds": json.dumps(sorted(model.TASK_KINDS)),
-                "window": RECENT_CLOSE,
+                "periods": json.dumps(
+                    {space: self.settings.number(space, CLOSE_PERIOD) for space in spaces}
+                ),
+                "period": self.settings.number(None, CLOSE_PERIOD),
             },
         ).fetchone()
         if found is None:
@@ -319,6 +345,7 @@ def _take(conn: sqlite3.Connection, entries: list[_Entry], reader: str | None) -
     """
 
     taken = Taken()
+    settings = participation.load(conn)
     batch = sorted(
         [*entries, *_earlier(conn, entries)],
         key=lambda entry: (
@@ -338,7 +365,7 @@ def _take(conn: sqlite3.Connection, entries: list[_Entry], reader: str | None) -
         ours = reader is None or hook.session_id == reader
         lines = taken.lines if ours else []
         if record["rewrite"] is None:
-            decision = decisions.setdefault(hook.session_id, _Decision(conn, hook))
+            decision = decisions.setdefault(hook.session_id, _Decision(conn, hook, settings))
             agent = None if entry.leftover else agent_of(hook, record)
             changed = _record(conn, decision, record, agent, replacing, lines)
         else:
@@ -724,25 +751,45 @@ def _owner(record: dict, key: str) -> tuple[str, str] | None:
 
 #: How many commits one close names at most; `unreported_total` counts them all past it.
 UNREPORTED_MOST = 20
+#: The point of the owner's setting at which an agent's close waits for their answer.
+HELD_CLOSE = "goal_close"
 #: How long one root's repository may take to say what was made in it.
 NET_SECONDS = 5.0
 #: What the net reads of each commit: its hash, committer time and address, and subject.
 _NET_FORMAT = "--format=%H%x00%cI%x00%ce%x00%s"
 #: When the call that took the item's claim was received: the lease's `acquired_at`.
 _CLAIM_RECEIVED = "SELECT received_at FROM execution_events WHERE id = ?"
-#: The newest claim or takeover of a step, by its text, or of the item, by a confirmed
-#: call of one session.
-_STEP_TAKEN = (
-    "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
-    " WHERE e.work_item_id = ? AND e.detail = ?"
-    " AND e.action IN ('checklist_claimed', 'checklist_taken_over')"
-    " AND c.session_id = ? AND c.identity_state = ?"
+#: Whose takes open a task's window: the task itself.
+_THE_TASK = "taken_on(id) AS (SELECT :item)"
+#: Whose takes open a goal's or stage's window: every task under it, at any depth.
+#: `UNION` keeps each once, so a cycle in a damaged store ends.
+_TASKS_UNDER = (
+    "under(id) AS (SELECT work_item_id FROM work_items WHERE parent_id = :item"
+    " UNION SELECT w.work_item_id FROM under u JOIN work_items w ON w.parent_id = u.id),"
+    " taken_on(id) AS (SELECT u.id FROM under u JOIN work_items i ON i.work_item_id = u.id"
+    " WHERE i.kind <> :goal_or_stage)"
 )
+#: The newest claim or takeover of each item of `taken_on` by confirmed calls of one
+#: session, a row for each item that has one.
 _ITEM_TAKEN = (
     "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
-    " WHERE e.work_item_id = ? AND e.action IN ('claimed', 'taken_over')"
-    " AND c.session_id = ? AND c.identity_state = ?"
+    " JOIN taken_on t ON t.id = e.work_item_id WHERE e.action IN ('claimed', 'taken_over')"
+    " AND c.session_id = :session AND c.identity_state = :proved GROUP BY e.work_item_id"
 )
+#: The same of each step of each item of `taken_on`, a step matched by its text as the
+#: event of its claim records it.
+_STEP_TAKEN = (
+    "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " JOIN taken_on t ON t.id = e.work_item_id"
+    " WHERE e.action IN ('checklist_claimed', 'checklist_taken_over')"
+    " AND e.detail IN (SELECT substr(json_extract(s.value, '$.text'), 1, 120)"
+    "  FROM work_items i, json_each(i.checklist) s WHERE i.work_item_id = e.work_item_id)"
+    " AND c.session_id = :session AND c.identity_state = :proved"
+    " GROUP BY e.work_item_id, e.detail"
+)
+#: The takes that open a task's window, and a goal's or stage's, each in one statement.
+_TAKES_OF_TASK = f"WITH RECURSIVE {_THE_TASK} {_ITEM_TAKEN} UNION ALL {_STEP_TAKEN}"
+_TAKES_UNDER = f"WITH RECURSIVE {_TASKS_UNDER} {_ITEM_TAKEN} UNION ALL {_STEP_TAKEN}"
 
 
 @dataclass(frozen=True)
@@ -812,13 +859,26 @@ def before_transition(conn: sqlite3.Connection, reference: str) -> Before | None
 
 
 def after_transition(before: Before | None, answer: Mapping[str, Any]) -> None:
-    """Note the window of a move into review or completed that `before` found one for."""
+    """Note the window of a move into review or completed that `before` found one for.
+
+    An agent's close of a goal the owner's setting keeps for their confirmation is not
+    made, and its answer says it waits (`waits_for_owner` at `HELD_CLOSE`): the window
+    is noted all the same, as the close would have had it, because the owner's answer
+    that makes the close later is no agent's write and runs no net.
+    """
 
     found = _WINDOWS.get()
-    state = answer.get("state")
-    if found is None or before is None or before.since is None or not isinstance(state, dict):
+    if found is None or before is None or before.since is None:
         return
-    if state["category"] in CLOSED_CATEGORIES and state["state_id"] != before.state_id:
+    state = answer.get("state")
+    waits = answer.get("waits_for_owner")
+    held = isinstance(waits, Mapping) and waits.get("point") == HELD_CLOSE
+    moved = (
+        isinstance(state, dict)
+        and state["category"] in CLOSED_CATEGORIES
+        and state["state_id"] != before.state_id
+    )
+    if held or moved:
         found.append(Window(before.work_item_id, before.since, before.session))
 
 
@@ -831,12 +891,24 @@ def window_start(conn: sqlite3.Connection, row: sqlite3.Row) -> int | None:
        still holds a step does not matter: a step ticked in the closing call, or before
        it, has no claim left to read, and the take is what the session made.
     3. Else no window: a session that took neither the item nor a step made nothing for it.
+
+    A goal or stage has no holder, so rules 1 and 2 never reach the card itself: its
+    window starts at the earliest take of rule 2 read over every task under it, at any
+    depth, and those tasks' steps, and rule 3 holds when the session took none of them.
+    The window so takes in the commits made between the close of the last task and the
+    confirmation of the goal.
     """
 
+    goal_or_stage = str(row["kind"]) == model.CONTAINER_KIND
     # A store an earlier build wrote, read as it is, has no `claim_call_id` (`leases`);
     # `in row` would search a Row's values, not its names.
     columns = row.keys()
-    if row["claim_ref"] and "claim_call_id" in columns and row["claim_call_id"] is not None:
+    if (
+        not goal_or_stage
+        and row["claim_ref"]
+        and "claim_call_id" in columns
+        and row["claim_call_id"] is not None
+    ):
         received = conn.execute(_CLAIM_RECEIVED, (int(row["claim_call_id"]),)).fetchone()
         claimed = leases.moment(received[0]) if received is not None else None
         if claimed is not None:
@@ -844,16 +916,17 @@ def window_start(conn: sqlite3.Connection, row: sqlite3.Row) -> int | None:
     session = calls.confirmed_session()
     if session is None:
         return None
-    takes = [
-        conn.execute(_ITEM_TAKEN, (row["work_item_id"], session, calls.CONFIRMED)).fetchone()[0]
-    ]
-    takes += [
-        conn.execute(
-            _STEP_TAKEN, (row["work_item_id"], step["text"][:120], session, calls.CONFIRMED)
-        ).fetchone()[0]
-        for step in model.checklist(row["checklist"])
-    ]
-    starts = [moment for moment in map(leases.moment, takes) if moment is not None]
+    takes = conn.execute(
+        _TAKES_UNDER if goal_or_stage else _TAKES_OF_TASK,
+        {
+            "item": str(row["work_item_id"]),
+            "goal_or_stage": model.CONTAINER_KIND,
+            "session": session,
+            "proved": calls.CONFIRMED,
+        },
+    )
+    moments = (leases.moment(taken) for (taken,) in takes)
+    starts = [moment for moment in moments if moment is not None]
     return int(min(starts).timestamp()) if starts else None
 
 

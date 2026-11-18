@@ -59,6 +59,8 @@ _NEW = _New()
 #: are new in each probe, and a fixed key such as a singleton's is replaced, since
 #: the write is `INSERT OR REPLACE`, so no row a store already holds collides.
 _ROWS: dict[str, dict[str, object]] = {
+    # The event it marks is the new rowid each probe takes.
+    "agent_decisions": {"point": "decision", "what": "probe"},
     "analytics_surface_uses": {"day": "0001-01-01", "kind": "page_open", "count": 1},
     "commits": {"project_id": _NEW, "hash": "0" * 40, "reported_at": "probe"},
     "execution_sessions": {"execution_id": _NEW, "session_id": _NEW, "relation": "launched"},
@@ -71,7 +73,27 @@ _ROWS: dict[str, dict[str, object]] = {
         "expected_effect": "probe",
         "status": "starting",
     },
+    "label_settings": {
+        "planning_space_id": _NEW,
+        "label": "probe",
+        "ready": 1,
+        "updated_at": "probe",
+    },
     "owner_alert_settings": {"key": "settings", "record_json": "{}", "updated_at": "probe"},
+    "participation_settings": {
+        "planning_space_id": _NEW,
+        "key": "queue",
+        "value": "on",
+        "updated_at": "probe",
+    },
+    "pending_actions": {
+        "action_id": _NEW,
+        "work_item_id": _NEW,
+        "point": "finding",
+        "action_json": "{}",
+        "asked_call": 0,
+        "created_at": "probe",
+    },
     "planning_spaces": {
         "planning_space_id": _NEW,
         "name": _NEW,
@@ -200,6 +222,14 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"hash": "0" * 6}, {"hash": "0" * 65}, {"hash": "A" * 40}),
         ({"hash": "0" * 7}, {"hash": "f" * 64}),
     ),
+    ("label_settings", "ready IS NOT NULL OR description IS NOT NULL"): (
+        ({"ready": None},),
+        ({"ready": None, "description": "probe"},),
+    ),
+    ("pending_actions", "(outcome IS NULL) = (ended_at IS NULL)"): (
+        ({"outcome": "dropped"}, {"ended_at": "probe"}),
+        ({"outcome": "dropped", "ended_at": "probe"},),
+    ),
     ("planning_spaces", "next_number >= 1"): (({"next_number": 0},), ({"next_number": 1},)),
     ("quota_account_names", "length(organization) BETWEEN 1 AND 512"): (
         ({"organization": ""}, {"organization": "o" * 513}),
@@ -263,6 +293,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
 #: A listed value another clause of the row ties to a second column, with the
 #: change that lets the row take it.
 _TAKEN_WITH: dict[tuple[str, str, object], dict[str, object]] = {
+    **{
+        ("pending_actions", "outcome", outcome): {"ended_at": "probe"}
+        for outcome in ("carried_out", "declined", "dropped", "withdrawn")
+    },
     ("quota_alerts", "kind", "week_model"): {"model": "probe"},
     ("quota_samples", "kind", "week_model"): {"model": "probe"},
     ("quota_samples", "source", "poll"): _POLLED,

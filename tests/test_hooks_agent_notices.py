@@ -762,16 +762,30 @@ class LapseTests(Harness):
         self.assertEqual([CHILD], [entry["agent"] for entry in self.listed])
 
     def test_the_hook_reads_the_periods_the_planning_rule_has(self) -> None:
-        from server.planning import leases, subscriptions
+        from server.planning import leases, participation, subscriptions
+
+        def common() -> float:
+            return leases.quiet_period(participation.load(self.conn), None).total_seconds()
 
         # A subscription keeps its own silence, not a lease's: the hook reads that one.
         self.assertEqual(
             subscriptions.QUIET_PERIOD.total_seconds(), notify.SUBSCRIPTION_QUIET_SECONDS
         )
-        self.assertNotEqual(leases.QUIET_PERIOD, subscriptions.QUIET_PERIOD)
+        self.assertNotEqual(common(), subscriptions.QUIET_PERIOD.total_seconds())
         self.assertEqual(leases.ENDED_GRACE.total_seconds(), notify.ENDED_GRACE_SECONDS)
-        # The tree a session works on is a participant's, live by the lease's silence.
-        self.assertEqual(leases.QUIET_PERIOD.total_seconds(), notify.LEASE_QUIET_SECONDS)
+        # The tree a session works on is a participant's, live by the common quiet period
+        # of a lease: the setting's when the owner sets it, its default when not.
+        self.assertEqual(participation.NUMBERS["lease_quiet_days"], notify.LEASE_QUIET_DAYS)
+        self.assertEqual(common(), notify.lease_quiet_seconds(self.conn))
+        participation.write_value(self.conn, None, "lease_quiet_days", 5)
+        self.assertEqual(5 * 24 * 3600, notify.lease_quiet_seconds(self.conn))
+        self.assertEqual(common(), notify.lease_quiet_seconds(self.conn))
+        # A value its bounds refuse reads as no row in both.
+        self.conn.execute(
+            "UPDATE participation_settings SET value = '0' WHERE key = 'lease_quiet_days'"
+        )
+        self.assertEqual(3 * 24 * 3600, notify.lease_quiet_seconds(self.conn))
+        self.assertEqual(common(), notify.lease_quiet_seconds(self.conn))
 
 
 class LockTests(Harness):

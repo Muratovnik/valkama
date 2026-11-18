@@ -37,6 +37,7 @@ from server.planning import (
     item_tree,
     leases,
     participants,
+    participation,
     person_events,
     read_model,
     service,
@@ -641,6 +642,30 @@ class WatchedTests(Harness):
             {ref: who for ref, who in listed.items() if who},
             "the fixture covers each way in and out",
         )
+
+    def test_a_session_works_on_its_tree_for_the_common_quiet_period_the_owner_sets(self) -> None:
+        self.agent("claim_work_item", AS_A2, id=self.t3)
+        self.conn.execute(
+            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 days')"
+            " WHERE id = ?",
+            (A,),
+        )
+        self.conn.commit()
+        row = read_model.item_row(self.conn, self.goal)
+        space = str(row["planning_space_id"])
+
+        def tree() -> tuple[frozenset[str], list[str]]:
+            listed = [entry["session"] for entry in participants.of_container(self.conn, row)]
+            return notify.watched(self.conn, A), listed
+
+        self.assertEqual((frozenset(), []), tree(), "silent past the three days of no setting")
+        # A session works in several spaces: one space's period is not its own.
+        participation.write_value(self.conn, space, "lease_quiet_days", 5)
+        self.conn.commit()
+        self.assertEqual((frozenset(), []), tree())
+        participation.write_value(self.conn, None, "lease_quiet_days", 5)
+        self.conn.commit()
+        self.assertEqual((frozenset({row["work_item_id"]}), [A]), tree(), "within the common five")
 
     def test_the_roots_are_found_without_reading_every_root_of_the_store(self) -> None:
         """A climb from a session's tasks reads the roots above them, not every root."""

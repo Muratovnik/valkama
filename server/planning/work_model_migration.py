@@ -19,7 +19,8 @@ otherwise cascade into them:
 - **history** renames those keys in the history, only where a key stands.
 - **items** rebuilds `work_items`: an epic, or any item with children, becomes a
   container; accepted work gets the basis `migrated`; a task gets the time its work
-  started. The events table takes the new actions. `sessions` is rebuilt to the
+  started. The fresh declaration it takes holds every basis, `agent` among them,
+  though no item gets it here. The events table takes the new actions. `sessions` is rebuilt to the
   fresh declaration when the Board cutover left it another: that cutover renamed
   `card_id` to `work_item_id` and kept its type `INTEGER`.
 - **containers** clears every claim on a container and puts each accepted open one in the
@@ -50,7 +51,8 @@ otherwise cascade into them:
   session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
   which of a person's acts before 3.0 nobody heard cannot be known now.
 - **ended-requests** rebuilds `work_item_requests` from the fresh declaration, with the `purpose`
-  a question to the owner may carry and the reasons a close stores: a request still
+  a question to the owner may carry, the action waiting for the owner it is about
+  (`action_id`, null on every row it carries) and the reasons a close stores: a request still
   pending on a closed item, which 2.9 read `task_closed` and left pending, ends
   `expired` as `item_completed` or `item_cancelled` by the category its item stands
   in, with no event, as does one that stored `task_closed`. One that had already
@@ -75,6 +77,22 @@ otherwise cascade into them:
 - **refs-without-commits** rebuilds `work_item_refs` when its CHECK still takes the
   kind `commit`, as a store before 3.0 declared it: a commit is attached now, never a
   ref, and `commit-refs` has left none.
+- **participation** creates the owner's participation setting and the rules of the
+  labels (`participation_settings`, `label_settings`) and their indexes, empty: with no
+  row every space reads the default set. Its postcondition of the same name holds both
+  empty and every space at that set.
+- **agent-decisions** creates the summary of the decisions agents took on their own
+  (`agent_decisions`), empty: the 2.9 history knew no points, so no earlier decision
+  can be marked. Its postcondition of the same name holds it empty.
+- **pending-actions** creates the table of the writes that wait for the owner's answer
+  (`pending_actions`), its index of the open ones and the index of the requests by their
+  action, empty: no 2.9 write waited, and a question asked before keeps asking as it did,
+  its answer acted on by the agent. Its postcondition of the same name holds the table
+  empty, no request naming an action or carrying a purpose of the owner's
+  participation, and no `action_dropped` in the history.
+
+The postcondition **agent-basis** holds that no item stands accepted on an agent's own
+decision (`agent`): before 3.0 no setting let an agent decide, so nothing was.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -108,8 +126,10 @@ from . import (
     item_projects_map,
     item_tree,
     model,
+    participation,
     questions,
     read_model,
+    request_model,
     words,
     work_model_probes,
 )
@@ -1767,8 +1787,10 @@ def _requests_needed(conn: sqlite3.Connection, context: Context) -> bool:
     declared = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_REQUESTS,)
     ).fetchone()
+    columns = _columns(conn, _REQUESTS)
     return (
-        "purpose" not in _columns(conn, _REQUESTS)
+        "purpose" not in columns
+        or "action_id" not in columns
         or "'task_closed'" in str(declared[0])
         or conn.execute(f"SELECT 1{_REQUEST_STATES} WHERE {_ENDS} LIMIT 1").fetchone() is not None
     )
@@ -2147,6 +2169,204 @@ def _check_ref_kinds(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"work_item_refs takes the kinds {_ref_kinds(conn)}")
 
 
+# -- participation: the owner's setting, empty ---------------------------------------
+
+#: The step and the postcondition that give the store the owner's participation setting.
+PARTICIPATION = "participation"
+_PARTICIPATION_TABLES = ("participation_settings", "label_settings")
+
+
+def _participation_missing(conn: sqlite3.Connection) -> list[str]:
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?)",
+            _PARTICIPATION_TABLES,
+        )
+    }
+    return [table for table in _PARTICIPATION_TABLES if table not in present]
+
+
+def _participation_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_participation_missing(conn))
+
+
+def _create_participation(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Both tables and their indexes, empty: the setting starts at the default set."""
+
+    del context
+    missing = _participation_missing(conn)
+    for statement in planning_store.PARTICIPATION:
+        conn.execute(statement)
+    return {"tables_created": missing}
+
+
+def _check_participation(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _participation_missing(conn)
+    if missing:
+        raise UnmetError(f"{', '.join(missing)} missing")
+
+
+def _participation_default(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Both tables are empty, and every space reads each point and switch at the
+    default set and stands at it."""
+
+    del context
+    found = []
+    for table in _PARTICIPATION_TABLES:
+        rows = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])  # noqa: S608 - constant name
+        if rows:
+            found.append(f"{table} holds {rows} rows, not 0")
+    settings = participation.load(conn)
+    default = participation.SETS[participation.DEFAULT]
+    spaces = conn.execute("SELECT planning_space_id, key FROM planning_spaces ORDER BY key")
+    for space, key in spaces.fetchall():
+        chosen = settings.chosen(str(space))
+        apart = [name for name, value in default.items() if chosen[name] != value]
+        if apart or participation.set_of(chosen) != participation.DEFAULT:
+            found.append(f"{key} reads {apart or 'another set'} apart from the default set")
+    _unmet(found, "the owner's participation")
+    return {"set": participation.DEFAULT}
+
+
+# -- agent-decisions: the summary of agent decisions, empty --------------------------
+
+#: The step and the postcondition that give the store the summary of agent decisions.
+AGENT_DECISIONS = "agent-decisions"
+
+
+def _decisions_missing(conn: sqlite3.Connection) -> bool:
+    found = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_decisions'"
+    ).fetchone()
+    return found is None
+
+
+def _decisions_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return _decisions_missing(conn)
+
+
+def _create_decisions(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table, empty: no decision an agent took before it can be told by its point."""
+
+    del context
+    missing = _decisions_missing(conn)
+    conn.execute(planning_store.AGENT_DECISIONS)
+    return {"tables_created": ["agent_decisions"] if missing else []}
+
+
+def _check_decisions(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    if _decisions_missing(conn):
+        raise UnmetError("agent_decisions missing")
+
+
+def _decisions_empty(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The summary holds no decision: the history this store kept marked none."""
+
+    del context
+    rows = int(conn.execute("SELECT COUNT(*) FROM agent_decisions").fetchone()[0])
+    _unmet([f"agent_decisions holds {rows} rows, not 0"] if rows else [], "the summary")
+    return {"rows": rows}
+
+
+# -- pending-actions: the writes that wait for the owner, none -----------------------
+
+#: The step and the postcondition that give the store the writes waiting for the owner.
+PENDING_ACTIONS = "pending-actions"
+_PENDING_OBJECTS = ("pending_actions", "pending_actions_open", "work_item_requests_action")
+
+
+def _pending_missing(conn: sqlite3.Connection) -> list[str]:
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE name IN (?, ?, ?)", _PENDING_OBJECTS
+        )
+    }
+    return [name for name in _PENDING_OBJECTS if name not in present]
+
+
+def _pending_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_pending_missing(conn))
+
+
+def _create_pending(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table and its two indexes, empty: no write of 2.9 waited for the owner."""
+
+    del context
+    missing = _pending_missing(conn)
+    for statement in planning_store.PENDING:
+        conn.execute(statement)
+    return {"created": missing}
+
+
+def _check_pending(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _pending_missing(conn)
+    if missing:
+        raise UnmetError(f"{', '.join(missing)} missing")
+
+
+def _pending_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Nothing waits on an action: no action, no request naming one or carrying a purpose
+    of the owner's participation, and no action dropped in the history."""
+
+    del context
+    actions = int(conn.execute("SELECT COUNT(*) FROM pending_actions").fetchone()[0])
+    named = [
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE action_id IS NOT NULL"
+            " ORDER BY request_id"
+        )
+    ]
+    purposed = [
+        f"{row[0]} ({row[1]})"
+        for row in conn.execute(
+            "SELECT request_id, purpose FROM work_item_requests"
+            " WHERE purpose IN (SELECT value FROM json_each(?)) ORDER BY request_id",
+            (json.dumps(request_model.PARTICIPATION_PURPOSES),),
+        )
+    ]
+    dropped = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE action = 'action_dropped'"
+        ).fetchone()[0]
+    )
+    found = [f"pending_actions holds {actions} rows, not 0"] if actions else []
+    found += [f"the request {request} names an action" for request in named]
+    found += [f"the request {request} carries a purpose of participation" for request in purposed]
+    found += [f"the history holds {dropped} action_dropped, not 0"] if dropped else []
+    _unmet(found, "an action waits")
+    return {"actions": actions, "requests": len(named) + len(purposed), "dropped": dropped}
+
+
+# -- agent-basis: no item accepted on an agent's own decision ------------------------
+
+#: The postcondition that holds no item to the basis of an agent's own decision.
+AGENT_BASIS = "agent-basis"
+
+
+def _agent_basis_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No item is accepted on the basis `agent`: no setting of 2.9 let an agent decide."""
+
+    del context
+    references = _references(conn)
+    found = [
+        f"{references[str(row[0])]} has the basis agent"
+        for row in conn.execute(
+            "SELECT work_item_id FROM work_items WHERE acceptance = 'agent' ORDER BY number"
+        )
+    ]
+    _unmet(found, "an agent's own decision")
+    return {"accepted_by_agent": len(found)}
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -2215,6 +2435,27 @@ STEPS = (
         _rebuild_refs,
         _ref_kinds_needed,
         _check_ref_kinds,
+    ),
+    Step(
+        PARTICIPATION,
+        "the owner's participation setting",
+        _create_participation,
+        _participation_needed,
+        _check_participation,
+    ),
+    Step(
+        AGENT_DECISIONS,
+        "the summary of agent decisions",
+        _create_decisions,
+        _decisions_needed,
+        _check_decisions,
+    ),
+    Step(
+        PENDING_ACTIONS,
+        "the writes that wait for the owner",
+        _create_pending,
+        _pending_needed,
+        _check_pending,
     ),
 )
 
@@ -3210,11 +3451,33 @@ POSTCONDITIONS = (
     Postcondition(
         DEFERRED_ITEMS, "a condition for each item put off, and for no other", _deferred_items
     ),
-    Postcondition("no-commit-refs", "no commit ref is left; the refs take a fresh store's kinds", _p31),
-    Postcondition("other-refs", "each item keeps its other refs and gains its url records", _p32),
-    Postcondition("record-pairs", "each item holds the pairs its records carry, migrated", _p33),
-    Postcondition("commits-attached", "every commit is attached, with no session and no rewrite", _p34),
-    Postcondition("commit-projects", "every project from commits is one of an attached commit", _p35),
+    Postcondition(
+        "no-commit-refs",
+        "no commit ref is left; the refs take a fresh store's kinds",
+        _holds_no_commit_refs,
+    ),
+    Postcondition(
+        "other-refs", "each item keeps its other refs and gains its url records", _holds_other_refs
+    ),
+    Postcondition(
+        "record-pairs", "each item holds the pairs its records carry, migrated", _holds_record_pairs
+    ),
+    Postcondition(
+        "commits-attached",
+        "every commit is attached, with no session and no rewrite",
+        _holds_commits_attached,
+    ),
+    Postcondition(
+        "commit-projects",
+        "every project from commits is one of an attached commit",
+        _holds_commit_projects,
+    ),
+    Postcondition(
+        PARTICIPATION, "no setting stored; every space at the default set", _participation_default
+    ),
+    Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
+    Postcondition(PENDING_ACTIONS, "no request waits on an action", _pending_none),
+    Postcondition(AGENT_BASIS, "no item accepted on an agent's own decision", _agent_basis_none),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

@@ -149,11 +149,14 @@ class QuestionCase(unittest.TestCase):
         fields: list[dict] | None = None,
         reference: str | None = None,
         prompt: str = "Which way?",
+        kind: str = "question",
     ) -> dict:
+        # The rules of fields and answers are both kinds'; a decision adds its own
+        # rule of recommendations, which the summary of decisions' tests hold.
         return self.tool(
             "create_work_item_request",
             id=reference or self.reference,
-            kind="decision",
+            kind=kind,
             prompt=prompt,
             fields=fields if fields is not None else [CHOICE],
             author="asking-agent",

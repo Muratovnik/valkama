@@ -183,6 +183,9 @@ def _item_dues(
         conn, [str(event["detail"]) for event in events if event["action"] == "request_created"]
     )
     open_rows = questions.open_rows(conn, work_item_id)
+    # A decision its recommendation answered in the write that asked it waits for nobody.
+    still_open = {str(row["request_id"]) for row in open_rows}
+    created = [request_id for request_id in created if request_id in still_open]
     dues: list[Due] = []
     closing = (moves and state["is_terminal"]) or any(
         event["action"] in _CLOSED_QUESTION for event in events

@@ -186,10 +186,11 @@ test('a deadline passed offers to check the status, until the question has close
   await expect(card.locator('button:not([aria-label="Reply"])')).toHaveCount(0)
 })
 
-test('a question waiting stands under the form past the first hundred, and the cut is said', async ({
+test('a question waiting stands under the form past the first page, and nothing is cut', async ({
   page,
 }) => {
-  const closed = Array.from({ length: 100 }, (_, index) =>
+  // One page holds 200: the question still waiting is on the second, which is read too.
+  const closed = Array.from({ length: 200 }, (_, index) =>
     question({
       request_id: `55555555-5555-4555-8555-${String(index).padStart(12, '0')}`,
       prompt: `Closed ${index}`,
@@ -207,9 +208,9 @@ test('a question waiting stands under the form past the first hundred, and the c
   const first = drawer.locator('.thread > li').first()
   await expect(first).toContainText(ROUTE_ASKED)
   await expect(first.getByRole('radio')).toHaveCount(3)
-  await expect(drawer.getByText(CUT, { exact: true })).toBeVisible()
+  await expect(drawer.getByText(CUT, { exact: true })).toHaveCount(0)
   expect(requests.reads.filter((read) => read.includes('reference=')).join(' ')).toContain(
-    'status=pending',
+    'offset=200',
   )
 })
 

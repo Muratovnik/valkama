@@ -24,6 +24,7 @@ from . import (
     calls,
     chain,
     commits,
+    decisions,
     held,
     images,
     item_projects,
@@ -31,11 +32,13 @@ from . import (
     mention_records,
     model,
     participants,
+    participation,
     read_model,
     requests,
     sections,
     service,
     split,
+    states,
     subscriptions,
     usage,
     views,
@@ -165,6 +168,8 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 403, {"error": {"code": "not_asker", "message": str(error)}}
     if isinstance(error, model.OwnerOnlyError):
         return 403, {"error": {"code": "owner_only", "message": str(error)}}
+    if isinstance(error, model.QueueOffError):
+        return 409, {"error": {"code": "queue_off", "message": str(error)}}
     if isinstance(error, model.StoreSchemaError):
         return 409, {"error": {"code": model.STORE_SCHEMA_MISMATCH, "message": str(error)}}
     if isinstance(error, model.PlanningError):
@@ -538,6 +543,33 @@ def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
     }
 
 
+def _participation(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """The owner's participation in one space, or without `space` the common setting."""
+
+    space = _first(parameters, "space")
+    return participation.shown(conn, None if space is None else service.space_identity(conn, space))
+
+
+def _decisions(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """One page of the decisions agents took on their own, newest first.
+
+    `point` may be repeated, each naming one more point; `from` and `to` are a day
+    or a timestamp, both ends taken in.
+    """
+
+    space = _first(parameters, "space")
+    return decisions.page(
+        conn,
+        space=None if space is None else service.space_identity(conn, space),
+        project=_first(parameters, "project"),
+        points=[value for value in parameters.get("point") or [] if value != ""],
+        start=_first(parameters, "from"),
+        end=_first(parameters, "to"),
+        limit=_int(_first(parameters, "limit"), "limit", decisions.PAGE_DEFAULT),
+        offset=_offset(parameters),
+    )
+
+
 def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     """The commits on no card of a space's projects or of one project, newest first."""
 
@@ -568,6 +600,8 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/requests": _requests,
     "/api/planning/request": _request,
     "/api/planning/held": _held,
+    "/api/planning/participation": _participation,
+    "/api/planning/decisions": _decisions,
     "/api/planning/commits/unattached": _unattached,
 }
 
@@ -622,13 +656,15 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         with service.one_write(conn):
             findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, str(item["work_item_id"]))
-    # What the creation itself said: the task a part was split off and the steps it took.
-    said = {name: item[name] for name in _SPLIT_ANSWER if name in item}
+    # What the creation itself said: the task a part was split off and the steps it took,
+    # or the question the owner answers before it is taken on.
+    said = {name: item[name] for name in _CREATED_ANSWER if name in item}
     return {**answer, **said, **findings, "applied": applied}
 
 
-#: What a creation that split a part off says beside the part.
-_SPLIT_ANSWER = ("split_from", "moved_steps", "overridden")
+#: What a creation says beside the item: of a part split off, the task and the steps it
+#: took; of an item the owner decides on, what waits for their answer.
+_CREATED_ANSWER = ("split_from", "moved_steps", "overridden", "waits_for_owner")
 
 
 def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -743,6 +779,9 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
         acceptance=payload.get("acceptance"),
         to_check=payload.get("to_check"),
         cancels=payload.get("cancels"),
+        following=payload.get("following"),
+        # The caller's own move: the owner's setting may keep it for their answer.
+        gated=True,
     )
     commits.after_transition(before, answer)
     return answer
@@ -757,6 +796,8 @@ def _defer(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         force=_flag(payload, "force"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
+        # The caller's own write: the owner's setting may keep it for their answer.
+        gated=True,
     )
 
 
@@ -814,6 +855,9 @@ def _checklist(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         force=_flag(payload, "force"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
+        reason=payload.get("reason"),
+        # The caller's own write: the owner's setting may keep part of it for their answer.
+        gated=True,
     )
 
 
@@ -1215,6 +1259,47 @@ def _space_settings(conn: sqlite3.Connection, payload: Mapping[str, object]) -> 
     return shown
 
 
+#: The fields of each form of a participation write, by the field that names the form.
+_PARTICIPATION_FORMS = {
+    "key": frozenset({"space", "key", "value"}),
+    "set": frozenset({"space", "set"}),
+    "label": frozenset({"space", "label", "ready", "description"}),
+}
+
+
+def _write_participation(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """One value, a set or a label's rule of one scope, answered with the scope's read.
+
+    The person's alone: an agent's call is refused before anything is read.
+    """
+
+    if not calls.by_person():
+        raise model.OwnerOnlyError(participation.OWNER_ONLY)
+    forms = [form for form in _PARTICIPATION_FORMS if form in payload]
+    if len(forms) != 1:
+        raise PlanningHttpError(400, "invalid_request", "name one of key, set or label")
+    (form,) = forms
+    unknown = sorted(str(name) for name in payload if name not in _PARTICIPATION_FORMS[form])
+    if unknown:
+        raise PlanningHttpError(400, "invalid_request", f"unknown field: {', '.join(unknown)}")
+    named = _field(payload, "space")
+    space = None if named is None else service.space_identity(conn, named)
+    if form == "key":
+        participation.write_value(conn, space, payload["key"], _field(payload, "value"))
+    elif form == "set":
+        participation.write_set(conn, space, payload["set"])
+    else:
+        participation.write_label(
+            conn,
+            space,
+            payload["label"],
+            # Both are named, so leaving one out never takes it away unseen.
+            ready=_field(payload, "ready"),
+            description=_field(payload, "description"),
+        )
+    return participation.shown(conn, space)
+
+
 def _author(payload: Mapping[str, object]) -> str | None:
     """The author the payload names, or the one its call implies.
 
@@ -1274,7 +1359,10 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         ),
     ),
     ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
-    ("transition", frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels"})),
+    (
+        "transition",
+        frozenset({"state", "reason", "force", "acceptance", "to_check", "cancels", "following"}),
+    ),
     ("defer", frozenset({"until", "reason", "force"})),
     ("move_out", frozenset({"reason", "force"})),
 )
@@ -1394,9 +1482,18 @@ def _forced_findings(answer: Mapping[str, object]) -> dict:
 
 
 def _apply_step(
-    conn: sqlite3.Connection, group: str, base: Mapping[str, object], entry: Mapping[str, object]
+    conn: sqlite3.Connection,
+    group: str,
+    base: Mapping[str, object],
+    entry: Mapping[str, object],
+    *,
+    waited: str | None = None,
 ) -> tuple[dict, object]:
-    """Run one step through the write the single tool uses, and say what it changed."""
+    """Run one step through the write the single tool uses, and say what it changed.
+
+    `waited` is the group of an earlier step of the batch that waits for the owner or
+    for sessions, which a transition that closes the item meets before its own guards
+    (`close_with_waiting`)."""
 
     if group == "claim":
         claimed = _claim(conn, base)
@@ -1407,12 +1504,19 @@ def _apply_step(
     if group == "update":
         # Who hears the items its description named stands where the single edit puts it.
         edited = _update(conn, {**entry, **base})
-        return {name: edited[name] for name in (TOLD,) if name in edited}, model.updated_fields(
-            entry
-        )
+        # A move the owner decides on waits, and the batch's answer says so as the edit's does.
+        return {
+            name: edited[name] for name in (TOLD, "waits_for_owner") if name in edited
+        }, model.updated_fields(entry)
     if group == "checklist":
         replaced = _checklist(conn, {**entry, **base})
-        return _forced_findings(replaced), [
+        # Steps of a goal or stage the owner decides on wait, and the batch's answer says so.
+        waits = (
+            {"waits_for_owner": replaced["waits_for_owner"]}
+            if "waits_for_owner" in replaced
+            else {}
+        )
+        return {**_forced_findings(replaced), **waits}, [
             {"item_id": step["id"], "text": step["text"], "done": step["done"]}
             for step in replaced["checklist"]
         ]
@@ -1441,7 +1545,12 @@ def _apply_step(
         asked = _create_request(conn, {**entry, **base})
         # An entry asked of sessions answers as the single write does: its requests,
         # each with its addressee.
-        names = ("requests",) if "addressees" in entry else ("request_id", "revision")
+        names: tuple[str, ...] = (
+            ("requests",) if "addressees" in entry else ("request_id", "revision")
+        )
+        # A decision its recommendation answered at once names its answer as well.
+        if asked.get("status") == "answered":
+            names += ("status", "answers", "note")
         return {}, {name: asked[name] for name in names}
     if group == "summary":
         beside = {name: entry[name] for name in ("list", "mentions") if name in entry}
@@ -1461,8 +1570,14 @@ def _apply_step(
         return _converted(conn, {**entry, **base})
     if group == "defer":
         return _deferred(conn, {**entry, **base})
+    if waited is not None:
+        _refuse_close_with_waiting(conn, base, entry, waited)
     answer = _transition(conn, {**entry, **base})
-    found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
+    found = {
+        name: answer[name]
+        for name in ("warnings", "overridden", "waits_for_owner", "waits_for_sessions")
+        if answer.get(name)
+    }
     # An accepted open goal or stage stands in no state a caller names: it shows what it derives.
     moved = {"state": answer["state"]["key"] if answer["state"] is not None else None}
     if answer["container_state"] is not None:
@@ -1489,7 +1604,14 @@ def _deferred(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[
     """A batch's put-off: where it went, whose claim it ended, and the condition."""
 
     answer = _defer(conn, payload)
-    found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
+    found = {
+        name: answer[name]
+        for name in ("warnings", "overridden", "waits_for_owner")
+        if answer.get(name)
+    }
+    if "waits_for_owner" in found:
+        # Kept back for the owner's answer: the item stands where it stood.
+        return found, {"state": answer["state"]["key"] if answer["state"] is not None else None}
     moved: dict[str, object] = {"state": answer["state"]["key"], "deferred": answer["deferred"]}
     if answer.get("released"):
         moved["released"] = answer["released"]
@@ -1507,6 +1629,34 @@ def _moved_out(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple
     if answer.get("released"):
         moved["released"] = answer["released"]
     return found, moved
+
+
+#: How the refusal of a close beside a waiting write names that write, by its group.
+_WAITING_STEPS = {"checklist": "checklist change", "update": "parent change"}
+
+
+def _refuse_close_with_waiting(
+    conn: sqlite3.Connection, base: Mapping[str, object], entry: Mapping[str, object], waited: str
+) -> None:
+    """Refuse a transition that closes the item beside a write of the same batch that waits.
+
+    The close would end the question the waiting write asked, or a cancel would take it
+    away unasked, so the batch is refused whole, before any guard of the move: one
+    refusal for a completion and a cancel alike. `force` does not carry it. A move into
+    review is no close: the item stays open, and its question stands beside the other.
+    """
+
+    row = read_model.item_row(conn, _text(base, "id"))
+    target = states.resolve(conn, str(row["workflow_id"]), _text(entry, "state"))
+    if target["category"] not in ("completed", "cancelled"):
+        return
+    step = _WAITING_STEPS.get(waited, waited)
+    raise PlanningHttpError(
+        409,
+        "close_with_waiting",
+        f"the {step} in this call waits for the owner, so the item cannot close in it: close"
+        " it after the answer, or send the change in another call",
+    )
 
 
 def _converted(conn: sqlite3.Connection, payload: Mapping[str, object]) -> tuple[dict, object]:
@@ -1544,7 +1694,7 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
     reference = _text(payload, "id")
     expected = _optional_int(payload, "expected_revision")
-    steps = _apply_entries(payload)
+    steps = _with_steps_reason(_apply_entries(payload), payload.get("checklist_reason"))
     base: dict[str, object] = {"id": reference}
     if "author" in payload:
         base["author"] = payload["author"]
@@ -1560,6 +1710,25 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         if not answer["open"]:
             _refuse_unanswerable(applied)
     return {**answer, **findings, "applied": applied}
+
+
+def _with_steps_reason(steps: list[_Step], reason: object) -> list[_Step]:
+    """The batch's steps, its `checklist` taking `checklist_reason` as the reason the single
+    write takes; sent without a `checklist`, it is refused rather than dropped."""
+
+    if reason is None:
+        return steps
+    if not any(group == "checklist" for group, _index, _entry in steps):
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "checklist_reason says why the checklist sent with it removes or rewrites a step:"
+            " send it with checklist, or leave it out",
+        )
+    return [
+        (group, index, {**entry, "reason": reason} if group == "checklist" else entry)
+        for group, index, entry in steps
+    ]
 
 
 def _refuse_unanswerable(applied: Mapping[str, Any]) -> None:
@@ -1624,9 +1793,10 @@ def _run_steps(
 
     findings: dict = {}
     applied: dict[str, Any] = {}
+    waited: str | None = None
     for group, index, entry in steps:
         try:
-            extra, change = _apply_step(conn, group, base, entry)
+            extra, change = _apply_step(conn, group, base, entry, waited=waited)
         except (model.PlanningError, PlanningHttpError) as error:
             status, body = error_response(error)
             label = f"{group}[{index}]" if group in _APPLY_LISTS else group
@@ -1641,6 +1811,8 @@ def _run_steps(
                 f"{label}: {body['error']['message']}",
                 {**detail, "step": {"group": group, "index": index}},
             ) from error
+        if waited is None and ("waits_for_owner" in extra or "waits_for_sessions" in extra):
+            waited = group
         # A claim's start and a transition may both warn, and a tick and a close may
         # both carry a force; no step's findings hide another's.
         joined = {
@@ -1663,6 +1835,7 @@ def _run_steps(
 _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] = {
     "/api/planning/spaces": _space,
     "/api/planning/space/settings": _space_settings,
+    "/api/planning/participation": _write_participation,
     "/api/planning/work-items": _create,
     "/api/planning/work-item/update": _update,
     "/api/planning/work-item/delete": _delete,

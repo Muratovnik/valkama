@@ -28,10 +28,10 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, store, store_backups, store_steps
+from server.planning import decisions, participation, words
 from server.planning import images as planning_images
 from server.planning import service as planning_service
 from server.planning import store as planning_store
-from server.planning import words
 from server.planning import work_model_migration as migration
 from server.projects import registry_owner
 from server.store_identity.refs import planning_space_entity
@@ -52,6 +52,9 @@ STEP_NAMES = [
     "commits",
     "commit-refs",
     "refs-without-commits",
+    "participation",
+    "agent-decisions",
+    "pending-actions",
 ]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
@@ -59,6 +62,10 @@ POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(18, 31)),
     "deferred-items",
     *(f"P{number}" for number in range(31, 36)),
+    "participation",
+    "agent-decisions",
+    "pending-actions",
+    "agent-basis",
     "second-run",
     "recovery-point",
 ]
@@ -804,7 +811,9 @@ class MigratedStoreTests(StoreCase):
     ) -> None:
         columns = [row[1] for row in self.read("PRAGMA table_info(work_item_requests)")]
         self.assertEqual(
-            ["addressee", "purpose"], columns[-2:], "in the order a fresh store declares them"
+            ["addressee", "purpose", "action_id"],
+            columns[-3:],
+            "in the order a fresh store declares them",
         )
         [index] = self.read(
             "SELECT sql FROM sqlite_master WHERE name = 'work_item_requests_addressee'"
@@ -853,8 +862,19 @@ class MigratedStoreTests(StoreCase):
         self.assertEqual(
             {
                 "no-old-waiting": {"rows": 0},
-                "request-shapes": {"refused": ["scope 'other'", "delivered_call without delivered_at"]},
-                "fresh-tables": {"added": ["work_item_deferrals", "work_item_waiting_notices"]},
+                "request-shapes": {
+                    "refused": ["scope 'other'", "delivered_call without delivered_at"]
+                },
+                "fresh-tables": {
+                    "added": [
+                        "agent_decisions",
+                        "label_settings",
+                        "participation_settings",
+                        "pending_actions",
+                        "work_item_deferrals",
+                        "work_item_waiting_notices",
+                    ]
+                },
             },
             details,
         )
@@ -1049,6 +1069,217 @@ class MigratedStoreTests(StoreCase):
             entry for entry in self.report["postconditions"] if entry["name"] == "deferred-items"
         ]
         self.assertEqual((True, {"rows": 0, "deferred": 0}), (found["passed"], found["detail"]))
+
+    def test_participation_starts_at_the_default_set(self) -> None:
+        """Both tables come empty and declared as a fresh store declares them, and every
+        space reads each point and switch at the default set."""
+
+        declared = {
+            str(row[0]): str(row[1])
+            for row in self.read(
+                "SELECT name, tbl_name FROM sqlite_master"
+                " WHERE tbl_name IN ('participation_settings', 'label_settings')"
+            )
+        }
+        self.assertEqual(
+            {
+                "participation_settings": "participation_settings",
+                "participation_settings_scope": "participation_settings",
+                "label_settings": "label_settings",
+                "label_settings_scope": "label_settings",
+            },
+            declared,
+        )
+        for table in ("participation_settings", "label_settings"):
+            self.assertEqual(0, self.read(f"SELECT COUNT(*) FROM {table}")[0][0], table)
+        default = {
+            "queue": "on",
+            "finding": "human",
+            "proposed_goal": "human",
+            "task_in_goal": "agent",
+            "decision": "human",
+            "cancel_outside": "agent",
+            "cancel_shared": "human",
+            "condition": "human",
+            "goal_close": "agent",
+            "goal_defer": "agent",
+            "triage_reminder": "on",
+        }
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        settings = participation.load(conn)
+        spaces = [
+            str(row[0]) for row in conn.execute("SELECT planning_space_id FROM planning_spaces")
+        ]
+        self.assertEqual(3, len(spaces))
+        for space in spaces:
+            self.assertEqual(default, settings.chosen(space), space)
+            self.assertEqual("default", participation.set_of(settings.chosen(space)))
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (True, {"tables_created": ["participation_settings", "label_settings"]}),
+            (steps["participation"]["needed"], steps["participation"]["result"]),
+        )
+        [found] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "participation"
+        ]
+        self.assertEqual((True, {"set": "default"}), (found["passed"], found["detail"]))
+        # `fresh-shape` held both to a fresh store's declaration, and a second run takes no step.
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("fresh-shape", "second-run")
+        }
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+
+    def test_agent_decisions_start_empty(self) -> None:
+        """The summary comes empty and declared as a fresh store declares it: no decision
+        an agent took before the migration is marked."""
+
+        declared = [
+            (str(row[0]), str(row[1]))
+            for row in self.read(
+                "SELECT type, name FROM sqlite_master WHERE tbl_name = 'agent_decisions'"
+                " AND sql IS NOT NULL"
+            )
+        ]
+        self.assertEqual([("table", "agent_decisions")], declared)
+        self.assertEqual(0, self.read("SELECT COUNT(*) FROM agent_decisions")[0][0])
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (True, {"tables_created": ["agent_decisions"]}),
+            (steps["agent-decisions"]["needed"], steps["agent-decisions"]["result"]),
+        )
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("agent-decisions", "fresh-shape", "second-run")
+        }
+        self.assertEqual((True, {"rows": 0}), held["agent-decisions"])
+        # `fresh-shape` held it to a fresh store's declaration, and a second run takes no step.
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+        # A mark goes with the event it marks, in the migrated store as in a fresh one.
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        event = conn.execute(
+            "SELECT e.id, e.work_item_id FROM work_item_events e"
+            " WHERE e.action = 'transitioned' ORDER BY e.id LIMIT 1"
+        ).fetchone()
+        decisions.mark(conn, int(event[0]), "goal_close", "closed the goal")
+        conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (event[1],))
+        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM agent_decisions").fetchone()[0])
+        conn.rollback()
+
+    def test_no_request_waits_on_an_action_after_migration(self) -> None:
+        """The table of waiting writes comes empty and declared as a fresh store declares
+        it; every request the store kept names no action and carries no purpose of the
+        owner's participation, and the history holds no dropped action but takes one."""
+
+        declared = {
+            str(row[0]): str(row[1])
+            for row in self.read(
+                "SELECT name, tbl_name FROM sqlite_master WHERE sql IS NOT NULL AND name IN"
+                " ('pending_actions', 'pending_actions_open', 'work_item_requests_action')"
+            )
+        }
+        self.assertEqual(
+            {
+                "pending_actions": "pending_actions",
+                "pending_actions_open": "pending_actions",
+                "work_item_requests_action": "work_item_requests",
+            },
+            declared,
+        )
+        self.assertEqual(0, self.read("SELECT COUNT(*) FROM pending_actions")[0][0])
+        self.assertEqual(
+            [("kept-request", None, None)],
+            [
+                tuple(row)
+                for row in self.read(
+                    "SELECT request_id, action_id, purpose FROM work_item_requests"
+                )
+            ],
+        )
+        self.assertEqual(
+            0,
+            self.read("SELECT COUNT(*) FROM work_item_events WHERE action = 'action_dropped'")[0][
+                0
+            ],
+        )
+        steps = {step["name"]: step for step in self.report["steps"]}
+        self.assertEqual(
+            (
+                True,
+                {
+                    "created": [
+                        "pending_actions",
+                        "pending_actions_open",
+                        "work_item_requests_action",
+                    ]
+                },
+            ),
+            (steps["pending-actions"]["needed"], steps["pending-actions"]["result"]),
+        )
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("pending-actions", "fresh-shape", "second-run")
+        }
+        self.assertEqual(
+            (True, {"actions": 0, "requests": 0, "dropped": 0}), held["pending-actions"]
+        )
+        # `fresh-shape` held the table, the requests and the events to a fresh store's declaration,
+        # and a second run takes no step.
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+        self.assertEqual("current", store.migrate_work_model(self.path)["status"])
+        # The migrated store opens with every row it held, and its history takes a
+        # dropped action, which a fresh store's takes.
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        events = conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        self.assertEqual(self.read("SELECT COUNT(*) FROM work_item_events")[0][0], events)
+        conn.execute(
+            "INSERT INTO work_item_events(work_item_id, action, detail)"
+            " SELECT work_item_id, 'action_dropped', 'proposed_goal: test' FROM work_items LIMIT 1"
+        )
+        conn.rollback()
+
+    def test_no_item_is_accepted_by_an_agent_after_migration(self) -> None:
+        """No item stands accepted on an agent's own decision: no 2.9 setting let one
+        decide. The rebuilt items take that basis, as a fresh store's do, and a second
+        run changes nothing."""
+
+        bases = {str(row[0]) for row in self.read("SELECT DISTINCT acceptance FROM work_items")}
+        self.assertNotIn("agent", bases)
+        self.assertIn("migrated", bases, "the store held accepted work to look at")
+        held = {
+            entry["name"]: (entry["passed"], entry["detail"])
+            for entry in self.report["postconditions"]
+            if entry["name"] in ("agent-basis", "fresh-shape", "second-run")
+        }
+        self.assertEqual((True, {"accepted_by_agent": 0}), held["agent-basis"])
+        self.assertTrue(held["fresh-shape"][0])
+        self.assertEqual((True, {"steps_needed_again": []}), held["second-run"])
+        before = file_digest(self.path)
+        self.assertEqual("current", self.migrate()["status"])
+        self.assertEqual(before, file_digest(self.path))
+        # The migrated store takes an agent's decision, which a fresh one takes.
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        conn.execute(
+            "UPDATE work_items SET acceptance = 'agent' WHERE work_item_id ="
+            " (SELECT work_item_id FROM work_items WHERE acceptance = 'migrated' LIMIT 1)"
+        )
+        self.assertEqual(
+            1,
+            conn.execute("SELECT COUNT(*) FROM work_items WHERE acceptance = 'agent'").fetchone()[
+                0
+            ],
+        )
+        conn.rollback()
 
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
         backups = sorted(os.listdir(os.path.join(self.directory.name, "backups")))
@@ -1784,6 +2015,21 @@ FAULTS = (
         " VALUES(?, 'stray', 'commits')",
         lambda ids: (ids["WM-9"],),
     ),
+    fault(
+        "participation",
+        "INSERT INTO participation_settings(planning_space_id, key, value, updated_at)"
+        " SELECT planning_space_id, 'finding', 'agent', 'x' FROM planning_spaces WHERE key = 'WM'",
+    ),
+    fault(
+        "agent-decisions",
+        "INSERT INTO agent_decisions(event_id, point, what)"
+        " SELECT MAX(id), 'goal_close', 'closed' FROM work_item_events",
+    ),
+    fault(
+        "pending-actions",
+        "UPDATE work_item_requests SET purpose = 'goal' WHERE request_id = 'kept-request'",
+    ),
+    fault("agent-basis", "UPDATE work_items SET acceptance = 'agent' WHERE acceptance IS NOT NULL"),
     fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
@@ -2016,6 +2262,29 @@ CLAUSE_FAULTS: tuple[
         ],
         # The attachment names a commit no row holds, which the foreign keys see too.
         ["row-counts", "integrity"],
+    ),
+    (
+        "pending-actions",
+        "the request kept-request (cancel) carries a purpose of participation",
+        lambda _ids: [
+            (
+                "UPDATE work_item_requests SET purpose = 'cancel' WHERE request_id = 'kept-request'",
+                (),
+            )
+        ],
+        ["pending-actions"],
+    ),
+    (
+        "pending-actions",
+        "the history holds 1 action_dropped, not 0",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_events(work_item_id, action, detail)"
+                " VALUES(?, 'action_dropped', 'proposed_goal: dropped')",
+                (ids["WM-1"],),
+            )
+        ],
+        ["row-counts", "pending-actions"],
     ),
     (
         "requests-asked",
