@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
+import { titleRuns } from '@/entities/work-item/utils/titleRuns.ts'
 
 describe('the runs of a card title', () => {
   it('cuts a reference out of the running text, and keeps every character', () => {

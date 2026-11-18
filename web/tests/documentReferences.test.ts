@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
+import { titleRuns } from '@/entities/work-item/utils/titleRuns.ts'
 
 import { parseRichText, plainText } from '@/shared/lib/richText.ts'
 import {

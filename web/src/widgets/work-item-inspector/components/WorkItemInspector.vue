@@ -47,7 +47,6 @@ import InspectorOverview from '@/widgets/work-item-inspector/components/Inspecto
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 import InspectorTabs from '@/widgets/work-item-inspector/components/InspectorTabs.vue'
-import InspectorTitle from '@/widgets/work-item-inspector/components/InspectorTitle.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import { agentCount } from '@/widgets/work-item-inspector/utils/agentUsage.ts'
 import { followGuard } from '@/widgets/work-item-inspector/utils/guardStep.ts'
@@ -67,6 +66,7 @@ import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkIte
 import { provideMissingPlaces } from '@/features/session-open/missingPlaces.ts'
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
+import WorkItemTitle from '@/entities/work-item/components/WorkItemTitle.vue'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -299,7 +299,7 @@ defineExpose({ close, openFrom })
     @close="close"
   >
     <template #title>
-      <InspectorTitle :title="title" />
+      <WorkItemTitle :title="title" />
     </template>
 
     <template #controls>
