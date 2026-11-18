@@ -27,6 +27,9 @@ A space whose stack has grown past the owner's thresholds shows a line that it i
 time for a review (`due`). It is read from the stack each time and stored nowhere, so
 it goes once the stack is reviewed.
 
+A store an earlier build wrote, attached and read as it is, lacks the tables the
+stack is made of (`STACK_TABLES`): it has no stack, no mark and no line.
+
 The module sits below the service, which calls it inside its writes and reads: it
 reads and writes the store itself and imports none of the writes.
 """
@@ -39,7 +42,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 
-from . import leases, model, participation, questions, standing
+from . import leases, model, participation, questions, standing, store
 
 #: The items of the spaces named, as one JSON array, that wait in the stack, each with
 #: its entry and its mark. `accepted` climbs from each goal or stage with no parent
@@ -67,6 +70,8 @@ _WAITING = (
     f" WHERE r.work_item_id = i.work_item_id AND {questions.OWNER_QUESTION})"
     " ORDER BY entered_at, p.key, i.number"
 )
+#: The tables the stack is read from: a store without one of them has no stack.
+STACK_TABLES = ("triage_marks", "work_item_requests")
 _SPACES_OF = (
     "SELECT DISTINCT planning_space_id FROM work_items"
     " WHERE work_item_id IN (SELECT value FROM json_each(?))"
@@ -112,7 +117,9 @@ def waiting(
     """The stack of one space, by its id, or of every space, oldest entry first.
 
     With `items`, only those of them that wait in it, read in their own spaces when no
-    space is named: whether an item may be marked, or what a card shows.
+    space is named: whether an item may be marked, or what a card shows. A store
+    without the stack's tables (`STACK_TABLES`) has none; they are looked for only
+    when the read fails, so a current store's read costs no statement more.
     """
 
     named = None if items is None else json.dumps(sorted(set(items)))
@@ -126,9 +133,14 @@ def waiting(
         ]
     if not spaces:
         return []
+    try:
+        rows = conn.execute(_WAITING, {"spaces": json.dumps(spaces), "items": named}).fetchall()
+    except sqlite3.OperationalError:
+        if all(store.has_table(conn, table) for table in STACK_TABLES):
+            raise
+        return []
     return [
-        Waiting(str(row[0]), str(row[1]), int(row[2]), str(row[3]), row[4], row[5])
-        for row in conn.execute(_WAITING, {"spaces": json.dumps(spaces), "items": named})
+        Waiting(str(row[0]), str(row[1]), int(row[2]), str(row[3]), row[4], row[5]) for row in rows
     ]
 
 
@@ -201,18 +213,13 @@ def due(conn: sqlite3.Connection, settings: participation.Settings, space: str) 
     stack no review has marked are at least `triage_count`, or the oldest of them entered
     at least `triage_age_days` days ago by the Planning clock (`leases.utc_now`). It says
     how many there are and when the oldest entered; the reader counts the age, so the
-    answer carries no clock of the server. A store an earlier build wrote has no stack,
-    and no line.
+    answer carries no clock of the server. A store an earlier build wrote has no stack
+    (`waiting`), and no line.
     """
 
     if not settings.on(space, "triage_reminder"):
         return None
-    try:
-        unseen = [found for found in waiting(conn, space) if found.seen_at is None]
-    except sqlite3.OperationalError as error:
-        if "no such" not in str(error):
-            raise
-        return None
+    unseen = [found for found in waiting(conn, space) if found.seen_at is None]
     if not unseen:
         return None
     oldest_at = unseen[0].entered_at
