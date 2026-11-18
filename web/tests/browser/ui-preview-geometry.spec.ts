@@ -37,6 +37,7 @@ const STATES = [
   'missing',
   'unavailable',
 ]
+const PLACES = ['flow', 'right', 'bottom']
 
 const AGENT_TITLE =
   'Свести MAIN-1201, MAIN-1202 и MAIN-1203 в одно правило переноса после MAIN-1204, MAIN-1205 и MAIN-1206'
@@ -299,5 +300,31 @@ for (const viewport of WIDTHS) {
       expect(drawn.stepsBeside?.apart).toBeLessThanOrEqual(1)
       expect(drawn.stepsBeside?.after).toBe(true)
     })
+
+    for (const place of PLACES)
+      test(`every state keeps to its card, and its card to the window, at the ${place}`, async ({
+        page,
+      }) => {
+        await openCards(page, viewport, `place=${place}`)
+        for (const state of STATES) {
+          await showCard(page, `a[data-state="${state}"]`)
+          const drawn = await measure(page)
+          const where = `${state} at the ${place}`
+          expect(drawn.words.length, where).toBeGreaterThan(0)
+          expect(drawn.overflow.card, where).toBeLessThanOrEqual(0)
+          expect(drawn.overflow.content, where).not.toBeNull()
+          expect(drawn.overflow.content ?? 1, where).toBeLessThanOrEqual(0)
+          expect(drawn.card.left, where).toBeGreaterThanOrEqual(EDGE - 0.5)
+          expect(drawn.card.top, where).toBeGreaterThanOrEqual(EDGE - 0.5)
+          expect(drawn.card.right, where).toBeLessThanOrEqual(drawn.window.width - EDGE + 0.5)
+          expect(drawn.card.bottom, where).toBeLessThanOrEqual(drawn.window.height - EDGE + 0.5)
+          expect(drawn.outside, where).toEqual([])
+          // Every word of the head, the facts and the date stands on one line.
+          expect(
+            drawn.words.filter(({ lines }) => lines !== 1),
+            where,
+          ).toEqual([])
+        }
+      })
   })
 }

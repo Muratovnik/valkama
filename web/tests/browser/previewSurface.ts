@@ -15,7 +15,7 @@ import { useWorkItemReferencePreview } from '@/entities/work-item/composables/us
 import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
 import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
 
-import { boardItem } from '../fixtures/board.ts'
+import { boardItem, boardState } from '../fixtures/board.ts'
 
 const thisYear = new Date().getFullYear()
 const at = (month: number, day: number, hour: number, minute: number) =>
@@ -71,7 +71,7 @@ export const PREVIEW_STATES: Readonly<Record<string, WorkItemPreviewSubject>> = 
       title: 'Перенести настройки',
       updated_at: at(11, 1, 9, 12),
     }),
-    project: 'example-project',
+    project: 'Длинное название проекта example-project-with-a-long-key из соседнего пространства',
   },
   stale: {
     reference: 'MAIN-55',
@@ -82,9 +82,14 @@ export const PREVIEW_STATES: Readonly<Record<string, WorkItemPreviewSubject>> = 
       updated_at: at(10, 30, 11, 0),
     }),
   },
+  // A title with no space to break at, and a state a workflow named at length.
   long: {
     reference: 'MAIN-200',
     item: boardItem(200, 'todo', {
+      state: {
+        ...boardState('todo'),
+        name: 'Ожидает согласования архитектурного решения владельцем продукта',
+      },
       kind: 'epic',
       priority: 'urgent',
       title: 'Ж'.repeat(200),
