@@ -15,6 +15,7 @@ export const analyticsDetailMessages = {
     failed: 'The details could not be read.',
     empty: 'Nothing was spent on it in this period.',
     figures: 'Figures',
+    about: 'About these figures',
     share: 'Share of the whole',
     shareOf: '{share} · {measure}',
     days: '{measure} {per}',
@@ -27,7 +28,6 @@ export const analyticsDetailMessages = {
     window: {
       open: 'Where the window went',
       title: '{window} · {account}',
-      about: 'About these figures',
       missing: 'The quota no longer names this window.',
     },
   },
@@ -42,6 +42,7 @@ export const analyticsDetailMessages = {
     failed: 'Не удалось прочитать подробности.',
     empty: 'В этом периоде на него ничего не потрачено.',
     figures: 'Показатели',
+    about: 'Об этих цифрах',
     share: 'Доля от всего',
     shareOf: '{share} · {measure}',
     days: '{measure} {per}',
@@ -54,7 +55,6 @@ export const analyticsDetailMessages = {
     window: {
       open: 'На что ушло окно',
       title: '{window} · {account}',
-      about: 'Об этих цифрах',
       missing: 'Квота больше не называет это окно.',
     },
   },

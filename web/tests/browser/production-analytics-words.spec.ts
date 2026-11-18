@@ -259,7 +259,7 @@ for (const locale of ['ru', 'en'] as const) {
     const panelText = plain(inPanel.blocks.join(' '))
     const basis = plain(caveatText(messages[locale].analytics, 'analytics.quota.spent.basis'))
     const about = page.getByRole('dialog').getByRole('button', {
-      name: messages[locale].analytics.detail.window.about,
+      name: messages[locale].analytics.detail.about,
     })
     await expect(about).toHaveCount(1)
     await about.click()

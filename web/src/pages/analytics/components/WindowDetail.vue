@@ -97,14 +97,14 @@ function choose(value: Shown) {
           :options="options"
           @update:model-value="choose"
         />
-        <InfoTip :label="t('analytics.detail.window.about')">
+        <InfoTip :label="t('analytics.detail.about')">
           <p class="window-detail-basis">{{ t('analytics.quota.spent.basis') }}</p>
           <template #trigger="{ toggle, popup }">
             <VButton
               class="window-detail-about"
               variant="ghost"
               size="compact"
-              :aria-label="t('analytics.detail.window.about')"
+              :aria-label="t('analytics.detail.about')"
               :aria-controls="popup.controls"
               :aria-expanded="popup.expanded"
               icon

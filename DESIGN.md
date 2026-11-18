@@ -2690,7 +2690,11 @@ opens it again with no focus ring; the overlay host gives it the focus, Escape c
 page under it is held, and the focus returns to what opened it. On a narrow window it takes the
 whole width. It names the value in full, and for a task «Open the card» opens the card over the
 page as any reference to the task does. Its figures are the time, the tokens, the cost and the
-value's share of the whole in the page's measure; its days are the page's period and step with
+value's share of the whole in the page's measure. What qualifies them — that the cost is an
+estimate at API prices, what the tokens count and, read by the minute, that a minute's figures
+are shared out — the section's «ⓘ» says under the panel, so the «ⓘ» «About these figures» that
+ends the figures' heading says it for the value's own read, once and in that «ⓘ» alone,
+never as a line of the panel. Its days are the page's period and step with
 the period before marked, one series in the value's colour; under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
 the value's filter added, and wait and fail as the page's do. «Narrow the page to it» does what

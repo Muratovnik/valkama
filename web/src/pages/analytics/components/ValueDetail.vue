@@ -7,7 +7,11 @@
  * the page's period, steps and filters and its own filter (`useValueRead`):
  *
  * - its figures, the agent time, the tokens and the cost, and its share of the whole the page
- *   shows in the page's measure;
+ *   shows in the page's measure, with what qualifies them — that the cost is an estimate at API
+ *   prices, what the tokens count and, read by the minute, that a minute's figures are shared out
+ *   (`useSectionCaveats`, of the value's own read) — said once in the «ⓘ» that ends their
+ *   heading's line, «About these figures», never as a line of the panel: the section's «ⓘ» that
+ *   says them on the page stands under the panel;
  * - its period step by step, with the period before marked (`ValueDays`);
  * - the models and the accounts it ran on, ranked in the page's measure, each in its hue of the
  *   page (`RankedBars`, dense); a value of the models or the accounts has no list of its own.
@@ -32,6 +36,7 @@ import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.t
 import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
+import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import {
   useValueRead,
@@ -95,6 +100,7 @@ const { t } = useI18n()
 const words = useSpendingWords()
 const actions = useLineActions()
 const places = useColourPlaces()
+const caveats = useSectionCaveats()
 
 const { state, retry } = useValueRead({
   by: () => props.by,
@@ -177,6 +183,8 @@ const figures = computed(() => {
         },
       ]
 })
+/** What qualifies the figures, as the section's «ⓘ» under the panel says it of the page's. */
+const about = computed(() => (steps.value ? caveats.spending(steps.value) : []))
 
 /** The value's hue on the page, as its bar and its stack draw it (`rankedSlots`). */
 const hue = computed(() => {
@@ -309,6 +317,8 @@ const narrow = useNarrowCharts(body)
           level="block"
           data-part="figures"
           :title="t('analytics.detail.figures')"
+          :about="about"
+          :about-label="t('analytics.detail.about')"
         >
           <dl class="value-figures">
             <div

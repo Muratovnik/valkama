@@ -6,9 +6,12 @@
  * in the history, and closes the panel; for work with no task, which has no card, it breaks the
  * view down by project crossed with launch class, or by launch class alone at a project's scope,
  * where the page has no section of projects. An opening or a narrowing the address cannot hold
- * says why instead of happening.
+ * says why instead of happening. What qualifies the figures — the cost an estimate, what the tokens
+ * count, a minute's figures shared out where the read is by the minute — the panel says once, in
+ * an «ⓘ» of its own named for the figures, never as a line: the section's «ⓘ» stands under it.
  */
 import { flushPromises } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import { noTask, serveUsage, task, value } from '../fixtures/analytics.ts'
@@ -31,6 +34,49 @@ import {
 vi.mock('@/shared/api/analyticsUses.ts', () => ({ reportAnalyticsUse: vi.fn() }))
 
 pressEachTest()
+
+/** The caveats of the figures in the words of the catalog, in each language. */
+const CAVEAT_WORDS = {
+  en: {
+    spending: [
+      'The cost is an estimate at API list prices, not a bill.',
+      'Tokens count input, output and cache writes; cache reads stand apart, and reasoning is part of output.',
+    ],
+    minutes:
+      'Figures per minute are an estimate: each stretch of work is shared out among the minutes it spans by its time in each.',
+  },
+  ru: {
+    spending: [
+      'Стоимость — оценка по прейскуранту API, а не счёт.',
+      'Токены — это вход, выход и запись в кэш; чтение кэша стоит отдельно, а рассуждения входят в выход.',
+    ],
+    minutes:
+      'Цифры по минутам — оценка: каждый отрезок работы делится между минутами, которые он захватывает, по времени в каждой.',
+  },
+}
+const EVERY_CAVEAT = Object.values(CAVEAT_WORDS).flatMap((one) => [...one.spending, one.minutes])
+
+/**
+ * The panel's «ⓘ» named `name`, the one in it and in its figures: the caveats it says once
+ * pressed, in order of their words, and every caveat the panel shows as a line before that.
+ */
+async function caveatsOf(host: VueWrapper, name: string) {
+  const panel = panelOf(host)
+  const press = `button[aria-label="${name}"]`
+  expect(panel.findAll(press)).toHaveLength(1)
+  expect(panel.get('[data-part="figures"]').findAll(press)).toHaveLength(1)
+  const text = panel.text().replaceAll(/\s+/gu, ' ')
+  const asLines = EVERY_CAVEAT.filter((caveat) => text.includes(caveat))
+  expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(0)
+  await panel.get(press).trigger('click')
+  await flushPromises()
+  const tips = document.querySelectorAll('[role="tooltip"]')
+  expect(tips).toHaveLength(1)
+  const inTip = [...(tips[0]?.querySelectorAll('p') ?? [])]
+    .map((line) => (line.textContent ?? '').trim())
+    .sort()
+  return { inTip, asLines }
+}
 
 describe('what a value’s panel shows', () => {
   it('says a task’s figures, its share of the whole and the models and accounts it ran on', async () => {
@@ -66,6 +112,34 @@ describe('what a value’s panel shows', () => {
     expect(panelOf(host).get('h2').text()).toBe('No task')
     expect(cardLinks(host)).toHaveLength(0)
     expect(narrowButton(host).attributes('aria-description')).toBe(BREAK_DOWN)
+  })
+
+  it('says what qualifies its figures once, in the «ⓘ» ending their heading, and never as a line', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({ by: 'work_item', detail: detailOf('work_item', task(1, '').id) })
+    const seen = await caveatsOf(host, 'About these figures')
+    // A week read by the day: the cost and the tokens are qualified, no minute is shared out.
+    expect(seen.inTip).toEqual([...CAVEAT_WORDS.en.spending].sort())
+    expect(seen.asLines).toEqual([])
+  })
+
+  it('adds that a minute’s figures are shared out where the value is read by the minute, in Russian', async () => {
+    // Twenty minutes of «Now», the hour up to Wednesday 14:30, on the first task.
+    const live: TimedStretch[] = [
+      {
+        at: new Date(2026, 10, 11, 14, 5),
+        group: { work_item: task(1, 'Task 1') },
+        spend: { seconds: 1200 },
+      },
+    ]
+    stubAnalyticsReads((query) => serveUsage(live, query))
+    const host = await mountPage(
+      { period: 'now', by: 'work_item', detail: detailOf('work_item', task(1, '').id) },
+      'ru',
+    )
+    const seen = await caveatsOf(host, 'Об этих цифрах')
+    expect(seen.inTip).toEqual([...CAVEAT_WORDS.ru.spending, CAVEAT_WORDS.ru.minutes].sort())
+    expect(seen.asLines).toEqual([])
   })
 
   it('says a value with nothing in the period spent nothing', async () => {

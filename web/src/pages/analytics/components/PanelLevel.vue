@@ -15,11 +15,12 @@
  * that qualifies the whole level — that a cost is an estimate, what the tokens count, that the
  * period does not reach the quota — is said once, in the «ⓘ» that ends the heading's line
  * (`about`), never as a line of the page; it opens on a press, so a finger reaches it too
- * (`InfoTip`). The quota once opened on two sentences of what does not apply to it, which pushed
- * its accounts down on every visit. What the level holds stands one under the next, two side by
- * side where both read well (`pair`), or as many side by side as keep `columnMin` (`fit`); a part
- * that must take the whole width says so on its own root. A group may stand on a surface of its
- * own.
+ * (`InfoTip`). It is named «About this section», and a level that is no section names it for what
+ * it qualifies (`aboutLabel`), as the figures of a value's side panel do. The quota once opened on
+ * two sentences of what does not apply to it, which pushed its accounts down on every visit. What
+ * the level holds stands one under the next, two side by side where both read well (`pair`), or as
+ * many side by side as keep `columnMin` (`fit`); a part that must take the whole width says so on
+ * its own root. A group may stand on a surface of its own.
  *
  * A heading that changes while the level stands, as a chart's names the page's measure, keeps the
  * room of every heading it takes in turn (`titles`): the others stand unseen in its place, so the
@@ -45,6 +46,8 @@ const props = withDefaults(
     level: Level
     /** The caveats of the whole level, each a sentence, said in the «ⓘ» of its heading. */
     about?: readonly string[]
+    /** The «ⓘ»'s name, its button's and its caveats'; «About this section» where it is unset. */
+    aboutLabel?: string
     /** The element the level is; a group of a list is its item. */
     as?: 'section' | 'div' | 'li'
     /** The element of what the level holds: a list of groups is a list. */
@@ -70,6 +73,7 @@ const props = withDefaults(
     surface: false,
     bodyLabel: undefined,
     about: () => [],
+    aboutLabel: undefined,
     titles: () => [],
   },
 )
@@ -91,6 +95,7 @@ const headed = computed(() => props.title !== '' || Boolean(slots.heading))
 const headingAs = useLevelHeading(() => headed.value)
 /** The «ⓘ» stands at a heading: a level with no heading has no line for it to end. */
 const caveats = computed(() => (headed.value ? props.about : []))
+const aboutName = computed(() => props.aboutLabel ?? t('analytics.about.label'))
 /** The other headings the level takes in turn, each held unseen in the heading's place. */
 const rivals = computed(() =>
   props.title ? [...new Set(props.titles)].filter((other) => other !== props.title) : [],
@@ -148,7 +153,7 @@ const rivals = computed(() =>
         class="level-about"
         :class="`heading-${level}`"
       >
-        <InfoTip :label="t('analytics.about.label')">
+        <InfoTip :label="aboutName">
           <div class="level-about-caveats">
             <p
               v-for="caveat in caveats"
@@ -163,7 +168,7 @@ const rivals = computed(() =>
               class="level-about-press"
               variant="ghost"
               :size="ACTION_SIZE"
-              :aria-label="t('analytics.about.label')"
+              :aria-label="aboutName"
               :aria-controls="popup.controls"
               :aria-expanded="popup.expanded"
               icon

@@ -5,7 +5,7 @@
  * modal inspector of the drawer layer, at the window's right edge and across the whole of a
  * phone, with the focus in it; Escape and Back close it and give the focus back to what opened
  * it, and a reload opens it again with no ring. Its parts stand in one column, none over another
- * and none cut. A task's panel offers its card, which stands over the page while the panel waits
+ * and none cut, and the «ⓘ» of its figures ends their heading's line. A task's panel offers its card, which stands over the page while the panel waits
  * closed under it; a model's offers none and is not broken down by models; work with no task has
  * no card, and «Narrow the page to it» breaks the page down by where the work came from. A press
  * with a modifier on a task is the browser's. «All N» opens every value of the section, found by
@@ -197,6 +197,25 @@ function expectPlaced(measured: Awaited<ReturnType<typeof placed>>, count: numbe
   }
 }
 
+/**
+ * The one «ⓘ» of the figures, named `about`, ends the line of their heading: after it, centred on
+ * it, inside their part, which stands inside the panel (`expectPlaced`), and over their first line.
+ */
+async function expectAboutEnds(part: Locator, words: { about: string; figures: string }) {
+  const press = part.getByRole('button', { name: words.about })
+  await expect(press).toHaveCount(1)
+  const named = await edges(part.getByRole('heading', { name: words.figures }))
+  const info = await edges(press)
+  const whole = await edges(part)
+  const first = await edges(part.locator('[data-figure]').first())
+  expect(info.left, '«ⓘ» after the heading').toBeGreaterThanOrEqual(named.right)
+  expect(Math.abs(middle(info) - middle(named)), '«ⓘ» on the heading’s line').toBeLessThanOrEqual(1)
+  expect(info.right, '«ⓘ» inside its part').toBeLessThanOrEqual(whole.right)
+  expect(info.top, '«ⓘ» inside its part').toBeGreaterThanOrEqual(whole.top)
+  expect(info.bottom, '«ⓘ» over the figures').toBeLessThanOrEqual(first.top)
+  return { heading: named, about: info }
+}
+
 /** Nothing in the open panel clipped without a sign, and none of its figures or names short. */
 async function expectWhole(page: Page, where: string, words: string) {
   await expectNoSilentClipping(page, where, '[role="dialog"]')
@@ -229,6 +248,7 @@ for (const locale of ['en', 'ru'] as const)
       for (const part of Object.values(taskParts)) await expect(part).toBeVisible()
       const taskPlaced = await placed(page, task, taskParts)
       expectPlaced(taskPlaced, parts.length + 1)
+      const figuresAbout = await expectAboutEnds(taskParts.figures, said.detail)
       await expectWhole(
         page,
         `a task's panel at ${width}px in ${locale}`,
@@ -280,7 +300,7 @@ for (const locale of ['en', 'ru'] as const)
       const windowPlaced = await placed(page, window, windowParts)
       expectPlaced(windowPlaced, 3)
       // The panel's «ⓘ» stands after its switch on the switch's line, inside the panel.
-      const about = await edges(window.getByRole('button', { name: said.detail.window.about }))
+      const about = await edges(window.getByRole('button', { name: said.detail.about }))
       const { shown } = windowPlaced.parts
       expect(about.left, '«ⓘ» after the switch').toBeGreaterThanOrEqual(shown.right)
       expect(about.right, '«ⓘ» inside the panel').toBeLessThanOrEqual(windowPlaced.panel.right)
@@ -295,7 +315,7 @@ for (const locale of ['en', 'ru'] as const)
       )
 
       await record(info, `value panel ${locale} ${width}`, {
-        task: taskPlaced,
+        task: { ...taskPlaced, figuresAbout },
         every: everyPlaced,
         window: { ...windowPlaced, about },
       })
