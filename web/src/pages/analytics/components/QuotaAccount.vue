@@ -13,7 +13,10 @@
  * share keeps them in its bar's, all of it in words as a table, and never a figure beside a share.
  *
  * It is a group of the panel on a surface of its own, its windows side by side where the width
- * keeps each readable and one under the next where it does not (`PanelLevel`).
+ * keeps each readable and one under the next where it does not (`PanelLevel`). Two windows side by
+ * side stand 32px apart (`apart`) with a hairline of the rule's ink midway between them: 16px apart and with
+ * nothing between, the moment ending one window's axis and the one starting the next stood a few
+ * pixels apart and read as one axis.
  *
  * What a reader of the page selects it by: the account is `data-account`, its name; the two parts
  * of its head are `data-account-head`, `name` for its name and `facts` for what stands beside it.
@@ -101,6 +104,7 @@ const tableWords = computed<WindowWords>(() => ({
     columns="fit"
     column-min="24rem"
     :data-account="name"
+    apart
     surface
   >
     <template #heading>
@@ -150,6 +154,7 @@ const tableWords = computed<WindowWords>(() => ({
       <QuotaWindow
         v-for="window in windows"
         :key="windowKey(window)"
+        class="quota-account-window"
         :account="account"
         :window="window"
         :today="today"
@@ -178,6 +183,38 @@ const tableWords = computed<WindowWords>(() => ({
 </template>
 
 <style scoped>
+/* The hairline between two windows side by side, midway in the gap before every window that does
+   not start a row. Where a row starts follows from the grid: as many windows a row as keep 24rem
+   with the gap between, which is 50rem for two and 76rem for three in the account's width. */
+.quota-account-window {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(-1 * (var(--space-8) + var(--space-hair)) / 2);
+    display: none;
+    border-inline-start: var(--space-hair) solid var(--color-rule);
+  }
+}
+
+@container (width >= 50rem) {
+  .quota-account-window:nth-child(2n of .quota-account-window)::before {
+    display: block;
+  }
+}
+
+@container (width >= 76rem) {
+  .quota-account-window:nth-child(2n of .quota-account-window)::before {
+    display: none;
+  }
+
+  .quota-account-window:not(:nth-child(3n + 1 of .quota-account-window))::before {
+    display: block;
+  }
+}
+
 /* What is not a window takes the group's whole width, over or under its windows. */
 .quota-account-none,
 .quota-account-table,

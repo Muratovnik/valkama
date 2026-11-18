@@ -99,6 +99,9 @@ export const LINE_BUDGET = new Map([
   ['pages/settings/components/installation-health.css', 5],
   // The status edge of the note that the period before could not be read, as the degraded banner's.
   ['pages/analytics/components/SpendingUnread.vue', 1],
+  // The divider between two quota windows of one account side by side: air alone left the moments
+  // ending one window's axis and starting the next reading as one axis.
+  ['pages/analytics/components/QuotaAccount.vue', 1],
   // Planning's own surfaces. Overview divides the facts from the record; the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 1], // Frozen step quote.

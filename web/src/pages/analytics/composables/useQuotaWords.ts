@@ -10,8 +10,8 @@
  * threshold `freshFor`, in seconds (`stateAt`), never taken from the answer's `state`, which was
  * true only when the server answered. A
  * window with no figure says so in words, so no source, a silent window and a fresh 0 % never
- * read alike. A forecast is said after the key that names its hatch, «Forecast · …», wherever a
- * drawing hatches it, and what a step line points at past its readings — the window now and its
+ * read alike. A forecast is said as «Forecast · …», the name the legend gives the hatch of a
+ * drawing that hatches it, and what a step line points at past its readings — the window now and its
  * forecast at the reset — is said here for its hint and its table. Nothing here adds two shares,
  * and nothing names money.
  */

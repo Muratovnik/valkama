@@ -2625,14 +2625,16 @@ its forecast's tail, which the bar's words and hint name «Forecast ·», since 
 for a key. A tile with no window to name says why: no source read the work, the windows reset
 since they were read, or no reading. The panel has a group per account on a surface of its
 own, by the name its owner gave it or the start of its id, the whole id in its hint, its
-windows side by side where the width allows. Every window, the five hours, the week and a
+windows side by side where the width allows, 32px apart with a hairline in the rule's ink midway
+between two neighbours: 16px apart with nothing between, the moment ending one window's axis and
+the one starting the next stood a few pixels apart and read as one axis. Every window, the five hours, the week and a
 model's week, has the same three parts 12px apart: what stands now, the `StepLine` of its
 readings and «Where the window went», which opens what used it in the side panel.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · fresh», «13% used · silent 5 h», over its bar, its share solid and its forecast a
-hatched tail; then its forecast in the text's ink after the key of that hatch, a swatch where a
-tail is drawn, hung in the card's start gutter so the line's words start where the lines under it
-do, and «Forecast ·» — the five hours a point, lasting to the reset with the share spent by
+hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the
+name the step line's legend gives the hatch, its words starting where the lines under it do and
+nothing of it in the card's inset — the five hours a point, lasting to the reset with the share spent by
 then, or running out at a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
 end there says the week runs out before its reset and about when its slower pace spends it, a
 high end there that it may, and ends said alike one value — and when it resets in absolute and
