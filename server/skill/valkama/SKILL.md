@@ -73,7 +73,8 @@ for your call, and the holder only when no session is confirmed. Sign every
 call with the same `author`.
 
 A claim is a lease: `live` while its session is active, `stale` once it ended
-or was quiet 3 days, `unconfirmed` when no session was proved, lapsing after 3
+or was quiet for the owner's `lease_quiet_days` (3 days unless they changed it
+for the space), `unconfirmed` when no session was proved, lapsing after as many
 days without an event on the item. An open question to the owner there stops
 the count; your steps lapse with your claim. Take a stale claim over without
 `force`, a live one only on an instruction that says so. An ended session keeps
@@ -231,13 +232,8 @@ session. Naming the item written on, or an item twice, is refused. Tell an item
 only with news for the work there.
 
 **Asking another session.** When you need another session's answer before you go
-on — a choice, a yes or no — ask it: `create_work_item_request` with `addressees`
-(its session id, from `participants`, `subscribers` or the holder) and fields. The
-request wakes that session, and its answer wakes you. Ask only a session that is
-working: an ended one is refused, and so are your own session and a subagent. A
-session is asked at most 3 times an hour by yours (`ask_limit`): ask once with
-every field you need. For a free exchange, write a comment with `awaits_reply`
-instead.
+on — a choice, a yes or no — ask it with `addressees`, as
+[the tool reference](references/tools.md#asking-another-session) says.
 
 **Resolved threads.** The batch's `resolutions` mark a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark, up to 100 roots in
@@ -348,9 +344,8 @@ Whenever you recommend an option or a verdict, give `why` beside it: markdown on
 why that one, which the owner reads by pointing at the recommendation. It is
 taken only beside `recommended` (true on an option).
 
-**A review of many points** is one `verdict` field per proposal, the steps or ways
-of a point a field `under` it and a `group` per area; how to write one, with an
-example, is in [the tool reference](references/tools.md#a-review-of-many-points).
+A review of many points is one `verdict` field per proposal: see
+[the tool reference](references/tools.md#a-review-of-many-points).
 
 The owner answers it in Valkama. In a field with options the answer is an option
 or an own variant (`own`): in a `choice` or `boolean` instead of an option, in a
@@ -362,36 +357,22 @@ open question is not an answer; to ask about a question, reply in its thread
 
 An answer can change after it was given: a person changes it in Valkama, and an
 agent changes it with `answer_work_item_request` and `change: true`, only when the
-owner asks for that. A change is refused when nothing differs, once the item is
-closed, and past 50 versions. A changed answer has `answer_version` 2 or more,
-the compact form shows the answer it replaced as `previous`, and the whole
+owner asks for that. A question with a `purpose`, or one a write that waits for the
+owner carries, is the owner's alone: its answer is carried out, never changed. A
+change is refused when nothing differs, once the item is closed, and past 50
+versions. A changed answer has `answer_version` 2 or more, the compact form
+shows the answer it replaced as `previous`, and the whole
 question keeps every replaced one in `history`. When you are told
 `question_changed`, read the question again: the answer you acted on is no longer
-the current one. There are three ways to read one:
+the current one.
 
-- `get_work_item` reads them as its `questions` part: `total`, how many are
-  `open`, and up to 5 `items` with the open ones first and then the newest closed,
-  and `truncated` when there are more. The card's `parts` counts them; read the
-  part when you come back to an item that has open ones.
-- `list_work_item_requests` finds them on an item (`id`) or in a space, by
-  `status` and `answered_after`. To read answers in portions, keep the last
-  `answered_at` you read and pass it as `answered_after`, and ask again while
-  `truncated` is true: the oldest comes first, no two answers of one time are
-  parted, and a changed answer comes again.
-- `get_work_item_request` gives one question whole, with its options and their
-  descriptions, its `history` and its thread as `replies`, and
-  `list_work_item_requests` gives each question whole with `full: true`.
-
-The first two answer in a compact form, whose fields are in
-[the tool reference](references/tools.md#requests). A long note or written answer
-is cut there with `clipped: true`; `get_work_item_request` has the whole text.
-
-A review adds `verdicts`, each verdict field under the word it was given, and
-`undecided`, the shown points given neither a verdict nor an own variant. Treat
-an undecided point as not decided, never as accepted. Its `answer` holds only
-what says more than a verdict: the fields under a point, with `under` and, for
-steps, `of` (how many were offered), and a point with a comment or an own
-variant. A point with its own variant is decided and in neither list.
+Read questions in the `questions` part of `get_work_item`, which the card's
+`parts` counts (read it when you come back to an item with open ones), with
+`list_work_item_requests` on an item or a space, in portions by `answered_after`,
+or one whole with `get_work_item_request`; their forms are in
+[the tool reference](references/tools.md#requests). What a review leaves
+`undecided`, and a list's `undecided: ["items"]`, is not decided: never read it
+as accepted, or as every option refused.
 
 A request suits a question the work can go on without. No session waits for it:
 the answer arrives with the next read of the item, so go on with what does not
@@ -401,10 +382,32 @@ that execution ends. Closing an item ends every request pending on it, a list un
 a comment too, `expired` with `item_completed` or `item_cancelled`, and reopening
 brings none back: keep the item open, in review for instance, while the answer or
 the ticks are still needed. A call that writes a list and closes its item is
-refused. A list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
-once the person sent it with none ticked. Treat that as not decided, never as every
-option refused; `status` tells a list not sent yet (`pending`) from one sent empty
-(`answered`). The owner's own rules on where to ask come first.
+refused. The owner's own rules on where to ask come first.
+
+## When the owner decides
+
+Some writes are the owner's to make, by a setting in Valkama that only the server
+reads. Act the same at any setting; the answer says what happened. A write that
+waits answers `waits_for_owner` with its `question`: nothing of it is written,
+and the server makes it when the owner answers, if it still applies. You hear the
+answer on the item, and `action_dropped` when it no longer applied. Go on with
+what does not depend on it; expiring the question takes the write back. A cancel
+of work other sessions hold may answer `waits_for_sessions`: each is asked to
+agree, and a day of silence passes it to the owner. Asked yourself, answer
+`agree`, `object` with a reason, or `moved_out` once `move_out` took your task
+out of what is being cancelled. A call that closes the item while another of its
+writes waits is refused whole.
+
+A decision is a choice between ways of doing accepted work that changes what the
+owner gets (scope, visible behaviour or interface, data, cost or time, public
+text) and that the item's steps, the project's rules or an earlier answer do not
+settle. Ask it as a `decision` with a recommended answer in every required
+field; it may come back answered by that recommendation, and then you act on it.
+A reversible technical choice that does not show in the result is yours: make it
+and say so in the summary. Removing or rewriting a step of a goal or stage needs
+`checklist_reason`; a step whose wording you only clarify goes by its id with
+`clarifies: true` and is written at once. A cancel that follows an owner's
+answer names it in `following`.
 
 ## Merging items that are one change
 
