@@ -135,6 +135,23 @@ const ACTIONS: [string, ReturnType<typeof action>][] = [
     action('goal_defer', { reason: 'after the release', proposed: { until: '2026-12-01' } }),
   ],
   ['goal', action('proposed_goal', { asked_by: 'Valkama', outcome: 'carried_out' })],
+  [
+    'triage',
+    action('finding', {
+      reason: 'One change to the export',
+      proposed: {
+        conditions: ['The export writes every field'],
+        items: [
+          { reference: 'TASK-41', title: 'Finding in the export' },
+          { reference: 'TASK-42', title: 'Another finding' },
+        ],
+        answer: 'later',
+        until: '2026-12-01',
+        why: 'One change to the export',
+      },
+      cancel_list: cancelList,
+    }),
+  ],
 ]
 
 describe('a question with a purpose', () => {
