@@ -11,12 +11,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import http_surface, store, watchers
+from server import app_shell, http_surface, store, watchers
 from server.planning import service as planning_service
 from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
 from server.platform import modules as platform_modules
 from server.projects import project_registry
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests import SUITE_STORE, schema8
 
 
@@ -90,6 +92,96 @@ class InitializeTests(unittest.TestCase):
             platform_migrations.CatalogMigrationError, "integration_settings"
         ):
             store.connect()
+
+    def test_a_route_the_shell_saved_in_a_space_opens_with_the_store(self) -> None:
+        conn = store.connect()
+        try:
+            planning_service.create_planning_space(conn, name="Alpha", key="ALPHA")
+            conn.commit()
+            space_ref = {
+                "data_scope_id": read_store_metadata(conn)["data_scope_id"],
+                "space_key": "ALPHA",
+            }
+            saved = app_shell.save_ui_prefs(
+                conn,
+                {
+                    "interface_version": app_shell.UI_PREFS_INTERFACE,
+                    "module_id": "planning",
+                    "scope": {"kind": "space", "space_ref": space_ref},
+                    "resource_ref": planning_space_entity(space_ref),
+                },
+            )["prefs"]
+        finally:
+            conn.close()
+        reopened = store.connect()
+        self.addCleanup(reopened.close)
+        self.assertEqual(saved, app_shell.ui_prefs_record(reopened))
+
+    def test_a_remembered_route_whose_scope_this_build_does_not_write_is_refused(self) -> None:
+        store.connect().close()
+        # `project` is the scope a route had before a planning space became one; the
+        # work-model migration drops such a route, so a current store holding one was
+        # not carried by this product. `everywhere` was never a scope.
+        for scope in (
+            {"kind": "everywhere"},
+            {"kind": "project", "project_ref": {"project_id": "alpha"}},
+        ):
+            with self.subTest(scope=scope["kind"]):
+                raw = sqlite3.connect(self.db)
+                raw.execute(
+                    "INSERT OR REPLACE INTO platform_ui_prefs(key, record_json, updated_at)"
+                    " VALUES ('last-route', ?, '2026-01-02T03:04:05Z')",
+                    (json.dumps({"module_id": "planning", "scope": scope}),),
+                )
+                raw.commit()
+                raw.close()
+                with self.assertRaisesRegex(
+                    platform_migrations.CatalogMigrationError, "UI preference"
+                ):
+                    store.connect().close()
+
+    def test_a_route_an_earlier_store_persisted_still_converts(self) -> None:
+        # The migrations that read an older catalog keep the scope it was written in.
+        row = {
+            "key": "last-route",
+            "record_json": json.dumps(
+                {
+                    "module_id": "planning",
+                    "scope": {"kind": "project", "project_ref": {"project_id": "alpha"}},
+                }
+            ),
+            "updated_at": "2026-01-02T03:04:05Z",
+        }
+        self.assertEqual(
+            {
+                "module_id": "planning",
+                "scope": {"kind": "project", "project_ref": {"project_id": "alpha"}},
+            },
+            platform_migrations._neutral_ui_prefs_record(row, legacy=False),
+        )
+        board_era = {
+            **row,
+            "record_json": json.dumps(
+                {
+                    "module_id": "planning",
+                    "scope": {"kind": "global"},
+                    "board_ref": {
+                        "data_scope_id": "00000000-0000-4000-8000-000000000001",
+                        "board_name": "Alpha",
+                    },
+                }
+            ),
+        }
+        self.assertEqual(
+            {
+                "module_id": "planning",
+                "scope": {"kind": "global"},
+                "resource_ref": planning_space_entity(
+                    {"data_scope_id": "00000000-0000-4000-8000-000000000001", "space_key": "ALP"}
+                ),
+            },
+            platform_migrations._neutral_ui_prefs_record(board_era, legacy=True),
+        )
 
     def test_initialize_needs_an_explicit_connection(self) -> None:
         with self.assertRaises(TypeError):
@@ -236,6 +328,44 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
         self.assertEqual(
             404, self._put("/api/modules/improvements/profile", {"scope": "personal"})[0]
         )
+
+    def test_the_service_keeps_answering_once_the_shell_saved_a_route_in_a_space(self) -> None:
+        # Every request that writes, and the event stream, opens the store through
+        # `store.connect()`, which holds the saved route to the store's postconditions.
+        conn = store.connect()
+        try:
+            planning_service.create_planning_space(conn, name="Alpha", key="ALPHA")
+            conn.commit()
+            space_ref = {
+                "data_scope_id": read_store_metadata(conn)["data_scope_id"],
+                "space_key": "ALPHA",
+            }
+        finally:
+            conn.close()
+
+        def save(scope: dict) -> int:
+            return self._post(
+                "/api/platform/ui-prefs",
+                {"interface_version": "valkama-ui-prefs", "module_id": "planning", "scope": scope},
+            )[0]
+
+        self.assertEqual(200, save({"kind": "space", "space_ref": space_ref}))
+        status, _, body = self._post(
+            "/api/planning/work-items", {"space": "ALPHA", "title": "After the route"}
+        )
+        self.assertEqual(200, status, body)
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        response = None
+        try:
+            client.request("GET", "/api/events?view=spaces")
+            response = client.getresponse()
+            self.assertEqual(200, response.status)
+            self.assertTrue(response.readline().startswith(b"data: "))
+        finally:
+            if response is not None:
+                response.close()
+            client.close()
+        self.assertEqual(200, save({"kind": "global"}))
 
     def test_unknown_sse_view_is_rejected(self) -> None:
         self.assertEqual(400, self._get("/api/events?view=not-registered")[0])

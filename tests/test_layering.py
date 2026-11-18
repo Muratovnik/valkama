@@ -28,12 +28,14 @@ ROUTING_MODULES = (
     "server.ui_state",
 )
 
-# The module list and its manifest are allowed; everything else under
-# `server.platform` brings a store up, migrates it or reaches an adapter.
+# The module list, its manifest and the grammar of the route the shell remembers
+# are allowed; everything else under `server.platform` brings a store up,
+# migrates it or reaches an adapter.
 ALLOWED_PLATFORM_MODULES = {
     "server.platform",
     "server.platform.module_manifest",
     "server.platform.modules",
+    "server.platform.ui_prefs",
 }
 
 
