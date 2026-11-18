@@ -6,7 +6,9 @@ recommendation, a cancel, a close -- and at an acceptance by assignment, the poi
 marks the event that recorded the action with `mark`. The mark is a row beside the
 event, not a record of its own: when it happened, on which item and in which
 session are the event's and its call's, so the summary and the item's history name
-one event and cannot part. Deleting the event, or its item, deletes the mark.
+one event and cannot part. A mark Valkama's call writes for an agent, as a cancel the
+sessions agreed to, names the session of the call that asked it, as the waiting action
+keeps it. Deleting the event, or its item, deletes the mark.
 
 Which event each point marks is fixed (`EVENTS`): a mark on any other is the
 point's own mistake, refused before anything is written.
@@ -114,11 +116,16 @@ _FROM = (
     " JOIN work_items w ON w.work_item_id = e.work_item_id"
     " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
 )
+#: A mark's rows, with the call that decided: the event's, or, where the event's call
+#: carried out a waiting action of the mark's point on its item, as Valkama's call makes
+#: the cancel the sessions agreed to, the call that asked that action (`asked_call`).
 _ROWS = (
     "SELECT d.event_id, d.point, d.what, e.created_at, e.author, w.work_item_id,"
     " w.number, w.title, s.key, c.identity_state, c.identity_source, c.session_id, c.agent_id"
     + _FROM
-    + " LEFT JOIN execution_events c ON c.id = e.call_id"
+    + " LEFT JOIN pending_actions a ON a.ended_call = e.call_id"
+    " AND a.work_item_id = e.work_item_id AND a.point = d.point AND a.outcome = 'carried_out'"
+    " LEFT JOIN execution_events c ON c.id = COALESCE(a.asked_call, e.call_id)"
 )
 
 

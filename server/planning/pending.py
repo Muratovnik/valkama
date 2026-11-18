@@ -547,7 +547,7 @@ def part(conn: sqlite3.Connection, action_id: str, purpose: str | None, author: 
     found: dict[str, object] = {
         "id": action.id,
         "point": action.point,
-        "asked_by": _asker(conn, action.asked_call, author),
+        "asked_by": asker(conn, action, author),
         "asked_at": action.created_at,
         "reason": action.reason,
         "proposed": action.proposed,
@@ -568,20 +568,52 @@ def part(conn: sqlite3.Connection, action_id: str, purpose: str | None, author: 
     return found
 
 
-def _asker(conn: sqlite3.Connection, call: int, author: str) -> str:
-    row = conn.execute(
+def _asking_call(conn: sqlite3.Connection, action: Action) -> sqlite3.Row | None:
+    """The call that asked an action: the one source of who asked it.
+
+    It is the agent's call whose write set the action going, also where a call of
+    Valkama's own then asked on that agent's behalf (the sessions in a round of
+    consent, the owner once the round passes the cancel on): Valkama writes, the
+    agent asks. An action Valkama asked itself, such as a goal that came back, names
+    Valkama's call.
+    """
+
+    found: sqlite3.Row | None = conn.execute(
         "SELECT identity_state, identity_source, session_id FROM execution_events WHERE id = ?",
-        (call,),
+        (action.asked_call,),
     ).fetchone()
+    return found
+
+
+def asked_session(conn: sqlite3.Connection, action: Action) -> str | None:
+    """The session that asked an action, which alone withdraws its questions; None when
+    Valkama asked it or its call proved no session."""
+
+    return _proved(_asking_call(conn, action))
+
+
+def asker(conn: sqlite3.Connection, action: Action, author: str) -> str:
+    """Who asked an action, as a holder is named: `Valkama` for one it asked itself, and
+    `author` for a call that proved no session."""
+
+    row = _asking_call(conn, action)
     if row is None:
         return author
     if row["identity_source"] == calls.VALKAMA:
         return VALKAMA
-    if row["identity_state"] == calls.CONFIRMED and row["session_id"]:
-        held = calls.channel_holder(str(row["identity_source"]), str(row["session_id"]))
-        if held is not None:
-            return held
-    return author
+    session = _proved(row)
+    held = None if session is None else calls.channel_holder(str(row["identity_source"]), session)
+    return held if held is not None else author
+
+
+def _proved(row: sqlite3.Row | None) -> str | None:
+    """The session an asking call proved; None for Valkama's call or one that proved none."""
+
+    if row is None or row["identity_source"] == calls.VALKAMA:
+        return None
+    if row["identity_state"] != calls.CONFIRMED or not row["session_id"]:
+        return None
+    return str(row["session_id"])
 
 
 def _consent(conn: sqlite3.Connection, action: Action) -> list[dict]:

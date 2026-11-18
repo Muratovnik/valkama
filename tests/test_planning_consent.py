@@ -49,8 +49,14 @@ def _agent(session: str) -> calls.Identity:
 
 
 A, B, C = _agent("session-a"), _agent("session-b"), _agent("session-c")
+#: A session that neither asked nor is asked.
+D = _agent("session-d")
 #: How a session is named where the round lists it: as a holder is named.
-LABEL_B, LABEL_C = "claude (session session-b)", "claude (session session-c)"
+LABEL_A, LABEL_B, LABEL_C = (
+    "claude (session session-a)",
+    "claude (session session-b)",
+    "claude (session session-c)",
+)
 REASON = "covered by another goal"
 SUMMARY = {"done": "Nothing: another goal covers it.", "next": "Nothing."}
 REFUSED = (model.PlanningError, api.PlanningHttpError)
@@ -375,6 +381,13 @@ class RoundTests(Harness):
         )
         self.assertEqual("carried_out", self.action(self.goal).outcome)
         self.assertIn(("cancel_shared", self.goal, f"cancel {self.goal}"), self.decided())
+        # Valkama made the cancel, and the summary names the session whose agent asked it.
+        [marked] = [
+            entry
+            for entry in decisions.page(self.conn, space=self.space)["items"]
+            if entry["point"] == "cancel_shared" and entry["item"]["reference"] == self.goal
+        ]
+        self.assertEqual(LABEL_A, marked["session"])
         # The agent that asked follows the goal and hears Valkama's write there.
         follows = self.conn.execute(
             "SELECT follows FROM work_item_subscriptions WHERE work_item_id = ? AND session_id = ?",
@@ -386,6 +399,45 @@ class RoundTests(Harness):
             for _call, entry in person_events.valkama_since(self.conn, self.id(self.goal), 0)
         }
         self.assertIn("status", heard)
+
+    def withdrawal(self, question: str) -> dict[str, object]:
+        row = self.request(question)
+        return {"id": question, "expected_revision": int(row["revision"]), "author": "claude"}
+
+    def test_the_agent_that_asked_withdraws_its_cancel_and_no_other_session_does(self) -> None:
+        # Valkama's call asked the sessions; the agent whose cancel waits is who asked.
+        asked_b = self.asked_of(self.goal, B)
+        self.assertEqual(LABEL_A, requests.get(self.conn, asked_b)["action"]["asked_by"])
+        for by in (B, D):
+            with self.subTest(by=by.session_id):
+                with self.assertRaises(REFUSED) as refused:
+                    self.tool("expire_work_item_request", by, **self.withdrawal(asked_b))
+                status, body = api.error_response(refused.exception)
+                self.assertEqual((403, "not_asker"), (status, body["error"]["code"]))
+        self.assertEqual(["pending", "pending"], [row["status"] for row in self.asked(self.goal)])
+        withdrawn = self.tool("expire_work_item_request", **self.withdrawal(asked_b))
+        self.assertEqual(("expired", "withdrawn"), (withdrawn["status"], withdrawn["carried_out"]))
+        self.assertEqual("withdrawn", self.action(self.goal).outcome)
+        self.assertEqual(
+            [("expired", "withdrawn"), ("expired", "withdrawn")],
+            [(row["status"], row["expired_reason"]) for row in self.asked(self.goal)],
+        )
+        self.assertEqual("open", self.category(self.goal))
+        self.assertEqual([], self.decided())
+
+    def test_the_agent_that_asked_withdraws_the_cancel_the_round_passed_on(self) -> None:
+        self.consent(self.goal, B, "object", reason="the release needs it")
+        # Valkama's call asked the owner on the agent's behalf.
+        [question] = self.owners_list()
+        self.assertEqual(LABEL_A, requests.get(self.conn, question)["action"]["asked_by"])
+        with self.assertRaises(REFUSED) as refused:
+            self.tool("expire_work_item_request", D, **self.withdrawal(question))
+        self.assertEqual("not_asker", api.error_response(refused.exception)[1]["error"]["code"])
+        withdrawn = self.tool("expire_work_item_request", **self.withdrawal(question))
+        self.assertEqual("withdrawn", withdrawn["carried_out"])
+        self.assertEqual("withdrawn", self.action(self.goal).outcome)
+        self.assertEqual([], self.owners_list())
+        self.assertEqual("open", self.category(self.goal))
 
     def test_an_objection_passes_the_cancel_to_the_owner(self) -> None:
         said = self.refused(lambda: self.consent(self.goal, B, "object"))

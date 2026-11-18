@@ -918,20 +918,28 @@ def _check_closer(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> No
         return
     if identity is None or identity.source == calls.VALKAMA:
         return
-    if proved is None or proved != _asker(conn, str(row["request_id"])):
+    if proved is None or proved != _asker(conn, row):
         raise model.NotAskerError(
             "only the session that asked this request, or Valkama, withdraws it"
         )
 
 
-def _asker(conn: sqlite3.Connection, request_id: str) -> str | None:
-    """The session whose proved call asked this request; None when Valkama or nobody proved asked it."""
+def _asker(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+    """The session that asked this request; None when Valkama or nobody proved asked it.
 
+    A request about a waiting action was asked by whoever asked the action
+    (`pending.asked_session`), even where a call of Valkama's own wrote the request on
+    that agent's behalf; any other, by the proved call that wrote it.
+    """
+
+    action = pending.of_request(row)
+    if action is not None:
+        return pending.asked_session(conn, pending.get(conn, action))
     found = conn.execute(
         "SELECT c.session_id FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
         " WHERE e.action = 'request_created' AND e.detail = ? AND c.identity_state = ?"
         " ORDER BY e.id LIMIT 1",
-        (request_id, calls.CONFIRMED),
+        (str(row["request_id"]), calls.CONFIRMED),
     ).fetchone()
     return None if found is None or found[0] is None else str(found[0])
 
@@ -1056,20 +1064,32 @@ def _purpose(row: sqlite3.Row) -> str | None:
     return purpose
 
 
+def _carries(row: sqlite3.Row) -> str | None:
+    """What a question's answer carries out: its purpose, `action` for one a waiting write
+    carries with none, and None for a question whose answer is only recorded."""
+
+    purpose = _purpose(row)
+    if purpose is None and pending.of_request(row) is not None:
+        return "action"
+    return purpose
+
+
 def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> None:
-    """Refuse a caller who may not close a question with a purpose this way.
+    """Refuse a caller who may not close a question with a purpose, or one a waiting
+    write carries, this way.
 
     Its answer is carried out as it is given, so it is never declined. It decides
     what the owner decides, so only the owner answers it, from Valkama's
-    interface; an agent that answered it would accept its own work. The one
-    exception is a session's consent to a cancel of its work, which that session
-    answers. Only the session that asked it withdraws it, from any of its agents: one Valkama asked
-    ends only with the write that ends it, and a question withdrawn by anyone else
-    would take work out of review, or leave the owner without the question that
-    was to reach them.
+    interface, whatever its purpose where a waiting write stands on its answer: an
+    agent that answered it would accept its own work, or make the write the owner
+    was asked about. The one exception is a session's consent to a cancel of its
+    work, which that session answers. Only the session that asked it withdraws it,
+    from any of its agents (`_asker`): one Valkama asked ends only with the write that
+    ends it, and a question withdrawn by anyone else would take work out of review,
+    or leave the owner without the question that was to reach them.
     """
 
-    purpose = _purpose(row)
+    purpose = _carries(row)
     if purpose is None:
         return
     if status == "declined":
@@ -1086,7 +1106,7 @@ def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> N
     proved = (
         identity.session_id if identity is not None and identity.state == calls.CONFIRMED else None
     )
-    if proved is None or proved != _asker(conn, str(row["request_id"])):
+    if proved is None or proved != _asker(conn, row):
         raise model.NotAskerError("only the session that asked this question withdraws it")
 
 
@@ -1710,7 +1730,7 @@ def change(
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
         _check_closer(conn, row, "answered")
-        purpose = _purpose(row)
+        purpose = _carries(row)
         if purpose is not None:
             raise model.PlanningError(
                 f"[purpose] this question carried out its answer ({purpose}) when it was"
