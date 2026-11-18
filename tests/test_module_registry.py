@@ -195,7 +195,8 @@ class ModuleRegistryTests(unittest.TestCase):
         )
 
     def test_each_volumes_read_model_is_a_read_planning_serves(self) -> None:
-        """Volumes declares its one read, and Planning the goal rows, at both levels.
+        """Volumes stands among the reading modules and declares its one read, and Planning
+        the goal rows, at both levels.
 
         A read model `planning.<name>` is the route `/api/planning/<name>`, and that route
         answers: the volumes of the whole store come back for an empty one, and the goal
@@ -203,6 +204,7 @@ class ModuleRegistryTests(unittest.TestCase):
         """
 
         manifests = {item["module_id"]: item for item in platform_modules.module_manifests()}
+        self.assertEqual("understand", manifests["volumes"]["navigation_group"])
         for scope in ("global", "space"):
             with self.subTest(scope=scope):
                 self.assertEqual(
