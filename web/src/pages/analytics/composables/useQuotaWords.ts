@@ -13,16 +13,15 @@
  * window with no figure says so in words, so no source, a silent window and a fresh 0 % never
  * read alike. A forecast is said as «Forecast · …», the name the legend gives the hatch of a
  * drawing that hatches it, and what a step line points at past its readings — the window now and its
- * forecast at the reset — is said here for its hint and its table. Nothing here adds two shares,
- * and nothing names money.
+ * forecast at the reset — is said here for its hint and its table, as is where the window's count
+ * restarted inside it, said as the fact alone. Nothing here adds two shares, and nothing names
+ * money.
  */
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { lastingEnd, runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
 import { dayOf, momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
-
-import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type {
@@ -32,7 +31,7 @@ import type {
   QuotaWindow,
 } from '@/shared/api/analyticsApi.ts'
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
-import type { StepPoint, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
+import type { StepPoint, StepRestart, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
 
 /** Whether a window is silent at `now` (ms), by the answer's threshold `freshFor` (s). */
 const silent = (window: QuotaWindow, now: number, freshFor: number) =>
@@ -46,14 +45,15 @@ export function useQuotaWords() {
   const sectionName = (section: QuotaSection) => t(`analytics.quota.sections.${section}`)
 
   /**
-   * An account by its owner's name, or else by the start of its id or its organization's. The
-   * name Valkama keeps now comes first, so a rename shows before the quota is read again; the
-   * answer's own name stands until the names are read.
+   * An account as the page says it (`useSpendingWords.seatLabel`): the names Valkama keeps now come
+   * first, so a rename shows before the quota is read again; the answer's own names stand until
+   * the names are read.
    */
   const accountName = (account: QuotaAccount) =>
-    words.accountName(account.organization) ??
-    account.name ??
-    agentIdStart(account.account_uuid ?? account.organization)
+    words.seatLabel(account.account, account.weekly_reset, {
+      name: account.name,
+      organization: account.organization_name,
+    })
 
   const windowName = (window: QuotaWindow) =>
     window.kind === 'week_model'
@@ -63,7 +63,7 @@ export function useQuotaWords() {
   /** A share of a window in the page's whole percents, never claiming more or less than it is. */
   const share = (percent: number) => words.share(percent / 100)
 
-  /** A window's state at `now` (ms) in a word, «fresh» or «silent» (`stateAt`). */
+  /** A window's state at `now` (ms) in a word, «up to date» or «no data» (`stateAt`). */
   const state = (window: QuotaWindow, now: number, freshFor: number) =>
     t(`analytics.quota.states.${stateAt(window, now, freshFor)}`)
   const source = (window: QuotaWindow) => t(`analytics.quota.sources.${window.latest.source}`)
@@ -72,7 +72,7 @@ export function useQuotaWords() {
   const silence = (window: QuotaWindow, now: number) =>
     spanWords(Math.max(0, now - Date.parse(window.latest.at)), span)
 
-  /** A window's state at `now` as its bar's words say it: «fresh», or «silent 3 h» with how long. */
+  /** A window's state at `now` as its bar's words say it: «up to date», or «no data for 3 h» with how long. */
   const stateWords = (window: QuotaWindow, now: number, freshFor: number) =>
     silent(window, now, freshFor)
       ? t('analytics.quota.silentFor', { for: silence(window, now) })
@@ -279,16 +279,37 @@ export function useQuotaWords() {
     })
 
   /**
-   * The step line's words for a reader who cannot see it: every reading with its moment, and the
-   * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`).
+   * Where a window's count restarted inside it, as its step line marks each and its table lists
+   * it: «Counter zeroed» with its moment, and that the window's reset did not move. The words
+   * name the fact alone, since the samples cannot tell what zeroed it.
    */
-  const readingsLabel = (
+  const restarts = (window: QuotaShareWindow, today: string): StepRestart[] =>
+    window.restarts.map((restart, index) => {
+      const at = moment(restart, today)
+      return {
+        key: `restart-${index}`,
+        at: Date.parse(restart),
+        timeText: at,
+        name: t('analytics.quota.readings.restart'),
+        figure: at,
+        notes: window.resets_at
+          ? [t('analytics.quota.readings.restartReset', { at: moment(window.resets_at, today) })]
+          : [],
+      }
+    })
+
+  /**
+   * The step line's words for a reader who cannot see it: every reading with its moment, the
+   * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`), and
+   * the moments its count restarted, where it did.
+   */
+  function readingsLabel(
     account: QuotaAccount,
     window: QuotaShareWindow,
     now: number,
     today: string,
-  ) =>
-    t('analytics.quota.readings.label', {
+  ) {
+    const label = t('analytics.quota.readings.label', {
       forecast: forecastAt(window, now, today),
       window: windowName(window),
       account: accountName(account),
@@ -300,6 +321,11 @@ export function useQuotaWords() {
         )
         .join(', '),
     })
+    const restarted = restarts(window, today).map((restart) => restart.timeText)
+    return restarted.length
+      ? `${label} ${t('analytics.quota.readings.restarts', { at: restarted.join(', ') })}`
+      : label
+  }
 
   return {
     accountName,
@@ -318,6 +344,7 @@ export function useQuotaWords() {
     otherState,
     points,
     readingsLabel,
+    restarts,
     reset,
     sectionName,
     share,

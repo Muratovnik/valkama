@@ -10,6 +10,10 @@
  * Past that moment a forecast runs to the window's reset as two edges, its slower and its faster
  * pace, each straight between the moments it turns: a pace is a share a minute, so the share it
  * spends grows in a straight line, and an edge that reaches the top of the window runs on flat.
+ *
+ * Where a window's count restarted inside it, the line falls at a reading with the reset
+ * unchanged; the restart stands at that reading's moment, before it in the order the readings
+ * stand (`stepStops`), and marks the fall (`restartFall`).
  */
 
 /** One window as a row of `WindowBarTable`: its name and its figures, each in words. */
@@ -73,6 +77,59 @@ export interface StepTarget {
   name: string
   /** What the figure leaves out, a line each: how old the latest reading is, when the reset is. */
   notes: readonly string[]
+}
+
+/**
+ * Where a window's count restarted inside it, its reset unchanged: the moment of the reading it
+ * restarted at, said as its hint, its name and its row of the table say it — what it is, the
+ * moment as its figure, and that the reset did not move. `key` names its row of the table.
+ */
+export interface StepRestart extends StepTarget {
+  at: number
+  key: string
+  /** Its moment in words, the table's first column: «12:05». */
+  timeText: string
+}
+
+/** A reading or a restart of a step line, by its kind and its order among its kind. */
+export interface StepStop {
+  index: number
+  kind: 'reading' | 'restart'
+}
+
+/**
+ * The readings and restarts a span shows in the order they stand, which is the order the keyboard
+ * walks them: by moment, and a restart before the reading at its moment, the one it restarted at,
+ * so a reader meets the restart before the share the count restarted from.
+ */
+export function stepStops(
+  readings: readonly { at: number }[],
+  restarts: readonly { at: number }[],
+): StepStop[] {
+  const stops: (StepStop & { at: number })[] = [
+    ...restarts.map((restart, index) => ({ at: restart.at, index, kind: 'restart' as const })),
+    ...readings.map((point, index) => ({ at: point.at, index, kind: 'reading' as const })),
+  ]
+  // A stable sort keeps a restart, listed first, before the reading at its moment.
+  return stops.sort((left, right) => left.at - right.at).map(({ index, kind }) => ({ index, kind }))
+}
+
+/**
+ * The fall a restart marks: from the share the line held before its moment (`high`) to the least
+ * it reads at it (`low`), as the line draws them, which is where its ring stands. Where no
+ * reading stood before it, both ends are at its own reading.
+ */
+export function restartFall(points: readonly StepPoint[], at: number) {
+  let held: number | undefined
+  const there: number[] = []
+  for (const point of points) {
+    if (point.at < at) held = point.value
+    else if (point.at === at) there.push(point.value)
+  }
+  const values = [...(held === undefined ? [] : [held]), ...there]
+  return values.length
+    ? { high: Math.max(...values), low: Math.min(...values) }
+    : { high: 0, low: 0 }
 }
 
 /** A moment an edge of a forecast turns at, and its share there. */

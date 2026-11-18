@@ -270,9 +270,9 @@
           },
           "seat": "week:2026-11-16T09:00Z",
           "week_ends_at": "2026-01-02T03:04:05.000Z",
-          "share": 1.0,
+          "share": 0.5,
           "week_used_percent": 40.0,
-          "percent": 40.0
+          "percent": 20.0
         }
       ],
       "unknown_share": 0.9615

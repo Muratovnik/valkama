@@ -12,7 +12,8 @@
  * the summary, which the panel says at its top. The cache reads and the reasoning, a part of
  * output, close the chart as notes with their figures, under the ring's legend or under the bars,
  * and are no part of its whole: the summary leaves them out as well, and no bar's share counts
- * them.
+ * them. A counted kind's bar says its share of the counted kinds after its figure, «1.2M · 40 %»;
+ * a note says its figure alone.
  *
  * It reads the page's own answer, whatever dimension that was read by: its total and its steps
  * hold the tokens by kind. An answer whose period before could not be read says so at the top.
@@ -32,6 +33,7 @@ import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCavea
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
 import { countedTotal, KIND_SLOTS, kindLines } from '@/pages/analytics/utils/tokenKinds.ts'
+import type { KindLine } from '@/pages/analytics/utils/tokenKinds.ts'
 
 import type { Usage } from '@/shared/api/analyticsApi.ts'
 import type { RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
@@ -64,12 +66,15 @@ const narrow = useNarrowCharts(root)
 const barsTitle = computed(() => t('analytics.kinds.bars'))
 /** The kinds are a few, named by identifiers: the split opens on its ring, the first offered. */
 const views: readonly SplitView[] = ['ring', 'bars']
+/** A counted kind's share of the counted kinds; none for a note or a kind with no count. */
+const shareOf = (line: KindLine) =>
+  line.counted && line.count !== null && counted.value ? line.count / counted.value : null
 const bars = computed<RankedRow[]>(() =>
   lines.value.map((line) => ({
     key: line.kind,
     label: kindWords.name(line),
     value: line.count ?? 0,
-    valueText: kindWords.count(line.count),
+    valueText: words.withShare(kindWords.count(line.count), shareOf(line)),
     kind: line.counted ? 'category' : 'other',
     slot: KIND_SLOTS.get(line.kind) ?? 'other',
   })),
@@ -163,8 +168,6 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
               :label="barsTitle"
               :rows="bars"
               :words="barWords"
-              :whole="counted ?? 0"
-              :format-share="words.markShare"
             />
           </template>
           <template #table>

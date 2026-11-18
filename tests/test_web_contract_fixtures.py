@@ -550,7 +550,8 @@ class _Scenario:
                     }
                 )
             ),
-            # The day after, by the seat: an account, a seat no account names, unknown.
+            # The day after, by the seat: an account, one known by its weekly reset, an
+            # organization's work no sample places, unknown.
             "analytics-usage-seat": self.http(
                 "/api/analytics/usage?"
                 + urlencode(
@@ -567,9 +568,12 @@ class _Scenario:
     @staticmethod
     def seats(conn: sqlite3.Connection, item: str) -> None:
         """A session's work on 2026-11-12, after the days the reads above cover: on the seat
-        an account's poll names, then on one no account names, then for no organization.
-        Its run's last record is the card's, so the reads above say the same. Its stretch on
-        the account's seat is the card's, so the card's read has a week of quota."""
+        an account's poll names, then on one no account names, then for no organization,
+        then for an organization no sample reads. Its run's last record is the card's, so
+        the reads above say the same. Its stretch on the account's seat is the card's, so
+        the card's read has a week of quota; the stretch before the day has no reading
+        before it and takes the seat of the session's next, so the card's is half that
+        seat's cost."""
 
         session, organization = "sess-seat", "org-fixture"
         run = conn.execute(
@@ -583,6 +587,7 @@ class _Scenario:
             ("2026-11-12T09:00:00.000Z", "2026-11-12T09:10:00.000Z", organization, item),
             ("2026-11-12T09:20:00.000Z", "2026-11-12T09:30:00.000Z", organization, None),
             ("2026-11-12T09:40:00.000Z", "2026-11-12T09:50:00.000Z", None, None),
+            ("2026-11-12T10:00:00.000Z", "2026-11-12T10:10:00.000Z", "org-unread", None),
         ):
             conn.execute(
                 "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"

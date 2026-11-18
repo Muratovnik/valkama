@@ -112,13 +112,13 @@ for (const colorScheme of ['light', 'dark'] as const)
         'token_kind',
         'quota_five_hour',
         'quota_week',
-        'account',
+        'seat',
       ])
       await expect(entry(page, 'quota_five_hour')).toContainText('a1b2c3d4')
       await expect(entry(page, 'quota_five_hour')).toContainText('74%')
-      await expect(entry(page, 'quota_five_hour')).toContainText('fresh')
+      await expect(entry(page, 'quota_five_hour')).toContainText('up to date')
       await expect(entry(page, 'quota_week')).toContainText('88%')
-      await expect(entry(page, 'quota_week')).toContainText('silent')
+      await expect(entry(page, 'quota_week')).toContainText('no data for')
       await expectNoSilentClipping(page, `rail at ${width}px`, '.analytics-rail')
       // The pointer over the quota's tiles moves no tile.
       const rail = await boxes(page)

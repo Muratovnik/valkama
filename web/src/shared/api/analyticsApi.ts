@@ -9,17 +9,21 @@
  * here: a field nobody declared is refused rather than drawn.
  */
 
+import { accountIdIssue, WEEKLY_RESET } from '@/shared/api/accountIds.ts'
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import { TITLE, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
-import { SEAT, tokensSchema } from '@/shared/api/planningUsageApi.ts'
+import { tokensSchema } from '@/shared/api/planningUsageApi.ts'
 import { enumField, invalid } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 /**
- * The dimensions the page breaks work down by and filters it on, in the contract's order. The
- * one list of them on the web: the address, the filters and the breakdown all read it here.
+ * The dimensions the page breaks work down by and filters it on: `seat`, the quota account a
+ * stretch was spent on, which the page calls the account, then the contract's order, where
+ * `account` is the organization the stretch was billed to. The one list of them on the web: the
+ * address, the filters and the breakdown all read it here.
  */
 export const USAGE_DIMENSIONS = [
+  'seat',
   'account',
   'project',
   'work_item',
@@ -34,14 +38,6 @@ export type UsageDimension = (typeof USAGE_DIMENSIONS)[number]
 
 export const isUsageDimension = (value: unknown): value is UsageDimension =>
   USAGE_DIMENSIONS.includes(value as UsageDimension)
-
-/**
- * Every dimension an answer may name and a read may ask by: the page's, and `seat`, the quota
- * account a stretch was spent on. No filter or breakdown of the page offers it; the quota panel
- * reads one account's work by it.
- */
-const ANSWER_DIMENSIONS = [...USAGE_DIMENSIONS, 'seat'] as const
-export type UsageReadDimension = (typeof ANSWER_DIMENSIONS)[number]
 
 const VALUE = /^[^\u{0}]{1,512}$/u
 /** A moment with its own offset, as the read writes it: `2030-03-04T00:00:00+03:00`. */
@@ -103,13 +99,23 @@ const groupValueSchema = strictObject({
   family: onTheSide().optional(),
   opened_in: onTheSide().optional(),
   opened_host: onTheSide().optional(),
-  /** A seat's: its organization, and its account's UUID or, for a seat no account names, its key. */
+  /**
+   * A seat's: its organization, its account's UUID, the time of week its week resets, and whether
+   * two accounts' readings may run under it (`accountIds.ts`).
+   */
   organization: boundedText(VALUE, 512).nullable().optional(),
   account_uuid: boundedText(VALUE, 512).nullable().optional(),
-  seat_key: boundedText(VALUE, 512).nullable().optional(),
+  weekly_reset: boundedText(WEEKLY_RESET, 8).nullable().optional(),
+  shared: z.boolean().optional(),
 })
 
-const groupSchema = z.partialRecord(z.enum(ANSWER_DIMENSIONS), groupValueSchema)
+const groupSchema = z
+  .partialRecord(z.enum(USAGE_DIMENSIONS), groupValueSchema)
+  .superRefine((group, context) => {
+    const seat = group.seat
+    const issue = seat?.id ? accountIdIssue(seat.id, seat) : null
+    if (issue) context.addIssue({ code: 'custom', path: ['seat', 'id'], message: issue })
+  })
 
 const rowSchema = strictObject({ group: groupSchema, ...measures })
 
@@ -125,7 +131,7 @@ const usageSchema = strictObject({
     step: enumField(USAGE_STEPS),
     utc_offset: z.number().int().min(-840).max(840),
   }),
-  group_by: z.array(z.enum(ANSWER_DIMENSIONS)).max(2),
+  group_by: z.array(z.enum(USAGE_DIMENSIONS)).max(2),
   cost_basis: z.string().min(1).max(512),
   last_event_at: moment().nullable(),
   total: totalSchema,
@@ -164,10 +170,10 @@ export type UsageFilters = Partial<Record<UsageDimension, readonly (string | nul
 export interface UsageQuery {
   compare: boolean
   /** The page's filters, and for the quota panel a `seat`'s. */
-  filters: Partial<Record<UsageReadDimension, readonly (string | null)[]>>
+  filters: Partial<Record<UsageDimension, readonly (string | null)[]>>
   /** A date, the start of that day at `utcOffset`, or a time with its own offset. */
   from: string
-  groupBy: readonly UsageReadDimension[]
+  groupBy: readonly UsageDimension[]
   /** Not included; a date or a time, as `from`. */
   to: string
   utcOffset: number
@@ -184,8 +190,8 @@ export function usageParameters(query: UsageQuery): URLSearchParams {
     utc_offset: String(query.utcOffset),
   })
   if (query.groupBy.length) parameters.set('group_by', query.groupBy.join(','))
-  const none: UsageReadDimension[] = []
-  for (const dimension of ANSWER_DIMENSIONS) {
+  const none: UsageDimension[] = []
+  for (const dimension of USAGE_DIMENSIONS) {
     const admitted = query.filters[dimension] ?? []
     const values = admitted.filter((value) => value !== null)
     if (values.length) parameters.set(dimension, values.join(','))
@@ -263,10 +269,23 @@ const shareWindowSchema = strictObject({
   started_at: moment().nullable(),
   even_percent: percent().nullable(),
   readings: z.array(quotaReadingSchema),
+  /**
+   * Where the window's count restarted inside it, its reset unchanged: the moment of the reading
+   * whose feed fell from its own previous reading, oldest first. The readings keep the fall.
+   */
+  restarts: z.array(moment()),
   forecast: z.union([pointForecastSchema, rangeForecastSchema]).nullable(),
 }).superRefine((window, context) => {
   if ((window.kind === 'week_model') !== (window.model !== null))
     context.addIssue({ code: 'custom', path: ['model'], message: 'a model only for its week' })
+  const read = new Set(window.readings.map((reading) => reading.at))
+  for (const [index, at] of window.restarts.entries())
+    if (!read.has(at))
+      context.addIssue({
+        code: 'custom',
+        path: ['restarts', index],
+        message: 'a restart is the moment of one of the readings',
+      })
   const { forecast } = window
   if (forecast && 'outcome' in forecast !== (window.kind === 'five_hour'))
     context.addIssue({
@@ -285,18 +304,24 @@ const spendWindowSchema = strictObject({
 })
 
 const quotaAccountSchema = strictObject({
+  /** The account's id, as the `seat` dimension gives it (`accountIds.ts`). */
+  account: boundedText(VALUE, 512),
   organization: boundedText(VALUE, 512),
   account_uuid: boundedText(VALUE, 512).nullable(),
-  seat: boundedText(SEAT, 32).nullable(),
+  weekly_reset: boundedText(WEEKLY_RESET, 8).nullable(),
+  /** Two accounts' readings may run under this weekly-reset account. */
+  shared: z.boolean(),
   plan: boundedText(RUN_TEXT, 200).nullable(),
+  /** The owner's name for the account itself, and for its organization. */
   name: boundedText(VALUE, 512).nullable(),
+  organization_name: boundedText(VALUE, 512).nullable(),
   no_source: z.boolean(),
   windows: z.array(z.union([shareWindowSchema, spendWindowSchema])),
 }).superRefine((account, context) => {
   if (account.no_source && account.windows.length)
     context.addIssue({ code: 'custom', path: ['windows'], message: 'no source reads no window' })
-  if (account.account_uuid !== null && account.seat !== null)
-    context.addIssue({ code: 'custom', path: ['seat'], message: 'a seat only without an account' })
+  const issue = accountIdIssue(account.account, account)
+  if (issue) context.addIssue({ code: 'custom', path: ['account'], message: issue })
 })
 
 const quotaSchema = strictObject({

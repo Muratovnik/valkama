@@ -149,15 +149,16 @@ test('one change of the view asks a read a dimension, and none for a measure or 
     opened_by: opened,
   })
   // Opening: the page's read of the week by task beside the same days before and by account, the
-  // overview's outline of the week before, and a read for each of the nine dimensions of the rail.
+  // overview's outline of the week before, and a read for each of the ten dimensions of the rail.
   // A read two parts ask is asked once: the rail's tiles of tasks and accounts are the page's own
   // reads, and the overview's cards of models, roles and projects are the rail's tiles of them.
   expect(opened.toSorted()).toEqual(
     [
       'work_item',
       'work_item',
-      'account',
+      'seat',
       '',
+      'account',
       'project',
       'executor',
       'role',
@@ -170,9 +171,9 @@ test('one change of the view asks a read a dimension, and none for a measure or 
   // Another section: the week before by model, and nothing for the rail; the week by model is the
   // rail's tile of models, and the accounts are the ones the view has.
   expect(section).toEqual(['model'])
-  // Another period: the page's read beside the period before, and the rail's nine, its read by
+  // Another period: the page's read beside the period before, and the rail's ten, its read by
   // account the page's own.
-  expect(period).toHaveLength(10)
+  expect(period).toHaveLength(11)
 })
 
 for (const [width, height] of [

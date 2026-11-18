@@ -5,17 +5,19 @@ settings.
 Added with schema 17, and additive: `store.connect()` runs this script against an
 upgraded store exactly as against a fresh one, and an upgraded store holds no account
 and no sample until a source records one or history is imported, and no name until the
-owner gives one. It imports nothing, because the store's bring-up reads it.
+owner gives one. Schema 18 renamed the key of the names (`migrate`). It imports nothing,
+because the store's bring-up reads it.
 
 `quota_accounts`: one row per account, an organization and the account's UUID in it, with
 the plan a source named. The UUID does not change from week to week, so the row holds
 across weeks. Only ids and a plan's short name are kept: no e-mail address and no name
 from a profile.
 
-`quota_account_names`: the owner's name for an account, one row per organization, written
-from Settings and read by every device and by the quota alerts (`quota.names`). No source
-writes it. A name is one line of 1 to `MAX_NAME_LENGTH` characters; an organization with
-no name has no row.
+`quota_account_names`: the owner's names, one row per key, `account`, written from
+Settings and read by every device and by the quota alerts (`quota.names`). No source
+writes it. A name is one line of 1 to `MAX_NAME_LENGTH` characters; a key with no name has
+no row. At schema 17 the key was `organization` and named only organizations; schema 18
+renamed the column, and a key that is an organization's id names that organization still.
 
 `quota_samples`: one row per reading of one window that differed from the reading before
 it in its series, never rewritten. A series is what the sample is identified by (the
@@ -28,7 +30,7 @@ model, the model. Rows older than a year are deleted by the start-up housekeepin
   form the usage rows keep, so a time comparison is a text comparison.
 - `account_uuid` is the account's UUID where the source gave it, which only an
   organization's reading does; NULL otherwise, and such a sample's account is read from
-  its seat (`seats.account_of_seat`).
+  its seat (`accounts.Resolver`).
 - `seat` is `week:<the week's reset, to the nearest ten minutes>`; NULL where the reading
   showed no week, or where imported history said none. It tells the seats of one
   organization apart within one week.
@@ -40,9 +42,12 @@ model, the model. Rows older than a year are deleted by the start-up housekeepin
 (`alerts.quota`), so a restart does not give it again. A row is the alert's key: the
 account, as its organization and its seat, the window (its kind and, for a model's week,
 the model, `''` for none), the reset the window named and the level. `account_uuid` is the
-account's UUID where it was known when the alert was raised, NULL for a provisional seat;
-it is not part of the key, so learning it later does not raise the same alert again. A row
-whose window has reset can match no reading any more, and the next evaluation deletes it.
+account's UUID where it was known when the alert was raised, NULL for an account known by its
+weekly reset; it is not part of the key, so learning it later does not raise the same alert
+again.
+`sample_at` is the sample the alert was given on: where the window's count restarted after
+it, the level counts as not given, and giving it again rewrites the row. A row whose window
+has reset can match no reading any more, and the next evaluation deletes it.
 
 `quota_settings`: the owner's settings for the quota sources, one row a key; no row means
 the defaults `quota.settings` keeps. `poll` holds whether the poll of the usage endpoint
@@ -50,6 +55,10 @@ runs, which it does not until the owner switches it on.
 """
 
 from __future__ import annotations
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    import sqlite3
 
 #: The window kinds a sample may be of, in the order a reader lists them: the five-hour
 #: window, the week, the week of one model, the usage credits past the plan's limits,
@@ -68,10 +77,12 @@ RETENTION_DAYS = 365
 #: five-hour window forecast to run out before its reset.
 ALERT_KINDS = ("five_hour", "week", "week_model")
 ALERT_LEVELS = ("75", "90", "exhausted")
-#: The longest name the owner may give an account, and the longest organization id, as
-#: the usage read bounds one.
+#: The longest name the owner may give an account, and the longest key a name is given
+#: to, which bounds an organization id as the usage read does.
 MAX_NAME_LENGTH = 80
-MAX_ORGANIZATION_LENGTH = 512
+MAX_KEY_LENGTH = 512
+#: The columns of `quota_account_names` from schema 18 on, in order.
+NAMES_COLUMNS = ("account", "name", "updated_at")
 
 
 def _listed(values: tuple[str, ...]) -> str:
@@ -86,7 +97,7 @@ CREATE TABLE IF NOT EXISTS quota_accounts(
     PRIMARY KEY(organization, account_uuid)
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS quota_account_names(
-    organization TEXT PRIMARY KEY CHECK(length(organization) BETWEEN 1 AND {MAX_ORGANIZATION_LENGTH}),
+    account TEXT PRIMARY KEY CHECK(length(account) BETWEEN 1 AND {MAX_KEY_LENGTH}),
     name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND {MAX_NAME_LENGTH}),
     updated_at TEXT NOT NULL
 ) WITHOUT ROWID;
@@ -147,16 +158,44 @@ SCHEMA_TABLES = (
     "quota_settings",
 )
 
+
+def _names_columns(conn: sqlite3.Connection) -> tuple[str, ...]:
+    return tuple(str(row[1]) for row in conn.execute("PRAGMA table_info(quota_account_names)"))
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Schema 18, once, inside the caller's transaction and under its recovery point: the
+    names' key column, `organization` at schema 17, becomes `account`.
+
+    The column is renamed in place, so every row keeps its key, its name and when it was
+    given, and a key that is an organization's id goes on naming that organization. A
+    store the script has just made the table in has the column already.
+    """
+
+    if "organization" in _names_columns(conn):
+        conn.execute("ALTER TABLE quota_account_names RENAME COLUMN organization TO account")
+
+
+def assert_current(conn: sqlite3.Connection) -> None:
+    """Refuse to stamp a store whose names are not keyed by `account`."""
+
+    if _names_columns(conn) != NAMES_COLUMNS:
+        raise RuntimeError("post-migration quota_account_names is not keyed by account")
+
+
 __all__ = [
     "ALERT_KINDS",
     "ALERT_LEVELS",
     "BY_ORGANIZATION",
     "KINDS",
+    "MAX_KEY_LENGTH",
     "MAX_NAME_LENGTH",
-    "MAX_ORGANIZATION_LENGTH",
     "MONEY_KINDS",
+    "NAMES_COLUMNS",
     "RETENTION_DAYS",
     "SCHEMA",
     "SCHEMA_TABLES",
     "SOURCES",
+    "assert_current",
+    "migrate",
 ]

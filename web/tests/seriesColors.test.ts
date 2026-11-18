@@ -150,12 +150,13 @@ describe('the palette', () => {
       }
   })
 
-  test('the two neutrals are greys, no hue, and the darker is what is not a value', () => {
+  test('the two neutrals are greys, no hue, and the darker is the folded rest', () => {
     // When both were one grey, a week's work on no task and its folded rest — its two largest
-    // parts — differed only in the hint.
+    // parts — differed only in the hint. The folded rest is often most of a period and says
+    // least, so it is the quieter of the two.
     const [apart, other] = NEUTRALS.map((neutral) => seen(hue(neutral), 'ordinary'))
     for (const [, a, b] of [apart, other]) assert.ok(Math.hypot(a, b) < 0.005)
-    assert.ok(apart[0] < other[0])
+    assert.ok(other[0] < apart[0])
   })
 
   test('no series is taken for a state', () => {

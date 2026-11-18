@@ -5,8 +5,10 @@
  * The oracle is the owner's rule and the list's contract: a list only, with no ring and no small
  * charts beside it, at the whole width of the charts; each name on lines of its own, two at most,
  * its reference whole on its first line; the bar and the value under it, every value ending at one
- * edge; the rest and the work on no task apart under a rule, each with its bar; over the rows a
- * strip of the whole, a part a row. A name in the day chart's legend takes one line and keeps its
+ * edge, and each figure followed by its share of the whole; the rest and the work on no task apart
+ * under a rule, each with its bar; no strip of the whole over the rows, which read as one more row,
+ * while a tile of the rail, whose rows draw nothing, keeps its strip (DESIGN.md, Charts). A name in
+ * the day chart's legend takes one line and keeps its
  * reference. The control is the breakdown by account, named by identifiers: its ring, with its
  * legend under it in a narrow column, and its small charts beside it.
  *
@@ -79,8 +81,8 @@ async function drawn(where: Locator) {
 /**
  * Where the list's parts stand: its width beside the charts', how many lines each name takes and
  * whether the reference it starts with stands whole on its first line inside the name's box, the
- * right edge of every value, any row reaching into the next, the strip's parts, and the rows apart
- * with their bars under their rule.
+ * right edge of every value and its words, any row reaching into the next, any strip of the whole,
+ * and the rows apart with their bars under their rule.
  */
 function listLayout(where: Locator) {
   return where.evaluate((section) => {
@@ -126,6 +128,7 @@ function listLayout(where: Locator) {
         referenceWhole,
         nameAbove: name.bottom <= Math.min(track.top, value.top) + 0.5,
         valueEnd: Math.round(value.right * 10) / 10,
+        figure: row.querySelector('.ranked-value')?.textContent ?? '',
         valueAfterTrack: value.left >= track.right - 0.5,
         bar: row.querySelector('.ranked-bar') !== null,
         apart: row.closest('.ranked-rest') !== null,
@@ -139,9 +142,7 @@ function listLayout(where: Locator) {
       chartsWidth: Math.round(inner),
       multiples: section.closest('.dimension-charts')?.querySelectorAll('.small-multiples').length,
       ring: section.querySelectorAll('.donut-chart').length,
-      strip: [...section.querySelectorAll('.ranked-whole .mini-share-part')].map(
-        (part) => (part as HTMLElement).dataset.key ?? '',
-      ),
+      strips: section.querySelectorAll('.mini-share-bar').length,
       rule: rest ? getComputedStyle(rest).borderTopWidth : null,
       rows,
       overlaps: rows.slice(1).filter((row, index) => row.top < (rows[index]?.bottom ?? 0) - 0.5)
@@ -199,9 +200,11 @@ function expectList(measured: Awaited<ReturnType<typeof listLayout>>) {
     expect(row.nameAbove, row.name).toBe(true)
     expect(row.valueAfterTrack, row.name).toBe(true)
     expect(row.bar, row.name).toBe(true)
+    // The figure, then the row's share of the whole in whole percents.
+    expect(row.figure, row.name).toMatch(/\S \u{B7} [<>]?\d+\s?%$/u)
   }
   expect(measured.rule).toBe('1px')
-  expect(measured.strip).toHaveLength(measured.rows.length)
+  expect(measured.strips).toBe(0)
 }
 
 for (const lang of ['en', 'ru'] as const)
@@ -249,6 +252,9 @@ for (const lang of ['en', 'ru'] as const)
       await openReport(page, 1440, pageAt({ by: 'executor' }))
       const sessions = await listLayout(list(page))
       expectList(sessions)
+      // The control for the strip: a tile of the rail, whose rows print a name and a share and
+      // draw nothing, keeps its strip of the whole.
+      await expect(page.locator('.analytics-rail .mini-share-bar').first()).toBeVisible()
       await charts(page).screenshot(shot(info, `sessions-${lang}-1440.png`))
 
       // The control: named by identifiers, the accounts keep their ring and their small charts.

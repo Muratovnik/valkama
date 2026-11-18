@@ -90,7 +90,7 @@ for (const width of [1440, 1024, 390]) {
       await expect(drawn).not.toContainText('running')
     }
     await expect
-      .poll(() => daysSaying(analytics, 'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0'))
+      .poll(() => daysSaying(analytics, 'Account change: 0b7d4e19 → 0b7d4e19, 7e6d5c4b'))
       .toBe(1)
 
     const measured = await measure(page)
@@ -185,7 +185,7 @@ const READ_STATES: {
       await expect(analytics.locator('.tile-figure[data-measure="tokens"]')).toHaveText('0')
       await expect(analytics.locator('.spending-tiles .tile-change').first()).toContainText('↓ 100')
       await expect(analytics.locator('.spending-bars')).toContainText(
-        ru ? 'нечего разбивать' : 'spent nothing to break down',
+        ru ? 'Нет данных для разбивки' : 'Nothing to break down',
       )
     },
   },
@@ -196,8 +196,8 @@ const READ_STATES: {
       const unread = analytics.locator('.spending-unread')
       await expect(unread.getByRole('status')).toHaveText(
         ru
-          ? 'Предыдущий период не удалось прочитать, поэтому изменение не показано.'
-          : 'The period before could not be read, so no change is shown.',
+          ? 'Не удалось загрузить предыдущий период, поэтому изменение не показано.'
+          : 'The period before could not be loaded, so no change is shown.',
       )
       await expect(unread.getByRole('button')).toHaveText(ru ? 'Повторить' : 'Retry')
     },
@@ -207,7 +207,7 @@ const READ_STATES: {
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
       // Said where the day is read, once: its day's hint on the chart, or its row of the table.
-      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 5b0c7e21 → d4e8a1f0`
+      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 0b7d4e19 → 7e6d5c4b`
       await expect.poll(() => daysSaying(analytics, said), 'days that say it').toBe(1)
     },
   },

@@ -8,13 +8,13 @@ earlier build.
 
 ## Migrating an older store
 
-This build opens only a store at its own schema, 22, and migrates none as it opens
-it. A store Valkama 2.9 left -- schema 17 with its word index -- is refused with
-"run `valkama migrate work-model` once" and left as it was. An older store, or one
-at 17 without the index, is refused with "open it with Valkama 2.9 first" and left
-exactly as it was, with no snapshot and no write. Open it with Valkama 2.9 once,
-which carries a store of any earlier schema forward under its own snapshots as that
-release describes, and then come back.
+This build opens only a store at its own schema, 23, and migrates none as it opens
+it. A store Valkama 2.9 left -- schema 18 with its word index, or 17 with it from a
+2.9 build before schema 18 -- is refused with "run `valkama migrate work-model` once"
+and left as it was. An older store, or one at 17 without the index, is refused with
+"open it with Valkama 2.9 first" and left exactly as it was, with no snapshot and no
+write. Open it with Valkama 2.9 once, which carries a store of any earlier schema
+forward under its own snapshots as that release describes, and then come back.
 
 ## Migrating a 2.9 store
 
@@ -70,10 +70,15 @@ holding work items needs the file. A refusal names what to run, and nothing is
 written. Before its first write it takes a verified snapshot labelled `pre3.0` in `backups/` beside the store, with
 the pictures in a `.images` folder beside it, and then runs every step and checks
 every postcondition in one transaction: a step that fails or a postcondition that
-does not hold rolls all of it back and leaves the store at 17. The command prints a
-JSON report with the time and result of each step and postcondition and of the
-snapshot, and exits 1 when the run failed, naming what failed. A second run finds
-the store current and changes nothing.
+does not hold rolls all of it back and leaves the store at the schema it had. The
+command prints a JSON report with the time and result of each step and
+postcondition and of the snapshot, and exits 1 when the run failed, naming what
+failed. A second run finds the store current and changes nothing.
+
+A store at 17 first takes the step Valkama 2.9.0 takes at schema 18, in the same
+transaction: the owner's names for the quota accounts are keyed by account
+(`quota_account_names.account`, `organization` before), keeping every name. A store
+at 18 already has them so, and both reach the same store.
 
 Among its steps, the migration attaches each commit a record carries to the ref's
 item, marked as carried over, and adds the `url` refs; several refs of one item
@@ -89,7 +94,7 @@ the store, delete the `-wal` and `-shm` files beside it, put the `pre3.0` snapsh
 place of the database and its `.images` folder in place of `images`, as
 [Restoring a snapshot](#restoring-a-snapshot) describes, and only then pin the 2.9
 release with `launcher install --revision <commit>`; everything written since the
-migration is lost. A 2.9 build refuses a store at 22.
+migration is lost. A 2.9 build refuses a store at 23.
 
 The sections below describe the snapshots the earlier upgrades took and how to go
 back from them.

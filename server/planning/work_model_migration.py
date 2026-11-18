@@ -111,6 +111,10 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
+Before oracle, `store` takes schema 18's step, `quota-names`, which renames the key of
+the quota accounts' names on a store a 2.9 build left at 17 and has nothing to do on one
+2.9.0 left at 18: so the steps here read one shape from either.
+
 The postconditions `fresh-shape` to `second-run` and `store-identity` to `commit-projects` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
 row counts of the tables `oracle` counted, of the projects `item-projects` fills, of the rows `confirmations`

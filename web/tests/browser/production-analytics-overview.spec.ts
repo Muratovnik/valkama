@@ -96,11 +96,11 @@ test('opens a plain address on the overview, its parts in order at 1440×900', a
     'Projects',
   ])
   // The page's read and the same days of the week before, the accounts, the steps of the week
-  // before for the outline, and the rail's nine, one a dimension; the rail's tiles of tasks and
+  // before for the outline, and the rail's ten, one a dimension; the rail's tiles of tasks and
   // accounts are the page's own reads, and each card the page's own read is not by is the rail's
   // tile of that dimension, so neither asks again.
   expect(new Set(asked).size).toBe(asked.length)
-  expect(asked).toHaveLength(11)
+  expect(asked).toHaveLength(12)
 })
 
 test('a figure chooses the measure, pressed by a check, from the keyboard, into the address', async ({
@@ -121,8 +121,11 @@ test('a figure chooses the measure, pressed by a check, from the keyboard, into 
   await expect(radios.nth(1).locator('.tile-chosen')).toBeVisible()
   await expect(figures.locator('.tile-chosen')).toHaveCount(1)
   await expect(panel.locator('.spending-days h3')).toHaveText('Tokens per day, by task')
-  // The cards and what changed say the measure chosen.
-  await expect(panel.locator('[data-card="model"] .ranked-value').first()).toHaveText('1.3M')
+  // The cards and what changed say the measure chosen: model-a's 13 hours of the week's 19, at
+  // a hundred thousand tokens an hour, and their share of the whole.
+  await expect(panel.locator('[data-card="model"] .ranked-value').first()).toHaveText(
+    /^1\.3M \u{B7} 68%$/u,
+  )
   await page.reload()
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true')
 })
@@ -307,7 +310,12 @@ test('a card’s figure is as wide as itself, and the name of its row takes the 
   await serve(page, MODELS)
   const panel = await openOverview(page, 1440, 900)
   const models = panel.locator('[data-card="model"]')
-  await expect(models.locator('.ranked-value')).toHaveText([/^3\sh$/u, /^2\sh$/u, 'under a minute'])
+  // Each figure with its share of the week's 6 h 59 min: 10 800, 7 200 and 7 140 of 25 140 seconds.
+  await expect(models.locator('.ranked-value')).toHaveText([
+    /^3\sh \u{B7} 43%$/u,
+    /^2\sh \u{B7} 29%$/u,
+    /^1\sh\s59\smin \u{B7} 28%$/u,
+  ])
   const rows = await models.locator('.ranked-line').evaluateAll((lines) =>
     lines.map((line) => {
       const label = line.querySelector('.ranked-label')

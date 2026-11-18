@@ -11,7 +11,6 @@ import type {
   UsageDimension,
   UsageGroupValue,
   UsageMeasures,
-  UsageReadDimension,
   UsageRow,
 } from '@/shared/api/analyticsApi.ts'
 
@@ -83,6 +82,28 @@ function add(left: UsageMeasures, right: UsageMeasures): UsageMeasures {
 }
 
 export const value = (id: string): UsageGroupValue => ({ id, unknown: false })
+
+/**
+ * An account of the `seat` dimension by its id, with what the contract says beside it: its
+ * organization, its UUID or, for one known by it alone, the time of week its week resets, and
+ * whether two accounts may run under it. `org/` is its organization's work on no known account.
+ */
+export function seatValue(
+  id: string,
+  options: { shared?: boolean; weeklyReset?: string | null } = {},
+): UsageGroupValue {
+  const slash = id.indexOf('/')
+  const tail = id.slice(slash + 1)
+  const weekly = tail.startsWith('weekly:') ? tail.slice('weekly:'.length) : null
+  return {
+    id,
+    unknown: false,
+    organization: id.slice(0, slash),
+    account_uuid: tail === '' || weekly !== null ? null : tail,
+    weekly_reset: weekly ?? options.weeklyReset ?? null,
+    shared: options.shared ?? false,
+  }
+}
 const unknownValue: UsageGroupValue = { id: null, unknown: true }
 
 /** Work on no task: no id, and known to be on none. */
@@ -100,17 +121,14 @@ export const task = (number: number, title: string): UsageGroupValue => ({
 /** One stretch of work: the day of the period it fell in, what it was by, what it spent. */
 export interface Stretch {
   day: number
-  group: Partial<Record<UsageReadDimension, UsageGroupValue>>
+  group: Partial<Record<UsageDimension, UsageGroupValue>>
   spend: Spend
 }
 
 const keyOf = (group: Stretch['group']) => JSON.stringify(group)
 
 /** The stretches by the dimensions asked, each a row: a stretch says only what was asked. */
-function rowsOf(
-  stretches: readonly Stretch[],
-  dimensions: readonly UsageReadDimension[],
-): UsageRow[] {
+function rowsOf(stretches: readonly Stretch[], dimensions: readonly UsageDimension[]): UsageRow[] {
   const rows = new Map<string, UsageRow>()
   for (const stretch of stretches) {
     const { spend } = stretch
@@ -158,12 +176,12 @@ function instant(text: string, offset: number) {
 }
 
 /** The dimensions whose «none» is work with no value there; elsewhere it is an unknown value. */
-const NONE_IS_NO_VALUE: ReadonlySet<UsageReadDimension> = new Set(['work_item', 'launch_class'])
+const NONE_IS_NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
 
-/** Every dimension a read may filter and group by: the page's, and the quota account's `seat`. */
-const READ_DIMENSIONS: readonly UsageReadDimension[] = [...USAGE_DIMENSIONS, 'seat']
-const isReadDimension = (name: string): name is UsageReadDimension =>
-  READ_DIMENSIONS.includes(name as UsageReadDimension)
+/** Every dimension a read may filter and group by. */
+const READ_DIMENSIONS: readonly UsageDimension[] = USAGE_DIMENSIONS
+const isReadDimension = (name: string): name is UsageDimension =>
+  READ_DIMENSIONS.includes(name as UsageDimension)
 
 /** Whether every filter of the query admits a stretch, `none` as the contract reads it. */
 function admits(query: URLSearchParams, group: Stretch['group']) {
@@ -253,7 +271,7 @@ type Answer = { interface_version: 'valkama-analytics-api'; usage: Usage }
  */
 function answerOf(options: {
   edges: readonly number[]
-  groupBy: UsageReadDimension[]
+  groupBy: UsageDimension[]
   offset: number
   stretches: readonly Stretch[]
   before?: readonly Stretch[] | null

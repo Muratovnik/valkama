@@ -135,6 +135,15 @@ const cardItem = (name: string) => {
   return card.state.payload.work_item
 }
 
+/** A seat as the server writes it, but for its weekly reset: by its id, organization and UUID. */
+const seat = (id: string | null, organization: string | null, uuid: string | null) => ({
+  id,
+  unknown: id === null,
+  organization,
+  account_uuid: uuid,
+  shared: false,
+})
+
 describe('the server fixtures', () => {
   it('are each read by the web or named as an agent read', () => {
     const files = readdirSync(directory).filter((name) => name.endsWith('.json'))
@@ -282,7 +291,9 @@ describe('the server fixtures', () => {
 
   it("give a card's sessions and its share of each account's week", () => {
     // Two sessions spent on the card and a third, which follows it, wrote to it. One stretch
-    // of its work, $0.01 of $0.26, is all its seat's cost that week, which the poll put at 40 %.
+    // of its work, $0.01 of $0.26, is half its seat's cost that week, which the poll put at
+    // 40 %: the session's stretch the day before has no reading before it, so it takes the
+    // seat of the session's next one.
     const usage = validateItemUsageAnswer(read('usage-item.json'))
     expect(usage.sessions).toBe(3)
     expect(
@@ -296,34 +307,26 @@ describe('the server fixtures', () => {
       {
         account: { organization: 'org-fixture', account_uuid: 'acct-fixture' },
         seat: 'week:2026-11-16T09:00Z',
-        share: 1,
-        percent: 40,
+        share: 0.5,
+        percent: 20,
       },
     ])
     // The rest, $0.25 of $0.26, is on no seat: the fixture's other rows name no organization.
     expect(usage.quota.unknown_share).toBeCloseTo(0.25 / 0.26, 4)
   })
 
-  it('name the seat of the work, which the page reads without taking it for its own', () => {
+  it('name the account of the work by its id, a dimension of the page', () => {
     const usage = validateUsageAnswer(read('analytics-usage-seat.json'))
     expect(usage.rows.map(({ group }) => group.seat)).toEqual([
       {
-        id: 'org-fixture/acct-fixture',
-        unknown: false,
-        organization: 'org-fixture',
-        account_uuid: 'acct-fixture',
-        seat_key: null,
+        ...seat('org-fixture/acct-fixture', 'org-fixture', 'acct-fixture'),
+        weekly_reset: '1T09:00Z',
       },
-      {
-        id: 'org-fixture/week:2026-11-17T19:00Z',
-        unknown: false,
-        organization: 'org-fixture',
-        account_uuid: null,
-        seat_key: 'week:2026-11-17T19:00Z',
-      },
-      { id: null, unknown: true, organization: null, account_uuid: null, seat_key: null },
+      { ...seat('org-fixture/weekly:2T19:00Z', 'org-fixture', null), weekly_reset: '2T19:00Z' },
+      { ...seat('org-unread/', 'org-unread', null), weekly_reset: null },
+      { ...seat(null, null, null), weekly_reset: null },
     ])
-    expect(pageDimensionOf(usage)).toBeNull()
+    expect(pageDimensionOf(usage)).toBe('seat')
     expect(pageDimensionOf(validateUsageAnswer(read('analytics-usage.json')))).toBe('work_item')
   })
 

@@ -130,7 +130,7 @@ describe('a field whose values are being read', () => {
     await filters.vm.$nextTick()
     expect(emptyLabels(filters)[0]).toBe('Loading')
     // Another field keeps its own answer, and a failed read says so.
-    expect(emptyLabels(filters)[3]).toBe('The values could not be read.')
+    expect(emptyLabels(filters)[3]).toBe('The values could not be loaded.')
 
     await filters.setProps({ values: allRead() })
     // Held for the minimum after the wait was shown, whatever arrived meanwhile.

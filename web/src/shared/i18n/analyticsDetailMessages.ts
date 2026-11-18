@@ -11,7 +11,7 @@ export const analyticsDetailMessages = {
     resize: 'Resize the details',
     card: 'Open the card',
     full: 'The link to this view cannot hold the details of {value}, so they are not opened.',
-    failed: 'The details could not be read.',
+    failed: 'The details could not be loaded.',
     empty: 'Nothing was spent on it in this period.',
     figures: 'Figures',
     about: 'About these figures',
@@ -25,9 +25,9 @@ export const analyticsDetailMessages = {
       find: 'Find by name',
     },
     window: {
-      open: 'Where the window went',
+      open: 'Breakdown',
       title: '{window} · {account}',
-      missing: 'The quota no longer names this window.',
+      missing: 'This window is no longer in the quota.',
     },
   },
   ru: {
@@ -37,7 +37,7 @@ export const analyticsDetailMessages = {
     resize: 'Изменить ширину подробностей',
     card: 'Открыть карточку',
     full: 'Ссылка на этот вид не вмещает подробности «{value}», поэтому они не открыты.',
-    failed: 'Не удалось прочитать подробности.',
+    failed: 'Не удалось загрузить подробности.',
     empty: 'В этом периоде на него ничего не потрачено.',
     figures: 'Показатели',
     about: 'Об этих цифрах',
@@ -51,9 +51,9 @@ export const analyticsDetailMessages = {
       find: 'Найти по имени',
     },
     window: {
-      open: 'На что ушло окно',
+      open: 'Детализация',
       title: '{window} · {account}',
-      missing: 'Квота больше не называет это окно.',
+      missing: 'Этого окна больше нет в квоте.',
     },
   },
 } as const

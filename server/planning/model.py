@@ -224,7 +224,7 @@ EVENT_ACTIONS = (
     # Schema 15: an edit changed the item's set of labels, the set before and the
     # set after as the detail (`labels_change`).
     "labels_changed",
-    # Schema 18: an item accepted, its basis as the detail; a container that came
+    # Schema 19: an item accepted, its basis as the detail; a container that came
     # to stand in the service state, a reason or nothing as the detail and never a
     # state's key; a child that left this container, the child's reference.
     "accepted",

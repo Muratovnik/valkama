@@ -99,6 +99,7 @@ describe('the rail of sections', () => {
       'Five hours',
       'Week',
       'Account',
+      'Organization',
       'Project',
       'Task',
       'Executor',

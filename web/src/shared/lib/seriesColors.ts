@@ -20,8 +20,8 @@
 export const SERIES_SLOT_COUNT = 6
 
 /**
- * A palette slot; `other`, the neutral of a folded tail; or `apart`, the darker neutral of what is
- * not a category at all.
+ * A palette slot; `other`, the darker neutral of a folded tail; or `apart`, the lighter neutral of
+ * what is not a category at all.
  */
 export type SeriesSlot = 1 | 2 | 3 | 4 | 5 | 6 | 'apart' | 'other'
 

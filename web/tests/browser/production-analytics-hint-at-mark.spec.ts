@@ -19,7 +19,16 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
-import { LEGEND_SERIES, openReport, pageAt, record, serve } from './analyticsPage.ts'
+import {
+  LEGEND_SERIES,
+  openReport,
+  pageAt,
+  record,
+  serve,
+  SESSION_REPORT,
+  SESSIONS,
+} from './analyticsPage.ts'
+import type { Answer } from './analyticsPage.ts'
 import { drawAllLined } from './drawnViews.ts'
 import { test } from './test.ts'
 
@@ -352,11 +361,11 @@ async function showAs(page: Page, view: string) {
     if (!(await radio.isChecked()) && (await radio.isVisible())) await radio.click()
 }
 
-async function open(page: Page, width: number, address?: string) {
+async function open(page: Page, width: number, address?: string, answer?: Answer) {
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
   // The hint's delay runs on this clock, so each hint is read after it.
   await page.clock.install()
-  await serve(page)
+  await serve(page, answer)
   await openReport(page, width, address)
   await drawAllLined(page)
   await page.evaluate(() => document.fonts.ready)
@@ -382,7 +391,9 @@ for (const width of [1440, 390]) {
   test(`at ${width}px a day's, a ranked row's and a legend entry's hint stand at their marks`, async ({
     page,
   }, info) => {
-    await open(page, width)
+    // Sessions named by their titles: a ranked row prints its name, figure and share, so its
+    // hint is the client and the start of the id its title leaves out.
+    await open(page, width, SESSION_REPORT, SESSIONS)
     const days = page.locator('.spending-days .period-column')
     const rows = page.locator('.spending-bars .ranked-line')
     // A key of a series: the hatch's key says its name whole while it is cut and has no hint of

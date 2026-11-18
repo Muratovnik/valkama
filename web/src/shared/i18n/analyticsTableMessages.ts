@@ -7,7 +7,7 @@ export const analyticsTableMessages = {
     title: 'Spending {by}',
     crossTitle: 'Spending {by} and {across}',
     change: 'Change',
-    unread: 'The period before was not read, so this table shows this period alone.',
+    unread: 'The period before was not loaded, so this table shows this period alone.',
     download: 'Download CSV',
     nothingToDownload: 'Nothing to download: this view holds no value.',
     moved: {
@@ -33,9 +33,9 @@ export const analyticsTableMessages = {
     title: 'Расход {by}',
     crossTitle: 'Расход {by} и {across}',
     change: 'Изменение',
-    unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
+    unread: 'Предыдущий период не загружен, поэтому таблица показывает только этот период.',
     download: 'Скачать CSV',
-    nothingToDownload: 'Скачивать нечего: в этом виде нет ни одного значения.',
+    nothingToDownload: 'Нет данных для скачивания: в этом виде нет значений.',
     moved: {
       up: '↑ {change}',
       down: '↓ {change}',
@@ -45,12 +45,12 @@ export const analyticsTableMessages = {
         tokens: {
           before: 'Раньше токены не учтены',
           now: 'Сейчас токены не учтены',
-          both: 'Токены не учтены ни там, ни там',
+          both: 'Токены не учтены ни в одном периоде',
         },
         cost: {
           before: 'Раньше нет цены',
           now: 'Сейчас нет цены',
-          both: 'Нет цены ни там, ни там',
+          both: 'Нет цены ни в одном периоде',
         },
       },
     },

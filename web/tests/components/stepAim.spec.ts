@@ -6,7 +6,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { aimAt } from '@/shared/ui/windowGeometry.ts'
+import { aimAt, restartFall, stepStops } from '@/shared/ui/windowGeometry.ts'
+import type { StepPoint } from '@/shared/ui/windowGeometry.ts'
 
 /** How near a mark the pointer finds it: half a mark as drawn when pointed at. */
 const HIT = 6
@@ -47,5 +48,62 @@ describe('where the pointer finds a place of a step line', () => {
     // Past the reach of every mark, a point outside the field is held at its edge.
     expect(aimAt(frame, aims.slice(0, 2), 300 + HIT, { width: 300, radius: HIT })).toBeNull()
     expect(aimAt(frame, aims.slice(0, 3), 300 + HIT, { width: 300, radius: HIT })).toBeNull()
+  })
+})
+
+/** A reading of a step line at `at` with `value`, its words left out. */
+const reading = (at: number, value: number): StepPoint => ({
+  at,
+  value,
+  key: `${at}`,
+  noteText: '',
+  text: '',
+  timeText: '',
+  valueText: '',
+})
+
+/**
+ * Where a restart of a window's count stands among a step line's places, held to the rule
+ * `StepLine` and `windowGeometry` state: a restart is a place at the moment of the reading it
+ * restarted at, walked before that reading, found by the pointer at its moment before it, and its
+ * ring spans the fall the line draws there, from the share the line held before to the share at
+ * it. The oracle is that rule on readings of 99 % at 100 and 0 % at 112, worked out by hand.
+ */
+describe('a restart of a window’s count on its step line', () => {
+  it('stands before the reading at its moment, among the readings in the order they stand', () => {
+    const readings = [reading(100, 99), reading(112, 0), reading(200, 10)]
+    expect(stepStops(readings, [{ at: 112 }])).toEqual([
+      { kind: 'reading', index: 0 },
+      { kind: 'restart', index: 0 },
+      { kind: 'reading', index: 1 },
+      { kind: 'reading', index: 2 },
+    ])
+    // With no restart the readings are the walk alone, in their order.
+    expect(stepStops(readings, [])).toEqual(
+      readings.map((_, index) => ({ kind: 'reading', index })),
+    )
+  })
+
+  it('is found by the pointer at its moment, and the reading it restarted at along its step', () => {
+    const frame = { from: 0, to: 300, top: 100 }
+    const aims = [
+      { at: 100, from: 100, to: 112 },
+      { at: 112, from: 112, to: 112 },
+      { at: 112, from: 112, to: 200 },
+    ]
+    const at = (x: number) => aimAt(frame, aims, x, { width: 300, radius: HIT })
+    expect([112, 112 - HIT + 1, 112 + HIT - 1].map((x) => at(x))).toEqual([1, 1, 1])
+    expect([112 + HIT + 1, 150].map((x) => at(x))).toEqual([2, 2])
+  })
+
+  it('marks the fall the line draws at its moment, from the share held before it', () => {
+    expect(restartFall([reading(100, 99), reading(112, 0)], 112)).toEqual({ high: 99, low: 0 })
+    // Another feed's lower reading before the restart is where the line stood when it fell.
+    expect(restartFall([reading(100, 99), reading(105, 30), reading(112, 0)], 112)).toEqual({
+      high: 30,
+      low: 0,
+    })
+    // Where no reading stood before it, the ring stands at its own reading.
+    expect(restartFall([reading(112, 4), reading(200, 10)], 112)).toEqual({ high: 4, low: 4 })
   })
 })

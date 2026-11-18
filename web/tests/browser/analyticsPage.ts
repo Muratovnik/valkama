@@ -22,6 +22,7 @@ export {
   NOW,
   ONE_VALUE,
   ONLY_WEEK_BEFORE,
+  SESSIONS,
   UNRECORDED_BETWEEN,
   WORLD,
 } from './served/analyticsWorld.ts'
@@ -36,6 +37,12 @@ export const LEGEND_NAMES = `${LEGEND_SERIES} [data-part="name"]`
 
 export const pageAt = (state: Record<string, string> = {}) =>
   serializePlatformRoute({ module_id: 'analytics', scope: globalScope, state })
+
+/** The section of sessions, whose rows `SESSIONS` fills. */
+export const SESSION_REPORT = pageAt({ by: 'executor' })
+
+/** What a session's row says in its hint: its client and the start of its id, on a line of its own. */
+export const SESSION_PLACE = /^claude · \d{8}$/mu
 
 /** What the double answers: the work it holds, or a read that never answers, or one that fails. */
 export type Answer = 'failed' | 'hold' | readonly TimedStretch[]

@@ -9,6 +9,7 @@ import { drawnColours } from './contrast.ts'
 import { test } from './test.ts'
 
 const STATES = [
+  'agent',
   'claimed',
   'closed',
   'foreign',

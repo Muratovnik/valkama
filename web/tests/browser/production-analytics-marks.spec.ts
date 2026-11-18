@@ -3,11 +3,12 @@
  * the table does, in the real app. The oracle is the requirement: a segment of a day, a ranked
  * row and a day the keyboard stands on each show a hint, and none of them moves the plot, the
  * panel's first block or the table by a pixel; so does a ranked row the panel has to scroll to,
- * pointed at or brought under a resting pointer by the wheel, its cut name a space apart from its
- * share; no line of words stands over a plot, so the drawing field keeps that room; a task's
- * segment opens the task's side panel, whose «Open the card» opens the card over the page, the
- * module still Analytics, and closing them gives back the section, the period and the scroll.
- * Each run prints what it measured.
+ * pointed at or brought under a resting pointer by the wheel. A ranked row prints its name, its
+ * figure and its share, so its hint is what the name leaves out: here a session's client and the
+ * start of its id, the session named by its title. No line of words stands over a plot, so the
+ * drawing field keeps that room; a task's segment opens the task's side panel, whose «Open the
+ * card» opens the card over the page, the module still Analytics, and closing them gives back the
+ * section, the period and the scroll. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -15,7 +16,17 @@ import type { Page } from '@playwright/test'
 import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { openReport, pageAt, record, serve, serveTask } from './analyticsPage.ts'
+import {
+  openReport,
+  pageAt,
+  record,
+  serve,
+  serveTask,
+  SESSION_PLACE,
+  SESSION_REPORT,
+  SESSIONS,
+} from './analyticsPage.ts'
+import { drawAllLined } from './drawnViews.ts'
 import { openOverview, WORLD } from './overviewPage.ts'
 import { workItem, workItemRef } from './planningFixtures.ts'
 import { expectNoLineOverPlot } from './plotWords.ts'
@@ -59,8 +70,10 @@ async function hintOf(page: Page, reach: () => Promise<void>, show: () => Promis
 test('a segment, a ranked row and a day the keyboard stands on each say themselves in a hint, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, WORLD)
-  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await serve(page, SESSIONS)
+  const analytics = await openReport(page, 1440, SESSION_REPORT)
+  // Six sessions draw as a ring until asked for their bars.
+  await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 900 })
   const days = analytics.locator('.spending-days')
   await expect(days).toHaveAttribute('data-shown', 'chart')
@@ -76,14 +89,14 @@ test('a segment, a ranked row and a day the keyboard stands on each say themselv
   )
   expect(onSegment.says).toMatch(/ of the total\n/u)
 
-  // A ranked row: what its printed name and figure leave out, its share of the whole.
+  // A ranked row: what its printed name, figure and share leave out, the session's client and id.
   const row = analytics.locator('.spending-bars .ranked-line').first()
   const onRow = await hintOf(
     page,
     () => row.scrollIntoViewIfNeeded(),
     () => row.hover(),
   )
-  expect(onRow.says).toMatch(/ of the total/u)
+  expect(onRow.says).toMatch(SESSION_PLACE)
 
   // A day the keyboard stands on: its sum, then its series, a line each.
   const stop = days.locator('.period-column[tabindex="0"]')
@@ -122,18 +135,13 @@ const reach = (page: Page) =>
     }
   })
 
-/**
- * What the row the world ranks first says: its share alone. A task's name takes a line of its own
- * and wraps to two before it is cut (`RankedBars`), so this one stands whole on its row, and a
- * hint never repeats the words its element shows.
- */
-const SHARE = /^\d+% of the total$/u
-
-test('a ranked row the panel scrolls to reach says its share, and nothing moves', async ({
+test('a ranked row the panel scrolls to reach says what its name leaves out, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, WORLD)
-  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await serve(page, SESSIONS)
+  const analytics = await openReport(page, 1440, SESSION_REPORT)
+  // Six sessions draw as a ring until asked for their bars.
+  await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 400 })
   const days = analytics.locator('.spending-days')
   await expect(days).toHaveAttribute('data-shown', 'chart')
@@ -152,15 +160,17 @@ test('a ranked row the panel scrolls to reach says its share, and nothing moves'
   expect(after.scrolled, 'pointing at the row scrolled the panel').toBeGreaterThan(0)
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row reached by the scroll', { before, after, ...seen })
-  expect(seen.says).toMatch(SHARE)
+  expect(seen.says).toMatch(SESSION_PLACE)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 
 test('a ranked row a wheel brings under a resting pointer says itself, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, WORLD)
-  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await serve(page, SESSIONS)
+  const analytics = await openReport(page, 1440, SESSION_REPORT)
+  // Six sessions draw as a ring until asked for their bars.
+  await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 400 })
   await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'chart')
   const start = await reach(page)
@@ -185,7 +195,7 @@ test('a ranked row a wheel brings under a resting pointer says itself, and nothi
   await expect.poll(under, { message: 'a ranked row came under the pointer' }).not.toBeNull()
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row under a resting pointer', { under: await under(), ...seen })
-  expect(seen.says).toMatch(/ of the total/u)
+  expect(seen.says).toMatch(SESSION_PLACE)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 

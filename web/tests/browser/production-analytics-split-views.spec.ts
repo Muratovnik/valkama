@@ -43,14 +43,14 @@ const legendFigures = (chart: Locator) =>
       ]),
     )
 
-/** Each ranked row: its name and its figure. */
+/** Each ranked row: its name and its figure, before the share the row prints after it. */
 const barFigures = (chart: Locator) =>
   chart
     .locator('.ranked-row')
     .evaluateAll((rows) =>
       rows.map((row) => [
         row.querySelector('.ranked-label')?.textContent ?? '',
-        row.querySelector('.ranked-value')?.textContent ?? '',
+        (row.querySelector('.ranked-value')?.textContent ?? '').split(' · ')[0] ?? '',
       ]),
     )
 
@@ -102,7 +102,7 @@ async function workSpend(page: Page) {
     .locator('.quota-account')
     .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
     .locator('.quota-window[data-window="five_hour"]')
-    .getByRole('button', { name: 'Where the window went' })
+    .getByRole('button', { name: 'Breakdown', exact: true })
     .click()
   const panel = page.getByRole('dialog', { name: 'Details: Five hours · Work' })
   await expect(panel).toHaveCSS('transform', 'none')

@@ -1,11 +1,11 @@
 /**
- * The owner's names for the accounts agent work was billed to. The usage rows hold only an
- * account's organization id, and nothing on the machine names most accounts, so the owner names
- * them in Settings and the Analytics page says that name, with the id in its hint. Valkama keeps
- * them in its store by the organization id (`quotaApi.ts`), so every device and the quota alerts
- * say one name; the server holds a write to the same rule this module writes a name by. Names a
- * build before that kept on this device wait in the device's settings (`settings.ts`) until they
- * move there once (`accountNamesStore.ts`).
+ * The owner's names for the accounts agent work was billed to and their organizations. Nothing on
+ * the machine names most accounts, so the owner names them in Settings and the Analytics page says
+ * that name (`accountLabel.ts`). Valkama keeps them in its store by the account's id or the
+ * organization's (`accountIds.ts`, `quotaApi.ts`), so every device and the quota alerts say one
+ * name; the server holds a write to the same rule this module writes a name by. Names a build
+ * before that kept on this device, by the organization's id, wait in the device's settings
+ * (`settings.ts`) until they move there once (`accountNamesStore.ts`).
  */
 
 /** A name by the account's id; an account with no name is not in it. */

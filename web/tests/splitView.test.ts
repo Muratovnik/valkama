@@ -13,6 +13,7 @@ import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 
 const IDENTIFIERS: UsageDimension[] = [
+  'seat',
   'account',
   'project',
   'role',

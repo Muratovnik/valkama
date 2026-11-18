@@ -2,7 +2,7 @@
 
 The vocabulary is stated here rather than read from the code under test: eight
 categories a caller names and the service one only the store holds, the kinds in
-and out, the acceptance bases and the events of schema 18. A fresh space's
+and out, the acceptance bases and the events of schema 19. A fresh space's
 workflow has a state for each category and one service state, and the store
 itself refuses a kind in a state it never stands in.
 """

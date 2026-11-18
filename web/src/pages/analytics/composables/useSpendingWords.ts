@@ -15,7 +15,7 @@ import { useI18n } from 'vue-i18n'
 import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
-import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { figureOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { isSeveral, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
@@ -26,6 +26,8 @@ import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import { aliasOf } from '@/shared/lib/accountAliases.ts'
+import { accountLabel } from '@/shared/lib/accountLabel.ts'
+import type { AnsweredNames } from '@/shared/lib/accountLabel.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
@@ -99,8 +101,28 @@ export function useSpendingWords() {
   const usage = useUsageWords()
   const { names } = storeToRefs(useAccountNamesStore())
 
-  /** The owner's name for an account, by its organization's id, or null where it has none. */
+  /** The owner's name for an account or an organization, by its id, or null where it has none. */
   const accountName = (id: string) => aliasOf(names.value, id)
+
+  /**
+   * An account by its id, as the app says one (`accountLabel.ts`); `answered` is what the quota's
+   * answer named it, until the names are read.
+   */
+  const seatLabel = (
+    id: string,
+    weeklyReset: string | null = null,
+    answered: AnsweredNames | null = null,
+  ) =>
+    accountLabel(
+      names.value,
+      { id, weeklyReset },
+      {
+        locale: i18n.locale.value,
+        unplaced: (organization) => t('analytics.values.seat.unplaced', { organization }),
+        weekly: (organization, reset) => t('analytics.values.seat.weekly', { organization, reset }),
+      },
+      answered,
+    )
 
   const compact = (value: number) =>
     new Intl.NumberFormat(i18n.locale.value, {
@@ -269,6 +291,10 @@ export function useSpendingWords() {
     if (name === 'role' && i18n.te(`analytics.roles.${value.id}`))
       return t(`analytics.roles.${value.id}`)
     if (name === 'account') return accountName(value.id) ?? agentIdStart(value.id)
+    if (name === 'seat') {
+      const said = seatLabel(value.id, value.weekly_reset ?? null)
+      return value.shared ? `${said} · ${t('analytics.values.seat.shared')}` : said
+    }
     return value.id
   }
 
@@ -317,6 +343,24 @@ export function useSpendingWords() {
 
   /** A line's figure with its remark beside it (`lineFigureWords`), as one line says them. */
   const lineFigure = (name: Measure, spent: Spent) => besides(lineFigureWords(name, spent))
+
+  /**
+   * A figure with its share of a whole after it, «4 дн. 1 ч · 78 %», as a ranked row prints it
+   * where its bar alone would leave the reader to guess how much of the whole it is; the figure
+   * alone where there is no share to say (`null`).
+   */
+  const withShare = (figure: string, ratio: number | null) =>
+    ratio === null ? figure : t('analytics.figures.withShare', { figure, share: share(ratio) })
+
+  /**
+   * A line's figure (`lineFigure`) with its share of what every line of its breakdown adds up to
+   * (`whole`): none for a line the measure has no amount for — no price, no token counted — and
+   * none of a whole of nothing.
+   */
+  function lineShare(name: Measure, spent: Spent, whole: number) {
+    const amount = measureOf(name, spent)
+    return withShare(lineFigure(name, spent), amount === null || whole <= 0 ? null : amount / whole)
+  }
 
   /**
    * How a line's measure moved, as a table cell says it (`changeCell`), and its remark: a change
@@ -425,8 +469,8 @@ export function useSpendingWords() {
   /** What changed in the accounts that worked: «Account change: a → a, b». */
   const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
     t('analytics.days.accounts', {
-      before: before.map((value) => valueLabel('account', value)).join(', '),
-      after: after.map((value) => valueLabel('account', value)).join(', '),
+      before: before.map((value) => valueLabel('seat', value)).join(', '),
+      after: after.map((value) => valueLabel('seat', value)).join(', '),
     })
 
   /**
@@ -513,6 +557,7 @@ export function useSpendingWords() {
 
   return {
     accountName,
+    seatLabel,
     accounts,
     axis,
     breakdownBy,
@@ -540,6 +585,7 @@ export function useSpendingWords() {
     lineFigureWords,
     lineEnd,
     lineLabel,
+    lineShare,
     measure,
     noneLabel,
     pairEnd,
@@ -548,5 +594,6 @@ export function useSpendingWords() {
     unpriced,
     valueDetail,
     valueLabel,
+    withShare,
   }
 }

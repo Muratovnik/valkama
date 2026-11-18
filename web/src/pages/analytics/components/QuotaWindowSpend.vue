@@ -32,7 +32,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { useWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
-import { measureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { belowUnit, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { shareOf, SPEND_BREAKDOWNS } from '@/pages/analytics/utils/windowSpend.ts'
 import type { SpendBy } from '@/pages/analytics/utils/windowSpend.ts'
@@ -152,18 +152,12 @@ const rows = computed<RankedRow[]>(() => {
   const held = answer.value
   if (!held) return []
   const { lines, total } = held.spent
-  return lines.map((line) => {
-    const share = shareOf(line, total)
-    const figure = cost(line.spent)
-    return {
-      ...rowOf(held, line),
-      slot: line.kind === 'category' ? 1 : 'other',
-      valueText:
-        share === null
-          ? figure
-          : t('analytics.quota.spent.share', { cost: figure, share: words.share(share) }),
-    }
-  })
+  return lines.map((line) => ({
+    ...rowOf(held, line),
+    slot: line.kind === 'category' ? 1 : 'other',
+    valueText: words.withShare(cost(line.spent), shareOf(line, total)),
+    belowUnit: belowUnit('cost', line.spent),
+  }))
 })
 /**
  * Each item of the ring by its estimate alone, since its legend says the share: an item in the hue

@@ -161,9 +161,10 @@ test('the heading row and total keep to the edges on every path to the table', a
   await page.evaluate(() => document.fonts.ready)
   const seen: Record<string, unknown> = {}
 
-  // The account a pair names after its task, by the start of its id, says the split has landed.
+  // The organization a pair names after its task, by the start of its id, says the split has
+  // landed.
   const paired = rows.first().getByText('5b0c7e21', { exact: false })
-  await splitBy(page, 'Account')
+  await splitBy(page, 'Organization')
   await expect(paired).toBeVisible()
   await toTable(page)
   seen.split = await expectEdges(page, 'split chosen')

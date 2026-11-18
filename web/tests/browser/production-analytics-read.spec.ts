@@ -85,7 +85,7 @@ const shown = (page: Page) =>
       (tile) => (tile as HTMLElement).dataset.state,
     ),
     failedTiles: [...document.querySelectorAll('.analytics-rail .rail-tile')].filter((tile) =>
-      tile.textContent?.includes('Could not be read'),
+      tile.textContent?.includes('Could not be loaded'),
     ).length,
   }))
 

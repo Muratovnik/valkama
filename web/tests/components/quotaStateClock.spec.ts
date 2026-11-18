@@ -66,20 +66,20 @@ describe('a quota window’s state by the panel’s clock', () => {
     expect(week).toMatchObject({ kind: 'week', state: 'fresh' })
     expect(workWeek(page)).toMatchObject({
       state: 'fresh',
-      lead: '41% used · fresh',
+      lead: '41% used · up to date',
       latest: 'Read 2 min ago from the poll',
     })
 
     // Ten minutes old is still fresh: the threshold is the last fresh moment.
     await wait(8 * MINUTE)
-    expect(workWeek(page)).toMatchObject({ state: 'fresh', lead: '41% used · fresh' })
+    expect(workWeek(page)).toMatchObject({ state: 'fresh', lead: '41% used · up to date' })
 
     // At the next tick of the clock it is older, and every word of the window says it is silent.
     await wait(5 * SECOND)
     const silent = workWeek(page)
-    expect(silent).toMatchObject({ state: 'silent', lead: '41% used · silent 10 min' })
+    expect(silent).toMatchObject({ state: 'silent', lead: '41% used · no data for 10 min' })
     expect(silent.latest).toMatch(/^No change since \d{2}:\d{2}, 10 min ago, from the poll$/u)
-    expect(silent.label).toMatch(/^Week: 41% used, steady use \d+%, silent 10 min\. /u)
+    expect(silent.label).toMatch(/^Week: 41% used, steady use \d+%, no data for 10 min\. /u)
   })
 
   it('names on the tile the fresh window of two at the same share, by the clock', async () => {
@@ -96,14 +96,18 @@ describe('a quota window’s state by the panel’s clock', () => {
     )
     const page = await mountAnalytics()
     // Both fresh, the first in the answer's order.
-    expect(says(page, 'quota_five_hour')).toEqual({ lead: 'Work', aside: '62%', count: 'fresh' })
+    expect(says(page, 'quota_five_hour')).toEqual({
+      lead: 'Work',
+      aside: '62%',
+      count: 'up to date',
+    })
 
     // «Work»'s reading is past ten minutes and the other's is not: the fresh one is the tightest.
     await wait(8 * MINUTE + 5 * SECOND)
     expect(says(page, 'quota_five_hour')).toEqual({
       lead: '7e6d5c4b',
       aside: '62%',
-      count: 'fresh',
+      count: 'up to date',
     })
 
     // A minute on both are silent, and the first in the answer's order is again the tightest.
@@ -111,7 +115,7 @@ describe('a quota window’s state by the panel’s clock', () => {
     expect(says(page, 'quota_five_hour')).toEqual({
       lead: 'Work',
       aside: '62%',
-      count: 'silent 11\u{A0}min',
+      count: 'no data for 11\u{A0}min',
     })
   })
 })

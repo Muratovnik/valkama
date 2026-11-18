@@ -37,7 +37,7 @@ type WindowOpener = (account: string, window: string, label: string) => void
 
 const WINDOW_DETAIL: InjectionKey<WindowOpener> = Symbol('analytics-window-detail')
 
-/** The opener a quota window's «Where the window went» asks; none outside the page. */
+/** The opener a quota window's «Breakdown» asks; none outside the page. */
 export const useWindowDetail = () => inject(WINDOW_DETAIL, null)
 
 export function useDetail(options: {

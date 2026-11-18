@@ -7,8 +7,8 @@
  * - An account with no name, read by the status line: five hours at a fresh 0 % that last to the
  *   reset, 35 % spent by then, the week at 88 % and silent, the tightest week.
  * - An organization that worked and that no source read.
- * - A provisional seat, known for its week alone: five hours at 74 % and fresh, the tightest five
- *   hours, and its week at 20 %.
+ * - An account known by its weekly reset alone, under which two accounts' readings may run: five
+ *   hours at 74 % and fresh, the tightest five hours, and its week at 20 %.
  *
  * The tightest window of each kind is therefore never the first account, so a tile that named the
  * first account rather than the tightest would say the wrong one.
@@ -50,6 +50,8 @@ function share(
     readings: Reading[]
     source: QuotaShareWindow['latest']['source']
     model?: string
+    /** Where its count restarted, as many ms before `now` as one of its readings. */
+    restarts?: number[]
   },
 ): QuotaShareWindow {
   const at = (ms: number) => momentAt(ms, offset)
@@ -73,6 +75,7 @@ function share(
     started_at: at(started),
     even_percent: Math.round(((now - started) / length) * 10_000) / 100,
     readings,
+    restarts: (window.restarts ?? []).map((ago) => at(now - ago)),
     forecast: window.forecast,
   }
 }
@@ -85,9 +88,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
   const accounts: QuotaAccount[] = [
     {
       ...WORK,
-      seat: null,
+      account: `${WORK.organization}/${WORK.account_uuid}`,
+      weekly_reset: '1T09:00Z',
+      shared: false,
       plan: 'Max',
       name: 'Work',
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -137,9 +143,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
     },
     {
       ...NIGHT,
-      seat: null,
+      account: `${NIGHT.organization}/${NIGHT.account_uuid}`,
+      weekly_reset: '3T23:00Z',
+      shared: false,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -164,19 +173,25 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
     },
     {
       ...UNREAD,
+      account: `${UNREAD.organization}/`,
       account_uuid: null,
-      seat: null,
+      weekly_reset: null,
+      shared: false,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: true,
       windows: [],
     },
     {
       ...SEATED,
+      account: `${SEATED.organization}/weekly:7T09:00Z`,
       account_uuid: null,
-      seat: 'week:2026-11-15T09:00Z',
+      weekly_reset: '7T09:00Z',
+      shared: true,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -210,6 +225,29 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
 /** The answer as the server sends it. */
 export const quotaAnswer = (quota: Quota) => ({ interface_version: 'valkama-analytics-api', quota })
 
+/** The short names of the days of the week from Sunday, as each language writes them. */
+const WEEKDAYS = {
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  ru: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
+}
+
+/**
+ * What the page calls the account known by its weekly reset alone, which falls on Sunday at 09:00
+ * UTC, in the reader's own time and language: «a1b2c3d4 · resets Sun 12:00» at +03:00 in English.
+ */
+export function seatedName(locale: 'en' | 'ru' = 'en') {
+  // 7 January 2024 was a Sunday.
+  const reset = new Date(Date.UTC(2024, 0, 7, 9))
+  const time = [reset.getHours(), reset.getMinutes()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':')
+  const resets = locale === 'ru' ? 'сброс' : 'resets'
+  return `a1b2c3d4 · ${resets} ${WEEKDAYS[locale][reset.getDay()] ?? ''} ${time}`
+}
+export const SEATED_NAME = seatedName()
+/** What the page calls the organization that worked and that no source read. */
+export const UNREAD_NAME = '9f8e7d6c · account not known'
+
 /** Two more accounts like «Work», each a week and a model's week, by these names and ids. */
 const MORE = [
   {
@@ -232,7 +270,11 @@ export function quotaOfSix(now: Date | number, offset = -new Date(now).getTimezo
   const quota = quotaAt(now, offset)
   const [work] = quota.accounts
   if (!work) throw new Error('the four accounts start with «Work»')
-  const more = MORE.map((account) => ({ ...work, ...account }))
+  const more = MORE.map((account) => ({
+    ...work,
+    ...account,
+    account: `${account.organization}/${account.account_uuid}`,
+  }))
   return { ...quota, accounts: [...quota.accounts, ...more] }
 }
 
@@ -256,7 +298,10 @@ export function quotaOfEdges(
   const window = (shape: Parameters<typeof share>[2]) => share(moment, offset, shape)
   const edge: QuotaAccount = {
     ...EDGE,
-    seat: null,
+    account: `${EDGE.organization}/${EDGE.account_uuid}`,
+    weekly_reset: '2T15:00Z',
+    shared: false,
+    organization_name: null,
     plan: 'Max',
     no_source: false,
     windows: [

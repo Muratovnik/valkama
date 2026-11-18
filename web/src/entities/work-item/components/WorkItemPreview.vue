@@ -6,11 +6,13 @@
  * Its head as every surface reads an item: a kind that is not the ordinary one,
  * the reference, a priority that is not the ordinary one, and its state, with
  * what it waits on if anything does (`MarkHead`);
- * the whole title, wrapped wherever it has to be; who holds it and how far its
- * steps are; and when it last changed or closed, after the space it comes
- * from when that is not the open one. Each fact is the facet registry's
- * (`surface: 'preview'`), drawn as a tile draws its own, so a stale claim reads
- * the same here as on the board.
+ * the whole title, wrapped wherever it has to be but never inside a reference it names
+ * (`WorkItemTitle`); who holds it and how far its steps are; and when it last changed
+ * or closed, after the space it comes from when that is not the open one. Each fact
+ * is the facet registry's (`surface: 'preview'`), drawn as a tile draws its own, so a
+ * stale claim reads the same here as on the board. A line of facts breaks between words
+ * alone, so an id, a session's start or a space's name is never cut across two lines
+ * (`vWholeWords`).
  *
  * Until the item is read the reference stands alone with one line under it, which
  * says the wait once it has lasted, and a refusal says so in a line of its own; the
@@ -22,6 +24,9 @@
  * it opens and what a screen reader hears belong to the reference that shows it: the facts are
  * hidden from assistive technology, which hears them as the reference's description
  * (`useWorkItemPreviewWords().describe`), and only the two controls and what they did are read.
+ *
+ * Each line carries `data-preview-part`: `head`, `title`, `facts`, `when`, or `note` for the line
+ * a card without an item prints.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,13 +34,14 @@ import { useI18n } from 'vue-i18n'
 import { drawMarks, MarkHead } from '@/entities/work-item/components/drawMarks.ts'
 import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
 import WorkItemCopyButtons from '@/entities/work-item/components/WorkItemCopyButtons.vue'
+import WorkItemTitle from '@/entities/work-item/components/WorkItemTitle.vue'
 import { useWorkItemCopy } from '@/entities/work-item/composables/useWorkItemCopy.ts'
 import { useWorkItemPreviewWords } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 import type { WorkItemPreviewSubject } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vWholeWords } from '@/shared/ui/wholeWords.ts'
 
 const props = withDefaults(defineProps<WorkItemPreviewSubject>(), {
   failure: null,
@@ -76,7 +82,10 @@ const copied = useWorkItemCopy(() => props.reference)
     class="work-item-preview"
     :data-read="read"
   >
-    <p class="preview-head">
+    <p
+      class="preview-head"
+      data-preview-part="head"
+    >
       <MarkHead
         class="preview-head-run"
         :marks="head"
@@ -97,13 +106,16 @@ const copied = useWorkItemCopy(() => props.reference)
     </p>
     <template v-if="drawn">
       <p
-        v-slash-breaks="drawn.title"
         class="preview-title"
+        data-preview-part="title"
         aria-hidden="true"
-      />
+      >
+        <WorkItemTitle :title="drawn.title" />
+      </p>
       <p
         v-if="facts.length || stale"
         class="preview-facts"
+        data-preview-part="facts"
         aria-hidden="true"
       >
         <component
@@ -121,10 +133,15 @@ const copied = useWorkItemCopy(() => props.reference)
       <p
         v-if="when"
         class="preview-when"
+        data-preview-part="when"
         aria-hidden="true"
       >
         <template v-if="space"
-          ><span class="preview-space">{{ space }}</span> ·
+          ><span
+            v-whole-words="space"
+            class="preview-space"
+          />
+          ·
         </template>
         <time :datetime="when.iso">{{ when.text }}</time>
       </p>
@@ -132,6 +149,7 @@ const copied = useWorkItemCopy(() => props.reference)
     <p
       v-else
       class="preview-note"
+      data-preview-part="note"
       aria-hidden="true"
     >
       {{ note }}

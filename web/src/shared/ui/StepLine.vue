@@ -55,9 +55,13 @@
  * where no corridor follows, the forecast along the corridor. So a reader aims at a moment and not
  * at a dot, and a reading a few pixels from the next is still found at its own mark.
  *
- * The readings and the two places are one stop for Tab, walked with the arrows in the order they
- * stand — the readings, then «now», then the forecast — each saying itself in its hint and as its
- * name. Tab lands on the latest reading. Each hint lies over the page at its mark, so pointing
+ * Where the window's count restarted inside it (`restarts`), the line falls at a reading, and the
+ * restart is a place on the line there with its hint, its mark a ring around the fall
+ * (`useStepWalk`), found by the pointer before the reading it restarted at.
+ *
+ * The readings, the restarts and the two places are one stop for Tab, walked with the arrows in
+ * the order they stand — the readings, each restart before the reading at its moment, then «now»,
+ * then the forecast — each saying itself in its hint and as its name. Tab lands on the latest reading. Each hint lies over the page at its mark, so pointing
  * moves nothing: a reading's at the top right of its dot (`data-hint-point`, `hintPlacement.ts`),
  * a place's beside its ring, level with the ring's top (`data-hint-mark`), so a forecast that runs
  * out at the top of the plot keeps its hint off the line's head. Every reading is also in the
@@ -71,7 +75,8 @@
  * the marks stand in, the `drawing` of its lines, the `hover` layer that takes the pointer, and
  * the `axis`, whose two ends are `data-moment` `from` and `to`; its marks are `data-mark` — the
  * readings' `line`, each `reading`'s dot inside its box (`data-reading`, its order), each
- * `place`'s ring inside its box (`data-target`, `now` or `reset`) and the forecast's `corridor`.
+ * `place`'s ring inside its box (`data-target`, `restart`, `now` or `reset`) and the forecast's
+ * `corridor`.
  * Each reading's and place's box is its stop (`data-stop`, its order), the element its hint and
  * the keyboard's focus belong to.
  */
@@ -87,6 +92,7 @@ import type { StepTargetPlace } from '@/shared/ui/useStepAhead.ts'
 import { useStepAim } from '@/shared/ui/useStepAim.ts'
 import { useStepFrame } from '@/shared/ui/useStepFrame.ts'
 import { useStepSpan } from '@/shared/ui/useStepSpan.ts'
+import { useStepWalk } from '@/shared/ui/useStepWalk.ts'
 import {
   evenAt,
   readingsIn,
@@ -98,13 +104,7 @@ import {
   stepX,
   stepY,
 } from '@/shared/ui/windowGeometry.ts'
-import type {
-  StepAhead,
-  StepAim,
-  StepPoint,
-  StepSpan,
-  StepWords,
-} from '@/shared/ui/windowGeometry.ts'
+import type { StepAhead, StepPoint, StepRestart, StepWords } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   /** The moment the last reading holds to: when the answer was read. */
@@ -124,6 +124,8 @@ const props = defineProps<{
   ended?: boolean
   /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
   even?: boolean
+  /** Where the window's count restarted inside it, each at the moment of one of `points`. */
+  restarts?: readonly StepRestart[]
   /** A moment as the axis names an end of the span shown, «14:05». */
   moment: (at: number) => string
 }>()
@@ -196,7 +198,11 @@ const reachStyle = ({ reach }: StepTargetPlace) => ({
  * The class of a place's ring by its kind, written whole: a class composed from a template hides
  * from a search, and from the guard over the tests' selectors, which class the line writes.
  */
-const PLACE_MARK = { now: 'step-now-mark', reset: 'step-reset-mark' } as const
+const PLACE_MARK = {
+  now: 'step-now-mark',
+  reset: 'step-reset-mark',
+  restart: 'step-restart-mark',
+} as const
 
 const targetMark = ({ mark }: StepTargetPlace) => ({
   '--step-high': mark.high,
@@ -204,45 +210,30 @@ const targetMark = ({ mark }: StepTargetPlace) => ({
   '--step-side': mark.side,
 })
 
-/** How many places the keyboard walks: the readings shown and the places past them. */
-const stops = computed(() => readings.value.inside.length + targets.value.length)
-/** A place past the readings by its order among them. */
-const stopOf = (index: number) => readings.value.inside.length + index
+/** Every place in the order the keyboard walks them: the readings, the restarts, those past. */
+const walk = useStepWalk(() => props, frame, {
+  inside: () => readings.value.inside,
+  past: () => targets.value,
+  step: (index) => ({ from: readings.value.inside[index]?.at ?? 0, to: stepEnd(index) }),
+})
+const { coveredBy, places, readingStop } = walk
 
 /** The place under the pointer or the keyboard, its mark painted. */
 const pointed = ref<number | null>(null)
 const markClass = (index: number) => ({ 'step-shown': pointed.value === index })
 
-/** Every place in the order the keyboard walks them, as the pointer finds each. */
-const aims = computed<StepAim[]>(() => [
-  ...readings.value.inside.map((point, index) => ({
-    at: point.at,
-    from: point.at,
-    to: stepEnd(index),
-  })),
-  ...targets.value.map(({ aim }) => aim),
-])
-
 /** The one place Tab lands on: the last stood on while it is still there, else the latest reading. */
 const stood = ref<number | null>(null)
 const stop = computed(() => {
-  const latest = Math.max(0, readings.value.inside.length - 1)
-  return stood.value !== null && stood.value < stops.value ? stood.value : latest
+  const latest = readingStop(Math.max(0, readings.value.inside.length - 1))
+  return stood.value !== null && stood.value < walk.count.value ? stood.value : latest
 })
 
 const field = ref<HTMLElement | null>(null)
 /** The one layer that takes the pointer, half a mark past each edge of the field. */
 const hover = ref<HTMLElement | null>(null)
-const { pickAt, placeAt } = useStepAim({ field, hover }, frame, () => aims.value)
+const { pickAt, placeAt } = useStepAim({ field, hover }, frame, () => walk.aims.value)
 const { framing, keys } = useStepFrame(field, { coveredBy, frame, narrow: span.narrow })
-
-/** The moments a place covers: a reading its step, «now» its moment, the forecast its corridor. */
-function coveredBy(index: number): StepSpan | null {
-  const point = readings.value.inside[index]
-  return point
-    ? { from: point.at, to: stepEnd(index) }
-    : (targets.value[index - readings.value.inside.length]?.covers ?? null)
-}
 
 const MOVES: Record<string, (at: number, last: number) => number> = {
   ArrowLeft: (at) => Math.max(0, at - 1),
@@ -256,7 +247,7 @@ const MOVES: Record<string, (at: number, last: number) => number> = {
  * Shift with an arrow stretches the frame from the place stood on as it walks (`useKeyFrame`).
  */
 async function move(event: KeyboardEvent) {
-  const count = stops.value
+  const count = walk.count.value
   if (!count) return
   const stretched = keys.stretch(event, stop.value, count)
   const to = MOVES[event.key]
@@ -365,10 +356,10 @@ function stand(index: number) {
           role="img"
           :aria-keyshortcuts="FRAME_KEYS"
           :data-reading="index"
-          :data-stop="index"
-          :tabindex="tabOf(index)"
+          :data-stop="readingStop(index)"
+          :tabindex="tabOf(readingStop(index))"
           :style="stepStyle(index)"
-          @focus="stand(index)"
+          @focus="stand(readingStop(index))"
           @blur="pointed = null"
           @keydown="move"
           @keyup="keys.release"
@@ -376,25 +367,26 @@ function stand(index: number) {
             class="step-mark"
             aria-hidden="true"
             data-mark="reading"
-            :class="markClass(index)"
+            :class="markClass(readingStop(index))"
             :data-key="point.key"
             :style="markStyle(point)"
             data-hint-point
         /></span>
-        <!-- «Now» and the forecast, walked on after the readings, each a picture of what it says. -->
+        <!-- The restarts among the readings, then «now» and the forecast, each a picture of what -->
+        <!-- it says, walked in the order they stand. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
         <span
-          v-for="(target, index) in targets"
-          :key="target.kind"
+          v-for="target in places"
+          :key="target.key"
           v-tooltip.detail="target.hint"
           class="step-target"
           role="img"
           :aria-keyshortcuts="FRAME_KEYS"
           :data-target="target.kind"
-          :data-stop="stopOf(index)"
-          :tabindex="tabOf(stopOf(index))"
+          :data-stop="target.stop"
+          :tabindex="tabOf(target.stop)"
           :style="reachStyle(target)"
-          @focus="stand(stopOf(index))"
+          @focus="stand(target.stop)"
           @blur="pointed = null"
           @keydown="move"
           @keyup="keys.release"
@@ -402,7 +394,7 @@ function stand(index: number) {
             class="step-target-mark"
             aria-hidden="true"
             data-mark="place"
-            :class="[PLACE_MARK[target.kind], markClass(stopOf(index))]"
+            :class="[PLACE_MARK[target.kind], markClass(target.stop)]"
             :style="targetMark(target)"
             data-hint-mark
         /></span>

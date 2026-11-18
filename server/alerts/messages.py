@@ -94,7 +94,7 @@ _QUOTA = {
     "ru": {
         "week": "Valkama: недельная квота перешла {level}%",
         "week_model": "Valkama: недельная квота {model} перешла {level}%",
-        "short": "Valkama: пятичасовая квота кончится около {at}",
+        "short": "Valkama: пятичасовая квота закончится около {at}",
         "spent": "Valkama: пятичасовая квота исчерпана",
         "state": "Израсходовано {percent}% · обновится {reset}",
         "today": "в {time}",

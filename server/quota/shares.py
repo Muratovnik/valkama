@@ -70,13 +70,17 @@ def _cost(value: float | None) -> float:
 def _places(
     conn: sqlite3.Connection, segments: Sequence[seats.Segment]
 ) -> list[tuple[_Place | None, str | None]]:
-    """Each segment's place, its organization and seat, with the seat's account; or None."""
+    """Each segment's place, its organization and seat, with the UUID of the seat's account
+    where one is known; or None."""
 
     found = seats.seats_of_segments(conn, segments)
     return [
         (None, None)
         if seat.seat is None
-        else ((str(segment.organization), seat.seat), seat.account_uuid)
+        else (
+            (str(segment.organization), seat.seat),
+            None if seat.account is None else seat.account.account_uuid,
+        )
         for segment, seat in zip(segments, found, strict=True)
     ]
 

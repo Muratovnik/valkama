@@ -2043,7 +2043,7 @@ no project or several, are groups of their own too, with an `id` of `null` and `
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
 | `launch_class` | how a subagent's run was launched, as the usage rows hold it. A session's own run is launched by no one, so it has none (`unknown` `false`); a subagent's run that does not say is unknown | — |
 | `model`, `effort`, `environment` | as the usage rows hold them | — |
-| `seat` | the subscription account of its organization the work was spent on, read from the quota samples when the answer is made: a stretch is on the seat the latest sample of each feed at or before it says, until that window resets, its own session's feeds first. The `id` is the organization, a `/` and the account's UUID, or, for a seat no sample with a UUID names in that organization that week, the seat's key for the week, `week:2030-03-08T09:00Z`, which does not hold across weeks. The same UUID in two organizations is two accounts. Unknown where the work names no organization or no sample of it says where it was: one group, never counted to an account | `organization`, `account_uuid` and `seat_key`, the parts of the `id`; all `null` when unknown |
+| `seat` | the subscription account the work was spent on, read from the quota samples when the answer is made: a stretch is on the seat the latest sample of each feed at or before it says, until that window resets, its own session's feeds first, and the seat is the account the rules of [Subscription quota samples and accounts](#subscription-quota-samples-and-accounts) make it. The `id` is the account's key: its organization, a `/` and its UUID, `org-a/0b7d4e19-…`, or, for an account no sample names a UUID for, `weekly:` and the time of week its week resets, `org-a/weekly:5T09:00Z`, which holds from week to week. The organization and a `/` alone, `org-a/`, is that organization's work no sample places on an account: one group per organization, never counted to an account. The same UUID in two organizations is two accounts. Unknown where the work names no organization: one group | `organization`, `account_uuid` and `weekly_reset`, the parts of the `id`, with `weekly_reset` also for an account known by its UUID whose samples name a week; and `shared`, `true` for an account known by its weekly reset that two accounts' readings run under. `null` and `false` where the `id` does not say them |
 
 The answer carries ids, the names and numbers a card already shows, times and counts.
 It holds no path and no folder. The one text from a transcript is an executor's
@@ -2055,8 +2055,8 @@ read once per answer and again only after it changed, so a period of many sessio
 costs the status of their files once each has been read. Because a person can rename a
 session, the `title` is one of two values in the answer that two reads of the same rows may
 give differently. The other is `seat`: a quota sample that arrives later, such as imported
-history, can say where earlier work was, and one that names an account's UUID turns a seat's
-key into its account.
+history, can say where earlier work was, and one that names an account's UUID turns an
+account known by its weekly reset into the account of that UUID.
 
 ### How much work stands and what it took
 
@@ -2545,16 +2545,49 @@ source named, and nothing else of a profile: no e-mail address and no name. A re
 names an organization and an account's UUID makes the row if it is not there yet, and a
 plan it names replaces the one there; a plan comes only with the UUID. The UUID does not
 change when a week resets, so the row and whatever is kept against the account hold from
-week to week. The name the owner gives an account is kept apart, by its organization
-([The owner's names for accounts](#the-owners-names-for-accounts)), and no source writes it.
+week to week. The name the owner gives an account is kept apart, by the account's key or
+its organization's id ([The owner's names for accounts](#the-owners-names-for-accounts)),
+and no source writes it.
 
 A seat key comes from the week's reset, so it changes every week, and two seats whose
 weeks reset within the same ten minutes cannot be told apart by it and share one key. A
-sample without an account's UUID belongs to the account whose samples in the same
-organization name the same seat: a key names one week's reset, so the same key is the same
-week. A seat no sample with a UUID names, or that samples of two accounts name, is
-provisional: it is known for its week and its account is not. Without a source that gives
-the UUID, seats are told apart only within a week.
+session's sample carries no organization of its own: it is the one the session's usage
+rows say it worked for at the sample's time, and a session that changes its login, or a
+subagent still running under the login before, can make that the wrong one. So the account
+a seat's samples are on is decided from every sample of that seat, whatever span a read
+covers, and a seat is the same account in every read (`server.quota.accounts`):
+
+1. A sample with a UUID is that account's, in the organization it names.
+2. Where two counters run under one seat, as the next paragraph but one says, a sample
+   without a UUID cannot be told apart and stays in the organization it was read for, as
+   that organization's account known by its weekly reset, marked `shared`.
+3. Otherwise, where exactly one account of the sample's own organization names the seat
+   with its UUID, it is that account's; where two do, it is the account known by its weekly
+   reset, marked `shared`.
+4. Otherwise, where exactly one account of any organization names the seat with its UUID,
+   it is that account's, in that account's organization: the sample was read for the wrong
+   one.
+5. Otherwise the seat's organization is the one most of its samples were read for, the
+   latest of them on a tie. Within it, an account whose UUID names the seat; else the one
+   account whose week resets at the same time of week in the nearest week that has one, and
+   which names no other seat within a week of this one; else the account known only by its
+   weekly reset. Two accounts tied for nearest leave the account known by its weekly reset,
+   marked `shared`.
+
+An account's key is its organization, a `/`, and its UUID, or `weekly:` and its weekly
+reset: the ISO weekday and the time to ten minutes, in UTC, at which its week resets,
+`<ISO weekday>T<HH:MM>Z`. An organization's id holds no `/`, so the two never meet. A week
+resets at the same time of week every week, so an account known by its weekly reset holds
+from week to week; without a source that gives the UUID, two accounts whose weeks reset
+within the same ten minutes are one such account.
+
+Two counters run under one seat when two feeds disagree while both are current: a reading
+of one feed, taken within `fresh_for_seconds` of another feed's latest, is apart from it, a
+week's share by more than two points or a five-hour window's reset by more than ten
+minutes, and that other feed's next reading is still apart from it. The last condition
+tells two counters from a window's count that restarted, after which every feed falls and
+the one that read high agrees again. Accounts of one seat never read near the same time do
+not show this way.
 
 A usage segment holds its organization and no seat, because a change of seat leaves no
 trace in a transcript. Its seat is read from the samples, and a sample that arrives
@@ -2575,12 +2608,12 @@ sample nearest in time.
    time.
 4. Without one, the feeds of the organization count: its poll's and imports', and another
    session's while that session was working for it.
-5. With none, the seat is unknown. A segment with no organization is on a seat unknown too.
-6. The account is the naming sample's UUID, or else the one the seat belongs to by the
-   rule above; a provisional seat has none.
+5. With none, the seat is unknown, and the segment is its organization's work on no known
+   account. A segment with no organization is on a seat unknown, of no organization.
+6. The account is the one the naming sample's seat is by the rules above.
 
 The read says which rule named the seat: `session` or `organization`, with that sample's
-time, and the account's UUID or none for a provisional seat.
+time, and the account.
 
 Percentages and money never share a figure. No answer carries a sum of percentages: a
 percentage belongs to one account and one window, and the percentages of different
@@ -2624,8 +2657,9 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
  "quota": {
    "now": "2030-03-06T13:00:00.000+03:00", "utc_offset": 180, "fresh_for_seconds": 900,
    "accounts": [
-     {"organization": "org-a", "account_uuid": "acct-a", "seat": null, "plan": "Max",
-      "name": null, "no_source": false,
+     {"account": "org-a/acct-a", "organization": "org-a", "account_uuid": "acct-a",
+      "weekly_reset": "5T09:00Z", "shared": false, "plan": "Max",
+      "name": null, "organization_name": "Work", "no_source": false,
       "windows": [
         {"kind": "five_hour", "model": null, "state": "fresh",
          "resets_at": "2030-03-06T16:00:00.000+03:00",
@@ -2636,6 +2670,7 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
                        "source": "poll"},
                       {"at": "2030-03-06T12:55:00.000+03:00", "used_percent": 50.0,
                        "source": "poll"}],
+         "restarts": [],
          "forecast": {"outcome": "runs_out",
                       "runs_out_at": "2030-03-06T13:40:00.000+03:00",
                       "at_reset_percent": null, "basis": "blend"}},
@@ -2643,12 +2678,14 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
          "resets_at": "2030-03-08T12:00:00.000+03:00",
          "latest": {"…": "as above", "used_percent": 41.0},
          "started_at": "2030-03-01T12:00:00.000+03:00", "even_percent": 72.02,
-         "readings": ["…"],
+         "readings": ["…"], "restarts": [],
          "forecast": {"low_percent": 56.93, "high_percent": 61.2}}]},
-     {"organization": "org-b", "account_uuid": null, "seat": null, "plan": null,
-      "name": null, "no_source": true, "windows": []},
-     {"organization": "org-c", "account_uuid": null, "seat": "week:2030-03-08T09:00Z",
-      "plan": null, "name": null, "no_source": false,
+     {"account": "org-b/", "organization": "org-b", "account_uuid": null,
+      "weekly_reset": null, "shared": false, "plan": null,
+      "name": null, "organization_name": null, "no_source": true, "windows": []},
+     {"account": "org-c/weekly:5T09:00Z", "organization": "org-c", "account_uuid": null,
+      "weekly_reset": "5T09:00Z", "shared": false, "plan": null,
+      "name": null, "organization_name": null, "no_source": false,
       "windows": [
         {"kind": "spend_limit", "model": null, "state": "silent", "resets_at": null,
          "latest": {"at": "2030-03-06T12:00:00.000+03:00", "source": "statusline"}}]}]}}
@@ -2658,12 +2695,15 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
 | --- | --- |
 | `now` | the moment the answer was worked out; every pace and state is as of it |
 | `fresh_for_seconds` | how old a window's latest sample may be and still be fresh: 900, the span the quota alerts read too |
-| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. A provisional seat whose week has ended is left out, and its organization is not then an entry with no source. Ordered by organization, then account |
+| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. An account known by its weekly reset is one entry however many weeks it was read in, and one read only in a week that has ended stands with that week silent. Ordered by `account` |
+| `account` | the account's key, as the `seat` dimension gives it: `<organization>/<UUID>`, `<organization>/weekly:<reset>` for an account no sample names a UUID for, or `<organization>/` for an organization with no sample |
 | `organization` | the organization's id |
-| `account_uuid` | the account's UUID: the sample's own, or the one its seat belongs to by the rule above; `null` for a provisional seat and for an organization with no sample |
-| `seat` | the provisional seat the samples without a UUID are on, `null` when the UUID is known. A provisional seat is known for one week, so once its week has ended it is no entry: the same machine read across a reset is the next week's seat alone, not two accounts |
+| `account_uuid` | the account's UUID by the rules above; `null` for an account known by its weekly reset and for an organization with no sample |
+| `weekly_reset` | the time of week the account's week resets, `5T09:00Z`, where its samples name a week; `null` otherwise |
+| `shared` | `true` for an account known by its weekly reset that two accounts' readings run under, by the rule above: its windows may hold both. `false` otherwise |
 | `plan` | the plan a source named for the account, or `null` |
-| `name` | the name the owner gave the account's organization, as the next section says, or `null` when none is set. Every entry of one organization has its name |
+| `name` | the name the owner gave the account itself, as the next section says: by its key, or for an account known by its UUID by its weekly-reset key; `null` when none is set and for an organization with no sample |
+| `organization_name` | the name the owner gave the account's organization, or `null`. Every entry of one organization has it |
 | `no_source` | `true` for an organization whose work no quota source has read in the seven days; its `windows` are empty. An account with samples is `false` |
 | `windows` | the account's windows, in the kinds' order above, a model's week by model: one per `kind` and `model` its samples have |
 
@@ -2677,7 +2717,8 @@ A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
 | `resets_at` | when the window resets, as its latest sample said; `null` when the window has not started |
 | `started_at` | its reset less its length, five hours or seven days; `null` without a reset |
 | `even_percent` | how much of the window steady use from its start would have spent by `now`: the pace tick. `null` without a reset or once the reset has passed |
-| `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it |
+| `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it, and a source's own reading falls where the window's count restarted |
+| `restarts` | the moments, oldest first, at which the window's count restarted inside it, its reset unchanged: one feed's reading fell ten points or more below that feed's previous reading of the window, and as far below the count. A feed is one session's samples, or the organization's poll and imports. The forecast reads only the readings from the latest restart on. Another feed's lower reading is no restart but a stale one, and is left out of the forecast. Empty where the count never restarted. What zeroed the counter is not said: the samples cannot tell |
 | `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts` with `at_reset_percent`, the share of the window its pace will have spent by the reset, at most 100 and rounded to the hundredth as a week's range is; `runs_out` with `runs_out_at`; or `spent`. `runs_out_at` and `at_reset_percent` are `null` for the other outcomes. `basis` is the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
 
 A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,
@@ -2692,37 +2733,46 @@ an account's UUID nor a seat, belongs to no account and is not in the answer.
 
 ### The owner's names for accounts
 
-The usage rows and the quota samples hold an account's organization id and nothing that
-names it, so the owner names it, and Valkama keeps one name per organization in the store's
-`quota_account_names` table: `organization`, `name` and `updated_at`, the UTC time of the
-write to the millisecond. An organization with no name has no row. Settings writes the
-name; the Analytics page on every device and the quota alerts read it, and the store's
-snapshots and restore carry it with the other quota tables. Other server modules read it
-through `server.quota.names.names_of(conn, organizations)`, which answers the names of any
-number of organizations in one query, by organization, leaving out one with none.
+The usage rows and the quota samples hold ids and nothing that names them, so the owner
+names them, and Valkama keeps the names in the store's `quota_account_names` table:
+`account`, the key a name is given to, `name` and `updated_at`, the UTC time of the write
+to the millisecond. A key is one of two:
+
+- an account's key, as the `seat` dimension and the quota answer give it: its
+  organization, a slash, and its UUID or `weekly:` with the time of week its week resets,
+  `<ISO weekday>T<HH:MM>Z` in UTC;
+- an organization's id alone. Its name labels the organization, and each of its accounts
+  that has no name of its own.
+
+An account known by its UUID also answers to the name given to its weekly-reset key, so a
+name given before the UUID turned up stays with it. A key with no name has no row.
+Settings writes the name; the Analytics page on every device and the quota alerts read it,
+and the store's snapshots and restore carry it with the other quota tables. Other server
+modules read it through `server.quota.names.names_of(conn, keys)`, which answers the names
+of any number of keys in one query, by key, leaving out one with none.
 
 | Route | What it does |
 | --- | --- |
-| `GET /api/quota/account-names` | every name: `{"names": {"<organization>": "<name>"}}`, `{"names": {}}` until one is given |
-| `PUT /api/quota/account-names` | `{"names": {"<organization>": "<name>"}, "replace": true}` names each account given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for an organization that has none, and an empty one changes nothing |
+| `GET /api/quota/account-names` | every name: `{"names": {"<key>": "<name>"}}`, `{"names": {}}` until one is given |
+| `PUT /api/quota/account-names` | `{"names": {"<key>": "<name>"}, "replace": true}` names each key given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for a key that has none, and an empty one changes nothing |
 
 A name is one line: its runs of spaces and line breaks are collapsed to one space and its
-ends trimmed, and what is left is at most 80 characters, counted as characters rather
-than UTF-16 units, with no control character. An organization is 1 to 512 characters with
-no NUL. A write that breaks either rule, names more than 1000 accounts, or carries a field
-other than `names` and `replace` is refused whole with `400`,
-`{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing. The read
-answers under the `Host` rule alone; the write takes the browser's credential, as the
-quota settings do.
+ends trimmed, and what is left is at most 80 characters, counted as characters rather than
+UTF-16 units, with no control character. A key is 1 to 512 characters with no NUL, and one
+with a slash is an account's key as above. A write that breaks either rule, names more than
+1000 accounts, or carries a field other than `names` and `replace` is refused whole with
+`400`, `{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing.
+The read answers under the `Host` rule alone; the write takes the browser's credential, as
+the quota settings do.
 
 A device that kept names of its own, as builds before this one did in the settings each
 browser and the desktop app keep, writes them once with `"replace": false` the first time
 it opens Settings or Analytics, so a name given since on another device stays, and drops
 them once the write succeeded. A write that failed leaves them for the next open.
 
-A quota alert names the account by its organization's name where there is one, before the
-share spent, and says no name where there is none, nor where the owner chose notifications
-whose text reveals nothing of the work.
+A quota alert names the account by the name the owner gave it, else by its organization's,
+before the share spent, and says no name where there is neither, nor where the owner chose
+notifications whose text reveals nothing of the work.
 
 ### The poll of the usage endpoint
 

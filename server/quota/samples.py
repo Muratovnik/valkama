@@ -15,7 +15,7 @@ to no seat's series. The seat's key changes when its week resets; what holds acr
 is the account, the organization and the account's UUID, which a reading of an
 organization passes as `account_uuid` when its source knows it and which makes the
 account's row. A reading without one gets its account from its seat when read
-(`seats.account_of_seat`).
+(`accounts.Resolver`).
 """
 
 from __future__ import annotations
@@ -80,6 +80,13 @@ def _plain(
         and value[0] in first
         and all(character in allowed for character in value)
     )
+
+
+def is_id(value: object) -> bool:
+    """Whether `value` is an id as a reading names one: an organization's, a session's or an
+    account's UUID, 1 to 128 characters of letters, digits and `._:-`."""
+
+    return _plain(value, _TOKEN, 128, _TOKEN)
 
 
 def _seat_shaped(value: object) -> bool:
@@ -305,12 +312,12 @@ def validated(reading: Reading, now: dt.datetime) -> Reading:
     if named is None or other is not None:
         wanted = "an organization" if by_organization else "a session"
         raise SampleError(f"a `{reading.source}` reading is identified by {wanted} alone")
-    if not _plain(named, _TOKEN, 128, _TOKEN):
+    if not is_id(named):
         raise SampleError(f"not an id: {named!r}")
     if reading.seat is not None and not _seat_shaped(reading.seat):
         raise SampleError(f"not a seat: {reading.seat!r}")
     if reading.account_uuid is not None and (
-        not by_organization or not _plain(reading.account_uuid, _TOKEN, 128, _TOKEN)
+        not by_organization or not is_id(reading.account_uuid)
     ):
         raise SampleError("an account's UUID is an id given with an organization's reading")
     if reading.plan is not None and (
@@ -419,6 +426,7 @@ __all__ = [
     "SampleError",
     "Window",
     "instant",
+    "is_id",
     "prune",
     "record",
     "retained_from",

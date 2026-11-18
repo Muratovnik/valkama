@@ -33,7 +33,7 @@ and its refusals, is the one every read over a period takes (`planning.usage.per
 | `role` | who spent it: `main`, a session's own run; `subagent`; `advisor`, a segment an adviser spent, in either | the run and the segment |
 | `launch_class` | how a subagent's run was launched, `null` for a session's own run | the run |
 | `model`, `effort`, `environment` | as the segment holds them | the segment |
-| `seat` | the quota account of its organization the stretch was spent on, else the seat's key for the week, `unknown` where no sample says | the quota samples (`quota.seats`) |
+| `seat` | the quota account the stretch was spent on (`quota.accounts`): its organization, a slash, and its UUID or `weekly:` with its weekly reset; `<organization>/` where the organization is known and no sample names the account; `unknown` where neither is known | the quota samples (`quota.seats`) |
 
 A value the store does not hold is its own group, `unknown`. Work on no item, a
 session's own run, which is launched by no one, and work on an item that names no project
@@ -57,7 +57,7 @@ from ..planning import executors, item_projects, live_sessions
 from ..planning import usage as item_usage
 from ..planning.usage import MAX_STEPS, STEPS, UsageQueryError, Value
 from ..projects import project_registry
-from ..quota import seats
+from ..quota import accounts, seats
 
 ACCOUNT = "account"
 PROJECT = "project"
@@ -385,11 +385,12 @@ def _with_seats(
 ) -> tuple[list[Sequence], dict[str, dict]]:
     """The rows, each with its seat's value added, and what each value names.
 
-    The value is the quota account the seat belongs to, as its organization and UUID, or
-    else the seat's key for its week; `None`, unknown, where no sample says. Its id is the
-    organization, a slash and the UUID or the key, so neither an account in two
-    organizations nor one key in two is one group. All rows are resolved in one pass over
-    the samples (`seats.seats_of_segments`).
+    The value is the key of the quota account the stretch was spent on
+    (`accounts.Account.key`), so neither an account in two organizations nor one weekly
+    reset in two is one group; where no sample names the account, the stretch's
+    organization and a slash (`accounts.unknown_key`); `None`, unknown, where the
+    organization is not known either. All rows are resolved in one pass over the samples
+    (`seats.seats_of_segments`).
     """
 
     found = seats.seats_of_segments(
@@ -405,15 +406,18 @@ def _with_seats(
     seated: list[Sequence] = []
     for row, seat in zip(rows, found, strict=True):
         value = None
-        if seat.seat is not None:
-            organization = str(row[_ORGANIZATION])
-            value = f"{organization}/{seat.account_uuid or seat.seat}"
+        if seat.account is not None:
+            value = seat.account.key
             if value not in named:
                 named[value] = {
-                    "organization": organization,
-                    "account_uuid": seat.account_uuid,
-                    "seat_key": None if seat.account_uuid else seat.seat,
+                    "organization": seat.account.organization,
+                    "account_uuid": seat.account.account_uuid,
+                    "weekly_reset": seat.account.weekly_reset,
+                    "shared": seat.account.shared,
                 }
+        elif row[_ORGANIZATION] is not None:
+            value = accounts.unknown_key(str(row[_ORGANIZATION]))
+            named.setdefault(value, {**_UNNAMED[SEAT], "organization": str(row[_ORGANIZATION])})
         seated.append((*row, value))
     return seated, named
 
@@ -526,7 +530,7 @@ _UNNAMED: dict[str, dict] = {
     WORK_ITEM: {"reference": None, "title": None},
     PROJECT: {"name": None, "combinations": None},
     EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "title": None},
-    SEAT: {"organization": None, "account_uuid": None, "seat_key": None},
+    SEAT: {"organization": None, "account_uuid": None, "weekly_reset": None, "shared": False},
 }
 
 #: What a session's executor says of it that the answer carries: where it was opened.

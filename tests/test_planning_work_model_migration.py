@@ -1,7 +1,8 @@
 """The migration that carries a store Valkama 2.9 left to the work model.
 
 Every store here is built as 2.9 left one -- the captured schema-17 catalog with
-its word index, rows written as plain SQL in the shapes that build wrote them --
+its word index, rows written as plain SQL in the shapes that build wrote them, the
+owner's names for two quota accounts among them --
 in a temporary directory, beside a registry of format 4 binding each space's
 project to it and a file of item projects that names none, so every task takes its
 space's project. The expectations are written out by hand from the rules
@@ -12,8 +13,10 @@ migration computes, so a rule both readings got wrong still fails here.
 from __future__ import annotations
 
 import contextlib
+import datetime
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -28,7 +31,7 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, store, store_backups, store_steps
-from server.planning import decisions, participation, words
+from server.planning import decisions, model, participation, words
 from server.planning import images as planning_images
 from server.planning import service as planning_service
 from server.planning import store as planning_store
@@ -46,6 +49,7 @@ T5 = "2026-08-05T10:00:00Z"
 PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
 STEP_NAMES = [
+    "quota-names",
     *(f"M{number}" for number in range(16)),
     "deferred-items",
     "history-actions",
@@ -391,18 +395,36 @@ def _other_space(conn: sqlite3.Connection) -> dict:
     return {"planning_space_id": space, "workflow_id": workflow, "states": states}
 
 
-def build(path: str) -> dict[str, str]:
-    """A populated store as 2.9 leaves it, its picture beside it; the ids by reference."""
+#: The owner's names for two quota accounts as a 2.9 build at 17 wrote them, keyed by
+#: organization: the key, the name, when it was given.
+QUOTA_NAMES = [
+    ("org-1", "Main account", "2026-08-01T09:00:00.000Z"),
+    ("org-2", "Second account", "2026-08-02T10:30:00.000Z"),
+]
+
+
+def build(path: str, schema: int = 17) -> dict[str, str]:
+    """A populated store as 2.9 leaves it, its picture beside it; the ids by reference.
+
+    At 17 as a 2.9 build before schema 18 left it, its quota names keyed by
+    organization; at 18 as 2.9.0 leaves it, the same store carried on by that release's
+    step."""
 
     schema17.build_2_9(path)
     conn = sqlite3.connect(path)
     try:
         ids = populate(conn)
+        conn.executemany(
+            "INSERT INTO quota_account_names(organization, name, updated_at) VALUES (?,?,?)",
+            QUOTA_NAMES,
+        )
         with schema17.words_as_2_9():
             words.bring_current(conn)
         conn.commit()
     finally:
         conn.close()
+    if schema == 18:
+        schema17.raise_to_18(path)
     folder = planning_images.directory_beside(path)
     os.makedirs(folder, exist_ok=True)
     with open(os.path.join(folder, hashlib.sha256(PICTURE).hexdigest()), "wb") as handle:
@@ -519,13 +541,16 @@ def file_digest(path: str) -> str:
 
 
 class StoreCase(unittest.TestCase):
-    """A 2.9 store of its own in a temporary directory."""
+    """A 2.9 store of its own in a temporary directory, at `SCHEMA`."""
+
+    #: 17, as a 2.9 build before schema 18 left the store, or 18, as 2.9.0 leaves it.
+    SCHEMA = 17
 
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.directory.cleanup)
         self.path = os.path.join(self.directory.name, "valkama.sqlite3")
-        self.ids = build(self.path)
+        self.ids = build(self.path, self.SCHEMA)
         registry(self, self.directory.name)
         self.file = item_projects_file(self.path, self.directory.name)
 
@@ -567,8 +592,13 @@ class MigratedStoreTests(StoreCase):
 
     def test_the_run_is_reported_and_every_postcondition_holds(self) -> None:
         self.assertEqual("migrated", self.report["status"])
-        self.assertEqual({"from": 17, "to": store.STORE_SCHEMA_VERSION}, self.report["schema"])
+        self.assertEqual(
+            {"from": self.SCHEMA, "to": store.STORE_SCHEMA_VERSION}, self.report["schema"]
+        )
         self.assertEqual(STEP_NAMES, [step["name"] for step in self.report["steps"]])
+        # Schema 18's step is taken on a store at 17 alone.
+        [quota_names] = [step for step in self.report["steps"] if step["name"] == "quota-names"]
+        self.assertEqual(self.SCHEMA == 17, quota_names["needed"])
         self.assertEqual(
             [(name, True) for name in POSTCONDITION_NAMES],
             [(entry["name"], entry["passed"]) for entry in self.report["postconditions"]],
@@ -605,10 +635,50 @@ class MigratedStoreTests(StoreCase):
         restored = os.path.join(self.directory.name, "restored", "valkama.sqlite3")
         os.makedirs(os.path.dirname(restored))
         shutil.copyfile(point, restored)
-        self.assertEqual(17, identity(restored)[0])
+        self.assertEqual(self.SCHEMA, identity(restored)[0])
         self.assertEqual("2.9", store.store_generation(restored))
         with self.assertRaises(store.WorkModelMigrationRequiredError):
             store.connect(restored)
+        # The names as the store held them: keyed by organization at 17, by account at 18.
+        key = "organization" if self.SCHEMA == 17 else "account"
+        held = sqlite3.connect(f"file:{restored}?mode=ro", uri=True)
+        try:
+            self.assertEqual(
+                QUOTA_NAMES,
+                held.execute(
+                    f"SELECT {key}, name, updated_at FROM quota_account_names ORDER BY 1"
+                ).fetchall(),
+            )
+        finally:
+            held.close()
+
+    def test_the_quota_names_keep_their_keys_under_account(self) -> None:
+        self.assertEqual(
+            QUOTA_NAMES,
+            [
+                tuple(row)
+                for row in self.read(
+                    "SELECT account, name, updated_at FROM quota_account_names ORDER BY 1"
+                )
+            ],
+        )
+        # The renamed key keeps its bound, declared as a fresh store declares it.
+        fresh = os.path.join(self.directory.name, "fresh", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(fresh))
+        store.connect(fresh).close()
+
+        def definition(path: str) -> str:
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            try:
+                sql = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE name = 'quota_account_names'"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+            text = re.sub(r"\s+", " ", str(sql).replace('"', "")).strip()
+            return text.replace(" IF NOT EXISTS ", " ")
+
+        self.assertEqual(definition(fresh), definition(self.path))
 
     def test_states_gives_the_default_workflow_the_eight_categories_and_the_service_state(
         self,
@@ -2721,6 +2791,72 @@ class RollbackTests(StoreCase):
         # The fault step is one a second run would take again, so `second-run` fails beside it.
         report = self.refused(store_steps.Step("fault", "recovery-point", spoil))
         self.assertEqual(["second-run", "recovery-point"], report["failed"])
+
+
+class MigratedFromEighteenTests(MigratedStoreTests):
+    """The same migration of a store Valkama 2.9.0 left at 18, read back the same way."""
+
+    SCHEMA = 18
+
+
+class _MigrationMoment(datetime.datetime):
+    """The moment of every migration `EitherStartTests` runs."""
+
+    @classmethod
+    def now(cls, tz: datetime.tzinfo | None = None) -> _MigrationMoment:
+        return cls(2026, 11, 18, 12, 0, tzinfo=tz)
+
+
+class EitherStartTests(unittest.TestCase):
+    """A store a 2.9 build left at 17 and the same store carried to 18 by 2.9.0, each
+    migrated at one moment, are one store at this build's schema, the quota names
+    included: schema 18's step brings the first where the second already stands."""
+
+    def migrated(self, source: str, directory: str) -> list[str]:
+        path = store.copy_store(source, directory)
+        if os.path.basename(directory) == "18":
+            schema17.raise_to_18(path)
+        file = item_projects_file(path, directory)
+        minted = itertools.count(1)
+        with (
+            mock.patch.object(
+                model, "new_id", lambda: f"00000000-0000-4000-9000-{next(minted):012d}"
+            ),
+            mock.patch.object(
+                store,
+                "datetime",
+                mock.Mock(datetime=_MigrationMoment, UTC=datetime.UTC),
+            ),
+        ):
+            report = store.migrate_work_model(path, item_projects=file)
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(int(os.path.basename(directory)), report["schema"]["from"])
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            self.assertEqual(
+                QUOTA_NAMES,
+                conn.execute(
+                    "SELECT account, name, updated_at FROM quota_account_names ORDER BY 1"
+                ).fetchall(),
+            )
+            lines = [
+                line for line in conn.iterdump() if line not in {"BEGIN TRANSACTION;", "COMMIT;"}
+            ]
+        finally:
+            conn.close()
+        # The catalog's own order is when each object was made, which is not the store.
+        return sorted(lines)
+
+    def test_a_store_at_17_and_at_18_migrate_to_one_store(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        source = os.path.join(directory.name, "source", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(source))
+        build(source)
+        registry(self, directory.name)
+        from_17 = self.migrated(source, os.path.join(directory.name, "17"))
+        from_18 = self.migrated(source, os.path.join(directory.name, "18"))
+        self.assertEqual(from_17, from_18)
 
 
 class CommandTests(StoreCase):

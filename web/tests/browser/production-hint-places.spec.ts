@@ -22,7 +22,12 @@ import type { Locator, Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { busyFrame } from '../support/liveFrame.ts'
-import { pageAt as analyticsAt, serve as serveAnalytics } from './analyticsPage.ts'
+import {
+  pageAt as analyticsAt,
+  serve as serveAnalytics,
+  SESSION_REPORT,
+  SESSIONS,
+} from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { openCard } from './cardHeadPage.ts'
@@ -238,7 +243,8 @@ for (const width of [1440, 1024]) {
     })
 
     test('no hint of the Analytics bars covers its own bar', async ({ page }) => {
-      await openDays(page, width)
+      // Sessions named by their titles, so each row hints its client and id beside its bar.
+      await openDays(page, width, SESSIONS, SESSION_REPORT)
       // Each section drawn as its chart, whichever the width of the panel opened it as.
       await drawAllLined(page)
       const ranking = page.locator('.spending-bars .ranked-grid')

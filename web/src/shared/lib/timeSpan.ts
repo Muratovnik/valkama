@@ -7,7 +7,8 @@
  */
 
 const SECOND = 1000
-const MINUTE = 60 * SECOND
+/** The least span a figure counts, in milliseconds: under it a span reads «under a minute». */
+export const MINUTE = 60 * SECOND
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 

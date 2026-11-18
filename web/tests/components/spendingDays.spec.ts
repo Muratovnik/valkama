@@ -16,7 +16,14 @@ import type { Usage } from '@/shared/api/analyticsApi.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
-import { momentAt, noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
+import {
+  momentAt,
+  noTask,
+  seatValue,
+  task,
+  unknownTask,
+  usageAnswer,
+} from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { plotWords } from '../support/plotWords.ts'
@@ -38,9 +45,14 @@ const STRETCHES: Stretch[] = Array.from({ length: 7 }, (_, index) => ({
 const week = (stretches: readonly Stretch[] = STRETCHES) =>
   usageAnswer({ first: MONDAY, days: 3, end: WEDNESDAY, groupBy: ['work_item'], stretches }).usage
 
+/** Two accounts of one organization, and its work no reading places on an account. */
+const A = 'org-a/acc-a'
+const B = 'org-a/acc-b'
+const UNPLACED = 'org-a/'
+
 const worked = (day: number, account: string, hours: number): Stretch => ({
   day,
-  group: { account: value(account) },
+  group: { seat: seatValue(account) },
   spend: { seconds: hours * 3600 },
 })
 
@@ -49,13 +61,13 @@ function byAccount(): Usage {
   return usageAnswer({
     first: MONDAY,
     days: 5,
-    groupBy: ['account'],
+    groupBy: ['seat'],
     stretches: [
-      worked(0, 'acc-a', 1),
-      worked(1, 'acc-a', 2),
-      worked(3, 'acc-b', 1),
-      worked(4, 'acc-a', 2),
-      worked(4, 'acc-b', 1),
+      worked(0, A, 1),
+      worked(1, A, 2),
+      worked(3, B, 1),
+      worked(4, A, 2),
+      worked(4, B, 1),
     ],
   }).usage
 }
@@ -303,7 +315,7 @@ describe('the days', () => {
   })
 })
 
-/** Work whose organization nobody recorded: no account, only work. */
+/** Work no reading places on any account, of no organization known: no account, only work. */
 const UNRECORDED = 'unrecorded'
 
 /** An answer by account over a day per entry, each day worked by the accounts it names. */
@@ -311,7 +323,7 @@ function daysOf(...days: readonly (readonly string[])[]): Usage {
   return usageAnswer({
     first: MONDAY,
     days: days.length,
-    groupBy: ['account'],
+    groupBy: ['seat'],
     stretches: days.flatMap((accounts, day) =>
       accounts.map((account) =>
         account === UNRECORDED
@@ -343,40 +355,34 @@ const everyDay = (count: number) =>
     })),
   }).usage
 
-// Work whose organization nobody recorded is not an account: it is neither a change nor hides one.
+// Work no reading places on an account, of an organization or of none, is not an account: it is
+// neither a change nor hides one.
 describe('the account marks', () => {
   it('mark no change where unrecorded work joins the same accounts', () => {
-    expect(changesOf(daysOf(['acc-a'], ['acc-a', UNRECORDED]))).toEqual([])
+    expect(changesOf(daysOf([A], [A, UNRECORDED]))).toEqual([])
+    expect(changesOf(daysOf([A], [A, UNPLACED]))).toEqual([])
   })
 
   it('mark no change across a day of unrecorded work alone between the same account', () => {
-    expect(changesOf(daysOf(['acc-a'], [UNRECORDED], ['acc-a']))).toEqual([])
+    expect(changesOf(daysOf([A], [UNRECORDED], [A]))).toEqual([])
+    expect(changesOf(daysOf([A], [UNPLACED], [A]))).toEqual([])
   })
 
   it('mark the change hidden behind a day of unrecorded work on the day the new account works', () => {
-    expect(changesOf(daysOf(['acc-a'], [UNRECORDED], ['acc-b']))).toEqual([
-      { day: 2, before: ['acc-a'], after: ['acc-b'] },
-    ])
+    expect(changesOf(daysOf([A], [UNRECORDED], [B]))).toEqual([{ day: 2, before: [A], after: [B] }])
+    expect(changesOf(daysOf([A], [UNPLACED], [B]))).toEqual([{ day: 2, before: [A], after: [B] }])
   })
 
   it('mark the accounts with a figure above zero in the measure shown, and only those', () => {
-    // acc-b joins on the second day with an hour of work, no token counted and no price.
+    // B joins on the second day with an hour of work, no token counted and no price.
     const usage = usageAnswer({
       first: MONDAY,
       days: 2,
-      groupBy: ['account'],
+      groupBy: ['seat'],
       stretches: [
-        {
-          day: 0,
-          group: { account: value('acc-a') },
-          spend: { seconds: 3600, tokens: 9, cost: 1 },
-        },
-        {
-          day: 1,
-          group: { account: value('acc-a') },
-          spend: { seconds: 3600, tokens: 9, cost: 1 },
-        },
-        { day: 1, group: { account: value('acc-b') }, spend: { seconds: 3600, unpriced: 5 } },
+        { day: 0, group: { seat: seatValue(A) }, spend: { seconds: 3600, tokens: 9, cost: 1 } },
+        { day: 1, group: { seat: seatValue(A) }, spend: { seconds: 3600, tokens: 9, cost: 1 } },
+        { day: 1, group: { seat: seatValue(B) }, spend: { seconds: 3600, unpriced: 5 } },
       ],
     }).usage
     const at = (measure: Measure) => accountChanges(usage, measure).map((change) => change.at)
@@ -389,13 +395,11 @@ describe('the account marks', () => {
   })
 
   it('mark a change where a known account joins', () => {
-    expect(changesOf(daysOf(['acc-a'], ['acc-a', 'acc-b']))).toEqual([
-      { day: 1, before: ['acc-a'], after: ['acc-a', 'acc-b'] },
-    ])
+    expect(changesOf(daysOf([A], [A, B]))).toEqual([{ day: 1, before: [A], after: [A, B] }])
   })
 
   it('say the change in the hint of its day and to a screen reader by the known accounts alone', () => {
-    const accounts = daysOf(['acc-a'], [UNRECORDED], ['acc-b', UNRECORDED], ['acc-b'])
+    const accounts = daysOf([A], [UNRECORDED], [B, UNPLACED, UNRECORDED], [B])
     const days = mountDays(everyDay(4), { accounts, readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(1)
     const named = spokenDays(days).map((day) => day.holds)
@@ -407,6 +411,7 @@ describe('the account marks', () => {
     ])
     expect(named[2]).toContain('Account change: acc-a → acc-b')
     expect(named.join(' ')).not.toContain('Unknown')
+    expect(named.join(' ')).not.toContain('account not known')
 
     const table = mountDays(everyDay(4), { narrow: true, accounts, readAt: AFTER })
     const notes = table
@@ -420,13 +425,13 @@ describe('the account marks', () => {
 describe('the days on the page', () => {
   it('ask for the period by account beside the page read, and not again when it is by account', async () => {
     const reads = stubAnalyticsReads((query) =>
-      query.get('group_by') === 'account'
+      query.get('group_by') === 'seat'
         ? { interface_version: 'valkama-analytics-api', usage: byAccount() }
         : { interface_version: 'valkama-analytics-api', usage: week() },
     )
     const page = await mountAnalytics()
     await flushPromises()
-    const accounts = reads.grouped('account')
+    const accounts = reads.grouped('seat')
     expect(accounts).toHaveLength(1)
     expect(accounts[0]?.get('compare')).toBeNull()
     expect(accounts[0]?.get('from')).toBe(reads.grouped('work_item')[0]?.get('from'))
@@ -435,13 +440,10 @@ describe('the days on the page', () => {
     // By account, the page's own answer is the accounts: its read and the same days of the week
     // before, and no third read.
     const asked = reads.asked.length
-    const byAccountPage = await mountAnalytics({ routeState: { by: 'account' } })
+    const byAccountPage = await mountAnalytics({ routeState: { by: 'seat' } })
     await flushPromises()
     expect(byAccountPage.findComponent(PeriodColumns).exists()).toBe(true)
-    expect(reads.asked.slice(asked).map((query) => query.get('group_by'))).toEqual([
-      'account',
-      'account',
-    ])
+    expect(reads.asked.slice(asked).map((query) => query.get('group_by'))).toEqual(['seat', 'seat'])
     expect(byAccountPage.findAll('.period-mark').length).toBeGreaterThan(0)
   })
 })

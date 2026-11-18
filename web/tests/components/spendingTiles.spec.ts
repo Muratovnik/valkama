@@ -79,7 +79,7 @@ describe('the tiles', () => {
     }
     // Not read is not nothing spent: the words say which.
     const notRead = mountTiles(NOW, null)
-    expect(tile(notRead, 'time').text).toContain('The period before was not read')
+    expect(tile(notRead, 'time').text).toContain('The period before was not loaded')
     expect(tile(notRead, 'time').text).not.toContain('Nothing spent')
   })
 
@@ -138,7 +138,7 @@ describe('the tiles', () => {
     )
     const notRead = mountTiles(NOW, null, 'time', 'ru')
     expect(tile(notRead, 'time').text).toContain(
-      'Предыдущий период не прочитан, сравнивать не с чем',
+      'Предыдущий период не загружен, сравнивать не с чем',
     )
   })
 

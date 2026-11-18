@@ -27,7 +27,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { messages } from '@/shared/i18n/index.ts'
 
-import { quotaAt, quotaOfEdges } from '../fixtures/quota.ts'
+import { quotaAt, quotaOfEdges, SEATED_NAME, seatedName } from '../fixtures/quota.ts'
 import { NOW, openPanel, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
 import { forecastLines } from './quotaForecastLine.ts'
@@ -68,7 +68,7 @@ const FIVE_HOURS: Record<string, Drawn> = {
     corridor: true,
     places: ['now', 'reset'],
   },
-  'a1b2c3d4 five_hour': {
+  [`${SEATED_NAME} five_hour`]: {
     fill: 74,
     tail: [[74, 100]],
     corridor: true,
@@ -104,7 +104,7 @@ const WEEKS: Record<string, Drawn> = {
     corridor: true,
     places: ['now', 'reset'],
   },
-  'a1b2c3d4 week': { fill: 20, tail: [], corridor: false, places: ['now'] },
+  [`${SEATED_NAME} week`]: { fill: 20, tail: [], corridor: false, places: ['now'] },
   // Read past 100 %: the fill stops at the track's end and nothing is ahead of it.
   'Edge week': { fill: 100, tail: [], corridor: true, places: ['now', 'reset'] },
   // A fresh 0 %: no fill, the tail from the track's start.
@@ -291,12 +291,21 @@ async function pointAtLatest(page: Page, lines: LineAhead[]) {
   return strays
 }
 
-/** A window's state at the end of its lead: «fresh», or «silent» and for how long. */
+/** The cases as a language says them: the account known by its weekly reset names it in it. */
+const casesIn = (cases: Record<string, Drawn>, lang: 'en' | 'ru') =>
+  Object.fromEntries(
+    Object.entries(cases).map(([key, drawn]) => [
+      key.replace(SEATED_NAME, seatedName(lang)),
+      drawn,
+    ]),
+  )
+
+/** A window's state at the end of its lead: «up to date», or «no data» and for how long. */
 const stateWords = (lang: 'en' | 'ru') => {
-  const { states } = messages[lang].analytics.quota
+  const { states, silentFor } = messages[lang].analytics.quota
   return {
     fresh: new RegExp(`· ${states.fresh}$`, 'u'),
-    silent: new RegExp(`· ${states.silent} [0-9]`, 'u'),
+    silent: new RegExp(`· ${silentFor.replace('{for}', '[0-9]')}`, 'u'),
   } as Record<string, RegExp>
 }
 
@@ -313,8 +322,8 @@ for (const lang of ['en', 'ru'] as const)
       await page.setViewportSize({ width, height: 1000 })
       const measured: Record<string, unknown> = {}
       for (const [section, cases] of [
-        ['quota_five_hour', FIVE_HOURS],
-        ['quota_week', WEEKS],
+        ['quota_five_hour', casesIn(FIVE_HOURS, lang)],
+        ['quota_week', casesIn(WEEKS, lang)],
       ] as const) {
         await openDrawn(page, section)
         await page.mouse.move(1, 1)
@@ -464,7 +473,7 @@ test('a window past its reset draws no tail, no corridor and no place past its r
   expect(windows.map(({ key, tail, corridor }) => [key, tail, corridor])).toEqual([
     ['Work five_hour', [], false],
     ['7e6d5c4b five_hour', [], false],
-    ['a1b2c3d4 five_hour', [], false],
+    [`${SEATED_NAME} five_hour`, [], false],
   ])
   expect(lines.map(({ places }) => places)).toEqual([[], [], []])
   // No forecast is said either, the reset in its place.

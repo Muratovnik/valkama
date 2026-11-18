@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
  * One window of one account in the quota panel, in three parts 12px apart: what stands now, the
- * step line of its readings (`StepLine`) and «Where the window went», which opens what used the
+ * step line of its readings (`StepLine`) and «Breakdown», which opens what used the
  * window in the side panel over the page (`WindowDetail`).
  *
  * What stands now leads with one line, the share spent as the window's figure and its state in
- * words beside it, «75% used · silent 3 d», over the bar with its pace tick (`WindowBar`), then
+ * words beside it, «75% used · no data for 3 d», over the bar with its pace tick (`WindowBar`), then
  * the forecast in the text's ink and when the window resets, in absolute and relative time,
  * quieter. The bar draws the forecast as a hatched tail past the share spent, and the forecast's
  * line, right under it, leads with «Forecast ·», as the step line's legend names its corridor: the
@@ -24,13 +24,15 @@
  * forecasts a range, said never past 100 % (`useQuotaWords`); both are drawn from one mapping
  * (`forecastCourses`). A window too new for a forecast says so in the quiet ink and draws no
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
- * old: it says «silent» and for how long, and its hint when its reading last changed; a fresh 0 %
- * is a bar with no fill that says «0% used» and «fresh». While the window stands, its step line
+ * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
+ * is a bar with no fill that says «0% used» and «up to date». While the window stands, its step line
  * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
  * silent window's line stops at its last reading, since nothing was measured after it, while a
  * fresh one's holds to now, a source writing a reading only when a value changes. A window past
  * its reset by the panel's moment has neither and shows its whole window alone, even
- * where its answer was read before the reset.
+ * where its answer was read before the reset. Where the window's count restarted inside it, the
+ * line marks each restart at its fall and the table lists it among the readings
+ * (`restarts`): the line would otherwise fall to nothing with no word of why.
  *
  * What used the window is the work Valkama recorded on the account since the window's start, by
  * its API price estimate, on an axis of its own (`QuotaWindowSpend`). A window that names no start
@@ -116,6 +118,7 @@ const bar = computed(() => {
 /** Whether the window has a pace: it named its start and its reset. */
 const paced = computed(() => props.window.even_percent !== null)
 const points = computed(() => words.points(props.window, props.today))
+const restarts = computed(() => words.restarts(props.window, props.today))
 /** Whether what used the window can be read: the account has a seat and the window a start. */
 const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
 /** What opens the side panel on what used the window; none outside the page. */
@@ -270,6 +273,7 @@ const readingsCaption = computed(() =>
         :legend="legend"
         :ahead="ahead"
         :ended="ended"
+        :restarts="restarts"
       />
       <StepLineTable
         v-else
@@ -278,6 +282,7 @@ const readingsCaption = computed(() =>
         :points="points"
         :words="stepWords"
         :forecast="ahead?.forecast ?? null"
+        :restarts="restarts"
       />
       <VButton
         v-if="spends && openSpend"
@@ -340,7 +345,7 @@ const readingsCaption = computed(() =>
   color: var(--color-text-muted);
 }
 
-/* «Where the window went» is a control of the window, at its start rather than across it. */
+/* «Breakdown» is a control of the window, at its start rather than across it. */
 .quota-window-uses {
   justify-self: start;
 }

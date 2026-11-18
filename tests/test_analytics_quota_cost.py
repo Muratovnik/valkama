@@ -14,7 +14,7 @@ import datetime as dt
 import time
 
 from server.analytics import quota
-from server.quota import samples
+from server.quota import accounts, samples
 from tests import test_analytics_cost as cost
 from tests.analytics_fixtures import START, UsageStore
 
@@ -80,18 +80,17 @@ class QuotaCostTests(UsageStore):
             spent.append(time.perf_counter() - began)
         took = ", ".join(f"{one:.3f}" for one in spent)
         self.assertLess(min(spent), cost.BUDGET, f"the quota read took {took} s")
-        # The status line's account is a provisional seat, one a week. The week before this
-        # one began within the seven days but ended a day before NOW, so only this one is
-        # answered; its readings are still read.
-        this_week = samples.seat_for_week((START + 53 * _WEEK).isoformat())
+        # The status line's account is its organization's, known by its weekly reset, which
+        # is the same every week: one account, however many weeks it was read in.
+        slot = accounts.weekly_reset(samples.seat_for_week((START + 53 * _WEEK).isoformat()))
         self.assertEqual(
             [
-                ("org-a", "acct-a", None, 2),
-                ("org-b", "acct-b", None, 3),
-                ("org-c", None, this_week, 2),
+                ("org-a/acct-a", "acct-a", slot, 2),
+                ("org-b/acct-b", "acct-b", slot, 3),
+                (f"org-c/weekly:{slot}", None, slot, 2),
             ],
             [
-                (one["organization"], one["account_uuid"], one["seat"], len(one["windows"]))
+                (one["account"], one["account_uuid"], one["weekly_reset"], len(one["windows"]))
                 for one in answer["accounts"]
             ],
         )

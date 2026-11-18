@@ -108,7 +108,7 @@ _ROWS: dict[str, dict[str, object]] = {
         "created_at": "probe",
     },
     "platform_ui_prefs": {"key": "last-route", "record_json": "{}", "updated_at": "probe"},
-    "quota_account_names": {"organization": _NEW, "name": "probe", "updated_at": "probe"},
+    "quota_account_names": {"account": _NEW, "name": "probe", "updated_at": "probe"},
     "quota_alerts": {
         "organization": _NEW,
         "seat": "probe",
@@ -237,9 +237,9 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"outcome": "dropped", "ended_at": "probe"},),
     ),
     ("planning_spaces", "next_number >= 1"): (({"next_number": 0},), ({"next_number": 1},)),
-    ("quota_account_names", "length(organization) BETWEEN 1 AND 512"): (
-        ({"organization": ""}, {"organization": "o" * 513}),
-        ({"organization": "o" * 512},),
+    ("quota_account_names", "length(account) BETWEEN 1 AND 512"): (
+        ({"account": ""}, {"account": "o" * 513}),
+        ({"account": "o" * 512},),
     ),
     ("quota_account_names", "length(name) BETWEEN 1 AND 80"): (
         ({"name": ""}, {"name": "n" * 81}),

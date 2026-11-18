@@ -98,7 +98,7 @@ describe('what a value’s panel shows', () => {
     expect(figures.time).toBe('12 h')
     expect(figures.share).toBe('18% · Agent time')
     // The panel's parts, in the order they stand; a chart's legend names its own parts inside.
-    const named = ['actions', 'figures', 'days', 'model', 'account']
+    const named = ['actions', 'figures', 'days', 'model', 'seat']
     const parts = panel
       .findAll(named.map((part) => `[data-part="${part}"]`).join(', '))
       .map((one) => one.attributes('data-part'))

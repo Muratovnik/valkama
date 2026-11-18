@@ -26,7 +26,7 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
-import { serveUsage, task, value } from '../fixtures/analytics.ts'
+import { seatValue, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -64,7 +64,13 @@ const sample = { project: value('sample'), role: value('main') }
 const WORLD: TimedStretch[] = [
   {
     at: on(10, 9),
-    group: { ...sample, work_item: ITEM, model: value('model-a'), account: value('acc-a') },
+    group: {
+      ...sample,
+      work_item: ITEM,
+      model: value('model-a'),
+      account: value('org-a'),
+      seat: seatValue('org-a/acc-a'),
+    },
     spend: { seconds: 3600, tokens: 1200, cost: 0.4 },
   },
   {
@@ -74,7 +80,8 @@ const WORLD: TimedStretch[] = [
       role: value('main'),
       work_item: task(13, 'Elsewhere'),
       model: value('model-b'),
-      account: value('acc-b'),
+      account: value('org-a'),
+      seat: seatValue('org-a/acc-b'),
     },
     spend: { seconds: 7200, tokens: 100, cost: 1 },
   },
@@ -273,7 +280,7 @@ describe('the Analytics page', () => {
   it('draws the account marks read with the answer shown, never the last answer’s', async () => {
     let holding = false
     const reads = stubAnalyticsReads((query) =>
-      holding && query.get('group_by') === 'account' ? 'hold' : serveUsage(WORLD, query),
+      holding && query.get('group_by') === 'seat' ? 'hold' : serveUsage(WORLD, query),
     )
     const page = await mountAnalytics()
     expect(page.findAll('.period-mark')).toHaveLength(1)
@@ -300,7 +307,7 @@ describe('the Analytics page', () => {
     await flushPromises()
     expect(page.findAll('.period-mark')).toHaveLength(0)
     expect(page.get('.spending-days-note').text()).toBe(
-      'The accounts that worked could not be read, so their changes are not marked.',
+      'The account data could not be loaded, so account changes are not marked.',
     )
   })
 
@@ -308,7 +315,7 @@ describe('the Analytics page', () => {
     let world = WORLD
     let holding = false
     const reads = stubAnalyticsReads((query) =>
-      holding && query.get('group_by') === 'account' ? 'hold' : serveUsage(world, query),
+      holding && query.get('group_by') === 'seat' ? 'hold' : serveUsage(world, query),
     )
     const page = await mountAnalytics()
     expect(time(page)).toBe('3 h')
@@ -393,7 +400,7 @@ describe('the Analytics page', () => {
   it('says a failed read failed, and asks again on retry', async () => {
     const reads = stubAnalyticsReads(() => ({ status: 500 }))
     const page = await mountAnalytics()
-    expect(page.get('[role="alert"]').text()).toContain('could not be read')
+    expect(page.get('[role="alert"]').text()).toContain('could not be loaded')
     const asked = reads.grouped('work_item').length
     await page.get('.platform-state-retry').trigger('click')
     await flushPromises()
@@ -416,9 +423,9 @@ describe('the Analytics page', () => {
     expect(time(page)).toBe('0 min')
     const unread = page.get('.spending-unread')
     expect(unread.get('[role="status"]').text()).toBe(
-      'The period before could not be read, so no change is shown.',
+      'The period before could not be loaded, so no change is shown.',
     )
-    expect(change(page)).toBe('The period before was not read, nothing to compare with')
+    expect(change(page)).toBe('The period before was not loaded, nothing to compare with')
 
     failing = false
     const asked = reads.asked.filter((query) => weekBefore(query)).length
@@ -434,7 +441,7 @@ describe('the Analytics page', () => {
     const page = await mountAnalytics({ routeState: { by: 'work_item' } }, 'ru')
     expect(time(page)).toBe('3 ч')
     expect(page.get('.spending-unread [role="status"]').text()).toBe(
-      'Предыдущий период не удалось прочитать, поэтому изменение не показано.',
+      'Не удалось загрузить предыдущий период, поэтому изменение не показано.',
     )
     expect(page.get('.spending-unread button').text()).toBe('Повторить')
   })

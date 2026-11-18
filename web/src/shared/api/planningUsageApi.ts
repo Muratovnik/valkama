@@ -18,7 +18,7 @@ export type UsageScope = (typeof SCOPES)[number]
 
 const RUN_TEXT = /^[^\u{0}]{1,200}$/u
 /** A seat: `week:` and its week's reset to the ten minutes. */
-export const SEAT = /^week:\d{4}-\d{2}-\d{2}T\d{2}:\d0Z$/u
+const SEAT = /^week:\d{4}-\d{2}-\d{2}T\d{2}:\d0Z$/u
 
 const seconds = () => z.number().nonnegative()
 const moment = () => boundedText(ISO, 96).nullable()
