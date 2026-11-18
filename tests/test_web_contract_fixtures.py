@@ -800,7 +800,9 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
-        today = datetime.now(UTC).date()
+        # Today on the caller's clock, so the work made now falls on the same day of the flow
+        # whatever the hour.
+        today = (datetime.now(UTC) + timedelta(minutes=180)).date()
         period = {
             "from": (today - timedelta(days=7)).isoformat(),
             "to": (today + timedelta(days=2)).isoformat(),

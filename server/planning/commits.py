@@ -1037,7 +1037,33 @@ _ON_NO_CARD = (
 )
 #: When the commit was made, by its committer time, which Git gives with its offset;
 #: the time Valkama learned of it when Git gave none.
-_MADE = "julianday(COALESCE(c.committed_at, c.reported_at))"
+_MADE_AT = "COALESCE(c.committed_at, c.reported_at)"
+_MADE = f"julianday({_MADE_AT})"
+#: The same moment as a UTC time to the second, `2030-03-04T21:30:00Z`, the form a day of
+#: the caller's is read from; null when the stored time cannot be read as one.
+MADE_UTC = f"strftime('%Y-%m-%dT%H:%M:%SZ', {_MADE_AT})"
+
+
+def made_on_no_card(
+    conn: sqlite3.Connection, projects: Sequence[str] | None
+) -> list[tuple[int, str | None]]:
+    """The commits on no card of these projects, or of every known repository with None:
+    each one's row id and when it was made (`MADE_UTC`)."""
+
+    if projects is None:
+        projects = [
+            str(row[0])
+            for row in conn.execute(
+                "SELECT DISTINCT project_id FROM commits WHERE project_id IS NOT NULL"
+            )
+        ]
+    return [
+        (int(row[0]), row[1])
+        for row in conn.execute(
+            f"SELECT c.commit_id, {MADE_UTC} FROM commits c WHERE {_ON_NO_CARD}",  # noqa: S608 - fixed clauses
+            {"projects": json.dumps(list(projects))},
+        )
+    ]
 
 
 def unattached(

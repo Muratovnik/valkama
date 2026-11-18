@@ -43,7 +43,8 @@ export type ChainScope = (typeof CHAIN_SCOPES)[number]
 const count = () => positiveInt(true)
 const reference = () => boundedText(WORK_ITEM_REFERENCE, 20)
 const title = () => boundedText(TITLE, 200)
-const DAY = /^\d{4}-\d{2}-\d{2}$/u
+/** A day alone, `2030-03-04`. */
+export const DAY = /^\d{4}-\d{2}-\d{2}$/u
 
 const rootSchema = strictObject({
   work_item_id: boundedText(UUID, 36),
@@ -71,6 +72,24 @@ const daySchema = strictObject({
   closed: count(),
   total: count(),
   closed_total: count(),
+})
+
+/**
+ * Per day with any change, oldest first: created and closed, and the totals so far. The
+ * Volumes read gives the pace of its scope in this shape too.
+ */
+export const chainSeriesSchema = z
+  .array(daySchema)
+  .refine((days) => days.every((entry, index) => index === 0 || days[index - 1].day < entry.day), {
+    message: 'expected ascending days',
+  })
+
+/** The last days up to today, and which way they lean. */
+export const chainRecentSchema = strictObject({
+  days: positiveInt(),
+  created: count(),
+  closed: count(),
+  trend: enumField(['growing', 'converging', 'steady'] as const),
 })
 
 const memberSchema = strictObject({
@@ -123,18 +142,8 @@ const chainSchema = strictObject({
   by_container_state: z.partialRecord(enumField(CONTAINER_STATES), count()),
   // A chain is as large as the work it grew into; the server caps none of these.
   origins: z.array(originSchema),
-  series: z
-    .array(daySchema)
-    .refine(
-      (days) => days.every((entry, index) => index === 0 || days[index - 1].day < entry.day),
-      { message: 'expected ascending days' },
-    ),
-  recent: strictObject({
-    days: positiveInt(),
-    created: count(),
-    closed: count(),
-    trend: enumField(['growing', 'converging', 'steady'] as const),
-  }),
+  series: chainSeriesSchema,
+  recent: chainRecentSchema,
   members: z.array(memberSchema),
   edges: z.array(edgeSchema),
 })

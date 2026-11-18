@@ -705,6 +705,97 @@
         "commits_unknown_repository": 0,
         "children": []
       }
-    ]
+    ],
+    "flow": {
+      "days": [
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 15,
+          "closed": 2,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        }
+      ],
+      "totals": {
+        "created": 15,
+        "closed": 2,
+        "decisions": 0,
+        "commits": 0
+      },
+      "pace": {
+        "open": 13,
+        "recent": {
+          "days": 7,
+          "created": 15,
+          "closed": 2,
+          "trend": "growing"
+        },
+        "series": [
+          {
+            "day": "2026-01-02",
+            "created": 15,
+            "closed": 2,
+            "total": 15,
+            "closed_total": 2
+          }
+        ]
+      }
+    }
   }
 }

@@ -189,10 +189,10 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
 def _complete(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     """Requests with who closed each one and the answers each current one replaced."""
 
-    return _with_history(conn, _with_by_person(conn, records))
+    return _with_history(conn, with_by_person(conn, records))
 
 
-def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+def with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     """Requests with whether the latest call that closed or changed each came through the interface.
 
     True for a browser write, false for any other call that answered, changed,

@@ -18,6 +18,7 @@ import {
   strictObject,
   z,
 } from '@/shared/api/contract.ts'
+import { chainRecentSchema, chainSeriesSchema, DAY } from '@/shared/api/planningChainApi.ts'
 import {
   CONTAINER_STATES,
   SPACE_KEY,
@@ -159,6 +160,32 @@ const goalTreeSchema: z.ZodType<VolumesGoalTree> = z.lazy(() =>
   strictObject({ ...goalRowShape, children: z.array(goalTreeSchema) }).refine(standing, STANDING),
 )
 
+/**
+ * What one day, or the whole period, brought: tasks created, tasks that came to be completed
+ * or cancelled, the owner's decisions made in the interface, and commits of a known repository.
+ */
+const flowCounts = {
+  created: count(),
+  closed: count(),
+  decisions: count(),
+  commits: count(),
+}
+const MEASURES = ['created', 'closed', 'decisions', 'commits'] as const
+
+const flowSchema = strictObject({
+  /** Every day of the period on the caller's clock, oldest first. */
+  days: z.array(strictObject({ day: boundedText(DAY, 10), ...flowCounts })),
+  totals: strictObject(flowCounts),
+  /** The pace of the scope's tasks in the shape of a chain's: the last days up to today. */
+  pace: strictObject({ open: count(), recent: chainRecentSchema, series: chainSeriesSchema }),
+}).refine(
+  (flow) =>
+    MEASURES.every(
+      (measure) => flow.days.reduce((sum, day) => sum + day[measure], 0) === flow.totals[measure],
+    ),
+  { message: 'expected the days to add up to the totals' },
+)
+
 const volumesSchema = strictObject({
   scope: scopeSchema,
   period: strictObject({
@@ -174,6 +201,7 @@ const volumesSchema = strictObject({
   }),
   /** The open goals and those that came to a close in the period. */
   goals: z.array(goalTreeSchema),
+  flow: flowSchema,
 })
 
 const interfaceVersion = z.literal('valkama-planning-api', {
