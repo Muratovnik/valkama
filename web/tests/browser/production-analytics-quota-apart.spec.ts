@@ -3,7 +3,8 @@
  * page is used at beside its rail. The oracle is the rule (`DESIGN.md`, Analytics, the quota's
  * panel): neighbouring windows stand 32px apart with a hairline in the rule's ink midway between
  * them, so the moments ending one window's axis and starting the next are at least that far apart
- * and never read as one axis; a window that starts a row has no hairline before it; and each
+ * and never read as one axis; a window that starts a row has no hairline before it, and at 1280px,
+ * where the panel is narrower than two windows and their gap, every window starts one; and each
  * window's forecast line is its words alone, starting where the reset's under them do, nothing of
  * it in the card's inset. Each run attaches what it measured.
  */
@@ -69,6 +70,13 @@ const ruleInk = (page: Page) =>
     return ink
   })
 
+/**
+ * The accounts whose windows stand side by side at each width: «Work» and «Edge» each have their
+ * week and a model's week, which share a row at 1440px; at 1280px the panel is under two windows
+ * of 24rem and the gap between them, so they stack.
+ */
+const SIDE_BY_SIDE: Record<number, string[]> = { 1280: [], 1440: ['Work', 'Edge'] }
+
 for (const width of [1280, 1440])
   test(`at ${width}px neighbouring windows stand ${APART}px apart with a hairline between, and the forecast line stays in its column`, async ({
     page,
@@ -99,11 +107,10 @@ for (const width of [1280, 1440])
     const lines = await forecastLines(page)
     await record(info, `quota windows apart ${width}`, { ink, pairs, starts, lines })
 
-    // «Work» and «Edge» each have their week and a model's week: at this width side by side.
     expect(
       pairs.map(({ account }) => account),
       'the neighbouring windows',
-    ).toEqual(['Work', 'Edge'])
+    ).toEqual(SIDE_BY_SIDE[width])
     for (const { account, left, right } of pairs) {
       const at = `${account} ${left.kind} | ${right.kind}`
       expect([left.moments, right.moments], `${at}: the moments of each axis`).toEqual([2, 2])
@@ -125,7 +132,8 @@ for (const width of [1280, 1440])
       expect(right.rule?.colour, `${at}: the hairline's ink`).toBe(ink)
     }
     // A window that starts a row has none: there is no neighbour before it.
-    expect(starts.length, 'the windows that start a row').toBeGreaterThanOrEqual(accounts.length)
+    const shown = accounts.filter(({ windows }) => windows.length > 0)
+    expect(starts.length, 'the windows that start a row').toBeGreaterThanOrEqual(shown.length)
     for (const { account, one } of starts)
       expect(one.rule, `${account} ${one.kind}: no hairline before a row's first`).toBeNull()
 
