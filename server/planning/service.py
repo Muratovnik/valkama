@@ -972,16 +972,34 @@ def _ask_about_task(
     author: str | None,
     *,
     moved_from: sqlite3.Row | None = None,
+    move: _HeldMove | None = None,
 ) -> pending.Waiting:
     """Ask the owner whether to take on a task an agent filed under the accepted goal or
     stage `goal_id`, which lies there in triage, or, with `moved_from` the task as it
     stands, one it moves there, which stays where it was; the action waits on the answer
-    (`requests.carry_out`)."""
+    (`requests.carry_out`).
+
+    `move` is the agent's move of a task lying there out of triage to a state other than
+    ready: the action keeps it as a `transition`, which the answer `do` makes."""
 
     row = read_model.item_by_id(conn, identity)
     reference = read_model.reference(conn, row)
     goal = read_model.reference(conn, read_model.item_by_id(conn, goal_id))
-    if moved_from is None:
+    if move is not None:
+        # It lies under the goal, as a filed one does; the answer makes the move it asked.
+        proposal = pending.Proposal(
+            "transition",
+            {"parent": goal_id, **move.params()},
+            f"accepted {reference} under {goal}",
+            seen={"parent": goal_id},
+            reason=move.reason or None,
+        )
+        prompt = (
+            f"An agent moves the task {reference}, lying in {goal}, to {move.state}:"
+            f" {row['title']}. Take it on and move it there, put it off, move it out of the"
+            " goal, or drop it."
+        )
+    elif moved_from is None:
         # It lies under the goal: moved away before the answer, it is no longer asked about.
         proposal = pending.Proposal(
             "accept",
@@ -1331,22 +1349,42 @@ def _gate(
     return _Gate(point, participation.load(conn).mode(str(row["planning_space_id"]), point))
 
 
+@dataclasses.dataclass(frozen=True)
+class _HeldMove:
+    """An agent's move of a task out of triage that waits for the owner: the key of the
+    state it goes to, and the reason and what to check it was sent with."""
+
+    state: str
+    reason: str
+    to_check: str
+
+    def params(self) -> dict[str, str]:
+        """The move as its waiting action keeps it, what is empty left out."""
+
+        found = {"state": self.state, "reason": self.reason, "to_check": self.to_check}
+        return {name: value for name, value in found.items() if value}
+
+
 def _ask_about_move(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
     gate: _Gate,
     author: str | None,
     warnings: list[str],
+    move: _HeldMove | None,
 ) -> dict:
     """The answer of an agent's move out of triage that `gate` keeps for the owner: the
     item stays in triage, a goal asked about by the question `goal`, a task under its
-    goal by the question `task`, and `waits_for_owner` names the question."""
+    goal by the question `task`, and `waits_for_owner` names the question.
+
+    The action of a task moved to ready is to accept it, as one filed there; of a task
+    moved anywhere else, `move`, the move itself, made by the answer `do`."""
 
     identity = str(row["work_item_id"])
     if gate.point == "proposed_goal":
         waits = _ask_about_goal(conn, identity, author, by_agent=True)
     else:
-        waits = _ask_about_task(conn, identity, str(row["parent_id"]), author)
+        waits = _ask_about_task(conn, identity, str(row["parent_id"]), author, move=move)
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
     answer["waits_for_owner"] = waits.answer()
@@ -1865,14 +1903,14 @@ def transition_work_item(
     goal with no parent where `proposed_goal` says `human`, which the question `goal`
     asks about, and of a task under goals and stages all accepted and open where
     `task_in_goal` says `human`, which the question `task` asks about; either stays in
-    triage. Left to the agent, the goal is accepted on the basis `agent`, and either
-    acceptance is marked in the summary of decisions, as is an assignment an agent
-    names. An agent's
-    completion of a goal, which confirms it, is the owner's to make where
-    `goal_close` says `human`: the goal stays as it is, with what the call wrote
-    before the move, and waits on the question `confirm` (`_ask_about_close`); left
-    to the agent, the close is marked. The
-    writes Valkama composes, the cancel an owner's answer carries out among them, are
+    triage, and a task's move to a state other than ready waits as that move, which the
+    owner's answer `do` makes. Left to the agent, the goal is accepted on the basis
+    `agent`, and either acceptance is marked in the summary of decisions, as is an
+    assignment an agent names. An agent's completion of a goal, which confirms it, is
+    the owner's to make where `goal_close` says `human`: the goal stays as it is, with
+    what the call wrote before the move, and waits on the question `confirm`
+    (`_ask_about_close`); left to the agent, the close is marked. The writes Valkama
+    composes, the cancel an owner's answer carries out among them, are
     not gated. `following` names the owner's answered question, on the item or over
     it, that the cancel follows from: it needs no question of the owner and reads no
     setting.
@@ -2062,7 +2100,8 @@ def _transition(
     if accept_gate is not None and accept_gate.mode == participation.HUMAN:
         # Checked as the move would be made now, taking the goal or the task on is the
         # owner's: it stays in triage and waits for the answer.
-        return _ask_about_move(conn, row, accept_gate, author, warnings)
+        move = None if target["category"] == "ready" else _HeldMove(str(target["key"]), note, check)
+        return _ask_about_move(conn, row, accept_gate, author, warnings, move)
     updates = ["state_id = ?"]
     parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)

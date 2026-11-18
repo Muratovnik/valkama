@@ -1395,7 +1395,9 @@ def _task(
     triage, or one it moved there, which stayed where it was (an action of kind `parent`).
 
     `do` takes it on in the goal: a task lying there moves to its first ready state,
-    `inherited` as filing it there would make it, and a moved one is moved there now,
+    `inherited` as filing it there would make it, or, where the agent moved it out of
+    triage to another state (an action of kind `transition`), to that state with the
+    reason and what to check the agent sent; a moved one is moved there now,
     accepted from triage the same way. `later` puts it off under the goal until the
     answer's `until`, a moved one moved there first. `out` takes a task lying there out
     of the goal to triage (`split.move_out`), linked as discovered from the goal, and
@@ -1409,7 +1411,16 @@ def _task(
     given = answers.get(request_model.REVIEW_ANSWER)
     if moving and given in (request_model.RETURN_DO, request_model.RETURN_LATER):
         service.update_work_item(conn, reference, parent=goal, author=author)
-    if given == request_model.RETURN_DO and not moving:
+    if given == request_model.RETURN_DO and action.kind == "transition":
+        service.transition_work_item(
+            conn,
+            reference,
+            str(action.params["state"]),
+            reason=str(action.params.get("reason") or ""),
+            to_check=action.params.get("to_check"),
+            author=author,
+        )
+    elif given == request_model.RETURN_DO and not moving:
         key = _first_state(conn, item, "ready")
         service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
     elif given == request_model.RETURN_LATER:
