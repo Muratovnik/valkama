@@ -91,7 +91,9 @@ says what it is:
 - `triage_stack`, only on an item waiting for a triage review, is `{seen_at, seen_by}`:
   when a review marked it seen and who, both null while none did. `list_work_items`
   with `triage_stack: "unseen"` lists the items no review marked, oldest first, and
-  `"seen"` the marked ones.
+  `"seen"` the marked ones. A list row carries no `triage_stack`: the filter says
+  whether its rows are marked, and the card, or the list with `verbose`, says when
+  and by whom. See [the triage procedure](triage.md).
 - `get_work_item_chain` with `scope: "tree"` reads everything under an item at
   any depth; `scope: "chain"`, the default, adds what was discovered from it.
 
@@ -113,21 +115,10 @@ await confirmation: check each and complete it, as the skill's Close section say
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist`, `links` or `group`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `waits_for_owner` (as `create_work_item` gives it) when the owner decides on one of its writes, `waits_for_sessions` (`action`, `point`, `sessions`, `until`) when a cancel waits for the sessions whose work it ends, `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `waits_for_owner` (as `create_work_item` gives it) when the owner decides on one of its writes, `waits_for_sessions` (`action`, `point`, `sessions`, `until`) when a cancel waits for the sessions whose work it ends, `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.triage_seen` `{seen_at}`, or `{cleared: true}` when it took the mark away; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `commits`, `links`, `projects`) |
 
-`claim_ready_work_item` takes the first workable task in the order of work —
-urgent, started, a goal or stage under way, priority, age — which a list row
-says as `queue_order`, and answers with the card of the item it took as
-`work_item`, null when no task is workable. It reads one space's queue: `space`, or the space of
-`within`, a goal or stage whose tasks at any depth it keeps, or else the space
-whose project root holds your session's folder (`session_space` in
-`list_planning_spaces`); `label` keeps the tasks that carry that label
-themselves, and `project` the tasks that name that project, never one that
-names none. A call naming neither `space` nor `within` from a session in no
-space's project root is refused with the spaces, as is `within` naming a task or
-a goal of another space than `space`; a task of any space is claimed by number. A goal, a stage and work in triage or deferred are never
-taken. Nothing sets the order by hand. A comment in `applied` has `comment_id`, and `reply_to` and
+A comment in `applied` has `comment_id`, and `reply_to` and
 `reply_to_request`: the root a reply joined, both null for a new root, and
 `list_request_id` when it carried a `list`, as the summary does. A comment or a
 summary that named other items in `mentions` adds `mentions`: per item its
@@ -285,7 +276,7 @@ matters, not when to do it:
 - `medium`: noticeably affects work, with a workaround
 - `low`: minor
 
-`labels` in the batch's `update` replaces the whole set: `["observation"]` leaves
+`labels` in the batch's `update` replaces the whole set: `["export"]` leaves
 the item with that one label and nothing else. To add or remove labels without
 knowing the rest, send `labels_add` or `labels_remove` (both may go in one
 call). A label already there is kept once, one the item lacks is ignored, and
@@ -559,6 +550,26 @@ match is weak, and an item with no attached commit cannot show.
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
 | A refused batch or creation step | The message starts with the group and index; correct that entry. |
 
+## The order of work
+
+The order of work is computed, and nothing sets it by hand: urgent first, then
+work already started, then tasks of a goal or stage already under way, then
+priority, then age. A list row the queue gives says its `queue_order`, 1 being
+what `claim_ready_work_item` gives next; any other row says `withheld`, why the
+queue does not give it.
+
+`claim_ready_work_item` takes the first workable task in that order and answers
+with the card of the item it took as `work_item`, null when no task is workable.
+It reads one space's queue: `space`, or the space of `within`, a goal or stage
+whose tasks at any depth it keeps, or else the space whose project root holds
+your session's folder (`session_space` in `list_planning_spaces`); `label` keeps
+the tasks that carry that label themselves, and `project` the tasks that name
+that project, never one that names none. A call naming neither `space` nor
+`within` from a session in no space's project root is refused with the spaces,
+as is `within` naming a task or a goal of another space than `space`; a task of
+any space is claimed by number. A goal, a stage and work in triage or deferred
+are never taken.
+
 ## Claims
 
 A claim is a lease on the session that took it: `live` while that session is
@@ -668,7 +679,8 @@ no longer stands in for it, and the refusal says so: "answer path is required;
 give an option or your own variant in own; a note no longer stands in for a
 field".
 
-A pending question is answered once; a second answer is refused. `change: true`
+A pending question is answered once; a second answer is refused. A person changes
+an answer in Valkama. `change: true`
 replaces the answer of an answered question, held to the same rules, and keeps the
 replaced one as a version: `answer_version` rises by one and `answered_at` moves to
 the change. Change an answer only when the owner asks. Refused with

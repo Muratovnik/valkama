@@ -14,14 +14,18 @@ than assert it. Work that cannot finish within a few days is more than one
 change: split it into items that each integrate on their own, under a goal
 or stage when they share one [DORA, Devin].
 
-## A finding is evidence, not an item
+## A finding is a task of its own
 
-A finding — a failing check, a review remark, a defect seen in passing — is
-evidence. It goes on the item it bears on: as a step, a comment or a ref.
+A finding — a failing check, a review remark, a defect or a hindrance seen in
+passing — that is not a step of the item at hand is a task of its own, filed
+without a parent in triage with a topic label and `discovered-from` the item it
+was found on. Evidence of a finding already open is a comment on it.
 
 Findings that share a cause, a fix or one mechanical rule are one item, kept as
 its steps or its links. When the same change was filed twice, merge the extras
 into one survivor with `merge_work_items`, or close them as duplicates of it.
+A triage review gathers findings of one topic under a proposed goal; see
+[the triage procedure](triage.md).
 
 Never group work by area or by a set of files alone. "Everything in the parser"
 or "all the UI bugs" is a list that has no single "done": it cannot be

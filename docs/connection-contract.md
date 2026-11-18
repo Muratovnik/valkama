@@ -531,6 +531,42 @@ carry it.
 | `owner_only` | 403 | an agent's answer to a question with a purpose but `consent`, or to one a waiting write carries; an agent's write of the setting |
 | `not_asker` | 403 | a withdrawal by another session than the one that asked, or of a question Valkama asked |
 
+#### The triage stack
+
+The items that carry `triage_stack` wait for a triage review: in a `triage`
+state, under no goal or stage or under goals and stages all accepted and open,
+with no question to the owner open on them. A review lists them with the
+`triage_stack` filter of the lists, oldest entry first, decides them by a merge,
+a [group](#a-group-of-findings) or a move, and marks each one it leaves as it is
+with the batch's group `triage_seen`, in `apply_work_item_changes` and
+`POST /api/planning/work-item/apply`:
+
+- `true` marks the item seen by the call, and marking it again moves the mark to
+  the later call; `false` takes the mark away. The answer carries
+  `applied.triage_seen`, `{"seen_at": "…"}` or `{"cleared": true}`. The item
+  records a `triage_seen` event with the detail `seen` or `cleared`, which is told
+  to nobody, and its revision does not move.
+- The group comes after `summary`, so a comment sent in the same call is written
+  first and the mark stays. Beside `transition`, `defer` or `move_out` it is
+  refused with `invalid_request` (400): `[triage_seen] a mark stays only on an
+  item that stays in triage: send it without transition, defer or move_out`.
+- An item that does not wait in the stack is refused, for `true` and `false`
+  alike, with `workflow_guard` (409): `[triage_seen] MAIN-12 is not waiting for a
+  triage review: <why>`, the why being `it is not in triage`, `it waits for the
+  owner's answer` or `it lies under MAIN-3`.
+
+The store takes the mark away, with no event of its own, when the item's state or
+parent changes, when it gains a comment (a reply, a summary and the note a merge
+into it writes among them) or a question to the owner, and when a merge moves a
+thread or a pending question to the owner onto it. A change of state takes it
+away, so only an item in `triage` holds one. A request asked of a session and a
+list under a comment are no questions to the owner and leave it.
+
+A row of the MCP `list_work_items` carries no `triage_stack`, as the list above
+says: a review lists the stack with the filter, which already says whether the
+rows it gives are marked, and reads when and by whom on `get_work_item`, a
+`verbose` list or the HTTP list.
+
 #### A group of findings
 
 A review of work in `triage` proposes tasks that belong together as one new goal:
@@ -3061,6 +3097,7 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
+| `triage_seen` | `true` or `false`; not with `transition`, `defer` or `move_out` | only here, see [The triage stack](#the-triage-stack) |
 | `transition` | `{state, reason?, force?, acceptance?, to_check?, cancels?}` | `/transition` |
 | `defer` | `{until, reason, force?}`; not with `transition`, `move_out` or `convert` | `/defer`, see [Putting work off](#putting-work-off) |
 | `move_out` | `{reason, force?}`; not with `transition`, `defer` or `convert` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |
