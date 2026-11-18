@@ -63,11 +63,11 @@ const props = defineProps<{
   /** Whether the period is live, «Now» or «Today». */
   live?: boolean
 }>()
-/** Closed; a value pressed in it; the page narrowed to the value on show. */
+/** Closed; a value pressed in it; the value on show added to the page's filter. */
 const emit = defineEmits<{
+  add: [by: UsageDimension, value: string | null, label: string]
   close: []
   inspect: [by: UsageDimension, value: string | null, label: string]
-  narrow: [by: UsageDimension, value: string | null, label: string]
 }>()
 
 const { t } = useI18n()
@@ -126,7 +126,7 @@ const label = computed(() => t('analytics.detail.label', { title: title.value })
       :live="live"
       @named="(name) => (title = name)"
       @close="emit('close')"
-      @narrow="(name) => shown?.kind === 'value' && emit('narrow', shown.by, shown.value, name)"
+      @add="(name) => shown?.kind === 'value' && emit('add', shown.by, shown.value, name)"
     />
     <ValueTable
       v-else-if="shown?.kind === 'all'"

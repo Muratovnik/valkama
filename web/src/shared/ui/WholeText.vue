@@ -73,7 +73,8 @@ const surface = shallowRef<HTMLElement | null>(null)
 const wholeOf = (anchor: HTMLElement | null) => (anchor && showsWhole(anchor) ? anchor : null)
 
 useHintKind('whole', {
-  pointedAnchor: (target) => (previewAnchorOf(target) ? null : wholeOf(pointerAnchorOf(target))),
+  pointedAnchor: (target, at) =>
+    previewAnchorOf(target) ? null : wholeOf(pointerAnchorOf(target, at)),
   focusedAnchor: (target) => (previewAnchorOf(target) ? null : wholeOf(focusAnchorOf(target))),
   shows: (anchor) => textIsClipped(anchor) && firstLetterOf(anchor) !== null,
   isArea: inTooltipArea,

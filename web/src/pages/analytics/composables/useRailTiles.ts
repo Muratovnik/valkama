@@ -51,7 +51,7 @@ export interface RailTileModel {
   /** Where the tile stands: its figures, a first read, no data, or a read that failed. */
   state: 'empty' | 'failed' | 'loading' | 'ready'
   trend: { label: string; points: TrendPoint[] } | null
-  /** What the lead leaves out, for its hint: an account's whole id. */
+  /** What the lead leaves out, for its hint: a titled session's client and the start of its id. */
   leadDetail?: string
   /** A window of the quota as a thin bar: its share spent, its pace and its forecast's tail. */
   meter?: {

@@ -12,6 +12,7 @@
  * which the check does not count as a write, and are listed all the same.
  */
 export const clipboardSpecs: readonly string[] = [
+  'production-analytics-quota-account-actions.spec.ts',
   'production-card-bar-press.spec.ts',
   'production-card-notes.spec.ts',
   'production-card-source.spec.ts',

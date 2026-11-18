@@ -7,7 +7,7 @@
  * it, and a reload opens it again with no ring. Its parts stand in one column, none over another
  * and none cut, and the «ⓘ» of its figures ends their heading's line. A task's panel offers its card, which stands over the page while the panel waits
  * closed under it; a model's offers none and is not broken down by models; work with no task has
- * no card, and «Narrow the page to it» breaks the page down by where the work came from. A press
+ * no card, and «Add to filter» adds it to the page's filter with the section kept. A press
  * with a modifier on a task is the browser's. «All N» opens every value of the section, found by
  * name, each opening its own panel in its place. Each run prints what it measured.
  */
@@ -322,7 +322,7 @@ for (const locale of ['en', 'ru'] as const)
       })
     })
 
-test('a model’s bar opens its panel from the keyboard, Escape and Back close it and give the focus back, a reload opens it again with no ring, and it narrows the page', async ({
+test('a model’s bar opens its panel from the keyboard, Escape and Back close it and give the focus back, a reload opens it again with no ring, and it adds the model to the filter', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -368,11 +368,12 @@ test('a model’s bar opens its panel from the keyboard, Escape and Back close i
   const reloaded = await focused(page)
   expect(reloaded).toEqual({ scroller: true, outline: 0, shadow: false })
 
-  // Narrowing from it is the page's narrowing to the model, the panel closed in the same step.
-  await panel.getByRole('button', { name: 'Narrow the page to it' }).click()
+  // «Add to filter» adds the model to the page's filter and keeps the section, the panel closed in
+  // the same step (`production-analytics-add-to-filter.spec.ts`).
+  await panel.getByRole('button', { name: 'Add to filter' }).click()
   await expect
     .poll(() => path(page))
-    .toBe(pageAt({ by: 'work_item', filters: '{"model":["model-b"]}' }))
+    .toBe(pageAt({ by: 'model', filters: '{"model":["model-b"]}' }))
   await expect(panel).toBeHidden()
   await page.goBack()
   await expect(panel).toBeVisible()
@@ -435,7 +436,7 @@ test('a task’s panel opens its card over the page, the panel closed under it u
   await record(info, 'value panel under a card', { over, uses })
 })
 
-test('in Russian, work with no task opens a panel with no card, and «Сузить страницу до него» breaks the page down by where the work came from and closes it', async ({
+test('in Russian, work with no task opens a panel with no card, and «Добавить в фильтр» adds it to the filter, keeps the section and closes it', async ({
   page,
 }) => {
   await inLocale(page, 'ru')
@@ -450,15 +451,14 @@ test('in Russian, work with no task opens a panel with no card, and «Сузит
   await expect(panel.locator('[data-part="figures"]')).toBeVisible()
   // No card: the task's panel offers one where this offers none.
   await expect(panel.getByRole('link', { name: 'Открыть карточку' })).toHaveCount(0)
-  const narrow = panel.getByRole('button', { name: 'Сузить страницу до него' })
-  await expect(narrow).toHaveAccessibleDescription(
-    'Разобрать работу без задачи по проектам и способам запуска',
-  )
-  await narrow.click()
+  await panel.getByRole('button', { name: 'Добавить в фильтр' }).click()
   await expect
     .poll(() => path(page))
-    .toBe(pageAt({ by: 'project', filters: '{"work_item":[null]}', across: 'launch_class' }))
+    .toBe(pageAt({ by: 'work_item', filters: '{"work_item":[null]}' }))
   await expect(panel).toBeHidden()
+  await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveText([
+    'Задача: Без задачи',
+  ])
 })
 
 test('«All N» opens every value of the section, found by its name, and a value pressed there opens its own panel in its place, which Back returns from', async ({

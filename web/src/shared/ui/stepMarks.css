@@ -1,16 +1,16 @@
 /*
  * The marks of a step line (`StepLine`, `useStepAhead`), read as its own scoped style: each
- * reading's dot and the stretch of the plot it takes the pointer along, the corridor of the
- * forecast past them, the hatch over the whole field cut to the corridor's outline, and the marks
+ * reading's dot and the box it stands in, the corridor of the forecast past them, the hatch over the whole field cut to the corridor's outline, and the marks
  * of the two places past the readings — «now» and the forecast at the reset — each a ring in the
  * line's hue around the ground, never a reading's dot. Every mark is painted only while pointed
- * at or focused, its box kept at rest for its hint and the pointer.
+ * at or focused, its box kept at rest for its hint. None of them takes the pointer: one layer over
+ * the field does, for all of them (`StepLine`).
  */
 
 /* A reading: a mark in the line's hue, ringed in the ground, at its step's start and value
-   (`--step-down`); at rest unpainted, its box kept for its hint and the pointer. It stands over
-   the places past the readings, so a latest reading read a moment before now keeps the pointer
-   over its whole dot, where «now»'s stretch starts under it. */
+   (`--step-down`); at rest unpainted, its box kept for its hint. It stands over the places past
+   the readings, so a latest reading read a moment before now shows its whole dot over «now»'s
+   ring. */
 .step-mark {
   --step-down: 0;
 
@@ -40,16 +40,26 @@
   scale: 1.5;
 }
 
-/* What the pointer points at for a reading: the whole step it holds, the plot's height, at
-   least as wide as a pointer can hit, but for the last reading where «now» follows it
-   (`StepLine`). It paints nothing, and the keyboard's ring is drawn on it. A place past the
-   readings takes the pointer the same way along its own stretch. */
+/* The box of a reading: the whole step it holds, the plot's height, at least a ring's width, but
+   for the last reading where «now» follows it (`StepLine`). It paints nothing and takes no
+   pointer, which the field's one layer takes for it; the keyboard's ring is drawn on it. A place
+   past the readings has its box the same way. */
 .step-reach,
 .step-target {
   position: absolute;
   inset-block: 0;
   min-inline-size: var(--step-reach);
   border-radius: var(--radius-status);
+  pointer-events: none;
+}
+
+/* The one layer that takes the pointer for every place (`useStepAim`): the whole field and half
+   a mark past each edge, so a ring centred on the field's edge is pointed at whole. It paints
+   nothing. */
+.step-hover {
+  position: absolute;
+  inset-block: 0;
+  inset-inline: calc(-1 * var(--step-hit));
 }
 
 /* The forecast's corridor: the readings' hue under the hatch (`hatch.css`) over the whole field,
@@ -67,9 +77,7 @@
 }
 
 /* A place past the readings: a ring in the line's hue around the ground, never a reading's dot;
-   at rest unpainted, its box kept for its hint. Its stretch takes the pointer, never the ring: a
-   ring centred on now stands half over the latest reading's step, which keeps the pointer up to
-   the line's end. */
+   at rest unpainted, its box kept for its hint. */
 .step-target-mark {
   --step-high: 0;
   --step-low: 0;
@@ -82,7 +90,6 @@
   outline: var(--space-hair) solid var(--color-canvas);
   box-shadow: inset 0 0 0 var(--space-half) var(--color-series-1);
   opacity: 0;
-  pointer-events: none;
 
   @media (forced-colors: active) {
     background: Canvas;

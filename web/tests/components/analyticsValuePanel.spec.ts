@@ -1,11 +1,11 @@
 /**
- * The side panel a value of the Analytics page opens, and the narrowing it offers. The oracle is
- * the requirement: the panel names the value, says its time, tokens, cost and share of the whole,
- * its days and the models and accounts it ran on, and offers its card where it is a task;
- * «Narrow the page to it» narrows the view to the value and breaks it down by task as a new place
- * in the history, and closes the panel; for work with no task, which has no card, it breaks the
- * view down by project crossed with launch class, or by launch class alone at a project's scope,
- * where the page has no section of projects. An opening or a narrowing the address cannot hold
+ * The side panel a value of the Analytics page opens, and the adding to the filter it offers. The
+ * oracle is the requirement: the panel names the value, says its time, tokens, cost and share of
+ * the whole, its days and the models and accounts it ran on, and offers its card where it is a
+ * task; «Add to filter» adds the value to its dimension's filter beside the values there, keeps
+ * the page on its section and closes the panel, as a new place in the history, and a value the
+ * filter holds already offers it disabled, «Already in filter». An opening or an adding the
+ * address cannot hold
  * says why instead of happening. What qualifies the figures — the cost an estimate, what the tokens
  * count, a minute's figures shared out where the read is by the minute — the panel says once, in
  * an «ⓘ» of its own named for the figures, never as a line: the section's «ⓘ» stands under it.
@@ -19,13 +19,14 @@ import type { TimedStretch } from '../fixtures/analytics.ts'
 import { stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { showView } from '../support/chartViews.ts'
 import {
+  addButton,
   cardLinks,
   detailOf,
   follow,
   MONDAY,
   mountPage,
-  narrowButton,
   panelOf,
+  panelShown,
   pressEachTest,
   WORLD,
   written,
@@ -106,14 +107,6 @@ describe('what a value’s panel shows', () => {
     expect(models.map((one) => one.text())).toEqual(['model-01', 'Unknown'])
   })
 
-  it('names work with no task, offers no card and narrows by where the work came from', async () => {
-    stubAnalyticsReads((query) => serveUsage(WORLD, query))
-    const host = await mountPage({ by: 'work_item', detail: detailOf('work_item', null) })
-    expect(panelOf(host).get('h2').text()).toBe('No task')
-    expect(cardLinks(host)).toHaveLength(0)
-    expect(narrowButton(host).attributes('aria-description')).toBe(BREAK_DOWN)
-  })
-
   it('says what qualifies its figures once, in the «ⓘ» ending their heading, and never as a line', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const host = await mountPage({ by: 'work_item', detail: detailOf('work_item', task(1, '').id) })
@@ -152,11 +145,8 @@ describe('what a value’s panel shows', () => {
   })
 })
 
-/** What narrowing to work with no task does, as the panel's action describes it. */
-const BREAK_DOWN = 'Break down the work with no task by project and launch class'
-
-describe('work with no task', () => {
-  it('breaks the view down by project and launch class from its panel, as a new place', async () => {
+describe('adding the value to the page’s filter', () => {
+  it('adds work with no task beside the filters the view had, keeps the section and closes the panel, as a new place', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const host = await mountPage({ by: 'work_item', filters: '{"model":["model-01"]}' })
     const bar = host.get('.spending-bars button.ranked-line[aria-label="Details of No task"]')
@@ -164,27 +154,71 @@ describe('work with no task', () => {
 
     await bar.trigger('click')
     await follow(host)
-    await narrowButton(host).trigger('click')
-    // The filter of no task joins the filters the view had, and the panel closes.
+    await addButton(host).trigger('click')
+    // The filter of no task joins the filters the view had, the section stays and the panel closes.
     expect(written(host).at(-1)).toEqual([
-      {
-        by: 'project',
-        across: 'launch_class',
-        filters: '{"work_item":[null],"model":["model-01"]}',
-      },
+      { by: 'work_item', filters: '{"work_item":[null],"model":["model-01"]}' },
       'push',
     ])
     await follow(host)
-    // The view's reads carry the filters; the reads its colours are ranked over carry none.
-    const filtered = (groupBy: string) =>
-      reads.grouped(groupBy).filter((one) => one.has('none') || one.has('model'))
-    const read = filtered('project').at(-1)
+    expect(panelShown(host)).toBe(false)
+    // The view's reads carry both filters.
+    const read = reads.grouped('work_item').findLast((one) => one.has('none') && one.has('model'))
     expect(read?.get('none')).toBe('work_item')
     expect(read?.get('model')).toBe('model-01')
-    expect(filtered('project,launch_class').at(-1)?.get('none')).toBe('work_item')
   })
 
-  it('opens the same panel from its row of the table and from the overview’s card of tasks', async () => {
+  it('adds a value beside the values its dimension’s filter holds', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({
+      by: 'model',
+      filters: '{"model":["model-01","model-02"]}',
+      detail: detailOf('model', 'model-03'),
+    })
+    await addButton(host).trigger('click')
+    expect(written(host)).toEqual([
+      [{ by: 'model', filters: '{"model":["model-01","model-02","model-03"]}' }, 'push'],
+    ])
+  })
+
+  it('offers nothing to add for a value the filter holds already, in each language', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const state = {
+      by: 'model',
+      filters: '{"model":["model-01"]}',
+      detail: detailOf('model', 'model-01'),
+    }
+    const host = await mountPage(state)
+    const held = addButton(host, 'Already in filter')
+    expect(held.attributes('disabled')).toBeDefined()
+    await held.trigger('click')
+    expect(written(host)).toEqual([])
+    host.unmount()
+
+    const ru = await mountPage(state, 'ru')
+    expect(addButton(ru, 'Уже в фильтре').attributes('disabled')).toBeDefined()
+    ru.unmount()
+    // Its control: a value the filter does not hold offers the adding, in Russian too.
+    const other = await mountPage({ ...state, detail: detailOf('model', 'model-02') }, 'ru')
+    expect(addButton(other, 'Добавить в фильтр').attributes('disabled')).toBeUndefined()
+  })
+
+  it('names work with no task, offers no card and offers to add it, in Russian', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({ by: 'work_item', detail: detailOf('work_item', null) }, 'ru')
+    const words = 'Подробнее: Без задачи'
+    expect(
+      host.get(`.spending-bars button.ranked-line[aria-label="${words}"] .ranked-label`).text(),
+    ).toBe('Без задачи')
+    expect(host.get(`.spending-table th button[aria-description="${words}"]`).text()).toBe(
+      'Без задачи',
+    )
+    expect(panelOf(host).get('h2').text()).toBe('Без задачи')
+    expect(cardLinks(host)).toHaveLength(0)
+    expect(addButton(host, 'Добавить в фильтр').attributes('disabled')).toBeUndefined()
+  })
+
+  it('opens the panel of work with no task from its row of the table and from the overview’s card of tasks', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const section = await mountPage({ by: 'work_item' })
     const row = section.get('.spending-table th button[aria-description="Details of No task"]')
@@ -214,51 +248,6 @@ describe('work with no task', () => {
     expect(written(overview)).toEqual([[{ detail: detailOf('work_item', null) }, 'push']])
   })
 
-  it('breaks it down by launch class alone at a project’s scope, which has no section of projects', async () => {
-    const alpha = value('alpha')
-    const world: TimedStretch[] = [
-      {
-        at: MONDAY,
-        group: { work_item: task(1, 'Task 1'), project: alpha },
-        spend: { seconds: 3600 },
-      },
-      { at: MONDAY, group: { work_item: noTask, project: alpha }, spend: { seconds: 1800 } },
-    ]
-    stubAnalyticsReads((query) => serveUsage(world, query))
-    const host = await mountPage(
-      { by: 'work_item', across: 'model', detail: detailOf('work_item', null) },
-      'en',
-      'alpha',
-    )
-    const narrow = narrowButton(host)
-    expect(narrow.attributes('aria-description')).toBe(
-      'Break down the work with no task by launch class',
-    )
-    await narrow.trigger('click')
-    // The crossing by model the view had would cross launch classes with models: it is dropped.
-    expect(written(host)).toEqual([
-      [{ by: 'launch_class', filters: '{"work_item":[null]}' }, 'push'],
-    ])
-  })
-
-  it('says what it does in Russian, in the bars, in the table and in the panel', async () => {
-    stubAnalyticsReads((query) => serveUsage(WORLD, query))
-    const host = await mountPage({ by: 'work_item', detail: detailOf('work_item', null) }, 'ru')
-    const words = 'Подробнее: Без задачи'
-    expect(
-      host.get(`.spending-bars button.ranked-line[aria-label="${words}"] .ranked-label`).text(),
-    ).toBe('Без задачи')
-    expect(host.get(`.spending-table th button[aria-description="${words}"]`).text()).toBe(
-      'Без задачи',
-    )
-    const narrow = panelOf(host)
-      .findAll('button')
-      .find((one) => one.text() === 'Сузить страницу до него')
-    expect(narrow?.attributes('aria-description')).toBe(
-      'Разобрать работу без задачи по проектам и способам запуска',
-    )
-  })
-
   it('is refused in the panel with the reason where its filter would not fit the address', async () => {
     const models = [1, 2, 3, 4].map((one) => `${'a-model-with-a-long-name-'.repeat(2)}${one}`)
     const filters = JSON.stringify({ model: models })
@@ -274,7 +263,7 @@ describe('work with no task', () => {
     stubAnalyticsReads((query) => serveUsage(world, query))
     const host = await mountPage({ by: 'work_item', filters, detail: detailOf('work_item', null) })
 
-    await narrowButton(host).trigger('click')
+    await addButton(host).trigger('click')
     await flushPromises()
     expect(written(host)).toEqual([])
     expect(panelOf(host).get('[role="alert"]').text()).toBe(

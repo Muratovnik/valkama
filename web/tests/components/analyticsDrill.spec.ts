@@ -5,7 +5,7 @@
  * link is the browser's, counted once as `task_open`, and the panel's «Open the card» opens the
  * card in place, counted once too. A day column still narrows the view to that day alone. Unknown
  * work is not a control, and a deleted task opens a panel with no card. What the panel shows, and
- * what narrowing from it does, is `analyticsValuePanel.spec.ts`.
+ * what adding its value to the filter from it does, is `analyticsValuePanel.spec.ts`.
  */
 import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
@@ -17,12 +17,12 @@ import { stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { showView } from '../support/chartViews.ts'
 import { rowHeadings } from '../support/rowHeadings.ts'
 import {
+  addButton,
   cardLinks,
   detailOf,
   follow,
   MONDAY,
   mountPage,
-  narrowButton,
   opened,
   openFirstTask,
   panelOf,
@@ -38,7 +38,7 @@ vi.mock('@/shared/api/analyticsUses.ts', () => ({ reportAnalyticsUse: vi.fn() })
 pressEachTest()
 
 describe('a value pressed on the Analytics page', () => {
-  it('opens a model’s panel from its bar, and narrows the view to it from the panel', async () => {
+  it('opens a model’s panel from its bar, and adds the model to the filter from the panel', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const host = await mountPage({ by: 'model' })
 
@@ -55,20 +55,18 @@ describe('a value pressed on the Analytics page', () => {
     expect(byAccount?.get('model')).toBe('model-02')
     expect(reads.grouped('model,model')).toHaveLength(0)
 
-    await narrowButton(host).trigger('click')
+    // The section stays the models', now filtered to model-02 alone.
+    await addButton(host).trigger('click')
     expect(written(host).at(-1)).toEqual([
-      { by: 'work_item', filters: '{"model":["model-02"]}' },
+      { by: 'model', filters: '{"model":["model-02"]}' },
       'push',
     ])
     await follow(host)
     expect(panelShown(host)).toBe(false)
-    const read = reads.grouped('work_item').at(-1)
+    // The view's read carries the filter; the reads its colours are ranked over carry none.
+    const read = reads.grouped('model').findLast((one) => one.has('model'))
     expect(read?.get('model')).toBe('model-02')
     expect(read?.get('none')).toBeNull()
-    // Only the second task worked under model-02: its bar is the one link of the chart.
-    const links = host.findAll('.spending-bars a.ranked-line')
-    expect(links.map((link) => link.attributes('href'))).toEqual(['/open/MAIN-2'])
-    expect(links[0]?.attributes('aria-label')).toBe('Details of MAIN-2 Task 2')
   })
 
   it('opens a task’s panel with a plain press, and its card from the panel, counted once', async () => {
@@ -194,9 +192,9 @@ describe('a value pressed on the Analytics page', () => {
     ])
     await follow(host)
     expect(reads.grouped('launch_class,model').at(-1)?.get('none')).toBe('launch_class')
-    await narrowButton(host).trigger('click')
+    await addButton(host).trigger('click')
     expect(written(host).at(-1)).toEqual([
-      { by: 'work_item', filters: '{"launch_class":[null]}' },
+      { by: 'launch_class', filters: '{"launch_class":[null]}' },
       'push',
     ])
   })

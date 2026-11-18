@@ -12,7 +12,9 @@
  *   it, so passing between neighbours never leaves a frame without one. The delay is one for every
  *   kind. An anchor whose target takes the pointer past what its hint speaks for
  *   (`HintKind.reaches`), as a board tile's open target stretched over the whole tile does past
- *   the title, is reached only there, asked again as the pointer moves within that target.
+ *   the title, is reached only there, asked again as the pointer moves within that target. A
+ *   target that picks its anchor by where the pointer stands on it (`data-hint-pick`), as a step
+ *   line's one layer over its field does among its readings, asks again at every move within it.
  * - When the pointer leaves the anchor the hint stays `GRACE_MS`, and for as long as the pointer is
  *   on the hint itself (`[data-hint-surface]`): a hint the pointer raised can be entered (WCAG 2.2,
  *   1.4.13). Another anchor takes over at once, but on the way to a hint that can be entered
@@ -76,8 +78,8 @@ export interface HintKind {
   holds?: (anchor: HTMLElement) => boolean
   /** Whether the anchor speaks for an area, each part of which asks again after a press. */
   isArea: (anchor: HTMLElement) => boolean
-  /** The anchor the pointer on `target` asks for, or null. */
-  pointedAnchor: (target: Element) => HTMLElement | null
+  /** The anchor the pointer on `target`, standing at `at` where it moved to, asks for, or null. */
+  pointedAnchor: (target: Element, at: Point | null) => HTMLElement | null
   /**
    * The box of its shown surface where the pointer can enter it from its anchor, or null where
    * it lets the pointer through: the pointer heading there keeps it over what lies between.
@@ -208,7 +210,7 @@ function onWay() {
 function resolve(target: EventTarget | null, by: Raiser, at: Point | null = null): Asked | null {
   if (!(target instanceof Element)) return null
   for (const [kind, rules] of kinds) {
-    const anchor = by === 'pointer' ? rules.pointedAnchor(target) : rules.focusedAnchor(target)
+    const anchor = by === 'pointer' ? rules.pointedAnchor(target, at) : rules.focusedAnchor(target)
     if (anchor && reachedAt(rules.reaches, anchor, target, at)) return { kind, anchor }
   }
   return null

@@ -31,9 +31,9 @@
  * opens its side panel over the page (`DetailPanel`, `useDetail`), and the page stays as it was;
  * the panel is a part of the view, so Back closes it and a reload opens it again. A task's value
  * is a link to its card as well, which a press with a modifier or the middle button opens
- * elsewhere (`useLineActions`). The panel's «Narrow the page to it» narrows the view to the value
- * and breaks it down by task, as a press of the value once did, as a new place in the history;
- * work with no task is broken down instead by where it came from. A period pressed in the
+ * elsewhere (`useLineActions`). The panel's «Add to filter» adds the value to its dimension's
+ * filter beside the values there, as choosing it in the filter's field does, with the section kept
+ * and the panel closed, as a new place in the history (`usePageFilter`). A period pressed in the
  * report — a day, an hour or a minute — narrows the view to it and breaks it down by task, a new
  * place too, so Back returns to the view it was pressed in. A frame along a chart of periods sets
  * the page's period to the periods it covers, the section kept, as a new place too.
@@ -56,8 +56,8 @@ import QuotaPanel from '@/pages/analytics/components/QuotaPanel.vue'
 import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 import { provideColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useDetail } from '@/pages/analytics/composables/useDetail.ts'
-import { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
+import { providePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useQuota } from '@/pages/analytics/composables/useQuota.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
@@ -73,7 +73,6 @@ import {
   addressFits,
   isQuotaSection,
   localDay,
-  orderFilters,
   OVERVIEW,
   QUOTA_SECTIONS,
   readAddress,
@@ -167,7 +166,6 @@ const readFailed = computed(() => read.state.value.status === 'error')
 const filterDimensions = computed<UsageDimension[]>(() =>
   USAGE_DIMENSIONS.filter((dimension) => !(props.projectId && dimension === 'project')),
 )
-const lines = provideLineActions(() => filterDimensions.value)
 
 /**
  * The page's sections, in the rail's order: the overview, the tokens by kind, the quota's five
@@ -231,11 +229,16 @@ watch(
   { immediate: true },
 )
 
-function filter(dimension: UsageDimension, values: (string | null)[]) {
-  const filters = orderFilters({ ...view.value.filters, [dimension]: values })
-  if (change({ filters }, 'replace')) return
-  refuse('filters', t('analytics.filters.full', { dimension: words.dimension(dimension) }))
-}
+/**
+ * The page's filters, set from their fields and added to from a value's panel or an account of the
+ * quota; a value the address cannot hold is refused under the filters.
+ */
+const pageFilter = providePageFilter({
+  change,
+  full: (dimension) =>
+    refuse('filters', t('analytics.filters.full', { dimension: words.dimension(dimension) })),
+  view: () => view.value,
+})
 
 const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
   dimensions: () => filterDimensions.value,
@@ -254,7 +257,7 @@ const quota = useQuota()
 const detail = useDetail({
   change,
   covered: () => props.covered,
-  lines,
+  filter: pageFilter,
   refuse,
   view: () => view.value,
 })
@@ -313,7 +316,7 @@ const emptyDescription = computed(() => {
       :values="read.filterValues.value"
       :view="view"
       @amend="(next) => change(next, 'replace')"
-      @filter="filter"
+      @filter="pageFilter.set"
       @refresh="refresh"
     />
 
@@ -429,7 +432,7 @@ const emptyDescription = computed(() => {
       :read-at="read.askedAt.value"
       @close="detail.close"
       @inspect="detail.inspectHere"
-      @narrow="detail.narrow"
+      @add="detail.add"
     />
   </section>
 </template>

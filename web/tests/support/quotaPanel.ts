@@ -74,9 +74,8 @@ export function windowOf(account: DOMWrapper<Element>, kind: string) {
     state: window.attributes('data-state'),
     lead: plain(window.get('.quota-window-lead').text()),
     filled: window.find('.window-fill').exists(),
-    /** The parts of the bar's hatched tail, and whether the forecast's line names its hatch. */
+    /** The parts of the bar's hatched tail. */
     tail: window.findAll('.window-ahead').length,
-    keyed: window.find('[data-fact="forecast"] [data-mark="hatch"]').exists(),
     reset: fact('reset'),
     forecast: fact('forecast'),
     facts: window.findAll('[data-fact]').map((one) => one.attributes('data-fact')),

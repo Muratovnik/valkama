@@ -130,8 +130,6 @@ export const analyticsMessages = {
       },
       table: analyticsTableMessages.en,
       drill: {
-        noTask: 'Break down the work with no task by project and launch class',
-        noTaskByLaunch: 'Break down the work with no task by launch class',
         day: 'Show the tasks of {day}',
         step: 'Show the tasks of {span}',
         clock: '{from}–{to}',
@@ -145,6 +143,8 @@ export const analyticsMessages = {
         failed: 'The values could not be read.',
         noMatches: 'No matches',
         full: 'The link to this view cannot hold more values of the {dimension} filter, so this one was not added.',
+        add: 'Add to filter',
+        held: 'Already in filter',
       },
       frame: {
         sections: 'Sections of the usage',
@@ -301,8 +301,6 @@ export const analyticsMessages = {
       },
       table: analyticsTableMessages.ru,
       drill: {
-        noTask: 'Разобрать работу без задачи по проектам и способам запуска',
-        noTaskByLaunch: 'Разобрать работу без задачи по способам запуска',
         day: 'Показать задачи за {day}',
         step: 'Показать задачи за {span}',
         clock: '{from}–{to}',
@@ -316,6 +314,8 @@ export const analyticsMessages = {
         failed: 'Не удалось прочитать значения.',
         noMatches: 'Ничего не найдено',
         full: 'Ссылка на этот вид не вмещает больше значений фильтра «{dimension}», поэтому это значение не добавлено.',
+        add: 'Добавить в фильтр',
+        held: 'Уже в фильтре',
       },
       frame: {
         sections: 'Разделы расхода',

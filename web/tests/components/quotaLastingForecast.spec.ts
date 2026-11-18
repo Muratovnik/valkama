@@ -2,7 +2,7 @@
  * Five hours that last to their reset draw the share they will have spent by then, as five hours
  * that run out and a week's range do (DESIGN.md, `WindowBar` and the quota's sections): a hatched
  * tail on the bar and the tile from the share spent to the share the answer names at the reset, a
- * corridor on the step line to it, the swatch on the forecast's line, and words that say that
+ * corridor on the step line to it, and the forecast's line, words with no swatch, that say that
  * share. The figures are `quotaAt`'s: 7e6d5c4b's five hours stand at a fresh 0 % four hours before
  * their reset and last to it with 35 % spent by then.
  */
@@ -67,7 +67,8 @@ describe('five hours that last to the reset', () => {
     const tail = window.findAll('[data-mark="ahead"]')
     expect(tail).toHaveLength(1)
     expect(tail[0]?.attributes('style')).toContain('inline-size: 35%')
-    expect(window.find('[data-fact="forecast"] [data-mark="hatch"]').exists()).toBe(true)
+    // The line is its words alone: no swatch stands before «Forecast».
+    expect(window.find('[data-fact="forecast"] [data-mark="hatch"]').exists()).toBe(false)
     expect(plain(window.get('[data-fact="forecast"]').text())).toBe(
       'Forecast · Lasts to the reset, 35% by then',
     )

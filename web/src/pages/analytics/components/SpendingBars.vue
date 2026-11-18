@@ -6,8 +6,8 @@
  * task can be the largest share of a period; a list of free text, below, sets them apart with that
  * bar instead. Each bar is passed its amount in the measure's own
  * units, hours and not a share. A bar takes its value's hue on the page (`slots`), the neutral for
- * a value the day chart folds away. A value named by the start of its id, an account, carries the
- * whole id as its detail.
+ * a value the day chart folds away. A session named by its title carries its client and the start
+ * of its id as its detail; an account carries none, its whole id copied from the quota panel.
  *
  * With the section split by a second dimension (`across`) the rows are of the read by both, and
  * each bar is a pair, «claude-opus-5-5 · high», ranked, coloured and folded as a value is; it acts
