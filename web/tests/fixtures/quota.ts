@@ -50,6 +50,8 @@ function share(
     readings: Reading[]
     source: QuotaShareWindow['latest']['source']
     model?: string
+    /** Where its count restarted, as many ms before `now` as one of its readings. */
+    restarts?: number[]
   },
 ): QuotaShareWindow {
   const at = (ms: number) => momentAt(ms, offset)
@@ -73,6 +75,7 @@ function share(
     started_at: at(started),
     even_percent: Math.round(((now - started) / length) * 10_000) / 100,
     readings,
+    restarts: (window.restarts ?? []).map((ago) => at(now - ago)),
     forecast: window.forecast,
   }
 }

@@ -12,7 +12,9 @@ no source, because a source did read it.
 
 A window is one kind of an account, and for a model's week one model. Its latest sample
 says how much of it is spent, when and by which source; the window's start is its reset
-less its length, and the readings since that start draw its step line. The even pace is
+less its length, and the readings since that start draw its step line. They stay as read,
+a fall included; the moments where a feed's fall restarted the window's count
+(`forecast.count`) are its `restarts`, so the line can say what the fall was. The even pace is
 how much of the window steady use would have spent by now. A window is `fresh` while its
 latest sample is within `forecast.FRESH_FOR`, the rule the alerts use, and `silent` once
 it is older; a fresh 0 % is a value like any other.
@@ -94,6 +96,7 @@ def _reading(sample: seats.AccountSample, length: int) -> forecast.Reading:
         sample.percent or 0.0,
         None if sample.resets_at is None else _millis(sample.resets_at),
         length,
+        sample.feed,
     )
 
 
@@ -142,7 +145,10 @@ def _window(kind: str, model: str | None, series: list[seats.AccountSample], clo
     started: int | None = None
     left: float | None = None
     since = [latest]
+    restarts: list[int] = []
     if resets_at is not None:
+        readings = [_reading(one, length) for one in series]
+        restarts = forecast.count(readings, length, resets_at).restarts
         started = resets_at - length
         since = [
             one
@@ -162,6 +168,7 @@ def _window(kind: str, model: str | None, series: list[seats.AccountSample], clo
                 {"at": clock.stored(one.at), "used_percent": one.percent, "source": one.source}
                 for one in since
             ],
+            "restarts": [clock.time(at) for at in restarts],
             "forecast": _forecast(window, series, clock),
         }
     )

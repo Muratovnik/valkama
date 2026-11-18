@@ -55,6 +55,7 @@ function week(used: number, left: number, low: number, high: number): QuotaShare
     started_at: at(now + left - 168 * HOUR),
     even_percent: null,
     readings: [],
+    restarts: [],
     forecast: { low_percent: low, high_percent: high },
   }
 }

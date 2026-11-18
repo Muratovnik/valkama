@@ -37,6 +37,7 @@
                 "source": "poll"
               }
             ],
+            "restarts": [],
             "forecast": {
               "outcome": "runs_out",
               "runs_out_at": "2026-01-02T03:04:05.000+03:00",
@@ -63,6 +64,7 @@
                 "source": "poll"
               }
             ],
+            "restarts": [],
             "forecast": {
               "low_percent": 71.75,
               "high_percent": 71.75
@@ -87,6 +89,7 @@
                 "source": "poll"
               }
             ],
+            "restarts": [],
             "forecast": {
               "low_percent": 21.88,
               "high_percent": 21.88
@@ -140,6 +143,7 @@
                 "source": "statusline"
               }
             ],
+            "restarts": [],
             "forecast": {
               "low_percent": 224.0,
               "high_percent": 224.0

@@ -272,6 +272,23 @@ class WindowTests(_Quota):
             ],
             window["readings"],
         )
+        # The 90 belongs to the window before, so this window's count never restarted.
+        self.assertEqual([], window["restarts"])
+
+    def test_a_window_names_where_a_feeds_fall_restarted_its_count(self) -> None:
+        self.working("s-1", ORG_A, at("2030-03-06T08:00:00+00:00"))
+        self.poll(at("2030-03-06T08:20:00+00:00"), five(99))
+        # Another feed's reading under the 99 is a stale one, not a restart.
+        self.statusline(at("2030-03-06T08:40:00+00:00"), "s-1", five(30))
+        self.poll(at("2030-03-06T08:57:00+00:00"), five(0))
+        self.poll(at("2030-03-06T09:50:00+00:00"), five(25))
+        window = self.window(self.account(self.quota(), ORG_A), "five_hour")
+        self.assertEqual(["2030-03-06T08:57:00.000+00:00"], window["restarts"])
+        # The readings stay as read, the fall included.
+        self.assertEqual(
+            [(99.0, "poll"), (30.0, "statusline"), (0.0, "poll"), (25.0, "poll")],
+            [(one["used_percent"], one["source"]) for one in window["readings"]],
+        )
 
     def test_the_five_hour_forecast_is_its_point_answer(self) -> None:
         self.poll(at("2030-03-06T09:00:00+00:00"), five(20))

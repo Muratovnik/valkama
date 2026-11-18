@@ -257,10 +257,23 @@ const shareWindowSchema = strictObject({
   started_at: moment().nullable(),
   even_percent: percent().nullable(),
   readings: z.array(quotaReadingSchema),
+  /**
+   * Where the window's count restarted inside it, its reset unchanged: the moment of the reading
+   * whose feed fell from its own previous reading, oldest first. The readings keep the fall.
+   */
+  restarts: z.array(moment()),
   forecast: z.union([pointForecastSchema, rangeForecastSchema]).nullable(),
 }).superRefine((window, context) => {
   if ((window.kind === 'week_model') !== (window.model !== null))
     context.addIssue({ code: 'custom', path: ['model'], message: 'a model only for its week' })
+  const read = new Set(window.readings.map((reading) => reading.at))
+  for (const [index, at] of window.restarts.entries())
+    if (!read.has(at))
+      context.addIssue({
+        code: 'custom',
+        path: ['restarts', index],
+        message: 'a restart is the moment of one of the readings',
+      })
   const { forecast } = window
   if (forecast && 'outcome' in forecast !== (window.kind === 'five_hour'))
     context.addIssue({

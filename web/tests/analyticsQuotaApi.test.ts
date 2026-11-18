@@ -138,6 +138,22 @@ describe('the quota read', () => {
       ).toThrow(/windows\[0\]/u)
   })
 
+  it('takes a restart at a reading’s moment, and refuses one at no reading’s or none', () => {
+    const restartAt = (moment: string) =>
+      withWindow(0, 0, (window) => ({ ...window, restarts: [moment] }))
+    const reading = quotaAt(NOW, 180).accounts[0]?.windows[0]
+    const middle = reading && 'readings' in reading ? reading.readings[1]?.at : undefined
+    if (!middle) throw new Error('a window of three readings')
+    expect(validateQuotaAnswer(restartAt(middle)).accounts[0]?.windows[0]).toMatchObject({
+      restarts: [middle],
+    })
+    expect(() => validateQuotaAnswer(restartAt('2026-11-11T12:00:00.000+03:00'))).toThrow(
+      'a restart is the moment of one of the readings',
+    )
+    const none = withWindow(0, 0, (window) => ({ ...window, restarts: undefined }))
+    expect(() => validateQuotaAnswer(none)).toThrow(/accounts\[0\]\.windows\[0\]/u)
+  })
+
   it('refuses an account with no source that has windows, and a seat beside a UUID', () => {
     const quota = quotaAt(NOW, 180)
     const [work, night, unread, seated] = quota.accounts
