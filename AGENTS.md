@@ -78,16 +78,20 @@ is complete on its own.
   changelog.
 - Every schema or destructive data operation requires a tested backup and
   rollback path.
-- `store.STORE_SCHEMA_VERSION` is a ratchet, not a release number. Raise it in
-  the same commit that changes what an existing row means, and a build made
-  before that change refuses the store instead of misreading it. Migrations here
-  are forward-only and idempotent, so an added table or column does not need it;
-  a changed meaning does. It is read before the first write, so it governs a
-  server that was spawned old. Under the launcher a running session follows the
-  pin through its stdio front, `mcp_front`, which stops the old release before
-  the new one opens the store. A process with no front that went stale while it
-  ran still holds its connection, and `static_assets.SourceWatch` is what warns
-  about that one.
+- `store.STORE_SCHEMA_VERSION` is a ratchet, not a release number. Raise it by
+  one in the same commit that changes the store's declaration (a table, column,
+  index, trigger or `CHECK`) or what an existing row means. A build opens a store
+  only at its own number and reads one at that number without bringing it up, so
+  one number names one declaration, and a build refuses a store of another one
+  instead of misreading it or failing on its first read. It is read before the
+  first write, so it governs a server that was spawned old. Under the launcher a
+  running session follows the pin through its stdio front, `mcp_front`, which
+  stops the old release before the new one opens the store. A process with no
+  front that went stale while it ran still holds its connection, and
+  `static_assets.SourceWatch` is what warns about that one.
+  `tests/test_store_schema_pin.py` pins the fresh store's
+  declaration to the version it belongs to: a change to that declaration without
+  a raise fails it, and the commit that makes the raise moves the pin there.
 - For Valkama changes run:
 
 ```powershell
