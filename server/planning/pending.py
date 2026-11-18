@@ -458,10 +458,8 @@ def inapplicable(conn: sqlite3.Connection, action: Action) -> str | None:
     if action.point == "condition":
         return _steps_changed(action, row)
     if action.point == "goal_close":
-        waits = conn.execute(
-            "SELECT 1 FROM work_item_confirmations WHERE work_item_id = ?", (action.work_item_id,)
-        ).fetchone()
-        return None if waits is not None else "it no longer awaits confirmation"
+        confirmable = closing.confirmable(conn, action.work_item_id)
+        return None if confirmable else "it no longer awaits confirmation"
     if action.point == "goal_defer":
         return None if accepted else "it is not accepted"
     return None

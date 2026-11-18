@@ -162,9 +162,19 @@ class Tree:
         children = self.children.get(identity, ())
         if not children and not node.lost_child:
             return "not_started"
-        if not any(not self.nodes[child].closed for child in children):
+        if not self._open_under(identity):
             return "awaiting_confirmation"
         return "in_progress" if self._first_start(identity) is not None else "not_started"
+
+    def confirmable(self, identity: str) -> bool:
+        """Whether completing the item now confirms it: an accepted open container with
+        nothing open under it, awaiting its confirmation or with nothing under it at all."""
+
+        node = self.nodes.get(identity)
+        return node is not None and node.accepted_open and not self._open_under(identity)
+
+    def _open_under(self, identity: str) -> bool:
+        return any(not self.nodes[child].closed for child in self.children.get(identity, ()))
 
     def started_at(self, identity: str) -> str | None:
         """When the item started: a task's own record, a container's earliest descendant's."""

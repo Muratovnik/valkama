@@ -1836,10 +1836,10 @@ def transition_work_item(
     accepted and open, where `task_in_goal` says `human`: the task stays in triage and
     the question `task` asks about it; left to the agent, the acceptance is marked in
     the summary of decisions, as is an assignment an agent names. An agent's
-    completion of a goal awaiting its confirmation is the owner's to make where
+    completion of a goal, which confirms it, is the owner's to make where
     `goal_close` says `human`: the goal stays as it is, with what the call wrote
-    before the move, and waits on the question `confirm` of its period of waiting
-    (`_ask_about_close`); left to the agent, the close is marked. The
+    before the move, and waits on the question `confirm` (`_ask_about_close`); left
+    to the agent, the close is marked. The
     writes Valkama composes, the cancel an owner's answer carries out among them, are
     not gated. `following` names the owner's answered question, on the item or over
     it, that the cancel follows from: it needs no question of the owner and reads no
@@ -2747,16 +2747,14 @@ def _goal_close(
     conn: sqlite3.Connection, row: sqlite3.Row, current: sqlite3.Row, target: sqlite3.Row
 ) -> str | None:
     """How an agent's confirmation of a goal goes, by the owner's setting of its space; None
-    for any other move. A confirmation is a completion of a goal, a goal or stage with no
-    parent, that awaits it: nothing under it is open. A stage the agent closes at any
-    setting: the owner confirms the goal it is part of."""
+    for any other move. A confirmation is any completion of a goal, a goal or stage with
+    no parent: the `children` refusal has already turned one with open work under it
+    away, so the goal awaits its confirmation or has nothing under it at all. A stage
+    the agent closes at any setting: the owner confirms the goal it is part of."""
 
     if not calls.from_agent() or row["kind"] != model.CONTAINER_KIND or row["parent_id"]:
         return None
     if target["category"] != "completed" or current["category"] == "completed":
-        return None
-    identity = str(row["work_item_id"])
-    if item_tree.below(conn, [identity]).container_state(identity) != closing.AWAITING:
         return None
     return participation.load(conn).mode(str(row["planning_space_id"]), "goal_close")
 
@@ -2784,8 +2782,9 @@ def _ask_about_close(
 
     The question is the one its period of waiting asks: when the sweep asked it already,
     the action waits on that question; else the agent's call asks it, and the period
-    records it, so the sweep asks nothing more. The same close sent again while it
-    waits answers the same wait."""
+    records it, so the sweep asks nothing more. A goal with nothing under it has no
+    period of waiting: the question stands on the action alone, and nothing records it
+    (`closing.asked`). The same close sent again while it waits answers the same wait."""
 
     identity = str(row["work_item_id"])
     summary = model.summary(row["summary"], required=False) or {}
@@ -3358,7 +3357,7 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
             _hand_back(conn, identity, author, reason)
 
 
-#: Why an agent's close of a goal no longer waits: the goal stopped awaiting confirmation.
+#: Why an agent's close of a goal no longer waits: the goal no longer stands to be confirmed.
 NO_LONGER_AWAITING = "it no longer awaits confirmation"
 
 
@@ -3371,7 +3370,9 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
     the end of the outermost the marked containers enter or leave the wait for their
     confirmation, the words left on one that stopped waiting go (`waiting.drop`) and so
     does an agent's close that waits on its confirmation (`dropped`), and the list this
-    yields names the references of those that came to wait.
+    yields names the references of those that came to wait. An agent's close waits on
+    a goal as it stood with nothing open under it, so a write that changes how the goal
+    stands (`Settled.moved`) ends it: work filed under it, the wait entered or left.
 
     `person` is where the history stood before a person's write, which the route
     passes to the frame it opens: what that write told nobody is left for the next
@@ -3386,7 +3387,8 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
         waiting.after_person(conn, person)
     for identity in settled.left:
         waiting.drop(conn, identity)
-        # A confirmation an agent's close waits on goes with the wait, as its question did.
+    for identity in settled.moved:
+        # A confirmation an agent's close waits on goes once the goal stands otherwise.
         for action in pending.open_on(conn, identity, "goal_close"):
             pending.end(
                 conn, action, pending.DROPPED, author=closing.AUTHOR, why=NO_LONGER_AWAITING
