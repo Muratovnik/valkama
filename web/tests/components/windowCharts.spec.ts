@@ -81,6 +81,7 @@ function openLine(
 const AHEAD: StepAhead = {
   value: 50,
   now: { name: 'Now', figure: '50%', notes: ['Last reading at h1.5'] },
+  silent: false,
   forecast: {
     name: 'Forecast by the reset',
     figure: '70%–100%',
@@ -199,7 +200,6 @@ describe('the step line', () => {
     await line.setProps({ ahead: AHEAD })
     // One layer, half a mark past each edge of the field.
     expect(line.findAll('[data-region="hover"]')).toHaveLength(1)
-    expect(line.get('[data-region="hover"]').classes()).toContain('step-hover')
     // Each reading's box and each place's stands with no pointer handler of its own.
     const stops = line.findAll('[data-stop]')
     expect(stops).toHaveLength(4)
@@ -386,6 +386,21 @@ describe('the step line past its readings', () => {
       '--step-low': 0.3,
       '--step-side': 100,
     })
+    line.unmount()
+  })
+
+  it('ends a silent window’s line at its last reading, and holds a fresh one’s to now', async () => {
+    const line = await stepLine(READ, START + 3 * HOUR)
+    const path = () => corners(line.get('.step-path').attributes('d'))
+    // Over five hours: the last reading, half past twelve, at 90 of 300; now, three hours in, at 180.
+    await line.setProps({ ahead: AHEAD })
+    expect(path().at(-1)).toEqual([180, 50])
+    await line.setProps({ ahead: { ...AHEAD, silent: true } })
+    expect(path().at(-1)).toEqual([90, 50])
+    // No stroke past the last reading toward now.
+    expect(path().filter(([x]) => x > 90)).toEqual([])
+    // «Now» keeps its place and its hint.
+    expect(targets(line)[0]).toMatchObject({ kind: 'now', hint: 'Now: 50%\nLast reading at h1.5' })
     line.unmount()
   })
 

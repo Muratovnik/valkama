@@ -26,7 +26,9 @@
  * old: it says «silent» and for how long, and its hint when its reading last changed; a fresh 0 %
  * is a bar with no fill that says «0% used» and «fresh». While the window stands, its step line
  * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
- * window past its reset by the panel's moment has neither and shows its whole window alone, even
+ * silent window's line stops at its last reading, since nothing was measured after it, while a
+ * fresh one's holds to now, a source writing a reading only when a value changes. A window past
+ * its reset by the panel's moment has neither and shows its whole window alone, even
  * where its answer was read before the reset.
  *
  * What used the window is the work Valkama recorded on the account since the window's start, by
@@ -200,6 +202,7 @@ const ahead = computed<StepAhead | null>(() => {
   return {
     value: window.latest.used_percent,
     now: words.nowTarget(window, now, today, freshFor),
+    silent: state.value === 'silent',
     forecast:
       found && ends ? { ...words.forecastTarget(window, ends, now, today), ...found } : null,
   }

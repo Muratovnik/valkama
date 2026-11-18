@@ -3,7 +3,8 @@
  * A window's readings over its span: the share spent as steps, flat from one reading to the next
  * and up or down at it, never a slope between them, since a source writes a reading only when a
  * value changed (`windowGeometry`). The last reading holds to `end`, the moment the answer was
- * read. Beside the steps, where steady use from the window's start would stand at each moment
+ * read; but in a silent window (`ahead.silent`) nothing was measured past the last reading, and
+ * the line ends there, its round cap on it, with nothing drawn from it to «now». Beside the steps, where steady use from the window's start would stand at each moment
  * (`even`): a thin line from nothing at the start to the whole at the reset. Past `end`, while the
  * window still runs (`ahead`), the corridor of its forecast: from the share it stands at now to
  * where its slower and its faster pace leave it at the reset, a band in the readings' hue under
@@ -135,7 +136,11 @@ const { shown, whole } = span
 
 const frame = computed(() => ({ ...shown.value, top: stepTop(props.points) }))
 const readings = computed(() => readingsIn(shown.value, props.points))
-const path = computed(() => stepPath(frame.value, readings.value.held, props.end))
+/** Where the readings' line ends: at `end`, or at the last reading of a silent window. */
+const lineEnd = computed(() =>
+  props.ahead?.silent ? (props.points.at(-1)?.at ?? props.end) : props.end,
+)
+const path = computed(() => stepPath(frame.value, readings.value.held, lineEnd.value))
 /** The pace across the span shown: where steady use stands at its start and at its end. */
 const evenLine = computed(() => ({
   y1: stepY(frame.value, evenAt(whole.value, shown.value.from)),
