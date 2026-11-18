@@ -124,6 +124,7 @@ WORK_KINDS = frozenset(
 #: commit is told by its own hook answer, and a person sees the commit on the card.
 #: `returned`: why put-off work came back, beside the move that brought it, which is told.
 #: `split_from`: a part's origin, which says no more than its creation does.
+#: `triage_seen`: a review's mark on an item it left where it is, which decides nothing.
 NOT_TOLD = frozenset(
     {
         "created",
@@ -137,6 +138,7 @@ NOT_TOLD = frozenset(
         "commit_attached",
         "commit_detached",
         "commit_rewritten",
+        "triage_seen",
     }
 )
 #: What a goal or stage put off is told with, after the move's own words: the work

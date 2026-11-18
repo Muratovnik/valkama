@@ -256,6 +256,10 @@ EVENT_ACTIONS = (
     "commit_attached",
     "commit_detached",
     "commit_rewritten",
+    # A triage review's mark on an item it saw and left where it is, set or taken away
+    # by the call that wrote it (`planning.triage`): `seen` or `cleared`. A mark the
+    # store takes away, when the item changes, writes none.
+    "triage_seen",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and
