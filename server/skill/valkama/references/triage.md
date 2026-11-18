@@ -26,17 +26,27 @@ again.
    as the answer says.
 2. Give each item a topic label and a priority.
 3. Findings that share a cause or a fix are one change, not a group. Merge
-   obvious repeats, the same defect in the same place: copy the evidence
-   the survivor lacks as comments in one `apply_work_item_changes` call, then
-   `merge_work_items` with up to 20 items.
+   obvious repeats, the same defect in the same place: the same screen, command
+   or code path. The same steps failing in another environment (another OS,
+   device or browser) are the same place, so they are an obvious repeat. Copy
+   the evidence the survivor lacks as comments in one `apply_work_item_changes`
+   call, then `merge_work_items` with up to 20 items. The merge clears the
+   survivor's mark: if the review leaves the survivor as it is, mark it
+   `triage_seen` in a later call.
 4. A repeat you are not sure of, such as the same symptom in another place or
-   two defects one fix would end, is a `decision` on the newer item, its choice
-   `answer` offering `merge` into the older one and `keep`, with your
-   recommendation. When it comes back answered by that recommendation, act on
-   it as step 1 says.
-5. Group by topic: 2 to 20 tasks without a parent that one goal would finish;
+   two defects one fix would end, is a `decision` on the newer item, the later
+   by `created_at`, then by number. Its choice field, `answer`, offers `merge`
+   into the older one and `keep`, with your recommendation. Mark the older item
+   as step 7 says when the review leaves it; the newer one, its question open,
+   joins no group until the question comes back. When it comes back answered,
+   act on the answer as step 1 says.
+5. Group by topic: a topic is an outcome one goal finishes, not an area or a
+   component, as "Never group work by area" in [the work model](work-model.md)
+   says. A group is 2 to 20 tasks without a parent that one goal would finish;
    a finding of priority high or urgent that none shares a topic with is a
-   group of one. File the goal with `create_work_item`: `kind: "goal"`, a title
+   group of one. A finding of another kind, such as an improvement, joins a
+   group only when the goal's outcome needs it; otherwise mark it as step 7
+   says. File the goal with `create_work_item`: `kind: "goal"`, a title
    and a description of what the group achieves, its conditions as `checklist`,
    and `group` with `items`, your `answer` and `why`. Answer `do`, `later` with
    `until`, or `drop` for work that is no longer needed. The tasks move under
@@ -50,8 +60,10 @@ again.
 7. Mark every item you leave as it is with `triage_seen: true`, a comment on
    why in the same call when it helps the next review. Accept or cancel a
    single finding only as part of a group.
-8. Close the review item with a summary: merged, groups and their answers,
-   decisions asked, marked.
+8. Close the review item when `triage_stack: "unseen"` lists nothing, even
+   while answers wait: the questions of groups and decisions stay on their own
+   items. Its summary gives merged, groups and their answers, decisions asked,
+   marked.
 
 ## What the owner's answer does
 
