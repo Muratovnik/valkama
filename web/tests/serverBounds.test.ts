@@ -105,6 +105,8 @@ const listed = (title = 'Space', projects = [project(0)]) => ({
   space_ref: spaceRef,
   title,
   work_item_count: 0,
+  numbers: { triage: 0, ready: 0, active: 0, waiting_owner: 0 },
+  numbers_absent: null,
   default_project: projects[0]?.project_id ?? null,
   projects,
 })

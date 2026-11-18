@@ -1,7 +1,8 @@
 """Planning's answers on the exact-scope routes the web shell reads.
 
-`/api/platform/planning` is the portfolio: every space with its projects and
-how full each one is, or every item of one exactly named space.
+`/api/platform/planning` is the portfolio: every space with its projects, how
+full each one is and the four numbers of its card (`volumes.portfolio_numbers`),
+or every item of one exactly named space.
 `/api/modules/planning/work-item` is one work item for the inspector. Search and
 human requests answer through `interactions` on the same routing.
 
@@ -15,14 +16,20 @@ import json
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from ..projects import project_registry
+from ..projects import project_registry, scopes
+from ..store_identity.metadata import ScopeError
 from ..store_identity.refs import validate_work_item_ref
 from ..ui_state import PlatformHttpError, envelope
-from . import interactions, item_tree, model, queue, service, states
+from . import interactions, item_tree, model, queue, service, states, volumes
 from .routing import PlanningRouting, one, scope_parameters
 
 PLANNING_INTERFACE = "valkama-planning"
 PLANNING_WORK_ITEM_INTERFACE = "valkama-planning-work-item"
+
+#: What opening a space's store and reading it raise: the attached store is gone or
+#: unlisted (`PlanningRouting.store_connection`), it is no store, its identity does not
+#: read, or SQLite cannot answer.
+_UNREADABLE = (PlatformHttpError, scopes.ScopeError, ScopeError, sqlite3.Error)
 
 PORTFOLIO_PATH = "/api/platform/planning"
 WORK_ITEM_PATH = "/api/modules/planning/work-item"
@@ -85,22 +92,49 @@ def planning_payload(routing: PlanningRouting, parameters: Mapping[str, list[str
 
 
 def _planning_space(routing: PlanningRouting, space_ref: dict) -> dict:
-    """One space as the directory lists it: its name, its projects and how many items."""
+    """One space as the directory lists it: its name, its projects, how many items, and the
+    four numbers of its card.
 
-    with routing.store_connection(space_ref) as store:
-        row = store.execute(
-            "SELECT p.name, COUNT(w.work_item_id) AS held FROM planning_spaces p"
-            " LEFT JOIN work_items w ON w.planning_space_id = p.planning_space_id"
-            " WHERE p.key = ? GROUP BY p.planning_space_id",
-            (space_ref["space_key"],),
-        ).fetchone()
+    A store that no longer opens, or does not answer, costs its own spaces alone: each is
+    listed by what is known without the store, its key for a name and no count, and the
+    directory answers for the others.
+    """
+
+    projects = project_registry.projects_shown(routing.space_projects(space_ref))
+    try:
+        with routing.store_connection(space_ref) as store:
+            row = store.execute(
+                "SELECT p.planning_space_id, p.key, p.name, COUNT(w.work_item_id) AS held"
+                " FROM planning_spaces p"
+                " LEFT JOIN work_items w ON w.planning_space_id = p.planning_space_id"
+                " WHERE p.key = ? GROUP BY p.planning_space_id",
+                (space_ref["space_key"],),
+            ).fetchone()
+            numbers = (
+                None
+                if row is None
+                else volumes.portfolio_numbers(store, row, listing=routing.projects_result)
+            )
+    except _UNREADABLE:
+        row = None
+    if row is None:
+        return {
+            "space_ref": space_ref,
+            "title": space_ref["space_key"],
+            "work_item_count": None,
+            "numbers": None,
+            "numbers_absent": "unreadable",
+            **projects,
+        }
     return {
         "space_ref": space_ref,
         # The display name is the space's own, kept apart from its identity:
         # renaming it must not move a single binding.
-        "title": str(row["name"]) if row else space_ref["space_key"],
-        "work_item_count": int(row["held"]) if row else 0,
-        **project_registry.projects_shown(routing.space_projects(space_ref)),
+        "title": str(row["name"]),
+        "work_item_count": int(row["held"]),
+        "numbers": numbers,
+        "numbers_absent": "old_store" if numbers is None else None,
+        **projects,
     }
 
 

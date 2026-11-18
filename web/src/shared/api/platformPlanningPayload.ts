@@ -24,6 +24,7 @@ import { validatePlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import {
   PLANNING_INTERFACE,
   PLANNING_WORK_ITEM_INTERFACE,
+  PORTFOLIO_NUMBERS_ABSENT,
 } from '@/shared/api/platformPlanningTypes.ts'
 import type {
   PlanningWorkItemPayload,
@@ -70,17 +71,40 @@ const workItemSummarySchema = strictObject({
   updated_at: boundedText(ISO, 96),
 })
 
+/**
+ * The four numbers of a space's card, counted as the space's Volumes page counts them:
+ * every card in triage, the tasks ready and at work, and the questions open for the owner.
+ */
+const portfolioNumbersSchema = strictObject({
+  triage: positiveInt(true),
+  ready: positiveInt(true),
+  active: positiveInt(true),
+  waiting_owner: positiveInt(true),
+})
+
+/** A space has numbers, or says why not; one whose store was not read has no count either. */
+const counted = (space: { numbers: unknown; numbers_absent: unknown; work_item_count: unknown }) =>
+  (space.numbers === null) !== (space.numbers_absent === null) &&
+  (space.work_item_count === null) === (space.numbers_absent === 'unreadable')
+
 /** A space as the directory lists it: its name, its projects and how many items it holds. */
 const spaceSummarySchema = strictObject({
   space_ref: fromValidator(validatePlanningSpaceRef),
+  /** The space's key when its store could not be read. */
   title: displayName(),
-  work_item_count: positiveInt(true),
+  /** Null when its store could not be read: no count is known. */
+  work_item_count: positiveInt(true).nullable(),
+  numbers: portfolioNumbersSchema.nullable(),
+  /** Why `numbers` is null: an earlier build wrote the store, or it could not be read. */
+  numbers_absent: enumField(PORTFOLIO_NUMBERS_ABSENT).nullable(),
   /** Null when the registry binds no project to the space. */
   default_project: boundedText(PROJECT_ID, 160).nullable(),
   /** The default one first, then by id. */
   projects: z.array(
     strictObject({ project_id: boundedText(PROJECT_ID, 160), display_name: displayName() }),
   ),
+}).refine(counted, {
+  message: 'expected numbers or why they are absent, and no count only for a store not read',
 })
 
 const spaceViewSchema = strictObject({

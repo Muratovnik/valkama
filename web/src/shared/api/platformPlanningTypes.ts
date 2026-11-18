@@ -28,12 +28,25 @@ type PlanningWorkItemSummary = {
   work_item_ref: WorkItemRef
 }
 
+/** Why a space's card has no numbers: an earlier build wrote its store, or it was not read. */
+export const PORTFOLIO_NUMBERS_ABSENT = ['old_store', 'unreadable'] as const
+
+/** The four numbers of a space's card, the ones its Volumes page counts. */
+type PortfolioNumbers = {
+  active: number
+  ready: number
+  triage: number
+  waiting_owner: number
+}
+
 type PlanningSpaceSummary = {
   default_project: string | null
+  numbers: PortfolioNumbers | null
+  numbers_absent: (typeof PORTFOLIO_NUMBERS_ABSENT)[number] | null
   projects: Array<{ display_name: string; project_id: string }>
   space_ref: PlanningSpaceRef
   title: string
-  work_item_count: number
+  work_item_count: number | null
 }
 
 type PlanningSpaceView = {

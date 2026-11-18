@@ -18,6 +18,8 @@ function payload() {
             space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' },
             title: 'Main',
             work_item_count: 3,
+            numbers: { triage: 1, ready: 1, active: 1, waiting_owner: 0 },
+            numbers_absent: null,
             default_project: 'main-project',
             projects: [
               { project_id: 'main-project', display_name: 'Main project' },

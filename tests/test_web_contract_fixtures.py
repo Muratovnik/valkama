@@ -1048,6 +1048,10 @@ class _Scenario:
             **self.converted(),
             # After every item above, so it counts the space as the answers left it.
             **self.volumes(),
+            # The directory «All spaces» reads, with the four numbers of the space's card.
+            "planning-portfolio": self.http(
+                "/api/platform/planning?scope_kind=global&directory_only=true"
+            ),
         }
 
 

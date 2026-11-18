@@ -42,6 +42,7 @@ from . import (
     store,
     subscriptions,
     transitions,
+    volumes,
     waiting,
     words,
 )
@@ -110,7 +111,7 @@ def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
     for row in conn.execute(
         f"SELECT {_SPACE_COLUMNS} FROM planning_spaces ORDER BY name"  # noqa: S608
     ):
-        counts = _space_counts(conn, str(row["planning_space_id"]))
+        counts = _space_counts(conn, row)
         spaces.append(
             {
                 **_space_record(row),
@@ -4011,21 +4012,24 @@ def with_clauses(query: str, clauses: list[str]) -> str:
     return query
 
 
-def _space_counts(conn: sqlite3.Connection, planning_space_id: str) -> dict:
-    row = conn.execute(
-        "SELECT COUNT(*) AS total,"
-        " SUM(CASE WHEN s.is_terminal = 0 THEN 1 ELSE 0 END) AS open,"
-        " SUM(CASE WHEN s.category = 'active' THEN 1 ELSE 0 END) AS active,"
-        " SUM(CASE WHEN s.category = 'completed' THEN 1 ELSE 0 END) AS completed"
-        " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
-        " WHERE i.planning_space_id = ?",
-        (planning_space_id,),
-    ).fetchone()
+def _space_counts(conn: sqlite3.Connection, space: sqlite3.Row) -> dict:
+    """The space's own items, counted by the one count by category the Volumes read takes.
+
+    `total` holds every item, the accepted open goals and stages of the service state
+    too, and `open` all but the completed and the cancelled.
+    """
+
+    counted = volumes.category_counts(conn, volumes.space_scope(conn, space, other_spaces=False))
+    held = {
+        category: found["tasks"] + found["goals"] + found["stages"]
+        for category, found in counted.items()
+    }
+    total = sum(held.values())
     return {
-        "total": int(row["total"] or 0),
-        "open": int(row["open"] or 0),
-        "active": int(row["active"] or 0),
-        "completed": int(row["completed"] or 0),
+        "total": total,
+        "open": total - sum(held[category] for category in model.TERMINAL_CATEGORIES),
+        "active": held["active"],
+        "completed": held["completed"],
     }
 
 
