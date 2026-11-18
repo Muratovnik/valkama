@@ -174,6 +174,5 @@ export function tightest(quota: Quota, section: QuotaSection, now: number): Quot
 export const windowKey = (window: QuotaWindow) =>
   window.model === null ? window.kind : `${window.kind}:${window.model}`
 
-/** An account's key among the answer's: its organization and its account or its seat. */
-export const accountKey = (account: QuotaAccount) =>
-  [account.organization, account.account_uuid ?? account.seat ?? ''].join('/')
+/** An account's key among the answer's: its id, as the `seat` dimension gives it. */
+export const accountKey = (account: QuotaAccount) => account.account

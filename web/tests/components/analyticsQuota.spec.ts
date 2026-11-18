@@ -3,8 +3,8 @@
  * The oracle is the requirement: two tiles, «Five hours» and «Week», stand after the token kinds
  * and before the dimensions; each names the tightest account's window — the most spent of those
  * still standing, never simply the first — with its share and its state in words. Choosing one
- * opens its panel as a new place in the address. The panel has a row per account, by its name or
- * else the start of its id, and for each window its bar, its share, its reset, its forecast — a
+ * opens its panel as a new place in the address. The panel has a row per account, by the name the
+ * page gives an account, and for each window its bar, its share, its reset, its forecast — a
  * point for the five hours, a range for a week — and how old its reading is and who read it. No
  * source, a silent window and a fresh 0 % each read in words of their own, on the tile and in the
  * panel, and nothing adds two shares or puts money beside one. A silent window's share is drawn as
@@ -31,8 +31,10 @@ import {
   plain,
   radioNamed,
   says,
+  SEATED_NAME,
   showTable,
   tile,
+  UNREAD_NAME,
   windowOf,
 } from '../support/quotaPanel.ts'
 
@@ -78,7 +80,7 @@ describe('the quota tiles', () => {
       'token_kind',
       'quota_five_hour',
       'quota_week',
-      'account',
+      'seat',
     ])
     expect(reads.quotaAsked).toHaveLength(1)
     expect(reads.quotaAsked[0]?.get('utc_offset')).toBe(String(-NOW.getTimezoneOffset()))
@@ -88,7 +90,7 @@ describe('the quota tiles', () => {
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const page = await mountAnalytics()
     expect(says(page, 'quota_five_hour')).toEqual({
-      lead: 'a1b2c3d4',
+      lead: SEATED_NAME,
       aside: '74%',
       count: 'fresh',
     })
@@ -157,14 +159,14 @@ describe('the quota tiles', () => {
 })
 
 describe('the quota panel', () => {
-  it('has a row per account by its name or the start of its id, with its windows of the section', async () => {
+  it('has a row per account by its name or what tells it apart, with its windows of the section', async () => {
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
     expect(accounts(page).map((one) => one.get('.quota-account-name').text())).toEqual([
       'Work',
       '7e6d5c4b',
-      '9f8e7d6c',
-      'a1b2c3d4',
+      UNREAD_NAME,
+      SEATED_NAME,
     ])
     const work = accountNamed(page, 'Work')
     expect(work.findAll('.quota-window').map((one) => one.get('h4').text())).toEqual([
@@ -178,7 +180,9 @@ describe('the quota panel', () => {
     expect(work.get('[data-account-head="menu"] .menu-trigger').attributes('aria-label')).toBe(
       'Account actions: Work',
     )
-    expect(accountNamed(page, 'a1b2c3d4').text()).toContain('Known by its seat for this week only')
+    expect(accountNamed(page, SEATED_NAME).text()).toContain(
+      'May be two accounts: their readings run under one weekly reset',
+    )
     // The usage credits are a line of their name and state, never a figure, and how old their
     // reading is and who read it is the line's hint, as a window of a share keeps it in its bar's.
     const credits = work.get('.quota-account-others li span')
@@ -252,13 +256,13 @@ describe('the quota panel', () => {
       /^Resets \d{2}:\d{2}, in 2 h/u,
     )
     // An organization no source read says so, and a week alone says it has no five hours.
-    expect(accountNamed(five, '9f8e7d6c').get('[data-state="no-source"]').text()).toBe(
+    expect(accountNamed(five, UNREAD_NAME).get('[data-state="no-source"]').text()).toBe(
       'No quota source has read this account’s work in the past seven days.',
     )
     // No money stands beside a share, and no share is a total: what used a window is a block of
     // its own under the readings (`analyticsQuotaSpent.spec.ts`). Each account's head is its name
-    // and its menu, and its facts beside them where it has a plan or a seat: «Work» and the seat
-    // «a1b2c3d4».
+    // and its menu, and its facts beside them where it has a plan or may be two accounts: «Work»
+    // and the account known by its weekly reset.
     const heads = five.findAll('[data-account-head]')
     expect(heads.map((one) => one.attributes('data-account-head')).join(' ')).toBe(
       'name menu facts name menu name menu name menu facts',
@@ -324,7 +328,7 @@ describe('the quota panel', () => {
 
     stubAnalyticsReads(usage, quotaOf([2]))
     const unread = await mountAnalytics({ routeState: { by: 'quota_week' } })
-    const only = accountNamed(unread, UNREAD.organization.slice(0, 8))
+    const only = accountNamed(unread, `${UNREAD.organization.slice(0, 8)} · account not known`)
     expect(only.find('.quota-window').exists()).toBe(false)
     expect(only.find('[data-state="no-source"]').exists()).toBe(true)
     expect(NIGHT.account_uuid.startsWith('7e6d5c4b')).toBe(true)

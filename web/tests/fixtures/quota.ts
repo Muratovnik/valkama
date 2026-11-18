@@ -7,8 +7,8 @@
  * - An account with no name, read by the status line: five hours at a fresh 0 % that last to the
  *   reset, 35 % spent by then, the week at 88 % and silent, the tightest week.
  * - An organization that worked and that no source read.
- * - A provisional seat, known for its week alone: five hours at 74 % and fresh, the tightest five
- *   hours, and its week at 20 %.
+ * - An account known by its weekly reset alone, under which two accounts' readings may run: five
+ *   hours at 74 % and fresh, the tightest five hours, and its week at 20 %.
  *
  * The tightest window of each kind is therefore never the first account, so a tile that named the
  * first account rather than the tightest would say the wrong one.
@@ -88,9 +88,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
   const accounts: QuotaAccount[] = [
     {
       ...WORK,
-      seat: null,
+      account: `${WORK.organization}/${WORK.account_uuid}`,
+      weekly_reset: '1T09:00Z',
+      shared: false,
       plan: 'Max',
       name: 'Work',
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -140,9 +143,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
     },
     {
       ...NIGHT,
-      seat: null,
+      account: `${NIGHT.organization}/${NIGHT.account_uuid}`,
+      weekly_reset: '3T23:00Z',
+      shared: false,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -167,19 +173,25 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
     },
     {
       ...UNREAD,
+      account: `${UNREAD.organization}/`,
       account_uuid: null,
-      seat: null,
+      weekly_reset: null,
+      shared: false,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: true,
       windows: [],
     },
     {
       ...SEATED,
+      account: `${SEATED.organization}/weekly:7T09:00Z`,
       account_uuid: null,
-      seat: 'week:2026-11-15T09:00Z',
+      weekly_reset: '7T09:00Z',
+      shared: true,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -259,7 +271,10 @@ export function quotaOfEdges(
   const window = (shape: Parameters<typeof share>[2]) => share(moment, offset, shape)
   const edge: QuotaAccount = {
     ...EDGE,
-    seat: null,
+    account: `${EDGE.organization}/${EDGE.account_uuid}`,
+    weekly_reset: '2T15:00Z',
+    shared: false,
+    organization_name: null,
     plan: 'Max',
     no_source: false,
     windows: [

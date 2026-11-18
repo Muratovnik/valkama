@@ -22,6 +22,7 @@ import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
+import { readAccountId, weeklyId } from '@/shared/api/accountIds.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
@@ -99,8 +100,57 @@ export function useSpendingWords() {
   const usage = useUsageWords()
   const { names } = storeToRefs(useAccountNamesStore())
 
-  /** The owner's name for an account, by its organization's id, or null where it has none. */
+  /** The owner's name for an account or an organization, by its id, or null where it has none. */
   const accountName = (id: string) => aliasOf(names.value, id)
+
+  /** The local weekday and time a weekly reset falls on, `5T09:00Z` as «Fri 12:00». */
+  function resetWords(weeklyReset: string) {
+    const [day, hours, minutes] = [
+      weeklyReset.slice(0, 1),
+      weeklyReset.slice(2, 4),
+      weeklyReset.slice(5, 7),
+    ]
+    // 2024-01-01 was a Monday, so its week holds every ISO weekday in order.
+    const moment = new Date(Date.UTC(2024, 0, Number(day), Number(hours), Number(minutes)))
+    return new Intl.DateTimeFormat(i18n.locale.value, {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(moment)
+  }
+
+  /**
+   * An account by its id (`accountIds.ts`): the owner's name for it, and for an account known by
+   * its UUID the one given its weekly reset; else its organization's name, or the start of its id,
+   * with what tells the account apart: the start of its UUID, when its week resets, or that the
+   * account is not known. `answered` is what the quota's answer named it, until the names are read.
+   */
+  function seatLabel(
+    id: string,
+    weeklyReset: string | null = null,
+    answered: { name: string | null; organization: string | null } | null = null,
+  ) {
+    const read = readAccountId(id)
+    if (!read) return agentIdStart(id)
+    const named = accountName(read.organization) ?? answered?.organization ?? null
+    const organization = named ?? agentIdStart(read.organization)
+    if (read.kind === 'unplaced') return t('analytics.values.seat.unplaced', { organization })
+    const own =
+      accountName(id) ??
+      (read.kind === 'uuid' && weeklyReset
+        ? accountName(weeklyId(read.organization, weeklyReset))
+        : null) ??
+      answered?.name ??
+      null
+    if (own) return own
+    if (read.kind === 'weekly')
+      return t('analytics.values.seat.weekly', {
+        organization,
+        reset: resetWords(read.weeklyReset),
+      })
+    return named ? `${named} · ${agentIdStart(read.uuid)}` : agentIdStart(read.uuid)
+  }
 
   const compact = (value: number) =>
     new Intl.NumberFormat(i18n.locale.value, {
@@ -269,6 +319,10 @@ export function useSpendingWords() {
     if (name === 'role' && i18n.te(`analytics.roles.${value.id}`))
       return t(`analytics.roles.${value.id}`)
     if (name === 'account') return accountName(value.id) ?? agentIdStart(value.id)
+    if (name === 'seat') {
+      const said = seatLabel(value.id, value.weekly_reset ?? null)
+      return value.shared ? `${said} · ${t('analytics.values.seat.shared')}` : said
+    }
     return value.id
   }
 
@@ -442,8 +496,8 @@ export function useSpendingWords() {
   /** What changed in the accounts that worked: «Account change: a → a, b». */
   const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
     t('analytics.days.accounts', {
-      before: before.map((value) => valueLabel('account', value)).join(', '),
-      after: after.map((value) => valueLabel('account', value)).join(', '),
+      before: before.map((value) => valueLabel('seat', value)).join(', '),
+      after: after.map((value) => valueLabel('seat', value)).join(', '),
     })
 
   /**
@@ -530,6 +584,7 @@ export function useSpendingWords() {
 
   return {
     accountName,
+    seatLabel,
     accounts,
     axis,
     breakdownBy,

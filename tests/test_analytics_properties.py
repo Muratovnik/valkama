@@ -186,7 +186,8 @@ def seat_of(
     session's feeds come first, and the most recent of those holding names the seat; with
     none, the session's next sample after the end, where it counts for the stretch's
     organization and names the week the end falls in; with none, the other feeds holding,
-    where all are one account's, the most recent of them.
+    where all are one account's, the most recent of them. The value is that account's key;
+    with none, the organization and a slash; with no organization, unknown.
     """
 
     organization = stretch["organization"]
@@ -204,10 +205,10 @@ def seat_of(
             reset = min(reset, sample["at"] + sample["resets"])
         return reset > start and counts(number)
 
-    def value(number: int, sample: Mapping) -> tuple[str | None, bool]:
+    def value(number: int, _sample: Mapping) -> tuple[str | None, bool]:
         account = accounts_of[number]
         assert account is not None
-        return f"{account.organization}/{account.account_uuid or sample['seat']}", False
+        return account.key, False
 
     ordered = sorted(enumerate(quota), key=lambda pair: (pair[1]["at"], pair[0]))
     latest: dict[tuple, tuple[int, Mapping]] = {}
@@ -232,7 +233,8 @@ def seat_of(
     others = [pair for (who, *_), pair in latest.items() if who != session and holds(*pair)]
     if len({accounts_of[number].key for number, _ in others}) == 1:  # type: ignore[union-attr]
         return value(*max(others, key=lambda pair: (pair[1]["at"], pair[0])))
-    return None, True
+    # The organization's work no sample places.
+    return f"{organization}/", False
 
 
 def group_of(value: Mapping) -> tuple[str | None, bool]:

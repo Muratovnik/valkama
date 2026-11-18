@@ -17,6 +17,22 @@ export const plain = (text: string) => text.replaceAll('\u{A0}', ' ')
 
 export const tile = (page: VueWrapper, section: string) => page.get(`[data-section="${section}"]`)
 
+/**
+ * What the page calls the quota fixture's account known by its weekly reset alone, which falls on
+ * Sunday at 09:00 UTC, in the reader's own time: «a1b2c3d4 · resets Sun 12:00» at +03:00.
+ */
+export const SEATED_NAME = (() => {
+  // 7 January 2024 was a Sunday.
+  const reset = new Date(Date.UTC(2024, 0, 7, 9))
+  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][reset.getDay()]
+  const time = [reset.getHours(), reset.getMinutes()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':')
+  return `a1b2c3d4 · resets ${day} ${time}`
+})()
+/** What the page calls the quota fixture's organization that worked and that no source read. */
+export const UNREAD_NAME = '9f8e7d6c · account not known'
+
 /** What a tile says: its lead, its share and the state beside its name. */
 export function says(page: VueWrapper, section: string) {
   const textIn = (part: string) =>

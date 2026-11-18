@@ -109,6 +109,13 @@ def is_account_key(key: str) -> bool:
     return samples.is_id(tail)
 
 
+def unknown_key(organization: str) -> str:
+    """What stands for an account of `organization` no sample names: the organization and a
+    slash, with nothing after it."""
+
+    return f"{organization}/"
+
+
 def _week_of(seat: str) -> dt.datetime:
     return dt.datetime.strptime(seat, "week:%Y-%m-%dT%H:%MZ").replace(tzinfo=dt.UTC)
 
@@ -325,5 +332,6 @@ __all__ = [
     "Resolver",
     "is_account_key",
     "organization_at",
+    "unknown_key",
     "weekly_reset",
 ]

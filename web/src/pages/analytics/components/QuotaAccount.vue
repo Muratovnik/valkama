@@ -175,14 +175,14 @@ const tableWords = computed<WindowWords>(() => ({
         />
       </span>
       <p
-        v-if="account.plan || account.seat"
+        v-if="account.plan || account.shared"
         class="quota-account-facts"
         data-account-head="facts"
       >
         <span v-if="account.plan">{{
           t('analytics.quota.panel.plan', { plan: account.plan })
         }}</span>
-        <span v-if="account.seat">{{ t('analytics.quota.panel.provisional') }}</span>
+        <span v-if="account.shared">{{ t('analytics.quota.panel.shared') }}</span>
       </p>
     </template>
     <p

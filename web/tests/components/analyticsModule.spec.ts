@@ -26,7 +26,7 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
-import { serveUsage, task, value } from '../fixtures/analytics.ts'
+import { seatValue, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -60,7 +60,13 @@ const sample = { project: value('sample'), role: value('main') }
 const WORLD: TimedStretch[] = [
   {
     at: on(10, 9),
-    group: { ...sample, work_item: ITEM, model: value('model-a'), account: value('acc-a') },
+    group: {
+      ...sample,
+      work_item: ITEM,
+      model: value('model-a'),
+      account: value('org-a'),
+      seat: seatValue('org-a/acc-a'),
+    },
     spend: { seconds: 3600, tokens: 1200, cost: 0.4 },
   },
   {
@@ -70,7 +76,8 @@ const WORLD: TimedStretch[] = [
       role: value('main'),
       work_item: task(13, 'Elsewhere'),
       model: value('model-b'),
-      account: value('acc-b'),
+      account: value('org-a'),
+      seat: seatValue('org-a/acc-b'),
     },
     spend: { seconds: 7200, tokens: 100, cost: 1 },
   },
@@ -269,7 +276,7 @@ describe('the Analytics page', () => {
   it('draws the account marks read with the answer shown, never the last answer’s', async () => {
     let holding = false
     const reads = stubAnalyticsReads((query) =>
-      holding && query.get('group_by') === 'account' ? 'hold' : serveUsage(WORLD, query),
+      holding && query.get('group_by') === 'seat' ? 'hold' : serveUsage(WORLD, query),
     )
     const page = await mountAnalytics()
     expect(page.findAll('.period-mark')).toHaveLength(1)
@@ -304,7 +311,7 @@ describe('the Analytics page', () => {
     let world = WORLD
     let holding = false
     const reads = stubAnalyticsReads((query) =>
-      holding && query.get('group_by') === 'account' ? 'hold' : serveUsage(world, query),
+      holding && query.get('group_by') === 'seat' ? 'hold' : serveUsage(world, query),
     )
     const page = await mountAnalytics()
     expect(time(page)).toBe('3 h')

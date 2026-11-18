@@ -6,11 +6,11 @@
  *   Valkama keeps and as Settings saves one (`accountNamesStore`, `cleanAlias`): Enter or leaving
  *   the field saves, Escape leaves the name as it was, and either gives the focus back to the menu's
  *   button. A save that fails keeps the field open and says why under it. A name is kept by the
- *   account's organization, which every account of it shares, as the usage rows hold no more.
- * - «Add to filter» adds the account to the page's filter by account — the usage's account is the
- *   organization its work was billed to — beside the accounts there, through the page's one
- *   operation (`usePageFilter`); an account the filter holds offers it disabled, «Already in
- *   filter», and outside the page, where there is no filter, it is absent.
+ *   account's id (`accountIds.ts`); a card of an organization no source read names the
+ *   organization.
+ * - «Add to filter» adds the account to the page's filter by account (`seat`) beside the accounts
+ *   there, through the page's one operation (`usePageFilter`); an account the filter holds offers
+ *   it disabled, «Already in filter», and outside the page, where there is no filter, it is absent.
  * - «Copy ID» puts the account's whole id on the clipboard — its UUID, or its organization's id
  *   where no UUID is known — and says it was copied, or refused, for a few seconds (`useCopyNote`).
  *   That is where the whole id is reached: no hint says it.
@@ -21,6 +21,7 @@ import { useI18n } from 'vue-i18n'
 
 import { usePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 
+import { weeklyId } from '@/shared/api/accountIds.ts'
 import type { QuotaAccount } from '@/shared/api/analyticsApi.ts'
 import { accountNamesFailure } from '@/shared/api/quotaApi.ts'
 import { aliasOf, cleanAlias } from '@/shared/lib/accountAliases.ts'
@@ -44,8 +45,22 @@ export function useAccountActions(options: {
   const copyNote = useCopyNote()
 
   const organization = () => options.account().organization
-  /** The name the account has now: Valkama's, or the quota answer's until the names are read. */
-  const kept = () => aliasOf(names.value, organization()) ?? options.account().name ?? ''
+  /** Where the account's name is kept: its id, or its organization's for one no source read. */
+  const key = () => (options.account().no_source ? organization() : options.account().account)
+  /**
+   * The name the account has now: Valkama's for it, for an account known by its UUID the one its
+   * weekly reset was given, or the quota answer's until the names are read.
+   */
+  function kept() {
+    const account = options.account()
+    if (account.no_source)
+      return aliasOf(names.value, organization()) ?? account.organization_name ?? ''
+    const weekly =
+      account.account_uuid && account.weekly_reset
+        ? aliasOf(names.value, weeklyId(organization(), account.weekly_reset))
+        : null
+    return aliasOf(names.value, key()) ?? weekly ?? account.name ?? ''
+  }
 
   /** What the name's field holds while it is open; null while the name stands. */
   const draft = ref<string | null>(null)
@@ -81,7 +96,7 @@ export function useAccountActions(options: {
     }
     saving = true
     try {
-      await namesStore.save(organization(), said)
+      await namesStore.save(key(), said)
       close()
       options.renamed()
     } catch (error) {
@@ -115,7 +130,7 @@ export function useAccountActions(options: {
     )
 
   const entries = computed<MenuEntry[]>(() => {
-    const held = pageFilter?.has('account', organization()) ?? false
+    const held = pageFilter?.has('seat', options.account().account) ?? false
     return [
       {
         kind: 'action',
@@ -133,7 +148,7 @@ export function useAccountActions(options: {
               label: held ? t('analytics.filters.held') : t('analytics.filters.add'),
               icon: 'filters',
               disabled: held,
-              select: () => void pageFilter.add('account', organization()),
+              select: () => void pageFilter.add('seat', options.account().account),
             },
           ]
         : []),

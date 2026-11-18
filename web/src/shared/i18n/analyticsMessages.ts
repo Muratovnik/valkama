@@ -9,6 +9,7 @@ import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsQuotaMessages } from '@/shared/i18n/analyticsQuotaMessages.ts'
 import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
 import { analyticsTimeMessages } from '@/shared/i18n/analyticsTimeMessages.ts'
+import { analyticsValueMessages } from '@/shared/i18n/analyticsValueMessages.ts'
 
 export const analyticsMessages = {
   en: {
@@ -37,7 +38,8 @@ export const analyticsMessages = {
         choose: 'Choose the days of the period',
       },
       dimensions: {
-        account: 'Account',
+        seat: 'Account',
+        account: 'Organization',
         project: 'Project',
         work_item: 'Task',
         executor: 'Executor',
@@ -52,19 +54,11 @@ export const analyticsMessages = {
         subagent: 'Subagent',
         advisor: 'Adviser',
       },
-      values: {
-        none: {
-          work_item: 'No task',
-          launch_class: 'The session itself',
-          other: 'No value',
-        },
-        unknown: 'Unknown',
-        deleted: 'Deleted task',
-        other: 'Other, {count} more | Other, {count} more',
-      },
+      values: analyticsValueMessages.en,
       chart: '{measure} {by}',
       byDimension: {
-        account: 'by account',
+        seat: 'by account',
+        account: 'by organization',
         project: 'by project',
         work_item: 'by task',
         executor: 'by executor',
@@ -231,7 +225,8 @@ export const analyticsMessages = {
         choose: 'Выберите дни периода',
       },
       dimensions: {
-        account: 'Аккаунт',
+        seat: 'Аккаунт',
+        account: 'Организация',
         project: 'Проект',
         work_item: 'Задача',
         executor: 'Исполнитель',
@@ -246,19 +241,11 @@ export const analyticsMessages = {
         subagent: 'Субагент',
         advisor: 'Советник',
       },
-      values: {
-        none: {
-          work_item: 'Без задачи',
-          launch_class: 'Сама сессия',
-          other: 'Без значения',
-        },
-        unknown: 'Неизвестно',
-        deleted: 'Удалённая задача',
-        other: 'Остальное, ещё {count} | Остальное, ещё {count} | Остальное, ещё {count}',
-      },
+      values: analyticsValueMessages.ru,
       chart: '{measure} {by}',
       byDimension: {
-        account: 'по аккаунтам',
+        seat: 'по аккаунтам',
+        account: 'по организациям',
         project: 'по проектам',
         work_item: 'по задачам',
         executor: 'по исполнителям',

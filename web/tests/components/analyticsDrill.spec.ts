@@ -51,7 +51,7 @@ describe('a value pressed on the Analytics page', () => {
     expect(panelOf(host).get('h2').text()).toBe('model-02')
     // A model has no card: the panel offers none, and reads by account alone.
     expect(cardLinks(host)).toHaveLength(0)
-    const byAccount = reads.grouped('model,account').at(-1)
+    const byAccount = reads.grouped('model,seat').at(-1)
     expect(byAccount?.get('model')).toBe('model-02')
     expect(reads.grouped('model,model')).toHaveLength(0)
 

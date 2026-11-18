@@ -3,7 +3,9 @@
 The contract held here, stated from the request rather than read from the code: one entry
 per account with a quota reading in the last seven days, and one per organization whose
 work in that span has no reading, which says it has no source. An account is its
-organization and its account's UUID, or the provisional seat a reading without one is on.
+organization and its account's UUID, or, where no reading of it names one, the time of week
+its week resets; its key says which, and an organization with no source is keyed by its id
+and a slash. An entry says the owner's name for the account and for its organization apart.
 Each window gives its latest percent with that reading's time and source, its reset and
 start, where steady use would stand now, its readings since its start, and a forecast:
 the five-hour window's point answer, and a week only as a range. A window is fresh within
@@ -153,7 +155,15 @@ class StateTests(_Quota):
             unread = self.account(answer, organization)
             self.assertTrue(unread["no_source"])
             self.assertEqual([], unread["windows"])
-            self.assertEqual((None, None), (unread["account_uuid"], unread["seat"]))
+            self.assertEqual(
+                (f"{organization}/", None, None, False),
+                (
+                    unread["account"],
+                    unread["account_uuid"],
+                    unread["weekly_reset"],
+                    unread["shared"],
+                ),
+            )
         self.assertEqual(3, len(answer["accounts"]))
 
     def test_freshness_ends_where_the_alerts_stop_reading(self) -> None:
@@ -174,14 +184,15 @@ class StateTests(_Quota):
 
 
 class AccountTests(_Quota):
-    def test_an_account_is_its_uuid_or_the_seat_a_reading_without_one_is_on(self) -> None:
+    def test_an_account_is_its_uuid_or_its_weekly_reset(self) -> None:
         self.poll(ago(hours=1), week(30), plan="Max")
-        # The owner names an organization; its provisional seat has that name too.
+        # The owner names organizations: each entry says its organization's name apart.
         names.write(self.conn, {"names": {ORG_A: "Work", ORG_C: "Lab"}})
         # A session of A on the seat acct-a's poll names is acct-a's.
         self.working("s-a", ORG_A, ago(days=1))
         self.statusline(ago(minutes=2), "s-a", week(31))
-        # A session of C on a seat no reading with a UUID names stays on that seat.
+        # A session of C on a seat no reading with a UUID names is C's account of that
+        # seat's weekly reset.
         self.working("s-c", ORG_C, ago(days=1))
         self.statusline(ago(minutes=3), "s-c", week(55, OTHER_RESET), seat=OTHER_SEAT)
         # A reading with neither a UUID nor a seat names no account.
@@ -190,8 +201,16 @@ class AccountTests(_Quota):
 
         named = self.account(answer, ORG_A)
         self.assertEqual(
-            ("acct-a", None, "Max", "Work"),
-            (named["account_uuid"], named["seat"], named["plan"], named["name"]),
+            ("org-a/acct-a", "acct-a", "5T09:00Z", False, "Max", None, "Work"),
+            (
+                named["account"],
+                named["account_uuid"],
+                named["weekly_reset"],
+                named["shared"],
+                named["plan"],
+                named["name"],
+                named["organization_name"],
+            ),
         )
         weekly = self.window(named, "week")
         self.assertEqual(
@@ -199,42 +218,72 @@ class AccountTests(_Quota):
             [(one["source"], one["used_percent"]) for one in weekly["readings"]],
         )
         self.assertEqual("statusline", weekly["latest"]["source"])
-        provisional = self.account(answer, ORG_C)
+        weekly = self.account(answer, ORG_C)
         self.assertEqual(
-            (None, OTHER_SEAT, None, "Lab"),
+            ("org-c/weekly:5T19:00Z", None, "5T19:00Z", None, None, "Lab"),
             (
-                provisional["account_uuid"],
-                provisional["seat"],
-                provisional["plan"],
-                provisional["name"],
+                weekly["account"],
+                weekly["account_uuid"],
+                weekly["weekly_reset"],
+                weekly["plan"],
+                weekly["name"],
+                weekly["organization_name"],
             ),
         )
-        self.assertEqual(["week"], [one["kind"] for one in provisional["windows"]])
+        self.assertEqual(["week"], [one["kind"] for one in weekly["windows"]])
+        # An account's own name; one known by its UUID also takes the name its weekly reset
+        # was given, and its own key's comes first.
+        names.write(
+            self.conn,
+            {"names": {"org-c/weekly:5T19:00Z": "Desk", "org-a/weekly:5T09:00Z": "Before"}},
+        )
+        answer = self.quota()
+        self.assertEqual("Desk", self.account(answer, ORG_C)["name"])
+        self.assertEqual("Before", self.account(answer, ORG_A)["name"])
+        names.write(self.conn, {"names": {"org-a/acct-a": "Own"}})
+        self.assertEqual("Own", self.account(self.quota(), ORG_A)["name"])
         # A name taken away is no name.
         names.write(self.conn, {"names": {ORG_C: ""}})
-        self.assertIsNone(self.account(self.quota(), ORG_C)["name"])
+        self.assertIsNone(self.account(self.quota(), ORG_C)["organization_name"])
 
-    def test_a_provisional_seat_whose_week_has_ended_is_left_out(self) -> None:
+    def test_an_account_known_by_its_weekly_reset_is_one_across_its_weeks(self) -> None:
         # One machine whose readings name no account, read before and after its week reset
-        # on 2030-03-01 09:00: the seat key changes with the week, so the two weeks are two
-        # provisional seats. The week that has ended is no account any more, and the
-        # organization is not said to have no source, since a source read it.
+        # on 2030-03-01 09:00: its week resets at the same time of week, so both weeks are
+        # one account, and its week is the one running.
         self.working("s-c", ORG_C, ago(days=6))
         self.statusline(ago(days=5, hours=2), "s-c", week(96, ENDED_RESET), seat=ENDED_SEAT)
         self.statusline(ago(minutes=3), "s-c", week(12))
         answer = self.quota()
-        self.assertEqual([SEAT], [one["seat"] for one in answer["accounts"]])
+        self.assertEqual(["org-c/weekly:5T09:00Z"], [one["account"] for one in answer["accounts"]])
         current = self.account(answer, ORG_C)
         self.assertFalse(current["no_source"])
         self.assertEqual(12.0, self.window(current, "week")["latest"]["used_percent"])
 
-    def test_a_provisional_seat_of_an_ended_week_alone_is_no_entry(self) -> None:
-        # Read only in the week that has ended: nothing of it stands now, and the
-        # organization's work was read by a source, so it is not an entry with no source.
+    def test_two_counters_under_one_seat_are_one_weekly_account_marked_shared(self) -> None:
+        # Two sessions of one organization read the same seat at once and disagree, and the
+        # first one's next reading still does: two accounts' counters, told apart by nothing.
+        self.working("s-1", ORG_C, ago(days=1))
+        self.working("s-2", ORG_C, ago(days=1))
+        self.statusline(ago(minutes=20), "s-1", week(20))
+        self.statusline(ago(minutes=18), "s-2", week(60))
+        self.statusline(ago(minutes=16), "s-1", week(21))
+        [entry] = self.quota()["accounts"]
+        self.assertEqual(
+            ("org-c/weekly:5T09:00Z", None, True),
+            (entry["account"], entry["account_uuid"], entry["shared"]),
+        )
+
+    def test_an_account_read_only_in_a_week_that_has_ended_stands_silent(self) -> None:
+        # Read only in the week that has ended: the account stands, as one known by its UUID
+        # does, with a silent week whose reset has passed and no pace.
         self.working("s-c", ORG_C, ago(days=6))
         self.statusline(ago(days=5, hours=2), "s-c", week(96, ENDED_RESET), seat=ENDED_SEAT)
         self.working("s-c", ORG_C, ago(days=1))
-        self.assertEqual([], self.quota()["accounts"])
+        [entry] = self.quota()["accounts"]
+        self.assertEqual(("org-c/weekly:5T09:00Z", False), (entry["account"], entry["no_source"]))
+        ended = self.window(entry, "week")
+        self.assertEqual(("silent", 96.0), (ended["state"], ended["latest"]["used_percent"]))
+        self.assertIsNone(ended["even_percent"])
 
     def test_a_reading_or_work_dated_after_the_answers_moment_is_not_in_it(self) -> None:
         # A source whose clock runs ahead can date a reading after the moment read.

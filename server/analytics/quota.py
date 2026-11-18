@@ -2,13 +2,15 @@
 
 One entry per account: every account with a quota sample in the last `LOOKBACK`, and
 every organization whose work has a usage segment in that span but no such sample, which
-has no source. An account is an organization and its account's UUID, or, for samples
-without one, the provisional seat their account is known by (`quota.accounts`). The samples are
-read through `seats.account_samples`, the read the alerts take, so both see one account
-where the other does. A provisional seat is known for its week alone, so one whose week
-has ended is left out: the same machine read across a week's reset is otherwise two
-accounts, the week gone and the week running. Its organization is not then an entry with
-no source, because a source did read it.
+has no source and is keyed `<organization>/` (`accounts.unknown_key`). An account is its
+organization and its account's UUID, or, where no sample of it names one, the time of week
+its week resets (`quota.accounts`); its key is the one the `seat` dimension gives it. The
+samples are read through `seats.account_samples`, the read the alerts take, so both see
+one account where the other does. `shared` marks a weekly-reset account two accounts'
+readings run under.
+
+An entry carries the owner's name for the account itself (`names.own_name`) and the one
+for its organization apart, so a reader says the account's own name where there is one.
 
 A window is one kind of an account, and for a model's week one model. Its latest sample
 says how much of it is spent, when and by which source; the window's start is its reset
@@ -34,7 +36,7 @@ import sqlite3
 from collections.abc import Iterable
 from typing import TypeAlias
 
-from ..quota import forecast, names, samples, seats
+from ..quota import accounts, forecast, names, samples, seats
 from ..quota import store as quota_store
 from . import usage
 
@@ -52,8 +54,6 @@ _ORGANIZATIONS_AT_WORK = (
     " WHERE ended_at >= ? AND started_at <= ? AND organization IS NOT NULL"
 )
 
-#: An account: its organization, its account's UUID, and its provisional seat without one.
-_Account: TypeAlias = tuple[str, str | None, str | None]
 _Series: TypeAlias = tuple[str, str | None]
 
 
@@ -182,18 +182,20 @@ def _order(series: _Series) -> tuple[int, str]:
 
 def _entry(
     conn: sqlite3.Connection,
-    account: _Account,
+    account: accounts.Account,
     windows: dict[_Series, list[seats.AccountSample]],
     clock: _Clock,
-    name: str | None,
+    named: dict[str, str],
 ) -> dict:
-    organization, account_uuid, seat = account
     return {
-        "organization": organization,
-        "account_uuid": account_uuid,
-        "seat": seat,
-        "plan": _plan(conn, organization, account_uuid),
-        "name": name,
+        "account": account.key if windows else accounts.unknown_key(account.organization),
+        "organization": account.organization,
+        "account_uuid": account.account_uuid,
+        "weekly_reset": account.weekly_reset,
+        "shared": account.shared,
+        "plan": _plan(conn, account.organization, account.account_uuid),
+        "name": names.own_name(named, account) if windows else None,
+        "organization_name": named.get(account.organization),
         "no_source": not windows,
         "windows": [
             _window(kind, model, windows[kind, model], clock)
@@ -204,19 +206,11 @@ def _entry(
 
 def _by_account(
     found: Iterable[seats.AccountSample],
-) -> dict[_Account, dict[_Series, list[seats.AccountSample]]]:
-    accounts: dict[_Account, dict[_Series, list[seats.AccountSample]]] = {}
+) -> dict[accounts.Account, dict[_Series, list[seats.AccountSample]]]:
+    read: dict[accounts.Account, dict[_Series, list[seats.AccountSample]]] = {}
     for one in found:
-        account = (one.organization, one.account_uuid, None if one.account_uuid else one.seat)
-        accounts.setdefault(account, {}).setdefault((one.kind, one.model), []).append(one)
-    return accounts
-
-
-def _ended(account: _Account, clock: _Clock) -> bool:
-    """Whether an account is a provisional seat whose week has ended by the answer's moment."""
-
-    seat = account[2]
-    return seat is not None and _millis(seats.week_end(seat)) <= clock.now
+        read.setdefault(one.account, {}).setdefault((one.kind, one.model), []).append(one)
+    return read
 
 
 def read(conn: sqlite3.Connection, utc_offset: int, *, now: dt.datetime | None = None) -> dict:
@@ -230,23 +224,19 @@ def read(conn: sqlite3.Connection, utc_offset: int, *, now: dt.datetime | None =
     moment = _EPOCH + dt.timedelta(milliseconds=clock.now)
     since = samples.instant((moment - LOOKBACK).isoformat())
     until = samples.instant(moment.isoformat())
-    accounts = _by_account(seats.account_samples(conn, since, quota_store.KINDS, until=until))
-    read_from = {organization for organization, _, _ in accounts}
-    for account in [one for one in accounts if _ended(one, clock)]:
-        del accounts[account]
+    found = _by_account(seats.account_samples(conn, since, quota_store.KINDS, until=until))
+    read_from = {account.organization for account in found}
     for (organization,) in conn.execute(_ORGANIZATIONS_AT_WORK, (since, until)):
         if organization not in read_from:
-            accounts[str(organization), None, None] = {}
-    # The owner names an organization, so every entry of one has its name; read once.
-    named = names.names_of(conn, (organization for organization, _, _ in accounts))
+            found[accounts.Account(str(organization), None, None)] = {}
+    # Every name an entry may say, read once.
+    named = names.names_of(conn, (key for account in found for key in names.keys_of(account)))
+    entries = [_entry(conn, account, windows, clock, named) for account, windows in found.items()]
     return {
         "now": clock.time(clock.now),
         "utc_offset": utc_offset,
         "fresh_for_seconds": forecast.FRESH_FOR // 1000,
-        "accounts": [
-            _entry(conn, account, accounts[account], clock, named.get(account[0]))
-            for account in sorted(accounts, key=lambda one: tuple(part or "" for part in one))
-        ],
+        "accounts": sorted(entries, key=lambda entry: entry["account"]),
     }
 
 

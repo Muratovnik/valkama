@@ -21,7 +21,7 @@ import { useSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 
 /** The dimensions a value's panel breaks it down by, each read apart. */
-const VALUE_BREAKDOWNS = ['model', 'account'] as const
+const VALUE_BREAKDOWNS = ['model', 'seat'] as const
 export type ValueBreakdown = (typeof VALUE_BREAKDOWNS)[number]
 
 /** The answers of a value, by the dimension each breaks it down by; its own has none. */

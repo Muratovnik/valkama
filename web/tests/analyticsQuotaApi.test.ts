@@ -3,7 +3,7 @@
  * it asks at the caller's offset and nothing else, takes an answer of every state a window has,
  * and refuses what the contract says no answer holds — a field nobody declared, a percent or a
  * forecast on a window of money, a point forecast for a week, a sum across accounts, an account
- * with no source that still has windows, a provisional seat beside an account's UUID.
+ * with no source that still has windows, an account whose id does not say its own fields.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -58,7 +58,11 @@ describe('the quota read', () => {
     expect(night?.windows[0]).toMatchObject({ state: 'fresh', latest: { used_percent: 0 } })
     expect(night?.windows[1]).toMatchObject({ state: 'silent', latest: { used_percent: 88 } })
     expect(unread).toMatchObject({ no_source: true, windows: [] })
-    expect(seated).toMatchObject({ account_uuid: null, seat: 'week:2026-11-15T09:00Z' })
+    expect(seated).toMatchObject({
+      account: `${seated?.organization}/weekly:7T09:00Z`,
+      account_uuid: null,
+      weekly_reset: '7T09:00Z',
+    })
     expect(work?.windows.map((window) => window.kind)).toEqual([
       'five_hour',
       'week',
@@ -154,7 +158,7 @@ describe('the quota read', () => {
     expect(() => validateQuotaAnswer(none)).toThrow(/accounts\[0\]\.windows\[0\]/u)
   })
 
-  it('refuses an account with no source that has windows, and a seat beside a UUID', () => {
+  it('refuses an account with no source that has windows, and an id its fields do not fit', () => {
     const quota = quotaAt(NOW, 180)
     const [work, night, unread, seated] = quota.accounts
     if (!work || !night || !unread || !seated) throw new Error('four accounts')
@@ -163,9 +167,16 @@ describe('the quota read', () => {
     expect(() => read([work, night, { ...unread, windows: night.windows }, seated])).toThrow(
       /accounts\[2\]\.windows: no source reads no window/u,
     )
-    expect(() =>
-      read([{ ...work, seat: 'week:2026-11-15T09:00Z' }, night, unread, seated]),
-    ).toThrow(/accounts\[0\]\.seat/u)
+    // A UUID beside a weekly id, another organization's id, a UUID on work no account holds.
+    expect(() => read([work, night, unread, { ...seated, account_uuid: 'acct-x' }])).toThrow(
+      /accounts\[3\]\.account: a weekly account has its weekly reset and no UUID/u,
+    )
+    expect(() => read([{ ...work, account: 'org-other/acct-x' }, night, unread, seated])).toThrow(
+      /accounts\[0\]\.account: an account id starts with its organization/u,
+    )
+    expect(() => read([work, night, { ...unread, account_uuid: 'acct-x' }, seated])).toThrow(
+      /accounts\[2\]\.account/u,
+    )
   })
 
   it('gives the moment the page state takes the one form that state checks', async () => {

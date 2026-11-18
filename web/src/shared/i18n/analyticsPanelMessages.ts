@@ -45,7 +45,8 @@ export const analyticsPanelMessages = {
         outside: '{count} outside the period',
         pairs: '{count} pair | {count} pairs',
         values: {
-          account: '{count} account | {count} accounts',
+          seat: '{count} account | {count} accounts',
+          account: '{count} organization | {count} organizations',
           project: '{count} project | {count} projects',
           work_item: '{count} task | {count} tasks',
           executor: '{count} executor | {count} executors',
@@ -116,7 +117,8 @@ export const analyticsPanelMessages = {
         outside: '{count} вне периода',
         pairs: '{count} пара | {count} пары | {count} пар',
         values: {
-          account: '{count} аккаунт | {count} аккаунта | {count} аккаунтов',
+          seat: '{count} аккаунт | {count} аккаунта | {count} аккаунтов',
+          account: '{count} организация | {count} организации | {count} организаций',
           project: '{count} проект | {count} проекта | {count} проектов',
           work_item: '{count} задача | {count} задачи | {count} задач',
           executor: '{count} исполнитель | {count} исполнителя | {count} исполнителей',

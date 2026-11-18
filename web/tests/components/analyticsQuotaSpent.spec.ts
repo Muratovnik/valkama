@@ -16,7 +16,8 @@
  *
  * The work is the fixture's (`quotaSpent.ts`): «Work» spent 13 dollars in its five hours, its
  * organization 2 more with no account known and another account of it 20 on MAIN-1; an account of
- * another organization 100 on MAIN-1, and the provisional seat's organization 4 with no account.
+ * another organization 100 on MAIN-1, and the organization of the account known by its weekly
+ * reset 4 with no account.
  */
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
@@ -39,9 +40,10 @@ import {
 } from '../fixtures/quotaSpent.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { seriesEntries } from '../support/legend.ts'
+import { SEATED_NAME, UNREAD_NAME } from '../support/quotaPanel.ts'
 
-const WORK_SEAT = seatOf(WORK)
-const NIGHT_SEAT = seatOf(NIGHT)
+/** The seats a window's read asks for: the account, and its organization's work on no account. */
+const seatsOf = (account: typeof WORK) => `${seatOf(account).id ?? ''},${account.organization}/`
 const quota = () => quotaAnswer(quotaAt(NOW))
 const usage = (query: URLSearchParams) => serveUsage(WORLD, query)
 
@@ -110,10 +112,10 @@ afterEach(() => {
 })
 
 describe('where a window went', () => {
-  it('reads the account’s seat over the window’s span, for the window opened and no other', async () => {
+  it('reads the account and its organization’s work on no account over the window’s span, for the window opened and no other', async () => {
     const reads = stubAnalyticsReads(usage, quota)
     const page = await openFiveHours()
-    // Work, the account with no name and the provisional seat each offer their five hours; the
+    // Work, the account with no name and the weekly account each offer their five hours; the
     // organization no source read has none. Nothing is read until one opens.
     const accounts = page.findAll('.quota-account')
     expect(accounts).toHaveLength(4)
@@ -126,9 +128,9 @@ describe('where a window went', () => {
       await openSpend(page, name)
     const asked = reads.asked.filter((query) => isSpend(query))
     expect(asked.map((query) => query.get('seat'))).toEqual([
-      WORK_SEAT.id,
-      NIGHT_SEAT.id,
-      seatOf(SEATED).id,
+      seatsOf(WORK),
+      seatsOf(NIGHT),
+      seatsOf(SEATED),
     ])
     const [work] = asked
     const five = WORK.windows[0]
@@ -138,9 +140,7 @@ describe('where a window went', () => {
       step: 'day',
       utc_offset: String(-NOW.getTimezoneOffset()),
       group_by: 'work_item,seat',
-      account: WORK.organization,
-      seat: WORK_SEAT.id,
-      none: 'seat',
+      seat: seatsOf(WORK),
     })
     // The quota itself is read once, as before.
     expect(reads.quotaAsked).toHaveLength(1)
@@ -312,14 +312,14 @@ describe('the states of what used a window', () => {
     expect(none.get('.window-spend-body').text()).toBe(
       'No work was recorded on this account in this window.',
     )
-    const unplaced = await openSpend(page, 'a1b2c3d4')
+    const unplaced = await openSpend(page, SEATED_NAME)
     expect(unplaced.attributes('data-state')).toBe('unplaced')
     expect(plain(unplaced.get('.window-spend-body').text())).toBe(
       'No work was recorded on this account in this window. Not counted here: ≈ $4.00 of work in its organization with the account unknown.',
     )
     expect(unplaced.find('.ranked-bars').exists()).toBe(false)
     // An organization no source read has no window, and so nothing to open; Work has.
-    expect(accountNamed(page, '9f8e7d6c').find('[data-spend]').exists()).toBe(false)
+    expect(accountNamed(page, UNREAD_NAME).find('[data-spend]').exists()).toBe(false)
     expect(accountNamed(page, 'Work').find('[data-spend]').exists()).toBe(true)
   })
 

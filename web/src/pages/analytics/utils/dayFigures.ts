@@ -16,6 +16,7 @@ import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
  * changed.
  * Words come in from the caller; this holds the numbers and which day is which.
  */
+import { readAccountId } from '@/shared/api/accountIds.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type {
   Usage,
@@ -187,15 +188,20 @@ export interface AccountChange {
 
 /**
  * The known accounts with a figure above zero in a day, in the measure the chart shows: any
- * figure counts, however small, and none, or no price or token counted, does not. Work whose
- * organization nobody recorded is not an account, so it is not one of them.
+ * figure counts, however small, and none, or no price or token counted, does not. Work no
+ * reading places on an account, of an organization or of none, is not an account, so it is not
+ * one of them.
  */
 const accountsOf = (point: Usage['series'][number], measure: Measure) =>
   point.groups
     .filter((group) => (measureOf(measure, spentOf(group)) ?? 0) > 0)
     .flatMap((group) => {
-      const account = group.group.account
-      return account && valueKind(account) === 'category' ? [account] : []
+      const account = group.group.seat
+      return account &&
+        valueKind(account) === 'category' &&
+        readAccountId(account.id ?? '')?.kind !== 'unplaced'
+        ? [account]
+        : []
     })
 
 const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupValue[]) => {

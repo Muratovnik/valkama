@@ -23,8 +23,6 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { lastingEnd, runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
 import { dayOf, momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 
-import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
-
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type {
   QuotaAccount,
@@ -47,14 +45,15 @@ export function useQuotaWords() {
   const sectionName = (section: QuotaSection) => t(`analytics.quota.sections.${section}`)
 
   /**
-   * An account by its owner's name, or else by the start of its id or its organization's. The
-   * name Valkama keeps now comes first, so a rename shows before the quota is read again; the
-   * answer's own name stands until the names are read.
+   * An account as the page says it (`useSpendingWords.seatLabel`): the names Valkama keeps now come
+   * first, so a rename shows before the quota is read again; the answer's own names stand until
+   * the names are read.
    */
   const accountName = (account: QuotaAccount) =>
-    words.accountName(account.organization) ??
-    account.name ??
-    agentIdStart(account.account_uuid ?? account.organization)
+    words.seatLabel(account.account, account.weekly_reset, {
+      name: account.name,
+      organization: account.organization_name,
+    })
 
   const windowName = (window: QuotaWindow) =>
     window.kind === 'week_model'

@@ -202,7 +202,8 @@ class SeatCostTests(SeatCostCase):
         took = ", ".join(f"{one:.3f}" for one in spent)
         self.assertLess(min(spent), BUDGET, f"by seat took {took} s")
         self.assertEqual(
-            {"org-a/acct-1", "org-a/acct-2", "org-a/acct-3", None},
+            # Work of the organization no reading places on an account is its own value.
+            {"org-a/acct-1", "org-a/acct-2", "org-a/acct-3", "org-a/", None},
             {row["group"]["seat"]["id"] for row in read["rows"]},
         )
         self.assertEqual(
