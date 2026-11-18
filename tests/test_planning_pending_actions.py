@@ -26,6 +26,7 @@ from server.planning import (
     api,
     calls,
     closing,
+    commits,
     decisions,
     leases,
     model,
@@ -2400,6 +2401,85 @@ class GoalCloseTests(SettingHarness):
         self.assertIsNone(self.period(goal)["request_id"])
         with mock.patch.object(leases, "utc_now", lambda: NOW + timedelta(days=2)):
             self.assertEqual(1, closing.sweep_confirmations(self.conn, limit=10))
+
+    def left_for_next(self, goal: str) -> list[tuple]:
+        """The words on the goal left for the next session that takes work in its space."""
+
+        return [
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT notice_id, from_call FROM work_item_waiting_notices"
+                " WHERE work_item_id = ? AND scope = 'space' ORDER BY notice_id",
+                (self.id(goal),),
+            )
+        ]
+
+    def empty(self, title: str) -> str:
+        """An accepted goal of the owner's with one step and nothing under it."""
+
+        goal = self.filed(title, kind="goal", by=calls.browser())
+        self.person("/api/planning/work-item/apply", id=goal, checklist=["Ship it"])
+        self.assertEqual("not_started", self.card(goal)["container_state"])
+        return goal
+
+    def test_a_goal_with_nothing_under_it_is_confirmed_as_any_goal(self) -> None:
+        """Completing an accepted goal with nothing under it confirms it, at the same point:
+        at `maximal` it waits on its own question `confirm`, with no period of waiting
+        behind it, until work is filed under the goal or the owner answers; at `minimal`
+        it is made and marked."""
+
+        self.at(participation.MAXIMAL)
+        goal = self.empty("A goal with nothing under it")
+        with commits.closes() as windows:
+            answer = self.confirm(goal)
+        waits = answer["waits_for_owner"]
+        self.assertNotIn("unreported_commits", answer)
+        self.assertEqual([], windows, "no task under it was taken: the close has no window")
+        card = self.card(goal)
+        self.assertEqual(
+            (None, True, "not_started", CLOSE_SUMMARY["done"]),
+            (card["state"], card["open"], card["container_state"], card["summary"]["done"]),
+        )
+        [action] = self.waiting_on(goal)
+        self.assertEqual(("goal_close", action.id), (waits["point"], waits["action"]))
+        question = self.request(waits["question"])
+        self.assertEqual(("confirm", action.id), (question["purpose"], question["action_id"]))
+        self.assertIsNone(self.period(goal))
+        self.assertEqual([], self.decided())
+        # The sweep has no period to ask in: the agent's question stays the only one.
+        with mock.patch.object(leases, "utc_now", lambda: NOW + timedelta(days=2)):
+            self.assertEqual(0, closing.sweep_confirmations(self.conn, limit=10))
+        self.conn.commit()
+        self.assertEqual([waits["question"]], self.owners_list())
+        # Work filed under the goal ends the close, as leaving the wait does.
+        self.tool("create_work_item", space="ALPHA", title="More work", parent=goal)
+        self.assertEqual("dropped", self.action(waits["action"])["outcome"])
+        self.assertEqual(
+            ["goal_close: it no longer awaits confirmation"], self.events(goal, "action_dropped")
+        )
+        self.assertEqual("expired", self.request(waits["question"])["status"])
+        self.assertNotIn(waits["question"], self.owners_list())
+
+        # In another run the owner leaves it: the goal stands as it was, nothing recorded.
+        left = self.empty("Another goal with nothing under it")
+        question = self.confirm(left)["waits_for_owner"]["question"]
+        before = (self.card(left), self.left_for_next(left))
+        record = self.answer(question, "leave")
+        self.assertEqual("declined", record["carried_out"])
+        after = (self.card(left), self.left_for_next(left))
+        self.assertEqual(
+            (before[0]["state"], before[0]["container_state"], before[0]["summary"], before[1]),
+            (after[0]["state"], after[0]["container_state"], after[0]["summary"], after[1]),
+        )
+        self.assertIsNone(self.period(left))
+        self.assertEqual([], self.waiting_on(left))
+
+        # At `minimal` the agent's close is made and marked.
+        self.at(participation.MINIMAL)
+        made = self.empty("A goal the agent closes")
+        self.assertNotIn("waits_for_owner", self.confirm(made))
+        self.assertEqual("completed", self.card(made)["state"]["category"])
+        self.assertIn(("goal_close", made, f"close {made}"), self.decided())
 
 
 #: The summary the agent confirms a goal with.

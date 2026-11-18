@@ -399,7 +399,7 @@ the same at any setting. A point of the setting is `agent` or `human`:
 | `cancel_outside` | a cancel of an item that its own work did not file |
 | `cancel_shared` | a cancel of work other live sessions do |
 | `condition` | a removal or rewording of a step of a goal or stage |
-| `goal_close` | the completion of a goal or stage awaiting confirmation |
+| `goal_close` | the completion of a goal, which confirms it: its work all closed, or nothing under it |
 | `goal_defer` | `defer` of an accepted goal or stage |
 | `decision` | a request of kind `decision`: at `agent` it comes back `answered` by its recommendations |
 | `finding` | the review of work in `triage`; a finding an agent files lies in `triage` at any setting |
@@ -447,9 +447,10 @@ agent asked for recommended: `goal` (`do`, `later` with the text `until`, `drop`
 with the text `cancels`, a cancel list's token), `task` (`do`, `later` with
 `until`, `out`, `drop`), `cancel` (`cancel` with `cancels`, `keep`), `condition`
 (`allow`, `keep`) and, for `goal_close`, the `confirm` of the goal's period of
-waiting (`confirm`, `leave`). Only a person answers it, in Valkama (`owner_only`),
-and its answer is never declined or changed (`[purpose]`); only the session that
-asked withdraws it (`not_asker`). Read whole, it carries the `action`:
+waiting, or the agent's own for a goal with nothing under it (`confirm`, `leave`).
+Only a person answers it, in Valkama (`owner_only`), and its answer is never
+declined or changed (`[purpose]`); only the session that asked withdraws it
+(`not_asker`). Read whole, it carries the `action`:
 
 ```json
 "action": {"id": "5f0c2a…", "point": "cancel_shared", "asked_by": "claude (session 3c9e…)",

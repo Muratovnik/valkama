@@ -167,8 +167,8 @@ these points whether an agent's write is made at once or waits for the owner: a 
 you file with no parent (`proposed_goal`), a task you file or move into accepted
 goals and stages (`task_in_goal`), a cancel of an item your own work did not file
 (`cancel_outside`) or of work other live sessions do (`cancel_shared`), a removal or
-rewording of a step of a goal or stage (`condition`), the completion of a goal or
-stage awaiting confirmation (`goal_close`) and the put-off of an accepted one
+rewording of a step of a goal or stage (`condition`), the completion of a goal,
+which confirms it (`goal_close`), and the put-off of an accepted one
 (`goal_defer`). Where the setting leaves it to you, the write is made and the
 owner's summary of decisions marks it. Act the same at any setting: the answer says
 which happened.

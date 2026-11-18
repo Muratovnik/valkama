@@ -23,6 +23,13 @@ that closed, reopened, moved, filed or deleted the item that made the difference
   row goes and an open confirmation question ends `withdrawn`. The words waiting for
   the next session on it go too (`waiting.drop`), which `service.marking` does after
   `settle`, since `waiting` reads the read model and this module sits below it.
+- **Standing to be confirmed** (`item_tree.Tree.confirmable`): a container accepted,
+  open and with nothing open under it, awaiting confirmation or with nothing under it
+  at all, is what an agent's confirmation that waits for the owner stands on. A write
+  that changes how such a container stands -- work filed under it, the wait entered or
+  left, the container closed or put off -- is named in `Settled.moved`, and
+  `service.marking` ends that confirmation `dropped`. A container with nothing under
+  it has no period of waiting: no row, and nothing for the sweep to ask.
 
 The invariant: a row stands for exactly the containers that derive
 `awaiting_confirmation`. It is not a second state; the state is still derived, and the
@@ -149,6 +156,8 @@ _ENTER = (
 class _Mark:
     #: What the container derived before the write changed it.
     before: str | None
+    #: Whether completing it confirmed it before the write (`item_tree.Tree.confirmable`).
+    confirmable: bool
     #: Who the write names, for what leaving the wait records under its call.
     author: str | None
 
@@ -161,6 +170,9 @@ class Settled:
     entered: list[str] = field(default_factory=list)
     #: The ids of the containers that stopped awaiting it.
     left: list[str] = field(default_factory=list)
+    #: The ids of the containers that stood to be confirmed and now stand otherwise:
+    #: work under them came to be open, they entered or left the wait, or they closed.
+    moved: list[str] = field(default_factory=list)
 
 
 @contextlib.contextmanager
@@ -201,7 +213,8 @@ def note(conn: sqlite3.Connection, identity: object, author: str | None = None) 
     if identity is None or str(identity) in marks:
         return
     found = str(identity)
-    marks[found] = _Mark(_derived(conn, found), author)
+    tree = item_tree.below(conn, [found])
+    marks[found] = _Mark(tree.container_state(found), tree.confirmable(found), author)
 
 
 def settle(conn: sqlite3.Connection, marks: dict[str, _Mark], settled: Settled) -> None:
@@ -218,6 +231,23 @@ def settle(conn: sqlite3.Connection, marks: dict[str, _Mark], settled: Settled) 
         elif mark.before == AWAITING and after != AWAITING:
             _leave(conn, identity, mark.author)
             settled.left.append(identity)
+        if mark.confirmable and (after, tree.confirmable(identity)) != (
+            mark.before,
+            mark.confirmable,
+        ):
+            settled.moved.append(identity)
+
+
+def confirmable(conn: sqlite3.Connection, identity: str) -> bool:
+    """Whether completing the container now confirms it (`item_tree.Tree.confirmable`)."""
+
+    return item_tree.below(conn, [identity]).confirmable(identity)
+
+
+def waits(conn: sqlite3.Connection, identity: str) -> bool:
+    """Whether the container has a period of waiting: a row records it."""
+
+    return _row(conn, identity) is not None
 
 
 def awaiting(conn: sqlite3.Connection) -> set[str]:
@@ -335,10 +365,6 @@ def _leave(conn: sqlite3.Connection, identity: str, author: str | None) -> None:
 
     conn.execute("DELETE FROM work_item_confirmations WHERE work_item_id = ?", (identity,))
     questions.end(conn, identity, "withdrawn", author, purpose=CONFIRM)
-
-
-def _derived(conn: sqlite3.Connection, identity: str) -> str | None:
-    return item_tree.below(conn, [identity]).container_state(identity)
 
 
 def _row(conn: sqlite3.Connection, identity: str) -> tuple[str, str | None, str | None] | None:
@@ -512,7 +538,7 @@ def open_question(conn: sqlite3.Connection, identity: str) -> str | None:
 
 def asked(conn: sqlite3.Connection, identity: str, request_id: str) -> None:
     """The period of waiting asked the owner by `request_id`, which a write asked: the
-    sweep asks nothing more in it."""
+    sweep asks nothing more in it. A container with no period of waiting records nothing."""
 
     conn.execute(
         "UPDATE work_item_confirmations SET request_id = ? WHERE work_item_id = ?",

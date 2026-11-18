@@ -169,10 +169,11 @@ and no compatibility layer.
      `condition` is `human`, waits for the owner, answering `waits_for_owner`
      and keeping the steps as they were until the answer `allow`; a step sent
      by its `id` with `clarifies: true` only clarifies its wording and is
-     written at once. An agent's completion of a goal or stage awaiting
-     confirmation waits for the owner where `goal_close` is `human`, writing
-     what the call sent before it and answering `waits_for_owner` on the
-     question `confirm`, and its put-off of an accepted goal or stage waits
+     written at once. An agent's completion of a goal, which confirms it
+     whether the work under it is all closed or nothing stands under it at
+     all, waits for the owner where `goal_close` is `human`, writing what the
+     call sent before it and answering `waits_for_owner` on the question
+     `confirm`, and its put-off of an accepted goal or stage waits
      where `goal_defer` is `human`. A call whose `transition` closes the item
      while another of its writes waits is refused whole (`close_with_waiting`);
    - a commit is attached to an item rather than written as a ref: the `refs`
@@ -290,7 +291,7 @@ and no compatibility layer.
 | a `decision` with a required field that recommends nothing | a `question`; a decision recommends an answer in every required field, and when it comes back `answered` by that recommendation, act on the answer |
 | an agent's cancel of work outside its own, or that other sessions do, made at once | read `waits_for_owner` or `waits_for_sessions` in the answer: the cancel is made, if it still applies, when the owner or those sessions agree |
 | a session whose work another agent cancels hears only the cancel | answer its `consent` request: `agree`, `object` with a `reason`, or `move_out` your work and then `moved_out` |
-| an agent's removal or rewording of a step of a goal or stage, its completion of one awaiting confirmation, or its put-off of an accepted one, made at once | send `checklist_reason` with such a step change, or `clarifies: true` on a step that only says the same better, and read `waits_for_owner` in the answer; close the item in a later call than a write that waits |
+| an agent's removal or rewording of a step of a goal or stage, its completion of a goal, or its put-off of an accepted one, made at once | send `checklist_reason` with such a step change, or `clarifies: true` on a step that only says the same better, and read `waits_for_owner` in the answer; close the item in a later call than a write that waits |
 
 ## Consequences
 

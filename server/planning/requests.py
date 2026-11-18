@@ -1607,10 +1607,13 @@ def _goal_closed(
     """The owner's answer about an agent's confirmation of a goal: `confirm` makes the close
     the agent asked for, with the steps it ticked and the summary it wrote, as the owner's;
     `leave` leaves the goal to the next session, as the answer to the question the sweep
-    asks does. The close runs no net for commits: the agent's write that asked ran it."""
+    asks does; a goal with nothing under it has no period of waiting to record that in,
+    and stays as it was. The close runs no net for commits: the agent's write that asked
+    ran it."""
 
     if answers.get(request_model.REVIEW_ANSWER) == request_model.CONFIRM_LEAVE:
-        _left_to_next(conn, action.work_item_id)
+        if closing.waits(conn, action.work_item_id):
+            _left_to_next(conn, action.work_item_id)
         return
     item = read_model.item_by_id(conn, action.work_item_id)
     service.transition_work_item(
