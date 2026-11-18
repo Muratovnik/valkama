@@ -31,7 +31,7 @@ const steps = (done: number, total: number) =>
   }))
 
 /** One card per state of the plan's table, named by `data-state`. */
-export const PREVIEW_STATES: Readonly<Record<string, WorkItemPreviewSubject>> = {
+const PREVIEW_STATES: Readonly<Record<string, WorkItemPreviewSubject>> = {
   // An agent's claim as the server signs it: a name holding an id, and the session it proved.
   // Its title names items, each of which a line may break around but never inside.
   agent: {
