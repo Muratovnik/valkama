@@ -848,7 +848,9 @@ def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dic
     if action.startswith("request_"):
         return _request_entry(conn, kind, at, action, detail)
     if action == "checklist_replaced":
-        return _entry(kind, at, text=f"{detail} steps")
+        # `<count>`, then the positions only clarified and the reason, as the service writes it.
+        count = detail[: len(detail) - len(detail.lstrip("0123456789"))]
+        return _entry(kind, at, text=f"{count} steps{detail[len(count) :]}")
     if action in ("comment_resolved", "comment_reopened"):
         # `<id>: <decision>` or `<id>`, as `service.resolve_comment` logs it.
         root, _colon, decision = detail.partition(": ")

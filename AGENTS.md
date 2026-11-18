@@ -42,6 +42,9 @@ is complete on its own.
   a cancel of work outside the agent's own or that other sessions do, which
   waits for the owner or for those sessions (`waits_for_owner`,
   `waits_for_sessions`, `consent`, `[consent]`),
+  an agent's change of a goal's or stage's steps, its confirmation or its
+  put-off, which may wait for the owner (`checklist_reason`, `clarifies`,
+  `close_with_waiting`),
   the step's text alone as the detail of an expired step's
   `checklist_released`, and the retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a

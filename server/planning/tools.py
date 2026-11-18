@@ -142,14 +142,35 @@ _STEP = {
         },
     ]
 }
+_STEPS_SAID = (
+    "The steps, in order: text, or {text, done}. A step whose text"
+    " repeats one the item has is that step, keeping its item_id, claim and tick;"
+    " a step sent done=true that was not done is recorded as done by you, as a"
+    " tick would record it."
+)
 _STEPS = {
     "type": "array",
     "maxItems": model.MAX_CHECKLIST,
-    "description": "The steps, in order: text, or {text, done}. A step whose text"
-    " repeats one the item has is that step, keeping its item_id, claim and tick;"
-    " a step sent done=true that was not done is recorded as done by you, as a"
-    " tick would record it.",
+    "description": _STEPS_SAID,
     "items": _STEP,
+}
+#: The steps an edit sends, which may name a step by its item_id and say a new text only
+#: clarifies it.
+_EDITED_STEPS = {
+    **_STEPS,
+    "description": _STEPS_SAID
+    + " A step sent by its item_id as id is that step under a new text; clarifies: true"
+    " says the new text only clarifies its wording.",
+    "items": {
+        "anyOf": [
+            {"type": "string"},
+            {
+                "type": "object",
+                "properties": {"id": _STR, "text": _STR, "done": _BOOL, "clarifies": _BOOL},
+                "required": ["text"],
+            },
+        ]
+    },
 }
 #: Rows a list or a search answers with when the caller names no limit.
 COMPACT_LIMIT = 50
@@ -886,7 +907,10 @@ TOOLS = [
         " setting only the server reads: such a write is not made, the answer names it in"
         " waits_for_owner with the question the owner answers, and the server makes it"
         " then if it still applies. A cancel of work other sessions hold may wait for them"
-        " instead (waits_for_sessions). transition.following names the owner's answer a"
+        " instead (waits_for_sessions). A call that closes the item while another of its"
+        " writes waits is refused whole. checklist_reason says why a step of a goal or stage"
+        " is removed or rewritten; a step sent by its id with clarifies: true only clarifies"
+        " its wording and is written at once. transition.following names the owner's answer a"
         " cancel follows. While the owner has not answered whether an item is to be done,"
         " only a cancel moves it out of triage (acceptance_question).",
         WRITES,
@@ -975,8 +999,14 @@ TOOLS = [
                 " instead. Leaving out a claimed or completed step is refused, naming"
                 " it; force discards it explicitly. applied.checklist lists every"
                 " item_id.",
-                "properties": {"items": _STEPS, "force": _FORCE},
+                "properties": {"items": _EDITED_STEPS, "force": _FORCE},
                 "required": ["items"],
+            },
+            "checklist_reason": {
+                "type": "string",
+                "maxLength": service.STEPS_REASON_LIMIT,
+                "description": "With checklist only: why it removes a step of a goal or stage,"
+                " or rewrites one without clarifies. Required then; the owner reads it.",
             },
             "checklist_ticks": {
                 "type": "array",

@@ -934,13 +934,13 @@ def _accepted_what(conn: sqlite3.Connection, identity: str, *, ruled: str | None
     return said
 
 
-def _last_accepted(conn: sqlite3.Connection, identity: str) -> int:
-    """The `accepted` event a move of the item wrote last."""
+def _last_event(conn: sqlite3.Connection, identity: str, action: str) -> int:
+    """The event of `action`, such as the `accepted` of a move, the item wrote last."""
 
     return int(
         conn.execute(
-            "SELECT MAX(id) FROM work_item_events WHERE work_item_id = ? AND action = 'accepted'",
-            (identity,),
+            "SELECT MAX(id) FROM work_item_events WHERE work_item_id = ? AND action = ?",
+            (identity, action),
         ).fetchone()[0]
     )
 
@@ -1219,7 +1219,10 @@ def update_work_item(
     if moved_under is not None and _accept_moved(conn, row, f"moved under {under}", author):
         if in_goal == participation.AGENT:
             decisions.mark(
-                conn, _last_accepted(conn, identity), "task_in_goal", _accepted_what(conn, identity)
+                conn,
+                _last_event(conn, identity, "accepted"),
+                "task_in_goal",
+                _accepted_what(conn, identity),
             )
     if labels is not None and change is not None:
         _accept_by_label(
@@ -1316,7 +1319,7 @@ def _accept_by_label(
     if calls.from_agent():
         decisions.mark(
             conn,
-            _last_accepted(conn, identity),
+            _last_event(conn, identity, "accepted"),
             "finding",
             _accepted_what(conn, identity, ruled=ruled),
         )
@@ -1807,7 +1810,11 @@ def transition_work_item(
     an agent's move of a task in triage into accepted work under goals and stages all
     accepted and open, where `task_in_goal` says `human`: the task stays in triage and
     the question `task` asks about it; left to the agent, the acceptance is marked in
-    the summary of decisions, as is an assignment an agent names. The
+    the summary of decisions, as is an assignment an agent names. An agent's
+    completion of a goal awaiting its confirmation is the owner's to make where
+    `goal_close` says `human`: the goal stays as it is, with what the call wrote
+    before the move, and waits on the question `confirm` of its period of waiting
+    (`_ask_about_close`); left to the agent, the close is marked. The
     writes Valkama composes, the cancel an owner's answer carries out among them, are
     not gated. `following` names the owner's answered question, on the item or over
     it, that the cancel follows from: it needs no question of the owner and reads no
@@ -1984,6 +1991,11 @@ def _transition(
         # Checked as the cancel would be made now, it is the owner's to make, or the
         # sessions' whose work it ends to hear first: it waits.
         return _ask_about_cancel(conn, row, target, note, author, warnings, gate, followed)
+    confirming = _goal_close(conn, row, current, target) if gated else None
+    if confirming == participation.HUMAN:
+        # Checked as the close would be made now, confirming the goal is the owner's: it
+        # waits on their question `confirm`.
+        return _ask_about_close(conn, row, target, note, author, warnings)
     in_goal = _accepted_in_goal(conn, row, current, gives, named) if gated else None
     if in_goal == participation.HUMAN:
         # Checked as the move would be made now, taking the task on is the owner's: it
@@ -2046,6 +2058,8 @@ def _transition(
             decisions.mark(conn, moved, gate.point, _cancel_what(conn, row, followed))
         if agreed is not None:
             decisions.mark(conn, moved, "cancel_shared", agreed)
+        if confirming == participation.AGENT:
+            decisions.mark(conn, moved, "goal_close", _close_what(conn, row))
     if held:
         _log(conn, identity, "released", held, author)
     for step in unheld:
@@ -2126,6 +2140,7 @@ def defer_work_item(
     force: bool = False,
     expected_revision: int | None = None,
     author: str | None = None,
+    gated: bool = False,
 ) -> dict:
     """Put an item off until a day, a time or another item's close (`deferral`).
 
@@ -2136,6 +2151,12 @@ def defer_work_item(
     and the question whether to take it up again ends with the old one. A claim of
     another session is refused without `force`, which records it as overridden.
     The answer names the condition as `deferred`.
+
+    `gated` says the write is the caller's own, as a surface takes it: an agent's
+    putting off of an accepted goal or stage takes back the owner's acceptance, and is
+    the owner's to make where `goal_defer` says `human`. Then the item stays as it is
+    and the answer names what waits in `waits_for_owner` (`_ask_about_put_off`); left
+    to the agent, it is marked in the summary of decisions.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
@@ -2157,6 +2178,17 @@ def defer_work_item(
             " can move to"
         )
     overridden = held_elsewhere(conn, [row], author, force, doing="put it off")
+    putting_off = _goal_defer(conn, row) if gated else None
+    if putting_off == participation.HUMAN:
+        # Checked as the move would be made now, taking the acceptance back is the owner's.
+        refusals, warnings = transitions.findings(
+            conn, row, target, reason=why, settings=participation.load(conn)
+        )
+        transitions.refuse([found for found in refusals if found[0] not in _DEFER_SPARES], False)
+        answer = read_model.present(conn, row, full=True)
+        answer["warnings"] = warnings
+        answer["waits_for_owner"] = _ask_about_put_off(conn, row, said, why, author).answer()
+        return answer
     answer = _transition(
         conn,
         identity,
@@ -2165,6 +2197,13 @@ def defer_work_item(
         author=author,
         spared=_DEFER_SPARES,
     )
+    if putting_off == participation.AGENT:
+        decisions.mark(
+            conn,
+            _last_event(conn, identity, "transitioned"),
+            "goal_defer",
+            _put_off_what(named, said, why),
+        )
     questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
     deferral.put(
         conn,
@@ -2329,6 +2368,51 @@ def _put_off_reason(reason: object) -> str:
             " when it comes back"
         )
     return model.text_field(reason, "reason", limit=PUT_OFF_REASON_LIMIT)
+
+
+def _goal_defer(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+    """How an agent's putting off of an item goes, by the owner's setting of its space; None
+    for any but an accepted goal or stage, whose acceptance it takes back. A task, and a
+    goal or stage nobody accepted, the agent puts off at any setting."""
+
+    if not calls.from_agent() or row["kind"] != model.CONTAINER_KIND or row["acceptance"] is None:
+        return None
+    return participation.load(conn).mode(str(row["planning_space_id"]), "goal_defer")
+
+
+def _put_off_what(reference: str, until: str, why: str) -> str:
+    """What the summary of decisions says of putting a goal or stage off."""
+
+    return f"put off {reference} until {until}: {why}"
+
+
+def _ask_about_put_off(
+    conn: sqlite3.Connection, row: sqlite3.Row, until: str, why: str, author: str | None
+) -> pending.Waiting:
+    """Ask the owner whether to put off an accepted goal or stage an agent puts off until
+    `until`, which waits on the answer (`requests.carry_out`): keep it, put it off, the
+    agent's condition standing when the answer names none, or drop it."""
+
+    reference = read_model.reference(conn, row)
+    return pending.ask(
+        conn,
+        str(row["work_item_id"]),
+        "goal_defer",
+        pending.Proposal(
+            "defer",
+            {"until": until, "reason": why},
+            _put_off_what(reference, until, why),
+            reason=why,
+            proposed={"until": until},
+        ),
+        purpose="goal",
+        prompt=(
+            f"An agent puts off {reference}, an accepted {_container_word(row)}: {row['title']}."
+            f" Until {until}. Its reason: {why}. Keep it, put it off, or drop it."
+        ),
+        fields=request_model.fields(request_model.put_off_fields(until)),
+        author=author,
+    )
 
 
 def _condition(
@@ -2629,6 +2713,96 @@ def cancel_agreed(
     return _transition(
         conn, reference, state, reason=reason, cancels=cancels, author=author, agreed=what
     )
+
+
+# -- a goal's close the owner may decide on --------------------------------------
+
+
+def _goal_close(
+    conn: sqlite3.Connection, row: sqlite3.Row, current: sqlite3.Row, target: sqlite3.Row
+) -> str | None:
+    """How an agent's confirmation of a goal goes, by the owner's setting of its space; None
+    for any other move. A confirmation is a completion of a goal, a goal or stage with no
+    parent, that awaits it: nothing under it is open. A stage the agent closes at any
+    setting: the owner confirms the goal it is part of."""
+
+    if not calls.from_agent() or row["kind"] != model.CONTAINER_KIND or row["parent_id"]:
+        return None
+    if target["category"] != "completed" or current["category"] == "completed":
+        return None
+    identity = str(row["work_item_id"])
+    if item_tree.below(conn, [identity]).container_state(identity) != closing.AWAITING:
+        return None
+    return participation.load(conn).mode(str(row["planning_space_id"]), "goal_close")
+
+
+#: How much of the agent's summary the owner's question about its close quotes.
+_SUMMARY_SHOWN = 1000
+
+
+def _close_what(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
+    """What the summary of decisions says of a goal's close: `close MAIN-3`."""
+
+    return f"close {read_model.reference(conn, row)}"
+
+
+def _ask_about_close(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    target: sqlite3.Row,
+    reason: str,
+    author: str | None,
+    warnings: list[str],
+) -> dict:
+    """Keep back an agent's confirmation of a goal: the goal stays as it is, and the owner
+    is asked to confirm it, the agent's summary shown (`requests.carry_out`).
+
+    The question is the one its period of waiting asks: when the sweep asked it already,
+    the action waits on that question; else the agent's call asks it, and the period
+    records it, so the sweep asks nothing more. The same close sent again while it
+    waits answers the same wait."""
+
+    identity = str(row["work_item_id"])
+    summary = model.summary(row["summary"], required=False) or {}
+    proposal = pending.Proposal(
+        "transition",
+        {"state": str(target["key"]), "reason": reason},
+        _close_what(conn, row),
+        reason=reason or None,
+        proposed={"summary": summary},
+    )
+    action, fresh = pending.hold(conn, identity, "goal_close", proposal)
+    question = pending.owner_question(conn, action)
+    if fresh:
+        asked = closing.open_question(conn, identity)
+        if asked is not None:
+            pending.join(conn, action, asked)
+            question = asked
+        else:
+            part = closing.confirmation(conn, row)
+            steps = [str(step["text"]) for step in model.checklist(row["checklist"])]
+            reference = read_model.reference(conn, row)
+            done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN]
+            head = (
+                f"An agent confirms {reference}: all work under it is closed"
+                + (f", and its summary says: {done}" if done else "")
+                + ". Confirm it, or leave it to the next session that takes work in this space."
+            )
+            question = pending.ask_owner(
+                conn,
+                action,
+                purpose=closing.CONFIRM,
+                prompt=closing.prompt(reference, part, steps, head=head),
+                fields=request_model.fields(list(request_model.CONFIRM_FIELDS)),
+                author=author,
+            )
+            closing.asked(conn, identity, question)
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    answer["warnings"] = warnings
+    answer["waits_for_owner"] = pending.Waiting(
+        action.id, action.point, question, action.what
+    ).answer()
+    return answer
 
 
 #: What a cancel of a goal or stage does not ask of the work under it: the guard holds
@@ -3126,6 +3300,10 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
             _hand_back(conn, identity, author, reason)
 
 
+#: Why an agent's close of a goal no longer waits: the goal stopped awaiting confirmation.
+NO_LONGER_AWAITING = "it no longer awaits confirmation"
+
+
 @contextlib.contextmanager
 def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> Iterator[list[str]]:
     """The container marks of one write (`closing.frame`), without the holder rule's wait.
@@ -3133,8 +3311,9 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
     Every write route opens it, and so does every write here that changes the work
     under a goal or stage, so no path passes it by; one inside another joins it. At
     the end of the outermost the marked containers enter or leave the wait for their
-    confirmation, the words left on one that stopped waiting go (`waiting.drop`), and
-    the list this yields names the references of those that came to wait.
+    confirmation, the words left on one that stopped waiting go (`waiting.drop`) and so
+    does an agent's close that waits on its confirmation (`dropped`), and the list this
+    yields names the references of those that came to wait.
 
     `person` is where the history stood before a person's write, which the route
     passes to the frame it opens: what that write told nobody is left for the next
@@ -3149,6 +3328,11 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
         waiting.after_person(conn, person)
     for identity in settled.left:
         waiting.drop(conn, identity)
+        # A confirmation an agent's close waits on goes with the wait, as its question did.
+        for action in pending.open_on(conn, identity, "goal_close"):
+            pending.end(
+                conn, action, pending.DROPPED, author=closing.AUTHOR, why=NO_LONGER_AWAITING
+            )
 
 
 def _settle(
@@ -3629,6 +3813,8 @@ def set_checklist(
     force: bool = False,
     expected_revision: int | None = None,
     author: str | None = None,
+    reason: object = None,
+    gated: bool = False,
 ) -> dict:
     """Set the steps, keeping every step the new list repeats.
 
@@ -3649,10 +3835,24 @@ def set_checklist(
     text, and every step repeated by its `id` with another text with the text it
     had: that wording is gone, and a tick made under it now stands under the new
     one, which the item's close is to name.
+
+    A step repeated by its `id` with a new text may say `clarifies: true`: the
+    wording is said better, the meaning stays. Any other step that says it is
+    refused, before anything is written.
+
+    `gated` says the write is the caller's own, as a surface takes it, which meets
+    the owner's setting: an agent's removal or rewording of a step of a goal or
+    stage that does not only clarify it needs `reason`, and is the owner's to make
+    where `condition` says `human`. Then the rest of the write is made, those steps
+    stay as they stand, and the answer names what waits in `waits_for_owner`
+    (`_ask_about_steps`). Left to the agent, the change is marked in the summary of
+    decisions, and so is a clarification at any setting. The event of the new list
+    reads `<count>`, then `, clarified <positions>` and `: <reason>` when they apply.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
     existing = model.checklist(row["checklist"])
+    items, clarifying = _clarifying(items)
     sent_steps = model.checklist(items)
     # The steps as sent, beside the steps as read; anything but a list (a stored
     # checklist's JSON text) carries nothing new.
@@ -3662,10 +3862,17 @@ def set_checklist(
     kept: set[str] = set()
     replacement: list[dict] = []
     completed: list[dict] = []
-    rewritten: list[str] = []
+    reworded: list[_Reworded] = []
     guards: list[str] = []
-    for step, raw in zip(sent_steps, sent, strict=True):
+    for index, (step, raw) in enumerate(zip(sent_steps, sent, strict=True)):
         named = raw.get("id") if isinstance(raw, dict) else None
+        clarifies = index in clarifying
+        if clarifies and (
+            not named or named not in by_id or named in kept or by_id[named]["text"] == step["text"]
+        ):
+            raise model.PlanningError(
+                "[checklist] clarifies marks a step of this item named by its id with a new text"
+            )
         if named and named not in by_id:
             replacement.append(step)  # carried over, with the state it carries
             continue
@@ -3684,7 +3891,9 @@ def set_checklist(
             continue
         kept.add(match["id"])
         if match["text"] != step["text"]:
-            rewritten.append(str(match["text"]))
+            reworded.append(
+                _Reworded(str(match["id"]), str(match["text"]), step["text"], clarifies)
+            )
         same = {**match, "text": step["text"]}
         if step["done"] and not match["done"]:
             held = match["claimed_by"]
@@ -3700,9 +3909,18 @@ def set_checklist(
             same.update(done=True, claimed_by="")
             completed.append(same)
         replacement.append(same)
-    dropped = [
-        step for step in existing if step["id"] not in kept and (step["done"] or step["claimed_by"])
-    ]
+    removed = [step for step in existing if step["id"] not in kept]
+    changed = [entry for entry in reworded if not entry.clarifies]
+    # An agent's own change of a goal's or stage's steps is a point of the owner's setting.
+    point = gated and calls.from_agent() and row["kind"] == model.CONTAINER_KIND
+    why = _steps_reason(reason, needed=point and bool(removed or changed))
+    held = (
+        point
+        and bool(removed or changed)
+        and participation.load(conn).mode(str(row["planning_space_id"]), "condition")
+        == participation.HUMAN
+    )
+    dropped = [step for step in removed if step["done"] or step["claimed_by"]]
     if dropped and not force:
         raise model.PlanningError(
             f"{read_model.reference(conn, row)} would lose {len(dropped)} claimed or completed"
@@ -3710,24 +3928,208 @@ def set_checklist(
             " by their text or id, to keep them, or pass force to discard that state"
             " explicitly"
         )
-    if dropped:
+    identity = str(row["work_item_id"])
+    action: pending.Action | None = None
+    fresh = False
+    if held:
+        # Checked as the whole write would be made now, the removals and rewordings are
+        # the owner's: the rest is made, and those steps stand as they are.
+        action, fresh = pending.hold(
+            conn, identity, "condition", _steps_proposal(removed, changed, why, force)
+        )
+        replacement = _kept_back(existing, replacement, removed, changed)
+        removed, changed = [], []
+    elif dropped:
         guards.append("checklist_discard")
     for step in completed:
         step["done_by"] = label
         step[model.PREVIOUS_HOLDER] = False
     _keep_held(conn, row, str(row["claim_ref"]), replacement)
-    identity = str(row["work_item_id"])
-    _write_checklist(conn, row, replacement, completed, author)
-    removed = [str(step["text"]) for step in existing if step["id"] not in kept]
-    for text in (*removed, *rewritten):
-        _log(conn, identity, "checklist_removed", text[:120], author)
+    clarified = [entry for entry in reworded if entry.clarifies] if point else []
+    detail = _steps_detail(replacement, clarified, why if removed or changed else None)
+    replaced = _write_checklist(conn, row, replacement, completed, author, detail=detail)
+    for text in (
+        *(step["text"] for step in removed),
+        *(entry.before for entry in reworded if entry.clarifies or not held),
+    ):
+        _log(conn, identity, "checklist_removed", str(text)[:120], author)
+    said = _steps_what(removed, changed, why) + [entry.said() for entry in clarified]
+    if point and said:
+        decisions.mark(conn, replaced, "condition", "; ".join(said))
     overridden = record_overrides(conn, identity, guards, author)
     # A step completed or dropped here ends its claim, which may have been the last holder.
     _settle(conn, identity, author, "steps replaced")
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     if overridden:
         answer["overridden"] = overridden
+    if action is not None:
+        answer["waits_for_owner"] = _ask_about_steps(conn, row, action, fresh, author).answer()
     return answer
+
+
+@dataclasses.dataclass(frozen=True)
+class _Reworded:
+    """A step repeated by its id with a new text, and whether it only clarifies it."""
+
+    id: str
+    before: str
+    after: str
+    clarifies: bool
+
+    def said(self) -> str:
+        verb = "clarified" if self.clarifies else "rewrote"
+        return f"{verb} step «{self.before}» → «{self.after}»"
+
+
+#: What a step says to only clarify its wording, sent beside its id and new text.
+CLARIFIES = "clarifies"
+#: The most characters the reason for removing or rewording a step of a goal or stage holds.
+STEPS_REASON_LIMIT = 500
+
+
+def _clarifying(items: object) -> tuple[object, set[int]]:
+    """The steps as sent without their `clarifies`, and the positions that said it."""
+
+    if not isinstance(items, list):
+        return items, set()
+    flagged: set[int] = set()
+    stripped: list[object] = []
+    for index, raw in enumerate(items):
+        if isinstance(raw, dict) and CLARIFIES in raw:
+            if not isinstance(raw[CLARIFIES], bool):
+                raise model.PlanningError(
+                    f"work_item.checklist[{index}].clarifies must be a boolean"
+                )
+            if raw[CLARIFIES]:
+                flagged.add(index)
+            raw = {name: value for name, value in raw.items() if name != CLARIFIES}
+        stripped.append(raw)
+    return stripped, flagged
+
+
+def _steps_reason(reason: object, *, needed: bool) -> str | None:
+    """Why the steps of a goal or stage are removed or reworded; refused where it is needed
+    and missing."""
+
+    if reason is None or (isinstance(reason, str) and not reason.strip()):
+        if needed:
+            raise model.PlanningError(
+                "[checklist] removing or rewriting a step of a goal or stage needs checklist_reason"
+            )
+        return None
+    return model.text_field(reason, "checklist_reason", limit=STEPS_REASON_LIMIT)
+
+
+def _steps_detail(replacement: list[dict], clarified: list[_Reworded], why: str | None) -> str:
+    """The detail of `checklist_replaced`: how many steps, which positions only clarify
+    their wording, and why steps were removed or reworded."""
+
+    detail = str(len(replacement))
+    if clarified:
+        named = {entry.id for entry in clarified}
+        positions = [str(index) for index, step in enumerate(replacement, 1) if step["id"] in named]
+        detail += f", clarified {', '.join(positions)}"
+    if why:
+        detail += f": {why}"
+    return detail[:EVENT_DETAIL_LIMIT]
+
+
+def _steps_what(removed: list[dict], changed: list[_Reworded], why: str | None) -> list[str]:
+    """What the summary of decisions says of steps removed or reworded: each, then why."""
+
+    said = [f"removed step «{step['text']}»" for step in removed]
+    said += [entry.said() for entry in changed]
+    if said and why:
+        said[-1] += f": {why}"
+    return said
+
+
+def _steps_proposal(
+    removed: list[dict], changed: list[_Reworded], why: str | None, force: bool
+) -> pending.Proposal:
+    """The removals and rewordings of steps that wait for the owner, as their action keeps them."""
+
+    return pending.Proposal(
+        "checklist",
+        {
+            "remove": [str(step["id"]) for step in removed],
+            "rewrite": [{"id": entry.id, "to": entry.after} for entry in changed],
+            "force": force,
+        },
+        "; ".join(_steps_what(removed, changed, why)),
+        reason=why,
+        proposed={
+            "removed": [{"id": str(step["id"]), "text": str(step["text"])} for step in removed],
+            "rewritten": [
+                {"id": entry.id, "from": entry.before, "to": entry.after} for entry in changed
+            ],
+        },
+    )
+
+
+def _kept_back(
+    existing: list[dict], replacement: list[dict], removed: list[dict], changed: list[_Reworded]
+) -> list[dict]:
+    """The new list with the steps the owner is asked about as they stand: a reworded step
+    keeps its text, and a removed one stands after the step that stood before it."""
+
+    before = {entry.id: entry.before for entry in changed}
+    result = list(replacement)
+    for step in result:
+        # In place: a step the write completes is the same record, and is recorded as done.
+        if step["id"] in before:
+            step["text"] = before[step["id"]]
+    staying = {str(step["id"]) for step in removed}
+    for index, step in enumerate(existing):
+        if step["id"] not in staying:
+            continue
+        placed = {str(found["id"]): at for at, found in enumerate(result)}
+        earlier = next(
+            (placed[str(old["id"])] for old in reversed(existing[:index]) if old["id"] in placed),
+            -1,
+        )
+        result.insert(earlier + 1, step)
+    return result
+
+
+#: What the owner's question about steps of a goal or stage asks them to do.
+_STEPS_ASKED = " Allow it, or keep the steps as they are."
+
+
+def _ask_about_steps(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    action: pending.Action,
+    fresh: bool,
+    author: str | None,
+) -> pending.Waiting:
+    """Ask the owner about the removals and rewordings an agent's write keeps back on a goal
+    or stage: what was and what would be, and why (`requests.carry_out`). The same write
+    sent again while it waits answers that wait and asks nothing more."""
+
+    if not fresh:
+        return pending.Waiting(
+            action.id, action.point, pending.owner_question(conn, action), action.what
+        )
+    reference = read_model.reference(conn, row)
+    lines = [f"- remove «{entry['text']}»" for entry in action.proposed["removed"]]
+    lines += [f"- «{entry['from']}» → «{entry['to']}»" for entry in action.proposed["rewritten"]]
+    prompt = "\n".join(
+        [
+            f"An agent changes the steps of {reference}, a {_container_word(row)}: {row['title']}.",
+            *lines,
+            f"Its reason: {action.reason}.{_STEPS_ASKED}",
+        ]
+    )
+    question = pending.ask_owner(
+        conn,
+        action,
+        purpose="condition",
+        prompt=prompt[: closing.PROMPT_LIMIT],
+        fields=request_model.fields(request_model.condition_fields()),
+        author=author,
+    )
+    return pending.Waiting(action.id, action.point, question, action.what)
 
 
 def _write_checklist(
@@ -3736,14 +4138,24 @@ def _write_checklist(
     replacement: list[dict],
     completed: list[dict],
     author: str | None,
-) -> None:
-    """Write the steps and their history: the replacement, then each step it completed."""
+    *,
+    detail: str | None = None,
+) -> int:
+    """Write the steps and their history: the replacement, then each step it completed.
+    The id of the event that records the replacement, whose detail is `detail` or the count."""
 
     _write(conn, row, ["checklist = ?"], [model.dumps(replacement)])
     identity = str(row["work_item_id"])
-    _log(conn, identity, "checklist_replaced", str(len(replacement)), author)
+    replaced = _log(
+        conn,
+        identity,
+        "checklist_replaced",
+        str(len(replacement)) if detail is None else detail,
+        author,
+    )
     for step in completed:
         _log(conn, identity, "checklist_completed", step["text"][:120], author)
+    return replaced
 
 
 def record_overrides(

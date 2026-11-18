@@ -155,6 +155,47 @@ def cancel_fields() -> list[dict]:
     return [choice, cancels]
 
 
+#: The answers about steps of a goal or stage an agent removes or rewords: `allow` makes
+#: the change, `keep` leaves the steps as they stand.
+CONDITION_ALLOW = "allow"
+CONDITION_KEEP = "keep"
+
+
+def condition_fields() -> list[dict]:
+    """The field of the question about steps of a goal or stage an agent removes or
+    rewords: `allow` or `keep`; the agent asks for `allow`."""
+
+    return [
+        {
+            "id": REVIEW_ANSWER,
+            "label": "Answer",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": CONDITION_ALLOW, "label": "Allow the change", "recommended": True},
+                {"id": CONDITION_KEEP, "label": "Keep the steps"},
+            ],
+        }
+    ]
+
+
+def put_off_fields(until: str) -> list[dict]:
+    """The fields of the question about an accepted goal or stage an agent puts off until
+    `until`: `do` keeps it accepted, `later` puts it off until the answer's `until`, which
+    left empty is the agent's, and `drop` cancels it, with `cancels` the list token for
+    one with open work under it. The agent asks for `later`."""
+
+    choice, later, cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": RETURN_DO, "label": "Keep it accepted"},
+        {"id": RETURN_LATER, "label": "Put it off", "recommended": True},
+        {"id": RETURN_DROP, "label": "Drop it"},
+    ]
+    later["required"] = False
+    later["description"] = f"The agent puts it off until {until}; left empty, that stands."
+    return [choice, later, cancels]
+
+
 #: The answers a session gives about a cancel of its work: it agrees, it objects with a
 #: reason, or it has moved its work out of what the cancel closes.
 CONSENT_AGREE = "agree"

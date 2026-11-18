@@ -468,16 +468,18 @@ def ask(conn: sqlite3.Connection, identity: str) -> str:
     return asked
 
 
-def prompt(reference: str, part: dict, steps: list[str]) -> str:
+def prompt(reference: str, part: dict, steps: list[str], *, head: str | None = None) -> str:
     """The question to confirm, at most `PROMPT_LIMIT` characters.
 
-    The lines that do not fit are counted at its end rather than cut mid-line.
+    `head` is its first line when an agent's confirmation waits on it. The lines that
+    do not fit are counted at its end rather than cut mid-line.
     """
 
-    head = (
-        f"All work under {reference} is closed: confirm it, or leave it to the next session"
-        " that takes work in this space."
-    )
+    if head is None:
+        head = (
+            f"All work under {reference} is closed: confirm it, or leave it to the next session"
+            " that takes work in this space."
+        )
     lines = [*_listed("Cancelled", part["cancelled"]), *_listed("Moved out", part["moved_out"])]
     if steps:
         lines += ["", "Its steps:", *(f"- {text}" for text in steps)]
@@ -493,6 +495,40 @@ def prompt(reference: str, part: dict, steps: list[str]) -> str:
             return text + more
         text += "\n" + line
     return text  # pragma: no cover - every line fitting is the whole fitting
+
+
+def open_question(conn: sqlite3.Connection, identity: str) -> str | None:
+    """The question the period of waiting asked the owner, while it is open and no write
+    waits on it; None else."""
+
+    found = conn.execute(
+        "SELECT r.request_id FROM work_item_confirmations c"
+        " JOIN work_item_requests r ON r.request_id = c.request_id"
+        " WHERE c.work_item_id = ? AND r.status = 'pending' AND r.action_id IS NULL",
+        (identity,),
+    ).fetchone()
+    return None if found is None else str(found[0])
+
+
+def asked(conn: sqlite3.Connection, identity: str, request_id: str) -> None:
+    """The period of waiting asked the owner by `request_id`, which a write asked: the
+    sweep asks nothing more in it."""
+
+    conn.execute(
+        "UPDATE work_item_confirmations SET request_id = ? WHERE work_item_id = ?",
+        (request_id, identity),
+    )
+
+
+def unasked(conn: sqlite3.Connection, identity: str, request_id: str) -> None:
+    """The question `request_id` that asked to confirm was withdrawn: the sweep asks the
+    owner again when the period is due."""
+
+    conn.execute(
+        "UPDATE work_item_confirmations SET request_id = NULL"
+        " WHERE work_item_id = ? AND request_id = ?",
+        (identity, request_id),
+    )
 
 
 def left(conn: sqlite3.Connection, identity: str) -> None:

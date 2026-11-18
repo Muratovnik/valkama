@@ -751,6 +751,8 @@ def _owner(record: dict, key: str) -> tuple[str, str] | None:
 
 #: How many commits one close names at most; `unreported_total` counts them all past it.
 UNREPORTED_MOST = 20
+#: The point of the owner's setting at which an agent's close waits for their answer.
+HELD_CLOSE = "goal_close"
 #: How long one root's repository may take to say what was made in it.
 NET_SECONDS = 5.0
 #: What the net reads of each commit: its hash, committer time and address, and subject.
@@ -839,13 +841,26 @@ def before_transition(conn: sqlite3.Connection, reference: str) -> Before | None
 
 
 def after_transition(before: Before | None, answer: Mapping[str, Any]) -> None:
-    """Note the window of a move into review or completed that `before` found one for."""
+    """Note the window of a move into review or completed that `before` found one for.
+
+    An agent's close of a goal the owner's setting keeps for their confirmation is not
+    made, and its answer says it waits (`waits_for_owner` at `HELD_CLOSE`): the window
+    is noted all the same, as the close would have had it, because the owner's answer
+    that makes the close later is no agent's write and runs no net.
+    """
 
     found = _WINDOWS.get()
-    state = answer.get("state")
-    if found is None or before is None or before.since is None or not isinstance(state, dict):
+    if found is None or before is None or before.since is None:
         return
-    if state["category"] in CLOSED_CATEGORIES and state["state_id"] != before.state_id:
+    state = answer.get("state")
+    waits = answer.get("waits_for_owner")
+    held = isinstance(waits, Mapping) and waits.get("point") == HELD_CLOSE
+    moved = (
+        isinstance(state, dict)
+        and state["category"] in CLOSED_CATEGORIES
+        and state["state_id"] != before.state_id
+    )
+    if held or moved:
         found.append(Window(before.work_item_id, before.since, before.session))
 
 

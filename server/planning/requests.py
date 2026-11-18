@@ -1181,6 +1181,9 @@ def _carry_action(
 
     if answers is None:
         pending.end(conn, action, pending.WITHDRAWN, author=author)
+        if action.point == "goal_close":
+            # The confirmation the asker withdrew is the sweep's to ask again.
+            closing.unasked(conn, action.work_item_id, str(row["request_id"]))
         return pending.WITHDRAWN
     if _addressee(row) is not None:
         # A session's answer about a cancel of its work may be the one that decides it.
@@ -1237,8 +1240,7 @@ def _confirmed(
         )
     identity = str(row["work_item_id"])
     if given == request_model.CONFIRM_LEAVE:
-        waiting.leave(conn, identity, waiting.SPACE)
-        closing.left(conn, identity)
+        _left_to_next(conn, identity)
         return "left_for_next_session"
     item = read_model.item_by_id(conn, identity)
     reference = read_model.reference(conn, item)
@@ -1252,6 +1254,14 @@ def _confirmed(
     key = _first_state(conn, item, "completed")
     service.transition_work_item(conn, reference, key, author=author)
     return "completed"
+
+
+def _left_to_next(conn: sqlite3.Connection, identity: str) -> None:
+    """The owner leaves a goal or stage awaiting confirmation to the next session that takes
+    work in its space, and the period of waiting asks them nothing again."""
+
+    waiting.leave(conn, identity, waiting.SPACE)
+    closing.left(conn, identity)
 
 
 #: What a summary the owner's drop of put-off work writes says comes next.
@@ -1516,6 +1526,136 @@ CARRIERS["cancel_outside"] = CARRIERS["cancel_shared"] = Carrier(
     },
     _cancel,
     by_list=request_model.CANCEL_CANCEL,
+)
+
+
+def _steps(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    _note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about steps of a goal or stage an agent removes or rewords.
+
+    `allow` makes the change on the steps as they stand, as the owner's write with the
+    agent's reason: the steps it removes go and the ones it rewords take the new text,
+    each recorded `checklist_removed` with the text it had. `keep` leaves them.
+    """
+
+    if answers.get(request_model.REVIEW_ANSWER) != request_model.CONDITION_ALLOW:
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    removed = set(action.params.get("remove") or [])
+    rewritten = {entry["id"]: entry["to"] for entry in action.params.get("rewrite") or []}
+    steps = [
+        {"id": step["id"], "text": rewritten.get(step["id"], step["text"]), "done": step["done"]}
+        for step in model.checklist(item["checklist"])
+        if step["id"] not in removed
+    ]
+    service.set_checklist(
+        conn,
+        read_model.reference(conn, item),
+        steps,
+        force=bool(action.params.get("force")),
+        author=author,
+        reason=action.reason,
+    )
+
+
+CARRIERS["condition"] = Carrier(
+    {
+        request_model.CONDITION_ALLOW: pending.CARRIED_OUT,
+        request_model.CONDITION_KEEP: pending.DECLINED,
+    },
+    _steps,
+)
+
+
+def _goal_closed(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    _note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about an agent's confirmation of a goal: `confirm` makes the close
+    the agent asked for, with the steps it ticked and the summary it wrote, as the owner's;
+    `leave` leaves the goal to the next session, as the answer to the question the sweep
+    asks does. The close runs no net for commits: the agent's write that asked ran it."""
+
+    if answers.get(request_model.REVIEW_ANSWER) == request_model.CONFIRM_LEAVE:
+        _left_to_next(conn, action.work_item_id)
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    service.transition_work_item(
+        conn,
+        read_model.reference(conn, item),
+        str(action.params["state"]),
+        reason=str(action.params.get("reason") or ""),
+        author=author,
+    )
+
+
+CARRIERS["goal_close"] = Carrier(
+    {
+        request_model.CONFIRM_CONFIRM: pending.CARRIED_OUT,
+        request_model.CONFIRM_LEAVE: pending.DECLINED,
+    },
+    _goal_closed,
+)
+
+#: What a summary the owner's drop of a goal or stage an agent put off says comes next.
+PUT_OFF_DROPPED_NEXT = "Nothing: the owner dropped it when asked whether to put it off."
+
+
+def _put_off(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about an accepted goal or stage an agent puts off: `do` keeps it
+    accepted as it is; `later` puts it off until the answer's `until`, or the agent's when
+    the answer names none, with the agent's reason; `drop` cancels it, with the answer's
+    `cancels` for one with open work under it."""
+
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if given == request_model.RETURN_DO:
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    reference = read_model.reference(conn, item)
+    if given == request_model.RETURN_LATER:
+        service.defer_work_item(
+            conn,
+            reference,
+            until=answers.get(request_model.RETURN_UNTIL) or action.params["until"],
+            reason=action.params["reason"],
+            author=author,
+        )
+        return
+    _drop(
+        conn,
+        item,
+        answers,
+        note,
+        author,
+        done="Nothing: the owner dropped it when an agent put it off.",
+        then=PUT_OFF_DROPPED_NEXT,
+    )
+
+
+CARRIERS["goal_defer"] = Carrier(
+    {
+        request_model.RETURN_DO: pending.DECLINED,
+        request_model.RETURN_LATER: pending.CARRIED_OUT,
+        request_model.RETURN_DROP: pending.DECLINED,
+    },
+    _put_off,
 )
 
 
