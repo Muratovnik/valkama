@@ -84,7 +84,12 @@ and no compatibility layer.
      `owner_only`, a withdrawal by anyone but the session that asked it with
      `not_asker`, and declining it, changing its answer or answering it with an
      own variant with `[purpose]`; withdrawing the question of review returns
-     its item to `ready`;
+     its item to `ready`. The same holds for the purposes `goal`, `task`,
+     `cancel` and `condition`, and for every question that a write waiting for
+     the owner carries, whatever its purpose: only a person answers it, and a
+     question Valkama asked about such a write is withdrawn by no session. A
+     request of purpose `consent` is answered by the session it asks, once, and
+     never declined or changed (`[purpose]`);
    - a goal or stage is refused a move to `completed` while an item under it,
      at any depth, is open (`children`), and `force` does not carry it;
    - the ending of a launch moves its item nowhere: an outcome `complete` or
@@ -127,6 +132,24 @@ and no compatibility layer.
      where the setting `task_in_goal` is `human`, answering `waits_for_owner`
      and leaving the task in `triage`. A person's claim or move of the item ends
      its question `withdrawn` and drops the write waiting on it;
+   - an agent's `create_work_item` of a goal with no parent meets the setting
+     `proposed_goal`: where it is `human`, as in the set a store starts at, the
+     goal lies in `triage` without a basis and the answer names
+     `waits_for_owner` (`action`, `point`, `question`, `what`), the question of
+     `purpose` `goal`, answered `do`, `later` or `drop`; where it is `agent` the
+     goal stands accepted at once on the new basis `agent`. A put-off goal that
+     comes back while the setting is `human` is asked about the same way, by
+     Valkama. A task an agent files under goals and stages all accepted and open
+     waits in `triage` under them where `task_in_goal` is `human`, on the
+     question `task`, and a task filed into `triage`, or given a label there, is
+     accepted at once on the basis `label_rule` when one of its labels has a
+     rule that makes it ready;
+   - while one write of a point waits for the owner on an item, another write of
+     that point there is refused with `[participation]`, and the same write sent
+     again answers the same `waits_for_owner` and writes nothing;
+   - where the owner hands out work by hand, the space's setting `queue` being
+     `off`, `claim_ready_work_item` and its HTTP write are refused with
+     `queue_off` (409), writing nothing;
    - an agent's cancel of an item its own work did not file waits for the
      owner where the setting `cancel_outside` is `human`, answering
      `waits_for_owner` and leaving the item as it was. An agent's cancel of work
@@ -249,7 +272,10 @@ and no compatibility layer.
 | a `blocks` link to enter `blocked` | a stated `reason`; work that waits on an item stays where it is, linked `blocks` |
 | `{"state": "review"}` with open steps or no summary | every step ticked, a `summary`, and `to_check`: what the owner is to check |
 | an agent completing an item, or taking it out of `review`, over an open question to the owner | wait for the owner's answer, or withdraw a question you asked |
-| an agent answering, declining or changing the answer of any question to the owner | leave a question with a `purpose` to the owner; only the session that asked withdraws it |
+| an agent answering, declining or changing the answer of any question to the owner | leave a question with a `purpose`, or one a waiting write carries, to the owner; only the session that asked withdraws it |
+| an agent's goal with no parent, or its task under accepted goals, accepted at once | read `waits_for_owner` in the answer: the item lies in `triage` until the owner answers; go on with what does not depend on it |
+| a second write of the same kind while the first waits for the owner | wait for the answer, or withdraw the question of the first |
+| `claim_ready_work_item` in a space whose owner hands out work by hand | `claim_work_item` on the item the owner named |
 | completing a goal or stage with open work under it | close, cancel or move out what is open under it; completing it then is the confirmation |
 | a launch that ends `complete` moves its item to `review` | the launched agent moves it to `review` with `to_check` |
 | cancelling a goal or stage with open work under it in one move | the move, refused with `cancel_list`; then the same move with `cancels` set to its `list_token` |
