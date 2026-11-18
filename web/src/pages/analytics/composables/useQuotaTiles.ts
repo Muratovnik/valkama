@@ -1,13 +1,16 @@
 /**
  * What the quota's two tiles on the rail say: for its five hours and for its week, the tightest
  * window across accounts (`tightest`), by its account's name, with its share and, beside the
- * section's name, its state in words, over a thin bar of that one window with its pace tick.
+ * section's name, its state in words, over a thin bar of that one window with its pace tick and
+ * its forecast as a hatched tail, as the panel's bar draws it (`forecastCourses`); the bar's hint
+ * and its words name the hatch, «Forecast · …», since a tile has no room for a key.
  *
  * A tile says one account's one window and never a sum. Where it has no window to name it says
  * why in words of its own, so no source, a window that reset since it was read and a fresh 0 %
  * never read alike: an organization nobody's source read is «No source», a fresh 0 % is the
- * account with «0%» and «fresh», a silent window says «silent» and is hatched. Before its first
- * answer the tile waits as the others do (`RailTile`), and a read that failed says so.
+ * account with «0%» and «fresh», a silent window says «silent» and for how long, its share as
+ * solid as a fresh one's. Before its first answer the tile waits as the others do (`RailTile`),
+ * and a read that failed says so.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +19,13 @@ import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { reading, standing } from '@/pages/analytics/composables/useRailTiles.ts'
 import type { RailTileModel } from '@/pages/analytics/composables/useRailTiles.ts'
-import { sectionWindows, tightest } from '@/pages/analytics/utils/quotaFigures.ts'
+import {
+  answerMoment,
+  forecastCourses,
+  forecastEnds,
+  sectionWindows,
+  tightest,
+} from '@/pages/analytics/utils/quotaFigures.ts'
 
 import { QUOTA_SECTIONS } from '@/shared/api/analyticsAddress.ts'
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
@@ -45,10 +54,12 @@ export function useQuotaTiles(options: {
     if (read.status === 'loading') return reading()
     if (read.status === 'failed') return standing('failed', t('analytics.rail.failed'))
     const { quota } = read
-    const found = tightest(quota, section, options.now())
+    const now = options.now()
+    const found = tightest(quota, section, now)
     if (!found) return { ...nothing(quota, section), busy: read.refreshing }
     const { account, window } = found
     const name = words.accountName(account)
+    const today = answerMoment(quota)
     return {
       ...standing('ready', window.kind === 'week_model' ? `${name}, ${window.model}` : name),
       quiet: false,
@@ -57,13 +68,13 @@ export function useQuotaTiles(options: {
         account: `${name} — ${words.accountDetail(account)}`,
       }),
       aside: words.share(window.latest.used_percent),
-      count: words.state(window),
+      count: words.stateWords(window, now, quota.fresh_for_seconds),
       busy: read.refreshing,
       meter: {
-        label: words.barLabel(window),
+        label: words.barLabel(window, now, today, quota.fresh_for_seconds),
         used: window.latest.used_percent,
         even: window.even_percent,
-        held: window.state !== 'fresh',
+        forecast: forecastEnds(forecastCourses(window, Date.parse(today))),
       },
     }
   }

@@ -108,9 +108,14 @@ function cellsOf(section: Locator) {
   )
 }
 
-/** The gap between the furthest-apart and the nearest of the cells that are there. */
-function spread(values: (number | null)[]): number {
+/**
+ * The gap between the furthest-apart and the nearest of the cells that are there, which are
+ * `present` of them, every one unless said: a gap read over fewer cells than the rows draw
+ * says nothing of the ones it missed, and over none it is no gap at all.
+ */
+function spread(values: (number | null)[], present = values.length): number {
   const known = values.filter((value): value is number => value !== null)
+  expect(known, 'the cells measured').toHaveLength(present)
   return known.length === 0 ? 0 : Math.max(...known) - Math.min(...known)
 }
 
@@ -138,11 +143,9 @@ for (const width of [1280, 390]) {
     // A waiting mark in one row must not squeeze every title on a phone.
     expect(rows[0]?.titleWidth ?? 0).toBeGreaterThanOrEqual(narrow ? 200 : 0)
     const waiting = rows.map((row) => row.waiting)
-    expect(waiting.filter((value) => value !== null)).toHaveLength(2)
-    expect(spread(waiting)).toBeLessThanOrEqual(1)
+    expect(spread(waiting, 2)).toBeLessThanOrEqual(1)
     const holders = rows.map((row) => row.holder)
-    expect(holders.filter((value) => value !== null)).toHaveLength(narrow ? 0 : 4)
-    expect(spread(holders)).toBeLessThanOrEqual(1)
+    expect(spread(holders, narrow ? 0 : 4)).toBeLessThanOrEqual(1)
     await section.screenshot(shot(info.outputPath(`chain-columns-${width}.png`)))
   })
 }
@@ -301,7 +304,10 @@ test('on a wide list every cell of a row stands on one baseline and every row is
   const rows = await linesOf(section)
   expect(rows.filter((row) => row.mark !== null)).toHaveLength(3)
   for (const row of rows) {
-    expect(spread([row.reference, row.title, row.mark, row.detail])).toBeLessThanOrEqual(0.75)
+    // Every row draws its reference, its title and its detail; a marked row its mark too.
+    const cells = [row.reference, row.title, row.mark, row.detail]
+    expect(spread(cells, row.mark === null ? 3 : 4)).toBeLessThanOrEqual(0.75)
+    expect(row.glyphOff === null, 'a glyph measured on a marked row').toBe(row.mark === null)
     expect(row.glyphOff ?? 0).toBeLessThanOrEqual(1.5)
   }
   expect(spread(rows.map((row) => row.height))).toBeLessThanOrEqual(0.5)
@@ -332,6 +338,7 @@ for (const width of [1280, 1440, 1920]) {
     for (const row of rows) {
       // The mark has a line of its own here; everything else stands on the title's.
       expect(spread([row.reference, row.title, row.detail])).toBeLessThanOrEqual(0.75)
+      expect(row.glyphOff === null, 'a glyph measured on a marked row').toBe(row.mark === null)
       expect(row.glyphOff ?? 0).toBeLessThanOrEqual(1.5)
     }
     // Rows of one line are one height, and rows of two lines are one height.

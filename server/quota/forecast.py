@@ -137,24 +137,28 @@ class Ceiling:
 class Enough:
     """The window lasts to its reset at this pace.
 
-    `ratio`: what the pace spends by the reset over what is left. `held`: the five-hour
-    ceiling held the pace back, so the result is the ceiling's.
+    `ratio`: what the pace spends by the reset over what is left. `reached`: the share of the
+    window spent by the reset, a percent no higher than 100. `held`: the five-hour ceiling held
+    the pace back, so the result is the ceiling's.
     """
 
     ratio: float
     resets_at: int
     basis: Basis
+    reached: float
     held: Ceiling | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Short:
-    """The window runs out at `at`, before its reset; `ratio` is above 1."""
+    """The window runs out at `at`, before its reset; `ratio` is above 1, and `reached`, the
+    share of the window the pace would have spent by the reset, above 100."""
 
     ratio: float
     resets_at: int
     at: float
     basis: Basis
+    reached: float
     held: Ceiling | None = None
 
 
@@ -437,8 +441,8 @@ def _ceiling_reaches(ceiling: Ceiling, points: float, now: int) -> float:
 def _judge(
     state: _State, pace: tuple[float, Basis], now: int, ceiling: Ceiling | None
 ) -> Enough | Short:
-    """Whether a pace lasts to the reset. It runs to now, not to the last reading, so a
-    quiet stretch lowers it."""
+    """Whether a pace lasts to the reset, and the share of the window it spends by then. It
+    runs to now, not to the last reading, so a quiet stretch lowers it."""
 
     per_ms, basis = pace
     resets_at = state.resets_at
@@ -446,14 +450,16 @@ def _judge(
     paced = per_ms * (resets_at - now)
     if ceiling is not None and ceiling.cost > 0 and _ceiling_growth(ceiling, resets_at) < paced:
         ratio = _ceiling_growth(ceiling, resets_at) / remaining
+        reached = state.spent + ratio * remaining
         if ratio < 1:
-            return Enough(ratio, resets_at, basis, held=ceiling)
+            return Enough(ratio, resets_at, basis, reached, held=ceiling)
         at = max(now + remaining / per_ms, _ceiling_reaches(ceiling, remaining, now))
-        return Short(ratio, resets_at, at, basis, held=ceiling)
+        return Short(ratio, resets_at, at, basis, reached, held=ceiling)
     ratio = paced / remaining
+    reached = state.spent + ratio * remaining
     if ratio <= 1:
-        return Enough(ratio, resets_at, basis)
-    return Short(ratio, resets_at, now + remaining / per_ms, basis)
+        return Enough(ratio, resets_at, basis, reached)
+    return Short(ratio, resets_at, now + remaining / per_ms, basis, reached)
 
 
 def forecast(
@@ -494,8 +500,7 @@ def outlook(
     if not paces:
         return None
     estimates = tuple(_judge(state, pace, now, ceiling) for pace in paces)
-    remaining = 100 - state.spent
-    reached = [state.spent + one.ratio * remaining for one in estimates]
+    reached = [one.reached for one in estimates]
     return WeekRange(state.resets_at, min(reached), max(reached), estimates)
 
 

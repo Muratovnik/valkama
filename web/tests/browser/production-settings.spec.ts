@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -8,6 +8,9 @@ import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
+
+/** What a part of the page says, its words run together. */
+const words = (part: Locator) => part.evaluate((node) => node.textContent?.trim() ?? '')
 
 async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') {
   await page.getByRole('tablist', { name: 'Settings section' }).getByRole('tab', { name }).click()
@@ -28,12 +31,17 @@ test('Settings sections share one measure and one compact control lane', async (
   const sectionControl = page.getByRole('tablist', { name: 'Settings section' })
   const sectionControlBox = await sectionControl.boundingBox()
   expect(Math.abs((sectionControlBox?.x ?? 0) - (pageBox?.x ?? 0))).toBeLessThan(2)
-  // The section's own heading is the switch: no line beside it restates it.
-  await expect(page.locator('.settings-page-head p')).toHaveCount(0)
+  // The section's own heading is the switch: no line beside it restates it, so the head says
+  // what its switch says and nothing more.
+  const head = page.locator('.settings-page-head')
+  await expect(head.getByRole('tablist', { name: 'Settings section' })).toBeVisible()
+  expect(await words(sectionControl)).not.toBe('')
+  expect(await words(head)).toBe(await words(sectionControl))
 
   const controlLefts = await page
     .locator('.settings-general-control, .settings-alerts-control')
     .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))
+  expect(controlLefts.length).toBeGreaterThan(1)
   expect(Math.max(...controlLefts) - Math.min(...controlLefts)).toBeLessThan(2)
   expect(controlLefts[0] - (pageBox?.x ?? 0)).toBeGreaterThan((pageBox?.width ?? 0) * 0.48)
   expect(controlLefts[0] - (pageBox?.x ?? 0)).toBeLessThan((pageBox?.width ?? 0) * 0.53)
@@ -122,6 +130,7 @@ test('a link to the retired Workspace section opens General', async ({ page }) =
   )
   await expect(page.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
+  // Shown present where an address names no section, in production-shell.spec.ts.
   await expect(page.locator('.route-recovery')).toHaveCount(0)
 })
 

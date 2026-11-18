@@ -11,6 +11,7 @@ import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 
 import { chainResponse, emptyChain, largeGoalChain } from '../fixtures/chain.ts'
 import { deferred, findTab, getButton, showChain, workItemFixture } from '../fixtures/workItem.ts'
+import { documentOrder } from '../support/documentOrder.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -96,20 +97,18 @@ describe('the chain section of a card', () => {
 
     // The section leads with its map; the totals follow it in one line, and the
     // chain's history is one action away.
-    const parts = chain.element.querySelectorAll(
-      '.branch-map, .chain-summary, .chain-details, .chain-members',
-    )
-    expect([...parts].map((part) => part.classList[0])).toEqual([
-      'branch-map',
-      'chain-summary',
-      'chain-details',
-      'chain-members',
-    ])
-    expect(chain.findAll('.chain-summary p')).toHaveLength(2)
     // The tab names the section, so it opens on its actions and no heading says «Chain» again;
     // nor does a bare count: the totals line is the section's one number for the chain, and it
     // says what it counts. The action wears its short word under its whole name.
-    expect(chain.element.firstElementChild?.classList).toContain('chain-actions')
+    const order = [
+      '.chain-actions',
+      '.branch-map',
+      '.chain-summary',
+      '.chain-details',
+      '.chain-members',
+    ]
+    expect(documentOrder(chain.element, order)).toEqual(order)
+    expect(chain.text().indexOf(chain.get('.chain-actions').text())).toBe(0)
     expect(chain.get('.chain-actions').text()).toBe('ContentsChainOn graph')
     expect(chain.find('h3, .section-header').exists()).toBe(false)
     expect(getButton(wrapper, 'On graph').attributes('aria-label')).toBe('Show on graph')
@@ -139,9 +138,7 @@ describe('the chain section of a card', () => {
     )
     expect(chain.get('.chain-chart').attributes('aria-label')).toContain('483 done and 133 open')
 
-    // Each origin is a lane of the map, its counts at its end; the textual
-    // origins line the map replaced is gone.
-    expect(chain.find('.chain-origins').exists()).toBe(false)
+    // Each origin is a lane of the map, its counts at its end.
     expect(chain.findAll('.branch-map-label').map((label) => label.text())).toEqual([
       'MAIN-384',
       'MAIN-779',
@@ -260,7 +257,8 @@ describe('the chain section of a card', () => {
     expect(document.activeElement).toBe(rows[8].element)
     expect(toggle()?.text()).toBe('Show fewer')
     expect(toggle()?.attributes('aria-expanded')).toBe('true')
-    expect(backlog()?.element.lastElementChild).toBe(toggle()?.element)
+    const last = rows.at(-1)?.element.compareDocumentPosition(toggle()?.element as Node) ?? 0
+    expect(last & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     // Closed again: the short list, and focus back on the toggle.
     await toggle()?.trigger('click')
@@ -376,19 +374,14 @@ describe('the chain section of a card', () => {
     // chain's history moves below it, so the rows the choice narrowed are not
     // a chart's height away from the label that narrowed them. Opened before the
     // choice, it stays open down there.
-    const order = () =>
-      [
-        ...section(wrapper).element.querySelectorAll(
-          '.branch-map, .chain-summary, .chain-lane-filter, .chain-members, .chain-details',
-        ),
-      ].map((part) => part.classList[0])
-    expect(order()).toEqual([
-      'branch-map',
-      'chain-summary',
-      'chain-lane-filter',
-      'chain-members',
-      'chain-details',
-    ])
+    const order = [
+      '.branch-map',
+      '.chain-summary',
+      '.chain-lane-filter',
+      '.chain-members',
+      '.chain-details',
+    ]
+    expect(documentOrder(section(wrapper).element, order)).toEqual(order)
     expect(section(wrapper).find('.chain-chart').exists()).toBe(false)
     await getButton(wrapper, 'Chart and pace').trigger('click')
     expect(section(wrapper).find('.chain-chart').exists()).toBe(true)

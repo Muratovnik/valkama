@@ -14,6 +14,7 @@ import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 import { serveUsage, task } from '../fixtures/analytics.ts'
 import { analyticsI18n } from '../support/analyticsReads.ts'
 import { showView, viewsOf } from '../support/chartViews.ts'
+import { seriesNames } from '../support/legend.ts'
 
 /** A week of three days, a task a day, compared with the week before when `compare` is set. */
 function usageOf(compare: boolean) {
@@ -97,11 +98,7 @@ describe('the ring of the tokens by kind', () => {
       ['output', '4'],
       ['cache_write_5m', '2'],
     ])
-    expect(ring.findAll('.chart-key-name').map((one) => one.text())).toEqual([
-      'Input',
-      'Output',
-      'Cache write, 5 min',
-    ])
+    expect(seriesNames(ring)).toEqual(['Input', 'Output', 'Cache write, 5 min'])
     // The cache reads and the reasoning are no part of the ring's whole: notes under its legend.
     expect(ring.findAll('.donut-note').map((one) => one.text())).toEqual([
       'Cache read60M',

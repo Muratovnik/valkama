@@ -165,7 +165,10 @@ describe('WorkItemInspector resource state', () => {
       'There is no such record: it was deleted, or the address points elsewhere.',
     )
     expect(wrapper.find('.platform-state-panel').exists()).toBe(false)
-    expect(wrapper.find('.card-facts-block').exists()).toBe(false)
+    // The reference and the sentence are all it says: no facts, no section, no state besides.
+    expect(wrapper.text().replace('QA-320', '').trim()).toBe(
+      'There is no such record: it was deleted, or the address points elsewhere.',
+    )
     expect(wrapper.findAll('button').map((button) => button.text())).toEqual([])
     // The execution module is never asked about a record that does not exist.
     expect(fetchExecutionHistory).not.toHaveBeenCalled()
@@ -217,6 +220,8 @@ describe('WorkItemInspector resource state', () => {
     const wrapper = mountInspector()
     await flushPromises()
     expect(wrapper.find('.overview-probe').exists()).toBe(true)
+    // The card it found has its sections, which the one that names nothing has not (above).
+    expect(wrapper.find('.inspector-tabs').exists()).toBe(true)
 
     vi.mocked(fetchWorkItem).mockRejectedValueOnce({
       code: 'not_found',

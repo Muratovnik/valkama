@@ -11,6 +11,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { tokenInk } from './contrast.ts'
 import { finishedCard, heldCard, openPlanFor, shortHolderCard } from './openSessionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { blockedWorkItem, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
@@ -79,17 +80,6 @@ async function box(locator: Locator) {
 }
 
 const inkOf = (target: Locator) => target.evaluate((node) => getComputedStyle(node).color)
-
-/** A token's colour in the form the computed style reports it, read through a probe. */
-const tokenInk = (page: Page, token: string) =>
-  page.evaluate((name) => {
-    const probe = document.createElement('span')
-    probe.style.color = `var(${name})`
-    document.body.append(probe)
-    const ink = getComputedStyle(probe).color
-    probe.remove()
-    return ink
-  }, token)
 
 const middle = (bounds: { height: number; y: number }) => bounds.y + bounds.height / 2
 
@@ -203,6 +193,7 @@ test('with no labels the row holds only the «+», and adds no room under it', a
     card: (read) => ({ ...shortHolderCard(read), labels: [] }),
   })
   const labels = row(drawer, 'Метки')
+  // The chips this row draws for labels: `production-card-head.spec.ts` counts two.
   await expect(labels.value.locator('.label-chip')).toHaveCount(0)
   await expect(labels.value.getByRole('button', { name: 'Добавить метку' })).toBeVisible()
   // The holder's row follows the labels' in the registry's order, one gap under it.
@@ -219,7 +210,8 @@ for (const width of [WIDE, PHONE]) {
       closed: true,
       card: (read) => ({ ...read, claim: null, claim_ref: '', claim_state: null, labels: [] }),
     })
-    // Finished, held by nobody, with nothing to do: a state, a priority and that word.
+    // Finished, held by nobody, with nothing to do: a state, a priority and that word. The
+    // action this leaves out is there on an item nobody holds, below.
     await expect(drawer.locator('.card-action .write-actions')).toHaveCount(0)
     const holder = row(drawer, 'Ранее отвечал')
     await expect(holder.value).toContainText('Никто не взял')
@@ -244,7 +236,9 @@ test('with nobody on the item the row keeps its label, its word and its action',
   })
   const holder = row(drawer, 'Исполняет')
   await expect(holder.value).toContainText('Никто не взял')
-  const action = drawer.locator('.card-action').getByRole('button', { name: 'Взять', exact: true })
+  const action = drawer
+    .locator('.card-action .write-actions')
+    .getByRole('button', { name: 'Взять', exact: true })
   const actionBox = await box(action)
   const holderBox = await box(holder.value)
   expect(middle(actionBox)).toBeCloseTo(middle(holderBox), 0)
@@ -261,6 +255,7 @@ for (const locale of ['ru', 'en'] as const) {
     // Said once, with no colon left over from the sentence it was.
     await expect(value).not.toContainText(':')
     await expect(label).not.toContainText(':')
+    // As on any finished item: the action stands only on an open one nobody holds.
     await expect(drawer.locator('.card-action .write-actions')).toHaveCount(0)
   })
 }

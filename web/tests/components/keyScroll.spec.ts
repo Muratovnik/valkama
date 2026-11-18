@@ -89,7 +89,8 @@ describe('a frame in a document', () => {
   it('watches frames and nothing else', async () => {
     const wrapper = drawn([PARAGRAPH, CODE, PARAGRAPH, TABLE])
     await flushPromises()
-    expect(watching.size).toBeLessThanOrEqual(2)
+    // The code and the table are the document's two frames, each watched.
+    expect(watching.size).toBe(2)
     expect([...watching].every((element) => element.matches('pre, .rich-table-frame'))).toBe(true)
     wrapper.unmount()
     expect(watching.size).toBe(0)

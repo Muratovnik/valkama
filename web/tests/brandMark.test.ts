@@ -3,7 +3,14 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
+import { h } from 'vue'
+
 import { test } from 'vitest'
+import { renderToString } from 'vue/server-renderer'
+
+import BrandMark from '@/shared/ui/BrandMark.vue'
+
+import { uncommented } from '../scripts/ui-system/comments.mjs'
 
 /**
  * One mark, five renderers.
@@ -125,23 +132,30 @@ test('the Windows icon draws the same polygons as the paths', () => {
   assert.deepEqual(scriptPolygons('ACCENT_POLYGONS'), polygons(ACCENT))
 })
 
-test('inside the shell the mark is one ink, and alone it is two flat colours', () => {
+/** Each path the component renders with these props, by its drawing, and the fill it gets. */
+async function fills(props: Record<string, unknown>) {
+  const html = await renderToString(h(BrandMark, props))
+  return Object.fromEntries(
+    [...html.matchAll(/<path\b[^>]*>/g)].map(([path]) => [
+      /\sd="([^"]*)"/.exec(path)?.[1],
+      /\sfill="([^"]*)"/.exec(path)?.[1],
+    ]),
+  )
+}
+
+test('inside the shell the mark is one ink, and alone it is two flat colours', async () => {
   // A second colour in the chrome is a chromatic event in a chrome that rations
   // a status to one dot. Alone on its tile the mark is the stroke and the
   // accent, each one flat colour from the palette.
-  assert.match(component, /tone\?:\s*'brand'\s*\|\s*'chrome'/)
-  assert.match(
-    component,
-    /bodyFill = computed\(\(\) =>\s*props\.tone === 'chrome' \? 'currentColor' : 'var\(--color-brand-body\)'/,
-  )
-  assert.match(
-    component,
-    /accentFill = computed\(\(\) =>\s*props\.tone === 'chrome' \? 'currentColor' : 'var\(--color-brand-accent\)'/,
-  )
-  assert.match(component, new RegExp(`d="${BODY}"\\s*:fill="bodyFill"`))
-  assert.match(component, new RegExp(`d="${ACCENT.replaceAll('.', '\\.')}"\\s*:fill="accentFill"`))
+  assert.deepEqual(await fills({ tone: 'chrome' }), {
+    [BODY]: 'currentColor',
+    [ACCENT]: 'currentColor',
+  })
+  const brand = { [BODY]: 'var(--color-brand-body)', [ACCENT]: 'var(--color-brand-accent)' }
+  assert.deepEqual(await fills({ tone: 'brand' }), brand)
+  assert.deepEqual(await fills({}), brand, 'alone is the default')
   const nav = read('../src/widgets/app-nav/components/AppNav.vue')
-  assert.match(nav, /<BrandMark[^>]*tone="chrome"/)
+  assert.match(uncommented('AppNav.vue', nav), /<BrandMark\b[^>]*\stone="chrome"/)
   // The skeleton draws the rail's mark, so in the rail's ink: the paths carry no fill
   // of their own and the mark fills with the colour of the rail's header.
   for (const [name, page] of [

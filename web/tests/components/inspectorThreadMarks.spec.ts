@@ -48,6 +48,12 @@ function asked() {
 }
 const talked = () => [root(1), root(2, { resolution: MARK }), root(3)]
 const unresolved = (wrapper: VueWrapper) => getButton(wrapper, 'Unresolved 2')
+/** The box that marks the thread resolved with a reply, found by the words it is labelled with. */
+const markBox = (wrapper: VueWrapper) =>
+  wrapper
+    .findAll('label')
+    .filter((label) => label.text() === 'Mark the thread resolved')
+    .map((label) => label.get('input[type="checkbox"]'))
 const count = (wrapper: VueWrapper) => wrapper.get('.section-header-count').text()
 
 describe('a question has a thread too', () => {
@@ -61,7 +67,7 @@ describe('a question has a thread too', () => {
     expect(tail.text()).toContain('Which docs?')
     expect(wrapper.find('.thread-entry').exists()).toBe(false)
     await getButton(wrapper, 'Reply').trigger('click')
-    expect(wrapper.find('.reply-mark').exists()).toBe(false)
+    expect(markBox(wrapper)).toHaveLength(0)
     await replyField(wrapper).setValue('All of them')
     vi.mocked(replyInThread).mockResolvedValueOnce({
       ...written(3, 0),
@@ -91,6 +97,7 @@ describe('marking', () => {
   it('sends the decision, and focus lands on the thread as it folds', async () => {
     const item = card([root(1), reply(2, 1)])
     const wrapper = open(item)
+    expect(thread(wrapper, 1).text()).toContain('Reply 2')
     await inThread(wrapper, 1, 'Resolve').trigger('click')
     await nextTick()
     const field = wrapper.get('.resolve-form input')
@@ -115,7 +122,7 @@ describe('marking', () => {
     expect(thread(wrapper, 1).classes()).toContain('is-folded')
     expect(thread(wrapper, 1).text()).toContain('Moved to MAIN-14')
     expect(thread(wrapper, 1).text()).toContain('Root 1')
-    expect(wrapper.find('.reply-text').exists()).toBe(false)
+    expect(thread(wrapper, 1).text()).not.toContain('Reply 2')
   })
 
   it('sends a blank decision as an empty one', async () => {
@@ -255,6 +262,8 @@ describe('marking', () => {
   it('does not fold a thread with a form open in it, whoever marks it', async () => {
     const wrapper = open(card([root(1)]))
     await inThread(wrapper, 1, 'Reply').trigger('click')
+    // A reply to an unmarked comment can carry the mark, as one to a question cannot.
+    expect(markBox(wrapper)).toHaveLength(1)
     await replyField(wrapper).setValue('Words')
     await wrapper.setProps({ item: card([root(1, { resolution: MARK })]) })
     expect((replyField(wrapper).element as HTMLTextAreaElement).value).toBe('Words')

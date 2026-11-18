@@ -387,6 +387,8 @@ for (const width of [1280, 390]) {
       edge ?? Number.NaN,
     )
     // The box keeps its whole target: it reaches outward rather than shrinking.
-    for (const target of await boxes(page.locator('.step'))) expect(target.width).toBe(28)
+    const targets = await boxes(page.locator('.step'))
+    expect(targets).toHaveLength(steps.length)
+    for (const target of targets) expect(target.width).toBe(28)
   })
 }

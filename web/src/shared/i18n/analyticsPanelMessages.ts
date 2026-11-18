@@ -7,7 +7,7 @@
 export const analyticsPanelMessages = {
   en: {
     bars: {
-      more: '{count} more — in the table | {count} more — in the table',
+      all: 'All {count} | All {count}',
     },
     multiples: {
       title: '{measure} {per}, separately {by}',
@@ -78,7 +78,7 @@ export const analyticsPanelMessages = {
   },
   ru: {
     bars: {
-      more: 'ещё {count} — в таблице | ещё {count} — в таблице | ещё {count} — в таблице',
+      all: 'Все {count} | Все {count} | Все {count}',
     },
     multiples: {
       title: '{measure} {per}, отдельно {by}',

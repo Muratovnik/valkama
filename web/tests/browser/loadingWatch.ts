@@ -5,7 +5,10 @@ interface LoadingSpan {
   /** From the moment the watch was started. */
   from: number
   to: number
-  /** Where it stood: the closest element that names its place. */
+  /**
+   * Where it stood: the closest element that names its place, by its `data-scroll-owner`, else
+   * `workspace-stage` or `drawer` for the element carrying that class, else its tag.
+   */
   where: string
 }
 
@@ -65,10 +68,12 @@ function startWatch() {
       return
     }
     const place = seen.closest<HTMLElement>('[data-scroll-owner], .workspace-stage, .drawer, main')
+    // A place is named by what it is, whatever order its classes come in.
+    const named = ['workspace-stage', 'drawer'].find((name) => place?.classList.contains(name))
     open = {
       from: at,
       to: at,
-      where: place?.dataset.scrollOwner ?? place?.className.split(' ')[0] ?? 'page',
+      where: place?.dataset.scrollOwner ?? named ?? place?.localName ?? 'page',
     }
     watch.spans.push(open)
   }

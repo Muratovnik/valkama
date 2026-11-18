@@ -117,7 +117,8 @@ describe('the panel of a dimension', () => {
     // Work under no known model is no value of the dimension: it is ranked by its figure, with a
     // small chart and a bar of its own on the values' scale, in the neutral of what is not a
     // value, never the lighter one of the folded rest.
-    expect(text(page, '.spending-multiples .multiples-apart .multiple-name')).toEqual([])
+    // Every name the section shows is a small chart's, so none stands in a list apart.
+    expect(text(page, '.spending-multiples .multiple-name')).toEqual([...multiples.keys()])
     expect(multiples.get('Unknown')).toBe('apart')
     expect(sectors.get('Unknown')).toBe('apart')
     expect(bars.get('Unknown')).toBe('apart')

@@ -8,6 +8,7 @@ import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorCommitMessages } from '@/shared/i18n/doctorCommitMessages.ts'
+import { doctorDesktopMessages } from '@/shared/i18n/doctorDesktopMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { doctorProjectMessages } from '@/shared/i18n/doctorProjectMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
@@ -489,6 +490,7 @@ export const en = {
       },
       ...doctorCommitMessages.en,
       ...doctorLoginMessages.en,
+      ...doctorDesktopMessages.en,
       ...doctorQuotaMessages.en,
       ...doctorProjectMessages.en,
       'listener-offline': {

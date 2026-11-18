@@ -54,6 +54,7 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/MarkdownSuggestions.vue', 1], // Overlay edge of the # list floating over the text.
   ['shared/ui/CountBadge.vue', 1],
   ['shared/ui/SmallMultiples.vue', 1], // The floor each small chart stands on, as a baseline.
+  ['shared/ui/RankedBars.vue', 1], // The rule a list of free text sets its rows apart under.
   ['shared/ui/DialogFrame.vue', 2],
   ['shared/ui/DrawerFrame.vue', 1],
   ['shared/ui/PlatformStatePanel.vue', 2],
@@ -68,8 +69,8 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/ReferencePreview.vue', 1], // Overlay edge of the card a reference shows on hover.
   ['shared/ui/SearchCombobox.vue', 2], // The field's edge, and the overlay edge of its list.
   ['shared/ui/SemanticState.vue', 1],
-  // A chart's outline of the period it is compared with, and its key in the legend: an open
-  // dashed edge told from the stack by its drawing, not a hue. The border is the drawing itself.
+  // A chart's tick of the period it is compared with, and its key in the legend: an edge in the
+  // text's ink told from the stack by its drawing, not a hue. The border is the drawing itself.
   ['shared/ui/periodPlot.css', 1],
   ['shared/ui/ChartLegend.vue', 1],
   ['shared/ui/TooltipHost.vue', 1], // Overlay edge of the window's one hint.

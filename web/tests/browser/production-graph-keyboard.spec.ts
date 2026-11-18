@@ -77,7 +77,9 @@ test('the field is one Tab stop and the arrows walk it with the camera', async (
       .locator('.vue-flow__node')
       .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).style.transform).join('|')),
   ).toBe(layout)
-  // No node is described to a screen reader as one the arrows move.
+  // No node is described to a screen reader as one the arrows move: the library's nodes are
+  // on the field, without the description it gives a node it lets the keys drag.
+  await expect(page.locator('.vue-flow__node').first()).toBeAttached()
   await expect(page.locator('.vue-flow__node[aria-describedby]')).toHaveCount(0)
 
   const walked = await focusedCard(page)

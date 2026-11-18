@@ -61,7 +61,7 @@ it('draws code in a label as code, and a link in it as its words inside the form
   expect(label?.find('code').text()).toBe('vue/max-lines-per-block')
   // A press inside a radio's label would select it as well as follow the link.
   expect(label?.find('a').exists()).toBe(false)
-  expect(wrapper.findAll('.request-option-label')[1]?.html()).toContain('>Leave it as it is<')
+  expect(wrapper.findAll('.request-option-label')[1]?.text()).toBe('Leave it as it is')
 })
 
 it('names the radio by those words, not by the markdown', () => {

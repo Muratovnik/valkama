@@ -83,7 +83,7 @@ function blockOf({ heights, pressedAt, spans }: LoadingWatch) {
 
 const surfaces = [
   { name: 'a switch of board', act: switchBoard, where: 'workspace-stage' },
-  { name: 'a card opened in the drawer', act: openCard, where: 'overlay-surface' },
+  { name: 'a card opened in the drawer', act: openCard, where: 'drawer' },
 ] as const
 
 for (const { name, act, where } of surfaces) {

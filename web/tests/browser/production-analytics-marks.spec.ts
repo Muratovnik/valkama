@@ -5,8 +5,9 @@
  * panel's first block or the table by a pixel; so does a ranked row the panel has to scroll to,
  * pointed at or brought under a resting pointer by the wheel, its cut name a space apart from its
  * share; no line of words stands over a plot, so the drawing field keeps that room; a task's
- * segment opens the task's card over the page, the module still Analytics, and closing it gives
- * back the section, the period and the scroll. Each run prints what it measured.
+ * segment opens the task's side panel, whose «Open the card» opens the card over the page, the
+ * module still Analytics, and closing them gives back the section, the period and the scroll.
+ * Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -17,7 +18,8 @@ import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { openReport, pageAt, record, serve, serveTask } from './analyticsPage.ts'
 import { openOverview, WORLD } from './overviewPage.ts'
 import { workItem, workItemRef } from './planningFixtures.ts'
-import { HELD_WORLD } from './served/analyticsMarks.ts'
+import { expectNoLineOverPlot } from './plotWords.ts'
+import { HELD, HELD_WORLD } from './served/analyticsMarks.ts'
 import { test } from './test.ts'
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
@@ -62,7 +64,8 @@ test('a segment, a ranked row and a day the keyboard stands on each say themselv
   await page.setViewportSize({ width: 1440, height: 900 })
   const days = analytics.locator('.spending-days')
   await expect(days).toHaveAttribute('data-shown', 'chart')
-  await expect(page.locator('.period-readout, .step-readout')).toHaveCount(0)
+  // No line of words stands over the plot: each mark says itself in its hint.
+  await expectNoLineOverPlot(page, '.spending-days [data-chart="periods"]')
 
   // A segment: its series, its value and its share of the day.
   const segment = days.locator('.period-segment').first()
@@ -119,10 +122,14 @@ const reach = (page: Page) =>
     }
   })
 
-/** The name of the row the world ranks first, cut on its row, then a space and its share. */
-const NAMED_SHARE = /^MAIN-1 Rework the import of planning documents, part 1 \d+% of the total/u
+/**
+ * What the row the world ranks first says: its share alone. A task's name takes a line of its own
+ * and wraps to two before it is cut (`RankedBars`), so this one stands whole on its row, and a
+ * hint never repeats the words its element shows.
+ */
+const SHARE = /^\d+% of the total$/u
 
-test('a ranked row the panel scrolls to reach says itself, its cut name apart from its share, and nothing moves', async ({
+test('a ranked row the panel scrolls to reach says its share, and nothing moves', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -145,7 +152,7 @@ test('a ranked row the panel scrolls to reach says itself, its cut name apart fr
   expect(after.scrolled, 'pointing at the row scrolled the panel').toBeGreaterThan(0)
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row reached by the scroll', { before, after, ...seen })
-  expect(seen.says).toMatch(NAMED_SHARE)
+  expect(seen.says).toMatch(SHARE)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 
@@ -225,7 +232,7 @@ async function viewShown(page: Page) {
   }
 }
 
-test('a task’s segment opens its card over the page, which closes back to the section, period and scroll', async ({
+test('a task’s segment opens its panel and from it its card over the page, which close back to the section, period and scroll', async ({
   page,
 }, info) => {
   await serve(page, HELD_WORLD)
@@ -242,18 +249,27 @@ test('a task’s segment opens its card over the page, which closes back to the 
   expect(before.panel, 'the panel scrolled to the day chart').toBeGreaterThan(0)
 
   await segment.click()
+  const details = page.getByRole('dialog', { name: `Details: MAIN-264 ${workItem.title}` })
+  await expect(details).toBeVisible()
+  const detail = JSON.stringify({ by: 'work_item', value: HELD.id })
+  await expect.poll(() => path(page)).toBe(pageAt({ ...VIEW, detail }))
+  expect(uses.filter((kind) => kind === 'task_open')).toEqual([])
+  await details.getByRole('link', { name: 'Open the card' }).click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toContainText(workItem.title)
   // The module is still Analytics: its path, its view in the address, and the card named there.
   expect(new URL(page.url()).pathname.startsWith('/modules/analytics/')).toBe(true)
   const opened = parsePlatformRoute(new URL(page.url()))
   expect(opened.module_id).toBe('analytics')
-  expect(opened.state).toEqual(VIEW)
+  expect(opened.state).toEqual({ ...VIEW, detail })
   expect(planningWorkItemRef(opened.entity)).toEqual(workItemRef)
   await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(1)
 
   await drawer.locator('.drawer-frame-close').click()
   await expect(drawer).toBeHidden()
+  await expect(details).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(details).toBeHidden()
   await expect.poll(() => path(page)).toBe(address)
   const after = await viewShown(page)
   await record(info, 'analytics segment card', { before, after })

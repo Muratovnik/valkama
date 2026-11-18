@@ -18,6 +18,12 @@ import {
 } from './previewPage.ts'
 import { test } from './test.ts'
 
+test.beforeEach(async ({ page }) => {
+  // A card's delay runs on this clock (`cardsAfterTheDelay`), so a loaded machine moves no
+  // verdict; until a test moves it, it keeps the wall clock's pace.
+  await page.clock.install()
+})
+
 const WORDS = {
   en: {
     copy: 'Copy MAIN-12',

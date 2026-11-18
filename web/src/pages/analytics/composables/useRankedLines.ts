@@ -1,9 +1,9 @@
 /**
  * The values of a breakdown as the rows of a ranked chart, wherever one stands — a section's bars
  * or a card of first values: each row its value's name, its whole id where the name is its start,
- * its figure in the measure, and what pressing it does (`useLineMarks`). A task's row is a link
- * to its card, followed as any reference is; a value the read can filter by narrows the view to
- * it, sent to `narrow` with its name.
+ * its figure in the measure, and what pressing it does (`useLineMarks`): a value the read can
+ * filter by opens its side panel, sent to `inspect` with its name, and a task's row is a link to
+ * its card as well, which a press with a modifier or the middle button opens elsewhere.
  */
 import { computed } from 'vue'
 
@@ -18,12 +18,12 @@ import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
 
 export function useRankedLines(options: {
   by: () => UsageDimension
+  /** A value pressed to open its side panel: its filter value, and its name. */
+  inspect: (value: string | null, label: string) => void
   lines: () => readonly SpendingLine[]
   measure: () => Measure
   /** What a row carries besides, such as its hue. */
   more?: (line: SpendingLine) => Partial<RankedRow>
-  /** A value pressed to narrow the view to it: its filter value, and its name. */
-  narrow: (value: string | null, label: string) => void
 }) {
   const words = useSpendingWords()
   const marks = useLineMarks(options)

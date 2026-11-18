@@ -19,7 +19,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
-import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { LEGEND_SERIES, openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { drawAllLined } from './drawnViews.ts'
 import { test } from './test.ts'
 
@@ -189,6 +189,8 @@ async function measure(page: Page, { find, hinted, name }: Marks, pick: number[]
       })
     }
   }
+  // Every kind asked for is measured at a mark of its own, not left out by its finder.
+  expect(measured.length, `${name}: marks measured`).toBeGreaterThan(0)
   return measured
 }
 
@@ -216,8 +218,8 @@ async function expectAtMarks(info: TestInfo, label: string, measured: Measured[]
  * more line; that is the row's mark, not the hint's place, so the spots leave the segments alone.
  */
 const day: Finder = (hinted) => {
-  const slot = hinted.closest('.period-slot')
-  const stack = slot?.querySelector('.period-stack')?.getBoundingClientRect()
+  const slot = hinted.closest('[data-tooltip-area]')
+  const stack = slot?.querySelector('[data-hint-mark]')?.getBoundingClientRect()
   const own = slot?.getBoundingClientRect()
   if (!stack || !own || stack.height < 4 || stack.top - own.top < 8) return null
   const middle = (stack.top + stack.bottom) / 2
@@ -297,6 +299,10 @@ const row: Finder = (hinted) => {
 const reading: Finder = (hinted) => {
   const mark = hinted.querySelector('.step-mark')?.getBoundingClientRect()
   const reach = hinted.getBoundingClientRect()
+  // A step narrower than 8px is skipped, so the latest reading, whose step ends where «now» takes
+  // the pointer, may be measured here by none of its spots. That it keeps the pointer, its dot
+  // painted and «now» not taking it, and that its hint stands at its dot, is held in
+  // `production-analytics-quota-forecast.spec.ts` (`pointAtLatest`).
   if (!mark || reach.width < 8) return null
   return {
     mark: { bottom: mark.bottom, left: mark.left, right: mark.right, top: mark.top },
@@ -346,12 +352,12 @@ async function showAs(page: Page, view: string) {
     if (!(await radio.isChecked()) && (await radio.isVisible())) await radio.click()
 }
 
-async function open(page: Page, width: number) {
+async function open(page: Page, width: number, address?: string) {
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
   // The hint's delay runs on this clock, so each hint is read after it.
   await page.clock.install()
   await serve(page)
-  await openReport(page, width)
+  await openReport(page, width, address)
   await drawAllLined(page)
   await page.evaluate(() => document.fonts.ready)
 }
@@ -379,7 +385,9 @@ for (const width of [1440, 390]) {
     await open(page, width)
     const days = page.locator('.spending-days .period-column')
     const rows = page.locator('.spending-bars .ranked-line')
-    const keys = page.locator('.spending-days .chart-key')
+    // A key of a series: the hatch's key says its name whole while it is cut and has no hint of
+    // its own to place.
+    const keys = page.locator(`.spending-days ${LEGEND_SERIES}`)
     await expect(rows.first()).toBeVisible()
     const measured = [
       ...(await measure(page, { name: 'day', hinted: days, find: day }, [0, 1, -1])),
@@ -392,7 +400,8 @@ for (const width of [1440, 390]) {
   test(`at ${width}px a small chart's columns and name have their hints at them`, async ({
     page,
   }, info) => {
-    await open(page, width)
+    // A section named by identifiers: the tasks, named by free text, draw no small charts.
+    await open(page, width, pageAt({ by: 'model' }))
     const multiples = page.locator('.spending-multiples')
     await multiples.scrollIntoViewIfNeeded()
     await expect(multiples.locator('.multiple-period').first()).toBeVisible()

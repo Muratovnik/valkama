@@ -3,13 +3,17 @@
  * One column per period — a day or an hour — stacked by a few series, such as the accounts the
  * work ran under. The value axis starts at zero and names a few round steps; the time axis
  * names as many periods as it has room for, counted back from the last. A period still running
- * is hatched, so a short last column does not read as a drop; a change at the start of a period
+ * is hatched (`hatch.css`), so a short last column does not read as a drop, and while one is on
+ * the plot the legend names the hatch (`words.hatch`); a change at the start of a period
  * (the account switched) is a line up the plot in the gap before it, and the period's hint, name
  * and table row say what changed: no row of the chart is kept for it, above the plot or under it.
- * A period compared with this one (`before`) stands on the same scale as a short mark at its
- * height over each column, an edge and not a hue, named in the legend, and the period's hint says
- * its figure. A series with no figure in a period (`absent`, such as work with no price) draws
- * nothing there, and the hint and the period's name say so rather than a zero. A period whose
+ * A period compared with this one (`before`) stands on the same scale as a tick at its height
+ * across each column, an edge in the text's main ink and not a hue, named in the legend, and the
+ * period's hint says its figure. The tick reaches 4px past each side of its column, where no
+ * border between two segments ever reaches, so it is never read as a gap in a grey stack; where a
+ * period's room leaves less, it reaches what it can and stays a hair inside that room
+ * (`periodPlot.css`). A series with no figure in a period (`absent`, such as work with no price)
+ * draws nothing there, and the hint and the period's name say so rather than a zero. A period whose
  * figures are not in yet (`pending`) stands as a hatched ground the plot's height, never a column
  * of zero, and its hint and name say it has no data yet. `PeriodColumnsTable` is the same periods
  * as a table.
@@ -48,6 +52,14 @@
  * an arrow, covers whole periods (`usePeriodFrame`), and goes out as `span` with the keys of its
  * first and last period once the pointer or Shift lets it go. A press that does not drag stays
  * the press of what it landed on, and Escape lets a frame go.
+ *
+ * What a reader of the page selects it by: the figure is `data-chart="periods"`, and its legend
+ * the list `ChartLegend` declares (`data-hint-list="legend"`); its regions are `data-region` —
+ * the `frame` the plot scrolls in, the `plot`, its `scale` up the side, the `field` the periods
+ * stand in and the `axis` under it. A period is its slot (`data-tooltip-area`, its key
+ * `data-key`) and its stack the mark its hint speaks for (`data-hint-mark`); a segment carries its
+ * series (`data-series`). The marks drawn up the plot are `data-mark` — a `change` at a period's
+ * start and the tick of the period compared with, `before`.
  */
 import { computed, ref } from 'vue'
 
@@ -112,6 +124,10 @@ const chart = computed(() => stackColumns(props.columns, props.series, props.mar
 /** The name of the mark of a period compared with, where the chart draws one. */
 const outline = computed(() =>
   props.columns.some((column) => column.before) ? props.words.before : undefined,
+)
+/** The name of the hatch while a period still running is on the plot, which is hatched. */
+const hatch = computed(() =>
+  props.columns.some((column) => column.incomplete) ? props.words.hatch : undefined,
 )
 const empty = computed(() => !props.columns.length || !props.series.length)
 
@@ -275,6 +291,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
 <template>
   <figure
     class="period-columns"
+    data-chart="periods"
     :aria-label="label"
   >
     <DataEmptyState
@@ -285,8 +302,9 @@ function focus(event: FocusEvent, index: number, at: number | null) {
     />
     <template v-else>
       <ChartLegend
-        v-if="series.length > 1 || outline"
+        v-if="series.length > 1 || outline || hatch"
         :series="series"
+        :hatch="hatch"
         :outline="outline"
         :hints="legendHints"
         @follow="(key, event) => emit('follow', key, event)"
@@ -296,6 +314,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
       <div
         ref="frame"
         class="period-frame"
+        data-region="frame"
         :class="{ 'period-acting': acting }"
         :style="{ '--period-gutter': gutter }"
         v-bind="hiddenEdges"
@@ -304,6 +323,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
         <div
           ref="plot"
           class="period-plot"
+          data-region="plot"
           :style="{
             '--period-count': columns.length,
             '--period-column': `${columnWidth(columns.length, width)}px`,
@@ -316,12 +336,14 @@ function focus(event: FocusEvent, index: number, at: number | null) {
           />
           <ChartTicks
             class="period-scale"
+            data-region="scale"
             along="block"
             :ticks="scale"
           />
           <div
             ref="field"
             class="period-field"
+            data-region="field"
           >
             <span
               v-for="tick in chart.ticks"
@@ -366,6 +388,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                     v-for="(segment, at) in one.segments"
                     :key="segment.series.key"
                     class="period-segment series-fill"
+                    :class="{ hatched: one.column.incomplete }"
                     :data-slot="segment.series.slot"
                     :data-series="segment.series.key"
                     :data-tooltip-row="segment.series.key"
@@ -382,12 +405,14 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                   v-if="one.column.before"
                   class="period-before"
                   aria-hidden="true"
+                  data-mark="before"
                   :style="levelOf(one.column.before ?? 0)"
                 />
                 <span
                   v-if="one.marks.length"
                   class="period-mark"
                   aria-hidden="true"
+                  data-mark="change"
                 />
               </div>
             </div>
@@ -404,6 +429,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
           </div>
           <ChartTicks
             class="period-axis"
+            data-region="axis"
             along="inline"
             :ticks="days"
           />
@@ -414,6 +440,8 @@ function focus(event: FocusEvent, index: number, at: number | null) {
 </template>
 
 <style scoped src="@/shared/ui/seriesFill.css"></style>
+
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped src="@/shared/ui/periodPlot.css"></style>
 
@@ -490,15 +518,6 @@ function focus(event: FocusEvent, index: number, at: number | null) {
   &:is(:hover, :focus-visible),
   .period-column:is(:hover, :focus-visible) + .period-stack > & {
     background: var(--series-lifted);
-  }
-
-  /* A period still running, hatched in its own hues: what it holds so far, not a drop. */
-  .period-incomplete > & {
-    mask-image: repeating-linear-gradient(
-      135deg,
-      black 0 var(--space-half),
-      rgb(0 0 0 / 40%) var(--space-half) var(--space-1)
-    );
   }
 }
 </style>

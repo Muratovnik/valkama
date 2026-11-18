@@ -142,3 +142,16 @@ export async function expectUnitHeld(head: Locator, where: string) {
   expect(Math.abs(time.left - who[0].left), `${label}: the time's start`).toBeLessThan(1)
   return 'own line'
 }
+
+/**
+ * The height a text field of `rows` lines draws: that many of its own lines, with its padding
+ * and border, so a field that asks for so many lines is held to them at any type size.
+ */
+export function heightOfLines(field: Locator, rows: number) {
+  return field.evaluate((element, count) => {
+    const style = getComputedStyle(element)
+    const px = (name: string) => Number.parseFloat(style.getPropertyValue(name))
+    const frame = ['padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width']
+    return count * px('line-height') + frame.reduce((sum, name) => sum + px(name), 0)
+  }, rows)
+}

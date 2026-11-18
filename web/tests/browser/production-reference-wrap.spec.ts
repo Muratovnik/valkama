@@ -190,6 +190,10 @@ test('a comma written against code stands close to it, as after a word', async (
   expect(comma?.after).toBeLessThanOrEqual(2)
   expect(bracketed?.before).toBeLessThanOrEqual(2)
   expect(bracketed?.after).toBeLessThanOrEqual(2)
-  // Parted by spaces, the span keeps the inset its ground is drawn with.
-  expect(free?.inset).toBe('4px')
+  // Parted by spaces, the span keeps the inset its ground is drawn with, `--space-1`.
+  const inset = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--space-1').trim(),
+  )
+  expect(inset).not.toBe('')
+  expect(free?.inset).toBe(inset)
 })

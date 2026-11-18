@@ -4,8 +4,9 @@
  * after them, each with its own words, never merged; the adviser and each launch class are rows
  * of their own; each bar is handed its amount in the measure's units and the hue its value has on
  * the page, the neutral when it has none; and the bars shown add up to the tile's total. The values
- * split one whole, so the section draws them as a ring or as bars, opening on the bars by task and
- * on the ring by any other dimension, and on the bars alone where a second dimension splits it.
+ * split one whole, so the section draws them as a ring or as bars, opening on the ring, and on the
+ * bars alone where a second dimension splits it; values named by free text, tasks and sessions on
+ * either side of a pair, are a list only, the first ten named and the rest folded into one row.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -24,6 +25,7 @@ import { noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analy
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { showView, viewsOf } from '../support/chartViews.ts'
+import { seriesEntries, seriesNames } from '../support/legend.ts'
 
 const MONDAY = new Date(2026, 10, 9)
 
@@ -89,6 +91,13 @@ async function mountShownBars(...given: Parameters<typeof mountBars>) {
 
 const barsOf = (wrapper: ReturnType<typeof mountBars>) =>
   wrapper.getComponent(RankedBars).props('rows') as RankedRow[]
+
+/**
+ * The rows the bars draw for the values they name, by the kind each row declares (`data-kind`),
+ * apart from the rest, work on no task and unknown work.
+ */
+const namedRows = (wrapper: ReturnType<typeof mountBars>) =>
+  wrapper.getComponent(RankedBars).findAll('[data-kind="category"]')
 
 const sum = (rows: readonly RankedRow[]) => rows.reduce((total, row) => total + row.value, 0)
 
@@ -172,11 +181,11 @@ describe('the bars', () => {
       })),
     )
     const byClass = await mountShownBars(classes.usage.rows, 'launch_class')
-    expect(byClass.findAll('.ranked-row')).toHaveLength(12)
+    expect(namedRows(byClass)).toHaveLength(12)
     expect(byClass.find('[data-kind="other"]').exists()).toBe(false)
   })
 
-  it('name the first twelve values and leave the rest to the table, in one line that asks for it', async () => {
+  it('name the first ten tasks, fold the rest into one row, and count every task in one line that opens them all', async () => {
     const many = (count: number) =>
       answer(
         ['work_item'],
@@ -186,21 +195,29 @@ describe('the bars', () => {
           spend: { seconds: (count - index) * 600 },
         })),
       ).usage.rows
-    const twelve = mountBars(many(12), 'work_item')
-    expect(twelve.findAll('.ranked-row')).toHaveLength(12)
-    expect(twelve.find('.spending-bars-more').exists()).toBe(false)
+    const ten = mountBars(many(10), 'work_item')
+    expect(namedRows(ten)).toHaveLength(10)
+    expect(ten.find('[data-kind="other"]').exists()).toBe(false)
+    expect(ten.find('[data-all]').exists()).toBe(false)
 
     const thirty = mountBars(many(30), 'work_item')
-    expect(thirty.findAll('.ranked-row .ranked-label').map((label) => label.text())).toEqual(
-      Array.from({ length: 12 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
+    const labels = thirty.findAll('.ranked-row .ranked-label').map((label) => label.text())
+    expect(labels).toEqual([
+      ...Array.from({ length: 10 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
+      'Other, 20 more',
+    ])
+    // The twenty folded add up to the rest's figure: 20 tasks of 10 down to 1 times ten minutes.
+    expect(barsOf(thirty).find((row) => row.kind === 'other')?.value).toBeCloseTo(
+      (210 * 600) / 3600,
     )
-    const more = thirty.get('.spending-bars-more')
-    expect(more.text()).toBe('18 more — in the table')
-    await more.trigger('click')
-    expect(thirty.emitted('more')).toHaveLength(1)
-    expect(
-      mountBars(many(30), 'work_item', { locale: 'ru' }).get('.spending-bars-more').text(),
-    ).toBe('ещё 18 — в таблице')
+    // The line counts every task of the period, the ten named and the twenty folded.
+    const all = thirty.get('[data-all]')
+    expect(all.text()).toBe('All 30')
+    await all.trigger('click')
+    expect(thirty.emitted('all')).toHaveLength(1)
+    expect(mountBars(many(30), 'work_item', { locale: 'ru' }).get('[data-all]').text()).toBe(
+      'Все 30',
+    )
   })
 
   const CATEGORY = { work_item: task(1, 'One'), launch_class: value('general') }
@@ -362,7 +379,7 @@ describe('the drawings of the split', () => {
     ['v:model-c', 3],
   ])
 
-  it('opens a dimension of a few values on its ring and the tasks on their bars', () => {
+  it('opens a dimension named by identifiers on its ring', () => {
     const byModel = mountBars(MODELS, 'model')
     expect(viewsOf(byModel, '.spending-bars')).toEqual({
       offered: ['Ring', 'Bars', 'Table'],
@@ -370,21 +387,13 @@ describe('the drawings of the split', () => {
     })
     expect(byModel.findComponent(DonutChart).exists()).toBe(true)
     expect(byModel.findComponent(RankedBars).exists()).toBe(false)
-
-    const byTask = mountBars(answer(['work_item']).usage.rows, 'work_item')
-    expect(viewsOf(byTask, '.spending-bars')).toEqual({
-      offered: ['Ring', 'Bars', 'Table'],
-      shown: 'Bars',
-    })
-    expect(byTask.findComponent(DonutChart).exists()).toBe(false)
   })
 
   it('reads the same figures as a ring, as bars and as a table', async () => {
     const section = mountBars(MODELS, 'model', { slots })
-    const ring = section.findAll('.chart-entry').map((one) => spaced(one.text()))
+    const ring = seriesEntries(section).map((one) => spaced(one.text()))
     // Each part its name, then its figure and its bare share at the end of its line.
     expect(ring).toEqual(['model-a3 h · 50%', 'model-b2 h · 33%', 'model-c1 h · 17%'])
-    expect(section.find('.donut-share').exists()).toBe(false)
 
     await showView(section, '.spending-bars', 'Bars')
     expect(barsOf(section).map((row) => [row.label, spaced(row.valueText)])).toEqual([
@@ -433,7 +442,7 @@ describe('the drawings of the split', () => {
     expect(narrow.findComponent(DonutChart).exists()).toBe(false)
   })
 
-  it('leaves no value to the table under the ring, and the first twelve to the bars', async () => {
+  it('leaves no value out under the ring, and the first twelve to the bars with a line to all', async () => {
     const many = answer(
       ['model'],
       Array.from({ length: 14 }, (_, index) => ({
@@ -443,11 +452,11 @@ describe('the drawings of the split', () => {
       })),
     ).usage.rows
     const section = mountBars(many, 'model')
-    // The ring folds its own rest: no line asks for the table.
-    expect(section.text()).not.toContain('2 more in the table')
-    expect(section.findAll('.chart-key-name').at(-1)?.text()).toMatch(/^Other, \d+ more$/u)
+    // The ring folds its own rest: no line asks for every value; the bars' does, the control.
+    expect(section.find('[data-all]').exists()).toBe(false)
+    expect(seriesNames(section).at(-1)).toMatch(/^Other, \d+ more$/u)
     await showView(section, '.spending-bars', 'Bars')
-    expect(section.findAll('.ranked-row')).toHaveLength(12)
-    expect(section.text()).toContain('2 more')
+    expect(namedRows(section)).toHaveLength(12)
+    expect(section.get('[data-all]').text()).toBe('All 14')
   })
 })

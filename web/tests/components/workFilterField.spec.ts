@@ -112,7 +112,11 @@ describe('the Work filter field', () => {
     // Labels by how many items carry them, under the choice of how they combine.
     await option(wrapper, 'Label').trigger('click')
     expect(options(wrapper)).toEqual(['Label', 'all', 'any', 'ui', 'agent'])
-    expect(wrapper.findAll('.option-row')).toHaveLength(2)
+    // One way of combining stands chosen; no value is, until one is taken.
+    const chosen = (names: string[]) =>
+      names.map((name) => option(wrapper, name).attributes('aria-selected'))
+    expect(chosen(['all', 'any']).filter((one) => one === 'true')).toHaveLength(1)
+    expect(chosen(['ui', 'agent'])).toEqual(['false', 'false'])
   })
 
   it('finds a value of any facet from the facets, and Enter takes it into its own facet', async () => {

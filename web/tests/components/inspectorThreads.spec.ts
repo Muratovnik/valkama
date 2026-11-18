@@ -75,6 +75,9 @@ describe('a thread on the card', () => {
     expect(shownReplies()).toEqual(['Reply 4', 'Reply 5'])
     const toggle = getButton(wrapper, 'Show 2 more replies')
     expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.attributes('aria-controls')).toBe(
+      wrapper.get('.reply-text').element.closest('ol')?.id,
+    )
     await toggle.trigger('click')
     await nextTick()
     expect(shownReplies()).toEqual(['Reply 2', 'Reply 3', 'Reply 4', 'Reply 5'])
@@ -85,7 +88,10 @@ describe('a thread on the card', () => {
   it('shows three replies whole, with nothing to ask for', () => {
     const wrapper = open(card([root(1), reply(2, 1), reply(3, 1), reply(4, 1)]))
     expect(wrapper.findAll('.reply-text')).toHaveLength(3)
-    expect(wrapper.find('.replies-toggle').exists()).toBe(false)
+    // Nothing controls the list of replies, as the button does where some are held back.
+    const list = wrapper.get('.reply-text').element.closest('ol')?.id
+    expect(list).toBeTruthy()
+    expect(wrapper.find(`[aria-controls="${list}"]`).exists()).toBe(false)
   })
 
   it('stays in place when a reply arrives while the card is open, and says so', async () => {

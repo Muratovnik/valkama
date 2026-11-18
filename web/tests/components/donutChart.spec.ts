@@ -16,6 +16,8 @@ import DonutChart from '@/shared/ui/DonutChart.vue'
 import type { DonutWords } from '@/shared/ui/DonutChart.vue'
 import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
+import { seriesEntries, seriesNames } from '../support/legend.ts'
+
 const words: DonutWords = {
   empty: 'Nothing spent in this period.',
   rest: (count) => `Other, ${count} more`,
@@ -75,13 +77,7 @@ describe('the ring of shares', () => {
       ['max', '4'],
       [' rest', 'other'],
     ])
-    expect(chart.findAll('.chart-key-name').map((one) => one.text())).toEqual([
-      'high',
-      'medium',
-      'low',
-      'max',
-      'Other, 2 more',
-    ])
+    expect(seriesNames(chart)).toEqual(['high', 'medium', 'low', 'max', 'Other, 2 more'])
   })
 
   it('keeps each value in the hue its page gave it, a swatch in the legend the same', () => {
@@ -118,9 +114,10 @@ describe('the ring of shares', () => {
     const chart = mountRing()
 
     expect(
-      chart
-        .findAll('.chart-entry')
-        .map((one) => [one.get('.chart-key-name').text(), one.get('.chart-figure').text()]),
+      seriesEntries(chart).map((one) => [
+        one.get('[data-series]').text(),
+        one.get('.chart-figure').text(),
+      ]),
     ).toEqual([
       ['high', '250 min · 50%'],
       ['medium', '120 min · 24%'],
@@ -129,8 +126,8 @@ describe('the ring of shares', () => {
       // The rest's figure is the sum of its parts, as the caller formats it.
       ['Other, 2 more', '30 min · 6%'],
     ])
-    // The legend prints them, so its entries repeat them in no hint.
-    expect(chart.get('[data-series="high"]').attributes('data-tooltip')).toBeUndefined()
+    // The legend prints them, so an entry's one hint is its name, whole while it is cut.
+    expect(chart.get('[data-series="high"]').attributes('data-tooltip')).toBe('high')
     expect(chart.get('.donut-ring').text()).toBe('')
     expect(chart.find('text').exists()).toBe(false)
   })
@@ -143,14 +140,14 @@ describe('the ring of shares', () => {
         .map((one) => one.attributes('data-key'))
 
     expect(lifted()).toEqual([])
-    const medium = chart.findAll('.chart-entry')[1]
+    const medium = seriesEntries(chart)[1]
     await medium?.trigger('pointerenter')
     expect(lifted()).toEqual(['medium'])
     await medium?.trigger('pointerleave')
     expect(lifted()).toEqual([])
-    await chart.findAll('.chart-entry')[4]?.trigger('focusin')
+    await seriesEntries(chart)[4]?.trigger('focusin')
     expect(lifted()).toEqual([' rest'])
-    await chart.findAll('.chart-entry')[4]?.trigger('focusout')
+    await seriesEntries(chart)[4]?.trigger('focusout')
     expect(lifted()).toEqual([])
   })
 
@@ -210,7 +207,7 @@ describe('the ring of shares', () => {
 
     expect(sectors(chart)).toHaveLength(1)
     expect(tooltipOf(sectors(chart)[0]?.element as Element)?.text).toBe('60 min, 100% of the total')
-    expect(chart.findAll('.chart-key-name').map((one) => one.text())).toEqual(['low'])
+    expect(seriesNames(chart)).toEqual(['low'])
   })
 
   it('says there is nothing to split where no part is above zero', () => {

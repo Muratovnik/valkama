@@ -49,7 +49,6 @@ async function openQuota(page: Page, width: number, height: number, section: str
   await page.goto(pageAt())
   await page.locator(`.analytics-rail-entry[data-section="${section}"]`).click()
   await expect(page.locator('.quota-account')).toHaveCount(6)
-  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 
@@ -218,6 +217,7 @@ test('at 1440×900 the quota numbers its accounts and their windows under its se
   await record(info, 'outline quota 1440x900', read)
   const { offStep, ranks } = nesting(read)
   expect(offStep, 'a heading not one step under the heading over it').toEqual([])
-  // The section, its accounts, their windows and where each window went.
-  expect(ranks).toEqual([2, 3, 4, 5])
+  // The section, its accounts and their windows; where a window went opens in the side panel,
+  // under the panel's own heading.
+  expect(ranks).toEqual([2, 3, 4])
 })

@@ -4,13 +4,17 @@
  * light and the dark theme a bar's fill is as long as the share spent and stops at the track's
  * end, its tick stands where steady use would be and crosses the bar, and the fill, the track and
  * the tick stand apart from each other and the fill from the ground by a contrast a reader can see
- * — a contrast of lightness, so the bar reads in grayscale too; a window that is not fresh is
- * hatched and a fresh one is not; no word is cut. The step line draws only flat and upright
- * strokes, a mark at each reading where its moment and value put it, painted only for the reading
- * under the pointer or the keyboard's focus, and that reading says itself in a hint over the plot
- * without moving anything, with no line over the plot. A forced palette draws them in its inks,
- * the focused reading too.
- * Each theme attaches what it measured.
+ * — a contrast of lightness, so the bar reads in grayscale too; the share spent is solid, silent
+ * or fresh, and the forecast alone is hatched, a tail inside the track from a surface gap past
+ * the fill, parted where its slower pace ends; no word is cut. The step line draws only flat and
+ * upright strokes, a mark at each reading where its moment and value put it, painted only for the
+ * reading under the pointer or the keyboard's focus, and that reading says itself in a hint over
+ * the plot without moving anything. Past its readings «now» and the
+ * forecast at the reset each say themselves in a hint at their mark, off the line's head, the
+ * corridor between them inside the plot, and nothing moves. A forced palette draws them in its
+ * inks, the focused reading and the tail too.
+ * Each theme attaches what it measured. Every part is read by the hook its component documents
+ * (`WindowBar`, `StepLine`, their tables) or the harness gives it (`data-case`).
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -21,6 +25,7 @@ import { test } from './test.ts'
 const GRAPHIC_CONTRAST = 3
 
 const HARNESS = '/tests/browser/harness.html?lang=en&surface=charts'
+const LINE = '[data-harness="step"] [data-chart="steps"]'
 
 /** Each bar as drawn: its boxes, its paints and their contrasts, and whether its words fit. */
 function windowBars(page: Page) {
@@ -56,10 +61,12 @@ function windowBars(page: Page) {
       const { left, right, top, bottom, width } = element.getBoundingClientRect()
       return { left, right, top, bottom, width }
     }
-    return [...section.querySelectorAll<HTMLElement>('.window-bar')].map((bar) => {
-      const track = bar.querySelector('.window-track')
-      const fill = bar.querySelector('.window-fill')
-      const tick = bar.querySelector('.window-tick')
+    return [...section.querySelectorAll<HTMLElement>('[data-case]')].map((bar) => {
+      const track = bar.querySelector('[data-mark="track"]')
+      const fill = bar.querySelector('[data-mark="fill"]')
+      const tick = bar.querySelector('[data-mark="tick"]')
+      const tail = [...bar.querySelectorAll('[data-mark="ahead"]')]
+      const words = [...bar.querySelectorAll<HTMLElement>('[data-words]')]
       const paint = (element: Element | null) =>
         element ? getComputedStyle(element).backgroundColor : null
       const [trackPaint, fillPaint, tickPaint] = [paint(track), paint(fill), paint(tick)]
@@ -75,14 +82,32 @@ function windowBars(page: Page) {
         // The tick crosses the bar, standing over and under it.
         crosses: ticked ? ticked.top < along.top && ticked.bottom > along.bottom : null,
         mask: fill ? getComputedStyle(fill).maskImage : null,
+        // Each part of the tail: where its run starts and where it ends along the track, in
+        // whole percents, the run starting where the fill or the part before ends; the ground
+        // between them in pixels; and whether it is hatched.
+        tail: tail.map((part, index) => {
+          const drawn = part.getBoundingClientRect()
+          const before = index === 0 ? filled : tail[index - 1]?.getBoundingClientRect()
+          const gap = before ? drawn.left - before.right : 0
+          return {
+            from: share(drawn.left - gap - along.left),
+            to: share(drawn.right - along.left),
+            gap: before ? Math.round(gap * 10) / 10 : null,
+            inside:
+              drawn.left >= along.left - 0.5 &&
+              drawn.right <= along.right + 0.5 &&
+              drawn.top >= along.top - 0.5 &&
+              drawn.bottom <= along.bottom + 0.5,
+            hatched: getComputedStyle(part).maskImage.includes('repeating-linear-gradient'),
+          }
+        }),
         fillOnGround: fillPaint ? contrast(fillPaint, ground) : null,
         fillOnTrack: fillPaint && trackPaint ? contrast(fillPaint, trackPaint) : null,
         tickOnFill: tickPaint && fillPaint ? contrast(tickPaint, fillPaint) : null,
         tickOnTrack: tickPaint && trackPaint ? contrast(tickPaint, trackPaint) : null,
-        // A word cut short: its text wider than the box it is given.
-        cut: [...bar.querySelectorAll<HTMLElement>('.window-value, .window-note')].some(
-          (words) => words.scrollWidth > words.clientWidth + 0.5,
-        ),
+        // The words beside the bar, and whether one is cut short: its text wider than its box.
+        words: words.length,
+        cut: words.some((one) => one.scrollWidth > one.clientWidth + 0.5),
       }
     })
   })
@@ -97,7 +122,9 @@ for (const colorScheme of ['light', 'dark'] as const)
     await page.goto(HARNESS)
     const section = page.locator('[data-harness="window"]')
     await expect(
-      section.getByRole('img', { name: 'Five hours: 62% used, steady use 40%, fresh' }),
+      section.getByRole('img', {
+        name: 'Week: 62% used, steady use 40%, fresh. Forecast · By the reset: 70% to 84%',
+      }),
     ).toBeVisible()
     const bars = await windowBars(page)
     await testInfo.attach(`window-bars-${colorScheme}`, {
@@ -105,21 +132,58 @@ for (const colorScheme of ['light', 'dark'] as const)
       contentType: 'application/json',
     })
     // A fill as long as the share, none at 0 or with no figure, and the tick where steady use
-    // stands, crossing the bar; no word cut.
+    // stands, crossing the bar; its words as the harness gives them, its share and its state, the
+    // share alone with no figure and none in a tile; no word cut.
     expect(
-      bars.map(({ case: name, used, even, crosses, cut }) => ({ name, used, even, crosses, cut })),
+      bars.map(({ case: name, used, even, crosses, words, cut }) => ({
+        name,
+        used,
+        even,
+        crosses,
+        words,
+        cut,
+      })),
     ).toEqual([
-      { name: 'spent', used: 62, even: 40, crosses: true, cut: false },
-      { name: 'over', used: 100, even: 100, crosses: true, cut: false },
-      { name: 'zero', used: null, even: 20, crosses: true, cut: false },
-      { name: 'held', used: 88, even: 86, crosses: true, cut: false },
-      { name: 'none', used: null, even: null, crosses: null, cut: false },
-      { name: 'compact', used: 74, even: 70, crosses: true, cut: false },
+      { name: 'spent', used: 62, even: 40, crosses: true, words: 2, cut: false },
+      { name: 'over', used: 100, even: 100, crosses: true, words: 2, cut: false },
+      { name: 'zero', used: null, even: 20, crosses: true, words: 2, cut: false },
+      { name: 'stale', used: 88, even: 86, crosses: true, words: 2, cut: false },
+      { name: 'runs', used: 74, even: 70, crosses: true, words: 2, cut: false },
+      { name: 'none', used: null, even: null, crosses: null, words: 1, cut: false },
+      { name: 'compact', used: 74, even: 70, crosses: true, words: 0, cut: false },
     ])
-    // Not fresh is hatched, fresh is not.
-    const masks = Object.fromEntries(bars.map((bar) => [bar.case, bar.mask]))
-    expect(masks.held).toContain('repeating-linear-gradient')
-    expect(masks.spent).toBe('none')
+    // The share spent is solid, silent or fresh: only the forecast is hatched.
+    for (const bar of bars.filter((one) => one.used !== null))
+      expect(bar.mask, `${bar.case}: the fill`).toBe('none')
+    // The tail, hatched inside the track: from 2px past the fill to the slower pace's end, and
+    // 2px on to the faster's; from the track's start at 0 %; to its end where the window runs
+    // out; none past 100 % or with no figure. Each end at its share, to the whole percent.
+    const tails = Object.fromEntries(
+      bars.map((bar) => [bar.case, bar.tail.map(({ from, to, gap }) => [from, to, gap])]),
+    )
+    expect(tails).toEqual({
+      spent: [
+        [62, 70, 2],
+        [70, 84, 2],
+      ],
+      over: [],
+      zero: [[0, 12, null]],
+      stale: [
+        [88, 97, 2],
+        [97, 100, 2],
+      ],
+      runs: [[74, 100, 2]],
+      none: [],
+      compact: [
+        [74, 86, 2],
+        [86, 95, 2],
+      ],
+    })
+    for (const bar of bars)
+      for (const part of bar.tail) {
+        expect(part.inside, `${bar.case}: a part inside its track`).toBe(true)
+        expect(part.hatched, `${bar.case}: a part hatched`).toBe(true)
+      }
     // Apart by lightness: the fill from its ground and its track, the tick from both.
     for (const bar of bars.filter((one) => one.used !== null)) {
       expect(bar.fillOnGround, `${bar.case}: fill on ground`).toBeGreaterThanOrEqual(
@@ -131,28 +195,31 @@ for (const colorScheme of ['light', 'dark'] as const)
       expect(bar.tickOnFill, `${bar.case}: tick on fill`).toBeGreaterThanOrEqual(GRAPHIC_CONTRAST)
     for (const bar of bars.filter((one) => one.even !== null))
       expect(bar.tickOnTrack, `${bar.case}: tick on track`).toBeGreaterThanOrEqual(GRAPHIC_CONTRAST)
-    // The table holds a row a window with each figure in words.
-    const table = page.locator('[data-harness="window-table"] table')
-    await expect(table.locator('tbody tr')).toHaveCount(5)
-    await expect(table.locator('tbody tr').first()).toContainText('62%')
+    // The table holds a row a window with each figure in words, its forecast too.
+    const rows = page.locator('[data-harness="window-table"] [data-key]')
+    await expect(rows).toHaveCount(6)
+    await expect(rows.first()).toContainText('62%')
+    await expect(rows.first().locator('[data-cell="forecast"]')).toHaveText(
+      'By the reset: 70% to 84%',
+    )
   })
 
 /** The step line as drawn: its path, its marks against its drawing, and the boxes of its parts. */
 function stepLine(page: Page) {
-  return page.evaluate(() => {
-    const figure = document.querySelector('[data-harness="step"] .step-line')
-    const field = figure?.querySelector('.step-field')
+  return page.evaluate((line) => {
+    const figure = document.querySelector(line)
+    const field = figure?.querySelector('[data-region="field"]')
     if (!figure || !field) throw new Error('the step line is not drawn')
     // The drawing the readings are placed on: the field less the inset that keeps a mark at 0 %
     // and one at the top whole inside it.
-    const area = (figure.querySelector('.step-svg') ?? field).getBoundingClientRect()
-    const plot = figure.querySelector('.step-plot')?.getBoundingClientRect() ?? area
+    const area = (figure.querySelector('[data-region="drawing"]') ?? field).getBoundingClientRect()
+    const plot = figure.querySelector('[data-region="plot"]')?.getBoundingClientRect() ?? area
     const { height } = figure.getBoundingClientRect()
     return {
       name: figure.getAttribute('aria-label') ?? '',
-      path: figure.querySelector('.step-path')?.getAttribute('d') ?? '',
-      stroke: getComputedStyle(figure.querySelector('.step-path') ?? figure).stroke,
-      marks: [...figure.querySelectorAll<HTMLElement>('.step-mark')].map((mark) => {
+      path: figure.querySelector('[data-mark="line"]')?.getAttribute('d') ?? '',
+      stroke: getComputedStyle(figure.querySelector('[data-mark="line"]') ?? figure).stroke,
+      marks: [...figure.querySelectorAll<HTMLElement>('[data-mark="reading"]')].map((mark) => {
         const { left, right, top, bottom } = mark.getBoundingClientRect()
         return {
           key: mark.dataset.key ?? '',
@@ -160,15 +227,18 @@ function stepLine(page: Page) {
           y: (area.bottom - (top + bottom) / 2) / area.height,
         }
       }),
-      readouts: figure.querySelectorAll('.step-readout').length,
-      boxes: ['.step-head', '.step-plot', '.step-axis'].map(
-        (part) => figure.querySelector(part)?.getBoundingClientRect().toJSON() as unknown,
+      boxes: ['head', 'plot', 'axis'].map(
+        (part) =>
+          figure
+            .querySelector(`[data-region="${part}"]`)
+            ?.getBoundingClientRect()
+            .toJSON() as unknown,
       ),
       height,
       // A fifth of the way across the plot, halfway up: where the first reading still holds.
       early: { x: plot.left + plot.width * 0.2, y: plot.top + plot.height / 2 },
     }
-  })
+  }, LINE)
 }
 
 for (const colorScheme of ['light', 'dark'] as const)
@@ -178,12 +248,15 @@ for (const colorScheme of ['light', 'dark'] as const)
     await page.emulateMedia({ colorScheme })
     await page.setViewportSize({ width: 1024, height: 1400 })
     await page.goto(HARNESS)
-    const figure = page.locator('[data-harness="step"] .step-line')
+    const figure = page.locator(LINE)
     await figure.scrollIntoViewIfNeeded()
     // The window is running, so it opens on its start to now and the forecast; the readings are
     // placed here against the whole five hours.
     await figure.getByRole('radio', { name: 'Whole window' }).click()
-    await expect(figure.locator('.step-axis span')).toHaveText(['11:00', '16:00'])
+    await expect(figure.locator('[data-region="axis"] [data-moment]')).toHaveText([
+      '11:00',
+      '16:00',
+    ])
     const before = await stepLine(page)
     await testInfo.attach(`step-line-${colorScheme}`, {
       body: JSON.stringify(before, null, 2),
@@ -204,7 +277,6 @@ for (const colorScheme of ['light', 'dark'] as const)
       expect(Math.abs((before.marks[index]?.x ?? 0) - x), `mark ${index} across`).toBeLessThan(0.01)
       expect(Math.abs((before.marks[index]?.y ?? 0) - y), `mark ${index} up`).toBeLessThan(0.03)
     }
-    expect(before.readouts, 'a line over the plot').toBe(0)
     // Under the pointer a fifth of the way across, the first reading holds and says so in its
     // hint; nothing moves.
     await page.mouse.move(before.early.x, before.early.y)
@@ -212,7 +284,8 @@ for (const colorScheme of ['light', 'dark'] as const)
     const pointed = await stepLine(page)
     expect(pointed.boxes).toEqual(before.boxes)
     expect(pointed.height).toBe(before.height)
-    await expect(page.locator('[data-harness="step-table"] tbody tr')).toHaveCount(4)
+    // The four readings and the forecast after them.
+    await expect(page.locator('[data-harness="step-table"] [data-key]')).toHaveCount(5)
   })
 
 /**
@@ -222,9 +295,10 @@ for (const colorScheme of ['light', 'dark'] as const)
  */
 const paintedDots = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('[data-harness="step"] .step-mark')].flatMap(
-      (mark, index) =>
-        mark.checkVisibility({ opacityProperty: true, visibilityProperty: true }) ? [index] : [],
+    [
+      ...document.querySelectorAll<HTMLElement>('[data-harness="step"] [data-mark="reading"]'),
+    ].flatMap((mark, index) =>
+      mark.checkVisibility({ opacityProperty: true, visibilityProperty: true }) ? [index] : [],
     ),
   )
 
@@ -234,13 +308,13 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
 }) => {
   await page.setViewportSize({ width: 1024, height: 1400 })
   await page.goto(HARNESS)
-  const figure = page.locator('[data-harness="step"] .step-line')
+  const figure = page.locator(LINE)
   await figure.scrollIntoViewIfNeeded()
   const whole = figure.getByRole('radio', { name: 'Whole window' })
   await whole.click()
   await page.mouse.move(1, 1)
-  const reach = figure.locator('.step-reach')
-  await expect(figure.locator('.step-mark')).toHaveCount(4)
+  const reach = figure.locator('[data-reading]')
+  await expect(figure.locator('[data-mark="reading"]')).toHaveCount(4)
   expect(await paintedDots(page), 'at rest').toEqual([])
   // The pointer on a reading's step paints that reading's dot alone; away from it, none.
   await reach.nth(1).hover()
@@ -272,19 +346,19 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
  * its bottom to the hint's top where the hint stands under it.
  */
 async function firstReadingHint(page: Page, top: number) {
-  const figure = page.locator('[data-harness="step"] .step-line')
-  const mark = figure.locator('.step-mark').first()
+  const figure = page.locator(LINE)
+  const mark = figure.locator('[data-mark="reading"]').first()
   const box = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
   await page.evaluate((by) => window.scrollBy(0, by), box.top - top)
   await page.mouse.move(1, 1)
-  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
   const at = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
   await page.mouse.move(at.left + at.width / 2, at.top + at.height / 2)
   await expect(page.getByRole('tooltip')).toHaveText('11:30, 10%, the poll')
   return page.evaluate(() => {
-    const hint = document.querySelector('.tooltip-hint')?.getBoundingClientRect()
+    const hint = document.querySelector('[data-hint-surface]')?.getBoundingClientRect()
     const drawn = document
-      .querySelector('[data-harness="step"] .step-mark')
+      .querySelector('[data-harness="step"] [data-mark="reading"]')
       ?.getBoundingClientRect()
     if (!hint || !drawn) throw new Error('no hint or no mark')
     return {
@@ -300,7 +374,7 @@ test('a reading’s hint stands at the top right of its mark, and at its bottom 
 }, testInfo) => {
   await page.setViewportSize({ width: 1024, height: 600 })
   await page.goto(HARNESS)
-  const figure = page.locator('[data-harness="step"] .step-line')
+  const figure = page.locator(LINE)
   await figure.scrollIntoViewIfNeeded()
   await figure.getByRole('radio', { name: 'Whole window' }).click()
   const roomy = await firstReadingHint(page, 300)
@@ -337,12 +411,15 @@ test('in a forced palette a window bar and a step line keep their marks in the p
     const result = {
       canvasText: system('CanvasText'),
       canvas: system('Canvas'),
-      fill: found('[data-case="spent"] .window-fill').backgroundColor,
-      tick: found('[data-case="spent"] .window-tick').backgroundColor,
-      tickRing: found('[data-case="spent"] .window-tick').outlineColor,
-      trackEdge: found('[data-case="spent"] .window-track').outlineColor,
-      path: found('[data-harness="step"] .step-path').stroke,
-      mark: found('[data-harness="step"] .step-mark').backgroundColor,
+      fill: found('[data-case="spent"] [data-mark="fill"]').backgroundColor,
+      tick: found('[data-case="spent"] [data-mark="tick"]').backgroundColor,
+      tickRing: found('[data-case="spent"] [data-mark="tick"]').outlineColor,
+      trackEdge: found('[data-case="spent"] [data-mark="track"]').outlineColor,
+      path: found('[data-harness="step"] [data-mark="line"]').stroke,
+      mark: found('[data-harness="step"] [data-mark="reading"]').backgroundColor,
+      tail: found('[data-case="spent"] [data-mark="ahead"]').backgroundColor,
+      ring: found('[data-harness="step"] [data-target="now"] [data-mark="place"]').boxShadow,
+      corridor: found('[data-harness="step"] [data-mark="corridor"]').backgroundColor,
     }
     probe.remove()
     return result
@@ -353,17 +430,20 @@ test('in a forced palette a window bar and a step line keep their marks in the p
   expect(paints.trackEdge).toBe(paints.canvasText)
   expect(paints.path).toBe(paints.canvasText)
   expect(paints.mark).toBe(paints.canvasText)
+  expect(paints.tail).toBe(paints.canvasText)
+  expect(paints.corridor).toBe(paints.canvasText)
+  expect(paints.ring).toContain(paints.canvasText)
   // The reading a key stands on still shows: its dot painted in the palette's ink, and its step
   // ringed in the palette's own colour for the focus.
-  const figure = page.locator('[data-harness="step"] .step-line')
+  const figure = page.locator(LINE)
   await figure.getByRole('radio', { name: 'Whole window' }).focus()
   await page.keyboard.press('Tab')
-  const focused = figure.locator('.step-reach').nth(3)
+  const focused = figure.locator('[data-reading="3"]')
   await expect(focused).toBeFocused()
   expect(await paintedDots(page), 'the focused reading').toEqual([3])
   const shown = await focused.evaluate((reach) => {
     const ring = getComputedStyle(reach)
-    const mark = reach.querySelector('.step-mark')
+    const mark = reach.querySelector('[data-mark="reading"]')
     return {
       ring: ring.outlineStyle,
       ringWidth: Number.parseFloat(ring.outlineWidth),

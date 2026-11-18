@@ -68,7 +68,7 @@ const NARROW = 900
  */
 const fit = (page: Page) =>
   page.evaluate((floorEms) => {
-    const frame = document.querySelector<HTMLElement>('.spending-table .chart-table-frame')
+    const frame = document.querySelector<HTMLElement>('.spending-table [data-region="table-frame"]')
     const table = frame?.querySelector('table')
     if (!frame || !table) throw new Error('no table')
     const edges = frame.getBoundingClientRect()
@@ -279,6 +279,7 @@ for (const locale of ['ru', 'en'] as const)
         }
         await record(info, `task table fit ${locale} ${period}`, seen)
         // At 1920 every name has the room it needs.
+        expect(wide.length, 'the names read at 1920px').toBeGreaterThan(0)
         for (const one of wide)
           expect.soft(one.short, `at 1920px: «${one.text}» cut`).toBeLessThanOrEqual(0)
         // Where one line fits, a heading keeps to it.

@@ -19,6 +19,7 @@ export const column = (
 export const words: PeriodWords = {
   total: 'total',
   incomplete: 'so far',
+  hatch: 'in progress',
   period: 'Day',
   note: 'Note',
   empty: 'Nothing',

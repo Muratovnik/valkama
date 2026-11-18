@@ -87,7 +87,11 @@ async function scrolls(page: Page) {
 const off = (edge: number | undefined, line: number | undefined) =>
   Math.abs((edge ?? Number.NaN) - (line ?? Number.NaN))
 
-/** Each section's name on the rail that its box cuts, by a whole pixel or a fraction of one. */
+/**
+ * Each section's name on the rail that its box cuts, by a whole pixel or a fraction of one, with
+ * how many names were measured and how many sections the rail has: a section's entry is its
+ * button (`data-section`, `AnalyticsRail`), so a name each is measured.
+ */
 async function cutNames(page: Page) {
   const scrolled = await page.evaluate(() =>
     [...document.querySelectorAll<HTMLElement>('.analytics-rail-name')]
@@ -95,7 +99,13 @@ async function cutNames(page: Page) {
       .map((name) => name.textContent),
   )
   const measured = await shortfalls(page, '.analytics-rail-name')
-  return { scrolled, short: measured.filter((name) => name.short > 0) }
+  const sections = await page.locator('button[data-section]').count()
+  return {
+    measured: measured.length,
+    sections,
+    scrolled,
+    short: measured.filter((name) => name.short > 0),
+  }
 }
 
 async function open(page: Page, width: number, height: number) {
@@ -135,6 +145,8 @@ for (const [width, height] of SIZES)
     expect(measured.panel, 'the panel beside the rail').toBeGreaterThanOrEqual(PANEL_LEAST)
     expect(measured.rail + measured.panel).toBeCloseTo(measured.page, 1)
 
+    expect(cut.sections, 'the sections of the rail').toBeGreaterThan(1)
+    expect(cut.measured, 'a name measured a section').toBe(cut.sections)
     expect(cut.scrolled, 'names their box scrolls').toEqual([])
     expect(cut.short, 'names cut by their box').toEqual([])
     expect(measured.railGutter, "the scrollbar's room").toBeGreaterThan(0)

@@ -77,7 +77,6 @@ for (const colorScheme of ['light', 'dark'] as const)
       const seen: Record<string, unknown> = {}
       for (const panel of PANELS) {
         await openWithTables(page, panel.address, panel.ready)
-        await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
         const cells = await grounds(page)
         seen[panel.name] = cells
         expect(cells.length, `${panel.name}: cells kept in place`).toBeGreaterThan(0)

@@ -4,7 +4,8 @@
  * `PeriodColumnsTable`): the empty state in the chart's own words when there is nothing, else
  * the table under a caption only a screen reader reads. A table wider than its column, as a
  * phone makes one of a period table, scrolls in its own frame instead of widening the page,
- * and Tab reaches that frame, named as the table, only while it scrolls (`keyScroll`).
+ * and Tab reaches that frame, named as the table, only while it scrolls (`keyScroll`). The frame
+ * is `data-region="table-frame"`, for a reader of the page to measure it by.
  */
 import { keyScroll } from '@/shared/lib/keyScroll.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -31,6 +32,7 @@ const vKeyScroll = keyScroll
     v-else
     v-key-scroll="label"
     class="chart-table-frame"
+    data-region="table-frame"
   >
     <table class="chart-table">
       <caption class="visually-hidden">

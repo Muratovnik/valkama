@@ -13,6 +13,8 @@ import { placeIcon } from '@/shared/ui/placeIcon.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
+import { groupHeads } from '../support/settingsGroups.ts'
+
 const FALLBACK = 'If the place is unknown or cannot be opened'
 
 function mountGeneral() {
@@ -62,7 +64,9 @@ describe('SettingsGeneral opening sessions and files', () => {
   it('offers each family only the places that can hold its sessions', () => {
     const wrapper = mountGeneral()
     // No paragraph stands over the group: which place «the place» is, is the label's hint.
-    expect(wrapper.find('.settings-group-head p').exists()).toBe(false)
+    const heads = groupHeads(wrapper)
+    expect(heads.length).toBeGreaterThan(0)
+    for (const head of heads) expect(head.said).toBe(head.heading)
     expect(wrapper.text()).not.toContain('A session opens where it was last open')
     expect(
       wrapper

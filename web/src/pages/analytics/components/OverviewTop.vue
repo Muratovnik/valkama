@@ -9,9 +9,10 @@
  * `useColourPlaces`), the one its tile and charts draw it in.
  *
  * The heading opens that section. A row acts as a bar of the breakdown does (`useRankedLines`):
- * a task is a link to its card, a value the read can filter by narrows the view to it, sent out
- * as `narrow`. A card whose values are being read for the first time, or could not be, says so in
- * one quiet line; one being read again keeps what it showed.
+ * a value the read can filter by opens its side panel, sent out as `inspect`, and a task is a
+ * link to its card as well. A card whose values are being read for the first time, or could not be, says so in
+ * one quiet line; one being read again keeps what it showed. The card names its dimension
+ * (`data-card`), for the page and a reader of it to find it by.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -39,8 +40,8 @@ const props = defineProps<{
   measure: Measure
   read: TopRead
 }>()
-/** The heading pressed, to open the section; a value pressed, to narrow the view to it. */
-const emit = defineEmits<{ narrow: [value: string | null, label: string]; open: [] }>()
+/** The heading pressed, to open the section; a value pressed, to open its side panel. */
+const emit = defineEmits<{ inspect: [value: string | null, label: string]; open: [] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -89,7 +90,7 @@ const { rows, follow, select } = useRankedLines({
     slot: slots.value.get(line.key) ?? 'other',
     quiet: line.kind !== 'category',
   }),
-  narrow: (value, label) => emit('narrow', value, label),
+  inspect: (value, label) => emit('inspect', value, label),
 })
 
 const barWords = computed(() => ({

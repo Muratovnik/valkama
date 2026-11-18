@@ -21,6 +21,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
+import { textBefore } from '../support/documentOrder.ts'
 import { hintOf } from '../support/hint.ts'
 
 const rows: EditorSuggestion[] = [
@@ -300,8 +301,11 @@ describe('MarkdownEditor', () => {
     const foot = wrapper.get('.markdown-foot')
     expect(foot.get('.markdown-hint').text()).toBe('Markdown · Ctrl+Enter')
     expect(foot.get('.markdown-hint').find('svg').exists()).toBe(false)
-    expect(foot.get('.markdown-actions button').text()).toBe('Send')
-    expect(foot.element.lastElementChild?.classList.contains('markdown-actions')).toBe(true)
+    const actions = foot.get('.markdown-actions')
+    expect(actions.get('button').text()).toBe('Send')
+    // The hint's words alone come before the actions, and the foot's words end with them.
+    expect(textBefore(foot.element, actions.element)).toBe('Markdown · Ctrl+Enter')
+    expect(foot.text().endsWith(actions.text())).toBe(true)
   })
 
   it('says a refusal in the foot in place of the hint, and the field names it', () => {
@@ -369,12 +373,18 @@ describe('MarkdownEditor', () => {
 
   it('turns the buttons off in preview and while the text is being sent', async () => {
     const { wrapper } = mountEditor()
-    const buttons = () => wrapper.findAll('[role="group"] button[data-tooltip]')
-    expect(buttons().every((button) => button.attributes('disabled') === undefined)).toBe(true)
+    // Each state reads every button the toolbar draws, so a toolbar dropped in preview fails.
+    const off = () =>
+      wrapper
+        .findAll('[role="group"] button[data-tooltip]')
+        .map((button) => button.attributes('disabled') !== undefined)
+    const drawn = off().length
+    expect(drawn).toBeGreaterThan(0)
+    expect(off()).toEqual(Array.from({ length: drawn }, () => false))
     await wrapper.setProps({ preview: true })
-    expect(buttons().every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+    expect(off()).toEqual(Array.from({ length: drawn }, () => true))
     await wrapper.setProps({ preview: false, disabled: true })
-    expect(buttons().every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+    expect(off()).toEqual(Array.from({ length: drawn }, () => true))
   })
 
   it('applies a button to the selection and sends the change the way typing does', async () => {

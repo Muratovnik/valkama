@@ -6,8 +6,8 @@
  * neutral hue (`dayMultiples`, `SmallMultiples`). Each chart is in its
  * value's hue on the page (`slots`) and says its name, so the hue never speaks alone. Drawn, or as
  * its table, as every chart of the page is (`ChartSection`). A chart's name does what its value's
- * row does (`useLineMarks`): a task opens its card, a value the read can filter by goes out as
- * `narrow`.
+ * row does (`useLineMarks`): a value the read can filter by opens its side panel, going out as
+ * `inspect`.
  *
  * Split by a second dimension (`across`), the answer is read by both and each chart is a pair,
  * «claude-opus-5-5 · high», ranked, coloured and folded as a value is; it acts as its first value
@@ -41,8 +41,8 @@ const props = defineProps<{
   /** The second dimension the section is split by, which `usage` is read by too; null for none. */
   across?: UsageDimension | null
 }>()
-/** A value pressed to narrow the view to it: its filter value, and its name. */
-const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
+/** A value pressed to open its side panel: its filter value, and its name. */
+const emit = defineEmits<{ inspect: [value: string | null, label: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -64,7 +64,7 @@ const drawn = computed(() => dayMultiples(props))
 const marks = useLineMarks({
   by: () => props.by,
   lines: () => drawn.value.map(({ line }) => line),
-  narrow: (value, label) => emit('narrow', value, label),
+  inspect: (value, label) => emit('inspect', value, label),
 })
 
 const multiples = computed<SmallMultiple[]>(() =>

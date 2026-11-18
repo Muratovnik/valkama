@@ -89,8 +89,6 @@ async function settled(page: Page) {
     0,
   )
   await expect(page.locator('.quota-account')).toHaveCount(4)
-  // What used each window is read after the quota, by each window's own block.
-  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 
@@ -173,13 +171,18 @@ for (const colorScheme of ['light', 'dark'] as const)
       await expect(page.locator('.quota-panel h2')).toHaveText('Five hours')
       await settled(page)
 
-      // The week, its forecasts said as ranges.
+      // The week, its forecasts said as ranges: drawn, after the key of their hatch; as a table,
+      // as narrow pages open, in its account's table.
       await choose(page, 'quota_week')
       await settled(page)
       await expect(page.locator('.quota-panel h2')).toHaveText('Week')
       await expect(
-        page.locator('.quota-window[data-window="week"] [data-fact="forecast"]').first(),
-      ).toHaveText('By the reset: 57% to 61%')
+        page
+          .locator(
+            '[data-window="week"] [data-fact="forecast"], [data-key="week"] [data-cell="forecast"]',
+          )
+          .first(),
+      ).toContainText('By the reset: 57% to 61%')
       // «Work» reads two weeks, side by side where the width allows.
       expect(await edges(page), 'every part of the week at its edge').toEqual([])
       await expectNoSilentClipping(page, `week at ${width}px`, '.analytics-panel')
@@ -201,15 +204,30 @@ for (const width of [390, 1440])
       await choose(page, section)
       await settled(page)
       await drawLined(page.locator('.chart-section').first())
-      const past = await page.locator('.quota-window').evaluateAll((windows) =>
-        windows.flatMap((window) => {
-          const edge = window.getBoundingClientRect().right
-          return [...window.querySelectorAll('.segmented')]
-            .map((one) => one.getBoundingClientRect().right - edge)
-            .filter((beyond) => beyond > 1)
-            .map((beyond) => `${(window as HTMLElement).dataset.window}: ${Math.round(beyond)}px`)
-        }),
-      )
+      // Each window by its hook (`QuotaWindow`), and each switch in it by its role.
+      const { past, switches, windows } = await page
+        .locator('[data-window]')
+        .evaluateAll((found) => {
+          const groups = found.map((window) => [
+            window,
+            [...window.querySelectorAll('[role="radiogroup"]')],
+          ])
+          return {
+            windows: found.length,
+            switches: groups.reduce((all, [, one]) => all + (one as Element[]).length, 0),
+            past: groups.flatMap(([window, one]) => {
+              const edge = (window as Element).getBoundingClientRect().right
+              return (one as Element[])
+                .map((group) => group.getBoundingClientRect().right - edge)
+                .filter((beyond) => beyond > 1)
+                .map(
+                  (beyond) => `${(window as HTMLElement).dataset.window}: ${Math.round(beyond)}px`,
+                )
+            }),
+          }
+        })
+      expect(windows, `${section}: the windows drawn`).toBeGreaterThan(0)
+      expect(switches, `${section}: the switches drawn`).toBeGreaterThan(0)
       expect(past, `${section}: switches past their window`).toEqual([])
       await page
         .locator('.analytics-panel')

@@ -99,6 +99,8 @@ test('a slow graph download keeps the board until the loading panel takes its pl
   // From here the page's time moves only when the test moves it: the board is
   // given its delay in one step, and no slow round trip can use it up first.
   await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
+  // The watch the switch on intent finds quiet sees this panel come.
+  const panelSeen = await watchStagePanels(page)
   await page.getByRole('radio', { name: 'Graph', exact: true }).click()
   await expect.poll(() => held !== undefined).toBe(true)
   // The board stays on the stage for the whole of its delay.
@@ -109,9 +111,11 @@ test('a slow graph download keeps the board until the loading panel takes its pl
   // The stage is never blank: when the board's delay runs out the loading panel takes
   // its place in the same step, with no time left to pass on the page's clock.
   await page.clock.runFor(1)
-  const loading = page.locator('.workspace-stage [aria-busy="true"]')
+  // The stage's state panel, the one the other tests here find absent.
+  const loading = page.locator('.workspace-stage .platform-state-panel[aria-busy="true"]')
   await expect(loading).toBeVisible()
   await expect(loading).toContainText('Loading')
+  expect(await panelSeen()).toBe(true)
   await expect(page.locator('.work-item-tile')).toHaveCount(0)
   expect(await page.locator('.workspace-head').boundingBox()).toEqual(header)
   await page.locator('.workspace').screenshot(shot(info, 'w-bundle-graph-loading.png'))
@@ -350,7 +354,8 @@ test('the questions opened before their code arrives say so in the dialog, then 
   await page.getByRole('button', { name: /^Needs my answer/u }).click()
 
   const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
-  const loading = dialog.locator('[aria-busy="true"]')
+  // The dialog's state panel, which is gone once the questions show.
+  const loading = dialog.locator('.platform-state-panel[aria-busy="true"]')
   await expect(loading).toContainText('Loading')
   await expect(dialog.locator('.request-card')).toHaveCount(0)
   await dialog.screenshot(shot(info, 'w-bundle-questions-loading.png'))

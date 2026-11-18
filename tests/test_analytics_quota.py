@@ -284,8 +284,30 @@ class WindowTests(_Quota):
             {
                 "outcome": "runs_out",
                 "runs_out_at": "2030-03-06T11:25:42.857+00:00",
+                "at_reset_percent": None,
                 "basis": "blend",
             },
+            found,
+        )
+
+    def test_five_hours_that_last_say_the_share_spent_by_the_reset(self) -> None:
+        reset = "2030-03-06T12:20:00Z"
+        self.poll(at("2030-03-06T09:00:00+00:00"), five(20, reset))
+        self.poll(at("2030-03-06T09:40:00+00:00"), five(25, reset))
+        self.poll(at("2030-03-06T09:55:00+00:00"), five(26, reset))
+        found = self.window(self.account(self.quota(), ORG_A), "five_hour")["forecast"]
+        # The last quarter hour spent 1 point (4 an hour), the last hour 6: the blend is 5 an
+        # hour, and the 2 h 20 m to the reset add 35/3 to the 26 spent, to the hundredth.
+        self.assertEqual(
+            {"outcome": "lasts", "runs_out_at": None, "at_reset_percent": 37.67, "basis": "blend"},
+            found,
+        )
+
+    def test_a_spent_five_hours_names_no_share_at_the_reset(self) -> None:
+        self.poll(ago(minutes=3), five(100))
+        found = self.window(self.account(self.quota(), ORG_A), "five_hour")["forecast"]
+        self.assertEqual(
+            {"outcome": "spent", "runs_out_at": None, "at_reset_percent": None, "basis": None},
             found,
         )
 

@@ -21,8 +21,8 @@ import {
   inTheList,
   LOWER,
   pair,
-  pause,
   press,
+  settledWrites,
   THIRD,
   threeInCard,
   under,
@@ -86,7 +86,7 @@ for (const [width, height, options] of [
     // The step is down before the press: what stands there now only sends, and sends nothing.
     await expect.poll(() => under(page, at)).toBe('The third question: Send')
     await press(page, at)
-    await pause(200)
+    await settledWrites(page)
     expect(writesTo(requests)).toEqual([])
     await expect(asking(page)).toHaveCount(0)
     await expect(second.getByRole('radio', { name: 'Choice 1' })).toBeChecked()
@@ -116,7 +116,7 @@ test('in the list of everything waiting a row ending brings no refusal under the
   await expect.poll(() => onWayOn(next, at)).toBe(true)
   await expect.poll(() => under(page, at)).toBe('The lower question: Send')
   await press(page, at)
-  await pause(200)
+  await settledWrites(page)
   expect(writesTo(opened.requests)).toEqual([])
   await expect(asking(page)).toHaveCount(0)
 })
@@ -135,7 +135,7 @@ test('in the list a row kept because something was chosen in it folds, and lifts
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect(top.locator('.request-state')).toBeVisible()
   await press(page, at)
-  await pause(200)
+  await settledWrites(page)
   expect(writesTo(opened.requests)).toEqual([])
   await expect(asking(page)).toHaveCount(0)
 })
@@ -155,7 +155,7 @@ test('the same with no press between: a pointer that only went elsewhere finds n
   expect(await onWayOn(third, at)).toBe(true)
   await expect.poll(() => under(page, at)).toBe('The third question: Send')
   await press(page, at)
-  await pause(200)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([])
   await expect(asking(page)).toHaveCount(0)
 })
@@ -171,7 +171,7 @@ test('a pointer resting on the confirm of a question that moves finds no refusal
   await folds(page, at, opened)
   await expect(asking(page)).toHaveCount(0)
   await press(page, at)
-  await pause(200)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([])
 })
 
@@ -224,11 +224,12 @@ test('a press on the confirm in the instant its question moved, before any frame
   const at = await centre(onward(second))
   await expect.poll(() => under(page, at)).toBe("The second question: Don't answer")
   await press(page, at)
-  await pause(200)
+  // The frames are held, so the wait asks for none.
+  await settledWrites(page, { frames: false })
   expect(requests.writes.map((write) => write.action)).toEqual([])
   await expect(asking(page)).toHaveCount(0)
   await release()
-  await pause(100)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([])
   await expect(second.getByRole('radio', { name: 'Choice 1' })).toBeChecked()
 })
@@ -320,8 +321,11 @@ test('scrolling the question away ends the step, and a read that moves nothing d
 }) => {
   const { requests, stream, top } = await inCard(page)
   await raise(page, top)
+  const reads = requests.reads.length
   await stream.signal('agents')
-  await pause(150)
+  // The read is in and drawn before the step is looked at: nothing it brought moved.
+  await expect.poll(() => requests.reads.length).toBeGreaterThan(reads)
+  await settledWrites(page)
   await expect(asking(top)).toBeVisible()
   await expect(wayOut(top)).toBeFocused()
   await page.mouse.wheel(0, -60)

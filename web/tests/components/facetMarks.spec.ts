@@ -5,6 +5,7 @@ import { createI18n } from 'vue-i18n'
  * The marks a surface prints, as a reader and a screen reader meet them: the
  * glyph, its word, the tone the state owner gave it, and what a click does.
  */
+import { Asterisk } from '@lucide/vue'
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -13,6 +14,7 @@ import LabelChip from '@/entities/work-item/components/LabelChip.vue'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
+import SessionSign from '@/shared/ui/SessionSign.vue'
 import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 import { boardItem } from '../fixtures/board.ts'
@@ -365,17 +367,23 @@ describe("a tile's executor", () => {
   ])('draws %o as its client and the session’s sign, named in words', (live, sign, words) => {
     const wrapper = executor(live)
     const holder = wrapper.get('[data-facet="holder"]')
-    expect(holder.get('svg.facet-glyph').classes()).toContain('lucide-asterisk')
+    // Claude's glyph, the one every surface draws for the client, at the line's size.
+    const glyph = holder.get('svg.facet-glyph')
+    const shapes = (svg: Pick<typeof glyph, 'findAll'>) =>
+      svg.findAll('*').map((one) => [one.element.tagName, one.attributes('d')])
+    expect(shapes(glyph)).toEqual(shapes(mount(Asterisk).get('svg')))
+    expect([glyph.attributes('width'), glyph.attributes('height')]).toEqual(['14', '14'])
     expect(signOf(wrapper)).toBe(sign)
     // The sign is the shared one: its size and stroke, after the glyph, hidden from a reader.
     const svg = holder.get('.facet-session')
     expect(svg.classes()).toContain('session-sign')
-    expect([svg.attributes('width'), svg.attributes('height')]).toEqual(['14', '14'])
+    expect(holder.findComponent(SessionSign).props('size')).toBe(14)
     expect(svg.attributes('aria-hidden')).toBe('true')
     expect(holder.get('.facet-word-hidden').text()).toBe(words)
     expect(hintOf(holder)).toBe(words)
-    // None of the old marks is left: no dots, no bare ring.
-    expect(holder.find('.work-dots').exists()).toBe(false)
+    // None of the old marks is left: no dots, no bare ring. The client's glyph and the sign are
+    // the only marks the holder draws.
+    expect(holder.findAll('svg')).toHaveLength(2)
   })
 
   it('says a session asks in Russian apart from one that waits', () => {

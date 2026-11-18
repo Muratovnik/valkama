@@ -26,6 +26,7 @@ import {
   pair,
   pause,
   press,
+  settledWrites,
   under,
   UPPER,
   writesTo,
@@ -46,7 +47,7 @@ test('a question rising under a pointer at rest takes nothing from the press tha
   await expect(top.locator('.request-state')).toBeVisible()
   await expect.poll(() => under(page, at)).toBe(LOWER_DECLINE)
   await press(page, at)
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([])
   await expect(back(next)).toBeFocused()
   await expect(next.getByText(ASKED, { exact: true })).toBeVisible()
@@ -80,7 +81,7 @@ test('a new question arriving over a pointer at rest takes nothing from the pres
   await expect(card).toHaveCount(2)
   await expect.poll(() => under(page, at)).toBe("The new question: Don't answer")
   await press(page, at)
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([])
 })
 
@@ -95,7 +96,7 @@ for (const [hand, shift, wheel] of [
     await press(page, at)
     await page.mouse.wheel(0, wheel)
     await press(page, { x: at.x + shift, y: at.y })
-    await pause(150)
+    await settledWrites(page)
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeVisible()
     await expect(next.getByRole('radio')).toHaveCount(2)
@@ -144,7 +145,7 @@ for (const { fields, form, says } of FORMS) {
     const at = await inReach(send(card))
     await press(page, at)
     await press(page, at, 2)
-    await pause(150)
+    await settledWrites(page)
     expect(writesTo(requests)).toEqual([])
     await expect(card.getByText(says, { exact: true })).toBeVisible()
     await expect(card.locator('.request-state')).toHaveCount(0)
@@ -170,7 +171,7 @@ test('spaces in the comment are nothing written, and words are', async ({ page }
   await card.getByRole('button', { name: /^Comment: /u }).click()
   await page.keyboard.insertText('   ')
   await send(card).click()
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([])
   await card.getByRole('textbox', { name: /^Comment: /u }).fill('A word')
   await send(card).click()
@@ -188,7 +189,7 @@ for (const gap of [180, 350]) {
     await pause(gap)
     await expect.poll(() => under(page, at)).toBe('The upper question: Back')
     await press(page, at, 2)
-    await pause(150)
+    await settledWrites(page)
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeFocused()
     await expect(top.getByText(ASKED, { exact: true })).toHaveCount(0)
@@ -205,7 +206,7 @@ test('going ahead by hand writes once, and a second press there reaches nothing'
   await press(page, onward)
   await expect(top.locator('.request-state')).toContainText('You declined')
   await press(page, onward, 2)
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(requests)).toEqual([UPPER])
   expect(requests.writes[0]?.action).toBe('decline')
   await expect(next.getByRole('radio')).toHaveCount(2)
@@ -291,7 +292,7 @@ test('in the list of everything waiting it takes the same two steps', async ({ p
   const at = await inReach(decline(top))
   await press(page, at)
   await press(page, at, 2)
-  await pause(150)
+  await settledWrites(page)
   expect(writesTo(opened.requests)).toEqual([])
   await expect(decline(top)).toBeFocused()
   await press(page, at)
@@ -406,7 +407,7 @@ test('a second press lands on nothing in the thread, such as a report rising und
     .evaluate((node, by) => node.scrollBy({ top: by, behavior: 'instant' }), y - at.y)
   await expect.poll(() => under(page, at)).toContain('outcome')
   await press(page, at, 2)
-  await pause(150)
+  await settledWrites(page)
   expect(backend.writes).toEqual([])
   expect(backend.item.summary_comment_id).toBeNull()
 })

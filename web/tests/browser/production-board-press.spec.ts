@@ -129,23 +129,33 @@ test('a second press past the double click interval, on a card reading slowly, l
   await board(page, {})
   // Wide enough for the card to leave the tile under the scrim once it has slid in.
   await page.setViewportSize({ width: 1680, height: 1050 })
+  // The card reads until the second press has landed: held, not timed.
+  const gate: { open?: () => void } = {}
+  const answered = new Promise<void>((done) => {
+    gate.open = done
+  })
   await page.route('**/api/modules/planning/work-item?*', async (route) => {
-    await new Promise((done) => setTimeout(done, 700))
+    await answered
     await route.fallback()
   })
+  const reading = page.waitForRequest('**/api/modules/planning/work-item?*')
   const title = tileIn(page.locator('.work-item-column').first()).locator('.tile-open')
   await title.scrollIntoViewIfNeeded()
   const { x, y } = await centre(title)
   await page.mouse.click(x, y)
-  await new Promise((done) => setTimeout(done, 750))
-  await expect(page.locator('.overlay-scrim')).toBeVisible()
-  const under = await page.evaluate((at) => document.elementFromPoint(at.x, at.y)?.className, {
-    x,
-    y,
-  })
-  expect(under).toBe('overlay-scrim')
+  await reading
+  await expect(page.locator('[data-overlay-scrim]')).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (at) => document.elementFromPoint(at.x, at.y)?.hasAttribute('data-overlay-scrim') ?? false,
+        { x, y },
+      ),
+    )
+    .toBe(true)
   // A browser counts this press as a first one, so only where it stands can tell it apart.
   await page.mouse.click(x, y)
+  gate.open?.()
   await readable(page)
   await page.mouse.click(5, 5)
   await expect(page.locator('.drawer')).toHaveCount(0)

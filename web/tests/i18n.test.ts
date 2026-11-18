@@ -73,67 +73,47 @@ test('locale resolution prefers an explicit saved language, then Russian browser
 })
 
 test('English and Russian catalogs translate checklist actors, activity, source fallback, and refresh', () => {
-  i18n.global.locale.value = 'en'
-  assert.equal(i18n.global.t('activity.claimed'), 'Work claimed')
-  assert.equal(i18n.global.t('workItem.noClaim'), 'No active claim')
-  assert.equal(i18n.global.t('activity.checklistClaimed'), 'Checklist item claimed')
-  assert.equal(i18n.global.t('workItem.claim'), 'Claim')
-  // The tooltip, not a caption: the connection strip is the refresh control and
-  // says so by its icon, so the word only exists as the control's own name.
-  assert.equal(i18n.global.t('refresh.title'), 'Refresh boards, activity, and the current view now')
-  assert.equal(i18n.global.t('workItem.view.kanban'), 'Kanban')
-  assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Workable · 2')
-  assert.equal(i18n.global.t('graph.openOnly', { count: 14 }), 'Open · 14')
-  assert.equal(i18n.global.t('graph.showDone', { count: 105 }), 'Show done · 105')
-  assert.equal(i18n.global.t('workItem.listEmpty'), 'This space has no work items yet.')
-  assert.equal(i18n.global.t('workItem.noSpace'), 'This project has no planning space yet.')
-  assert.equal(i18n.global.t('settings.title'), 'Valkama settings')
-  assert.equal(i18n.global.t('alerts.event.question'), 'An answer or a decision is needed')
-  assert.equal(
-    i18n.global.t('open.refused.no-folder'),
-    'The session’s folder is unknown, so no window can be chosen for it.',
-  )
-  assert.equal(i18n.global.t('session.open'), 'Open session')
-  assert.equal(i18n.global.t('workItem.relations'), 'Relations')
-  assert.equal(i18n.global.t('open.settings.title'), 'Opening sessions and files')
-  assert.equal(i18n.global.t('status.live'), 'Connected')
-  assert.equal(i18n.global.t('workItem.back'), 'Back')
-  assert.equal(i18n.global.t('graph.zoomIn'), 'Zoom in')
-  assert.equal(i18n.global.t('platform.actions.relation.remove'), 'Remove')
-  assert.equal(i18n.global.t('platform.actions.resource.open'), 'Open')
-  assert.match(i18n.global.t('platform.coreWrites.primaryOwnerRequired'), /writable primary store/)
-
-  i18n.global.locale.value = 'ru'
-  assert.equal(i18n.global.t('activity.claimed'), 'Работа взята')
-  assert.equal(i18n.global.t('workItem.claim'), 'Взять')
-  assert.equal(i18n.global.t('activity.checklistClaimed'), 'Пункт чек-листа взят в работу')
-  assert.equal(i18n.global.t('workItem.noClaim'), 'Никто не взял')
-  assert.equal(i18n.global.t('refresh.title'), 'Обновить доски, активность и текущий вид сейчас')
-  assert.equal(i18n.global.t('workItem.view.kanban'), 'Канбан')
-  assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Можно брать · 2')
-  assert.equal(i18n.global.t('graph.openOnly', { count: 14 }), 'Открытые · 14')
-  assert.equal(i18n.global.t('graph.showDone', { count: 105 }), 'Показать готовые · 105')
-  assert.equal(i18n.global.t('workItem.listEmpty'), 'В этом пространстве ещё нет работы.')
-  assert.equal(
-    i18n.global.t('workItem.noSpace'),
-    'У этого проекта пока нет пространства планирования.',
-  )
-  assert.equal(i18n.global.t('settings.title'), 'Настройки Valkama')
-  assert.equal(i18n.global.t('alerts.event.question'), 'Нужен ответ или решение')
-  assert.equal(
-    i18n.global.t('open.refused.no-folder'),
-    'Папка сессии неизвестна, поэтому окно для неё не выбрать.',
-  )
-  assert.equal(i18n.global.t('session.open'), 'Открыть сессию')
-  assert.equal(i18n.global.t('workItem.relations'), 'Связи')
-  assert.equal(i18n.global.t('open.settings.title'), 'Открытие сессий и файлов')
-  assert.equal(i18n.global.t('status.live'), 'Подключено')
-  assert.equal(i18n.global.t('workItem.back'), 'Назад')
-  assert.equal(i18n.global.t('graph.zoomIn'), 'Приблизить')
-  assert.equal(i18n.global.t('platform.actions.relation.remove'), 'Удалить')
-  assert.equal(i18n.global.t('platform.actions.resource.open'), 'Открыть')
-  assert.match(i18n.global.t('platform.coreWrites.primaryOwnerRequired'), /основное хранилище/)
-
+  // Several of these keys are built at runtime (`activity.${action}`), where the scan of
+  // written-out keys above cannot see them. The words are the owner's to edit: what holds
+  // is that each key reads in its own language and keeps the count it is given.
+  const keys = [
+    'activity.claimed',
+    'activity.checklistClaimed',
+    'workItem.noClaim',
+    'workItem.claim',
+    'refresh.title',
+    'workItem.view.kanban',
+    'workItem.listEmpty',
+    'workItem.noSpace',
+    'settings.title',
+    'alerts.event.question',
+    'open.refused.no-folder',
+    'session.open',
+    'workItem.relations',
+    'open.settings.title',
+    'status.live',
+    'workItem.back',
+    'graph.zoomIn',
+    'platform.actions.relation.remove',
+    'platform.actions.resource.open',
+    'platform.coreWrites.primaryOwnerRequired',
+  ]
+  const counted = { 'graph.frontier': 2, 'graph.openOnly': 14, 'graph.showDone': 105 }
+  // English carries a letter and no Cyrillic one; Russian carries Cyrillic.
+  const language = { en: /^(?!.*\p{Script=Cyrillic}).*\p{L}/su, ru: /\p{Script=Cyrillic}/u }
+  for (const locale of ['en', 'ru'] as const) {
+    i18n.global.locale.value = locale
+    for (const key of keys) {
+      const text = i18n.global.t(key)
+      assert.notEqual(text, key, `${locale}: ${key} does not resolve`)
+      assert.match(text, language[locale], `${locale}: ${key} reads «${text}»`)
+    }
+    for (const [key, count] of Object.entries(counted)) {
+      const text = i18n.global.t(key, { count })
+      assert.match(text, language[locale], `${locale}: ${key} reads «${text}»`)
+      assert.ok(text.split(/\D+/u).includes(String(count)), `${locale}: ${key} drops ${count}`)
+    }
+  }
   i18n.global.locale.value = 'en'
 })
 

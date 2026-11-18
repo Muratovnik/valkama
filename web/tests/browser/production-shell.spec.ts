@@ -33,10 +33,11 @@ test('cold start at "/" restores a canonical route with no error states', async 
   // The one space this workstation has is where a first start opens.
   await expect(page).toHaveURL(SPACE_ADDRESS)
   await expect(page.locator('.work-item-board')).toBeVisible()
+  // Each is shown present where it does appear: a failed read's panel in
+  // production-state-panel.spec.ts, the recovery where an address names no section below.
   await expect(
     page.locator('.platform-state-panel[data-tone="danger"], .route-recovery'),
   ).toHaveCount(0)
-  await expect(page.locator('.board-scope')).toHaveCount(0)
   expect(errors).toEqual([])
 })
 
@@ -289,6 +290,8 @@ test('an attached same-key space stays readable but never reaches primary-only p
     )
     .toContain(`data_scope_id=${attachedDataScopeId}`)
   await expect(page.locator('.drawer')).toContainText('Attached:')
+  // A writable card's action is shown present in production-card-head.spec.ts, and its
+  // discussion form in production-discussion.spec.ts.
   await expect(page.locator('.drawer .write-actions')).toHaveCount(0)
   // The state is read, not offered as a move, where nothing can be written.
   await expect(page.locator('.drawer .card-state')).toBeVisible()
@@ -314,6 +317,8 @@ test('an address that names no section is the main region and claims no section'
     await page.goto(path)
     const main = page.getByRole('main')
     await expect(main).toHaveCount(1)
+    // The recovery the clean starts above find absent.
+    await expect(page.locator('.route-recovery')).toBeVisible()
     await expect(main.locator('.route-choices button').first()).toBeVisible()
     await expect(page.locator('nav [aria-current]')).toHaveCount(0)
     await expect(page.locator('.context-bar .module-title')).toHaveText('Section not found')

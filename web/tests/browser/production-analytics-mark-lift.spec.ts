@@ -88,7 +88,7 @@ test('every series mark lifts under the pointer, its box and its neighbours as t
   seen.sector = { resting, pointed }
   seen.legend = await lift(
     page,
-    ring.locator('.chart-entry').nth(1),
+    ring.locator('[data-hint-list="legend"] li').nth(1),
     sectors.nth(1),
     sectors.first(),
   )
@@ -161,7 +161,7 @@ test('in a forced palette a lifted mark takes the highlight, and a resting one t
   const ink = await systemColour(page, 'CanvasText')
   await page.mouse.move(0, 0)
   expect(await paintNow(sectors.first())).toBe(ink)
-  await ring.locator('.chart-entry').first().hover()
+  await ring.locator('[data-hint-list="legend"] li').first().hover()
   expect(await paintNow(sectors.first())).toBe(highlight)
   expect(await paintNow(sectors.nth(1))).toBe(ink)
 })
