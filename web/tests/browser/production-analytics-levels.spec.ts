@@ -6,10 +6,11 @@
  * together to be measured.
  *
  * The quota is read with six accounts, as a workstation that holds six reads it: each account is
- * a group on a surface of its own, its windows side by side where the width allows, each window's
- * parts 12px apart and the lines of what stands now 4px, so no part stands as far from the next
- * as a window from a window. Six accounts once ran together into one list 4279 pixels long, each
- * 16px from the next under a heading as large as its section's.
+ * a group on a surface of its own, its windows side by side where the width allows, 32px apart
+ * with a hairline between, each window's parts 12px apart and the lines of what stands now 4px,
+ * so no part stands as far from the next as a window from a window. Six accounts once ran
+ * together into one list 4279 pixels long, each 16px from the next under a heading as large as
+ * its section's.
  *
  * The headings' elements follow how the levels nest, from the module's name, the `h1` over the
  * panel: each heading is one rank under the heading of the level around it. A section's heading
@@ -148,7 +149,10 @@ for (const { width, height, tallest } of QUOTA_SIZES)
     expect(seen.surface.radius).not.toBe('0px')
     const [week, model] = seen.work
     expect(model?.top, 'the two windows of «Work» on one row').toBe(week?.top)
-    expect((model?.left ?? 0) - (week?.left ?? 0) - (week?.width ?? 0), 'apart as blocks').toBe(16)
+    expect(
+      (model?.left ?? 0) - (week?.left ?? 0) - (week?.width ?? 0),
+      'apart, a hairline between',
+    ).toBe(32)
     expect(seen.height, 'six accounts').toBeLessThan(tallest)
   })
 
