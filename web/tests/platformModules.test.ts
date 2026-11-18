@@ -36,15 +36,16 @@ const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
   },
   analytics: { global: ['work-item'], space: ['work-item'] },
   decisions: { global: ['work-item'], space: ['work-item'] },
+  volumes: { global: ['work-item'], space: ['work-item'] },
   memory: { global: ['memory-resource'], space: ['memory-resource', 'work-item'] },
   settings: { global: ['work-item'], space: ['work-item'] },
 } as const
 
-test('valkama-modules has exactly five registrations with both operating levels', () => {
-  assert.equal(OFFLINE_MODULE_FALLBACK.length, 5)
+test('valkama-modules has exactly six registrations with both operating levels', () => {
+  assert.equal(OFFLINE_MODULE_FALLBACK.length, 6)
   assert.deepEqual(
     OFFLINE_MODULE_FALLBACK.map((module) => module.module_id),
-    ['planning', 'analytics', 'decisions', 'memory', 'settings'],
+    ['planning', 'analytics', 'decisions', 'volumes', 'memory', 'settings'],
   )
   for (const module of OFFLINE_MODULE_FALLBACK) {
     assert.equal(module.interface_version, MODULES_INTERFACE)
@@ -73,7 +74,7 @@ test('offline secondary contexts exactly mirror the authoritative scoped contrac
 
 test('valkama-modules payload validates and rejects additive fields', () => {
   const payload = modulesPayload()
-  assert.equal(validateModulesPayload(payload).modules.length, 5)
+  assert.equal(validateModulesPayload(payload).modules.length, 6)
   const additive = structuredClone(payload) as Record<string, unknown>
   additive.extra = true
   assert.throws(() => validateModulesPayload(additive), /unknown field/)
@@ -140,7 +141,7 @@ test('every registration is enabled and fixed, and anything else is refused', ()
   assert.equal(
     validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: moduleRegistrations() })
       .modules.length,
-    5,
+    6,
   )
   for (const [field, value, message] of [
     ['state', 'disabled', /state: expected enabled/],

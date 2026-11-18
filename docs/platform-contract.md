@@ -10,7 +10,7 @@ Kernel lets an adapter do. `OperatingScope` is a required route discriminant
 and is validated on every Kernel request.
 
 The shell exposes Work, Analytics and Settings. The module list declares
-Planning, Analytics, Agent decisions, Memory, and Settings; Memory contributes work-item
+Planning, Analytics, Agent decisions, Volumes, Memory, and Settings; Memory contributes work-item
 references. Session lifecycle and compact context are Planning-owned.
 Standalone Sessions, Improvements, and Skills destinations and their APIs are
 retired, as are the flow-metrics Analytics dashboards that once held the
@@ -33,6 +33,7 @@ changes the level.
 | Planning | Portfolio of Planning spaces and their work; its current Kanban storage uses Planning-specific boards/cards | Views and actions for the exact space, narrowed to one of its projects when the route names one |
 | Analytics | Usage of agent work across projects; until usage is collected the page shows its empty state | The same for the exact space |
 | Agent decisions | Decisions the agents took, across every space | The decisions of the exact space |
+| Volumes | How much work stands in each state, what it took and what is left, across spaces | The same for the exact space or one of its projects |
 | Memory | The knowledge provider that answers for each registered project, and its health | Search and exact references linked to work items in the space |
 | Settings | Language and installation health | The same installation settings and the projects of the space; Settings holds nothing project-owned |
 
