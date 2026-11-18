@@ -90,7 +90,7 @@ class RuleTests(_Store):
     def test_the_table_itself_refuses_a_name_over_the_bound(self) -> None:
         with self.assertRaises(sqlite3.IntegrityError):
             self.conn.execute(
-                "INSERT INTO quota_account_names(organization, name, updated_at) VALUES (?,?,?)",
+                "INSERT INTO quota_account_names(account, name, updated_at) VALUES (?,?,?)",
                 (MAIN, "y" * 81, "2030-03-04T09:00:00.000Z"),
             )
         self.conn.rollback()

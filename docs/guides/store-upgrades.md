@@ -36,7 +36,12 @@ beside it stands `<snapshot>.liveness`, a verified copy of the liveness file
 the store had then. Going back to a build at schema 15 is the restore described
 below with the `preschema16` snapshot, plus that copy put beside the store as
 `<store>.liveness`. A store at 14 takes both steps in one open, under the one
-`preschema15` snapshot, and that copy then stands beside it instead.
+`preschema15` snapshot, and that copy then stands beside it instead. Schema 17 adds
+the subscription quota's tables, empty until a source records a reading, and
+schema 18 keys the owner's names for the quota accounts by account
+(`quota_account_names.account`, `organization` before), keeping every name. A
+store at 16 takes both steps in one open, under the `preschema17` snapshot; one
+at 17 takes schema 18's under `preschema18`.
 
 ## Restoring a snapshot
 

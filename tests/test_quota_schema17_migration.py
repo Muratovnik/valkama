@@ -29,10 +29,12 @@ from server.quota import samples
 from tests import schema9, schema15, schema16
 from tests.test_schema12_migration import _catalog, _columns, _rows, _shape
 
-#: The tables schema 17 adds and their columns, in order.
+#: The tables schema 17 adds and their columns, in order, as this build has them: the
+#: chain runs on to its own schema in the same open, and schema 18 named the key of the
+#: names `account`.
 ADDED = {
     "quota_accounts": ["organization", "account_uuid", "plan"],
-    "quota_account_names": ["organization", "name", "updated_at"],
+    "quota_account_names": ["account", "name", "updated_at"],
     "quota_samples": [
         "id",
         "at",
@@ -99,7 +101,10 @@ class _SchemaSeventeen(unittest.TestCase):
         return {label: len(self.snapshots(label)) for label in LABELS if self.snapshots(label)}
 
     def assert_reached_17(self, conn: sqlite3.Connection) -> None:
-        self.assertEqual(17, conn.execute("PRAGMA user_version").fetchone()[0])
+        # The chain runs on to this build's own schema in the same open.
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         columns = _columns(conn)
         for table, names in ADDED.items():
             with self.subTest(table=table):
@@ -172,7 +177,10 @@ class _SchemaSeventeen(unittest.TestCase):
             self.assertRaises(store.StoreTooNewError) as refusal,
         ):
             store.connect()
-        self.assertEqual((17, 16), (refusal.exception.stored, refusal.exception.supported))
+        self.assertEqual(
+            (store.STORE_SCHEMA_VERSION, 16),
+            (refusal.exception.stored, refusal.exception.supported),
+        )
         self.assertEqual(before, Path(self.path).read_bytes())
 
 

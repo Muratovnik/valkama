@@ -1,14 +1,15 @@
 """The word index arrives in a store at schema 17 without raising the schema.
 
-The source is a store built from the catalog the last schema-17 build created,
-populated as that build wrote it. What this suite holds the migration to: the
-index and its marks arrive, every item already there is found by a word of its
-own, every former row stays as it was, all of it under one recovery point
-(`prewords`), a second open writes nothing, the recovery point brings the store
-back and the migration runs again, the stamp stays 17, and a fresh store has the
-same catalog directly. Then the guarantee the index is designed around: a SQLite
-that cannot create it still opens and writes the store, and the first open by one
-that can reads every item into it.
+The source is a store built from the catalog the last schema-17 build before the
+index created, populated as that build wrote it. What this suite holds the migration
+to: the index and its marks arrive, every item already there is found by a word of
+its own, every former row stays as it was, all of it under one recovery point, a
+second open writes nothing, the recovery point brings the store back and the
+migration runs again, and a fresh store has the same catalog directly. The same open
+runs on to this build's schema, so that point is `preschema18`, the one of its first
+step. Then the guarantee the index is designed around: a SQLite that cannot create
+it still opens and writes the store, and the first open by one that can reads every
+item into it.
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ WORD_TRIGGERS = {
     for event in ("insert", "update", "delete")
 }
 WORD_INDEXES = {"work_item_search_rows_stale"}
+#: The table whose key schema 18 renames, which the same open reaches.
+NAMES = "quota_account_names"
 HELD = "11111111-1111-4111-8111-111111111111"
 LINKED = "22222222-2222-4222-8222-222222222222"
 
@@ -89,10 +92,12 @@ class _FromSeventeen(unittest.TestCase):
             self.before = _rows(conn, self.shape)
         finally:
             conn.close()
+        # Every table the open leaves as it was: schema 18 renames the key of the names.
+        self.kept = {table: names for table, names in self.shape.items() if table != NAMES}
         for table in WORD_TABLES:
             self.assertNotIn(table, self.shape)
 
-    def snapshots(self, label: str = "prewords") -> list[Path]:
+    def snapshots(self, label: str = "preschema18") -> list[Path]:
         return sorted((self.root / "backups").glob(f"*-{label}-*.sqlite3"))
 
     def taken(self) -> dict[str, int]:
@@ -104,7 +109,10 @@ class WordIndexMigrationTests(_FromSeventeen):
     def test_every_item_there_is_found_by_its_own_words_and_every_row_stays(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(17, conn.execute("PRAGMA user_version").fetchone()[0])
+        # The chain runs on to this build's own schema in the same open.
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertLessEqual(WORD_TABLES, _catalog(conn, "table"))
         self.assertEqual(
             [(HELD, 0), (LINKED, 0)],
@@ -126,12 +134,14 @@ class WordIndexMigrationTests(_FromSeventeen):
                 self.assertEqual([owner], _found(conn, query))
         plain = sqlite3.connect(self.path)
         self.addCleanup(plain.close)
-        self.assertEqual(self.before, _rows(plain, self.shape))
+        self.assertEqual(
+            {table: self.before[table] for table in self.kept}, _rows(plain, self.kept)
+        )
         self.assertEqual("ok", plain.execute("PRAGMA integrity_check").fetchone()[0])
 
     def test_one_recovery_point_holding_the_source_as_it_was(self) -> None:
         store.connect().close()
-        self.assertEqual({"prewords": 1}, self.taken())
+        self.assertEqual({"preschema18": 1}, self.taken())
         backup = sqlite3.connect(f"file:{self.snapshots()[0]}?mode=ro", uri=True)
         self.addCleanup(backup.close)
         self.assertEqual(self.shape, _columns(backup))
@@ -152,7 +162,7 @@ class WordIndexMigrationTests(_FromSeventeen):
         self.addCleanup(conn.close)
         self.assertEqual([LINKED], _found(conn, "reconciliation"))
         # The restored store is the point's own source, so the replay reuses it.
-        self.assertEqual({"prewords": 1}, self.taken())
+        self.assertEqual({"preschema18": 1}, self.taken())
 
     def test_reopening_a_migrated_store_writes_nothing(self) -> None:
         store.connect().close()
@@ -161,7 +171,7 @@ class WordIndexMigrationTests(_FromSeventeen):
         written = observer.execute("PRAGMA data_version").fetchone()[0]
         store.connect().close()
         self.assertEqual(written, observer.execute("PRAGMA data_version").fetchone()[0])
-        self.assertEqual({"prewords": 1}, self.taken())
+        self.assertEqual({"preschema18": 1}, self.taken())
 
     def test_a_fresh_store_has_the_catalog_a_migrated_one_reaches(self) -> None:
         migrated = store.connect()

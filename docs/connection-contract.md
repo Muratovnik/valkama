@@ -1393,12 +1393,12 @@ an account's UUID nor a seat, belongs to no account and is not in the answer.
 
 The usage rows and the quota samples hold an account's organization id and nothing that
 names it, so the owner names it, and Valkama keeps one name per organization in the store's
-`quota_account_names` table: `organization`, `name` and `updated_at`, the UTC time of the
-write to the millisecond. An organization with no name has no row. Settings writes the
-name; the Analytics page on every device and the quota alerts read it, and the store's
-snapshots and restore carry it with the other quota tables. Other server modules read it
-through `server.quota.names.names_of(conn, organizations)`, which answers the names of any
-number of organizations in one query, by organization, leaving out one with none.
+`quota_account_names` table: `account`, the organization's id, `name` and `updated_at`, the
+UTC time of the write to the millisecond. An organization with no name has no row. Settings
+writes the name; the Analytics page on every device and the quota alerts read it, and the
+store's snapshots and restore carry it with the other quota tables. Other server modules
+read it through `server.quota.names.names_of(conn, organizations)`, which answers the names
+of any number of organizations in one query, by organization, leaving out one with none.
 
 | Route | What it does |
 | --- | --- |

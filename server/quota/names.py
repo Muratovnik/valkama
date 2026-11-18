@@ -7,7 +7,7 @@ from here — the Analytics page on any device, and the quota alert text (`alert
 A name is held to the rule the web app writes it by: one line, its runs of spaces and line
 breaks collapsed to one space and its ends trimmed, at most `MAX_NAME_LENGTH` characters
 after that. A name over the bound is refused, never cut; an empty one means none. An
-organization is the id the usage read gives, 1 to `MAX_ORGANIZATION_LENGTH` characters
+organization is the id the usage read gives, 1 to `MAX_KEY_LENGTH` characters
 with no NUL. A write that breaks either rule is refused whole and changes nothing.
 
 A write either replaces what is there, or, with `replace` false, gives a name only to an
@@ -23,18 +23,18 @@ import unicodedata
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 
-from .store import MAX_NAME_LENGTH, MAX_ORGANIZATION_LENGTH
+from .store import MAX_KEY_LENGTH, MAX_NAME_LENGTH
 
 #: How many names one write may carry: far more accounts than anyone bills work to.
 MAX_NAMES_PER_WRITE = 1000
 _KEYS = frozenset({"names", "replace"})
-_INSERT = "INSERT INTO quota_account_names(organization, name, updated_at) VALUES (?,?,?)"
+_INSERT = "INSERT INTO quota_account_names(account, name, updated_at) VALUES (?,?,?)"
 #: A name that replaces the one there, and one kept only where there is none.
 _REPLACE = (
-    _INSERT + " ON CONFLICT(organization) DO UPDATE SET"
+    _INSERT + " ON CONFLICT(account) DO UPDATE SET"
     " name = excluded.name, updated_at = excluded.updated_at"
 )
-_KEEP = _INSERT + " ON CONFLICT(organization) DO NOTHING"
+_KEEP = _INSERT + " ON CONFLICT(account) DO NOTHING"
 
 
 class NamesError(ValueError):
@@ -54,8 +54,8 @@ def clean(value: str) -> str:
 
 
 def _organization(value: object) -> str:
-    if not isinstance(value, str) or not 1 <= len(value) <= MAX_ORGANIZATION_LENGTH:
-        raise NamesError(f"an organization is 1 to {MAX_ORGANIZATION_LENGTH} characters of text")
+    if not isinstance(value, str) or not 1 <= len(value) <= MAX_KEY_LENGTH:
+        raise NamesError(f"an organization is 1 to {MAX_KEY_LENGTH} characters of text")
     if "\0" in value or not _text(value):
         raise NamesError("an organization holds no NUL and no unpaired surrogate")
     return value
@@ -104,7 +104,7 @@ def read(conn: sqlite3.Connection) -> dict[str, str]:
     return {
         str(organization): str(name)
         for organization, name in conn.execute(
-            "SELECT organization, name FROM quota_account_names ORDER BY organization"
+            "SELECT account, name FROM quota_account_names ORDER BY account"
         )
     }
 
@@ -121,8 +121,8 @@ def names_of(conn: sqlite3.Connection, organizations: Iterable[str]) -> dict[str
     return {
         str(organization): str(name)
         for organization, name in conn.execute(
-            "SELECT organization, name FROM quota_account_names"
-            " WHERE organization IN (SELECT value FROM json_each(?))",
+            "SELECT account, name FROM quota_account_names"
+            " WHERE account IN (SELECT value FROM json_each(?))",
             (json.dumps(wanted),),
         )
     }
@@ -142,7 +142,7 @@ def write(conn: sqlite3.Connection, payload: object) -> dict[str, str]:
             if not name:
                 if replace:
                     conn.execute(
-                        "DELETE FROM quota_account_names WHERE organization = ?", (organization,)
+                        "DELETE FROM quota_account_names WHERE account = ?", (organization,)
                     )
                 continue
             conn.execute(_REPLACE if replace else _KEEP, (organization, name, now))
@@ -154,9 +154,9 @@ def write(conn: sqlite3.Connection, payload: object) -> dict[str, str]:
 
 
 __all__ = [
+    "MAX_KEY_LENGTH",
     "MAX_NAMES_PER_WRITE",
     "MAX_NAME_LENGTH",
-    "MAX_ORGANIZATION_LENGTH",
     "NamesError",
     "clean",
     "names_of",

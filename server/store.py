@@ -203,7 +203,8 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
     # and empty in an upgraded store, so this script is the whole of its migration.
     + analytics_store.SCHEMA
     # The quota accounts, samples and settings, added with schema 17. Additive and empty in an
-    # upgraded store, so this script is the whole of its migration.
+    # upgraded store, so this script is the whole of its migration, but for schema 18's
+    # rename of the names' key (`quota_store.migrate`).
     + quota_store.SCHEMA
 )
 
@@ -297,7 +298,16 @@ MIGRATIONS = {
 # `open_read_only` -- takes the stamp for the catalog: a quota source of this build would
 # write into a store at 16 that has no quota tables yet, where stamped 17 it waits for a
 # full open, and a build at 16 would keep samples past their year.
-STORE_SCHEMA_VERSION = 17
+#
+# 18 renamed the key of the owner's names for the quota accounts (`quota_account_names`)
+# from `organization` to `account`: a name is given to an account, by its organization
+# and its UUID or weekly reset, as well as to an organization, and every name there was
+# keeps its organization's id as its key. It is raised so the upgrade takes a recovery
+# point of its own, and because a build at 17 reads and writes the names by the column
+# `organization`, so every name it read or wrote in a store at 18 would fail; the
+# ratchet makes it refuse the store instead, and what opens a store without bringing it
+# up waits on a store at 17 for a full open.
+STORE_SCHEMA_VERSION = 18
 
 
 class StoreTooNewError(RuntimeError):
@@ -512,6 +522,7 @@ def _assert_current_catalog(conn: sqlite3.Connection) -> None:
     planning_store.assert_threads_postconditions(conn)
     planning_store.assert_links_postconditions(conn)
     usage_store.assert_current(conn)
+    quota_store.assert_current(conn)
 
 
 def _snapshot_before_new_tables(conn: sqlite3.Connection) -> str | None:
@@ -826,10 +837,10 @@ def connect() -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's to 17's, one at 11 only schema 12's to 17's, one
-            # at 12 only schema 13's to 17's, one at 13 only schema 14's to 17's, one
-            # at 14 only schema 15's to 17's, one at 15 only schema 16's and 17's, and
-            # one at 16 only schema 17's.
+            # 10 only schema 11's to 18's, one at 11 only schema 12's to 18's, one
+            # at 12 only schema 13's to 18's, one at 13 only schema 14's to 18's, one
+            # at 14 only schema 15's to 18's, one at 15 only schema 16's to 18's, one
+            # at 16 only schema 17's and 18's, and one at 17 only schema 18's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a
@@ -967,6 +978,8 @@ def connect() -> sqlite3.Connection:
             _migrate_session_place(conn)
             # Schema 16: the usage columns, and one row per request in the whole store.
             usage_store.migrate(conn)
+            # Schema 18: the names of the quota accounts keyed by account.
+            quota_store.migrate(conn)
             # The word index, after every step that adds a column its triggers name.
             planning_words.migrate(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)

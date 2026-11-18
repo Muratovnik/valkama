@@ -32,7 +32,7 @@ checkouts are therefore distinguishable even at the same version.
   The README is now an entry page, and the user guides live under `docs/guides`
   ([1caf2b0](https://github.com/Muratovnik/valkama/commit/1caf2b0e33b2804fc7ec2ff4d8bf420a0a80a5db),
   [757899a](https://github.com/Muratovnik/valkama/commit/757899ae690aaaba180cccf458729e0ebbad5773)).
-- Upgrading: the store moves to schema 17 behind the recovery point `preschema17`, and a
+- Upgrading: the store moves to schema 18 behind the recovery point `preschema17`, and a
   2.8 build refuses it afterwards. The same first open fills the search index and folds
   duplicate `relates-to` links, after a verified recovery point.
 
