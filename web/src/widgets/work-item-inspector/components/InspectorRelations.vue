@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import InspectorEvidence from '@/widgets/work-item-inspector/components/InspectorEvidence.vue'
 import RelatedWorkPicker from '@/widgets/work-item-inspector/components/RelatedWorkPicker.vue'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
@@ -12,7 +14,6 @@ import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
@@ -184,7 +185,7 @@ async function remove(link: Link) {
               >
                 <span class="link-reference">{{ link.reference }}</span>
                 <span
-                  v-slash-breaks="link.title"
+                  v-work-item-title="link.title"
                   class="link-title"
                 />
                 <!-- The other end's state, when the server could say it: a finished blocker reads as finished. -->

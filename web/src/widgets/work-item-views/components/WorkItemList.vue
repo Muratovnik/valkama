@@ -50,6 +50,7 @@ import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 import { factsOf, ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
 
 import { drawMarks, drawWordCell } from '@/entities/work-item/components/drawMarks.ts'
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { holderRef, leadMarks, markWidth, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetId, FacetMark } from '@/entities/work-item/utils/facets.ts'
@@ -59,7 +60,6 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
@@ -268,7 +268,7 @@ const said = (item: WorkItemBrief) =>
               </td>
               <td class="list-cell list-title">
                 <span
-                  v-slash-breaks="entry.row.title"
+                  v-work-item-title="entry.row.title"
                   class="list-name"
                 />
                 <span

@@ -7,6 +7,8 @@
  */
 import { computed, ref } from 'vue'
 
+import { vTextRuns, writtenText } from '@/shared/ui/textRuns.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -15,8 +17,11 @@ const props = withDefaults(
     title: string
     /** What the way out is called. A head with none is the head of a window, which has its own. */
     closeLabel?: string
-    /** Which record the overlay is about: an identifier and its title. */
-    context?: string
+    /**
+     * Which record the overlay is about: an identifier and its title, as text or as the runs a
+     * work item's title is drawn in (`referencedTitleRuns`).
+     */
+    context?: string | readonly TextRun[]
     /** The title can hold focus, for a host whose content takes it only once it arrives. */
     focusableTitle?: boolean
     /** What the title is in the page's outline: the top of it, on a page that is only this. */
@@ -43,6 +48,14 @@ const nameFocus = computed(() => (props.focusableTitle ? -1 : undefined))
 const nameMark = computed(() => (props.focusableTitle ? '' : undefined))
 /** A title held to one line says itself whole while it is cut; one that wraps is never cut. */
 const cutTitle = computed(() => (props.singleLine ? props.title : ''))
+/** The context as runs, text being one run of it; none when there is no context. */
+const contextRuns = computed((): readonly TextRun[] | null => {
+  const { context } = props
+  if (typeof context === 'string') return context ? [{ kind: 'text', text: context }] : null
+  return context.length ? context : null
+})
+/** The context as written, for its hint. */
+const contextText = computed(() => writtenText(contextRuns.value ?? []))
 defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
 </script>
 
@@ -76,11 +89,11 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
         {{ subtitle }}
       </p>
       <span
-        v-if="context"
-        v-tooltip.clipped="context"
+        v-if="contextRuns"
+        v-text-runs="contextRuns"
+        v-tooltip.clipped="contextText"
         class="overlay-header-context one-line"
-        >{{ context }}</span
-      >
+      />
       <slot name="meta" />
     </div>
     <div

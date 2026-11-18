@@ -1,11 +1,14 @@
 /**
- * A title is drawn through `v-slash-breaks`.
+ * A title is drawn through `v-slash-breaks`, and a work item's title through `v-work-item-title`.
  *
  * A browser offers no break after a `/`, so a title such as `loading/empty/error/unavailable`
  * is one word to it and breaks wherever its line runs out: «un» above «available». The
  * directive (`shared/ui/slashBreaks.ts`) gives it a place to break after each `/`. A list of
  * the surfaces that use it is what the next surface skips: ten of the twelve the directive
  * was added to wrote the title straight into the template, as the next one most likely will.
+ * A work item's title is drawn through `v-work-item-title` (`entities/work-item/components/
+ * workItemTitle.ts`), which also sets the code it holds as code, on one line as on several; a
+ * control that draws any text takes the title's runs from its host (`vTextRuns`).
  *
  * So a template may not write a title as text. A `{{ … }}` whose expression names `title`
  * (`{{ title }}`, `{{ item.title }}`, `{{ title(entry) }}`, `{{ `${item.title} ·` }}`),
@@ -21,10 +24,11 @@
  * holds.
  *
  * A title that reaches the template under another name is not seen here: an option's
- * `label` (`SearchCombobox`, which draws every option through the directive), a run of the
- * card's title (`InspectorTitle`) and a path in free text (`RichInlines`); the browser checks
- * in `production-title-surfaces.spec.ts` measure each of those. A dialog's context line
- * (`OverlayHeader`) holds a title on one line with an ellipsis.
+ * `label` or runs (`SearchCombobox`, which draws every option through a directive), the card's
+ * head (a title drawn into `DrawerFrame`'s title slot) and a path in free text (`RichInlines`);
+ * the browser checks in `production-title-surfaces.spec.ts` and `production-title-code.spec.ts`
+ * measure each of those. A dialog's context line (`OverlayHeader`) holds a title on one line
+ * with an ellipsis.
  */
 
 const TEMPLATE = /<template\b[^>]*>([\s\S]*)<\/template>/
@@ -72,8 +76,8 @@ export const UNBROKEN_TITLES = new Map([
   ],
   ['shared/ui/DataEmptyState.vue {{ title }} in strong.empty-title', "an empty state's heading"],
   [
-    'shared/ui/DrawerFrame.vue {{ title }} in p.drawer-frame-pinned-title.one-line',
-    `the pinned title is ${ONE_LINE}`,
+    'shared/ui/DrawerFrame.vue {{ title }} in p.drawer-frame-pinned-title.one-line > slot',
+    `the pinned title's words where the title slot is left empty, ${ONE_LINE}: the card draws its title in the slot through the directive`,
   ],
   [
     'shared/ui/DrawerFrame.vue {{ title }} in h2.drawer-frame-name > slot',
@@ -81,7 +85,7 @@ export const UNBROKEN_TITLES = new Map([
   ],
   [
     'shared/ui/MarkdownSuggestions.vue {{ row.title }} in span.markdown-suggestion-title.one-line',
-    `a suggestion is ${ONE_LINE}`,
+    `a file's path in a suggestion is ${ONE_LINE}; a task's title is drawn in its runs`,
   ],
   [
     'shared/ui/OverlayHeader.vue {{ title }} in component.overlay-header-name',
@@ -101,11 +105,7 @@ export const UNBROKEN_TITLES = new Map([
   ],
   [
     'widgets/app-nav/components/NavWorkLink.vue {{ title }} in span.nav-row-title.trimmed-word.one-line',
-    `a row of the Work list is ${ONE_LINE}`,
-  ],
-  [
-    'widgets/work-item-inspector/components/ChainMembers.vue {{ member.title }} in span.chain-row-title.one-line',
-    `a chain's row is ${ONE_LINE}`,
+    `a session's row of the Work list is ${ONE_LINE}; an item's title is drawn through the directive`,
   ],
   [
     'widgets/work-item-inspector/components/InspectorActivity.vue {{ title(entry) }} in span.entry-title',
@@ -118,10 +118,6 @@ export const UNBROKEN_TITLES = new Map([
   [
     'widgets/work-item-inspector/components/InspectorRefusal.vue {{ notice.title }} in strong.refusal-title',
     "a refusal's heading",
-  ],
-  [
-    'widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }} in span.lane-title.one-line',
-    `the epic's title over its lane is ${ONE_LINE}`,
   ],
 ])
 
@@ -225,7 +221,7 @@ export function scanTitleBreaks(sources, register = UNBROKEN_TITLES) {
       seen.add(key)
       if (register.has(key)) continue
       violations.push(
-        `${file}: writes ${place} as text; a title is one word to the browser across each '/', and breaks in the middle of one at a phone's width, so draw it with v-slash-breaks (shared/ui/slashBreaks.ts), or register it in title-breaks.mjs with why it need not break`,
+        `${file}: writes ${place} as text; a title is one word to the browser across each '/', and breaks in the middle of one at a phone's width, so draw it with v-slash-breaks (shared/ui/slashBreaks.ts), a work item's title with v-work-item-title (entities/work-item/components/workItemTitle.ts), or register it in title-breaks.mjs with why it need not break`,
       )
     }
   }

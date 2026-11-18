@@ -185,13 +185,14 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
       >
         <slot name="identity" />
       </div>
-      <!-- The heading is the one in the scroller; this is the same words kept in sight. -->
+      <!-- The heading is the one in the scroller; this is the same words kept in sight,
+           drawn by the same slot. -->
       <p
         v-tooltip.clipped="title"
         class="drawer-frame-pinned-title one-line"
         aria-hidden="true"
       >
-        {{ title }}
+        <slot name="title">{{ title }}</slot>
       </p>
       <div
         v-if="$slots.action"

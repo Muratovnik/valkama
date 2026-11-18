@@ -17,6 +17,8 @@
  */
 import { computed } from 'vue'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -66,11 +68,11 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
     <span class="nav-row-words">
       <template v-if="epic">
         <span
+          v-work-item-title="epic"
           v-tooltip.clipped="epic"
           class="nav-row-epic trimmed-word one-line"
           :style="epicStyle"
-          >{{ epic }}</span
-        >
+        />
         <span
           class="nav-row-epic-mark trimmed-word"
           aria-hidden="true"
@@ -78,10 +80,17 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
         >
       </template>
       <span
+        v-if="glyph"
         v-tooltip.clipped="title"
         class="nav-row-title trimmed-word one-line"
         >{{ title }}</span
       >
+      <span
+        v-else
+        v-work-item-title="title"
+        v-tooltip.clipped="title"
+        class="nav-row-title trimmed-word one-line"
+      />
       <span
         v-if="meta"
         class="nav-row-meta"

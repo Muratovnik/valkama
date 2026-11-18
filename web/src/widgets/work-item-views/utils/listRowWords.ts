@@ -16,6 +16,8 @@ import { holderRef, leadMarks, surfaceMarks } from '@/entities/work-item/utils/f
 import type { FacetContext, FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { titleRuns } from '@/shared/lib/titleRuns.ts'
+import { drawnText } from '@/shared/ui/textRuns.ts'
 
 /** The facets of a row's runs, each in the place the row gives it. */
 export const ROW_FACETS = {
@@ -69,7 +71,8 @@ export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
     ...runWords(leadMarks('kind', 'list', item), words),
     item.reference,
     ...(shown('priority') ? [] : runWords(leadMarks('priority', 'list', item), words)),
-    item.title,
+    // The title as it reads on the row: its code without the backticks it was written in.
+    drawnText(titleRuns(item.title)),
     ...underTitle(item, reading),
     ...(shown('state') ? runWords(marksOf(item, ROW_FACETS.STATE), words) : []),
     ...(shown('priority') ? cell(ROW_FACETS.PRIORITY) : []),

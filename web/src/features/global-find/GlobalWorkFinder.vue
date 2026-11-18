@@ -21,6 +21,7 @@ import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 import { projectTitle } from '@/shared/lib/projectTitles.ts'
+import { titleRuns } from '@/shared/lib/titleRuns.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import CommandList from '@/shared/ui/CommandList.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -160,6 +161,7 @@ const choices = computed(() =>
     return {
       key: `${entry.target.project_id}:${entry.target.space_ref.data_scope_id}:${entry.item.work_item_id}`,
       title: entry.item.title,
+      runs: titleRuns(entry.item.title),
       reference: entry.item.reference,
       subject,
       // With its marks the state is drawn, so the words after it are the rest.

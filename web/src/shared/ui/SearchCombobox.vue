@@ -21,7 +21,8 @@
  * The popup is ChoiceSelect's surface at the field's own width, so it never reaches past
  * the dialog the field stands in. A long option wraps inside it at a space, a hyphen or
  * after a `/` (`slashBreaks.ts`): an epic's option is its title, and a label is as often
- * a path of words such as `area/web`, so every option breaks the way a title does.
+ * a path of words such as `area/web`, so every option breaks the way a title does. An option
+ * the host gave runs (`ChoiceOption.runs`) is drawn in them, an epic's code as code.
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
 
@@ -38,6 +39,7 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { choiceToken, freshToken, searchChoices, tokenValue } from '@/shared/ui/searchChoices.ts'
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import VField from '@/shared/ui/VField.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -306,6 +308,12 @@ defineExpose({ show })
               <div class="combo-option">
                 <span class="combo-value">
                   <strong
+                    v-if="option.runs"
+                    v-text-runs="option.runs"
+                    class="combo-title"
+                  />
+                  <strong
+                    v-else
                     v-slash-breaks="option.label"
                     class="combo-title"
                   />

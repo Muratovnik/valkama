@@ -7,6 +7,7 @@ import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
+import { referencedTitleRuns } from '@/shared/lib/titleRuns.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 /** The facets a new item is given in the dialog; the state is the workflow's to choose. */
@@ -47,6 +48,7 @@ export function parentChoices(
     ...parents.map((item) => ({
       value: item.reference,
       label: `${item.reference} · ${item.title}`,
+      runs: referencedTitleRuns(item.reference, item.title),
       description: stateName(item.state),
     })),
   ]

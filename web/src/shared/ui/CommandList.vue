@@ -1,7 +1,15 @@
 <script
   setup
   lang="ts"
-  generic="Item extends { detail: string; key: string; title: string; reference?: string }"
+  generic="
+    Item extends {
+      detail: string
+      key: string
+      title: string
+      reference?: string
+      runs?: readonly TextRun[]
+    }
+  "
 >
 /**
  * A search field over a list of results that Enter, the arrows and a pointer
@@ -10,13 +18,17 @@
  * A result reads as one line where the list is wide — its marks, its
  * reference, its title, and its detail at the end — and as two on a phone,
  * the title under the rest. The host may draw marks before the reference
- * (`lead`) and draw the detail itself (`detail`), from the result it gave.
+ * (`lead`) and draw the detail itself (`detail`), from the result it gave. A result whose
+ * title the host has cut into runs (`runs`, a work item's title by `titleRuns`) is drawn in
+ * them, its code as code; any other title is drawn as the text it is.
  */
 import { computed, onMounted, useId, useTemplateRef, watch } from 'vue'
 
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot } from 'reka-ui'
 
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
@@ -126,6 +138,13 @@ function submit(event: KeyboardEvent) {
           >
         </span>
         <span
+          v-if="item.runs"
+          v-text-runs="item.runs"
+          v-tooltip.clipped="item.title"
+          class="command-title"
+        />
+        <span
+          v-else
           v-slash-breaks="item.title"
           v-tooltip.clipped="item.title"
           class="command-title"

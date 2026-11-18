@@ -17,6 +17,7 @@ import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ExecutionCapabilities, ExecutionDriver } from '@/shared/api/executionModel.ts'
+import { referencedTitleRuns } from '@/shared/lib/titleRuns.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -181,7 +182,7 @@ function submit() {
     :error="error"
     :title="t('launch.title')"
     :subtitle="t('launch.subtitle')"
-    :context="`${reference} · ${title}`"
+    :context="referencedTitleRuns(reference, title)"
     :close-label="t('workItem.cancel')"
     @close="emit('close')"
     @submit="submit"

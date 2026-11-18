@@ -17,6 +17,7 @@ import { useLiveWord } from '@/widgets/work-item-graph/composables/useGraphMotio
 import type { LiveWork, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { holderRef } from '@/entities/work-item/utils/facets.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
@@ -24,7 +25,6 @@ import { holderName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const {
@@ -211,7 +211,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         >
       </span>
       <span
-        v-slash-breaks="node.title"
+        v-work-item-title="node.title"
         v-tooltip.clipped="node.title"
         class="flow-node-title"
       />

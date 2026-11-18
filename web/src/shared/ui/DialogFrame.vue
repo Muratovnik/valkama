@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -11,8 +12,8 @@ const props = withDefaults(
     open: boolean
     title: string
     busy?: boolean
-    /** Which record this dialog is about: a card number and its title. */
-    context?: string
+    /** Which record this dialog is about: a card number and its title, as `OverlayHeader` takes it. */
+    context?: string | readonly TextRun[]
     /** Why the last submit did not go through. */
     error?: string
     pane?: OverlayPaneNames | null

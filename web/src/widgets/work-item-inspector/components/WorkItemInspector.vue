@@ -66,7 +66,7 @@ import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkIte
 import { provideMissingPlaces } from '@/features/session-open/missingPlaces.ts'
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
-import WorkItemTitle from '@/entities/work-item/components/WorkItemTitle.vue'
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -299,7 +299,7 @@ defineExpose({ close, openFrom })
     @close="close"
   >
     <template #title>
-      <WorkItemTitle :title="title" />
+      <span v-work-item-title="title" />
     </template>
 
     <template #controls>

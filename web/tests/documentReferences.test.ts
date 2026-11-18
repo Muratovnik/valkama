@@ -5,8 +5,6 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { titleRuns } from '@/entities/work-item/utils/titleRuns.ts'
-
 import { parseRichText, plainText } from '@/shared/lib/richText.ts'
 import {
   documentLink,
@@ -17,6 +15,7 @@ import {
   wholeDocument,
 } from '@/shared/lib/textReferences.ts'
 import type { DocumentReference } from '@/shared/lib/textReferences.ts'
+import { titleRuns } from '@/shared/lib/titleRuns.ts'
 
 const documents = (text: string) =>
   splitReferences(text).filter(

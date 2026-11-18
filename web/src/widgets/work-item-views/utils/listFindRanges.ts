@@ -6,10 +6,12 @@
  * from its text as the reader sees it, run by run, as the row's words are read
  * for the count: one run per element that holds words, so no match spans two
  * cells or two marks, a title's pieces after each `/` (`slashBreaks.ts`) as one,
- * and nothing a reader does not see, the words kept for assistive technology
- * alone included.
+ * and so its references and its code (`textRuns.ts`), and nothing a reader does
+ * not see, the words kept for assistive technology alone included.
  */
 import { fold, occurrences, RUN_BREAK } from '@/widgets/work-item-views/utils/listFind.ts'
+
+import { runsHostOf } from '@/shared/ui/textRuns.ts'
 
 /** Words in the row that are not on screen. */
 const UNSEEN = '.visually-hidden, .facet-word-hidden'
@@ -23,7 +25,7 @@ function runsOf(row: Element): Text[][] {
     const text = node as Text
     const parent = text.parentElement
     if (!parent || parent.closest(UNSEEN)) continue
-    const owner = parent.closest(':not(.slash-break)')
+    const owner = runsHostOf(parent) ?? parent.closest(':not(.slash-break)')
     if (owner !== holder) {
       // The white space a template leaves between two elements is no run of words.
       if (!text.data.trim()) continue

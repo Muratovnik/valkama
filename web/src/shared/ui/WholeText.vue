@@ -25,6 +25,8 @@
  *   (`HintKind.covers`).
  * - It fades in where it lies after the pointer's rest, and is there at once passing on from a
  *   neighbour, as every hint is.
+ * - A text drawn in runs (`textRuns.ts`), as a work item's title is, is laid in the same runs, so
+ *   its code reads as code over the cut code rather than as the backticks it was written in.
  * - It is drawn, not read: assistive technology reads the element's own words, which are whole
  *   in the page however the screen cuts them.
  */
@@ -36,6 +38,7 @@ import { closeHint, shownHint, useHintKind } from '@/shared/ui/hintManager.ts'
 import { placeWhole } from '@/shared/ui/hintPlacement.ts'
 import type { WholePlace } from '@/shared/ui/hintPlacement.ts'
 import { previewAnchorOf } from '@/shared/ui/referencePreviewAnchors.ts'
+import { runsDrawnIn, vTextRuns } from '@/shared/ui/textRuns.ts'
 import {
   cutLinesOf,
   firstLetterOf,
@@ -88,6 +91,10 @@ useHintKind('whole', {
 /** The element whose words show whole, while the manager shows them. */
 const anchor = computed(() => (shownHint.value?.kind === 'whole' ? shownHint.value.anchor : null))
 const text = computed(() => (anchor.value ? (tooltipOf(anchor.value)?.text ?? '') : ''))
+/** The runs the cut text is drawn in, when it is (`textRuns.ts`): its code is code here too. */
+const runs = computed(() =>
+  anchor.value && text.value ? runsDrawnIn(anchor.value, text.value) : null,
+)
 /** How the whole text opened: after the pointer's rest, when it fades in, or at once. */
 const opened = computed(() =>
   shownHint.value?.kind === 'whole' && shownHint.value.rested ? 'after-rest' : 'at-once',
@@ -259,7 +266,10 @@ useEventListener(window, 'resize', relay, { passive: true })
       :data-opened="opened"
       data-hint-surface
     >
-      {{ text }}
+      <span
+        v-if="runs"
+        v-text-runs="runs"
+      /><template v-else>{{ text }}</template>
     </div>
   </Teleport>
 </template>

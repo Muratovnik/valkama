@@ -1,3 +1,5 @@
+import type { TextRun } from '@/shared/ui/textRuns.ts'
+
 export type ControlIconName =
   | 'language'
   | 'vscode'
@@ -23,6 +25,11 @@ export interface ChoiceOption {
   description?: string
   disabled?: boolean
   icon?: ControlIconName
+  /**
+   * The label as the runs a list draws it in, where it holds a work item's title
+   * (`titleRuns`); `writtenText` of them is `label`. Without them the label is drawn as text.
+   */
+  runs?: readonly TextRun[]
   /** A hover hint on the option and on the chosen value; it is not drawn. */
   title?: string
 }

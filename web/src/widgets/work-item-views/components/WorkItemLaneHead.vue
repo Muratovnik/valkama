@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useLaneActionsPlace } from '@/widgets/work-item-views/composables/useLaneActionsPlace.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import { useStateName } from '@/shared/lib/useStateName.ts'
@@ -109,10 +110,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           >{{ props.lane.epic.reference }}</span
         >
         <span
+          v-work-item-title="title"
           v-tooltip.clipped="title"
           class="lane-title one-line"
-          >{{ title }}</span
-        >
+        />
       </span>
     </button>
     <SemanticState

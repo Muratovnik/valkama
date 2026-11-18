@@ -2,18 +2,20 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import { createWorkItem, linkWorkItems } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import type { PlanningSearchResult } from '@/shared/api/planningSearchApi.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { referencedTitleRuns } from '@/shared/lib/titleRuns.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -173,7 +175,7 @@ function close() {
   <DialogFrame
     :open="open"
     :title="t('workItem.related.pickerTitle')"
-    :context="`${item.reference} · ${item.title}`"
+    :context="referencedTitleRuns(item.reference, item.title)"
     :close-label="t('drawer.close')"
     :busy="busy"
     :error="error"
@@ -265,7 +267,7 @@ function close() {
             />
             <span class="result-copy">
               <span class="result-title"
-                >{{ candidate.reference }} · <span v-slash-breaks="candidate.title"
+                >{{ candidate.reference }} · <span v-work-item-title="candidate.title"
               /></span>
               <span class="result-meta"
                 >{{ stateName(candidate.state)

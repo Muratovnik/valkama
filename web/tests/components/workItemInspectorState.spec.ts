@@ -245,7 +245,7 @@ describe('WorkItemInspector resource state', () => {
     await flushPromises()
     const head = wrapper.get('.frame-head')
     // The reference is one run the head keeps from breaking at its hyphen.
-    expect(head.findAll('.title-reference').map((run) => run.text())).toEqual(['MAIN-384'])
+    expect(head.findAll('.text-reference').map((run) => run.text())).toEqual(['MAIN-384'])
     expect(head.text()).toContain('Findings after the review (follow-up to MAIN-384)')
     wrapper.unmount()
   })

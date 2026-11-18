@@ -300,6 +300,33 @@ describe('a term in the bar', () => {
     for (const mark of marks) expect(mark.text.toLowerCase()).toBe('backlog')
   })
 
+  it('finds words across a title’s code as the row shows them, without its backticks', async () => {
+    // Code in a title is drawn as code with no backticks (`titleRuns.ts`): a term that runs
+    // from the words into the code matches, and one with a backtick matches nothing shown.
+    const coded = [
+      boardItem(1, 'backlog', {
+        title: 'Raise `STORE_SCHEMA` to 18',
+        updated_at: '2026-10-01T10:00:00Z',
+      }),
+      boardItem(2, 'backlog', {
+        title: 'Keep `MAIN-9` and store',
+        updated_at: '2026-10-02T10:00:00Z',
+      }),
+    ]
+    const wrapper = await list('en', coded)
+    await open(wrapper, 'raise store_schema to')
+    expect(count()).toBe('1 of 1')
+    expect(current()).toEqual([{ row: 'MAIN-1', text: 'Raise STORE_SCHEMA to' }])
+    await open(wrapper, 'store')
+    // The current match stays on MAIN-1's row, which still matches.
+    expect(count()).toBe('2 of 2')
+    expect(current()).toEqual([{ row: 'MAIN-1', text: 'STORE' }])
+    expect(others()).toEqual([{ row: 'MAIN-2', text: 'store' }])
+    await open(wrapper, '`STORE')
+    expect(count()).toBe('No matches')
+    expect(current()).toEqual([])
+  })
+
   it('says so when nothing matches, and the steps go nowhere', async () => {
     const wrapper = await list()
     await open(wrapper, 'nowhere at all')
