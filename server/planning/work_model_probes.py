@@ -116,6 +116,12 @@ _ROWS: dict[str, dict[str, object]] = {
         "seconds": 0.0,
         "quality": "observed",
     },
+    "work_item_baselines": {
+        "work_item_id": _NEW,
+        "tasks": 0,
+        "basis": "accepted",
+        "taken_at": "probe",
+    },
     "work_item_comments": {"work_item_id": _NEW, "body": "probe"},
     "work_item_commits": {"work_item_id": _NEW, "commit_id": 0, "attached_by": "server"},
     "work_item_deferrals": {
@@ -250,6 +256,7 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"size": 10485760},),
     ),
     ("work_items", "number >= 1"): (({"number": 0},), ()),
+    ("work_item_baselines", "tasks >= 0"): (({"tasks": -1},), ({"tasks": 3},)),
     ("work_item_deferrals", "(until_at IS NULL) <> (until_item_id IS NULL)"): (
         ({"until_at": None}, {"until_item_id": "probe"}),
         ({"until_at": None, "until_item_id": "probe"},),

@@ -363,6 +363,20 @@ COMMITS = (
 )
 _COMMITS = "".join(f"{statement};\n" for statement in COMMITS)
 
+_BASELINE_BASIS_SQL = ",".join(f"'{basis}'" for basis in model.BASELINE_BASES)
+#: How many tasks stood under a goal or stage when it was accepted, or when work under
+#: one accepted empty first started (`planning.baselines`): one row for as long as its
+#: acceptance stands, none for an acceptance the work-model migration gave. A fresh
+#: store creates it from this text, and so does the work-model migration.
+ITEM_BASELINES = (
+    "CREATE TABLE IF NOT EXISTS work_item_baselines(\n"
+    "    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    tasks INTEGER NOT NULL CHECK(tasks >= 0),\n"
+    f"    basis TEXT NOT NULL CHECK(basis IN ({_BASELINE_BASIS_SQL})),\n"
+    "    taken_at TEXT NOT NULL\n"
+    ") WITHOUT ROWID"
+)
+
 
 def table_definition(table: str, name: str) -> str:
     """The `CREATE TABLE` of one rebuilt table under `name`, as a fresh store holds it."""
@@ -498,6 +512,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 
 {_ITEM_PROJECTS}
 {_COMMITS}
+{ITEM_BASELINES};
 """
 
 
@@ -918,6 +933,7 @@ SCHEMA_TABLES = (
     "work_item_projects",
     "commits",
     "work_item_commits",
+    "work_item_baselines",
 )
 
 
