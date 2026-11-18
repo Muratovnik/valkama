@@ -234,7 +234,8 @@ def triage_fields(
     choice["options"] = answers
     listed = {
         "id": TRIAGE_ITEMS,
-        "label": "Items to do",
+        "label": "Items in this group",
+        "description": "An item left unticked leaves the group and goes back to triage.",
         "type": "multi_choice",
         "required": False,
         "options": [{"id": option, "label": label, "recommended": True} for option, label in items],

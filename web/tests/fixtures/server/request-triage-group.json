@@ -39,8 +39,9 @@
         "type": "choice"
       },
       {
+        "description": "An item left unticked leaves the group and goes back to triage.",
         "id": "items",
-        "label": "Items to do",
+        "label": "Items in this group",
         "options": [
           {
             "id": "main-28",
