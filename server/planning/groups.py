@@ -1,7 +1,7 @@
 """A triage review's group: tasks waiting in the triage stack proposed as one new goal.
 
-The creation of a goal takes the step `group` (`propose`): 2 to 20 tasks of the stack
-that lie under no goal, the answer the agent gives about them (`do`, `later` with
+The creation of a goal takes the step `group` (`propose`): 1 to 20 tasks of the stack
+that lie under no goal, one alone only when it is of priority high or urgent, the answer the agent gives about them (`do`, `later` with
 `until`, `drop`) and why. The goal is created in triage, the tasks move under it at
 once and leave the stack with it, and then:
 
@@ -55,9 +55,13 @@ from . import (
 TAG = "[group]"
 #: The answers an agent gives about its group.
 ANSWERS = (request_model.RETURN_DO, request_model.RETURN_LATER, request_model.RETURN_DROP)
-#: How many tasks one group holds: a group of one is a goal for one task, and twenty is
-#: the most options one field of the owner's question offers.
-FEWEST, MOST = 2, 20
+#: How many tasks one group holds: twenty is the most options one field of the owner's
+#: question offers.
+FEWEST, MOST = 1, 20
+#: The priorities a task alone in a group has: a serious finding with no pair reaches the
+#: owner by the group's question instead of staying marked in the stack, and any other
+#: single finding stays there. The priority is read when the group is written.
+ALONE = ("high", "urgent")
 #: Who decides on a group.
 OWNER, AGENT, HUMAN = "owner", participation.AGENT, participation.HUMAN
 #: The longest reason a group gives, one line. Each reason an answer writes from it must
@@ -89,8 +93,9 @@ def form(payload: Mapping[str, object]) -> Group:
     """The group a creation names, or the refusal of its form, before anything is created.
 
     The goal is a new goal with no parent, its conditions in `checklist`, neither
-    accepted, claimed nor placed in a state by the call; the group names 2 to 20
-    distinct tasks, an answer, why, and `until` with `later` and only with it.
+    accepted, claimed nor placed in a state by the call; the group names 1 to 20
+    distinct tasks, an answer, why, and `until` with `later` and only with it. Whether a
+    task alone may form a group is its priority's to say, read with the task (`_tasks`).
     """
 
     raw = payload.get("group")
@@ -196,7 +201,7 @@ def propose(conn: sqlite3.Connection, goal_id: str, group: Group, author: str | 
     for row in rows:
         service.update_work_item(conn, str(row["work_item_id"]), parent=reference, author=author)
     references = [read_model.reference(conn, row) for row in rows]
-    what = f"group «{goal['title']}»: {group.answer} {len(rows)} items"
+    what = f"group «{goal['title']}»: {group.answer} {_count(rows)}"
     deciding = _decides(conn, goal, group, rows)
     if deciding == HUMAN:
         waits = _ask(conn, goal_id, group, rows, what, author)
@@ -210,7 +215,8 @@ def _tasks(
     conn: sqlite3.Connection, goal: sqlite3.Row, items: tuple[str, ...]
 ) -> list[sqlite3.Row]:
     """The rows of the tasks named, each one a task of the goal's space waiting in its
-    triage stack with no goal over it; the first that is not is refused (`workflow_guard`)."""
+    triage stack with no goal over it, and a task alone one of a priority in `ALONE`; the
+    first that is not is refused (`workflow_guard`)."""
 
     rows = [read_model.item_row(conn, item) for item in items]
     ids = [str(row["work_item_id"]) for row in rows]
@@ -224,7 +230,18 @@ def _tasks(
             raise model.WorkflowGuardError(
                 f"{TAG} {read_model.reference(conn, row)} is not waiting for a triage review: {why}"
             )
+    if len(rows) == 1 and rows[0]["priority"] not in ALONE:
+        raise model.WorkflowGuardError(
+            f"{TAG} a group of one takes a task of priority {' or '.join(ALONE)}:"
+            f" {read_model.reference(conn, rows[0])} is {rows[0]['priority']}"
+        )
     return rows
+
+
+def _count(rows: list[sqlite3.Row]) -> str:
+    """How many tasks a group holds, as its question and its mark say it."""
+
+    return "1 item" if len(rows) == 1 else f"{len(rows)} items"
 
 
 def _not_waiting(
@@ -331,7 +348,7 @@ def _ask(
         "finding",
         proposal,
         purpose="triage",
-        prompt=f"Group of {len(rows)} items: «{goal['title']}»",
+        prompt=f"Group of {_count(rows)}: «{goal['title']}»",
         fields=request_model.fields(
             request_model.triage_fields(group.answer, group.why, options, group.until)
         ),

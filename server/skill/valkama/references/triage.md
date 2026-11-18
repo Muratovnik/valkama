@@ -34,10 +34,11 @@ again.
    `answer` offering `merge` into the older one and `keep`, with your
    recommendation. When it comes back answered by that recommendation, act on
    it as step 1 says.
-5. Group by topic: 2 to 20 tasks without a parent that one goal would finish.
-   File the goal with `create_work_item`: `kind: "goal"`, a title and a
-   description of what the group achieves, its conditions as `checklist`, and
-   `group` with `items`, your `answer` and `why`. Answer `do`, `later` with
+5. Group by topic: 2 to 20 tasks without a parent that one goal would finish;
+   a finding of priority high or urgent that none shares a topic with is a
+   group of one. File the goal with `create_work_item`: `kind: "goal"`, a title
+   and a description of what the group achieves, its conditions as `checklist`,
+   and `group` with `items`, your `answer` and `why`. Answer `do`, `later` with
    `until`, or `drop` for work that is no longer needed. The tasks move under
    the goal at once; the answer is carried out, or waits for the owner as one
    question, as `waits_for_owner` says.

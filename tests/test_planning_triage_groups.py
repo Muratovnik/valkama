@@ -7,8 +7,8 @@ settings the group meets, `finding` and `proposed_goal`, and for `drop` from
 answer is carried out in the same call, with one mark of the summary of decisions at
 `finding`, or waits for the owner on an action of kind `group` and the question
 `triage`, which holds the tasks under it from a claim, a move and a label's rule. A
-group outside its form or naming a task that does not wait in the stack is refused
-whole, with nothing created and no number spent. The asker's withdrawal dissolves a
+group outside its form, naming a task that does not wait in the stack, or of one task
+below priority high is refused whole, with nothing created and no number spent. The asker's withdrawal dissolves a
 waiting group, its tasks going back to the stack, and a person's own write on the goal
 before the answer decides it, ending the question and the action.
 """
@@ -106,6 +106,55 @@ class GroupHarness(SettingHarness):
 
     def items(self) -> int:
         return int(self.conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0])
+
+    def assert_waits(self, answer: dict, tasks: list[str]) -> tuple[str, dict]:
+        """The group waits on the question `triage` and nothing is carried out."""
+
+        goal = str(answer["reference"])
+        self.assertEqual(("triage", None, None), self.where(goal))
+        for task in tasks:
+            self.assertEqual(("triage", None, goal), self.where(task))
+        [action] = self.waiting_on(goal)
+        waits = answer["waits_for_owner"]
+        self.assertEqual(
+            {
+                "action": action.id,
+                "point": "finding",
+                "question": waits["question"],
+                "what": waits["what"],
+            },
+            waits,
+        )
+        self.assertEqual(("finding", "group"), (action.point, action.kind))
+        question = self.request(waits["question"])
+        self.assertEqual(
+            ("triage", action.id, None, "pending"),
+            (question["purpose"], question["action_id"], question["addressee"], question["status"]),
+        )
+        self.assertFalse(answer["applied"]["group"]["carried_out"])
+        self.assertEqual([], self.events(goal, "accepted"))
+        self.assertEqual([], self.decided())
+        return goal, waits
+
+    def owner_answers(self, question: str, answer: str, items: list[str], **more: object) -> dict:
+        """The owner's answer through the HTTP route, ticking `items`: the answer's record."""
+
+        path = "/api/planning/request/answer"
+        payload = {
+            "id": question,
+            "expected_revision": int(self.request(question)["revision"]),
+            "answers": {"answer": answer, "items": [item.lower() for item in items], **more},
+            "author": "user",
+        }
+        try:
+            with calls.bind(calls.browser(), path):
+                written = api.handle_post(self.conn, path, payload)
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        assert written is not None
+        return written[1]
 
     def at_values(self, **values: str) -> None:
         """The minimal set with these values of the space changed."""
@@ -218,35 +267,6 @@ class AgentGroupTests(GroupHarness):
 
 class OwnerGroupTests(GroupHarness):
     """Where either setting keeps the decision for the owner, the answer waits."""
-
-    def assert_waits(self, answer: dict, tasks: list[str]) -> tuple[str, dict]:
-        """The group waits on the question `triage` and nothing is carried out."""
-
-        goal = str(answer["reference"])
-        self.assertEqual(("triage", None, None), self.where(goal))
-        for task in tasks:
-            self.assertEqual(("triage", None, goal), self.where(task))
-        [action] = self.waiting_on(goal)
-        waits = answer["waits_for_owner"]
-        self.assertEqual(
-            {
-                "action": action.id,
-                "point": "finding",
-                "question": waits["question"],
-                "what": waits["what"],
-            },
-            waits,
-        )
-        self.assertEqual(("finding", "group"), (action.point, action.kind))
-        question = self.request(waits["question"])
-        self.assertEqual(
-            ("triage", action.id, None, "pending"),
-            (question["purpose"], question["action_id"], question["addressee"], question["status"]),
-        )
-        self.assertFalse(answer["applied"]["group"]["carried_out"])
-        self.assertEqual([], self.events(goal, "accepted"))
-        self.assertEqual([], self.decided())
-        return goal, waits
 
     def test_the_stricter_row_decides(self) -> None:
         # Findings are the agent's, proposed goals the owner's: the group waits.
@@ -367,9 +387,15 @@ class RefusalTests(GroupHarness):
             elsewhere = service.create_work_item(self.conn, space="BETA", title="Elsewhere")
         self.conn.commit()
         ready = self.filed("Ready work", by=calls.browser())
-        form = "[group] a group is a new goal without a parent, with its conditions in checklist and 2 to 20 items: "
+        form = "[group] a group is a new goal without a parent, with its conditions in checklist and 1 to 20 items: "
         cases = {
-            "one item": ({"group": {"items": tasks[:1]}}, 400, form + "items names 1"),
+            "no item": ({"group": {"items": []}}, 400, form + "items names 0"),
+            "one medium item": (
+                {"group": {"items": tasks[:1]}},
+                409,
+                f"[group] a group of one takes a task of priority high or urgent: {tasks[0]} is"
+                " medium",
+            ),
             "21 items": ({"group": {"items": tasks}}, 400, form + "items names 21"),
             "a parent": ({"parent": str(waiting["reference"])}, 400, form + "parent is named"),
             "no checklist": ({"checklist": None}, 400, form + "checklist names no condition"),
@@ -435,26 +461,6 @@ class OwnerAnswerTests(GroupHarness):
     """The owner's answer to the question `triage`, given through Valkama's HTTP route and
     carried out in the write that gives it: the tasks left unticked go back to the stack,
     a ticked one that left the group takes no part, and the answer acts on the goal."""
-
-    def owner_answers(self, question: str, answer: str, items: list[str], **more: object) -> dict:
-        """The owner's answer through the HTTP route, ticking `items`: the answer's record."""
-
-        path = "/api/planning/request/answer"
-        payload = {
-            "id": question,
-            "expected_revision": int(self.request(question)["revision"]),
-            "answers": {"answer": answer, "items": [item.lower() for item in items], **more},
-            "author": "user",
-        }
-        try:
-            with calls.bind(calls.browser(), path):
-                written = api.handle_post(self.conn, path, payload)
-        except BaseException:
-            self.conn.rollback()
-            raise
-        self.conn.commit()
-        assert written is not None
-        return written[1]
 
     def test_a_card_taken_out_returns_to_the_stack(self) -> None:
         goal, tasks, question = self.waiting_group()
@@ -774,6 +780,57 @@ class SummaryTests(GroupHarness):
             },
             read,
         )
+
+
+class GroupOfOneTests(GroupHarness):
+    """A finding of priority high or urgent with no pair is a group of one, asked about
+    and answered as any group; a single finding of lower priority is refused (above)."""
+
+    def serious(self, priority: str = "high") -> str:
+        """A finding of `priority` alone in the stack."""
+
+        [finding] = self.findings(1)
+        self.tool("apply_work_item_changes", id=finding, update={"priority": priority})
+        return finding
+
+    def test_a_serious_single_finding_is_a_group_of_one(self) -> None:
+        finding = self.serious()
+        goal, waits = self.assert_waits(self.group([finding]), [finding])
+        self.assertEqual("group «Export fixes»: do 1 item", waits["what"])
+        self.assertEqual([], triage.waiting(self.conn, self.space, items=[self.id(finding)]))
+        question = self.request(waits["question"])
+        self.assertEqual("Group of 1 item: «Export fixes»", question["prompt"])
+        _choice, items, _until, _cancels = json.loads(question["fields_json"])
+        self.assertEqual([finding.lower()], [option["id"] for option in items["options"]])
+        # The priority was read when the group was written: lowering it now changes
+        # nothing, and the owner's answer is carried out.
+        self.tool("apply_work_item_changes", id=finding, update={"priority": "low"})
+        record = self.owner_answers(str(waits["question"]), "do", [finding])
+        self.assertEqual({"answer": "do", "moved_out": [], "skipped": []}, record["carried_out"])
+        self.assertEqual(("ready", "inherited", goal), self.where(finding))
+
+    def test_its_only_task_unticked_is_as_any_group_with_none_ticked(self) -> None:
+        finding = self.serious("urgent")
+        goal, waits = self.assert_waits(self.group([finding]), [finding])
+        question = str(waits["question"])
+        status, code, said = self.refusal(functools.partial(self.owner_answers, question, "do", []))
+        self.assertEqual(
+            (400, "invalid_request", "[triage] tick what is to be done, or answer drop"),
+            (status, code, said),
+        )
+        record = self.owner_answers(question, "drop", [])
+        self.assertEqual(
+            {"answer": "drop", "moved_out": [finding], "skipped": []}, record["carried_out"]
+        )
+        self.assertEqual(("triage", None, None), self.where(finding))
+        self.assertEqual(("cancelled", None, None), self.where(goal))
+
+    def test_the_agents_group_of_one_marks_one_item(self) -> None:
+        self.at(participation.MINIMAL)
+        finding = self.serious()
+        goal = str(self.group([finding])["reference"])
+        self.assertEqual(("ready", "inherited", goal), self.where(finding))
+        self.assertEqual([("finding", goal, "group «Export fixes»: do 1 item")], self.decided())
 
 
 if __name__ == "__main__":

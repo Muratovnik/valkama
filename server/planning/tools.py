@@ -467,9 +467,9 @@ TOOLS = [
         " under its parent's space, else in the home space of its projects, else in your"
         " session's space. Projects of two spaces need space, one of them. A goal or"
         " stage names no projects. group, with kind goal, a checklist and no parent,"
-        " proposes the goal for 2 to 20 tasks waiting for a triage review: they move"
-        " under it, and the answer group names (do, later with until, drop) is carried"
-        " out at once, or waits for the owner as waits_for_owner says.",
+        " proposes the goal for 2 to 20 tasks waiting for a triage review, or for one of"
+        " priority high or urgent: they move under it, and the answer group names (do,"
+        " later with until, drop) is carried out at once, or waits for the owner as waits_for_owner says.",
         WRITES,
         {
             "space": _SPACE,

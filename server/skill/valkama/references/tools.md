@@ -249,15 +249,18 @@ new item in the same call, all or nothing:
 
 A refused claim, step, link or group creates nothing and spends no number.
 
-`group` makes a new goal of 2 to 20 tasks waiting for a triage review: each in
-triage, under no goal, in the goal's space, with no question of the owner open.
+`group` makes a new goal of 2 to 20 tasks waiting for a triage review, or of one
+of priority high or urgent: each in triage, under no goal, in the goal's space,
+with no question of the owner open.
 The goal needs `kind: "goal"` and its conditions in `checklist`, and takes no
 `parent`, `acceptance`, `claim` or `state` (`[group]`). The tasks move under it at
 once. Your `answer` (`do`, `later` with `until`, `drop`) is carried out in the same
 call, and `applied.group.carried_out` is `true`; or it waits for the owner, as
 `waits_for_owner` says, and while it waits no task of the group is claimed or
 moved. A task that does not wait in the stack is refused with
-`[group] MAIN-41 is not waiting for a triage review: <why>`.
+`[group] MAIN-41 is not waiting for a triage review: <why>`, and a task alone
+of lower priority with
+`[group] a group of one takes a task of priority high or urgent: MAIN-41 is medium`.
 
 `split_from` names an open task to split a part off, and `steps` the ids of its
 steps the part takes. The part stands beside the task, under the same parent,
