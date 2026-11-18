@@ -16,7 +16,7 @@ python valkama.py <command> [options]
 | `capabilities` | report public interfaces, MCP revisions and tool count as JSON without reading user data |
 | `status [--launcher-directory DIR]` | report source, database, runtime and launcher state without opening the database |
 | `launcher install [--revision REV] [--checkout DIR] [--releases DIR] [--directory DIR] [--force]` | pin a commit as a release and atomically install or repair the stable client command that runs it |
-| `launcher status [--directory DIR]` | verify launcher ownership and hashes |
+| `launcher status [--directory DIR]` | verify launcher ownership and hashes, and whether the installed desktop app packs the pinned release's `desktop/` sources (`desktop_app`) |
 | `launcher listener status\|stop [--port 8642] [--directory DIR]` | inspect or stop only the Windows listener proven to run through the managed shim |
 | `launcher autostart enable [--port PORT] [--force] \| disable [--force] \| status` | on Windows, keep an on-demand listener on the port from login; off until enabled. `--port` defaults to `VALKAMA_PORT`, then `8642`; see [`SERVICE.md`](../../SERVICE.md#holding-the-port-from-login) |
 | `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files and this launcher's autostart value |

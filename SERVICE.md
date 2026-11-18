@@ -13,7 +13,11 @@ python valkama.py launcher install
 python valkama.py launcher status
 ```
 
-The result is JSON containing `command` and `args`. The default command is:
+The result is JSON containing `command` and `args`. `launcher status` also
+carries `desktop_app`: whether the installed desktop app packs the `desktop/`
+sources of the pinned release, which
+[the installation guide](docs/guides/installation.md#the-desktop-app-windows)
+describes. The default command is:
 
 - Windows: `%LOCALAPPDATA%\Valkama\bin\valkama.cmd`
 - macOS/Linux: `$XDG_BIN_HOME/valkama` or `~/.local/bin/valkama`

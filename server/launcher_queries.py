@@ -2,7 +2,8 @@
 
 The tray and the desktop app ask the managed launcher the same questions every
 time a window opens: what runtime identity a new server would have (`runtime`),
-whether the launcher is installed as its manifest says (`launcher status`), and
+whether the launcher is installed as its manifest says and the desktop app packs
+the sources of the release it pins (`launcher status`), and
 who holds the port (`launcher listener status`). Each is a few milliseconds of
 work, but answering it through `cli` imported every surface first -- the MCP
 catalogue, the HTTP handlers, the store -- which cost about 150 ms per question,
@@ -89,7 +90,7 @@ def main(argv: Sequence[str]) -> int | None:
         return None
     try:
         if arguments[1] == "status":
-            result = launcher.status(options.get("--directory"))
+            result = launcher.report(options.get("--directory"))
         else:
             port = int(options.get("--port", "8642"))
             result = launcher.listener_status(options.get("--directory"), port=port)

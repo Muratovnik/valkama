@@ -7,6 +7,7 @@ import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
+import { doctorDesktopMessages } from '@/shared/i18n/doctorDesktopMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
@@ -494,6 +495,7 @@ export const ru = {
         detail: 'Ни Claude Code, ни Codex не настроены для этого пользователя.',
       },
       ...doctorLoginMessages.ru,
+      ...doctorDesktopMessages.ru,
       ...doctorQuotaMessages.ru,
       'listener-offline': {
         title: 'Локальный сервер не запущен',

@@ -7,6 +7,7 @@ import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
+import { doctorDesktopMessages } from '@/shared/i18n/doctorDesktopMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
@@ -495,6 +496,7 @@ export const en = {
         detail: 'Neither Claude Code nor Codex is set up for this user.',
       },
       ...doctorLoginMessages.en,
+      ...doctorDesktopMessages.en,
       ...doctorQuotaMessages.en,
       'listener-offline': {
         title: 'Local server is not running',

@@ -1271,6 +1271,7 @@ def _runtime_checks(port: int, *, probe: bool) -> list[dict]:
     ]
     checks.extend(_autostart_check())
     checks.extend(_alerts_check())
+    checks.extend(_desktop_app_check())
     if not probe:
         return checks
     checks.append(_listener_check(port, snapshot.identity))
@@ -1341,6 +1342,83 @@ def _alerts_check() -> list[dict]:
             f"shortcut found, helper can be built, listener at login {found['autostart']}",
             presentation_code="alerts-ready",
             parameters={"autostart": found["autostart"]},
+        )
+    ]
+
+
+def _desktop_app_check() -> list[dict]:
+    """One line: whether the desktop app packs the desktop sources of the pinned release.
+
+    `launcher install` leaves the app as it was, and the app's version does not move
+    with its sources, so an app built from an older commit runs on, looking current,
+    until something says so. The reading is `launcher status`'s own, which reads only.
+    """
+
+    try:
+        reading = launcher.report()["desktop_app"]
+    except launcher.LauncherError:
+        return []
+    if not isinstance(reading, dict) or reading.get("state") == "unsupported":
+        return []
+    title = "Desktop app"
+    state = reading["state"]
+    release = reading.get("release")
+    revision = Path(release).name[:12] if isinstance(release, str) else ""
+    fix = str(reading.get("fix", ""))
+    if state == "absent":
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "ok",
+                "not installed",
+                presentation_code="desktop-app-absent",
+            )
+        ]
+    if state == "no-release":
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "unknown",
+                "the launcher pins no release to compare the installed app with",
+                fix,
+                presentation_code="desktop-app-no-release",
+            )
+        ]
+    if state == "current":
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "ok",
+                f"packs the desktop sources of release {revision}",
+                presentation_code="desktop-app-current",
+                parameters={"revision": revision},
+            )
+        ]
+    if state == "differs":
+        differs = [str(path) for path in reading.get("differs", [])]
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "warn",
+                f"packs other desktop sources than release {revision}: {', '.join(differs)}",
+                fix,
+                presentation_code="desktop-app-differs",
+                parameters={"revision": revision, "count": len(differs)},
+            )
+        ]
+    return [
+        _check(
+            "desktop-app",
+            title,
+            "warn",
+            f"cannot be compared with release {revision}: {reading.get('detail')}",
+            fix,
+            presentation_code="desktop-app-unreadable",
+            parameters={"revision": revision},
         )
     ]
 

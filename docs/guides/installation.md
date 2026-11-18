@@ -74,7 +74,10 @@ registration is removed before its launcher-backed replacement is added.
 
 `python valkama.py doctor` checks the whole installation in four levels —
 Installation, Projects, Capabilities, Connections — and says what to do about
-each problem; the [command reference](commands.md) lists its options.
+each problem; the [command reference](commands.md) lists its options. Among
+the Installation checks, its Desktop app line says whether the installed desktop
+app was built from the release the launcher pins; see
+[The desktop app (Windows)](#the-desktop-app-windows).
 
 ## The desktop app (Windows)
 
@@ -104,6 +107,30 @@ anything running from those directories, runs each old copy's own uninstaller,
 and installs the current one. It only ever touches something registered under
 one of this product's names *and* installed under `%LOCALAPPDATA%\Programs`;
 anything else is reported and left alone.
+
+The desktop app is a separate artifact: `launcher install` publishes the server
+and the web build and leaves the installed app as it was, and the app's version
+in `desktop/package.json` stays the same while its sources change. So
+`launcher status` reports, in its `desktop_app` field, whether the installed app
+packs the `desktop/` sources of the release the launcher pins, and `doctor` shows
+the same answer as its Desktop app line. Neither installs, starts or changes
+anything. The check compares the bytes of each file the release's build
+configuration packs with the file in the app's `resources\app.asar`, and
+`package.json` without the keys the build drops:
+
+| `desktop_app.state` | `doctor` | Meaning |
+| --- | --- | --- |
+| `current` | ok | the app packs the release's desktop sources |
+| `differs` | warn | the files in `differs` are not the release's; `fix` names the reinstall |
+| `unreadable` | warn | the app's archive or the release's desktop sources cannot be read; `detail` says which |
+| `no-release` | unknown | the launcher pins no release to compare with |
+| `absent` | ok | no desktop app is installed |
+| `unsupported` | no line | not Windows |
+
+For `differs`, install the app from the commit the launcher pins:
+`.\windows\install-desktop.ps1 -Build` in a source checkout at that commit, or
+that release's `Valkama-Setup-<version>.exe`. When the app is the newer of the
+two, `launcher install` from the app's commit pins the matching release instead.
 
 What the window and the tray do once installed is in
 [The desktop app and the tray](desktop-and-tray.md).
