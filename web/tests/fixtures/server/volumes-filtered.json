@@ -161,6 +161,21 @@
         "sessions": 2,
         "commits": 0,
         "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
         "children": [
           {
             "work_item_id": "00000000-0000-4000-8000-000000000034",
@@ -229,6 +244,21 @@
             "sessions": 1,
             "commits": 0,
             "commits_unknown_repository": 0,
+            "remaining": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": 0,
+                "cached_read": 0,
+                "cache_write_5m": 0,
+                "cache_write_1h": 0,
+                "output": 0,
+                "reasoning": 0
+              },
+              "estimated_api_cost_usd": 0.0,
+              "basis": 0,
+              "estimated": 0,
+              "unestimated": 1
+            },
             "children": []
           }
         ]
@@ -300,6 +330,21 @@
         "sessions": 1,
         "commits": 0,
         "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
         "children": []
       },
       {
@@ -368,6 +413,21 @@
         "sessions": 1,
         "commits": 0,
         "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 2
+        },
         "children": [
           {
             "work_item_id": "00000000-0000-4000-8000-000000000042",
@@ -431,6 +491,21 @@
             "sessions": 1,
             "commits": 0,
             "commits_unknown_repository": 0,
+            "remaining": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": 0,
+                "cached_read": 0,
+                "cache_write_5m": 0,
+                "cache_write_1h": 0,
+                "output": 0,
+                "reasoning": 0
+              },
+              "estimated_api_cost_usd": 0.0,
+              "basis": 0,
+              "estimated": 0,
+              "unestimated": 2
+            },
             "children": [
               {
                 "work_item_id": "00000000-0000-4000-8000-000000000040",
@@ -494,6 +569,21 @@
                 "sessions": 0,
                 "commits": 0,
                 "commits_unknown_repository": 0,
+                "remaining": {
+                  "agent_seconds": 0.0,
+                  "tokens": {
+                    "input": 0,
+                    "cached_read": 0,
+                    "cache_write_5m": 0,
+                    "cache_write_1h": 0,
+                    "output": 0,
+                    "reasoning": 0
+                  },
+                  "estimated_api_cost_usd": 0.0,
+                  "basis": 0,
+                  "estimated": 0,
+                  "unestimated": 1
+                },
                 "children": []
               }
             ]
@@ -567,6 +657,21 @@
         "sessions": 0,
         "commits": 0,
         "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
         "children": [
           {
             "work_item_id": "00000000-0000-4000-8000-000000000037",
@@ -635,6 +740,21 @@
             "sessions": 0,
             "commits": 0,
             "commits_unknown_repository": 0,
+            "remaining": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": 0,
+                "cached_read": 0,
+                "cache_write_5m": 0,
+                "cache_write_1h": 0,
+                "output": 0,
+                "reasoning": 0
+              },
+              "estimated_api_cost_usd": 0.0,
+              "basis": 0,
+              "estimated": 0,
+              "unestimated": 1
+            },
             "children": []
           }
         ]
@@ -705,6 +825,21 @@
         "sessions": 0,
         "commits": 0,
         "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
         "children": []
       }
     ],
@@ -836,6 +971,46 @@
           }
         ]
       }
+    },
+    "estimates": {
+      "min_basis": 5,
+      "basis": 1,
+      "rows": [
+        {
+          "level": "project_kind",
+          "project": {
+            "id": null,
+            "unknown": false,
+            "name": null,
+            "combinations": null
+          },
+          "space": {
+            "key": "MAIN",
+            "name": "Contract"
+          },
+          "kind": "task",
+          "label": null,
+          "tasks": 1,
+          "agent_seconds": {
+            "median": 300.0,
+            "q1": 300.0,
+            "q3": 300.0,
+            "mean": 300.0
+          },
+          "tokens_anew": {
+            "median": 48,
+            "q1": 48,
+            "q3": 48,
+            "mean": 48
+          },
+          "estimated_api_cost_usd": {
+            "median": 1.0,
+            "q1": 1.0,
+            "q3": 1.0,
+            "mean": 1.0
+          }
+        }
+      ]
     }
   }
 }

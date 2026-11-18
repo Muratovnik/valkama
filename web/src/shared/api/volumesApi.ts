@@ -97,7 +97,7 @@ const projectName = () => boundedText(PROJECT_VALUE, 512).nullable()
  * A row's project as a project group of the Analytics read is written: its id and name, or
  * null for tasks naming none and for those naming several, which list each set they name.
  */
-const outsideProjectSchema = strictObject({
+const projectGroupSchema = strictObject({
   id: boundedText(PROJECT_ID, 160).nullable(),
   unknown: z.literal(false),
   name: projectName(),
@@ -117,7 +117,7 @@ const outsideProjectSchema = strictObject({
  */
 const outsideSchema = strictObject({
   tasks: count(),
-  by_project: z.array(strictObject({ project: outsideProjectSchema, categories: rowCategories() })),
+  by_project: z.array(strictObject({ project: projectGroupSchema, categories: rowCategories() })),
   by_label: z.array(strictObject({ label: label().nullable(), categories: rowCategories() })),
 }).refine(
   (outside) =>
@@ -162,6 +162,22 @@ const baselineSchema = strictObject({
   taken_at: boundedText(ISO, 96),
 })
 
+/**
+ * What its open tasks have left by their estimates, judged by done work of the whole store:
+ * `basis` counts the different done tasks those estimates were judged by. Null with no open
+ * task; zeros with `estimated` 0 when none of them has an estimate.
+ */
+const remainingSchema = strictObject({
+  agent_seconds: z.number().nonnegative(),
+  tokens: tokensSchema,
+  estimated_api_cost_usd: z.number().nonnegative(),
+  basis: count(),
+  estimated: count(),
+  unestimated: count(),
+}).refine((left) => (left.estimated === 0) === (left.basis === 0), {
+  message: 'expected done tasks behind the estimates exactly when one is given',
+})
+
 /** Why a row shows no count at acceptance: the first that holds. */
 const BASELINE_ABSENT = ['filtered', 'partial', 'not_accepted', 'not_started', 'migrated'] as const
 
@@ -196,6 +212,7 @@ const goalRowShape = {
   commits: count(),
   /** Records of commits of no known repository: one commit may stand as two abbreviations. */
   commits_unknown_repository: count(),
+  remaining: remainingSchema.nullable(),
 }
 
 /** A row stands in a state or derives one, never both; it shows a count or says why not. */
@@ -247,6 +264,42 @@ const flowSchema = strictObject({
   { message: 'expected the days to add up to the totals' },
 )
 
+/** The median, the quartiles and the mean of one measure over a row's done tasks. */
+const describedSchema = strictObject({
+  median: z.number().nonnegative(),
+  q1: z.number().nonnegative(),
+  q3: z.number().nonnegative(),
+  mean: z.number().nonnegative(),
+})
+
+/**
+ * A row of the table of estimates: the scope's done tasks of one project and kind, or those of
+ * them carrying one label. A row of several projects or of none names the space it stands in.
+ */
+const estimateRowSchema = strictObject({
+  level: enumField(['project_kind', 'project_kind_label'] as const),
+  project: projectGroupSchema,
+  space: strictObject({ key: boundedText(SPACE_KEY, 8), name: title() }).nullable(),
+  kind: enumField(['task', 'bug', 'improvement'] as const),
+  label: label().nullable(),
+  tasks: positiveInt(),
+  agent_seconds: describedSchema,
+  tokens_anew: describedSchema,
+  estimated_api_cost_usd: describedSchema,
+}).refine(
+  (row) =>
+    (row.level === 'project_kind') === (row.label === null) &&
+    (row.space === null) === (row.project.id !== null),
+  { message: 'expected a label exactly on a label row, and a space exactly with no one project' },
+)
+
+/** The scope's done work that estimates are judged by: how many tasks, and the table. */
+const estimatesSchema = strictObject({
+  min_basis: positiveInt(),
+  basis: count(),
+  rows: z.array(estimateRowSchema),
+})
+
 const volumesSchema = strictObject({
   scope: scopeSchema,
   period: strictObject({
@@ -273,6 +326,7 @@ const volumesSchema = strictObject({
   goals: z.array(goalTreeSchema),
   outside: outsideSchema,
   flow: flowSchema,
+  estimates: estimatesSchema,
 }).refine(
   (read) =>
     read.counts.categories.every(

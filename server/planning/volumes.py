@@ -16,10 +16,12 @@ question to the owner (`questions.open_on`), and the commits on no card of the
 scope's projects, or of the whole store, as the total of their list
 (`commits.unattached`). The goals come next: the open ones and those closed in the
 period, each with what it took over all its time and its stages under it
-(`goal_volumes`). Then the work outside goals: the scope's tasks under no goal, by
-project and by label, counted by category as the counts are. The flow closes the
-read: the scope's tasks created and closed on each day of the period, the owner's
-decisions and the commits, with the pace of its tasks (`volume_flow`).
+(`goal_volumes`), with what its open tasks have left by their estimates. Then the work
+outside goals: the scope's tasks under no goal, by project and by label, counted by
+category as the counts are. Then the flow: the scope's tasks created and closed on
+each day of the period, the owner's decisions and the commits, with the pace of its
+tasks (`volume_flow`). The estimates close the read: the scope's done work that
+estimates are judged by, described by project, kind and label (`estimates.table`).
 
 A read may also name kinds of task and labels (`WorkFilter`), by the rules of the
 board's filter. It then keeps only the scope's tasks that match, by one condition every
@@ -43,6 +45,7 @@ from ..projects import project_registry, scopes
 from ..store_identity.metadata import read_store_metadata
 from . import (
     commits,
+    estimates,
     goal_volumes,
     item_projects,
     model,
@@ -465,7 +468,7 @@ def _outside(conn: sqlite3.Connection, request: Request) -> dict:
         for label in labels or [None]:
             if not shown or label in shown:
                 by_label.setdefault(label, []).append(row)
-    names = _project_names(held.values())
+    names = usage.project_names(held.values())
     projects_first = sorted(
         by_project.items(), key=lambda entry: usage.ranking(len(entry[1]), None, (entry[0],))
     )
@@ -475,7 +478,10 @@ def _outside(conn: sqlite3.Connection, request: Request) -> dict:
     return {
         "tasks": len(rows),
         "by_project": [
-            {"project": _project(group, names, sets[group]), "categories": _by_category(found)}
+            {
+                "project": usage.project_group(group, names, sets[group]),
+                "categories": _by_category(found),
+            }
             for group, found in projects_first
         ],
         "by_label": [
@@ -491,38 +497,6 @@ def _by_category(rows: list[sqlite3.Row]) -> dict[str, int]:
     for row in rows:
         found[str(row["category"])] += 1
     return found
-
-
-def _project_names(held: Iterable[frozenset[str]]) -> dict[str, str]:
-    """The registry's name of each project these tasks name; none when it cannot be read."""
-
-    named: set[str] = set().union(*held)
-    if not named:
-        return {}
-    listing = project_registry.read_registry()
-    if listing["status"] != "available":
-        return {}
-    return {
-        str(entry["project_id"]): str(entry["display_name"])
-        for entry in listing["projects"]
-        if str(entry["project_id"]) in named
-    }
-
-
-def _project(group: usage.Value, names: dict[str, str], sets: set[frozenset[str]]) -> dict:
-    """A row's project as a project group of the Analytics read is written: its `id` and
-    `name`, null for none and for several, and for several each set of projects named."""
-
-    return {
-        **usage.value(group, unknown=False),
-        "name": names.get(group) if isinstance(group, str) else None,
-        "combinations": [
-            [{"id": project, "name": names.get(project)} for project in projects]
-            for projects in sorted(sorted(found) for found in sets)
-        ]
-        if group is usage.SEVERAL
-        else None,
-    }
 
 
 # -- the flow --------------------------------------------------------------------
@@ -558,6 +532,17 @@ def _flow(conn: sqlite3.Connection, request: Request) -> dict:
     )
 
 
+# -- the estimates ---------------------------------------------------------------
+
+
+def _estimates(conn: sqlite3.Connection, request: Request) -> dict:
+    """The scope's done work that estimates are judged by, described by project, kind and
+    label. A filter does not narrow it yet: it describes the scope's basis whole."""
+
+    scope = request.scope
+    return estimates.table(conn, scope.where(), scope.parameters)
+
+
 # -- the read --------------------------------------------------------------------
 
 
@@ -577,6 +562,7 @@ SECTIONS: tuple[tuple[str, Section], ...] = (
     ("goals", _goals),
     ("outside", _outside),
     ("flow", _flow),
+    ("estimates", _estimates),
 )
 
 

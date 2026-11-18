@@ -18,7 +18,7 @@ from tests.test_planning_volumes import CATEGORIES, VolumesCase
 #: The four figures of a number that add up from item to item.
 ADDED = ("agent_seconds", "tokens", "estimated_api_cost_usd", "unpriced_tokens")
 TOKENS = tuple(kind for kind, _column in usage.TOKEN_KINDS)
-#: What a row counts of its items besides what they spent.
+#: What a row says of its items besides what they spent.
 COUNTED = (
     "tasks",
     "baseline",
@@ -26,6 +26,7 @@ COUNTED = (
     "sessions",
     "commits",
     "commits_unknown_repository",
+    "remaining",
 )
 
 
@@ -591,6 +592,7 @@ PARTS = {
     "sessions": "execution_events",
     "commits": "work_item_commits",
     "counts at acceptance": "work_item_baselines",
+    "the basis of the estimates": "HAVING SUM(g.seconds) > 0",
 }
 
 
@@ -617,15 +619,18 @@ class StatementTests(GoalCase):
             statements.clear()
             return found
 
-        # Every part once for six rows; the usage rows and the sessions read usage.
-        once = {**dict.fromkeys(PARTS, 1), "of usage": 2}
+        # Every part once for six rows; the usage rows, the sessions and the basis read usage.
+        once = {**dict.fromkeys(PARTS, 1), "of usage": 3}
         self.goal_volumes(*references)
         self.assertEqual(once, reading())
         self.assertEqual(3, len(self.volumes("MAIN")["goals"]))
         # The frame's first counted moment reads usage too, the flow reads the scope's commits
         # twice, those attached to its items and those on no card, whatever its goals, and the
-        # counts take how many stand on no card in one more.
-        self.assertEqual({**once, "of usage": 3, "commits": 4}, reading())
+        # counts take how many stand on no card in one more. The table of the estimates reads
+        # the basis once more, whatever its goals.
+        self.assertEqual(
+            {**once, "of usage": 5, "commits": 4, "the basis of the estimates": 2}, reading()
+        )
 
 
 class RefusalTests(GoalCase):
