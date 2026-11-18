@@ -2558,9 +2558,9 @@ A dimension's section answers «of what»: the same cells, then its values three
 form follows how the values are named (`splitView.ts`). Named by identifiers — accounts,
 projects, roles, models, efforts, environments, launch classes — they split one whole, drawn as
 a ring or as ranked bars and switched with the table as «Ring | Bars | Table», the same numbers
-in each, opening on the ring: the ranked bars list the first twelve and say how many more the
-table holds, and the ring (`DonutChart`) names its first parts and folds the smaller into one
-rest. Split by a second dimension it draws bars alone, since a ring of pairs would tell one
+in each, opening on the ring: the ranked bars list the first twelve, and under them «All N»
+opens every value of the period in the side panel, and the ring (`DonutChart`) names its first
+parts and folds the smaller into one rest. Split by a second dimension it draws bars alone, since a ring of pairs would tell one
 value's pairs apart by hue alone. Named by free text — tasks and sessions, by their own or on
 either side of a pair — they are a list only, switched with the table as «Chart | Table»: the
 ranked list of free text, with no ring and no small charts, across the whole width of the
@@ -2581,8 +2581,7 @@ and may. Ranked over what the filter left, every survivor moved up a hue. The se
 and the table under them, held to about the window's height so it and its heading line stand
 in the window together, scrolling inside its frame with its heading row and total row at the
 frame's edges, so what focus brings into view stands clear of them. A «To the table» link over
-the charts, like the ranked bars' line of how many more the table holds, brings the table into
-view with the focus on it. The table sorts by any column and downloads what it shows. A line under its heading row counts the
+the charts brings the table into view with the focus on it. The table sorts by any column and downloads what it shows. A line under its heading row counts the
 values of the period that have a figure in the measure, as their tile does, and says apart
 those that spent in the period only in another measure — the adviser has tokens and no agent
 time — and those that spent only before it. The line is a row of its own, kept while it has
@@ -2607,7 +2606,7 @@ chart. In the ranked bars a pair's name takes a line of its own over its bar at 
 name does in a narrow chart: the second part is a whole value's name, as wide as a model's, and
 the one-line name column, two-fifths of the row, held «claude-opus-5-5» with 13 pixels of the task
 before it and cut the model as well. A pair acts as its first value does, and a bar, a small
-chart or a legend entry that acts is named by that action, «Show the tasks of claude-opus-5-5», so
+chart or a legend entry that acts is named by that action, «Details of claude-opus-5-5», so
 each is described by its whole pair before its figures: described by its figures alone, the high
 and the medium row of one model sounded alike to a screen reader.
 
@@ -2628,7 +2627,7 @@ since they were read, or no reading. The panel has a group per account on a surf
 own, by the name its owner gave it or the start of its id, the whole id in its hint, its
 windows side by side where the width allows. Every window, the five hours, the week and a
 model's week, has the same three parts 12px apart: what stands now, the `StepLine` of its
-readings and what used it.
+readings and «Where the window went», which opens what used it in the side panel.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · fresh», «13% used · silent 5 h», over its bar, its share solid and its forecast a
 hatched tail; then its forecast in the text's ink after the key of that hatch, a swatch where a
@@ -2658,26 +2657,52 @@ its state, its age and its source in the line's hint as a window of a share keep
 bar's and in words as a table, with no figure. No share is added to another, of two windows or
 two accounts, and no dollar stands beside one.
 
-Under each window that names its start stands «Where the window went»: the work Valkama
-recorded on that account from the window's start to the answer's moment, held to the last five
+Under each window that names its start stands «Where the window went», a button that opens the
+side panel on that window of that account, titled «Five hours · Work»: the work Valkama
+recorded on the account from the window's start to the answer's moment, held to the last five
 minutes, as ranked bars — the first five items by the API price estimate, each with its share
 of the account's estimate, and one line for the rest — or as a ring of every item that folds its
-own rest, chosen with «Ring | Bars» beside the breakdowns, or as the bars' table when the panel
-turns to its tables, which hides that switch. It opens by task and offers projects and models;
-the choice of breakdown holds for that window when the panel turns to its table. By project or
-model it opens on the ring, as every split named by identifiers does, and a person's choice of
-drawing holds until the page is left; by task it is the list of free text alone, with no switch,
-the rest and the work on no task apart after the five under their rule. Its heading names the stretch it covers. That it is the API price estimate and not
-quota points, and that work in claude.ai and the desktop app, which the window's share counts,
-is not in it, the section's «ⓘ» says once for every window. It is read by the account's seat,
-one window at a time and only for the windows shown, so another account's work is never in it;
-work its organization recorded with no account known is a quiet line of its own, never counted
-to the account. No work, only such work, a wait and a read that failed, with its retry, each
-say so in the block, and the quota's own figures stand meanwhile. The block starts at its
-window's edge, under the window's bar and readings, on no axis of theirs.
+own rest, chosen with «Ring | Bars» beside the breakdowns, or as the bars' table, which the
+panel's own «Chart | Table» under its title chooses and which hides «Ring | Bars»; the panel's
+width chooses first, as a page's does. It opens by task and offers projects and models; the
+choice of breakdown holds for that window when the panel turns to its table or opens again. By
+project or model it opens on the ring, as every split named by identifiers does, and a person's
+choice of drawing holds until the page is left; by task it is the list of free text alone, with
+no switch, the rest and the work on no task apart after the five under their rule. Its heading
+names the stretch it covers. That it is the API price estimate and not quota points, and that
+work in claude.ai and the desktop app, which the window's share counts, is not in it, the
+section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
+says for this one, never as a line of the panel. It is read by the
+account's seat when its panel opens, never for a window nobody opened, so another account's work
+is never in it; work its organization recorded with no account known is a quiet line of its
+own, never counted to the account. No work, only such work, a wait and a read that failed, with
+its retry, each say so in the panel, and the quota's own figures stand meanwhile. It stands
+apart from the window's bar and readings, on no axis of theirs: under the window it was a block
+as tall as the window again, and every window of every account read what used it whether or not
+anyone asked.
 
-A task pressed anywhere on the page opens its card over the page, and closing the card leaves
-the page as it was (Inspectors).
+A value pressed on the page — a bar, a sector, a segment of a day, a legend entry, a name in a
+table, a line of the overview's cards — opens its side panel on the right, the shared resizable
+inspector of the drawer layer, and the page stays as it was: pressing a value used to narrow
+the page to it, which lost the view it was pressed in for a look at one value. The panel is a
+part of the view's address, so opening it is a step of the history, Back closes it, and a reload
+opens it again with no focus ring; the overlay host gives it the focus, Escape closes it, the
+page under it is held, and the focus returns to what opened it. On a narrow window it takes the
+whole width. It names the value in full, and for a task «Open the card» opens the card over the
+page as any reference to the task does. Its figures are the time, the tokens, the cost and the
+value's share of the whole in the page's measure; its days are the page's period and step with
+the period before marked, one series in the value's colour; under them dense ranked bars say the
+models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
+the value's filter added, and wait and fail as the page's do. «Narrow the page to it» does what
+pressing a value did: the page narrows to it, broken down by task — work with no task by where
+it came from — and the panel closes, a step of the history too. A press with a modifier or the
+middle button on a task still opens its card in a new tab, and a day, an hour or a minute still
+narrows the page. «All N» opens the section's whole table in the panel, every value with the
+period's figures and those of the period before, sorted as the table sorts and with a field that
+finds a value by its name; a value pressed there opens its own panel in its place, a step of the
+history. A card opened from the panel stands over the page while the panel waits closed under
+it, and the panel opens again when the card closes: two surfaces of one layer paint in the order
+they were first drawn, and the panel stood over the card.
 
 A cost is always an estimate at API prices and is written as one, with «≈», and the section's
 «ⓘ» says once that it is not a bill; cached reads are counted apart from the tokens processed
