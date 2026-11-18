@@ -278,10 +278,13 @@ const tableWords = computed<WindowWords>(() => ({
   align-items: center;
 }
 
-/* The field that renames the account, in the name's place, as wide as a name reads. */
+/* The field that renames the account, in the name's place, as wide as a name reads. The name
+   stands unseen in the heading for the outline, which leaves the heading row's gap (`--space-3`)
+   before the field: the field takes that gap back, so it starts where the name did. */
 .quota-account-field {
   flex: 0 1 20rem;
   min-width: 0;
+  margin-inline-start: calc(-1 * var(--space-3));
 }
 
 /* What is not a window takes the group's whole width, over or under its windows. */

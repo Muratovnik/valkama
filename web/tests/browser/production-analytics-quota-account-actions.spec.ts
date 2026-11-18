@@ -1,9 +1,9 @@
 /**
  * The menu at an account's name on the quota's panel, in the real app. The oracle is the
  * requirement (`DESIGN.md`, Analytics, the quota's panel): three entries and no more; «Rename»
- * opens a field in the name's place that saves through the names Valkama keeps, the name Settings
- * then shows, on Enter, leaves the name on Escape, and gives the focus back to the menu's button
- * either way; «Add to filter» adds the account to the page's filter, a chip in the bar, and the
+ * opens a field in the name's place, starting where the name did, that saves through the names
+ * Valkama keeps, the name Settings then shows, on Enter, leaves the name on Escape, and gives the
+ * focus back to the menu's button either way; «Add to filter» adds the account to the page's filter, a chip in the bar, and the
  * page stays on its section, after which the entry is disabled, «Already in filter»; «Copy ID»
  * puts the account's whole id on the clipboard and says so. No hint says that id.
  */
@@ -44,12 +44,21 @@ test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, an
   page,
 }) => {
   const { analytics, backend } = await openQuota(page)
+  const name = await analytics
+    .locator('[data-account="7e6d5c4b"] .quota-account-name')
+    .boundingBox()
   const { menu } = await openMenu(page, '7e6d5c4b')
   await expect(menu.getByRole('menuitem')).toHaveText(['Rename', 'Add to filter', 'Copy ID'])
   await menu.getByRole('menuitem', { name: 'Rename' }).click()
   const field = analytics.getByRole('textbox', { name: 'Account name' })
   await expect(field).toBeFocused()
   await expect(field).toHaveValue('')
+  // The field stands in the name's place: it starts where the name did.
+  const placed = await field.boundingBox()
+  expect(
+    Math.abs((placed?.x ?? 0) - (name?.x ?? -1)),
+    'the field where the name was',
+  ).toBeLessThanOrEqual(1)
   await field.fill('Night shift')
   await field.press('Enter')
   await expect(field).toHaveCount(0)
