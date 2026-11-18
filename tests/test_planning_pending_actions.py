@@ -1192,6 +1192,36 @@ class TaskInGoalTests(SettingHarness):
         self.assertEqual([], self.owners_list())
         self.assertEqual([], self.decided())
 
+    def test_a_task_moved_from_the_goal_before_the_answer_is_not_taken_on(self) -> None:
+        self.at(participation.MANUAL)
+        filed = self.file_in_goal("A task asked about in the goal")
+        task, question = str(filed["reference"]), str(filed["waits_for_owner"]["question"])
+        [action] = self.waiting_on(task)
+        with calls.bind(calls.browser(), "create_work_item"):
+            elsewhere = str(
+                service.create_work_item(
+                    self.conn, space="ALPHA", title="A goal in triage", kind="goal", state="triage"
+                )["reference"]
+            )
+        self.conn.commit()
+        # The agent moves the task under a goal nobody has taken on before the owner answers.
+        self.tool("apply_work_item_changes", id=task, update={"parent": elsewhere})
+        self.assertEqual(self.id(elsewhere), self.card(task)["parent_id"])
+        record = self.answer(question, "do")
+        self.assertEqual("dropped", record["carried_out"])
+        card = self.card(task)
+        self.assertEqual(
+            ("triage", None, self.id(elsewhere)),
+            (card["state"]["category"], card["acceptance"], card["parent_id"]),
+        )
+        stored = self.request(question)
+        self.assertEqual(
+            ("answered", {"answer": "do"}), (stored["status"], json.loads(stored["answers_json"]))
+        )
+        self.assertEqual("dropped", self.action(action.id)["outcome"])
+        self.assertEqual(["task_in_goal: the task moved"], self.events(task, "action_dropped"))
+        self.assertEqual([], self.owners_list())
+
 
 #: The batch an agent cancels an item with: its summary, and the move with its reason.
 SUMMARY = {"done": "Nothing: another item covers it.", "next": "Nothing."}

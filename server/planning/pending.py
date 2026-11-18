@@ -77,8 +77,8 @@ class Proposal:
 
     `params` and `seen` are JSON objects: the write's arguments, and what the asker
     saw of the item that the answer must still find (`inapplicable` reads, by point:
-    `parent` in `params` for a task in a goal, and `parent` and `accepted` in `seen`
-    for one being moved there; `item`, `cancels` and `dependents` for a cancel, as `cancel_seen`
+    `parent` in `params` and in `seen` for a task in a goal, and `accepted` in `seen`
+    too for one being moved there; `item`, `cancels` and `dependents` for a cancel, as `cancel_seen`
     gives them). `proposed` is what the question shows was proposed (`removed` and
     `rewritten` for a condition, `until` for putting a goal off, `summary` for a
     close), and `what` the line of the summary of decisions once it is carried out.
@@ -469,8 +469,8 @@ def inapplicable(conn: sqlite3.Connection, action: Action) -> str | None:
 
 def _task_in_goal(conn: sqlite3.Connection, action: Action, row: sqlite3.Row) -> str | None:
     """A task lying in a goal applies while it is not accepted, and one being moved there
-    while it is not accepted since it was asked (`accepted` in `seen`) and stands where
-    it stood; either while the goal is open and accepted."""
+    while it is not accepted since it was asked (`accepted` in `seen`); either while it
+    stands where it stood (`parent` in `seen`) and the goal is open and accepted."""
 
     if row["acceptance"] is not None and not action.seen.get("accepted"):
         return "the task was accepted"

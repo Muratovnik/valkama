@@ -996,8 +996,12 @@ def _ask_about_task(
     reference = read_model.reference(conn, row)
     goal = read_model.reference(conn, read_model.item_by_id(conn, goal_id))
     if moved_from is None:
+        # It lies under the goal: moved away before the answer, it is no longer asked about.
         proposal = pending.Proposal(
-            "accept", {"parent": goal_id}, f"accepted {reference} under {goal}"
+            "accept",
+            {"parent": goal_id},
+            f"accepted {reference} under {goal}",
+            seen={"parent": goal_id},
         )
         prompt = f"An agent files the task {reference} in {goal}: {row['title']}."
     else:
