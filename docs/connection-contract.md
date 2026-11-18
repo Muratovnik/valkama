@@ -1720,9 +1720,9 @@ key into its account.
 
 The Volumes read counts the work of a scope by where it stands: how much waits in each
 category now, which card has stood there longest, and how much came to be completed or
-cancelled in a period, and what each goal took. It answers `GET /api/planning/volumes`
-with `interface_version` `valkama-planning-api` and `volumes`; `GET
-/api/planning/goal-volumes` gives the rows of the goals and stages it is asked for,
+cancelled in a period, what each goal took, and how work flowed day by day. It answers
+`GET /api/planning/volumes` with `interface_version` `valkama-planning-api` and
+`volumes`; `GET /api/planning/goal-volumes` gives the rows of the goals and stages it is asked for,
 whole (see [A goal's row](#a-goals-row)). A later build only adds fields and sections to
 these answers. No MCP tool reads them: the numbers would cost an agent context.
 
@@ -1759,7 +1759,15 @@ of another space that the space's items name keeps only the space's own.
                    "reference": "MAIN-12", "since": "2030-01-03T10:00:00Z"}},
        {"category": "completed", "tasks": 31, "goals": 1, "stages": 0, "oldest": null},
        {"…": "the other six categories"}]},
-   "goals": [{"…": "a goal's row, with the rows of its stages in children"}]}}
+   "goals": [{"…": "a goal's row, with the rows of its stages in children"}],
+   "flow": {
+     "days": [{"day": "2030-03-04", "created": 14, "closed": 11, "decisions": 6, "commits": 9},
+              {"…": "every other day of the period"}],
+     "totals": {"created": 70, "closed": 64, "decisions": 24, "commits": 51},
+     "pace": {"open": 640,
+              "recent": {"days": 7, "created": 70, "closed": 64, "trend": "growing"},
+              "series": [{"day": "2030-01-03", "created": 3, "closed": 0, "total": 3,
+                          "closed_total": 0}]}}}}
 ```
 
 | Field | What it holds |
@@ -1769,6 +1777,7 @@ of another space that the space's items name keeps only the space's own.
 | `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
 | `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest` |
 | `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
+| `flow` | how work flowed through the scope: `days`, `totals` and `pace` (see [The flow](#the-flow)) |
 
 A category counts the items of the scope that stand in a state of it. An accepted open
 goal or stage stands in no category and is in none of these counts. Work in an open
@@ -1896,6 +1905,32 @@ answers `interface_version` `valkama-planning-api` and `goals`.
 | `400` `invalid_request`: `id takes 1 to 100 goals or stages` | no `id`, or more than 100 |
 | `400` `invalid_request`: `<REF> is a task: goal volumes read goals and stages` | an `id` names a task |
 | `404` `not_found`: `no work item <id>` | an `id` names no item |
+
+#### The flow
+
+`flow` says how work moved through the scope on each day of the period, a day of the
+caller's clock at `utc_offset`. `days` holds every day the period touches, oldest first,
+the quiet ones too, and `totals` adds them up.
+
+| Field | What a day counts |
+| --- | --- |
+| `created` | the scope's tasks created that day |
+| `closed` | the scope's tasks whose present entry into completed or cancelled fell on that day: a task reopened and closed again counts on the later day |
+| `decisions` | the owner's decisions: requests of the scope's items answered or declined that day by a call from the interface. The latest call that answered, changed or declined a request says whose it is, so an agent's answer is no decision, and an answer changed later is still one decision, on the day of its latest change |
+| `commits` | the commits of a known repository made that day, by the committer time Git gave or, without one, when Valkama learned of the commit, that are attached now to an item of the scope or stand on no card of its projects; each commit once |
+
+Only tasks are created and closed here: making or closing a goal or a stage is not work
+flowing. The projects whose commits on no card a scope holds are the project read, the
+projects the registry binds to the space read, or, in a `global` read, every known
+repository. A commit of no known repository is left out: its hash is kept as it was
+written, so one commit may stand as two records.
+
+`pace` reads the scope's tasks as [Reading a chain of work](#reading-a-chain-of-work)
+reads a chain's members, with a day of the caller's clock in place of a UTC day: `open`,
+how many stand open now; `recent`, the last 7 days up to today, whatever the period; and
+`series`, each day with a change since the first. With `utc_offset` `0`, the pace of a
+scope that holds one goal's tasks and nothing else is what the chain of that goal gives
+in scope `tree`.
 
 ### How often each analytics surface is opened
 

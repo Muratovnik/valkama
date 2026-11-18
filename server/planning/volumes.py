@@ -12,7 +12,9 @@ counts by category are the first section: work in an open category is counted as
 it stands now, with the card longest in it, and work that came to be completed or
 cancelled is counted when it came to stand there inside the period. The goals come
 next: the open ones and those closed in the period, each with what it took over all
-its time and its stages under it (`goal_volumes`).
+its time and its stages under it (`goal_volumes`). The flow closes the read: the
+scope's tasks created and closed on each day of the period, the owner's decisions and
+the commits, with the pace of its tasks (`volume_flow`).
 
 Only the store this service writes is read. Usage is written there alone, and an
 attached store is read as an earlier build left it, so a space of one is refused
@@ -27,7 +29,7 @@ from typing import NamedTuple
 
 from ..projects import project_registry, scopes
 from ..store_identity.metadata import read_store_metadata
-from . import goal_volumes, item_projects, model, usage
+from . import goal_volumes, item_projects, model, usage, volume_flow
 
 SCOPE_KINDS = ("global", "space")
 UNKNOWN_SCOPE = "scope_kind must be global or space"
@@ -166,7 +168,8 @@ def _known_project(conn: sqlite3.Connection, project: str) -> bool:
 #: Each item of a scope with its category and the moment it came to stand where it is:
 #: its last state entry (`model.STATE_ENTRY_ACTIONS`), or its creation when it has none.
 _STANDING = (
-    "SELECT i.work_item_id, i.number, i.kind, i.parent_id, s.category, p.key AS space_key,"
+    "SELECT i.work_item_id, i.number, i.kind, i.parent_id, i.created_at, s.category,"
+    " p.key AS space_key,"
     " COALESCE((SELECT e.created_at FROM work_item_events e"
     "  WHERE e.work_item_id = i.work_item_id"
     "  AND e.action IN ({entries}) ORDER BY e.id DESC LIMIT 1), i.created_at) AS since"
@@ -277,6 +280,34 @@ def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
     )
 
 
+# -- the flow --------------------------------------------------------------------
+
+
+def _flow(conn: sqlite3.Connection, request: Request) -> dict:
+    """The scope's tasks created and closed by day, the owner's decisions, its commits, its pace.
+
+    Its commits on no card are those of the scope's projects: the project read, or the
+    projects the registry binds to the space read, or every known repository's.
+    """
+
+    scope, period = request.scope, request.period
+    projects: list[str] | None = None
+    if scope.project is not None:
+        projects = [scope.project]
+    elif scope.space is not None:
+        projects = item_projects.space_project_ids(conn, str(scope.space["key"]))
+    return volume_flow.flow(
+        conn,
+        _standing(conn, scope, "i.kind != ?", parameters=(model.CONTAINER_KIND,)),
+        where=scope.where(),
+        parameters=scope.parameters,
+        projects=projects,
+        begins=period.begins,
+        ends=period.ends,
+        utc_offset=period.utc_offset,
+    )
+
+
 # -- the read --------------------------------------------------------------------
 
 
@@ -291,7 +322,11 @@ Section = Callable[[sqlite3.Connection, Request], object]
 
 #: The sections of the answer after its frame, in the order it gives them. Each is one
 #: function of the request; a part of the read is added as one more entry here.
-SECTIONS: tuple[tuple[str, Section], ...] = (("counts", _counts), ("goals", _goals))
+SECTIONS: tuple[tuple[str, Section], ...] = (
+    ("counts", _counts),
+    ("goals", _goals),
+    ("flow", _flow),
+)
 
 
 def read(conn: sqlite3.Connection, request: Request) -> dict:

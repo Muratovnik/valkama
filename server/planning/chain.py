@@ -283,7 +283,7 @@ def _origins(found: list[dict], root_id: str, rows: dict[str, sqlite3.Row], key:
     return [{name: value for name, value in group.items() if name != "_order"} for group in ordered]
 
 
-def _day(stamp: object, utc_offset: int) -> str:
+def day_of(stamp: object, utc_offset: int) -> str:
     """The day a stored UTC stamp falls on for a caller `utc_offset` minutes from UTC.
 
     A stamp that cannot be read is taken as its first ten characters, as before.
@@ -301,9 +301,9 @@ def series(found: list[dict], utc_offset: int = 0) -> list[dict]:
     `utc_offset` is the caller's offset from UTC in minutes; each stamp moves by it before its day is taken.
     """
 
-    created = Counter(_day(member["created_at"], utc_offset) for member in found)
+    created = Counter(day_of(member["created_at"], utc_offset) for member in found)
     closed = Counter(
-        _day(member["closed_at"], utc_offset) for member in found if member["closed_at"]
+        day_of(member["closed_at"], utc_offset) for member in found if member["closed_at"]
     )
     rows = []
     total = closed_total = 0
@@ -332,7 +332,7 @@ def recent(found: list[dict], today: date, utc_offset: int = 0) -> dict:
     last = today.isoformat()
 
     def within(stamp: object) -> bool:
-        return stamp is not None and first <= _day(stamp, utc_offset) <= last
+        return stamp is not None and first <= day_of(stamp, utc_offset) <= last
 
     created = sum(1 for member in found if within(member["created_at"]))
     closed = sum(1 for member in found if within(member["closed_at"]))

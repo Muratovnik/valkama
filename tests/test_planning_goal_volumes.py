@@ -503,6 +503,14 @@ class CommitTests(GoalCase):
         self.conn.commit()
         row = self.goal_volumes(self.ref("MAIN:G"))[0]
         self.assertEqual((1, 2), (row["commits"], row["commits_unknown_repository"]))
+        # The flow counts the known commit once on the day it was made, and neither the
+        # rewritten one nor the records of no known repository.
+        flow = self.volumes("MAIN")["flow"]
+        self.assertEqual(
+            {"2026-11-12": 1},
+            {day["day"]: day["commits"] for day in flow["days"] if day["commits"]},
+        )
+        self.assertEqual(1, flow["totals"]["commits"])
 
 
 class SessionTests(GoalCase):
@@ -614,8 +622,9 @@ class StatementTests(GoalCase):
         self.goal_volumes(*references)
         self.assertEqual(once, reading())
         self.assertEqual(3, len(self.volumes("MAIN")["goals"]))
-        # The frame's first counted moment reads usage too.
-        self.assertEqual({**once, "of usage": 3}, reading())
+        # The frame's first counted moment reads usage too, and the flow reads the scope's
+        # commits twice, those attached to its items and those on no card, whatever its goals.
+        self.assertEqual({**once, "of usage": 3, "commits": 3}, reading())
 
 
 class RefusalTests(GoalCase):

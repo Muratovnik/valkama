@@ -1294,7 +1294,7 @@ _SESSIONS_OF_ITEMS = (
 
 #: The commits attached now to the items `{items}` names. A commit a rewrite replaced is
 #: not among them: its attachments moved to the commit that replaced it.
-_ATTACHED_OF = (
+ATTACHED_OF = (
     " FROM work_item_commits a JOIN commits c ON c.commit_id = a.commit_id"
     " WHERE a.work_item_id {items} AND c.rewritten_to IS NULL"
 )
@@ -1327,7 +1327,7 @@ def part_counts(
         " (SELECT COUNT(*) FROM work_item_links WHERE from_id = :id)"
         " + (SELECT COUNT(*) FROM work_item_links WHERE to_id = :id),"
         " (SELECT COUNT(*) FROM work_item_refs WHERE work_item_id = :id),"
-        " (SELECT COUNT(*)" + _ATTACHED_OF.format(items="= :id") + "),"
+        " (SELECT COUNT(*)" + ATTACHED_OF.format(items="= :id") + "),"
         " (SELECT COUNT(*) FROM work_item_events WHERE work_item_id = :id"
         "  AND action = 'mentioned'),"
         " (SELECT COUNT(DISTINCT session_id)" + _SESSION_CALLS + "),"
@@ -1484,7 +1484,7 @@ def commits(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT c.project_id, c.hash, c.subject, c.committed_at, c.session_id, c.agent_id,"
         " a.attached_by, a.label"
-        + _ATTACHED_OF.format(items="= ?")
+        + ATTACHED_OF.format(items="= ?")
         + " ORDER BY a.created_at DESC, a.commit_id DESC",
         (work_item_id,),
     ).fetchall()
@@ -1682,7 +1682,7 @@ def attached_commits(
     found: dict[str, set[tuple[int, bool]]] = {}
     for item, commit, known in conn.execute(
         "SELECT a.work_item_id, c.commit_id, c.project_id IS NOT NULL"  # noqa: S608 - fixed clauses
-        + _ATTACHED_OF.format(items="IN (SELECT value FROM json_each(?))"),
+        + ATTACHED_OF.format(items="IN (SELECT value FROM json_each(?))"),
         (json.dumps(sorted(set(ids))),),
     ):
         found.setdefault(str(item), set()).add((int(commit), bool(known)))
