@@ -35,9 +35,12 @@ function projectsLine(space: PlatformPlanningReady['spaces'][number]): string {
         <strong class="space-title">{{ space.title }}</strong>
         <small class="space-key">{{ space.space_ref.space_key }}</small>
       </header>
-      <span class="space-count">{{
-        t('platform.planning.workItemCount', { count: space.work_item_count })
-      }}</span>
+      <!-- A space whose store could not be read has no count to show. -->
+      <span
+        v-if="space.work_item_count !== null"
+        class="space-count"
+        >{{ t('platform.planning.workItemCount', { count: space.work_item_count }) }}</span
+      >
       <div class="space-projects">
         <span class="projects-label">{{ t('platform.planning.projects') }}</span>
         <span class="projects-names">{{ projectsLine(space) }}</span>

@@ -6,8 +6,7 @@
  * are stale), so a key the server adds, drops or reshapes fails here.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { readdirSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
@@ -46,9 +45,12 @@ import {
 import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
+  validatePlatformPlanningPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
 import { validateGoalVolumesAnswer, validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
+
+import { readServerFixture, SERVER_FIXTURES } from './support/serverFixtures.ts'
 
 const STEP_KINDS = [
   'focus-folder',
@@ -60,8 +62,8 @@ const STEP_KINDS = [
   'explain',
 ] as const
 
-const directory = fileURLToPath(new URL('./fixtures/server/', import.meta.url))
-const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${name}`, 'utf8'))
+const directory = SERVER_FIXTURES
+const read = readServerFixture
 
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
@@ -97,6 +99,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'open-plan-silent.json': validateOpenPlan,
   'open-plan-session.json': validateOpenPlan,
   'planning-chain-tree.json': (value) => validateWorkItemChain(value),
+  'planning-portfolio.json': (value) => validatePlatformPlanningPayload(value),
   'planning-read-model.json': (value) => validateReadModel(value),
   'planning-search.json': validateGlobalPlanningSearch,
   'request-answered.json': validateInputRequestDetail,
@@ -376,59 +379,5 @@ describe('the server fixtures', () => {
       'expired',
       'session_gone',
     ])
-  })
-
-  it('carry a waiting question, a commit on no card and rows of work outside goals', () => {
-    const { counts, outside } = validateVolumesAnswer(read('volumes-project.json'))
-    expect(counts.unattached_commits).toBe(1)
-    expect(outside.by_project.map((row) => row.project.id)).toEqual(['example-project'])
-    expect(outside.by_label.map((row) => row.label)).toEqual(['ui'])
-    const space = validateVolumesAnswer(read('volumes-space.json'))
-    expect(space.counts.waiting_owner.oldest?.reference).toMatch(/^MAIN-\d+$/u)
-    expect(space.outside.by_project.map((row) => row.project.id)).toContain(null)
-  })
-
-  it('carry a filter that keeps only tasks, and count no goals or stages under it', () => {
-    const filtered = validateVolumesAnswer(read('volumes-filtered.json'))
-    expect(filtered.filter).toEqual({ kinds: ['task', 'bug'], labels: ['ui'] })
-    expect(filtered.counts.categories.map((row) => row.tasks).reduce((all, n) => all + n)).toBe(2)
-    expect(filtered.outside.by_label.map((row) => row.label)).toEqual(['ui'])
-    expect(validateVolumesAnswer(read('volumes-space.json')).filter).toBeNull()
-    const counted = read('volumes-filtered.json') as {
-      volumes: { counts: { categories: { goals: number | null }[] } }
-    }
-    counted.volumes.counts.categories[0].goals = 0
-    expect(() => validateVolumesAnswer(counted)).toThrow()
-  })
-
-  it('add up under a filter only the tasks that match, and show no count at acceptance', () => {
-    // The goal holds the labelled task under its stage, which spent 300 s; the goal spent too.
-    const [goal] = validateVolumesAnswer(read('volumes-filtered.json')).goals
-    const [stage] = goal.children
-    expect([goal.tasks.total, goal.spent.agent_seconds, stage.spent.agent_seconds]).toEqual([
-      1, 300, 300,
-    ])
-    expect([goal.baseline_absent, stage.baseline_absent]).toEqual(['filtered', 'filtered'])
-    const whole = validateVolumesAnswer(read('volumes-space.json')).goals
-    expect(whole.find((row) => row.reference === goal.reference)?.spent.agent_seconds).toBe(900)
-    const shown = read('volumes-filtered.json') as {
-      volumes: { goals: { baseline_absent: string }[] }
-    }
-    shown.volumes.goals[0].baseline_absent = 'not_accepted'
-    expect(() => validateVolumesAnswer(shown)).toThrow()
-  })
-
-  it('carry the table of estimates and what open work has left', () => {
-    const { estimates, goals } = validateVolumesAnswer(read('volumes-space.json'))
-    expect([estimates.min_basis, estimates.basis]).toEqual([5, 1])
-    expect(estimates.rows.map((row) => [row.level, row.kind, row.space?.key])).toEqual([
-      ['project_kind', 'task', 'MAIN'],
-    ])
-    const [goal] = validateGoalVolumesAnswer(read('goal-volumes.json'))
-    expect([goal.remaining?.estimated, goal.remaining?.unestimated]).toEqual([0, 2])
-    expect(goals.every((row) => row.remaining !== undefined)).toBe(true)
-    const judged = read('goal-volumes.json') as { goals: { remaining: { basis: number } }[] }
-    judged.goals[0].remaining.basis = 3
-    expect(() => validateGoalVolumesAnswer(judged)).toThrow()
   })
 })

@@ -36,7 +36,9 @@ describes the done tasks that match.
 
 Only the store this service writes is read. Usage is written there alone, and an
 attached store is read as an earlier build left it, so a space of one is refused
-rather than counted short.
+rather than counted short. The four numbers of a space's card in the portfolio count
+no usage, and are counted in the store that holds the space (`portfolio_numbers`),
+unless an earlier build wrote it.
 """
 
 from __future__ import annotations
@@ -210,6 +212,68 @@ def scope(
             raise model.PlanningError(NO_PROJECT.format(project=project))
     clauses, parameters = item_projects.space_read(conn, space, project)
     return Scope(space, project, own, tuple(clauses), tuple(parameters))
+
+
+def space_scope(
+    conn: sqlite3.Connection,
+    space: sqlite3.Row,
+    *,
+    other_spaces: bool = True,
+    listing: project_registry.RegistryResult | None = None,
+) -> Scope:
+    """One space of the store `conn` reads, attached or not, as its board holds it.
+
+    Without `other_spaces` it holds the space's own items alone. `listing` is the
+    registry a caller read already, read here when it names none.
+    """
+
+    clauses, parameters = item_projects.space_read(
+        conn, space, other_spaces=other_spaces, listing=listing
+    )
+    own = str(read_store_metadata(conn)["data_scope_id"])
+    return Scope(space, None, own, tuple(clauses), tuple(parameters))
+
+
+def holds_the_work_model(conn: sqlite3.Connection) -> bool:
+    """Whether every state of the store stands in a category of the work model.
+
+    An attached store an earlier build wrote is read as it is, and its states stand in
+    the categories of before, which nothing here counts.
+    """
+
+    outside = conn.execute(
+        "SELECT 1 FROM workflow_states WHERE category NOT IN (SELECT value FROM json_each(?))"
+        " LIMIT 1",
+        (json.dumps(list(model.STORED_CATEGORIES)),),
+    ).fetchone()
+    return outside is None
+
+
+def portfolio_numbers(
+    conn: sqlite3.Connection,
+    space: sqlite3.Row,
+    *,
+    listing: project_registry.RegistryResult | None = None,
+) -> dict[str, int] | None:
+    """The four numbers a space's card in the portfolio shows, or None for a store of before.
+
+    The space reads as its board and its Volumes page hold it (`space_scope`), so the
+    card's numbers are the page's: `triage`, every card waiting to be taken up, tasks,
+    goals and stages; `ready` and `active`, the tasks; and `waiting_owner`, the
+    questions open for the owner on its items.
+    """
+
+    if not holds_the_work_model(conn):
+        return None
+    scope = space_scope(conn, space, listing=listing)
+    counted = category_counts(conn, scope)
+    triage = counted["triage"]
+    return {
+        "triage": triage["tasks"] + triage["goals"] + triage["stages"],
+        "ready": counted["ready"]["tasks"],
+        "active": counted["active"]["tasks"],
+        "waiting_owner": len(questions.open_on(conn, scope.where(), scope.parameters)),
+    }
 
 
 def period(start: str, end: str, utc_offset: int) -> Period:

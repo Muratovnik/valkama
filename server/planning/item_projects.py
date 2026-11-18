@@ -627,6 +627,7 @@ def space_read(
     project: str | None = None,
     *,
     other_spaces: bool = True,
+    listing: project_registry.RegistryResult | None = None,
 ) -> tuple[list[str], list[object]]:
     """The items a read holds, as conditions on `work_items i` and their parameters, in order.
 
@@ -638,7 +639,8 @@ def space_read(
     the space, and from other spaces only when it is one of the space's projects, so
     a project of another space that the space's items name brings only the space's
     own. Without a space it keeps the items naming it in every space. The conditions
-    are joined by `AND`; none means every item.
+    are joined by `AND`; none means every item. `listing` is the registry a caller
+    read already, read here when it names none.
     """
 
     kept = naming(conn, [project]) if project is not None else None
@@ -646,7 +648,9 @@ def space_read(
     parameters: list[object] = []
     if space is not None:
         space_id = str(space["planning_space_id"])
-        foreign = space_project_ids(conn, str(space["key"])) if other_spaces else []
+        foreign = (
+            space_project_ids(conn, str(space["key"]), listing=listing) if other_spaces else []
+        )
         if kept is not None:
             # Narrowed to one project, other spaces bring what names it, if it is the space's.
             foreign = [found for found in foreign if found == project]

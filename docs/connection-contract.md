@@ -2070,6 +2070,36 @@ tasks, without the work of its goals and stages, and carries no count at accepta
 | `flow` | `created`, `closed` and `pace` read the tasks that match, `decisions` their requests and `commits` the commits attached to them; no commit on no card is counted |
 | `estimates` | the table describes the done tasks of the scope's basis that match, and `basis` counts them; with a `label` named, the rows of `level` `project_kind_label` are those of the labels named alone, since a row of another label would only show where it meets the filter |
 
+#### A space's card in the portfolio
+
+The directory of spaces, `GET /api/platform/planning` at global scope, which «All
+spaces» reads with `directory_only=true`, lists each space with `numbers`: the four
+numbers of its card. They are counted as the Volumes read counts the space, with no
+filter, so a card's numbers are those of the space's Volumes page and open its board on
+the same work. Unlike that read, the directory counts a space of an attached store too:
+the four numbers take nothing from usage.
+
+```json
+{"space_ref": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001", "space_key": "MAIN"},
+ "title": "Main work", "work_item_count": 412,
+ "numbers": {"triage": 41, "ready": 20, "active": 5, "waiting_owner": 12},
+ "numbers_absent": null,
+ "default_project": "app", "projects": [{"project_id": "app", "display_name": "App"}]}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `work_item_count` | the space's own items, in every state; `null` when its store could not be read |
+| `numbers.triage` | every card of the space's scope in triage: its tasks, goals and stages |
+| `numbers.ready`, `numbers.active` | the scope's tasks in `ready` and in `active` |
+| `numbers.waiting_owner` | the questions to the owner still open on the scope's items, the `count` of `counts.waiting_owner` |
+| `numbers_absent` | why `numbers` is `null`, or `null` when they are given |
+
+| `numbers_absent` | When |
+| --- | --- |
+| `old_store` | an earlier build wrote the space's store, which is attached and read as it is: its states stand in the categories of before. The rest of the record is what the store gives |
+| `unreadable` | the space's store was listed when the read began, then did not open or did not answer. The record holds what is known without it: `space_ref`, the projects the registry binds, the key as `title`, and `work_item_count` `null`, since no count is known. The directory still answers for every other space |
+
 ### How often each analytics surface is opened
 
 The Analytics module counts, on this machine, how often each of its surfaces is opened

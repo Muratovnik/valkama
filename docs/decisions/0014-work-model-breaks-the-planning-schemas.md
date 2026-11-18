@@ -129,6 +129,11 @@ and no compatibility layer.
      reads, where 2.9 wrote `<reason>: <step text>`; the reason is recorded only
      in the `released` of a claim released with it and in a move back to the
      queue;
+   - a space of the directory `GET /api/platform/planning` carries the four
+     numbers of its card, `numbers`, or why it has none, `numbers_absent`; a
+     store that does not open or answer no longer fails the whole directory:
+     each of its spaces is listed by what is known without it, with
+     `work_item_count` `null`, where the field was always a number;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -215,6 +220,7 @@ and no compatibility layer.
 | a card's commits among its `refs` | its `commits` |
 | `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
 | the reason before the step's text in an expired step's `checklist_released` | the step's text alone; the reason in a `released` or a move back that went with it |
+| a directory space's `work_item_count`, always a number | a number, or `null` with `numbers_absent` `unreadable` when the space's store could not be read |
 
 ## Consequences
 
