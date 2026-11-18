@@ -265,11 +265,11 @@ for (const [locale, word] of [
     expect(running?.focusable, 'the key only shows').toBe(false)
 
     // The week before is over: nothing on the plot is hatched, and the legend has no such key,
-    // though it still names the series and the period before.
+    // though it still keys the period before (its lone series the chart's title names).
     await page.goto(pageAt({ period: 'custom', from: '2026-11-02', to: '2026-11-04' }))
     await expect(days.locator('.period-column')).toHaveCount(3)
     await expect(days.locator('.period-incomplete')).toHaveCount(0)
-    await expect(legend.locator('[data-series]').first()).toBeVisible()
+    await expect(legend.locator('[data-mark="outline"]')).toBeVisible()
     const past = await hatchKey(page)
     await record(info, `hatch key ${locale}`, { running, past })
     expect(past).toBeNull()

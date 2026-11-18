@@ -2,7 +2,8 @@
 /**
  * Which hue is which series, in words: each series' name beside a swatch of its hue, in the
  * stack's order. A chart of two series or more carries one, so a series is never told apart by
- * its hue alone; one series needs none, since the chart's title already says what it is. A chart
+ * its hue alone; one series needs none, since the chart's title already says what it is, and the
+ * legend names no lone series whatever keys it still carries (`named`). A chart
  * that hatches a period still running names the hatch after the series (`hatch`), beside a
  * hatched swatch, so the texture never has to be guessed; and a chart that marks a period it is
  * compared with names that mark last (`outline`), beside a short line in the ink the plot draws
@@ -40,7 +41,7 @@
  * `outline`). In either, the name is `data-part="name"`, and the figure at a line's end
  * `data-part="figure"`.
  */
-import { useId } from 'vue'
+import { computed, useId } from 'vue'
 
 import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 import { markPartId, markTag, markType } from '@/shared/ui/chartGeometry.ts'
@@ -65,6 +66,13 @@ const emit = defineEmits<{
   point: [key: string | null]
   select: [key: string]
 }>()
+
+/**
+ * The series the legend names. A lone one is named by its chart's title, so a legend of names keys
+ * only its chart's marks; a ring's legend gives each part's figure (`figures`), which the title
+ * does not, so it lists a lone part too.
+ */
+const named = computed(() => (props.series.length > 1 || props.figures ? props.series : []))
 
 function press(one: PeriodSeries, event: MouseEvent) {
   if (one.href) emit('follow', one.key, event)
@@ -116,7 +124,7 @@ const figureOf = (key: string) => props.figures?.get(key)
     :class="{ 'chart-legend-figures': figures }"
   >
     <li
-      v-for="one in series"
+      v-for="one in named"
       :key="one.key"
       class="chart-entry"
       @pointerenter="emit('point', one.key)"

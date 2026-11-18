@@ -12,6 +12,7 @@ import type {
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
+import { seriesNames } from '../support/legend.ts'
 import { plotWords } from '../support/plotWords.ts'
 
 const words: PeriodWords = {
@@ -147,11 +148,12 @@ describe('period columns that open nothing', () => {
 
   it('gives a single series a legend for the hatch alone while its period runs', () => {
     const one = [series[0] as PeriodSeries]
+    // The title names the lone series; the legend keys only the hatch, which the title does not.
+    const running = mountColumns({ series: one })
+    expect(seriesNames(running)).toEqual([])
     expect(
-      mountColumns({ series: one })
-        .findAll(':is(.chart-key, .chart-mark)')
-        .map((key) => key.text()),
-    ).toEqual(['ci', 'in progress'])
+      running.findAll('[data-hint-list="legend"] [data-mark]').map((key) => key.text()),
+    ).toEqual(['in progress'])
     const over = mountColumns({
       series: one,
       columns: finished,
