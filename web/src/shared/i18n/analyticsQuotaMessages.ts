@@ -48,7 +48,7 @@ export const analyticsQuotaMessages = {
     },
     tile: {
       noSource: 'No source',
-      noAccount: 'No account read',
+      noAccount: 'No account data',
       noWindow: 'No reading',
       reset: 'Reset since read',
       detail: '{window} of {account}',
@@ -86,12 +86,12 @@ export const analyticsQuotaMessages = {
         'The period and the filters above do not apply to the quota, and no two accounts or windows are added.',
       noSource: 'No quota data in the past 7 days.',
       noWindow: {
-        quota_five_hour: 'No five-hour reading in the past seven days.',
-        quota_week: 'No weekly reading in the past seven days.',
+        quota_five_hour: 'No five-hour reading in the past 7 days.',
+        quota_week: 'No weekly reading in the past 7 days.',
       },
       shared: 'May be two accounts: their readings run under one weekly reset',
       plan: 'Plan: {plan}',
-      none: 'No account was read in the past seven days.',
+      none: 'No account data in the past 7 days.',
       failed: 'The quota could not be loaded.',
     },
     table: {
@@ -180,7 +180,7 @@ export const analyticsQuotaMessages = {
     },
     tile: {
       noSource: 'Нет источника',
-      noAccount: 'Ни один аккаунт не прочитан',
+      noAccount: 'Нет данных по аккаунтам',
       noWindow: 'Нет показаний',
       reset: 'Сброшено после чтения',
       detail: '{window}, {account}',
@@ -217,12 +217,12 @@ export const analyticsQuotaMessages = {
       intro: 'Период и фильтры выше к квоте не относятся; аккаунты и окна не складываются.',
       noSource: 'Нет данных квоты за 7 дней.',
       noWindow: {
-        quota_five_hour: 'Нет показаний пятичасового окна за последние семь дней.',
-        quota_week: 'Нет недельных показаний за последние семь дней.',
+        quota_five_hour: 'Нет показаний пятичасового окна за 7 дней.',
+        quota_week: 'Нет недельных показаний за 7 дней.',
       },
       shared: 'Возможно, два аккаунта: их показания идут под одним недельным сбросом',
       plan: 'План: {plan}',
-      none: 'Ни один аккаунт не прочитан за последние семь дней.',
+      none: 'Нет данных ни по одному аккаунту за 7 дней.',
       failed: 'Не удалось загрузить квоту.',
     },
     table: {
