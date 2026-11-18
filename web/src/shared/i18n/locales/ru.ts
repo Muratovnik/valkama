@@ -82,6 +82,7 @@ export const ru = {
       sessions: 'Сессии',
       analytics: 'Аналитика',
       decisions: 'Решения агентов',
+      volumes: 'Объёмы',
       improvements: 'Улучшения',
       skills: 'Навыки',
       memory: 'Память',

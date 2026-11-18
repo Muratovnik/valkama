@@ -154,6 +154,11 @@ class WorkFocusMigrationTests(unittest.TestCase):
     def test_agent_decisions_bring_back_none_of_the_flow_metrics(self) -> None:
         self.assert_brings_back_none_of_the_flow_metrics("decisions")
 
+    def test_volumes_bring_back_none_of_the_flow_metrics(self) -> None:
+        # Volumes counts the work in each state; it reopens no portfolio, compare or
+        # project read of the flow dashboard, nor its events, actions or capability.
+        self.assert_brings_back_none_of_the_flow_metrics("volumes")
+
     def assert_brings_back_none_of_the_flow_metrics(self, module_id: str) -> None:
         retired = FORMER_MODULES["analytics"]
         current = next(m for m in modules.module_manifests() if m["module_id"] == module_id)
