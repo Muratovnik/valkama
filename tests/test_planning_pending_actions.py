@@ -1027,6 +1027,29 @@ class ProposedGoalTests(SettingHarness):
         )
         self.assertEqual("carried_out", self.action(action.id)["outcome"])
 
+    def test_the_events_an_answer_carries_out_name_who_asked(self) -> None:
+        """The owner makes the write, and its history says whose ask it carried out: the
+        agent's session for a goal it proposed, Valkama for a goal that came back."""
+
+        question, task = self.proposed_with_work()
+        self.answer(question, "do")
+        asked = "as asked by claude (session session-a)"
+        self.assertEqual([f"owner: {asked}"], self.events("ALPHA-1", "accepted"))
+        self.assertEqual([asked], self.events("ALPHA-1", "opened"))
+        # The task under it is taken on by the same write, so its events name the asker too.
+        self.assertEqual([f"inherited: {asked}"], self.events(task, "accepted"))
+        self.assertEqual(
+            [f"ready: accepted with ALPHA-1; {asked}"], self.events(task, "transitioned")
+        )
+        # The answer itself is the owner's own event, and names the question alone.
+        self.assertEqual([question], self.events("ALPHA-1", "request_answered"))
+        goal, _task = self.returned_goal()
+        [returned] = self.owners_list()
+        self.answer(returned, "do")
+        # Its first acceptance, the owner's own write in the browser, names nobody.
+        self.assertEqual(["owner", "owner: as asked by Valkama"], self.events(goal, "accepted"))
+        self.assertEqual("as asked by Valkama", self.events(goal, "opened")[-1])
+
     def test_a_returned_goal_waits_for_triage_when_the_agent_decides(self) -> None:
         self.at(participation.MINIMAL)
         goal, _task = self.returned_goal()
@@ -1212,7 +1235,10 @@ class TaskInGoalTests(SettingHarness):
         )
         drop = self.card(drop_task)
         self.assertEqual(("cancelled", goal), (drop["state"]["category"], drop["parent_id"]))
-        self.assertEqual("cancelled: owner: not needed", self.events(drop_task, "transitioned")[-1])
+        self.assertEqual(
+            "cancelled: owner: not needed; as asked by claude (session session-a)",
+            self.events(drop_task, "transitioned")[-1],
+        )
         # Every action ended with its answer, and the owner's answers are not the agent's.
         self.assertEqual(
             [], [self.waiting_on(reference) for reference in answered if self.waiting_on(reference)]
@@ -1392,7 +1418,10 @@ class CancelOutsideTests(SettingHarness):
         record = self.answer(waits["question"], "cancel")
         self.assertEqual("carried_out", record["carried_out"])
         self.assertEqual("cancelled", self.category(self.task))
-        self.assertEqual(f"cancelled: {REASON}", self.events(self.task, "transitioned")[-1])
+        self.assertEqual(
+            f"cancelled: {REASON}; as asked by claude (session session-a)",
+            self.events(self.task, "transitioned")[-1],
+        )
         self.assertEqual("carried_out", self.action(waits["action"])["outcome"])
         # The asker follows the task and hears the answer and the cancel.
         self.assertLessEqual({"question_answered", "status"}, self.told(self.task))
@@ -2142,7 +2171,10 @@ class ConditionTests(SettingHarness):
         self.assertEqual("carried_out", record["carried_out"])
         self.assertEqual(["Y said anew", "Z"], self.steps(goal))
         self.assertEqual(["X", "Y"], self.events(goal, "checklist_removed"))
-        self.assertEqual(f"2: {STEPS_REASON}", self.events(goal, "checklist_replaced")[-1])
+        self.assertEqual(
+            f"2: {STEPS_REASON}; as asked by claude (session session-a)",
+            self.events(goal, "checklist_replaced")[-1],
+        )
         self.assertEqual("carried_out", self.action(waits["action"])["outcome"])
         # The owner made it: nothing goes into the summary of agent decisions.
         self.assertEqual([], self.decided())

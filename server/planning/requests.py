@@ -1194,7 +1194,8 @@ def _carry_action(
     The owner's answer to an action that no longer applies drops it (`pending.inapplicable`),
     the answer standing as given; to one that still does, the action ends with the
     outcome its carrier gives the choice, and then the carrier does what the choice
-    says, so the write it makes finds the action already ended. A cancel whose list
+    says, so the write it makes finds the action already ended; the events that record
+    that write name who asked for it (`service.asked_by`). A cancel whose list
     alone changed is the owner's to confirm on the list as it stands (`Carrier.by_list`).
     Answers the outcome.
     """
@@ -1230,7 +1231,9 @@ def _carry_action(
             " say more in note"
         )
     pending.end(conn, action, outcome, author=author)
-    carrier.run(conn, row, action, answers, note, author)
+    # The owner makes the write; its events say who asked for it, as the question does.
+    with service.asked_by(pending.asker(conn, action, str(row["author"]))):
+        carrier.run(conn, row, action, answers, note, author)
     return outcome
 
 
