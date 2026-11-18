@@ -2151,6 +2151,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "resolutions",
                 "questions",
                 "summary",
+                "triage_seen",
                 "transition",
                 "defer",
                 "move_out",

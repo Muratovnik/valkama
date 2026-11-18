@@ -893,8 +893,8 @@ TOOLS = [
         " in this order: claim,"
         " subscribe, update, convert, checklist, checklist_ticks, refs, commits, links, comment"
         " or comments,"
-        " resolutions, questions, summary, then one of transition, defer or move_out — so a"
-        " claim and"
+        " resolutions, questions, summary, triage_seen, then one of transition, defer or"
+        " move_out — so a claim and"
         " its steps take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
         " sent with claim moves an item the claim has already started; a closing"
@@ -913,7 +913,9 @@ TOOLS = [
         " is removed or rewritten; a step sent by its id with clarifies: true only clarifies"
         " its wording and is written at once. transition.following names the owner's answer a"
         " cancel follows, which is no act of a person against that cancel. While the owner has not answered whether an item is to be done,"
-        " only a cancel moves it out of triage (acceptance_question).",
+        " only a cancel moves it out of triage (acceptance_question). triage_seen true marks an"
+        " item waiting for a triage review as seen; a later comment, owner question, move or"
+        " change of state clears it.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
@@ -1178,6 +1180,12 @@ TOOLS = [
                     "mentions": _TEXT_MENTIONS,
                 },
                 "required": ["done", "next"],
+            },
+            "triage_seen": {
+                "type": "boolean",
+                "description": "true marks an item waiting for a triage review as seen, false"
+                " takes the mark away; the answer's applied.triage_seen says seen_at or cleared."
+                " Not with transition, defer or move_out in the same call.",
             },
             "transition": {
                 "type": "object",

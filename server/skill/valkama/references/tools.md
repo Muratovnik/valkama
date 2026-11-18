@@ -316,6 +316,7 @@ resolves its discussion, records its summary and moves its state:
 | `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | marks thread roots resolved |
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
+| `triage_seen` | `true` or `false` | marks an item waiting for a triage review as seen, or takes the mark away; not with `transition`, `defer` or `move_out` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
 | `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
 | `move_out` | `{"reason": "…", "force": false}`, not with `transition`, `defer` or `convert` | takes the item out of its goal or stage, to triage |

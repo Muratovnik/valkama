@@ -81,6 +81,17 @@ _MARK = (
 )
 _SEEN_AT = "SELECT seen_at FROM triage_marks WHERE work_item_id = ?"
 _UNMARK = "DELETE FROM triage_marks WHERE work_item_id = ?"
+#: An item's state category, kind, parent and reference parts, for the reason it does not wait.
+_HEAD = (
+    "SELECT s.category, i.kind, i.parent_id, p.key, i.number FROM work_items i"
+    " JOIN workflow_states s ON s.state_id = i.state_id"
+    " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
+    " WHERE i.work_item_id = ?"
+)
+_OPEN_OWNER_QUESTION = (
+    "SELECT 1 FROM work_item_requests r WHERE r.work_item_id = ? AND "  # noqa: S608 - constant text
+    + questions.OWNER_QUESTION
+)
 
 
 @dataclass(frozen=True)
@@ -161,4 +172,28 @@ def field(conn: sqlite3.Connection, ids: Iterable[str]) -> Mapping[str, dict]:
     }
 
 
-__all__ = ["Waiting", "entered", "field", "mark", "waiting"]
+def refusal(conn: sqlite3.Connection, work_item_id: str) -> str:
+    """Why an item the store holds does not wait in the stack, in the words a refused mark gives.
+
+    The first reason that holds decides: it is not in triage, it waits for the owner's
+    answer, or it lies under the nearest goal or stage that nobody accepted. An item
+    that waits gets the last line, which a caller that asks only of an item `waiting`
+    lacks never reads.
+    """
+
+    category, _kind, parent, key, number = conn.execute(_HEAD, (work_item_id,)).fetchone()
+    if category != "triage":
+        return "it is not in triage"
+    if conn.execute(_OPEN_OWNER_QUESTION, (work_item_id,)).fetchone() is not None:
+        return "it waits for the owner's answer"
+    current = parent
+    while current is not None:
+        category, kind, parent, key, number = conn.execute(_HEAD, (current,)).fetchone()
+        # The stack's own rule (`_WAITING`): every goal or stage above must be accepted.
+        if kind != model.CONTAINER_KIND or category != model.SERVICE_CATEGORY:
+            return f"it lies under {model.human_id(str(key), int(number))}"
+        current = parent
+    return "it waits in the stack already"
+
+
+__all__ = ["Waiting", "entered", "field", "mark", "refusal", "waiting"]
