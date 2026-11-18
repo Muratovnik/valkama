@@ -124,16 +124,18 @@ describe('the quota read', () => {
 
   it('takes a share at the reset where the five hours last, and nowhere else', () => {
     const lasts = { outcome: 'lasts', runs_out_at: null, at_reset_percent: 35, basis: 'window' }
-    const withForecast = (forecast: object) =>
-      withWindow(1, 0, (window) => ({ ...window, forecast }))
     // The control: a window that lasts, with the share it spends by the reset.
-    expect(() => validateQuotaAnswer(withForecast(lasts))).not.toThrow()
+    expect(() =>
+      validateQuotaAnswer(withWindow(1, 0, (window) => ({ ...window, forecast: lasts }))),
+    ).not.toThrow()
     for (const forecast of [
       { ...lasts, at_reset_percent: null },
       { ...lasts, at_reset_percent: 100.5 },
       { ...lasts, outcome: 'spent' },
     ])
-      expect(() => validateQuotaAnswer(withForecast(forecast))).toThrow(/windows\[0\]/u)
+      expect(() =>
+        validateQuotaAnswer(withWindow(1, 0, (window) => ({ ...window, forecast }))),
+      ).toThrow(/windows\[0\]/u)
   })
 
   it('refuses an account with no source that has windows, and a seat beside a UUID', () => {
