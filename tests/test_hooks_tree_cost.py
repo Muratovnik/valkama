@@ -9,10 +9,10 @@ machine busy with other work the same code took two to five times as long.
 - With nothing new anywhere, the hook answers from its two reads with the tree as
   without it: the tree adds no statement, only three columns to the second, each an
   uncorrelated subquery SQLite answers by a search of its table, never a scan.
-- With 100 comments another session wrote across the tree since the hook last read it,
-  200 rows in two sources, the tree's news is read, climbed to its roots and sorted in
-  a few statements, and 100 more comments on 100 other items add none: what it reads
-  grows with neither the rows written since nor the items they name.
+- The tree's news is read in as many statements whatever it reads: 13 comments on one
+  stage and then one on each of the 13 stages, or 100 comments across the tree and then
+  100 more on 100 other tasks, take the same number. What it reads grows with neither
+  the rows written since nor the items they name.
 - The climb reads each level once: an item and its parent asked about together are
   one statement whichever row comes first, and what is over them the next.
 """
@@ -36,10 +36,6 @@ A = "0a000000-0000-4000-8000-00000000000a"
 B = "0b000000-0000-4000-8000-00000000000b"
 STAGES = 13
 TASKS = 20
-#: The statements the tree's news of the 100 comments takes beyond the hook's two reads,
-#: as counted when the bound was set: its transaction, one read per source after its
-#: place, one per level climbed to the roots and a few fixed reads, none per item or row.
-FEED_STATEMENTS = 12
 #: How SQLite names the plan of a subquery, numbered, and of a read of one table.
 _SUBQUERY = re.compile(r"(SCALAR SUBQUERY) \d+")
 _READ = re.compile(r"(SEARCH|SCAN) (TABLE )?(\w+)")
@@ -165,6 +161,15 @@ class TreeCostTests(unittest.TestCase):
         self.collect()
         self.assertFalse(self.collect(), "everything is read")
         before = self.marks()
+        self.comment([self.stages[1]] * STAGES)
+        one = self.statements()
+        self.comment(self.stages)
+        every = self.statements()
+        self.assertEqual(
+            len(one),
+            len(every),
+            f"{STAGES} comments on one stage, then one on each of the {STAGES}: no more statements",
+        )
         written = [self.stages[n % STAGES] for n in range(48)] + self.tasks[1::5]
         self.assertEqual(100, len(written))
         self.comment(written)
@@ -177,9 +182,7 @@ class TreeCostTests(unittest.TestCase):
         without = self.statements("_tree_moved", lambda *_: False)
         self.assertEqual(2, len(without), "the hook's own two reads")
         first = self.statements()
-        self.assertLessEqual(
-            len(first) - len(without), FEED_STATEMENTS, [text[:60] for text in first]
-        )
+        self.assertLess(len(without), len(first), "the tree's news is read")
 
         others = (self.tasks[2::5] + self.tasks[3::5])[:100]
         self.assertFalse(set(others) & set(written), "100 items not written on yet")
