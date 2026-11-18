@@ -394,7 +394,7 @@ the same at any setting. A point of the setting is `agent` or `human`:
 
 | Point | The agent's write it decides |
 | --- | --- |
-| `proposed_goal` | `create_work_item` of a goal with no parent, which then lies in `triage` |
+| `proposed_goal` | `create_work_item` of a goal with no parent, which then lies in `triage`, and a move of such a goal out of `triage` into accepted work without `acceptance`, which accepts it on `agent` |
 | `task_in_goal` | a task filed under goals and stages all accepted and open, or moved there by `parent` or out of `triage` into them |
 | `cancel_outside` | a cancel of an item that its own work did not file |
 | `cancel_shared` | a cancel of work other live sessions do |

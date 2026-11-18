@@ -1290,26 +1290,67 @@ def _moved_into_goal(
     return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
 
 
-def _accepted_in_goal(
+@dataclasses.dataclass(frozen=True)
+class _Gate:
+    """The point of the owner's setting an agent's move out of triage into accepted work
+    meets, and who decides there by it: `agent` or `human`."""
+
+    point: str
+    mode: str
+
+
+def _gate(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
     current: sqlite3.Row,
-    gives: str | None,
+    target: sqlite3.Row,
     named: str | None,
-) -> str | None:
-    """Who decides on a task an agent moves out of triage into accepted work under goals
-    and stages all accepted and open, on no one's word, `agent` or `human` by the
-    owner's setting of its space (`task_in_goal`); None for any other move.
+) -> _Gate | None:
+    """The point an agent's move of the item out of triage into accepted work meets on no
+    one's word; None for any other move, which meets none.
 
-    Such a move accepts it `inherited` (`gives`), as filing it there does. The agent's
-    `assignment` is the owner's word and passes; a claim by number meets no gate.
+    It is read before the move's refusals, the `acceptance` one among them. A goal with
+    no parent has no chain to take a basis from: `proposed_goal` decides on it, as on one
+    an agent files, and left to the agent the move accepts it on the basis `agent`. A
+    task under goals and stages all accepted and open would be `inherited`, as filing it
+    there makes it, and `task_in_goal` decides on it. The agent's `assignment` is the
+    owner's word and passes; a claim by number meets no gate.
     """
 
-    if gives != "inherited" or named is not None or not calls.from_agent():
+    if named is not None or not calls.from_agent() or row["acceptance"] is not None:
         return None
-    if row["kind"] == model.CONTAINER_KIND or current["category"] != "triage":
+    if current["category"] != "triage" or target["category"] not in model.ACCEPTED_CATEGORIES:
         return None
-    return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
+    parent = None if row["parent_id"] is None else str(row["parent_id"])
+    if row["kind"] == model.CONTAINER_KIND:
+        point = "proposed_goal" if parent is None else None
+    else:
+        point = "task_in_goal" if item_tree.accepted_chain(conn, parent) else None
+    if point is None:
+        return None
+    return _Gate(point, participation.load(conn).mode(str(row["planning_space_id"]), point))
+
+
+def _ask_about_move(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    gate: _Gate,
+    author: str | None,
+    warnings: list[str],
+) -> dict:
+    """The answer of an agent's move out of triage that `gate` keeps for the owner: the
+    item stays in triage, a goal asked about by the question `goal`, a task under its
+    goal by the question `task`, and `waits_for_owner` names the question."""
+
+    identity = str(row["work_item_id"])
+    if gate.point == "proposed_goal":
+        waits = _ask_about_goal(conn, identity, author, by_agent=True)
+    else:
+        waits = _ask_about_task(conn, identity, str(row["parent_id"]), author)
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    answer["warnings"] = warnings
+    answer["waits_for_owner"] = waits.answer()
+    return answer
 
 
 def _accept_by_label(
@@ -1820,10 +1861,13 @@ def transition_work_item(
     of work other live sessions do asks those sessions (`cancel_shared`): with the owner
     where the setting says `human`, alone otherwise, and then it waits for their
     answers (`waits_for_sessions`), even when it follows an owner's answer. So is
-    an agent's move of a task in triage into accepted work under goals and stages all
-    accepted and open, where `task_in_goal` says `human`: the task stays in triage and
-    the question `task` asks about it; left to the agent, the acceptance is marked in
-    the summary of decisions, as is an assignment an agent names. An agent's
+    an agent's move out of triage into accepted work on no one's word (`_gate`): of a
+    goal with no parent where `proposed_goal` says `human`, which the question `goal`
+    asks about, and of a task under goals and stages all accepted and open where
+    `task_in_goal` says `human`, which the question `task` asks about; either stays in
+    triage. Left to the agent, the goal is accepted on the basis `agent`, and either
+    acceptance is marked in the summary of decisions, as is an assignment an agent
+    names. An agent's
     completion of a goal, which confirms it, is the owner's to make where
     `goal_close` says `human`: the goal stays as it is, with what the call wrote
     before the move, and waits on the question `confirm` (`_ask_about_close`); left
@@ -1987,6 +2031,11 @@ def _transition(
     check = _to_check(to_check, into_review, target)
     note = transition_reason(reason, str(target["key"]))
     gives = LABEL_RULE if ruled is not None else _basis(conn, row, target, named)
+    accept_gate = _gate(conn, row, current, target, named) if gated else None
+    if accept_gate is not None and accept_gate.point == "proposed_goal":
+        # The setting gives the goal its basis before the `acceptance` refusal reads it,
+        # so a move that waits for the owner is checked as it would be made now.
+        gives = model.AGENT_BASIS
     refusals, warnings = transitions.findings(
         conn,
         row,
@@ -2010,15 +2059,10 @@ def _transition(
         # Checked as the close would be made now, confirming the goal is the owner's: it
         # waits on their question `confirm`.
         return _ask_about_close(conn, row, target, note, author, warnings)
-    in_goal = _accepted_in_goal(conn, row, current, gives, named) if gated else None
-    if in_goal == participation.HUMAN:
-        # Checked as the move would be made now, taking the task on is the owner's: it
-        # stays in triage under its goal and waits for the answer.
-        waits = _ask_about_task(conn, identity, str(row["parent_id"]), author)
-        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
-        answer["warnings"] = warnings
-        answer["waits_for_owner"] = waits.answer()
-        return answer
+    if accept_gate is not None and accept_gate.mode == participation.HUMAN:
+        # Checked as the move would be made now, taking the goal or the task on is the
+        # owner's: it stays in triage and waits for the answer.
+        return _ask_about_move(conn, row, accept_gate, author, warnings)
     updates = ["state_id = ?"]
     parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
@@ -2052,7 +2096,7 @@ def _transition(
             gives,
             author,
             named=named,
-            in_goal=in_goal == participation.AGENT,
+            in_goal=accept_gate is not None and accept_gate.point == "task_in_goal",
             ruled=ruled,
         )
     _settled_by_owner(conn, identity, str(current["category"]), target, author)
