@@ -18,6 +18,7 @@ export const clipboardSpecs: readonly string[] = [
   'production-card-source.spec.ts',
   'production-open-session.spec.ts',
   'production-reference-preview-copy.spec.ts',
+  'production-title-code-copy.spec.ts',
   'ui-document-links.spec.ts',
 ]
 
