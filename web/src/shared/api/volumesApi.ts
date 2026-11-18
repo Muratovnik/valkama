@@ -67,6 +67,64 @@ const categorySchema = strictObject({
   oldest: oldestSchema.nullable(),
 })
 
+/** The questions waiting for the owner on the scope's items, and the one asked first. */
+const waitingOwnerSchema = strictObject({
+  count: count(),
+  oldest: strictObject({
+    request_id: boundedText(UUID, 36),
+    reference: reference(),
+    since: boundedText(ISO, 96),
+  }).nullable(),
+}).refine((waiting) => (waiting.count === 0) === (waiting.oldest === null), {
+  message: 'expected the first question exactly when one waits',
+})
+
+/** How many tasks of a row stand in each of the eight categories, counted as the counts are. */
+const rowCategories = () => z.record(enumField(STATE_CATEGORIES), count())
+
+const PROJECT_VALUE = /^[^\u{0}]{1,512}$/u
+const projectName = () => boundedText(PROJECT_VALUE, 512).nullable()
+
+/**
+ * A row's project as a project group of the Analytics read is written: its id and name, or
+ * null for tasks naming none and for those naming several, which list each set they name.
+ */
+const outsideProjectSchema = strictObject({
+  id: boundedText(PROJECT_ID, 160).nullable(),
+  unknown: z.literal(false),
+  name: projectName(),
+  combinations: z
+    .array(
+      z
+        .array(strictObject({ id: boundedText(PROJECT_ID, 160), name: projectName() }))
+        .min(2)
+        .max(20),
+    )
+    .nullable(),
+})
+
+/**
+ * The scope's tasks under no goal. By project each stands in one row, so those rows add up to
+ * `tasks`; by label in the row of each of its labels, or of no label, adding up to no total.
+ */
+const outsideSchema = strictObject({
+  tasks: count(),
+  by_project: z.array(strictObject({ project: outsideProjectSchema, categories: rowCategories() })),
+  by_label: z.array(
+    strictObject({
+      label: boundedText(/^[^\u{0}]{1,64}$/u, 64).nullable(),
+      categories: rowCategories(),
+    }),
+  ),
+}).refine(
+  (outside) =>
+    outside.by_project.reduce(
+      (sum, row) => sum + Object.values(row.categories).reduce((all, n) => all + n, 0),
+      0,
+    ) === outside.tasks,
+  { message: 'expected the rows by project to add up to the tasks' },
+)
+
 /**
  * What the items of a goal or stage spent over all its time: agent time, the sum of the
  * stretches, tokens by kind and their cost at API prices. `partly_measured` counts its tasks
@@ -198,9 +256,13 @@ const volumesSchema = strictObject({
   counts: strictObject({
     /** The eight categories, always all, in the model's order. */
     categories: z.array(categorySchema).length(STATE_CATEGORIES.length),
+    waiting_owner: waitingOwnerSchema,
+    /** The commits on no card of the scope's projects, or of the whole store: their list's total. */
+    unattached_commits: count(),
   }),
   /** The open goals and those that came to a close in the period. */
   goals: z.array(goalTreeSchema),
+  outside: outsideSchema,
   flow: flowSchema,
 })
 

@@ -19,7 +19,7 @@
       "categories": [
         {
           "category": "triage",
-          "tasks": 5,
+          "tasks": 6,
           "goals": 3,
           "stages": 2,
           "oldest": {
@@ -89,7 +89,16 @@
           "stages": 0,
           "oldest": null
         }
-      ]
+      ],
+      "waiting_owner": {
+        "count": 1,
+        "oldest": {
+          "request_id": "00000000-0000-4000-8000-000000000007",
+          "reference": "MAIN-1",
+          "since": "2026-01-02T03:04:05.000000Z"
+        }
+      },
+      "unattached_commits": 1
     },
     "goals": [
       {
@@ -706,6 +715,75 @@
         "children": []
       }
     ],
+    "outside": {
+      "tasks": 8,
+      "by_project": [
+        {
+          "project": {
+            "id": null,
+            "unknown": false,
+            "name": null,
+            "combinations": null
+          },
+          "categories": {
+            "triage": 4,
+            "deferred": 1,
+            "ready": 0,
+            "active": 2,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        {
+          "project": {
+            "id": "example-project",
+            "unknown": false,
+            "name": "example-project",
+            "combinations": null
+          },
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ],
+      "by_label": [
+        {
+          "label": null,
+          "categories": {
+            "triage": 4,
+            "deferred": 1,
+            "ready": 0,
+            "active": 2,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        {
+          "label": "ui",
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ]
+    },
     "flow": {
       "days": [
         {
@@ -759,10 +837,10 @@
         },
         {
           "day": "2026-01-02",
-          "created": 15,
+          "created": 16,
           "closed": 2,
           "decisions": 0,
-          "commits": 0
+          "commits": 1
         },
         {
           "day": "2026-01-02",
@@ -773,25 +851,25 @@
         }
       ],
       "totals": {
-        "created": 15,
+        "created": 16,
         "closed": 2,
         "decisions": 0,
-        "commits": 0
+        "commits": 1
       },
       "pace": {
-        "open": 13,
+        "open": 14,
         "recent": {
           "days": 7,
-          "created": 15,
+          "created": 16,
           "closed": 2,
           "trend": "growing"
         },
         "series": [
           {
             "day": "2026-01-02",
-            "created": 15,
+            "created": 16,
             "closed": 2,
-            "total": 15,
+            "total": 16,
             "closed_total": 2
           }
         ]

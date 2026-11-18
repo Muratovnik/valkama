@@ -376,4 +376,14 @@ describe('the server fixtures', () => {
       'session_gone',
     ])
   })
+
+  it('carry a waiting question, a commit on no card and rows of work outside goals', () => {
+    const { counts, outside } = validateVolumesAnswer(read('volumes-project.json'))
+    expect(counts.unattached_commits).toBe(1)
+    expect(outside.by_project.map((row) => row.project.id)).toEqual(['example-project'])
+    expect(outside.by_label.map((row) => row.label)).toEqual(['ui'])
+    const space = validateVolumesAnswer(read('volumes-space.json'))
+    expect(space.counts.waiting_owner.oldest?.reference).toMatch(/^MAIN-\d+$/u)
+    expect(space.outside.by_project.map((row) => row.project.id)).toContain(null)
+  })
 })

@@ -378,6 +378,18 @@ ITEM_BASELINES = (
 )
 
 
+def has_table(conn: sqlite3.Connection, name: str) -> bool:
+    """Whether a store has a table. An attached store is read as it is, and an older
+    one lacks what later schemas added: it has nothing of that to say."""
+
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+        ).fetchone()
+        is not None
+    )
+
+
 def table_definition(table: str, name: str) -> str:
     """The `CREATE TABLE` of one rebuilt table under `name`, as a fresh store holds it."""
 

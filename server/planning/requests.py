@@ -32,6 +32,7 @@ from . import (
     request_model,
     service,
     states,
+    store,
     waiting,
     words,
 )
@@ -168,71 +169,16 @@ def get(conn: sqlite3.Connection, identity: object, *, replies: bool = False) ->
     # A store older than question threads has no reply to read.
     thread = (
         read_model.request_replies(conn, record["request_id"])
-        if _has_table(conn, "work_item_request_answers")
+        if store.has_table(conn, "work_item_request_answers")
         else []
     )
     return {**record, "replies": thread}
 
 
-def _has_table(conn: sqlite3.Connection, name: str) -> bool:
-    """Whether a store has a table. An attached store is read as it is, and an older
-    one lacks what later schemas added: it has nothing of that to say."""
-
-    return (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
-        ).fetchone()
-        is not None
-    )
-
-
 def _complete(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     """Requests with who closed each one and the answers each current one replaced."""
 
-    return _with_history(conn, with_by_person(conn, records))
-
-
-def with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
-    """Requests with whether the latest call that closed or changed each came through the interface.
-
-    True for a browser write, false for any other call that answered, changed,
-    declined or withdrew it, and null while no call has: still open, run out by
-    itself, or written with no call, as on a comment. The latest such event
-    decides, so a changed answer is the changer's. The `author` beside it is text
-    the caller wrote and says nothing here; the fact stays once, on the call row.
-    One statement for every request of a read.
-    """
-
-    closed = [record["request_id"] for record in records if record["resolved_at"] is not None]
-    sources: dict[str, object] = {}
-    # One from before calls were recorded has no such row to read: nothing there
-    # came through a call anyone proved.
-    if closed and _has_table(conn, "execution_events"):
-        # By the request rather than its item: a merge moves a request and leaves
-        # its history where it was written. A call row that is there always has a
-        # source, so a join that found none means no call.
-        sources = {
-            str(row["detail"]): row["identity_source"]
-            for row in conn.execute(
-                "SELECT e.detail, c.identity_source FROM work_item_events e"
-                " LEFT JOIN execution_events c ON c.id = e.call_id"
-                " WHERE e.id IN (SELECT MAX(id) FROM work_item_events"
-                " WHERE action IN"
-                " ('request_answered','request_changed','request_declined','request_expired')"
-                " AND detail IN (SELECT value FROM json_each(?)) GROUP BY detail)",
-                (json.dumps(closed),),
-            )
-        }
-    return [
-        {**record, "by_person": _through_interface(sources.get(record["request_id"]))}
-        for record in records
-    ]
-
-
-def _through_interface(source: object) -> bool | None:
-    """Whether a call of this source came through the interface; null with no call."""
-
-    return None if source is None else source == calls.BROWSER
+    return _with_history(conn, questions.with_by_person(conn, records))
 
 
 def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
@@ -245,7 +191,7 @@ def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
 
     versions: dict[str, list[dict]] = {}
     changed = [record["request_id"] for record in records if record["answer_version"] >= 2]
-    if changed and _has_table(conn, "work_item_request_answers"):
+    if changed and store.has_table(conn, "work_item_request_answers"):
         for row in conn.execute(
             "SELECT a.request_id, a.version, a.answers_json, a.answered_by, a.answered_at,"
             " a.call_id, c.identity_source FROM work_item_request_answers a"
@@ -277,7 +223,7 @@ def compact_all(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     identities = [record["request_id"] for record in records]
     threads = (
         read_model.request_threads(conn, identities)
-        if identities and _has_table(conn, "work_item_request_answers")
+        if identities and store.has_table(conn, "work_item_request_answers")
         else {}
     )
     shown = []
@@ -423,7 +369,7 @@ def list_page(
         parameters.append(_own_session() if session is None else session)
     if space is not None:
         clauses.append("i.planning_space_id=?")
-        parameters.append(service.space_identity(conn, space))
+        parameters.append(read_model.space_identity(conn, space))
     if reference is not None:
         item = read_model.item_row(conn, reference)
         if space is not None and item["planning_space_id"] != parameters[-1]:

@@ -1,10 +1,10 @@
 """The commits on no card over HTTP, and the attachment the interface makes from that list.
 
 `GET /api/planning/commits/unattached` lists a session's commits that no item holds
-and no rewrite replaced, by a project or by the projects the registry binds to a
-space. `POST /api/planning/work-item/commit` attaches one, or detaches it with
-`remove`. Both are asked of a real server, as the browser asks, so the write is the
-person's: signed `manual`, by the person, from a call of the interface.
+and no rewrite replaced, by a project, by the projects the registry binds to a space
+or of the whole store. `POST /api/planning/work-item/commit` attaches one, or detaches
+it with `remove`. Both are asked of a real server, as the browser asks, so the write
+is the person's: signed `manual`, by the person, from a call of the interface.
 """
 
 from __future__ import annotations
@@ -266,11 +266,37 @@ class ScopeTests(ApiCase):
         self.assertEqual([default], self.hashes(space="MAIN"))
         self.assertEqual([own], self.hashes(project=PROJECT))
 
-    def test_the_scope_is_one_space_or_one_project(self) -> None:
-        either = "[commit] the commits on no card are read by a space or by a project: name one"
-        self.assertEqual(either, self.refused(LIST))
+    def test_without_a_space_or_a_project_the_whole_store_is_read(self) -> None:
+        own = self.stored(PROJECT, "a")
+        default = self.stored(DEFAULT, "b")
+        elsewhere = self.stored(UNBOUND, "c")
+        # Never on the list: a commit no session reported, and one a rewrite replaced.
+        self.stored(UNBOUND, "d", session=None)
+        self.stored(UNBOUND, "e")
+        self.conn.execute(
+            "UPDATE commits SET rewritten_to = (SELECT commit_id FROM commits WHERE hash = ?)"
+            " WHERE hash = ?",
+            (elsewhere, "e" * 40),
+        )
+        self.conn.commit()
+
+        answer = self.listed()
+        self.assertEqual(3, answer["total"])
+        self.assertEqual({own, default, elsewhere}, {e["hash"] for e in answer["items"]})
+        self.assertNotEqual({None}, {entry["display_name"] for entry in answer["items"]})
+        limited = self.listed(limit=1)
+        self.assertEqual((3, 1), (limited["total"], len(limited["items"])))
+
+        # The whole store asks the registry only for the names: unreadable, it names none.
+        (self.place.local / "Valkama" / "projects.json").write_bytes(b"{")
+        answer = self.listed()
+        self.assertEqual(3, answer["total"])
+        self.assertEqual({None}, {entry["display_name"] for entry in answer["items"]})
+
+    def test_a_space_and_a_project_together_are_refused(self) -> None:
         self.assertEqual(
-            either, self.refused(f"{LIST}?{urlencode({'space': 'MAIN', 'project': PROJECT})}")
+            "[commit] the commits on no card are read by a space or by a project, not both",
+            self.refused(f"{LIST}?{urlencode({'space': 'MAIN', 'project': PROJECT})}"),
         )
         self.assertEqual(
             "no planning space named NOPE", self.refused(f"{LIST}?{urlencode({'space': 'NOPE'})}")

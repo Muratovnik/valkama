@@ -128,7 +128,7 @@ def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
 def get_planning_space(conn: sqlite3.Connection, reference: str) -> dict:
     """One space, by id, key or name — whichever the caller has."""
 
-    identity = space_identity(conn, reference)
+    identity = read_model.space_identity(conn, reference)
     row = conn.execute(
         f"SELECT {_SPACE_COLUMNS} FROM planning_spaces WHERE planning_space_id = ?",  # noqa: S608
         (identity,),
@@ -246,7 +246,7 @@ def list_work_items(
     honest account of what it left out asks `list_work_items_page`.
     """
 
-    space_row = _space_row(conn, space) if space is not None else None
+    space_row = read_model.space_row(conn, space) if space is not None else None
     space_id = str(space_row["planning_space_id"]) if space_row is not None else None
     wanted = item_projects.project_id(project, "project") if project is not None else None
     marked = space_row is not None and other_spaces
@@ -455,7 +455,9 @@ def search_work_items(
     """
 
     text = model.text_field(query, "query", limit=200)
-    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
+    space_id = (
+        str(read_model.space_row(conn, space)["planning_space_id"]) if space is not None else None
+    )
     found = words.stems(text)
     if found and model.exact_reference(text) is None and model.exact_number(text) is None:
         rows = words.search_rows(
@@ -605,7 +607,7 @@ def set_launch_place(conn: sqlite3.Connection, space: str, launch_place: object)
         raise model.PlanningError("launch_place must be " + " or ".join(model.LAUNCH_PLACES))
     if not conn.in_transaction:
         conn.execute("BEGIN IMMEDIATE")
-    identity = space_identity(conn, space)
+    identity = read_model.space_identity(conn, space)
     conn.execute(
         "UPDATE planning_spaces SET launch_place = ?,"
         " updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')"
@@ -835,7 +837,7 @@ def _placed_space(
 ) -> sqlite3.Row:
     """The space a new item lies in: the one it names, held to `item_projects.placement`."""
 
-    named = None if space is None else _space_row(conn, space)
+    named = None if space is None else read_model.space_row(conn, space)
     parent_space = None
     if parent:
         parent_space = str(
@@ -851,7 +853,9 @@ def _placed_space(
         parent_space=parent_space,
         session_id=calls.confirmed_session(),
     )
-    return named if named is not None and str(named["key"]) == key else _space_row(conn, key)
+    return (
+        named if named is not None and str(named["key"]) == key else read_model.space_row(conn, key)
+    )
 
 
 @_marked
@@ -2844,11 +2848,11 @@ def _queue_scope(
     space keeps the tasks of this space that name it.
     """
 
-    named = _space_row(conn, space) if space is not None else None
+    named = read_model.space_row(conn, space) if space is not None else None
     within_id = None
     if within is not None:
         row = read_model.item_row(conn, within)
-        under = _space_row(conn, row["planning_space_id"])
+        under = read_model.space_row(conn, row["planning_space_id"])
         reference = model.human_id(str(under["key"]), int(row["number"]))
         if row["kind"] != model.CONTAINER_KIND:
             raise model.PlanningError(
@@ -2862,7 +2866,7 @@ def _queue_scope(
         within_id = str(row["work_item_id"])
     if named is None:
         found = item_projects.session_space(conn, calls.confirmed_session())
-        named = _space_row(conn, found) if found is not None else None
+        named = read_model.space_row(conn, found) if found is not None else None
     if named is None:
         keys = [str(key) for (key,) in conn.execute("SELECT key FROM planning_spaces ORDER BY key")]
         raise model.PlanningError(
@@ -4023,27 +4027,6 @@ def _space_counts(conn: sqlite3.Connection, planning_space_id: str) -> dict:
         "active": int(row["active"] or 0),
         "completed": int(row["completed"] or 0),
     }
-
-
-def space_identity(conn: sqlite3.Connection, reference: object) -> str:
-    """The id of the space a caller named by its id, key or name.
-
-    It reads nothing but the space's identity, so a store another build wrote,
-    whose spaces lack a column the record reads, still answers it.
-    """
-
-    return str(_space_row(conn, reference)["planning_space_id"])
-
-
-def _space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
-    text = model.text_field(reference, "planning space", limit=200)
-    row = conn.execute(
-        "SELECT * FROM planning_spaces WHERE planning_space_id = ? OR key = ? OR name = ?",
-        (text, text, text),
-    ).fetchone()
-    if row is None:
-        raise model.PlanningError(f"no planning space named {text}")
-    return row
 
 
 def _workflow_payload(conn: sqlite3.Connection, workflow: sqlite3.Row) -> dict:
