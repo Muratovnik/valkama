@@ -1,7 +1,7 @@
 import { pairKey, pairKind, valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
 
-import { tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+import { LEAST_COST, tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 /**
  * The figures the Analytics page draws from a usage answer, kept apart from the words so a test
@@ -19,6 +19,7 @@ import type {
   UsageMeasures,
   UsageRow,
 } from '@/shared/api/analyticsApi.ts'
+import { MINUTE } from '@/shared/lib/timeSpan.ts'
 
 /** What a line spent: seconds of agent work, tokens anew, an estimated cost and what it leaves out. */
 export interface Spent {
@@ -57,6 +58,22 @@ const HOUR = 3600
 export function measureOf(measure: Measure, spent: Spent): number | null {
   if (measure === 'time') return spent.seconds / HOUR
   return measure === 'tokens' ? spent.tokens : spent.cost
+}
+
+/**
+ * Whether a line's figure in a measure is less than the least its words count, so that it reads as
+ * a span «under a minute», a cost «< $0.01» or no token at all: a row that says nothing of how much.
+ * It is judged from the amount and the unit the words use, never from the words: time taken to the
+ * millisecond as its words take it, against a minute; a cost against a cent; tokens against one. A
+ * line the measure has no amount for says why in words and is never below; nor is a cost that
+ * leaves tokens out, since its words say those tokens.
+ */
+export function belowUnit(measure: Measure, spent: Spent): boolean {
+  if (measure === 'time') return Math.round(spent.seconds * 1000) < MINUTE
+  const amount = measureOf(measure, spent)
+  if (amount === null) return false
+  if (measure === 'tokens') return amount < 1
+  return spent.unpriced === 0 && amount < LEAST_COST
 }
 
 /** Whether a line spent anything at all: some time, a token, a price or tokens without one. */

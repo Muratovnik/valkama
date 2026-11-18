@@ -32,7 +32,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { useWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
-import { measureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { belowUnit, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { shareOf, SPEND_BREAKDOWNS } from '@/pages/analytics/utils/windowSpend.ts'
 import type { SpendBy } from '@/pages/analytics/utils/windowSpend.ts'
@@ -156,6 +156,7 @@ const rows = computed<RankedRow[]>(() => {
     ...rowOf(held, line),
     slot: line.kind === 'category' ? 1 : 'other',
     valueText: words.withShare(cost(line.spent), shareOf(line, total)),
+    belowUnit: belowUnit('cost', line.spent),
   }))
 })
 /**

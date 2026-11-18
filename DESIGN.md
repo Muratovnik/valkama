@@ -1028,7 +1028,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   stands over rows that draw their own bars: as thin as the bars and with no words of its own,
   it read as one more row. Parts are compared by ranked bars on one base; a thin segmented strip
   belongs only over rows that print a name and a number and draw nothing, as a rail tile's
-  `MiniShareBar` does.
+  `MiniShareBar` does. A row whose figure is less than the least its unit shows — «меньше
+  минуты», a cost under a cent, no token — says nothing of how much and is not drawn, under any
+  name, judged from its amount against that unit and never from its words; «unknown» of a unit or
+  more stays, since it shows a gap in what is placed. The section's total, every share and the
+  table twin still count and list such a row, and a list whose every row is one draws them all.
   `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
   draws one small chart of the span per leading value, all on one scale whose top is written
   once over them, each with its name on one line and its figure; the folded tail shares the

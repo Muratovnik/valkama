@@ -51,6 +51,7 @@ import type { ValueBreakdown } from '@/pages/analytics/composables/useValueRead.
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import {
+  belowUnit,
   breakdownOf,
   figureOf,
   measureOf,
@@ -225,6 +226,7 @@ function rankedOf(breakdown: ValueBreakdown, usage: Usage): RankedRow[] {
       detail: words.valueDetail(breakdown, line.value),
       value: weight(line),
       valueText: words.lineShare(props.measure, line.spent, whole),
+      belowUnit: belowUnit(props.measure, line.spent),
       slot: hues.get(line.key) ?? 'other',
       quiet: line.kind !== 'category',
     }))

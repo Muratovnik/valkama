@@ -17,7 +17,8 @@ export type UsageFigures = Pick<ItemUsage, 'estimated_api_cost_usd' | 'tokens'> 
 
 const ESTIMATE = '≈\u{A0}'
 const INCOMPLETE = '+'
-const LEAST_COST = 0.01
+/** The least cost a figure counts, a cent: under it a cost reads «< $0.01». */
+export const LEAST_COST = 0.01
 /** From here a count is said in thousands, whose word takes the same form at any number. */
 const COMPACT_FROM = 1000
 
