@@ -211,6 +211,11 @@ async function measure(page: Page) {
     holder: {
       lines: lineCount(holder.map(({ top }) => top)),
       glyphOnFirstLine: first !== undefined && glyph > first.top && glyph < first.bottom,
+      // Where each of its lines starts: a wrapped line starts where the first one's words do,
+      // beside the glyph, not under it.
+      starts: [...new Set(holder.map(({ top }) => Math.round(top)))].map((top) =>
+        Math.min(...holder.filter((line) => Math.round(line.top) === top).map(({ left }) => left)),
+      ),
     },
     stepsBeside:
       held && steps
@@ -281,6 +286,10 @@ for (const viewport of WIDTHS) {
           where,
         ).toEqual([])
         expect(drawn.holder.glyphOnFirstLine, where).toBe(true)
+        expect(
+          Math.max(...drawn.holder.starts) - Math.min(...drawn.holder.starts),
+          where,
+        ).toBeLessThanOrEqual(1)
         holderLines.push(drawn.holder.lines)
         titleLines.push(drawn.titleLines)
       }
