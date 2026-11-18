@@ -152,8 +152,6 @@ export const analyticsMessages = {
         },
       },
       drill: {
-        noTask: 'Break down the work with no task by project and launch class',
-        noTaskByLaunch: 'Break down the work with no task by launch class',
         day: 'Show the tasks of {day}',
         step: 'Show the tasks of {span}',
         clock: '{from}–{to}',
@@ -346,8 +344,6 @@ export const analyticsMessages = {
         },
       },
       drill: {
-        noTask: 'Разобрать работу без задачи по проектам и способам запуска',
-        noTaskByLaunch: 'Разобрать работу без задачи по способам запуска',
         day: 'Показать задачи за {day}',
         step: 'Показать задачи за {span}',
         clock: '{from}–{to}',

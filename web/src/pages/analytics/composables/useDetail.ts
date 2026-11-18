@@ -9,8 +9,9 @@
  *   window went» opens what it went to, through the opener the page gives it (`useWindowDetail`).
  *   A value pressed in the table opens in its place, a new place too (`inspectHere`).
  * - Its Close and Escape close it, as a new place, as a card's do (`close`).
- * - Its «Narrow the page to it» narrows the view to the value and breaks it down as that value is
- *   (`narrowedBy`), with the panel closed in the same place (`narrow`).
+ * - Its «Add to filter» adds the value to its dimension's filter beside the values already there,
+ *   with the page kept on its section and the panel closed in the same place (`add`); a value the
+ *   filter holds already offers nothing to add (`usePageFilter`).
  *
  * An opening the address cannot hold is not made, and the words where it was asked say why: in the
  * part of the report it was pressed in, under the filters for a quota window, or in the panel for
@@ -24,11 +25,10 @@ import { computed, inject, provide, ref, watch } from 'vue'
 import type { InjectionKey } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
+import type { providePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
-import { orderFilters } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsDetail, AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 
@@ -41,8 +41,8 @@ const WINDOW_DETAIL: InjectionKey<WindowOpener> = Symbol('analytics-window-detai
 export const useWindowDetail = () => inject(WINDOW_DETAIL, null)
 
 export function useDetail(options: {
-  /** How the page breaks a value down once narrowed to it. */
-  lines: ReturnType<typeof provideLineActions>
+  /** The page's filters, which a value of the panel is added to. */
+  filter: ReturnType<typeof providePageFilter>
   /** Writes a change of the view into its address; false, with nothing written, if it does not fit. */
   change: (next: Partial<AnalyticsView>, mode: 'push' | 'replace') => boolean
   /** Whether a card stands over the page. */
@@ -94,12 +94,11 @@ export function useDetail(options: {
     options.change({ detail: null }, 'push')
   }
 
-  /** The page narrowed to the value on show, by its name; said in the panel when it does not fit. */
-  function narrow(by: UsageDimension, value: string | null, label: string) {
-    const filters = orderFilters({ ...options.view().filters, [by]: [value] })
-    const next = { filters, ...options.lines.narrowedBy(by, value), detail: null }
-    if (!options.change(next, 'push')) notice.value = t('analytics.drill.full', { value: label })
+  /** The value on show added to the page's filter, by its name; said in the panel if it does not fit. */
+  function add(by: UsageDimension, value: string | null, label: string) {
+    if (options.filter.add(by, value, true) === 'full')
+      notice.value = t('analytics.drill.full', { value: label })
   }
 
-  return { all, close, detail, inspect, inspectHere, narrow, notice, open }
+  return { add, all, close, detail, inspect, inspectHere, notice, open }
 }

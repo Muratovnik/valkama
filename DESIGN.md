@@ -2697,9 +2697,11 @@ ends the figures' heading says it for the value's own read, once and in that «�
 never as a line of the panel. Its days are the page's period and step with
 the period before marked, one series in the value's colour; under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
-the value's filter added, and wait and fail as the page's do. «Narrow the page to it» does what
-pressing a value did: the page narrows to it, broken down by task — work with no task by where
-it came from — and the panel closes, a step of the history too. A press with a modifier or the
+the value's filter added, and wait and fail as the page's do. «Add to filter» adds the value to
+its dimension's filter beside the values already there, as choosing it in the filter's field
+does, so A and B and then C is A, B and C: the page stays on its section and the panel closes, a
+step of the history too. A value the filter holds already offers it disabled, «Already in
+filter»; a filter the link cannot hold says why in the panel. A press with a modifier or the
 middle button on a task still opens its card in a new tab, and a day, an hour or a minute still
 narrows the page. «All N» opens the section's whole table in the panel, every value with the
 period's figures and those of the period before, sorted as the table sorts and with a field that

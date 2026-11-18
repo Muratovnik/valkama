@@ -218,10 +218,10 @@ test('a card’s heading opens its section, and a row opens its value’s panel 
   await models.getByRole('button', { name: 'Details of model-b' }).click()
   await expect.poll(() => path(page)).toBe(pageAt({ detail: '{"by":"model","value":"model-b"}' }))
   const details = page.getByRole('dialog', { name: 'Details: model-b' })
-  await details.getByRole('button', { name: 'Narrow the page to it' }).click()
-  await expect
-    .poll(() => path(page))
-    .toBe(pageAt({ by: 'work_item', filters: '{"model":["model-b"]}' }))
+  // Adding it to the filter keeps the overview.
+  await details.getByRole('button', { name: 'Add to filter' }).click()
+  await expect.poll(() => path(page)).toBe(pageAt({ filters: '{"model":["model-b"]}' }))
+  await expect(page.locator('.analytics-rail [aria-current="page"]')).toHaveText(/^Overview/u)
   // A task's row is a link to its card, as a bar by task is.
   await page.goBack()
   await page.goBack()

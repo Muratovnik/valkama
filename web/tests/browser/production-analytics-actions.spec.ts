@@ -6,8 +6,9 @@
  * The table stands whole in both languages, scrolls sideways inside its own frame with its row
  * names kept in view, and says once when the period before was not read. The download is offered
  * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model opens the
- * model's side panel, whose «Narrow the page to it» narrows the view to it, and a day pressed by
- * keyboard or by mouse beside its coloured stack narrows the view to the day, each as a new place
+ * model's side panel, whose «Add to filter» adds it to the page's filter with the section kept,
+ * and a day pressed by keyboard or by mouse beside its coloured stack narrows the view to the
+ * day, each as a new place
  * in the history, while a segment of the stack acts for its own model as its bar does, so Back
  * returns, as a section opened from a card or the rail does, and as a split chosen in a section's
  * heading does, while the period and the measure change the place in hand; the task's bar or row
@@ -292,23 +293,26 @@ for (const width of WIDTHS)
     // By pointer: model-a, then its one task. A bar is named by its action, and a row of the
     // table a narrow page shows first by the value it heads.
     await bars.getByRole('button', { name: /^(Details of )?model-a$/u }).click()
-    // Its panel is a place of its own, and narrowing from it breaks the view down by task, which
-    // the address names.
+    // Its panel is a place of its own, and «Add to filter» in it adds the model to the page's
+    // filter with the section kept, which the address names.
     const modelPanel = at({ by: 'model', detail: '{"by":"model","value":"model-a"}' })
     await expect.poll(() => path(page)).toBe(modelPanel)
     await page
       .getByRole('dialog', { name: 'Details: model-a' })
-      .getByRole('button', { name: 'Narrow the page to it' })
+      .getByRole('button', { name: 'Add to filter' })
       .click()
-    const narrowed = at({ by: 'work_item', filters: '{"model":["model-a"]}' })
-    await expect.poll(() => path(page)).toBe(narrowed)
+    const filtered = at({ by: 'model', filters: '{"model":["model-a"]}' })
+    await expect.poll(() => path(page)).toBe(filtered)
     await page.goBack()
     await expect.poll(() => path(page)).toBe(modelPanel)
     await page.goBack()
     await expect.poll(() => path(page)).toBe(byModel)
     await page.goForward()
     await page.goForward()
-    await expect.poll(() => path(page)).toBe(narrowed)
+    await expect.poll(() => path(page)).toBe(filtered)
+    // The tasks of the model, its filter kept.
+    await openReport(page, width, at({ by: 'work_item', filters: '{"model":["model-a"]}' }))
+    await drawLined(bars)
     // The task's bar is named by its action, and its row in the table by the task it heads.
     const task = 'MAIN-264 Import the planning documents'
     const link = bars.getByRole('link', { name: new RegExp(`^(Details of )?${task}$`, 'u') })
