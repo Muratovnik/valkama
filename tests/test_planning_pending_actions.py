@@ -470,25 +470,40 @@ class CarryOutTests(Harness):
         self.assertEqual([], self.ran)
 
     def test_an_action_that_no_longer_applies_is_dropped_and_the_answer_stands(self) -> None:
-        # The stage asked about is accepted with the goal over it, which an agent takes on
-        # by assignment: an agent's write answers no question for the owner, so the
-        # stage's stays (a person's would end it, `AcceptanceQuestionTests`).
-        stage = self.filed("A stage of it", kind="stage", parent=self.goal)
-        waiting = self.ask(stage)
-        with calls.bind(AGENT, "apply_work_item_changes"):
-            service.transition_work_item(self.conn, self.goal, "ready", acceptance="assignment")
+        # The owner is asked about a task an agent files in the owner's goal, and then puts
+        # the goal off: the task still waits, but the goal it was to be taken on in is no
+        # longer accepted, so the answer takes nothing on.
+        participation.write_set(
+            self.conn, service.space_identity(self.conn, "ALPHA"), participation.MANUAL
+        )
+        goal = self.filed("The owner's goal", kind="goal", by=calls.browser())
+        with calls.bind(AGENT, "create_work_item"):
+            filed = tools.OPS["create_work_item"](
+                self.conn, {"space": "ALPHA", "title": "A task in it", "parent": goal}
+            )
         self.conn.commit()
-        self.assertIsNotNone(service.get_work_item(self.conn, stage)["acceptance"])
-        self.assertEqual("pending", self.request(waiting.question)["status"])
-        record = self.answer(waiting.question, "do")
+        task = str(filed["reference"])
+        question = str(filed["waits_for_owner"]["question"])
+        [action] = pending.open_on(self.conn, self.id(task))
+        with mock.patch.object(leases, "utc_now", lambda: NOW):
+            self.person("/api/planning/work-item/defer", id=goal, until=UNTIL, reason="later")
+        self.assertEqual("pending", self.request(question)["status"])
+        record = self.answer(question, "do")
         self.assertEqual("dropped", record["carried_out"])
-        stored = self.request(waiting.question)
+        stored = self.request(question)
         self.assertEqual(
             ("answered", {"answer": "do"}), (stored["status"], json.loads(stored["answers_json"]))
         )
-        self.assertEqual(("dropped", True, True), self.ended(waiting))
-        [detail] = self.events(stage, "action_dropped")
-        self.assertTrue(detail.startswith("proposed_goal: "), detail)
+        ended = self.action(action.id)
+        self.assertEqual(
+            ("dropped", True, True),
+            (ended["outcome"], ended["ended_call"] is not None, ended["ended_at"] is not None),
+        )
+        self.assertEqual(
+            ["task_in_goal: the goal is not accepted"], self.events(task, "action_dropped")
+        )
+        card = service.get_work_item(self.conn, task)
+        self.assertEqual(("triage", None), (card["state"]["category"], card["acceptance"]))
         self.assertEqual([], self.ran)
 
     def test_the_asker_withdraws_the_action_with_every_question_of_it(self) -> None:
@@ -1177,6 +1192,36 @@ class TaskInGoalTests(SettingHarness):
         self.assertEqual([], self.owners_list())
         self.assertEqual([], self.decided())
 
+    def test_a_task_moved_from_the_goal_before_the_answer_is_not_taken_on(self) -> None:
+        self.at(participation.MANUAL)
+        filed = self.file_in_goal("A task asked about in the goal")
+        task, question = str(filed["reference"]), str(filed["waits_for_owner"]["question"])
+        [action] = self.waiting_on(task)
+        with calls.bind(calls.browser(), "create_work_item"):
+            elsewhere = str(
+                service.create_work_item(
+                    self.conn, space="ALPHA", title="A goal in triage", kind="goal", state="triage"
+                )["reference"]
+            )
+        self.conn.commit()
+        # The agent moves the task under a goal nobody has taken on before the owner answers.
+        self.tool("apply_work_item_changes", id=task, update={"parent": elsewhere})
+        self.assertEqual(self.id(elsewhere), self.card(task)["parent_id"])
+        record = self.answer(question, "do")
+        self.assertEqual("dropped", record["carried_out"])
+        card = self.card(task)
+        self.assertEqual(
+            ("triage", None, self.id(elsewhere)),
+            (card["state"]["category"], card["acceptance"], card["parent_id"]),
+        )
+        stored = self.request(question)
+        self.assertEqual(
+            ("answered", {"answer": "do"}), (stored["status"], json.loads(stored["answers_json"]))
+        )
+        self.assertEqual("dropped", self.action(action.id)["outcome"])
+        self.assertEqual(["task_in_goal: the task moved"], self.events(task, "action_dropped"))
+        self.assertEqual([], self.owners_list())
+
 
 #: The batch an agent cancels an item with: its summary, and the move with its reason.
 SUMMARY = {"done": "Nothing: another item covers it.", "next": "Nothing."}
@@ -1700,6 +1745,99 @@ class AcceptanceQuestionTests(SettingHarness):
         self.person("/api/planning/work-item/apply", id=self.goal, transition={"state": "ready"})
         self.assertEqual(("ready", "inherited"), self.where(task))
         self.settled_by_the_owner(task, asked, action.id)
+
+    def back_in_triage(self) -> None:
+        """At the manual set with the goals an agent proposes left to it: the owner's goal,
+        put off by the owner and brought back by the sweep, lies in triage asked about by
+        nobody, so an agent may take it on by an assignment."""
+
+        participation.write_value(self.conn, self.space, "proposed_goal", participation.AGENT)
+        self.conn.commit()
+        self.person("/api/planning/work-item/defer", id=self.goal, until=UNTIL, reason="later")
+        with mock.patch.object(leases, "utc_now", lambda: CAME):
+            self.assertEqual({sweep.RETURNS: 1}, sweep.run_pass(self.conn).changed)
+        self.conn.commit()
+        self.assertEqual(("triage", None), self.where(self.goal))
+        self.assertEqual([], self.waiting_on(self.goal))
+
+    def take_on_the_goal(self) -> list[str]:
+        """The agent takes the goal back in triage on by an assignment; the answer's warnings."""
+
+        answer = self.tool(
+            "apply_work_item_changes",
+            id=self.goal,
+            transition={"state": "ready", "acceptance": "assignment"},
+        )
+        self.assertEqual("assignment", self.card(self.goal)["acceptance"]["basis"])
+        return list(answer.get("warnings", []))
+
+    def test_an_agents_acceptance_of_the_goal_leaves_the_task_the_owner_is_asked_about(
+        self,
+    ) -> None:
+        self.at(participation.MANUAL)
+        task, asked = self.waiting_task("A task waiting in the goal")
+        [action] = self.waiting_on(task)
+        self.back_in_triage()
+        self.assertEqual("pending", self.request(asked)["status"])
+        beside = self.filed("Work filed in the goal while it lay in triage", parent=self.goal)
+        self.assertEqual(([], ("triage", None)), (self.waiting_on(beside), self.where(beside)))
+        warnings = self.take_on_the_goal()
+        # The agent's word was about the goal: the task asked about waits for the answer,
+        # and the work asked about by nobody is taken on with the goal.
+        self.assertEqual(
+            [
+                f"{task} stays in triage: the owner has not decided whether it is to be done"
+                f" (question {asked})"
+            ],
+            warnings,
+        )
+        self.assertEqual(("triage", None), self.where(task))
+        self.assertEqual(("ready", "inherited"), self.where(beside))
+        self.assertEqual("pending", self.request(asked)["status"])
+        self.assertIsNone(self.action(action.id)["outcome"])
+        self.assertEqual([asked], self.owners_list())
+        # The owner's answer is carried out: the task is taken on in the goal.
+        self.assertEqual("carried_out", self.answer(asked, "do")["carried_out"])
+        self.assertEqual(("ready", "inherited"), self.where(task))
+        self.assertEqual("carried_out", self.action(action.id)["outcome"])
+        self.assertEqual(([], []), (self.events(task, "action_dropped"), self.owners_list()))
+
+    def test_an_agents_acceptance_of_the_goal_stops_at_a_stage_the_owner_is_asked_about(
+        self,
+    ) -> None:
+        self.at(participation.MANUAL)
+        self.back_in_triage()
+        participation.write_value(self.conn, self.space, "proposed_goal", participation.HUMAN)
+        self.conn.commit()
+        stage, asked = self.proposed("A goal the agent proposes and then files in the goal")
+        self.tool("apply_work_item_changes", id=stage, update={"parent": self.goal})
+        under = str(
+            self.tool("create_work_item", space="ALPHA", title="Work in the stage", parent=stage)[
+                "reference"
+            ]
+        )
+        self.assertEqual(
+            (self.id(self.goal), ("triage", None)),
+            (self.card(stage)["parent_id"], self.where(under)),
+        )
+        warnings = self.take_on_the_goal()
+        self.assertEqual(
+            [
+                f"{stage} stays in triage: the owner has not decided whether it is to be done"
+                f" (question {asked})"
+            ],
+            warnings,
+        )
+        # The stage left in triage stops the descent: the work in it waits with it.
+        self.assertEqual(
+            (("triage", None), ("triage", None)), (self.where(stage), self.where(under))
+        )
+        self.assertEqual("pending", self.request(asked)["status"])
+        # The owner's answer takes the stage on, and the work in it with it.
+        self.assertEqual("carried_out", self.answer(asked, "do")["carried_out"])
+        self.assertEqual("inherited", self.card(stage)["acceptance"]["basis"])
+        self.assertEqual(("ready", "inherited"), self.where(under))
+        self.assertEqual([], self.owners_list())
 
     def test_an_assignment_an_agent_takes_on_is_summarised(self) -> None:
         finding = self.filed("A finding the agent is asked to do")

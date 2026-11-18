@@ -375,7 +375,12 @@ and open, and otherwise the basis the accepting write gave, `owner` from the
 browser and the `acceptance` an agent sent. A stage accepted under a goal that is
 not accepted thus gives its work the stage's own basis, as a claim of that work
 would, and leaves the goal as it is. A goal or stage in `deferred` stops the
-descent, and nothing under it changes.
+descent, and nothing under it changes. An agent's write leaves out an item on
+which the owner's question whether to do it stands: it stays in `triage` for the
+answer, named in `warnings` as `MAIN-12 stays in triage: the owner has not decided
+whether it is to be done (question <id>)`, and a goal or stage left so stops the
+descent as a deferred one does. A person's write takes it along, and that ends
+the question as withdrawn.
 
 A record carries no `container` and no `ready` field: `kind` says which items
 hold others, and `workable` which may be taken.
@@ -3452,7 +3457,10 @@ and its move anywhere but a cancelled state, is refused with
 `acceptance_question`, which `force` does not carry.
 
 A claim, or any move out of `deferred`, a cancel included, ends the condition and
-withdraws its question; moving the item under another parent keeps them. A read
+withdraws its question; moving the item under another parent keeps them. Merged
+into an item that is not put off, the item's question ends withdrawn in the merge
+and moves to the survivor closed, since its answer `do` would move the survivor
+from wherever it stands; a survivor put off takes the question still waiting. A read
 writes nothing: a condition that came stands until a write brings the work back.
 
 **A goal or stage put off** keeps the work under it with whoever holds it, and the

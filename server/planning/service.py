@@ -996,8 +996,12 @@ def _ask_about_task(
     reference = read_model.reference(conn, row)
     goal = read_model.reference(conn, read_model.item_by_id(conn, goal_id))
     if moved_from is None:
+        # It lies under the goal: moved away before the answer, it is no longer asked about.
         proposal = pending.Proposal(
-            "accept", {"parent": goal_id}, f"accepted {reference} under {goal}"
+            "accept",
+            {"parent": goal_id},
+            f"accepted {reference} under {goal}",
+            seen={"parent": goal_id},
         )
         prompt = f"An agent files the task {reference} in {goal}: {row['title']}."
     else:
@@ -2982,6 +2986,12 @@ def _cascade(
     descent: what is under it keeps a container above it that is not accepted.
     Anything else is not waiting to be accepted and stays as it is.
 
+    An agent's write takes no item along that the owner is asked whether to do, on the
+    item itself (`_asked_itself`): the agent's word was about the container, and only
+    the owner answers that question. The item stays in triage, the answer warns so, and
+    a goal or stage left there stops the descent as a deferred one does. A person's
+    write takes it along and answers the question with it (`_settled_by_owner`).
+
     `basis` is the order of bases read once for the whole descent, since every item
     it reaches has the same containers above it that are not accepted with it:
     `inherited` when, with this container accepted, every one up to the root stands
@@ -2994,7 +3004,15 @@ def _cascade(
         " WHERE i.parent_id = ? AND s.category = 'triage' ORDER BY i.number",
         (identity,),
     ).fetchall()
+    by_agent = calls.from_agent()
     for child in children:
+        asked = _asked_itself(conn, child) if by_agent else None
+        if asked is not None:
+            warnings.append(
+                f"{read_model.reference(conn, child)} stays in triage: the owner has not"
+                f" decided whether it is to be done (question {asked})"
+            )
+            continue
         container = child["kind"] == model.CONTAINER_KIND
         target = states.reachable(conn, child, model.SERVICE_CATEGORY if container else "ready")
         if target is None:
@@ -3018,6 +3036,16 @@ def _cascade(
         # Accepted with its goal or stage by a person, it is answered as if taken on alone.
         _settled_by_owner(conn, found, "triage", target, author)
     return warnings
+
+
+def _asked_itself(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+    """The open question whether to do the item `row`, asked on the item itself, by its
+    id; None while none is (`questions.acceptance_asked` reads one over it too)."""
+
+    asked = questions.acceptance_asked(conn, row)
+    if asked is None or str(asked["work_item_id"]) != str(row["work_item_id"]):
+        return None
+    return str(asked["request_id"])
 
 
 def claim_work_item(
@@ -4406,7 +4434,8 @@ def merge_work_items(
     released and closed in its cancelled state. What describes the merged item
     itself stays with it: its history, its reports with their threads, its
     description, its parent, a ref the survivor already has, and the links
-    that would now tie the survivor to itself.
+    that would now tie the survivor to itself. A question whether to take up
+    again a merged item put off ends withdrawn unless the survivor is put off too.
 
     Each write is one a single tool makes, with that tool's event, so a build
     that knows nothing of merging reads the result as links, checklists
@@ -4614,6 +4643,7 @@ def _fold(
             reason=questions.closed_reason("cancelled"),
             author=author,
         )
+        _return_without_subject(conn, identity, survivor_state, author)
         # Only a question to the owner is said to wait on the survivor: a list waits for
         # nobody, and a request asked of an agent session waits for that session.
         waiting_on = conn.execute(
@@ -4723,6 +4753,21 @@ def _fold(
     if forced:
         answer["overridden"] = forced
     return answer
+
+
+def _return_without_subject(
+    conn: sqlite3.Connection, identity: str, survivor_state: sqlite3.Row, author: str | None
+) -> None:
+    """End, withdrawn, the question whether to take up again the merged item `identity`
+    put off (`deferral.RETURN`) when the survivor is not put off, before the merge moves it.
+
+    The question asks about work standing in deferred: on a survivor standing elsewhere it
+    has no subject, nothing reads it as a question whether to do the survivor, and its
+    answer `do` would move the survivor from wherever it stands.
+    """
+
+    if survivor_state["category"] != "deferred":
+        questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
 
 
 def _moving_roots(conn: sqlite3.Connection, identity: str) -> list[int]:
