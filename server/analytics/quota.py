@@ -3,7 +3,7 @@
 One entry per account: every account with a quota sample in the last `LOOKBACK`, and
 every organization whose work has a usage segment in that span but no such sample, which
 has no source. An account is an organization and its account's UUID, or, for samples
-without one, the provisional seat `seats.account_of_seat` leaves them on. The samples are
+without one, the provisional seat their account is known by (`quota.accounts`). The samples are
 read through `seats.account_samples`, the read the alerts take, so both see one account
 where the other does. A provisional seat is known for its week alone, so one whose week
 has ended is left out: the same machine read across a week's reset is otherwise two

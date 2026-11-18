@@ -28,7 +28,7 @@ model, the model. Rows older than a year are deleted by the start-up housekeepin
   form the usage rows keep, so a time comparison is a text comparison.
 - `account_uuid` is the account's UUID where the source gave it, which only an
   organization's reading does; NULL otherwise, and such a sample's account is read from
-  its seat (`seats.account_of_seat`).
+  its seat (`accounts.Resolver`).
 - `seat` is `week:<the week's reset, to the nearest ten minutes>`; NULL where the reading
   showed no week, or where imported history said none. It tells the seats of one
   organization apart within one week.

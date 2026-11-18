@@ -9,17 +9,18 @@ forecast takes one series: the five-hour readings of one account, never a week b
 them, each with its feed, so a counter zeroed inside the window restarts the count the
 forecast reads rather than leaving its earlier top in force (`forecast.count`).
 
-Whose window. A reading of a session (`statusline`, `mod`) names no organization: it is
-the one the session's usage rows say it worked for at the reading's moment
-(`seats.organization_at`), which the listener's transcript reader learns from the
-session's `credential_org`. Until the reader has got that far the reading belongs to
-nobody and is passed over, and the evaluation after the reader's next pass takes it up.
-A reading with no seat, or whose organization is not known, raises nothing: there is no
-account to warn about. The account is the organization and the seat: a seat names one
-account of its organization for the week it names, whether its UUID is known
-(`seats.account_of_seat`) or the seat is still provisional, so the key holds when the UUID
-turns up later. The toast says the name the owner gave the organization's account
-(`quota.names`), and where there is none it says no name at all.
+Whose window. A reading's account is the one every read of quota takes
+(`quota.accounts`): a reading of a session (`statusline`, `mod`) names no organization,
+and its seat's samples decide whose it is, the session's usage rows saying which
+organization each was read for (`accounts.organization_at`), which the listener's
+transcript reader learns from the session's `credential_org`. Until something places it
+the reading belongs to nobody and is passed over, and the evaluation after the reader's
+next pass takes it up. A reading with no seat, or whose account is not known, raises
+nothing: there is no account to warn about. The key is the account's organization and the
+seat: a seat names one account of its organization for the week it names, whether its UUID
+is known or not, so the key holds when the UUID turns up later. The toast says the name the
+owner gave the organization's account (`quota.names`), and where there is none it says no
+name at all.
 
 Freshness. Samples are kept only when a value changed (`quota.samples`), so a series'
 latest sample says when it last moved. One older than `forecast.FRESH_FOR` raises
@@ -47,7 +48,7 @@ A week's reaches back five hours only, so where a level the fresh readings reach
 already, the week's samples since its start are read once for the pass -- one range of
 `quota_samples` by its `at` index, of the week kinds, every account's, up to seven days and
 the reset slack, rows kept only where a value changed, and a session's sample one indexed
-lookup of its organization (`seats.organization_at`) -- to find its restarts; the week
+lookup of its organization (`accounts.organization_at`) -- to find its restarts; the week
 alerts on the fresh readings from its latest restart on.
 
 Where it runs: in the listener, after each pass of its usage reader (`housekeeping`),

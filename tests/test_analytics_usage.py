@@ -682,12 +682,13 @@ class WindowSpanTests(UsageStore):
         _, self.task = self.item("Answer a review")
         _, self.other = self.item("Fix the import")
         # Each organization's poll names an account from 80 s on: work that ended before that
-        # is on no account anyone knows. The window's organization has a second account, whose
-        # session's own feed puts its work there; the poll's latest says the first for the rest.
+        # is on no account anyone knows. The window's organization has two accounts, and each
+        # session's own feed puts its work on one of them.
         self.quota_sample(80, SEAT_3, organization="org-w", account="acct-v")
         self.quota_sample(120, SEAT_1, organization="org-w", account="acct-w")
         self.quota_sample(100, SEAT_2, organization="org-x", account="acct-x")
         self.quota_sample(100, SEAT_3, session="s-5")
+        self.quota_sample(100, SEAT_1, session="s-1")
         # What that session worked for, outside the window.
         self.segment("s-5", -2 * DAY, -2 * DAY, seconds=0.0, organization="org-w")
         # Half before the window's start, half in it.

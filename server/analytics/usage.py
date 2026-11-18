@@ -482,14 +482,15 @@ def _with_seats(
     seated: list[Sequence] = []
     for row, seat in zip(rows, found, strict=True):
         value = None
-        if seat.seat is not None:
-            organization = str(row[_ORGANIZATION])
-            value = f"{organization}/{seat.account_uuid or seat.seat}"
+        if seat.seat is not None and seat.account is not None:
+            uuid = seat.account.account_uuid
+            organization = seat.account.organization
+            value = f"{organization}/{uuid or seat.seat}"
             if value not in named:
                 named[value] = {
                     "organization": organization,
-                    "account_uuid": seat.account_uuid,
-                    "seat_key": None if seat.account_uuid else seat.seat,
+                    "account_uuid": uuid,
+                    "seat_key": None if uuid else seat.seat,
                 }
         seated.append((*row, value))
     return seated, named

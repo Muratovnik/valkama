@@ -9,7 +9,10 @@ spends between two moments is the difference.
 
 A stretch's seat is held to a reference of its own, written from the seat rule as the
 contract states it (`quota.seats`) over the samples the test wrote, in milliseconds
-rather than the stored text the read compares.
+rather than the stored text the read compares. Which account each sample is, the rule of
+`quota.accounts`, is held to its own cases in `test_quota_seats`; the reference takes it
+from `accounts.Resolver` for the sample and the organization the reference says it was
+read for, and holds the read's join of stretches to those samples.
 
 Each property is a function made inside its test, so every run builds a new one: one
 Hypothesis test shared by every instance unittest makes of the case fails its
@@ -29,6 +32,7 @@ from hypothesis import strategies as st
 
 from server.analytics import usage
 from server.planning import usage as item_usage
+from server.quota import accounts
 from tests.analytics_fixtures import DAY, HOUR, START, UsageStore, day, stamp
 from tests.property_settings import use_gate_profile
 
@@ -152,16 +156,37 @@ def week_end(seat: str) -> int:
     return (moment - START) // dt.timedelta(milliseconds=1)
 
 
-def seat_of(stretch: Mapping, stretches: list[dict], quota: list[dict]) -> tuple[str | None, bool]:
+def worked_for(sample: Mapping, stretches: list[dict]) -> str | None:
+    """The organization a sample was read for: an organization's own, and a session's as
+    its latest main-run stretch begun by the sample says."""
+
+    if sample["who"].startswith("org-"):
+        return sample["who"]
+    begun = [
+        (other["start"], number)
+        for number, other in enumerate(stretches)
+        if other["session"] == sample["who"]
+        and other["agent"] == ""
+        and other["start"] <= sample["at"]
+    ]
+    return stretches[max(begun)[1]]["organization"] if begun else None
+
+
+def seat_of(
+    stretch: Mapping,
+    quota: list[dict],
+    accounts_of: list[accounts.Account | None],
+) -> tuple[str | None, bool]:
     """The seat value the contract gives a stretch, by the rule of `quota.seats` read anew.
 
-    Of each feed, a session's or an organization's in one window, its latest sample at or
-    before the stretch's end (and within the longest hold of its start) is its state. It
-    counts while its window has not reset by the start, and when the feed's identity worked
-    for the stretch's organization then: an organization's own, and a session's as its
-    latest main-run stretch begun by the sample says. The stretch's own session's feeds come
-    first; the most recent of those holding names the seat. The account is the naming
-    sample's, or else the one account the organization's samples of that seat name.
+    Of each feed, a session's in one window or an organization's of one account in one
+    window, its latest sample at or before the stretch's end (and within the longest hold of
+    its start) is its state. It holds while its window has not reset by the start, and it
+    counts for the organization of its sample's account (`accounts_of`). The stretch's own
+    session's feeds come first, and the most recent of those holding names the seat; with
+    none, the session's next sample after the end, where it counts for the stretch's
+    organization and names the week the end falls in; with none, the other feeds holding,
+    where all are one account's, the most recent of them.
     """
 
     organization = stretch["organization"]
@@ -169,48 +194,45 @@ def seat_of(stretch: Mapping, stretches: list[dict], quota: list[dict]) -> tuple
         return None, True
     start, end = stretch["start"], stretch["start"] + stretch["length"]
 
-    def worked_for(sample: Mapping) -> str | None:
-        if sample["who"].startswith("org-"):
-            return sample["who"]
-        begun = [
-            (other["start"], number)
-            for number, other in enumerate(stretches)
-            if other["session"] == sample["who"]
-            and other["agent"] == ""
-            and other["start"] <= sample["at"]
-        ]
-        return stretches[max(begun)[1]]["organization"] if begun else None
+    def counts(number: int) -> bool:
+        account = accounts_of[number]
+        return account is not None and account.organization == organization
 
-    def holds(sample: Mapping) -> bool:
+    def holds(number: int, sample: Mapping) -> bool:
         reset = week_end(sample["seat"])
         if sample["resets"] is not None:
             reset = min(reset, sample["at"] + sample["resets"])
-        return reset > start and worked_for(sample) == organization
+        return reset > start and counts(number)
 
-    latest: dict[tuple[str, str], tuple[int, Mapping]] = {}
-    for number, sample in sorted(enumerate(quota), key=lambda pair: (pair[1]["at"], pair[0])):
+    def value(number: int, sample: Mapping) -> tuple[str | None, bool]:
+        account = accounts_of[number]
+        assert account is not None
+        return f"{account.organization}/{account.account_uuid or sample['seat']}", False
+
+    ordered = sorted(enumerate(quota), key=lambda pair: (pair[1]["at"], pair[0]))
+    latest: dict[tuple, tuple[int, Mapping]] = {}
+    for number, sample in ordered:
         if start - LONGEST_HOLD <= sample["at"] <= end:
-            latest[sample["who"], sample["kind"]] = (number, sample)
-    own = [pair for (who, _), pair in latest.items() if who == stretch["session"]]
-    others = [pair for (who, _), pair in latest.items() if who != stretch["session"]]
-    for feeds in (own, others):
-        holding = [pair for pair in feeds if holds(pair[1])]
-        if holding:
-            _, naming = max(holding, key=lambda pair: (pair[1]["at"], pair[0]))
-            break
-    else:
-        return None, True
-    accounts = {
-        sample["account"]
-        for sample in quota
-        if sample["who"] == organization
-        and sample["seat"] == naming["seat"]
-        and sample["account"] is not None
-    }
-    account = naming["account"] if naming["who"].startswith("org-") else None
-    if account is None and len(accounts) == 1:
-        account = next(iter(accounts))
-    return f"{organization}/{account or naming['seat']}", False
+            account = None if sample["who"].startswith("s-") else sample["account"]
+            latest[sample["who"], sample["kind"], account] = (number, sample)
+    session = stretch["session"]
+    own = [pair for (who, *_), pair in latest.items() if who == session and holds(*pair)]
+    if own:
+        return value(*max(own, key=lambda pair: (pair[1]["at"], pair[0])))
+    after = [
+        (number, sample)
+        for number, sample in ordered
+        if sample["who"] == session and sample["at"] > end
+    ]
+    if after:
+        number, sample = after[0]
+        week = week_end(sample["seat"])
+        if counts(number) and week - 7 * DAY * 1000 <= end < week:
+            return value(number, sample)
+    others = [pair for (who, *_), pair in latest.items() if who != session and holds(*pair)]
+    if len({accounts_of[number].key for number, _ in others}) == 1:  # type: ignore[union-attr]
+        return value(*max(others, key=lambda pair: (pair[1]["at"], pair[0])))
+    return None, True
 
 
 def group_of(value: Mapping) -> tuple[str | None, bool]:
@@ -327,6 +349,16 @@ class ReferenceTests(UsageStore):
                 launch_class=LAUNCH[stretch["agent"]],
                 advisor=stretch["advisor"],
             )
+        # Each sample's account, once the stretches say what each session worked for.
+        resolver = accounts.Resolver(self.conn, {sample["seat"] for sample in quota})
+        self.accounts_of = [
+            resolver.account(
+                sample["seat"],
+                worked_for(sample, stretches),
+                None if sample["who"].startswith("s-") else sample["account"],
+            )
+            for sample in quota
+        ]
 
     def value(self, stretch: Mapping, dimension: str) -> tuple[str | None, bool]:
         """A stretch's group in a dimension, as its `id` and whether it is unknown, from what
@@ -348,7 +380,7 @@ class ReferenceTests(UsageStore):
                 return "advisor", False
             return ("main" if stretch["agent"] == "" else "subagent"), False
         if dimension == "seat":
-            return seat_of(stretch, self.stretches, self.quota)
+            return seat_of(stretch, self.quota, self.accounts_of)
         found = {
             "account": stretch["organization"],
             "executor": stretch["session"],

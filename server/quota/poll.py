@@ -437,25 +437,16 @@ def _working(conn: sqlite3.Connection, organization: str, now: dt.datetime) -> b
     return row is not None
 
 
-#: The latest status line or mod reading of each session since a moment.
-_FRESH_FEEDS = (
-    "SELECT session_id, MAX(at) FROM quota_samples WHERE source IN (?, ?)"
-    " AND at >= ? GROUP BY session_id"
-)
-
-
 def _fed(conn: sqlite3.Connection, organization: str, now: dt.datetime) -> bool:
-    """Whether a status line or mod reading for a session of the organization is fresh.
+    """Whether a status line or mod reading for the organization is fresh.
 
-    Those readings name a session, so a session counts for the organization its own
-    usage rows say it was working for at its latest reading.
+    Those readings name a session, so a reading counts for the organization of its account,
+    as every read of an account takes it, or, with no account to name, the one the
+    session's usage rows say it worked for (`seats.organizations_read`).
     """
 
     since = samples.instant((now - FEED_FRESH).isoformat())
-    rows = conn.execute(_FRESH_FEEDS, (*FEED_SOURCES, since)).fetchall()
-    return any(
-        seats.organization_at(conn, str(session), str(at)) == organization for session, at in rows
-    )
+    return organization in seats.organizations_read(conn, since, FEED_SOURCES)
 
 
 def _record(conn: sqlite3.Connection, reading: samples.Reading, now: dt.datetime) -> None:

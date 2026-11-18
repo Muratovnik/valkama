@@ -15,7 +15,7 @@ to no seat's series. The seat's key changes when its week resets; what holds acr
 is the account, the organization and the account's UUID, which a reading of an
 organization passes as `account_uuid` when its source knows it and which makes the
 account's row. A reading without one gets its account from its seat when read
-(`seats.account_of_seat`).
+(`accounts.Resolver`).
 """
 
 from __future__ import annotations

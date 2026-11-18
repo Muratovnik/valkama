@@ -40,6 +40,9 @@ SEAT = samples.seat_for_week(WEEK_RESET)
 #: The week before it, which ended on 2030-03-01 09:00, and the seat its readings named.
 ENDED_RESET = "2030-03-01T09:00:00Z"
 ENDED_SEAT = samples.seat_for_week(ENDED_RESET)
+#: Another account's week, which resets that day in the evening.
+OTHER_RESET = "2030-03-08T19:00:00Z"
+OTHER_SEAT = samples.seat_for_week(OTHER_RESET)
 
 
 def at(text: str) -> dt.datetime:
@@ -180,7 +183,7 @@ class AccountTests(_Quota):
         self.statusline(ago(minutes=2), "s-a", week(31))
         # A session of C on a seat no reading with a UUID names stays on that seat.
         self.working("s-c", ORG_C, ago(days=1))
-        self.statusline(ago(minutes=3), "s-c", week(55))
+        self.statusline(ago(minutes=3), "s-c", week(55, OTHER_RESET), seat=OTHER_SEAT)
         # A reading with neither a UUID nor a seat names no account.
         self.statusline(ago(minutes=1), "s-c", five(70), seat=None)
         answer = self.quota()
@@ -198,7 +201,7 @@ class AccountTests(_Quota):
         self.assertEqual("statusline", weekly["latest"]["source"])
         provisional = self.account(answer, ORG_C)
         self.assertEqual(
-            (None, SEAT, None, "Lab"),
+            (None, OTHER_SEAT, None, "Lab"),
             (
                 provisional["account_uuid"],
                 provisional["seat"],

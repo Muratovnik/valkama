@@ -401,6 +401,17 @@ class OrganizationTests(_Quota):
         self.assertEqual([], self.evaluate(63))
         self.assertEqual([(ORG_B, "week", "", "2030-03-08T09:00:00.000Z", "75")], self.keys())
 
+    def test_a_reading_read_for_the_wrong_organization_warns_its_account_once(self) -> None:
+        # The session's usage rows say the other organization, while its seat is the one
+        # the first organization's poll names with an account: one window, one alert.
+        self.working("sess-2", ORG_B)
+        self.read()
+        self.poll(30, samples.Window("week", 80, WEEK_RESET))
+        self.assertEqual(1, len(self.evaluate(31)))
+        self.statusline(60, week=81, session="sess-2")
+        self.assertEqual([], self.evaluate(61))
+        self.assertEqual([(ORG_A, "week", "", "2030-03-08T09:00:00.000Z", "75")], self.keys())
+
     def test_a_session_whose_organization_stays_unknown_raises_nothing(self) -> None:
         self.working("sess-3", None)
         self.read()
