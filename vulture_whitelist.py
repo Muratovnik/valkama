@@ -18,6 +18,9 @@ _.do_OPTIONS  # unused method (server\http_surface.py)
 _.close_connection  # unused attribute (server\http_surface.py)
 # socketserver reads this class attribute in `server_bind` to decide SO_REUSEADDR.
 _.allow_reuse_address  # unused variable (server\http_surface.py)
+# ThreadingMixIn reads this in `process_request` and `server_close`: the stream
+# tests turn it off so that closing the server waits for every handler thread.
+_.daemon_threads  # unused attribute (tests\test_live_stream.py)
 _.row_factory  # unused attribute (server\projects\scopes.py)
 _.row_factory  # unused attribute (server\store.py)
 
