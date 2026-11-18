@@ -51,6 +51,7 @@ import sqlite3
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 
+from ..projects import project_registry
 from . import chain, model, read_model
 
 ITEM_SCOPE = "item"
@@ -264,6 +265,38 @@ def ranking(seconds: float, cost: float | None, values: Iterable[Value]) -> tupl
             for held in values
         ),
     )
+
+
+def project_names(held: Iterable[frozenset[str]]) -> dict[str, str]:
+    """The registry's name of each project these sets name; none when it cannot be read."""
+
+    named: set[str] = set().union(*held)
+    if not named:
+        return {}
+    listing = project_registry.read_registry()
+    if listing["status"] != "available":
+        return {}
+    return {
+        str(entry["project_id"]): str(entry["display_name"])
+        for entry in listing["projects"]
+        if str(entry["project_id"]) in named
+    }
+
+
+def project_group(group: Value, names: dict[str, str], sets: Iterable[frozenset[str]]) -> dict:
+    """A group's project as a project group of the Analytics read is written: its `id` and
+    `name`, null for none and for several, and for several each set of projects named."""
+
+    return {
+        **value(group, unknown=False),
+        "name": names.get(group) if isinstance(group, str) else None,
+        "combinations": [
+            [{"id": project, "name": names.get(project)} for project in projects]
+            for projects in sorted(sorted(found) for found in set(sets))
+        ]
+        if group is SEVERAL
+        else None,
+    }
 
 
 def role(agent_id: str, advisor: object) -> str:
@@ -579,6 +612,14 @@ def stored_micro(text: str) -> int:
 #: When usage was first counted to an item in this store, as `first`: work begun before
 #: it spent more than its rows say.
 FIRST_COUNTED = "SELECT MIN(started_at) AS first FROM usage_segments WHERE work_item_id IS NOT NULL"
+
+
+def counted_whole(begun: str, first: int | None) -> bool:
+    """Whether all of an item's work was counted: it began, started or else was created, no
+    earlier than usage was first counted to an item (`first`, in microseconds since the
+    epoch), or no usage has been counted to an item yet."""
+
+    return first is None or stored_micro(begun) >= first
 
 
 def at(moment: int, zone: dt.tzinfo) -> str:

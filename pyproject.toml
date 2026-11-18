@@ -352,6 +352,7 @@ name = "The Volumes reads sit below the service"
 type = "forbidden"
 source_modules = [
   "server.planning.baselines",
+  "server.planning.estimates",
   "server.planning.goal_volumes",
   "server.planning.volume_flow",
   "server.planning.volumes",

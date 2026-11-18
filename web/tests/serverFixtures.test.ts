@@ -400,4 +400,18 @@ describe('the server fixtures', () => {
     counted.volumes.counts.categories[0].goals = 0
     expect(() => validateVolumesAnswer(counted)).toThrow()
   })
+
+  it('carry the table of estimates and what open work has left', () => {
+    const { estimates, goals } = validateVolumesAnswer(read('volumes-space.json'))
+    expect([estimates.min_basis, estimates.basis]).toEqual([5, 1])
+    expect(estimates.rows.map((row) => [row.level, row.kind, row.space?.key])).toEqual([
+      ['project_kind', 'task', 'MAIN'],
+    ])
+    const [goal] = validateGoalVolumesAnswer(read('goal-volumes.json'))
+    expect([goal.remaining?.estimated, goal.remaining?.unestimated]).toEqual([0, 2])
+    expect(goals.every((row) => row.remaining !== undefined)).toBe(true)
+    const judged = read('goal-volumes.json') as { goals: { remaining: { basis: number } }[] }
+    judged.goals[0].remaining.basis = 3
+    expect(() => validateGoalVolumesAnswer(judged)).toThrow()
+  })
 })

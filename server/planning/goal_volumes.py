@@ -26,10 +26,16 @@ items alone; a row whose bounds hold others is `partial`, and shows no count at
 acceptance. A row names the space of a goal from another space than the one read, as
 `other_space`.
 
+A row says what its open tasks have left, triage and deferred ones too, as `remaining`:
+the sum of their estimates (`estimates`), judged by done work of the whole store, with
+how many of them have an estimate and how many have none. A row with no open task has
+none.
+
 Each part a read takes from the store is one statement, however many goals it reads:
 the usage rows of every item it keeps, grouped by item, by whether a row is priced
-and by its quality; their sessions; their commits; and the counts at acceptance of
-the rows it shows.
+and by its quality; their sessions; their commits; the counts at acceptance of
+the rows it shows; and, when it keeps an open task, the basis of the estimates and the
+projects of the open tasks.
 """
 
 from __future__ import annotations
@@ -39,7 +45,7 @@ import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from . import baselines, item_tree, model, read_model, states, usage
+from . import baselines, estimates, item_projects, item_tree, model, read_model, states, usage
 
 #: How many goals and stages one `goal-volumes` read takes.
 MOST_READ = 100
@@ -59,7 +65,7 @@ _SPENDING = (
 
 #: What a row says of each item in the bounds, and whether the read keeps it.
 _ITEMS = (
-    "SELECT i.work_item_id, i.number, i.title, i.kind, i.parent_id,"
+    "SELECT i.work_item_id, i.number, i.title, i.kind, i.parent_id, i.labels,"
     " COALESCE(i.started_at, i.created_at) AS begun, i.planning_space_id, i.acceptance,"
     " p.key AS space_key, p.name AS space_name,"
     " s.key, s.name, s.category, s.is_terminal,"
@@ -104,6 +110,7 @@ class _Row:
     sessions: set[str] = field(default_factory=set)
     commits: set[int] = field(default_factory=set)
     commits_unknown: set[int] = field(default_factory=set)
+    remaining: estimates.Remaining = field(default_factory=estimates.Remaining)
 
     def add(self, sessions: set[str], commits: set[tuple[int, bool]]) -> None:
         """An item's sessions and commits, each counted once however many items hold it."""
@@ -177,10 +184,12 @@ def rows(
     def cancelled(identity: str) -> bool:
         return str(items[identity]["category"]) == "cancelled"
 
+    own: dict[str, usage.Tally] = {}
     for row in spending:
         if row["work_item_id"] is None:
             continue
         identity = str(row["work_item_id"])
+        own.setdefault(identity, usage.Tally()).add(row)
         for summed in over(identity):
             summed.with_cancelled.add(row)
             if not cancelled(identity):
@@ -197,13 +206,35 @@ def rows(
             continue
         for summed in over(identity):
             summed.tasks[str(item["category"])] += 1
-        if started is None:
-            continue
-        if usage.stored_micro(str(item["begun"])) < started:
+        if not usage.counted_whole(str(item["begun"]), started):
             for summed in over(identity):
                 summed.with_cancelled.partly_measured += 1
                 if not cancelled(identity):
                     summed.spent.partly_measured += 1
+
+    open_tasks = [
+        identity
+        for identity in kept
+        if items[identity]["kind"] != model.CONTAINER_KIND
+        and str(items[identity]["category"]) not in model.TERMINAL_CATEGORIES
+    ]
+    if open_tasks:
+        basis, _kept = estimates.read(conn)
+        projects = item_projects.ids_of_items(conn, open_tasks)
+        for identity in open_tasks:
+            item = items[identity]
+            left = basis.left(
+                estimates.task(
+                    identity,
+                    str(item["kind"]),
+                    str(item["labels"]),
+                    projects.get(identity, frozenset()),
+                    (str(item["space_key"]), str(item["space_name"])),
+                    own.get(identity, usage.Tally()),
+                )
+            )
+            for summed in over(identity):
+                summed.remaining.add(left)
 
     under: dict[str, list[str]] = {}
     for identity in sorted(shown - set(roots), key=lambda found: int(items[found]["number"])):
@@ -239,6 +270,7 @@ def rows(
             "sessions": len(summed.sessions),
             "commits": len(summed.commits),
             "commits_unknown_repository": len(summed.commits_unknown),
+            "remaining": summed.remaining.answer(),
         }
         if children:
             found["children"] = [answer(child) for child in under.get(identity, [])]

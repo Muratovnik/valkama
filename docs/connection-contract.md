@@ -1725,7 +1725,8 @@ key into its account.
 The Volumes read counts the work of a scope by where it stands: how much waits in each
 category now, which card has stood there longest, and how much came to be completed or
 cancelled in a period, what waits for the owner, which commits stand on no card, what
-each goal took, what work stands outside goals, and how work flowed day by day. It answers
+each goal took and what its open work has left, what work stands outside goals, how work
+flowed day by day, and the done work its estimates are judged by. It answers
 `GET /api/planning/volumes` with `interface_version` `valkama-planning-api` and
 `volumes`; `GET /api/planning/goal-volumes` gives the rows of the goals and stages it is asked for,
 whole (see [A goal's row](#a-goals-row)). A later build only adds fields and sections to
@@ -1789,7 +1790,17 @@ of another space that the space's items name keeps only the space's own.
      "pace": {"open": 640,
               "recent": {"days": 7, "created": 70, "closed": 64, "trend": "growing"},
               "series": [{"day": "2030-01-03", "created": 3, "closed": 0, "total": 3,
-                          "closed_total": 0}]}}}}
+                          "closed_total": 0}]}},
+   "estimates": {
+     "min_basis": 5, "basis": 210,
+     "rows": [
+       {"level": "project_kind",
+        "project": {"id": "app", "unknown": false, "name": "App", "combinations": null},
+        "space": null, "kind": "task", "label": null, "tasks": 64,
+        "agent_seconds": {"median": 1260.0, "q1": 540.0, "q3": 2880.0, "mean": 2310.5},
+        "tokens_anew": {"median": 61000, "q1": 24000, "q3": 150000, "mean": 118000},
+        "estimated_api_cost_usd": {"median": 2.1, "q1": 0.85, "q3": 5.4, "mean": 4.75}},
+       {"level": "project_kind_label", "label": "ui", "…": "the same project and kind"}]}}}
 ```
 
 | Field | What it holds |
@@ -1804,6 +1815,7 @@ of another space that the space's items name keeps only the space's own.
 | `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
 | `outside` | the scope's tasks under no goal: `tasks`, how many, and the rows `by_project` and `by_label` (see below) |
 | `flow` | how work flowed through the scope: `days`, `totals` and `pace` (see [The flow](#the-flow)) |
+| `estimates` | the scope's done work that estimates are judged by: `min_basis`, `basis` and `rows` (see [Estimates](#estimates)) |
 
 A category counts the items of the scope that stand in a state of it. An accepted open
 goal or stage stands in no category and is in none of these counts. Work in an open
@@ -1875,6 +1887,10 @@ the goals and stages it names, without `children`, in the order named.
            "partly_measured": 0},
  "spent_with_cancelled": {"agent_seconds": 81000.0, "…": "the same figures"},
  "sessions": 61, "commits": 140, "commits_unknown_repository": 3,
+ "remaining": {"agent_seconds": 30100.0,
+               "tokens": {"input": 41000, "cached_read": 2100000, "cache_write_5m": 90000,
+                          "cache_write_1h": 0, "output": 120000, "reasoning": 0},
+               "estimated_api_cost_usd": 150.2, "basis": 31, "estimated": 40, "unestimated": 2},
  "children": [{"…": "the row of each stage directly under it"}]}
 ```
 
@@ -1894,6 +1910,7 @@ the goals and stages it names, without `children`, in the order named.
 | `sessions` | the sessions that spent on any of its items or made a confirmed write to one, each once |
 | `commits` | the commits of a known repository attached to any of its items, each once |
 | `commits_unknown_repository` | the records of commits of no known repository attached to its items: records, not commits |
+| `remaining` | what its open tasks have left by their estimates: `agent_seconds`, `tokens` by kind and `estimated_api_cost_usd`, with `basis`, `estimated` and `unestimated` (see [Estimates](#estimates)); `null` when no open task stands under it |
 
 The items of a goal are the items under it now, at any depth, with the goal itself.
 An item moved out of it, or filed under another goal, leaves with what it spent; a move
@@ -1979,6 +1996,57 @@ how many stand open now; `recent`, the last 7 days up to today, whatever the per
 `series`, each day with a change since the first. With `utc_offset` `0`, the pace of a
 scope that holds one goal's tasks and nothing else is what the chain of that goal gives
 in scope `tree`.
+
+#### Estimates
+
+An estimate says what an open task has left, judged by done tasks like it. The done
+tasks it is judged by, the basis, are the tasks of the store (`task`, `bug`,
+`improvement`) that stand completed, spent agent time, and were counted whole: they
+started, or were created when they never started, no earlier than `measured_from`. A
+cancelled task's spending says nothing of what done work costs, and a task done with
+nothing spent was carried over or closed with no work.
+
+A task's group is its project and its kind; a task naming several projects or none
+adds its space, so that work of no project in two spaces is not mixed. An open task
+that has spent `s` of agent time is judged on the first rung of this ladder that holds
+at least `min_basis`, five, done tasks that spent more than `s`:
+
+1. its group, the tasks sharing a label with it;
+2. its group;
+3. its project, or its space's tasks of several projects or of none, of any kind.
+
+Its time left is the mean of `v - s` over those tasks, `v` being what each spent,
+without the tenth of them, rounded down, that had the most left: a few very long
+tasks would otherwise pull the mean up. Its tokens of each kind and its cost left are
+the mean of `v - s` over the same tasks, and never below zero. A task with no such
+rung has no estimate: it has spent more than the work it could be judged by, and
+nothing left would be untrue. A task's cost is what its priced rows cost.
+
+A goal's or stage's `remaining` adds up the estimates of all its open tasks that the
+scope holds, in triage and deferred too: the goal does not close while they are open,
+and `tasks.by_category` says how many of them are put off. `estimated` and
+`unestimated` count its open tasks with an estimate and without one, and `basis` the
+different done tasks its estimates were judged by. With no open task under it
+`remaining` is `null`; when none of them has an estimate it holds zeros with
+`estimated` `0`. A reader shows `basis` beside the estimate, and says the estimate is
+incomplete while `unestimated` is above zero.
+
+The groups are read across the store whatever the scope: a project is one project in
+every space. The table describes the basis the scope holds. Each row of
+`level` `project_kind` holds the done tasks of one project and kind, the most tasks
+first, and is followed by a row of `level` `project_kind_label` for each label one of
+them carries, the most tasks first; a task with no label stands only in the row of its
+project and kind. `project` is written as in `outside`, and `space` is `{key, name}` of
+the space in a row of several projects or of none, `null` otherwise. `tasks` is how
+many done tasks a row holds; `agent_seconds`, `tokens_anew` (the input, cache write and
+output tokens) and `estimated_api_cost_usd` each give their `median`, the quartiles
+`q1` and `q3` by linear interpolation between the values in order, and `mean`, tokens
+in whole units. The mean, not the median, is what adds up over a goal's tasks. `basis`
+is how many done tasks the scope holds.
+
+An estimate is a rough figure. About half of the goals checked halfway through their
+work came within a factor of two, so a reader rounds it, to an hour and a million
+tokens, rather than show it to the second.
 
 #### Filtering by kind and label
 

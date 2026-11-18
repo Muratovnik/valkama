@@ -66,7 +66,22 @@
       },
       "sessions": 1,
       "commits": 0,
-      "commits_unknown_repository": 0
+      "commits_unknown_repository": 0,
+      "remaining": {
+        "agent_seconds": 0.0,
+        "tokens": {
+          "input": 0,
+          "cached_read": 0,
+          "cache_write_5m": 0,
+          "cache_write_1h": 0,
+          "output": 0,
+          "reasoning": 0
+        },
+        "estimated_api_cost_usd": 0.0,
+        "basis": 0,
+        "estimated": 0,
+        "unestimated": 2
+      }
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000042",
@@ -129,7 +144,22 @@
       },
       "sessions": 1,
       "commits": 0,
-      "commits_unknown_repository": 0
+      "commits_unknown_repository": 0,
+      "remaining": {
+        "agent_seconds": 0.0,
+        "tokens": {
+          "input": 0,
+          "cached_read": 0,
+          "cache_write_5m": 0,
+          "cache_write_1h": 0,
+          "output": 0,
+          "reasoning": 0
+        },
+        "estimated_api_cost_usd": 0.0,
+        "basis": 0,
+        "estimated": 0,
+        "unestimated": 2
+      }
     }
   ]
 }
