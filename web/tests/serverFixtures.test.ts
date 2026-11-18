@@ -105,6 +105,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'requests.json': validateInputRequestList,
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
+  'volumes-filtered.json': validateVolumesAnswer,
   'volumes-project.json': validateVolumesAnswer,
   'volumes-space.json': validateVolumesAnswer,
 }
@@ -385,5 +386,18 @@ describe('the server fixtures', () => {
     const space = validateVolumesAnswer(read('volumes-space.json'))
     expect(space.counts.waiting_owner.oldest?.reference).toMatch(/^MAIN-\d+$/u)
     expect(space.outside.by_project.map((row) => row.project.id)).toContain(null)
+  })
+
+  it('carry a filter that keeps only tasks, and count no goals or stages under it', () => {
+    const filtered = validateVolumesAnswer(read('volumes-filtered.json'))
+    expect(filtered.filter).toEqual({ kinds: ['task', 'bug'], labels: ['ui'] })
+    expect(filtered.counts.categories.map((row) => row.tasks).reduce((all, n) => all + n)).toBe(1)
+    expect(filtered.outside.by_label.map((row) => row.label)).toEqual(['ui'])
+    expect(validateVolumesAnswer(read('volumes-space.json')).filter).toBeNull()
+    const counted = read('volumes-filtered.json') as {
+      volumes: { counts: { categories: { goals: number | null }[] } }
+    }
+    counted.volumes.counts.categories[0].goals = 0
+    expect(() => validateVolumesAnswer(counted)).toThrow()
   })
 })

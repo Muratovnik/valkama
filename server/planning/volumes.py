@@ -21,6 +21,12 @@ project and by label, counted by category as the counts are. The flow closes the
 read: the scope's tasks created and closed on each day of the period, the owner's
 decisions and the commits, with the pace of its tasks (`volume_flow`).
 
+A read may also name kinds of task and labels (`WorkFilter`), by the rules of the
+board's filter. It then keeps only the scope's tasks that match, by one condition every
+section takes (`Request.matching`): a goal or stage never matches, so the counts give
+no number of goals and stages, and the commits on no card, which have no task to
+match, are counted as without a filter and left out of the flow.
+
 Only the store this service writes is read. Usage is written there alone, and an
 attached store is read as an earlier build left it, so a space of one is refused
 rather than counted short.
@@ -53,6 +59,8 @@ GLOBAL_NAMES_NOTHING = "a global scope names no space and no project"
 ATTACHED = "volumes read the store this service writes; {key} lives in an attached store"
 NO_SPACE = "no planning space {key}"
 NO_PROJECT = "no project {project}"
+KIND_FILTERS_TASKS = "kind filters tasks: task, bug or improvement"
+NO_LABEL = "no work item carries label {label}"
 
 #: The categories whose work is counted as it stands now; the others when it came there.
 OPEN_CATEGORIES = tuple(
@@ -103,11 +111,47 @@ class Period(NamedTuple):
         }
 
 
+class WorkFilter(NamedTuple):
+    """The tasks a filtered read keeps, by the rules of the board's filter: of any of `kinds`,
+    or of any kind when it names none, and carrying every one of `labels`."""
+
+    kinds: tuple[str, ...]
+    labels: tuple[str, ...]
+
+    def answer(self) -> dict:
+        return {"kinds": list(self.kinds), "labels": list(self.labels)}
+
+    def condition(self) -> tuple[tuple[str, ...], tuple[object, ...]]:
+        """The one rule of a task the filter keeps, as conditions on `work_items i` joined by
+        `AND`, with their parameters in order. A goal or stage never matches: it has no kind
+        of a task, and its labels are not labels of work."""
+
+        kinds = json.dumps(list(self.kinds) or sorted(model.TASK_KINDS))
+        carries = "EXISTS (SELECT 1 FROM json_each(i.labels) WHERE value = ?)"
+        return (
+            ("i.kind IN (SELECT value FROM json_each(?))", *(carries for _ in self.labels)),
+            (kinds, *self.labels),
+        )
+
+
 class Request(NamedTuple):
-    """What one read is asked: what it counts and over which period."""
+    """What one read is asked: what it counts, over which period, and which of its tasks."""
 
     scope: Scope
     period: Period
+    work_filter: WorkFilter | None = None
+
+    def matching(self) -> Scope:
+        """The items the sections count: the scope's, or under a filter the scope's tasks
+        it keeps (`WorkFilter.condition`)."""
+
+        if self.work_filter is None:
+            return self.scope
+        clauses, parameters = self.work_filter.condition()
+        return self.scope._replace(
+            clauses=(*self.scope.clauses, *clauses),
+            parameters=(*self.scope.parameters, *parameters),
+        )
 
 
 def scope(
@@ -156,6 +200,31 @@ def period(start: str, end: str, utc_offset: int) -> Period:
     except usage.UsageQueryError as error:
         raise model.PlanningError(str(error)) from error
     return Period(begins, ends, utc_offset)
+
+
+def work_filter(
+    conn: sqlite3.Connection, kinds: Iterable[str], labels: Iterable[str]
+) -> WorkFilter | None:
+    """The filter a caller names, None when it names no kind and no label, or a refusal.
+
+    A kind is one of a task's; a label is one some item of the store carries. A label
+    the store holds but the scope does not gives an empty read, not a refusal.
+    """
+
+    kept_kinds = tuple(dict.fromkeys(kinds))
+    kept_labels = tuple(dict.fromkeys(labels))
+    if not kept_kinds and not kept_labels:
+        return None
+    if any(kind not in model.TASK_KINDS for kind in kept_kinds):
+        raise model.PlanningError(KIND_FILTERS_TASKS)
+    for label in kept_labels:
+        carried = conn.execute(
+            "SELECT 1 FROM work_items w, json_each(w.labels) l WHERE l.value = ? LIMIT 1",
+            (label,),
+        ).fetchone()
+        if carried is None:
+            raise model.PlanningError(NO_LABEL.format(label=label))
+    return WorkFilter(kept_kinds, kept_labels)
 
 
 def _store_path(conn: sqlite3.Connection) -> str:
@@ -255,15 +324,19 @@ def _counted(row: sqlite3.Row, period: Period | None) -> bool:
 
 
 def _categories(conn: sqlite3.Connection, request: Request) -> list[dict]:
-    """The eight categories in the model's order, the longest-standing card of each open one."""
+    """The eight categories in the model's order, the longest-standing card of each open one.
 
-    counted = category_counts(conn, request.scope, request.period)
+    Under a filter only tasks match, and `goals` and `stages` are null rather than none.
+    """
+
+    counted = category_counts(conn, request.matching(), request.period)
+    filtered = request.work_filter is not None
     return [
         {
             "category": category,
             "tasks": counted[category]["tasks"],
-            "goals": counted[category]["goals"],
-            "stages": counted[category]["stages"],
+            "goals": None if filtered else counted[category]["goals"],
+            "stages": None if filtered else counted[category]["stages"],
             "oldest": counted[category]["oldest"] if category in OPEN_CATEGORIES else None,
         }
         for category in model.PUBLIC_CATEGORIES
@@ -290,23 +363,33 @@ def _waiting_owner(conn: sqlite3.Connection, scope: Scope) -> dict:
     }
 
 
-def _unattached_commits(conn: sqlite3.Connection, scope: Scope) -> int:
+def _unattached_commits(conn: sqlite3.Connection, scope: Scope) -> int | None:
     """How many commits stand on no card of the project read, of the space's projects or of
-    the whole store: the total of the list the number opens."""
+    the whole store: the total of the list the number opens.
 
-    if scope.project is not None:
-        listed = commits.unattached(conn, project=scope.project, limit=0)
-    elif scope.space is not None:
-        listed = commits.unattached(conn, space=str(scope.space["key"]), limit=0)
-    else:
-        listed = commits.unattached(conn, limit=0)
+    None when that list cannot be read for the scope: a project only items name, which
+    the registry does not list, or a space or project while the registry cannot be read.
+    The number has no list to open then, and the rest of the read still answers.
+    """
+
+    try:
+        if scope.project is not None:
+            listed = commits.unattached(conn, project=scope.project, limit=0)
+        elif scope.space is not None:
+            listed = commits.unattached(conn, space=str(scope.space["key"]), limit=0)
+        else:
+            listed = commits.unattached(conn, limit=0)
+    except commits.UnknownProjectsError:
+        return None
     return int(listed["total"])
 
 
 def _counts(conn: sqlite3.Connection, request: Request) -> dict:
+    # A commit on no card has no task whose kind and labels a filter could test, and its
+    # number opens the list it is attached from: no filter narrows it.
     return {
         "categories": _categories(conn, request),
-        "waiting_owner": _waiting_owner(conn, request.scope),
+        "waiting_owner": _waiting_owner(conn, request.matching()),
         "unattached_commits": _unattached_commits(conn, request.scope),
     }
 
@@ -352,14 +435,17 @@ def _outside(conn: sqlite3.Connection, request: Request) -> dict:
     in one row: its one project, several or none, written as a project group of the
     Analytics read, so the rows add up to `tasks`. By label, a task stands in the row
     of each of its labels and one with none in the row of no label, so those rows add
-    up to no total. Each row says all eight categories; the most tasks first.
+    up to no total. Each row says all eight categories; the most tasks first. Under a
+    filter it counts the tasks the filter keeps, and with labels named the rows by label
+    are only theirs: a row of another label would show only where it meets the filter.
     """
 
+    shown = () if request.work_filter is None else request.work_filter.labels
     rows = [
         row
         for row in _standing(
             conn,
-            request.scope,
+            request.matching(),
             "i.kind != ?",
             "i.parent_id IS NULL",
             parameters=(model.CONTAINER_KIND,),
@@ -377,7 +463,8 @@ def _outside(conn: sqlite3.Connection, request: Request) -> dict:
         sets.setdefault(group, set()).add(projects)
         labels: list[str | None] = [*model.labels(json.loads(str(row["labels"])))]
         for label in labels or [None]:
-            by_label.setdefault(label, []).append(row)
+            if not shown or label in shown:
+                by_label.setdefault(label, []).append(row)
     names = _project_names(held.values())
     projects_first = sorted(
         by_project.items(), key=lambda entry: usage.ranking(len(entry[1]), None, (entry[0],))
@@ -445,20 +532,25 @@ def _flow(conn: sqlite3.Connection, request: Request) -> dict:
     """The scope's tasks created and closed by day, the owner's decisions, its commits, its pace.
 
     Its commits on no card are those of the scope's projects: the project read, or the
-    projects the registry binds to the space read, or every known repository's.
+    projects the registry binds to the space read, or every known repository's. Under a
+    filter it reads the tasks the filter keeps, their decisions and the commits attached
+    to them; a commit on no card has no task to match, and none is counted.
     """
 
     scope, period = request.scope, request.period
     projects: list[str] | None = None
-    if scope.project is not None:
+    if request.work_filter is not None:
+        projects = []
+    elif scope.project is not None:
         projects = [scope.project]
     elif scope.space is not None:
         projects = item_projects.space_project_ids(conn, str(scope.space["key"]))
+    kept = request.matching()
     return volume_flow.flow(
         conn,
-        _standing(conn, scope, "i.kind != ?", parameters=(model.CONTAINER_KIND,)),
-        where=scope.where(),
-        parameters=scope.parameters,
+        _standing(conn, kept, "i.kind != ?", parameters=(model.CONTAINER_KIND,)),
+        where=kept.where(),
+        parameters=kept.parameters,
         projects=projects,
         begins=period.begins,
         ends=period.ends,
@@ -494,6 +586,7 @@ def read(conn: sqlite3.Connection, request: Request) -> dict:
     return {
         "scope": request.scope.answer(),
         "period": request.period.answer(),
+        "filter": None if request.work_filter is None else request.work_filter.answer(),
         "measured_from": measured_from(conn),
         **{name: section(conn, request) for name, section in SECTIONS},
     }

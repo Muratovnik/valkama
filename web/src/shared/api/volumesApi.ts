@@ -37,6 +37,13 @@ const MOMENT = /^\d{4}-\d{2}-\d{2}T[^\s]{1,80}$/u
 const count = () => positiveInt(true)
 const reference = () => boundedText(WORK_ITEM_REFERENCE, 20)
 const title = () => boundedText(TITLE, 200)
+const label = () => boundedText(/^[^\u{0}]{1,64}$/u, 64)
+
+/** The tasks a filtered read keeps: of any of `kinds` (any kind with none named), with every label. */
+const filterSchema = strictObject({
+  kinds: z.array(enumField(['task', 'bug', 'improvement'] as const)).max(3),
+  labels: z.array(label()),
+})
 
 const scopeSchema = z.union([
   strictObject({ kind: z.literal('global'), space_ref: z.null(), project_ref: z.null() }),
@@ -57,13 +64,14 @@ const oldestSchema = strictObject({
 /**
  * One category: its tasks and its goals and stages. An open category counts what stands in
  * it now and names its oldest card; completed and cancelled count what came to stand there
- * inside the period, and name none.
+ * inside the period, and name none. Under a filter only tasks match, and the goals and stages
+ * are null.
  */
 const categorySchema = strictObject({
   category: enumField(STATE_CATEGORIES),
   tasks: count(),
-  goals: count(),
-  stages: count(),
+  goals: count().nullable(),
+  stages: count().nullable(),
   oldest: oldestSchema.nullable(),
 })
 
@@ -110,12 +118,7 @@ const outsideProjectSchema = strictObject({
 const outsideSchema = strictObject({
   tasks: count(),
   by_project: z.array(strictObject({ project: outsideProjectSchema, categories: rowCategories() })),
-  by_label: z.array(
-    strictObject({
-      label: boundedText(/^[^\u{0}]{1,64}$/u, 64).nullable(),
-      categories: rowCategories(),
-    }),
-  ),
+  by_label: z.array(strictObject({ label: label().nullable(), categories: rowCategories() })),
 }).refine(
   (outside) =>
     outside.by_project.reduce(
@@ -251,20 +254,34 @@ const volumesSchema = strictObject({
     to: boundedText(MOMENT, 96),
     utc_offset: z.number().int().min(-840).max(840),
   }),
+  /** The kinds and labels the read keeps its tasks to, or null when it keeps all its work. */
+  filter: filterSchema.nullable(),
   /** When usage was first counted to an item in this store; null before any was. */
   measured_from: boundedText(ISO, 96).nullable(),
   counts: strictObject({
     /** The eight categories, always all, in the model's order. */
     categories: z.array(categorySchema).length(STATE_CATEGORIES.length),
     waiting_owner: waitingOwnerSchema,
-    /** The commits on no card of the scope's projects, or of the whole store: their list's total. */
-    unattached_commits: count(),
+    /**
+     * The commits on no card of the scope's projects, or of the whole store: their list's total.
+     * Null when that list cannot be read for the scope, a project only items name or a space
+     * while the registry cannot be read: there is no list for the number to open.
+     */
+    unattached_commits: count().nullable(),
   }),
   /** The open goals and those that came to a close in the period. */
   goals: z.array(goalTreeSchema),
   outside: outsideSchema,
   flow: flowSchema,
-})
+}).refine(
+  (read) =>
+    read.counts.categories.every(
+      (row) =>
+        (row.goals === null) === (read.filter !== null) &&
+        (row.stages === null) === (read.filter !== null),
+    ),
+  { message: 'expected goals and stages counted exactly when no filter keeps only tasks' },
+)
 
 const interfaceVersion = z.literal('valkama-planning-api', {
   message: 'expected valkama-planning-api',

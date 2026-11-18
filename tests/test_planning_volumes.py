@@ -20,7 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import store
-from server.planning import api, service
+from server.planning import api, commits, model, service
 from server.projects import scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -52,6 +52,14 @@ SHAPES = ("tasks", "goals", "stages")
 
 def _moment(text: str) -> datetime:
     return datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+
+def _repeated(parameters: dict[str, str | list[str]]) -> dict[str, list[str]]:
+    """The query as the HTTP surface hands it on: each name with all its values."""
+
+    return {
+        name: value if isinstance(value, list) else [value] for name, value in parameters.items()
+    }
 
 
 class VolumesCase(unittest.TestCase):
@@ -124,6 +132,24 @@ class VolumesCase(unittest.TestCase):
             )
         return identity
 
+    def question(
+        self,
+        name: str,
+        created: str,
+        *,
+        status: str = "pending",
+        addressee: str | None = None,
+        expires_at: str | None = None,
+    ) -> str:
+        identity = f"request-{created}"
+        self.conn.execute(
+            "INSERT INTO work_item_requests(request_id, work_item_id, kind, prompt, fields_json,"
+            " status, author, created_at, addressee, expires_at)"
+            " VALUES (?, ?, 'question', 'Which way?', '[]', ?, 'asking-agent', ?, ?, ?)",
+            (identity, *self.ids(name), status, created, addressee, expires_at),
+        )
+        return identity
+
     def ids(self, *names: str) -> set[str]:
         found = set()
         for name in names:
@@ -133,8 +159,12 @@ class VolumesCase(unittest.TestCase):
 
     # -- reading ---------------------------------------------------------------
 
-    def volumes(self, space: str | None = None, project: str | None = None, **more: str) -> dict:
-        parameters = {**PERIOD, **more}
+    def volumes(
+        self, space: str | None = None, project: str | None = None, **more: str | list[str]
+    ) -> dict:
+        """The read of a space, or of every space; a parameter given a list is repeated."""
+
+        parameters: dict[str, str | list[str]] = {**PERIOD, **more}
         if space is None:
             parameters["scope_kind"] = "global"
         else:
@@ -142,12 +172,19 @@ class VolumesCase(unittest.TestCase):
             parameters["space_key"] = space
         if project is not None:
             parameters["project_id"] = project
-        answer = api.handle_get(
-            self.conn, "/api/planning/volumes", {key: [value] for key, value in parameters.items()}
-        )
+        answer = api.handle_get(self.conn, "/api/planning/volumes", _repeated(parameters))
         assert answer is not None
         self.assertEqual(200, answer[0])
         return answer[1]["volumes"]
+
+    def refused(self, parameters: dict[str, str | list[str]]) -> str:
+        """The words of the read's refusal, which is a request the caller can mend."""
+
+        with self.assertRaises(Exception) as caught:
+            api.handle_get(self.conn, "/api/planning/volumes", _repeated(parameters))
+        status, body = api.error_response(caught.exception)
+        self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+        return str(body["error"]["message"])
 
     @staticmethod
     def categories(volumes: dict) -> dict[str, dict]:
@@ -571,24 +608,6 @@ class WaitingTests(VolumesCase):
         self.question("MAIN:b", "2026-11-02T11:00:00.000Z", expires_at="2026-11-03T00:00:00Z")
         self.conn.commit()
 
-    def question(
-        self,
-        name: str,
-        created: str,
-        *,
-        status: str = "pending",
-        addressee: str | None = None,
-        expires_at: str | None = None,
-    ) -> str:
-        identity = f"request-{created}"
-        self.conn.execute(
-            "INSERT INTO work_item_requests(request_id, work_item_id, kind, prompt, fields_json,"
-            " status, author, created_at, addressee, expires_at)"
-            " VALUES (?, ?, 'question', 'Which way?', '[]', ?, 'asking-agent', ?, ?, ?)",
-            (identity, *self.ids(name), status, created, addressee, expires_at),
-        )
-        return identity
-
     def waiting_directly(self, items: set[str]) -> list[str]:
         """The questions to the owner still waiting on these items, counted from the rows."""
 
@@ -700,6 +719,146 @@ class UnattachedCommitTests(VolumesCase):
         ).fetchone()[0]
         self.assertEqual(directly, self.volumes()["counts"]["unattached_commits"])
 
+    def test_a_scope_whose_list_cannot_be_read_has_no_number_and_still_answers(self) -> None:
+        # A project only an item names: the registry lists no `zed`, so its list refuses it.
+        self.place("MAIN", "z", projects=("zed",))
+        self.conn.commit()
+        with self.assertRaises(commits.UnknownProjectsError):
+            self.listed(project="zed")
+        read = self.volumes("MAIN", "zed")
+        self.assertIsNone(read["counts"]["unattached_commits"])
+        self.assertEqual(1, self.categories(read)["triage"]["tasks"])
+        self.assertEqual(1, read["outside"]["tasks"])
+        self.assertEqual(7, len(read["flow"]["days"]))
+
+        # A space while the registry cannot be read: its list refuses, and the whole store's
+        # still reads, needing the registry only for names.
+        (self.root / "local" / "Valkama" / "projects.json").write_bytes(b"{")
+        with self.assertRaises(commits.UnknownProjectsError):
+            self.listed(space="MAIN")
+        read = self.volumes("MAIN")
+        self.assertIsNone(read["counts"]["unattached_commits"])
+        self.assertEqual(2, self.categories(read)["triage"]["tasks"])
+        self.assertEqual(2, read["outside"]["tasks"])
+        # The commit attached to a still flows; no project binds to MAIN, so none on no card.
+        self.assertEqual(1, read["flow"]["totals"]["commits"])
+        self.assertEqual(3, self.volumes()["counts"]["unattached_commits"])
+
+        # Any other refusal of the list is the read's refusal still.
+        other = model.PlanningError("the list refused something else")
+        with mock.patch.object(commits, "unattached", side_effect=other):
+            with self.assertRaises(model.PlanningError) as caught:
+                self.volumes()
+        self.assertIs(other, caught.exception)
+
+
+class FilterTests(VolumesCase):
+    """MAIN's work under no goal, of each kind and with labels, beside a goal labelled too."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        for name, kind, labels in (
+            ("t", "task", ("ui", "api")),
+            ("b", "bug", ("ui",)),
+            ("c", "bug", ()),
+            ("i", "improvement", ("ui",)),
+        ):
+            self.place("MAIN", name, kind=kind)
+            self.label(f"MAIN:{name}", *labels)
+        # A goal never matches a filter, whatever labels it carries.
+        self.place("MAIN", "G", kind="goal")
+        self.label("MAIN:G", "ui")
+        self.asked = self.question("MAIN:b", "2026-11-05T09:00:00.000Z")
+        self.question("MAIN:G", "2026-11-04T09:00:00.000Z")
+        self.conn.execute(
+            "INSERT INTO commits(project_id, hash, committed_at, session_id, reported_at)"
+            " VALUES ('app', ?, '2026-11-12T10:00:00Z', 'sess-a', '2026-11-12T10:00:01Z')",
+            ("a" * 40,),
+        )
+        # A label the store holds only on another space's item, which MAIN does not read.
+        self.place("ALPHA", "o")
+        self.label("ALPHA:o", "docs")
+        self.conn.commit()
+
+    def label(self, name: str, *labels: str) -> None:
+        self.conn.execute(
+            "UPDATE work_items SET labels = ? WHERE work_item_id = ?",
+            (json.dumps(labels), *self.ids(name)),
+        )
+
+    def test_a_filter_counts_the_tasks_it_keeps(self) -> None:
+        unfiltered = self.volumes("MAIN")
+        self.assertIsNone(unfiltered["filter"])
+        read = self.volumes("MAIN", kind=["bug", "task"], label="ui")
+        self.assertEqual({"kinds": ["bug", "task"], "labels": ["ui"]}, read["filter"])
+        found = self.categories(read)
+        # The bug and the task with `ui`: not the bug without it, the improvement or the goal.
+        kept = self.ids("MAIN:t", "MAIN:b")
+        self.assertEqual(
+            {name: counts["tasks"] for name, counts in self.counted(kept).items()},
+            {name: row["tasks"] for name, row in found.items()},
+        )
+        self.assertEqual(2, found["triage"]["tasks"])
+        for row in found.values():
+            self.assertEqual((None, None), (row["goals"], row["stages"]), row["category"])
+        self.assertEqual(self.ids("MAIN:t"), {found["triage"]["oldest"]["work_item_id"]})
+        # The goal's question is not on a task the filter keeps.
+        waiting = read["counts"]["waiting_owner"]
+        self.assertEqual((1, self.asked), (waiting["count"], waiting["oldest"]["request_id"]))
+        self.assertEqual(2, unfiltered["counts"]["waiting_owner"]["count"])
+        # A commit on no card has no task to match: the number is the one without a filter.
+        self.assertEqual(1, read["counts"]["unattached_commits"])
+        self.assertEqual(
+            unfiltered["counts"]["unattached_commits"], read["counts"]["unattached_commits"]
+        )
+        # Outside goals the same two, and the rows by label are the filter's labels alone.
+        outside = read["outside"]
+        self.assertEqual(2, outside["tasks"])
+        self.assertEqual(
+            [("ui", 2)],
+            [(row["label"], sum(row["categories"].values())) for row in outside["by_label"]],
+        )
+        self.assertEqual(2, sum(sum(row["categories"].values()) for row in outside["by_project"]))
+
+        # Kinds alone keep every label's row, and the row of none.
+        bugs = self.volumes("MAIN", kind="bug")
+        self.assertEqual({"kinds": ["bug"], "labels": []}, bugs["filter"])
+        self.assertEqual(2, self.categories(bugs)["triage"]["tasks"])
+        self.assertEqual(
+            [("ui", 1), (None, 1)],
+            [
+                (row["label"], sum(row["categories"].values()))
+                for row in bugs["outside"]["by_label"]
+            ],
+        )
+
+        # A label the store holds outside the scope reads as nothing, and is no refusal.
+        empty = self.volumes("MAIN", label="docs")
+        self.assertEqual({"kinds": [], "labels": ["docs"]}, empty["filter"])
+        self.assertEqual(0, sum(row["tasks"] for row in empty["counts"]["categories"]))
+        self.assertEqual({"count": 0, "oldest": None}, empty["counts"]["waiting_owner"])
+        self.assertEqual(
+            (0, [], []),
+            tuple(empty["outside"][part] for part in ("tasks", "by_project", "by_label")),
+        )
+
+    def test_a_filter_refuses_what_is_no_kind_of_task_and_no_label_of_the_store(self) -> None:
+        main: dict[str, str | list[str]] = {
+            "scope_kind": "space",
+            "data_scope_id": self.scope_id,
+            "space_key": "MAIN",
+            **PERIOD,
+        }
+        for kind in ("goal", "stage", "epic", "container"):
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    "kind filters tasks: task, bug or improvement",
+                    self.refused({**main, "kind": ["bug", kind]}),
+                )
+        self.assertEqual(
+            "no work item carries label nowhere", self.refused({**main, "label": ["ui", "nowhere"]})
+        )
+
 
 class FrameTests(VolumesCase):
     def test_the_answer_names_its_scope_period_and_first_measured_moment(self) -> None:
@@ -740,18 +899,7 @@ class FrameTests(VolumesCase):
 
 
 class RefusalTests(VolumesCase):
-    def refused(self, parameters: dict[str, str]) -> str:
-        with self.assertRaises(Exception) as caught:
-            api.handle_get(
-                self.conn,
-                "/api/planning/volumes",
-                {key: [value] for key, value in parameters.items()},
-            )
-        status, body = api.error_response(caught.exception)
-        self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
-        return str(body["error"]["message"])
-
-    def space(self, **more: str) -> dict[str, str]:
+    def space(self, **more: str) -> dict[str, str | list[str]]:
         return {
             "scope_kind": "space",
             "data_scope_id": self.scope_id,

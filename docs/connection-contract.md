@@ -1738,6 +1738,8 @@ these answers. No MCP tool reads them: the numbers would cost an agent context.
 | `project_id` | with `space`, optional: a project, which narrows the space to the items that name it |
 | `from`, `to` | required: a date or a time with its offset, as in [What agent work spent in a period](#what-agent-work-spent-in-a-period). The period holds at most 2,400 days |
 | `utc_offset` | required: the caller's offset from UTC in minutes, from `-840` to `840`; a date means the start of that day at it |
+| `kind` | optional, repeatable: `task`, `bug` or `improvement`; the read keeps the tasks of any kind named (see [Filtering by kind and label](#filtering-by-kind-and-label)) |
+| `label` | optional, repeatable: a label; the read keeps the tasks carrying every label named |
 
 A space's scope holds the items the space's board holds, so a number opens the board on
 the same work: the space's items, and the items of other spaces that name one of the
@@ -1756,6 +1758,7 @@ of another space that the space's items name keeps only the space's own.
              "project_ref": null},
    "period": {"from": "2030-03-04T00:00:00+03:00", "to": "2030-03-11T00:00:00+03:00",
               "utc_offset": 180},
+   "filter": null,
    "measured_from": "2030-02-17T16:03:29.000Z",
    "counts": {
      "categories": [
@@ -1793,10 +1796,11 @@ of another space that the space's items name keeps only the space's own.
 | --- | --- |
 | `scope` | the scope read: `kind`, `space_ref` (`{data_scope_id, space_key}`, or `null` for `global`) and `project_ref` (`{project_id}`, or `null`) |
 | `period` | the period asked for, with `from` and `to` at the caller's offset |
+| `filter` | the filter asked for, `{"kinds": [...], "labels": [...]}` with each in the order named and once, or `null` when the read names no `kind` and no `label` |
 | `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
-| `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest` |
+| `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest`; under a filter `goals` and `stages` are `null` |
 | `counts.waiting_owner` | the questions to the owner still open on the scope's items: `count`, and `oldest`, the one asked first, with `request_id`, the `reference` of its item and its `created_at` as `since`, or `null` when none waits |
-| `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store |
+| `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store; `null` when that list refuses the scope, a project only items name or a space or project read while the projects registry cannot be read, and the rest of the answer stands |
 | `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
 | `outside` | the scope's tasks under no goal: `tasks`, how many, and the rows `by_project` and `by_label` (see below) |
 | `flow` | how work flowed through the scope: `days`, `totals` and `pace` (see [The flow](#the-flow)) |
@@ -1842,7 +1846,8 @@ attached store is refused rather than counted short.
 | `volumes read the store this service writes; <KEY> lives in an attached store` | the space is in an attached store |
 | `no planning space <KEY>` | the store holds no such space, or the `data_scope_id` is no store this service knows |
 | `no project <id>` | neither the projects registry nor any item of the store names the project |
-| `[commit] <id> is not a registered project: <ids>`, and the refusal of a registry that cannot be read | the commits on no card of the scope cannot be read, as [Commits on no card](#commits-on-no-card) refuses them: a project only items name, or a space or project read while the registry cannot be |
+| `kind filters tasks: task, bug or improvement` | a `kind` that is no kind of a task, `goal` and `stage` among them |
+| `no work item carries label <label>` | a `label` no item of the store carries; a label the store holds but the scope does not gives an empty answer instead |
 | the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
 | `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
 
@@ -1974,6 +1979,23 @@ how many stand open now; `recent`, the last 7 days up to today, whatever the per
 `series`, each day with a change since the first. With `utc_offset` `0`, the pace of a
 scope that holds one goal's tasks and nothing else is what the chain of that goal gives
 in scope `tree`.
+
+#### Filtering by kind and label
+
+`kind` and `label` keep the scope's tasks that match, by the rules of the board's
+filter, so a number under a filter opens the board on the same tasks with the same
+filter: a task matches when its kind is any of the kinds named, or any kind when none
+is, and when it carries every label named. Both together keep what both keep:
+`kind=bug&kind=task&label=ui` keeps the bugs and the tasks labelled `ui`. A goal or a
+stage never matches: it has no kind of a task, and its labels are not labels of work.
+
+| Part | Under a filter |
+| --- | --- |
+| `counts.categories` | `tasks` counts the tasks that match and `oldest` is the one of them that came to stand there first; `goals` and `stages` are `null`, not `0` |
+| `counts.waiting_owner` | the questions to the owner on the tasks that match |
+| `counts.unattached_commits` | as without a filter: a commit on no card has no task whose kind and labels could match, and the number opens the list a commit is attached from |
+| `outside` | the tasks that match with no parent; with a `label` named, `by_label` holds the rows of the labels named alone, since a row of another label would only show where it meets the filter |
+| `flow` | `created`, `closed` and `pace` read the tasks that match, `decisions` their requests and `commits` the commits attached to them; no commit on no card is counted |
 
 ### How often each analytics surface is opened
 

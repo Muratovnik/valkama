@@ -569,15 +569,17 @@ def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
     )
 
 
-#: What the volumes read takes: its scope (`project_id` alone may be left out) and its period.
+#: What the volumes read takes: its scope (`project_id` alone may be left out), its period,
+#: and a filter of its tasks, each part of which may be repeated or left out.
 _VOLUMES_SCOPE = ("scope_kind", "data_scope_id", "space_key", "project_id")
 _VOLUMES_PERIOD = ("from", "to", "utc_offset")
+_VOLUMES_FILTER = ("kind", "label")
 
 
 def _volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     """How much work stands in a scope and what came to a close in a period."""
 
-    unknown = sorted(set(parameters) - {*_VOLUMES_SCOPE, *_VOLUMES_PERIOD})
+    unknown = sorted(set(parameters) - {*_VOLUMES_SCOPE, *_VOLUMES_PERIOD, *_VOLUMES_FILTER})
     if unknown:
         raise PlanningHttpError(400, "invalid_request", f"{unknown[0]} is not a parameter")
     named = {name: _first(parameters, name) for name in _VOLUMES_SCOPE}
@@ -596,9 +598,10 @@ def _volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
             400, "invalid_request", "utc_offset must be a whole number of minutes"
         ) from error
     period = volumes.period(_required(parameters, "from"), _required(parameters, "to"), minutes)
+    kept = volumes.work_filter(conn, parameters.get("kind", []), parameters.get("label", []))
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "volumes": volumes.read(conn, volumes.Request(scope, period)),
+        "volumes": volumes.read(conn, volumes.Request(scope, period, kept)),
     }
 
 

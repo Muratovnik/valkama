@@ -240,6 +240,44 @@ class DecisionTests(FlowCase):
         )
 
 
+class FilterTests(FlowCase):
+    def test_a_filter_keeps_the_flow_of_its_tasks(self) -> None:
+        # A bug and a task created on the 12th, each with an owner's decision and an attached
+        # commit that day, both done that day; open, a bug and a task made before the period.
+        for name, kind in (("x", "bug"), ("y", "task")):
+            self.place("MAIN", name, kind=kind, created="2026-11-12T08:00:00Z")
+        self.place("MAIN", "z", kind="bug", created="2026-11-01T08:00:00Z")
+        self.place("MAIN", "w", kind="task", created="2026-11-01T09:00:00Z")
+        self.conn.commit()
+        for name, digits in (("x", "a1"), ("y", "b2")):
+            decided = self.by_person("answer", self.ask(f"MAIN:{name}"), answers={"path": "keep"})
+            self.closed_at(decided, "2026-11-12T13:00:00Z")
+            self.commit("app", digits * 20, "2026-11-12T10:00:00Z", attached=(f"MAIN:{name}",))
+            self.trees["MAIN"].move(name, "done", started=True)
+            self.conn.execute(
+                "INSERT INTO work_item_events(work_item_id, action, detail, author, created_at)"
+                " VALUES (?, 'transitioned', 'done', 'case', '2026-11-12T15:00:00Z')",
+                tuple(self.ids(f"MAIN:{name}")),
+            )
+        # A commit on no card of the space's project, made the same day.
+        self.commit("app", "c3" * 20, "2026-11-12T11:00:00Z")
+        self.conn.commit()
+
+        quiet = dict.fromkeys(MEASURES, 0)
+        bugs = self.flow(kind="bug")
+        self.assertEqual(
+            {"2026-11-12": {**quiet, "created": 1, "closed": 1, "decisions": 1, "commits": 1}},
+            self.busy(bugs),
+        )
+        self.assertEqual(1, bugs["pace"]["open"])
+        # Without the filter both tasks flow, with the commit on no card besides.
+        self.assertEqual(
+            {"2026-11-12": {**quiet, "created": 2, "closed": 2, "decisions": 2, "commits": 3}},
+            self.busy(self.flow()),
+        )
+        self.assertEqual(2, self.flow()["pace"]["open"])
+
+
 class PaceTests(FlowCase):
     def test_pace_is_the_chains_shape(self) -> None:
         self.place("MAIN", "G", kind="goal", state="container")
