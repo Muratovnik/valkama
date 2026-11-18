@@ -19,9 +19,9 @@ owner something; where they differ from this skill, follow them.
 
 An item is one change: it can be integrated and reverted on its own, usually
 as one branch or pull request, takes hours to a couple of days, and closes when
-a test-based "done when" holds, checked by a verify command the item names. A
-finding is evidence attached to an item, not an item of its own. Work that
-shares a cause, a fix or one mechanical rule is one item. Read
+a test-based "done when" holds, checked by a verify command the item names.
+Work that shares a cause, a fix or one mechanical rule is one item; a finding
+outside it is an item of its own (see Findings). Read
 [the work model](references/work-model.md) before filing several items,
 splitting one or a part off it, or handing items to other agents.
 
@@ -213,10 +213,8 @@ replies in its thread rather than as new roots. A worker writes its report as
 the root of its own thread, posts what follows as replies there, and hands the
 root's `comment_id` back to the agent that delegated.
 
-**A list under a comment.** When a report or a comment offers several findings
-for the owner to choose from, put them under it as `list`, on a root only; the
-owner ticks the ones to take on ([its form and answer](references/tools.md#comments-and-threads)).
-Nobody waits for it: it raises no alert and is not among the questions waiting for the owner.
+**A list under a comment** lets the owner tick several options of a report with
+one button: see [the tool reference](references/tools.md#comments-and-threads).
 
 **Telling another item.** A number in a text is a link and tells nobody. To tell
 the work on another item, name it in `mentions`: the batch's `comment`,
@@ -238,10 +236,10 @@ on — a choice, a yes or no — ask it with `addressees`, as
 
 **Resolved threads.** The batch's `resolutions` mark a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark, up to 100 roots in
-one call. Mark a thread only on the owner's decision, for example while reviewing
-a digest with them, and write that decision in `resolution`. A reply leaves the
-mark in place, so reopen the discussion of a resolved root by writing a new root
-that names it. A reply and a question's thread take no mark.
+one call. Mark a thread only on the owner's decision, and write that decision in
+`resolution`. A reply leaves the mark in place, so reopen the discussion of a
+resolved root by writing a new root that names it. A reply and a question's
+thread take no mark.
 
 **Links.** The batch's `links` take `kind`:
 
@@ -256,13 +254,8 @@ that names it. A reply and a question's thread take no mark.
 
 Steps of the same change stay on the checklist; a link is for separate work.
 
-**Order.** The order of work is computed, and nothing sets it: urgent first,
-then work already started, then tasks of a goal or stage already under way,
-then priority, then age. A list row the queue gives says its `queue_order`, 1
-being what `claim_ready_work_item` gives next; any other row says `withheld`.
-The queue is one space's: `space`, or that of `within`, a goal or stage whose
-work it keeps at any depth, or else your session's space; `label` keeps the
-tasks carrying that label, `project` those naming that project.
+**Order.** The order of work is computed, and nothing sets it: what comes first
+and which queue `claim_ready_work_item` reads is in [the tool reference](references/tools.md#the-order-of-work).
 
 **Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
 work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label
@@ -357,15 +350,10 @@ open question is not an answer; to ask about a question, reply in its thread
 (the batch's `comment` with `reply_to_request`).
 
 An answer can change after it was given: a person changes it in Valkama, and an
-agent changes it with `answer_work_item_request` and `change: true`, only when the
-owner asks for that. A question with a `purpose`, or one a write that waits for the
-owner carries, is the owner's alone: its answer is carried out, never changed. A
-change is refused when nothing differs, once the item is closed, and past 50
-versions. A changed answer has `answer_version` 2 or more, the compact form
-shows the answer it replaced as `previous`, and the whole
-question keeps every replaced one in `history`. When you are told
-`question_changed`, read the question again: the answer you acted on is no longer
-the current one.
+agent only when the owner asks for that, as
+[the tool reference](references/tools.md#answering-and-reading-a-question) says.
+When you are told `question_changed`, read the question again: the answer you
+acted on is no longer the current one.
 
 Read questions in the `questions` part of `get_work_item`, which the card's
 `parts` counts (read it when you come back to an item with open ones), with
@@ -409,6 +397,15 @@ and say so in the summary. Removing or rewriting a step of a goal or stage needs
 `checklist_reason`; a step whose wording you only clarify goes by its id with
 `clarifies: true` and is written at once. A cancel that follows an owner's
 answer names it in `following`; that answer does not count against the cancel.
+
+## Findings
+
+A finding is work met on the way that nobody asked for. Unless it is a step of
+your item, file it as a task without a parent, with a topic label and
+`discovered-from` your item: it waits in triage. A goal takes only work its
+conditions need. More evidence for an open finding is a comment on it; a closed
+one gets a new item linked `relates-to`. The owner starts a triage review: run it
+by [the triage procedure](references/triage.md).
 
 ## Merging items that are one change
 
