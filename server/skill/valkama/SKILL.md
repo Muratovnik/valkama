@@ -46,8 +46,9 @@ splitting one or a part off it, or handing items to other agents.
    space. A finding in another project's code goes to that project, and so to
    its space. A plan in the repository is referenced by `source`
    (`docs/plan.md#kb:a7f3`), not copied, and a file the description names is
-   written as Naming a file says. Umbrella work is `kind: goal`, or `stage` under a parent at any depth; children name it as
-   `parent`, and nobody claims it. Work filed outside accepted open goals and
+   written as Naming a file says. Umbrella work is `kind: goal`, or `stage`
+   under a parent at any depth; children name it as `parent`, and nobody
+   claims it. Work filed outside accepted open goals and
    stages starts in triage: send `acceptance: "assignment"` only on the owner's word.
    Pass `claim: true` and `checklist` when you take a task at once. Link the
    related items your search found (`relates-to`, `blocks`) and name the goal or

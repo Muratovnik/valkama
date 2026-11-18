@@ -1,9 +1,10 @@
 """A triage review's group: tasks waiting in the triage stack proposed as one new goal.
 
 The creation of a goal takes the step `group` (`propose`): 1 to 20 tasks of the stack
-that lie under no goal, one alone only when it is of priority high or urgent, the answer the agent gives about them (`do`, `later` with
-`until`, `drop`) and why. The goal is created in triage, the tasks move under it at
-once and leave the stack with it, and then:
+that lie under no goal, one alone only when it is of priority high or urgent, the
+answer the agent gives about them (`do`, `later` with `until`, `drop`) and why. The
+goal is created in triage, the tasks move under it at once and leave the stack with
+it, and then:
 
 - **The owner decides** (`human`) when the setting of the space keeps findings
   (`finding`) or proposed goals (`proposed_goal`) for the owner, and for `drop` also
