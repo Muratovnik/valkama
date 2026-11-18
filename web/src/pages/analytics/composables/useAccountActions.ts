@@ -21,10 +21,10 @@ import { useI18n } from 'vue-i18n'
 
 import { usePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 
-import { weeklyId } from '@/shared/api/accountIds.ts'
 import type { QuotaAccount } from '@/shared/api/analyticsApi.ts'
 import { accountNamesFailure } from '@/shared/api/quotaApi.ts'
 import { aliasOf, cleanAlias } from '@/shared/lib/accountAliases.ts'
+import { ownAccountName } from '@/shared/lib/accountLabel.ts'
 import { useCopyNote } from '@/shared/lib/copyNote.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
@@ -53,13 +53,10 @@ export function useAccountActions(options: {
    */
   function kept() {
     const account = options.account()
-    if (account.no_source)
-      return aliasOf(names.value, organization()) ?? account.organization_name ?? ''
-    const weekly =
-      account.account_uuid && account.weekly_reset
-        ? aliasOf(names.value, weeklyId(organization(), account.weekly_reset))
-        : null
-    return aliasOf(names.value, key()) ?? weekly ?? account.name ?? ''
+    const held = account.no_source
+      ? (aliasOf(names.value, organization()) ?? account.organization_name)
+      : (ownAccountName(names.value, account.account, account.weekly_reset) ?? account.name)
+    return held ?? ''
   }
 
   /** What the name's field holds while it is open; null while the name stands. */

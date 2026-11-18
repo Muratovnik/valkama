@@ -1,4 +1,7 @@
-/* The words of the accounts group in Settings, where the owner names the accounts work was billed to. */
+/*
+ * The words of the accounts group in Settings, where the owner names the organizations work was
+ * billed to and their accounts: an account's own words, then an organization's (`organization`).
+ */
 
 export const accountAliasMessages = {
   en: {
@@ -8,6 +11,8 @@ export const accountAliasMessages = {
     kept: 'Analytics and quota alerts name the account by it. Kept in Valkama, so every device says the same name.',
     share: '{share} of agent time in the past year',
     unseen: 'No work in the past year',
+    weekly: 'Resets {reset}',
+    shared: 'May be two accounts under one weekly reset',
     clear: 'Clear',
     clearName: 'Clear the name of account {id}',
     loading: 'Reading the accounts work was billed to…',
@@ -18,6 +23,14 @@ export const accountAliasMessages = {
     saved: 'Saved the name of account {short}.',
     cleared: 'Cleared the name of account {short}.',
     saveFailed: 'Could not save the name of account {short}: {reason}',
+    organization: {
+      field: 'Name of organization {id}',
+      clearName: 'Clear the name of organization {id}',
+      saving: 'Saving the name of organization {short}…',
+      saved: 'Saved the name of organization {short}.',
+      cleared: 'Cleared the name of organization {short}.',
+      saveFailed: 'Could not save the name of organization {short}: {reason}',
+    },
   },
   ru: {
     title: 'Аккаунты',
@@ -26,6 +39,8 @@ export const accountAliasMessages = {
     kept: 'Аналитика и уведомления о квоте называют аккаунт этим именем. Хранится в Valkama, поэтому на всех устройствах имя одно.',
     share: '{share} времени агентов за год',
     unseen: 'За год работы не было',
+    weekly: 'Сброс {reset}',
+    shared: 'Возможно, два аккаунта под одним недельным сбросом',
     clear: 'Очистить',
     clearName: 'Очистить имя аккаунта {id}',
     loading: 'Читаю аккаунты, на которые шла работа…',
@@ -36,5 +51,13 @@ export const accountAliasMessages = {
     saved: 'Имя аккаунта {short} сохранено.',
     cleared: 'Имя аккаунта {short} очищено.',
     saveFailed: 'Не удалось сохранить имя аккаунта {short}: {reason}',
+    organization: {
+      field: 'Имя организации {id}',
+      clearName: 'Очистить имя организации {id}',
+      saving: 'Сохранение имени организации {short}…',
+      saved: 'Имя организации {short} сохранено.',
+      cleared: 'Имя организации {short} очищено.',
+      saveFailed: 'Не удалось сохранить имя организации {short}: {reason}',
+    },
   },
 }
