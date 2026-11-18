@@ -1380,6 +1380,26 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `SearchCombobox`, the runs of the card's head, a path in free text.
   `production-title-surfaces.spec.ts` measures each surface. It is a directive because
   a component instance in every tile and row is a cost the board's budget refuses.
+- **Code in a title:** a work item's title may hold code between backticks, «Raise
+  `` `STORE_SCHEMA_VERSION` `` to 18», and every surface that draws a title draws it as
+  code: in the monospace face (`--font-family-mono`), without the backticks. One parse
+  cuts a title (`titleRuns.ts`): backticks pair from the left, a pair with something
+  between them is code, an empty pair or a backtick left alone stays text, and a
+  reference inside code is code. One primitive draws the runs (`textRuns.ts`):
+  `v-work-item-title` on a surface that knows it holds a title, and `v-text-runs` with the
+  runs its host hands it on a control that draws any text — `CommandList`,
+  `SearchCombobox`, an editor's suggestion, a dialog's context line — which never cuts a
+  string of its own. A word of code is a box of its own, so it breaks after a `/` as the
+  rest of the title does and never at a hyphen; one wider than its line breaks inside and
+  stays in its box, and a surface that ends a title in an ellipsis or a clamp still does.
+  A cut title's whole words are laid in the same runs. Everything that is text rather than
+  drawing holds the title as written, backticks included: a name or a hint attribute, a
+  description, a download, and a copy — a selection inside a drawn title puts each piece
+  of code it holds whole on the clipboard between its backticks. The list's find reads a
+  title as it is drawn, without them. `production-title-code.spec.ts` measures the
+  surfaces. Analytics is the one place this does not reach yet: it names a task by its
+  reference and title as one string through its shared chart parts (a table's row, a
+  bar, a legend, a filter, a chart's hint), and there the backticks are drawn as written.
 - **Free text:** `RichText` owns every text an agent or a person wrote — a
   description, a comment, a report section, a question, an attempt's result, a
   ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,
