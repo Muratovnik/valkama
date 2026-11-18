@@ -191,8 +191,9 @@ layers = [
 ]
 containers = ["server"]
 
-# Planning's exact-scope routing and the app shell answer from the module list
-# and the module manifest alone: nothing that brings a store up, migrates it,
+# Planning's exact-scope routing and the app shell answer from the module list,
+# the module manifest and the grammar of the route the shell remembers alone
+# (`platform.ui_prefs`): nothing that brings a store up, migrates it,
 # or reaches an external adapter. `test_layering.py` checks the loaded modules
 # at run time as well, because an import graph does not show the edge a
 # package's `__init__` adds.
