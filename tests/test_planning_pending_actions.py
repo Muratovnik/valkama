@@ -754,6 +754,19 @@ class SettingHarness(Harness):
             for entry in decisions.page(self.conn, space=self.space)["items"]
         ]
 
+    def marked(self, reference: str) -> list[tuple[str, str, str]]:
+        """The marks of the summary of decisions on the item's events: point, action, detail."""
+
+        return [
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT d.point, e.action, e.detail FROM agent_decisions d"
+                " JOIN work_item_events e ON e.id = d.event_id WHERE e.work_item_id = ?"
+                " ORDER BY e.id",
+                (self.id(reference),),
+            )
+        ]
+
     def waiting_on(self, reference: str) -> list[pending.Action]:
         return pending.open_on(self.conn, self.id(reference))
 
@@ -1037,6 +1050,24 @@ class TaskInGoalTests(SettingHarness):
         self.tool("apply_work_item_changes", id=ready, update={"parent": self.goal})
         self.assertEqual(self.id(self.goal), self.card(ready)["parent_id"])
         self.assertEqual(2, len(self.decided()))
+
+    def test_a_task_filed_in_a_goal_on_an_assignment_is_summarised_at_any_setting(self) -> None:
+        for name in participation.SETS:
+            with self.subTest(setting=name):
+                self.at(name)
+                answer = self.file_in_goal(f"Work assigned at {name}", acceptance="assignment")
+                task = str(answer["reference"])
+                self.assertNotIn("waits_for_owner", answer)
+                # The order of bases gives the basis; the agent's word gives the mark.
+                card = self.card(task)
+                self.assertEqual(
+                    ("ready", "inherited"),
+                    (card["state"]["category"], card["acceptance"]["basis"]),
+                )
+                self.assertEqual([("assignment", "accepted", "inherited")], self.marked(task))
+                self.assertEqual(
+                    ("assignment", task, f"accepted {task} under {self.goal}"), self.decided()[0]
+                )
 
     def manual_tasks(self) -> tuple[dict, dict, str]:
         """At the manual set: the answer filing a task in the goal, the answer moving the
@@ -1705,7 +1736,7 @@ class AcceptanceQuestionTests(SettingHarness):
         # Its answer takes it on with the goal.
         self.answer(waits["question"], "do")
         self.assertEqual(("ready", "inherited"), self.where(task))
-        # An assignment passes the gate.
+        # An assignment passes the gate, and is summarised as one.
         named = self.untriaged("A task the agent was asked to do")
         answer = self.tool(
             "apply_work_item_changes",
@@ -1714,15 +1745,57 @@ class AcceptanceQuestionTests(SettingHarness):
         )
         self.assertNotIn("waits_for_owner", answer)
         self.assertEqual(("ready", "inherited"), self.where(named))
-        self.assertEqual([], self.decided())
+        assigned = ("assignment", named, f"accepted {named} under {self.goal}")
+        self.assertEqual([assigned], self.decided())
         # Left to the agent, the move takes it on and is summarised.
         self.at(participation.DEFAULT)
         left = self.untriaged("A task the agent takes on")
         self.tool("apply_work_item_changes", id=left, transition={"state": "ready"})
         self.assertEqual(("ready", "inherited"), self.where(left))
         self.assertEqual(
-            [("task_in_goal", left, f"accepted {left} under {self.goal}")], self.decided()
+            [("task_in_goal", left, f"accepted {left} under {self.goal}"), assigned],
+            self.decided(),
         )
+
+    def test_an_agents_move_on_an_assignment_in_a_goal_is_summarised_at_any_setting(
+        self,
+    ) -> None:
+        for name in participation.SETS:
+            with self.subTest(setting=name):
+                self.at(name)
+                task = self.untriaged(f"A task the agent is asked to do at {name}")
+                answer = self.tool(
+                    "apply_work_item_changes",
+                    id=task,
+                    transition={"state": "ready", "acceptance": "assignment"},
+                )
+                self.assertNotIn("waits_for_owner", answer)
+                # The order of bases gives the basis; the agent's word gives the mark.
+                self.assertEqual(("ready", "inherited"), self.where(task))
+                self.assertEqual([("assignment", "accepted", "inherited")], self.marked(task))
+                self.assertEqual(
+                    ("assignment", task, f"accepted {task} under {self.goal}"), self.decided()[0]
+                )
+
+    def test_an_agents_claim_of_work_put_off_in_a_goal_is_summarised_at_any_setting(
+        self,
+    ) -> None:
+        for name in participation.SETS:
+            with self.subTest(setting=name):
+                self.at(name)
+                task = self.untriaged(f"A task the owner put off at {name}")
+                self.person(
+                    "/api/planning/work-item/defer", id=task, until=UNTIL, reason="not this week"
+                )
+                self.assertEqual(("deferred", None), self.where(task))
+                claimed = self.tool("claim_work_item", id=task)
+                self.assertEqual("deferred", claimed["started"]["from"])
+                # A claim is the agent's assignment: inside the goal it is still one.
+                self.assertEqual(("active", "inherited"), self.where(task))
+                self.assertEqual([("assignment", "accepted", "inherited")], self.marked(task))
+                self.assertEqual(
+                    ("assignment", task, f"accepted {task} under {self.goal}"), self.decided()[0]
+                )
 
     def test_an_agents_claim_of_a_task_nobody_triaged_is_summarised_at_any_setting(
         self,

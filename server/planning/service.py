@@ -810,19 +810,15 @@ def create_work_item(
     # A goal or stage accepted at once names no state: its opening says where it stands.
     _log(conn, item_id, "created", "" if opened else str(target["key"]), author)
     if basis is not None:
-        ruling = None if basis != LABEL_RULE else ruled
-        accepted = _log(conn, item_id, "accepted", _accepted_detail(basis, ruling), author)
-        # An agent's own decision, its word that the owner gave the work, and the label
-        # it chose that a rule accepts, are the owner's to read in the summary of decisions.
-        point = {
-            model.AGENT_BASIS: "proposed_goal",
-            model.NAMED_BASIS: "assignment",
-            LABEL_RULE: "finding",
-        }.get(basis)
-        if in_goal == participation.AGENT and basis == "inherited":
-            point = "task_in_goal"
-        if point is not None and calls.from_agent():
-            decisions.mark(conn, accepted, point, _accepted_what(conn, item_id, ruled=ruling))
+        _accepted(
+            conn,
+            item_id,
+            basis,
+            author,
+            named=named,
+            in_goal=in_goal == participation.AGENT,
+            ruled=None if basis != LABEL_RULE else ruled,
+        )
     if opened:
         _log(conn, item_id, "opened", "", author)
     creator = subscriptions.agent_session(calls.current())
@@ -917,6 +913,44 @@ def _accepted_detail(basis: str, ruled: str | None) -> str:
     """The detail of an `accepted` event: the basis, and the label a rule accepted by."""
 
     return basis if ruled is None else f"{basis}: {ruled}"
+
+
+#: The point of the summary of decisions an agent's acceptance is marked with, by the
+#: basis it gives or, under goals and stages all accepted, by the basis it names.
+_ACCEPTANCE_POINTS = {
+    model.AGENT_BASIS: "proposed_goal",
+    model.NAMED_BASIS: "assignment",
+    LABEL_RULE: "finding",
+}
+
+
+def _accepted(
+    conn: sqlite3.Connection,
+    identity: str,
+    basis: str,
+    author: str | None,
+    *,
+    named: str | None = None,
+    in_goal: bool = False,
+    ruled: str | None = None,
+) -> int:
+    """Record that a write accepted the item on `basis`: its `accepted` event, which it
+    answers, and the mark of an acceptance an agent makes alone in the summary of decisions.
+
+    The one place a creation, a move and a claim mark one. A task taken on inside goals
+    and stages all accepted on no one's word (`in_goal`) is `task_in_goal`. Otherwise the
+    basis decides, and under such a chain, where the order of bases gives `inherited`,
+    the basis the write names: the agent's word that the owner gave the work is
+    `assignment` whatever basis the order gives. `ruled` is the label a rule accepted by.
+    """
+
+    accepted = _log(conn, identity, "accepted", _accepted_detail(basis, ruled), author)
+    if calls.from_agent():
+        said = named if basis == "inherited" else basis
+        point = "task_in_goal" if in_goal else _ACCEPTANCE_POINTS.get(said or "")
+        if point is not None:
+            decisions.mark(conn, accepted, point, _accepted_what(conn, identity, ruled=ruled))
+    return accepted
 
 
 def _accepted_what(conn: sqlite3.Connection, identity: str, *, ruled: str | None = None) -> str:
@@ -1316,13 +1350,6 @@ def _accept_by_label(
     if ruled is None or target is None:
         return
     _transition(conn, identity, str(target["state_id"]), author=author, ruled=ruled)
-    if calls.from_agent():
-        decisions.mark(
-            conn,
-            _last_event(conn, identity, "accepted"),
-            "finding",
-            _accepted_what(conn, identity, ruled=ruled),
-        )
 
 
 def _left(conn: sqlite3.Connection, row: sqlite3.Row, reason: str, author: str | None) -> None:
@@ -2033,14 +2060,15 @@ def _transition(
         warnings += _cancel_under(conn, cancelling, note, author, returned)
     _write(conn, row, updates, parameters)
     if gives is not None:
-        accepted = _log(conn, identity, "accepted", _accepted_detail(gives, ruled), author)
-        # The agent's word that the owner gave the work, and a task it took on inside
-        # accepted goals where the setting left that to it, are the owner's to read.
-        said = {model.NAMED_BASIS: "assignment"}.get(gives)
-        if in_goal == participation.AGENT:
-            said = "task_in_goal"
-        if said is not None and calls.from_agent():
-            decisions.mark(conn, accepted, said, _accepted_what(conn, identity))
+        _accepted(
+            conn,
+            identity,
+            gives,
+            author,
+            named=named,
+            in_goal=in_goal == participation.AGENT,
+            ruled=ruled,
+        )
     _taken_by_owner(conn, decided, author)
     if opened:
         # Entering the service state names no state: it is the goal's or stage's opening.
@@ -3231,19 +3259,21 @@ def _started(
 
     A start out of deferred ends the condition it stood there on, as any move out does.
     An acceptance an agent's claim makes alone is marked in the summary of decisions:
-    the assignment it takes the work on, and, inside goals and stages all accepted, a
-    task in triage nobody triaged, whatever the setting `task_in_goal` says, since a
-    claim by number meets no gate (`task_in_goal`).
+    the assignment it takes the work on, inside goals and stages all accepted too, and
+    there a task in triage nobody triaged as `task_in_goal`, whatever the setting
+    `task_in_goal` says, since a claim by number meets no gate.
     """
 
     if start.gives is not None:
-        accepted = _log(conn, identity, "accepted", start.gives, author)
         untriaged = start.current is not None and start.current["category"] == "triage"
-        point = {model.NAMED_BASIS: "assignment", "inherited": "task_in_goal"}.get(start.gives)
-        if point == "task_in_goal" and not untriaged:
-            point = None
-        if point is not None and calls.from_agent():
-            decisions.mark(conn, accepted, point, _accepted_what(conn, identity))
+        _accepted(
+            conn,
+            identity,
+            start.gives,
+            author,
+            named=model.NAMED_BASIS,
+            in_goal=untriaged and start.gives == "inherited",
+        )
     if start.target is not None:
         _log(conn, identity, "transitioned", f"{start.target['key']}: {reason}", author)
     if start.current is not None and start.current["category"] == "deferred":
