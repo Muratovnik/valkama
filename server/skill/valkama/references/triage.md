@@ -3,9 +3,10 @@
 A triage review decides what waits in triage in one space: findings filed
 outside accepted goals, goals nobody has accepted, and tasks waiting inside
 accepted goals. The owner starts one, when a line among their questions says it
-is time or at any moment. Run it as an item of its own, filed with
-`acceptance: "assignment"` on the owner's word, and give its counts in the
-closing summary.
+is time or at any moment. Run it as an item of its own, `Triage review: <space>`,
+filed with `acceptance: "assignment"`: the owner asking for the review is that
+word. It is done when `triage_stack: "unseen"` lists nothing in the space; give
+its counts in the closing summary.
 
 ## What waits
 
@@ -24,10 +25,12 @@ again.
 1. An item back with its doubtful-repeat decision answered: merge it or keep it
    as the answer says.
 2. Give each item a topic label and a priority.
-3. Merge obvious repeats, the same defect in the same place: copy the evidence
+3. Findings that share a cause or a fix are one change, not a group. Merge
+   obvious repeats, the same defect in the same place: copy the evidence
    the survivor lacks as comments in one `apply_work_item_changes` call, then
    `merge_work_items` with up to 20 items.
-4. A repeat you are not sure of is a `decision` on the newer item, its choice
+4. A repeat you are not sure of, such as the same symptom in another place or
+   two defects one fix would end, is a `decision` on the newer item, its choice
    `answer` offering `merge` into the older one and `keep`, with your
    recommendation. When it comes back answered by that recommendation, act on
    it as step 1 says.

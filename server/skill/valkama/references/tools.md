@@ -160,7 +160,10 @@ id. The claim does not depend on them.
 
 The owner's participation setting, which only the server reads, decides at each of
 these points whether an agent's write is made at once or waits for the owner: a goal
-with no parent you file or accept out of `triage` (`proposed_goal`), a task you file or move into accepted
+with no parent you file or accept out of `triage` (`proposed_goal`), a group of findings
+you file under a new goal (`finding`: the owner decides it when this point or
+`proposed_goal` leaves it to them, or, for `drop` of tasks you did not file,
+`cancel_outside`; the wait names `finding`), a task you file or move into accepted
 goals and stages (`task_in_goal`), a cancel of an item your own work did not file
 (`cancel_outside`) or of work other live sessions do (`cancel_shared`), a removal or
 rewording of a step of a goal or stage (`condition`), the completion of a goal,
