@@ -1441,6 +1441,12 @@ question: it is not in `items`, `total`, `limit`, `offset` or `has_more`, and it
 takes no answer. Nothing stores it, so it goes once the work is reviewed, and
 the MCP list of requests does not carry it.
 
+The lines belong to the whole list, not to a page, so only the first page
+carries them: `triage_due` is empty when `offset` is above 0, and a reader that
+reads on while `has_more` holds takes them from that first page. It is empty too
+when `status` names anything but `pending` and when `reference` names one item.
+A source the read could not reach is named in `coverage` and has no line.
+
 ### The card's waiting question
 
 `/open/<reference>?reveal=question` leads to the card as the plain address does, under the

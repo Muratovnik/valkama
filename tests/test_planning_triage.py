@@ -23,7 +23,17 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
-from server.planning import api, deferral, interactions, leases, model, questions, sweep, triage
+from server.planning import (
+    api,
+    deferral,
+    interactions,
+    leases,
+    model,
+    questions,
+    service,
+    sweep,
+    triage,
+)
 from server.planning.routing import PlanningRouting
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -555,12 +565,15 @@ class DueTests(Stack):
     def setting(self, key: str, value: object) -> None:
         self.person(PARTICIPATION, space="MAIN", key=key, value=value)
 
-    def listed(self, **parameters: str) -> dict:
-        """The person's read of every source's open questions, as the interface asks it."""
+    def listed(self, **parameters: str | None) -> dict:
+        """The person's read of every source's open questions, as the interface asks it;
+        a parameter given None is left out."""
 
         routing = PlanningRouting(self.conn, self.db, registry_reader=self.registry.read_bytes)
         asked = {"scope_kind": "global", "status": "pending", **parameters}
-        return interactions.request_list(routing, {key: [value] for key, value in asked.items()})
+        return interactions.request_list(
+            routing, {key: [value] for key, value in asked.items() if value is not None}
+        )
 
     def filed_at(self, title: str, moment: str) -> str:
         reference = self.found(title)
@@ -626,3 +639,75 @@ class DueTests(Stack):
         self.setting("triage_reminder", "off")
 
         self.assertEqual([], self.listed()["triage_due"])
+
+    def test_the_line_stands_beside_the_requests(self) -> None:
+        """Two spaces read, one past its count; a bound source no store here holds.
+
+        The line is the list's, not a page's: a read of open questions has it on its
+        first page, of the whole space too, and a read of answered ones, of one item's
+        or of a later page has none. A source that could not be read is named in the
+        coverage alone."""
+
+        service.create_planning_space(self.conn, name="Alpha", key="ALPHA")
+        self.conn.commit()
+        alpha = str(
+            self.agent("create_work_item", AS_B, space="ALPHA", title="a finding of alpha")[
+                "reference"
+            ]
+        )
+        self.entries_at(alpha, deferral.stamp(NOW - timedelta(days=1)))
+        away = {"data_scope_id": "99999999-9999-4999-8999-999999999999", "space_key": "AWAY"}
+        self.registry.write_bytes(
+            registry_bytes(
+                [
+                    project_entry(
+                        "app",
+                        self.registry.parent,
+                        bindings=[project_binding("app", planning_space_entity(self.space_ref))],
+                    ),
+                    project_entry(
+                        "lib",
+                        self.registry.parent / "lib",
+                        bindings=[project_binding("lib", planning_space_entity(away))],
+                    ),
+                ]
+            )
+        )
+        _before, filed = self.five_due()
+        line = {
+            "space": {"key": "MAIN", "name": "Crew"},
+            "count": 5,
+            "oldest_at": "2026-11-17T01:00:00Z",
+        }
+
+        pending = self.listed()
+        self.assertEqual([line], pending["triage_due"], "only the space past its count")
+        self.assertEqual(
+            {
+                "MAIN": ("searched", None),
+                "ALPHA": ("searched", None),
+                "AWAY": ("unavailable", "store_not_attached"),
+            },
+            {
+                source["space_ref"]["space_key"]: (source["status"], source["reason"])
+                for source in pending["coverage"]
+            },
+        )
+        space = {
+            "scope_kind": "space",
+            "data_scope_id": self.space_ref["data_scope_id"],
+            "space_key": "MAIN",
+        }
+        with_line = {
+            "every status": {"status": None},
+            "the whole space": {**space, "status": None},
+        }
+        without_line = {
+            "answered": {"status": "answered"},
+            "one item's": {**space, "reference": filed[0], "status": None},
+            "the second page": {"offset": "200"},
+        }
+        for name, parameters in {**with_line, **without_line}.items():
+            with self.subTest(name):
+                expected = [line] if name in with_line else []
+                self.assertEqual(expected, self.listed(**parameters)["triage_due"])

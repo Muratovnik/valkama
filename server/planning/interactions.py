@@ -356,7 +356,9 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
 
     Beside the questions stands `triage_due`: a line for each space read whose stack
     of triage waits past the owner's thresholds (`triage.due`). It is no question, so
-    it is no item, counts in no total and takes no answer.
+    it is no item, counts in no total and takes no answer. It belongs to the list as
+    a whole, not to a page: only the first page reads it, and a read of answered or
+    closed questions, or of one item's, has none.
     """
 
     limit = _limit(parameters, 100, requests.PAGE)
@@ -379,6 +381,7 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         reference = _one(scoped, "reference") if "reference" in scoped else None
         space_ref = _exact_parameters(scoped, {"reference"} if reference is not None else set())
         resources = [space_ref]
+    reminds = offset == 0 and status in {None, "pending"} and reference is None
     items: list[dict] = []
     coverage: list[dict] = []
     due: list[dict] = []
@@ -409,10 +412,14 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
                                 "request": record,
                             }
                         )
-                line = triage.due(
-                    conn,
-                    participation.load(conn),
-                    read_model.space_identity(conn, space_ref["space_key"]),
+                line = (
+                    triage.due(
+                        conn,
+                        participation.load(conn),
+                        read_model.space_identity(conn, space_ref["space_key"]),
+                    )
+                    if reminds
+                    else None
                 )
             entry.update(status="searched", reason=None)
             if line is not None:
