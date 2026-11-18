@@ -752,9 +752,10 @@ class _Scenario:
         }
 
     def volumes(self) -> dict[str, object]:
-        """What stands in the space and in its project, over the days around today, and what
-        the tree's goal and stage took: work on the goal, on a task done and on one cancelled
-        under it, and on a task under the stage, one of its rows of no known price."""
+        """What stands in the space, in its project and in the space filtered to its tasks
+        with a label, over the days around today, and what the tree's goal and stage took:
+        work on the goal, on a task done and on one cancelled under it, and on a task under
+        the stage, one of its rows of no known price."""
 
         conn = store.connect()
         try:
@@ -827,6 +828,11 @@ class _Scenario:
             "volumes-space": self.http(f"/api/planning/volumes?{self.scope(**period)}"),
             "volumes-project": self.http(
                 f"/api/planning/volumes?{self.scope(project_id=PROJECT, **period)}"
+            ),
+            # The space's tasks with the label `ui`, of either of two kinds.
+            "volumes-filtered": self.http(
+                f"/api/planning/volumes?{self.scope(**period)}&"
+                + urlencode([("kind", "task"), ("kind", "bug"), ("label", "ui")])
             ),
             "goal-volumes": self.http(
                 "/api/planning/goal-volumes?"
