@@ -20,13 +20,16 @@ taken when it happens and kept in `work_item_baselines`: the tasks (`task`, `bug
 `settle` runs once at the end of each write (`service.marking`), over the items the
 write marked (`closing.note`) and every goal and stage above them: a task that starts
 under a stage starts the goal over it as well.
+
+A goal's row reads the counts of the goals and stages it shows at once (`taken`), and
+names why one shows none (`shown`).
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from . import item_tree, model
 from .closing import Stood
@@ -48,6 +51,47 @@ _TAKE = (
     " basis = excluded.basis, taken_at = excluded.taken_at"
 )
 _DROP = "DELETE FROM work_item_baselines WHERE work_item_id = ?"
+_TAKEN = (
+    "SELECT work_item_id, tasks, basis, taken_at FROM work_item_baselines"
+    " WHERE work_item_id IN (SELECT value FROM json_each(?))"
+)
+
+#: Why a row shows no count, besides `MIGRATED`: it reads only some of the items under
+#: its goal or stage, which the count does not; it is not accepted; it was accepted
+#: with no task under it, and no task under it has started yet.
+PARTIAL = "partial"
+NOT_ACCEPTED = "not_accepted"
+NOT_STARTED = "not_started"
+
+
+def taken(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, dict]:
+    """The count of each of these goals and stages that has one, in one read."""
+
+    return {
+        str(row[0]): {"tasks": int(row[1]), "basis": str(row[2]), "taken_at": str(row[3])}
+        for row in conn.execute(_TAKEN, (json.dumps(sorted(set(ids))),))
+    }
+
+
+def shown(
+    count: dict | None, acceptance: str | None, *, partial: bool
+) -> tuple[dict | None, str | None]:
+    """The count a row shows, or none and why, the first reason that holds deciding.
+
+    A row of some of a goal's items shows none: the count is of all of them. A goal or
+    stage not accepted has none, and one accepted by the work-model migration never
+    gets one; an accepted one without a count has not started.
+    """
+
+    if partial:
+        return None, PARTIAL
+    if count is not None:
+        return count, None
+    if acceptance is None:
+        return None, NOT_ACCEPTED
+    if acceptance == MIGRATED:
+        return None, MIGRATED
+    return None, NOT_STARTED
 
 
 def settle(conn: sqlite3.Connection, marked: Mapping[str, Stood | None]) -> None:

@@ -1806,12 +1806,18 @@ the goals and stages it names, without `children`, in the order named.
  "title": "Ship the importer", "kind": "goal",
  "state": null, "container_state": "in_progress", "open": true, "parent_reference": null,
  "other_space": null, "partial": false,
+ "tasks": {"total": 120, "closed": 78, "completed": 74, "cancelled": 4,
+           "by_category": {"triage": 6, "deferred": 2, "ready": 20, "active": 5, "review": 7,
+                           "completed": 74, "blocked": 2, "cancelled": 4}},
+ "baseline": {"tasks": 70, "basis": "accepted", "taken_at": "2030-01-05T09:00:00Z"},
+ "baseline_absent": null,
  "spent": {"agent_seconds": 79200.0,
            "tokens": {"input": 120000, "cached_read": 9000000, "cache_write_5m": 300000,
                       "cache_write_1h": null, "output": 410000, "reasoning": null},
            "estimated_api_cost_usd": 412.5, "unpriced_tokens": 0, "quality": "mixed",
            "partly_measured": 0},
  "spent_with_cancelled": {"agent_seconds": 81000.0, "…": "the same figures"},
+ "sessions": 61, "commits": 140, "commits_unknown_repository": 3,
  "children": [{"…": "the row of each stage directly under it"}]}
 ```
 
@@ -1823,8 +1829,14 @@ the goals and stages it names, without `children`, in the order named.
 | `parent_reference` | the goal or stage it is filed under, or `null` |
 | `other_space` | `{key, name}` of the goal's space when that is not the space read; `null` for the space's own goals, in a `global` read and in `goal-volumes` |
 | `partial` | some of the items under it are outside the scope, which adds up only the rest |
+| `tasks` | its tasks (`task`, `bug`, `improvement`) under it now, at any depth and in any state, that the scope holds: `total`, `closed` of them, `completed` and `cancelled`, and `by_category`, the eight categories, every one |
+| `baseline` | how many tasks stood under it when it was accepted: `tasks`, `basis` and `taken_at`; or `null` |
+| `baseline_absent` | why `baseline` is `null`, or `null` when it is given |
 | `spent` | what its items spent, leaving out every item that stands cancelled now |
 | `spent_with_cancelled` | what all its items spent |
+| `sessions` | the sessions that spent on any of its items or made a confirmed write to one, each once |
+| `commits` | the commits of a known repository attached to any of its items, each once |
+| `commits_unknown_repository` | the records of commits of no known repository attached to its items: records, not commits |
 
 The items of a goal are the items under it now, at any depth, with the goal itself.
 An item moved out of it, or filed under another goal, leaves with what it spent; a move
@@ -1843,6 +1855,31 @@ the items it adds up. Time is agent time, the sum of the stretches: it adds up f
 tasks to goals; the union a card's line shows does not. `partly_measured` counts the
 tasks it adds up that started before `measured_from`, or were created before it when
 they never started: each may have spent more than its usage says.
+
+`tasks` counts the cancelled tasks too: `cancelled` is how many there are. A task moved
+out of the goal is not among them, wherever it went.
+
+`baseline` is the count of the tasks under the goal or stage, at any depth and in any
+state, when it was accepted (`basis` `accepted`). One accepted with no task under it
+takes the count when the first task under it starts (`basis` `started`): a plan of
+nothing says nothing. Entering triage or deferred takes the acceptance away and the
+count with it; accepted again, it is counted anew. Without a count, `baseline_absent`
+says why, the first of these that holds:
+
+| `baseline_absent` | When |
+| --- | --- |
+| `partial` | the row is `partial`: the count is of all its tasks, `tasks` only of the scope's |
+| `not_accepted` | it is not accepted: it stands in triage or deferred, or was closed from there |
+| `migrated` | it was accepted before the work model, which kept no count of what stood under it then |
+| `not_started` | it was accepted with no task under it, and none under it has started yet |
+
+`sessions` counts the sessions of [How much work an item took](#how-much-work-an-item-took)
+over all its items at once: a session that worked on two of them is one session, so a
+row's number is not the sum of its tasks' and stages'. `commits` counts the commits
+attached now, a commit a rewrite replaced not among them, the way an item's read lists
+them; a commit attached to two of its items is one. A commit of no known repository
+keeps its hash as it was written, abbreviated too, so one commit may stand as two
+records: those are counted apart, as records.
 
 A space's read adds up what its scope holds of each goal. A goal of the space is all
 its own work there, unless a project narrows the read; a goal of another space comes

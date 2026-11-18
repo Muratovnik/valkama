@@ -108,6 +108,24 @@
         "parent_reference": null,
         "other_space": null,
         "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 0,
+            "active": 1,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": null,
+        "baseline_absent": "not_accepted",
         "spent": {
           "agent_seconds": 0.0,
           "tokens": {
@@ -138,6 +156,9 @@
           "quality": null,
           "partly_measured": 0
         },
+        "sessions": 2,
+        "commits": 0,
+        "commits_unknown_repository": 0,
         "children": [
           {
             "work_item_id": "00000000-0000-4000-8000-000000000034",
@@ -155,6 +176,24 @@
             "parent_reference": "MAIN-4",
             "other_space": null,
             "partial": false,
+            "tasks": {
+              "total": 1,
+              "closed": 0,
+              "completed": 0,
+              "cancelled": 0,
+              "by_category": {
+                "triage": 0,
+                "deferred": 0,
+                "ready": 0,
+                "active": 1,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0,
+                "cancelled": 0
+              }
+            },
+            "baseline": null,
+            "baseline_absent": "not_accepted",
             "spent": {
               "agent_seconds": 0.0,
               "tokens": {
@@ -185,6 +224,9 @@
               "quality": null,
               "partly_measured": 0
             },
+            "sessions": 1,
+            "commits": 0,
+            "commits_unknown_repository": 0,
             "children": []
           }
         ]
@@ -205,6 +247,24 @@
         "parent_reference": null,
         "other_space": null,
         "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 0,
+            "active": 1,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": null,
+        "baseline_absent": "not_accepted",
         "spent": {
           "agent_seconds": 0.0,
           "tokens": {
@@ -235,6 +295,9 @@
           "quality": null,
           "partly_measured": 0
         },
+        "sessions": 1,
+        "commits": 0,
+        "commits_unknown_repository": 0,
         "children": []
       },
       {
@@ -248,6 +311,28 @@
         "parent_reference": null,
         "other_space": null,
         "partial": false,
+        "tasks": {
+          "total": 4,
+          "closed": 2,
+          "completed": 1,
+          "cancelled": 1,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 2,
+            "active": 0,
+            "review": 0,
+            "completed": 1,
+            "blocked": 0,
+            "cancelled": 1
+          }
+        },
+        "baseline": {
+          "tasks": 3,
+          "basis": "started",
+          "taken_at": "2026-01-02T03:04:05Z"
+        },
+        "baseline_absent": null,
         "spent": {
           "agent_seconds": 900.0,
           "tokens": {
@@ -278,6 +363,9 @@
           "quality": "observed",
           "partly_measured": 0
         },
+        "sessions": 1,
+        "commits": 0,
+        "commits_unknown_repository": 0,
         "children": [
           {
             "work_item_id": "00000000-0000-4000-8000-000000000042",
@@ -290,6 +378,24 @@
             "parent_reference": "MAIN-9",
             "other_space": null,
             "partial": false,
+            "tasks": {
+              "total": 2,
+              "closed": 0,
+              "completed": 0,
+              "cancelled": 0,
+              "by_category": {
+                "triage": 0,
+                "deferred": 0,
+                "ready": 2,
+                "active": 0,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0,
+                "cancelled": 0
+              }
+            },
+            "baseline": null,
+            "baseline_absent": "not_started",
             "spent": {
               "agent_seconds": 300.0,
               "tokens": {
@@ -320,6 +426,9 @@
               "quality": "observed",
               "partly_measured": 0
             },
+            "sessions": 1,
+            "commits": 0,
+            "commits_unknown_repository": 0,
             "children": [
               {
                 "work_item_id": "00000000-0000-4000-8000-000000000040",
@@ -332,6 +441,24 @@
                 "parent_reference": "MAIN-10",
                 "other_space": null,
                 "partial": false,
+                "tasks": {
+                  "total": 1,
+                  "closed": 0,
+                  "completed": 0,
+                  "cancelled": 0,
+                  "by_category": {
+                    "triage": 0,
+                    "deferred": 0,
+                    "ready": 1,
+                    "active": 0,
+                    "review": 0,
+                    "completed": 0,
+                    "blocked": 0,
+                    "cancelled": 0
+                  }
+                },
+                "baseline": null,
+                "baseline_absent": "not_started",
                 "spent": {
                   "agent_seconds": 0.0,
                   "tokens": {
@@ -362,6 +489,9 @@
                   "quality": null,
                   "partly_measured": 0
                 },
+                "sessions": 0,
+                "commits": 0,
+                "commits_unknown_repository": 0,
                 "children": []
               }
             ]
@@ -384,6 +514,24 @@
         "parent_reference": null,
         "other_space": null,
         "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": null,
+        "baseline_absent": "not_accepted",
         "spent": {
           "agent_seconds": 0.0,
           "tokens": {
@@ -414,6 +562,9 @@
           "quality": null,
           "partly_measured": 0
         },
+        "sessions": 0,
+        "commits": 0,
+        "commits_unknown_repository": 0,
         "children": [
           {
             "work_item_id": "00000000-0000-4000-8000-000000000037",
@@ -431,6 +582,24 @@
             "parent_reference": "MAIN-15",
             "other_space": null,
             "partial": false,
+            "tasks": {
+              "total": 1,
+              "closed": 0,
+              "completed": 0,
+              "cancelled": 0,
+              "by_category": {
+                "triage": 1,
+                "deferred": 0,
+                "ready": 0,
+                "active": 0,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0,
+                "cancelled": 0
+              }
+            },
+            "baseline": null,
+            "baseline_absent": "not_accepted",
             "spent": {
               "agent_seconds": 0.0,
               "tokens": {
@@ -461,6 +630,9 @@
               "quality": null,
               "partly_measured": 0
             },
+            "sessions": 0,
+            "commits": 0,
+            "commits_unknown_repository": 0,
             "children": []
           }
         ]
@@ -476,6 +648,28 @@
         "parent_reference": null,
         "other_space": null,
         "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 0,
+            "active": 1,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": {
+          "tasks": 1,
+          "basis": "accepted",
+          "taken_at": "2026-01-02T03:04:05Z"
+        },
+        "baseline_absent": null,
         "spent": {
           "agent_seconds": 0.0,
           "tokens": {
@@ -506,6 +700,9 @@
           "quality": null,
           "partly_measured": 0
         },
+        "sessions": 0,
+        "commits": 0,
+        "commits_unknown_repository": 0,
         "children": []
       }
     ]

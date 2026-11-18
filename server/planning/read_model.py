@@ -1292,6 +1292,14 @@ _SESSIONS_OF_ITEMS = (
 )
 
 
+#: The commits attached now to the items `{items}` names. A commit a rewrite replaced is
+#: not among them: its attachments moved to the commit that replaced it.
+_ATTACHED_OF = (
+    " FROM work_item_commits a JOIN commits c ON c.commit_id = a.commit_id"
+    " WHERE a.work_item_id {items} AND c.rewritten_to IS NULL"
+)
+
+
 def _session_calls(identity: str, name: str = "id") -> dict[str, str]:
     """The values `_SESSION_CALLS_OF` names, the items as `name`."""
 
@@ -1319,8 +1327,7 @@ def part_counts(
         " (SELECT COUNT(*) FROM work_item_links WHERE from_id = :id)"
         " + (SELECT COUNT(*) FROM work_item_links WHERE to_id = :id),"
         " (SELECT COUNT(*) FROM work_item_refs WHERE work_item_id = :id),"
-        " (SELECT COUNT(*) FROM work_item_commits a JOIN commits c"
-        "  ON c.commit_id = a.commit_id WHERE a.work_item_id = :id AND c.rewritten_to IS NULL),"
+        " (SELECT COUNT(*)" + _ATTACHED_OF.format(items="= :id") + "),"
         " (SELECT COUNT(*) FROM work_item_events WHERE work_item_id = :id"
         "  AND action = 'mentioned'),"
         " (SELECT COUNT(DISTINCT session_id)" + _SESSION_CALLS + "),"
@@ -1476,10 +1483,9 @@ def commits(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
 
     rows = conn.execute(
         "SELECT c.project_id, c.hash, c.subject, c.committed_at, c.session_id, c.agent_id,"
-        " a.attached_by, a.label FROM work_item_commits a"
-        " JOIN commits c ON c.commit_id = a.commit_id"
-        " WHERE a.work_item_id = ? AND c.rewritten_to IS NULL"
-        " ORDER BY a.created_at DESC, a.commit_id DESC",
+        " a.attached_by, a.label"
+        + _ATTACHED_OF.format(items="= ?")
+        + " ORDER BY a.created_at DESC, a.commit_id DESC",
         (work_item_id,),
     ).fetchall()
     names: dict[str, str] = {}
@@ -1659,6 +1665,27 @@ def session_ids(conn: sqlite3.Connection, ids: Iterable[str]) -> dict[str, set[s
         _session_calls(json.dumps(sorted(set(ids))), "ids"),
     ):
         found.setdefault(str(item), set()).add(str(session))
+    return found
+
+
+def attached_commits(
+    conn: sqlite3.Connection, ids: Iterable[str]
+) -> dict[str, set[tuple[int, bool]]]:
+    """The commits attached now to each of these items, as `commits` reads one item's, in
+    one read: each commit's row id and whether its repository is known. An item with none
+    is absent.
+
+    A commit of no known repository is stored as its hash was written, abbreviated too,
+    so two of its rows may be one commit: its row id counts records, not commits.
+    """
+
+    found: dict[str, set[tuple[int, bool]]] = {}
+    for item, commit, known in conn.execute(
+        "SELECT a.work_item_id, c.commit_id, c.project_id IS NOT NULL"  # noqa: S608 - fixed clauses
+        + _ATTACHED_OF.format(items="IN (SELECT value FROM json_each(?))"),
+        (json.dumps(sorted(set(ids))),),
+    ):
+        found.setdefault(str(item), set()).add((int(commit), bool(known)))
     return found
 
 
