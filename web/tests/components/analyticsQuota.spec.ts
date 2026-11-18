@@ -15,8 +15,6 @@
  * The figures come from `quotaAt`: the tightest five hours is the fourth account's 74 %, the
  * tightest week the second account's 88 %, and the first account is neither.
  */
-import { flushPromises } from '@vue/test-utils'
-import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
@@ -26,6 +24,17 @@ import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { NIGHT, quotaAnswer, quotaAt, UNREAD } from '../fixtures/quota.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import {
+  accountNamed,
+  accounts,
+  headings,
+  plain,
+  radioNamed,
+  says,
+  showTable,
+  tile,
+  windowOf,
+} from '../support/quotaPanel.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
 const NOW = new Date(2026, 10, 11, 14, 30)
@@ -46,63 +55,6 @@ const quotaOf = (accounts: number[]) => () => {
     ...quota,
     accounts: quota.accounts.filter((_, index) => accounts.includes(index)),
   })
-}
-
-const tile = (page: VueWrapper, section: string) => page.get(`[data-section="${section}"]`)
-/** What a tile says: its lead, its share and the state beside its name. */
-const textIn = (page: VueWrapper, section: string, part: string) =>
-  tile(page, section)
-    .findAll(part)
-    .map((one) => one.text())
-    .join('')
-const says = (page: VueWrapper, section: string) => ({
-  lead: textIn(page, section, '.rail-tile-lead'),
-  aside: textIn(page, section, '.rail-tile-aside'),
-  count: textIn(page, section, '.analytics-rail-count'),
-})
-const accounts = (page: VueWrapper) => page.findAll('.quota-account')
-const accountNamed = (page: VueWrapper, name: string) => {
-  const found = accounts(page).find((one) => one.get('.quota-account-name').text() === name)
-  if (!found) throw new Error(`no account ${name}`)
-  return found
-}
-/** Words as a reader reads them: the app keeps a figure and its unit together with a no-break space. */
-const plain = (text: string) => text.replaceAll(' ', ' ')
-
-/** Shows the panel as a table by its own switch, named «Table», not a step line's span. */
-async function showTable(page: VueWrapper) {
-  const table = page
-    .findAll('[role="radio"]')
-    .filter((one) => one.text() === messages.en.analytics.shown.table)
-  expect(table).toHaveLength(1)
-  await table[0]?.trigger('click')
-  await flushPromises()
-}
-/**
- * What a window of the panel says: its state, its lead, its facts, and what its bar's hint adds —
- * where steady use would stand, then how old the latest reading is and who read it — with the
- * bar's words for a screen reader.
- */
-function windowOf(account: DOMWrapper<Element>, kind: string) {
-  const window = account.get(`.quota-window[data-window="${kind}"]`)
-  const fact = (key: string) => plain(window.get(`[data-fact="${key}"]`).text())
-  const bar = window.get('.quota-window-bar')
-  const [even, latest, ...more] = plain(bar.attributes('data-tooltip') ?? '').split('\n')
-  return {
-    state: window.attributes('data-state'),
-    lead: plain(window.get('.quota-window-lead').text()),
-    filled: window.find('.window-fill').exists(),
-    /** The parts of the bar's hatched tail, and whether the forecast's line names its hatch. */
-    tail: window.findAll('.window-ahead').length,
-    keyed: window.find('[data-fact="forecast"] .quota-window-swatch').exists(),
-    reset: fact('reset'),
-    forecast: fact('forecast'),
-    facts: window.findAll('[data-fact]').map((one) => one.attributes('data-fact')),
-    even,
-    latest,
-    more,
-    label: plain(bar.get('.window-track').attributes('aria-label') ?? ''),
-  }
 }
 
 beforeEach(() => {
@@ -199,7 +151,8 @@ describe('the quota tiles', () => {
 
     const opened = await mountAnalytics({ routeState: { by: 'quota_week' } })
     expect(opened.get('[aria-current="page"]').attributes('data-section')).toBe('quota_week')
-    expect(opened.get('.quota-panel h2').text()).toBe('Week')
+    // The panel's heading, the one of its level under the page's, names the section opened.
+    expect(headings(opened, 2)).toEqual(['Week'])
   })
 })
 
@@ -330,7 +283,7 @@ describe('the quota panel', () => {
     // reader's clock: 11:30 to 14:30, and an hour of forecast to 15:30.
     expect(work.findAll('.step-axis span').map((one) => one.text())).toEqual(['11:30', '15:30'])
     // The whole window runs to its reset, two hours after 14:30.
-    await work.findAll('.step-views [role="radio"]')[1]?.trigger('click')
+    await radioNamed(work, messages.en.analytics.quota.readings.whole).trigger('click')
     expect(work.findAll('.step-axis span').map((one) => one.text())).toEqual(['11:30', '16:30'])
     // The panel's own switch, not a line's span, turns the readings into a table.
     await showTable(page)

@@ -20,63 +20,7 @@ import StepLine from '@/shared/ui/StepLine.vue'
 import StepLineTable from '@/shared/ui/StepLineTable.vue'
 import type { StepAhead, StepPoint, StepWords } from '@/shared/ui/windowGeometry.ts'
 
-const style = (element: { attributes: (name: string) => string | undefined }) =>
-  element.attributes('style') ?? ''
-
-/** A figure to the hundredth, so a check holds the number and not how many digits print it. */
-const hundredths = (value: number) => Math.round(value * 100) / 100
-
-type Point = [number, number]
-
-/**
- * How each command a line of steps draws with moves the pen from where it stands, and how many
- * numbers one move takes: a line to a point, a run across, a run up or down.
- */
-const MOVES: Record<string, { take: number; to: (at: Point, values: number[]) => Point }> = {
-  M: { take: 2, to: (_, [x = Number.NaN, y = Number.NaN]) => [x, y] },
-  L: { take: 2, to: (_, [x = Number.NaN, y = Number.NaN]) => [x, y] },
-  H: { take: 1, to: ([, y], [x = Number.NaN]) => [x, y] },
-  V: { take: 1, to: ([x], [y = Number.NaN]) => [x, y] },
-}
-
-/**
- * The corners a step line's path runs through, in the drawing's units, however its commands are
- * written: absolute or relative, a run across or up and down, or a line to a point. A curve, or
- * any command a line of steps does not draw with, throws, so it fails the check that reads it.
- */
-function corners(d = ''): Point[] {
-  const found: Point[] = []
-  let at: Point = [0, 0]
-  for (const [, command = '', given = ''] of d.matchAll(/([A-Za-z])([^A-Za-z]*)/gu)) {
-    const move = MOVES[command.toUpperCase()]
-    if (!move) throw new Error(`a step line draws with no «${command}»: ${d}`)
-    const values = given
-      .trim()
-      .split(/[\s,]+/u)
-      .filter(Boolean)
-      .map(Number)
-    const relative = command !== command.toUpperCase()
-    for (let first = 0; first + move.take <= values.length; first += move.take) {
-      const taken = values.slice(first, first + move.take)
-      const [x, y] = relative ? move.to([0, 0], taken) : move.to(at, taken)
-      at = relative ? [at[0] + x, at[1] + y] : [x, y]
-      found.push([hundredths(at[0]), hundredths(at[1])])
-    }
-  }
-  return found
-}
-
-/** Where a stretch stands across the plot and how wide it is, in percent, however it is written. */
-function placement(element: { attributes: (name: string) => string | undefined }) {
-  const declared = new Map(
-    style(element)
-      .split(';')
-      .map((one) => one.split(':').map((part) => part.trim()))
-      .filter(([name]) => name)
-      .map(([name = '', value = '']) => [name, hundredths(Number.parseFloat(value))]),
-  )
-  return { start: declared.get('inset-inline-start'), size: declared.get('inline-size') }
-}
+import { corners, declared, placement, style } from '../support/stepDrawing.ts'
 
 const START = Date.UTC(2030, 2, 6, 11)
 const HOUR = 3_600_000
@@ -348,9 +292,12 @@ const targets = (line: ReturnType<typeof openLine>) =>
     kind: target.attributes('data-target'),
     stop: target.attributes('data-stop'),
     hint: target.attributes('data-tooltip'),
-    reach: style(target),
+    reach: placement(target),
     shown: target.get('.step-target-mark').classes('step-shown'),
   }))
+
+/** The step the reach of «now» takes past its start: the line's own width for a pointer. */
+const REACH = 'var(--step-reach)'
 
 describe('the step line past its readings', () => {
   it('points at now and at the forecast by the reset, each with its own hint, painted only when pointed at', async () => {
@@ -362,23 +309,24 @@ describe('the step line past its readings', () => {
         kind: 'now',
         stop: '2',
         hint: 'Now: 50%\nLast reading at h1.5',
-        reach: 'inset-inline-start: 60%; inset-inline-end: auto; inline-size: var(--step-reach);',
+        reach: { start: 60, end: 'auto', size: REACH },
         shown: false,
       },
       {
         kind: 'reset',
         stop: '3',
         hint: 'Forecast by the reset: 70%–100%\nResets at h5',
-        reach:
-          'inset-inline-start: min(calc(60% + var(--step-reach)), calc(100% - var(--step-reach))); inset-inline-end: 0; inline-size: auto;',
+        // From past now's reach, and never so far on that its own reach leaves the plot.
+        reach: { start: `min(calc(60% + ${REACH}), calc(100% - ${REACH}))`, end: 0, size: 'auto' },
         shown: false,
       },
     ])
     // The readings keep their own stretches and are still the first places; the last holds only
     // its own step, since «now» takes the pointer from the line's end on.
-    expect(
-      line.findAll('.step-reach').map((one) => style(one).includes('min-inline-size: 0')),
-    ).toEqual([false, true])
+    expect(line.findAll('.step-reach').map((one) => declared(one)['min-inline-size'])).toEqual([
+      undefined,
+      0,
+    ])
     await line.get('[data-target="reset"]').trigger('pointerenter')
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
@@ -388,9 +336,11 @@ describe('the step line past its readings', () => {
     await line.get('[data-target="reset"]').trigger('pointerleave')
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, false])
     // The reset's mark spans the corridor's end, from its faster edge at 100 % to its slower at 70 %.
-    expect(style(line.get('.step-reset-mark'))).toBe(
-      '--step-high: 0; --step-low: 0.3; --step-side: 100%;',
-    )
+    expect(declared(line.get('.step-reset-mark'))).toEqual({
+      '--step-high': 0,
+      '--step-low': 0.3,
+      '--step-side': 100,
+    })
     line.unmount()
   })
 
@@ -447,9 +397,11 @@ describe('the step line past its readings', () => {
       ['now', 'Now: 50%\nLast reading at h1.5'],
       ['reset', 'Forecast by the reset: 70%–100%\nResets at h5\nPast the right edge'],
     ])
-    expect(style(line.get('.step-reset-mark'))).toBe(
-      '--step-high: 0; --step-low: 0.4; --step-side: 100%;',
-    )
+    expect(declared(line.get('.step-reset-mark'))).toEqual({
+      '--step-high': 0,
+      '--step-low': 0.4,
+      '--step-side': 100,
+    })
     line.unmount()
   })
 
@@ -459,12 +411,12 @@ describe('the step line past its readings', () => {
     expect(line.find('.step-ahead').exists()).toBe(false)
     expect(line.find('[data-key="ahead"]').exists()).toBe(false)
     expect(targets(line).map(({ kind, reach }) => [kind, reach])).toEqual([
-      ['now', 'inset-inline-start: 60%; inset-inline-end: 0; inline-size: auto;'],
+      ['now', { start: 60, end: 0, size: 'auto' }],
     ])
     // Read at the reset, now stands at the plot's end and takes the pointer over the last 24px.
     await line.setProps({ end: START + 5 * HOUR })
     expect(targets(line).map(({ reach }) => reach)).toEqual([
-      'inset-inline-start: auto; inset-inline-end: 0; inline-size: var(--step-reach);',
+      { start: 'auto', end: 0, size: REACH },
     ])
     line.unmount()
   })
@@ -475,7 +427,7 @@ describe('the step line past its readings', () => {
     expect(line.find('.step-ahead').exists()).toBe(false)
     // With no «now» after it, the last reading is as wide as a pointer can hit, as every other.
     expect(line.findAll('.step-reach')).toHaveLength(READ.length)
-    expect(line.findAll('.step-reach').some((one) => style(one).includes('min-inline-size'))).toBe(
+    expect(line.findAll('.step-reach').some((one) => 'min-inline-size' in declared(one))).toBe(
       false,
     )
     line.unmount()
