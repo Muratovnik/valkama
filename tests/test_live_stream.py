@@ -74,7 +74,7 @@ class LiveStreamTests(unittest.TestCase):
     """A real listener, read the way a browser's `EventSource` reads it."""
 
     def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
         environment = mock.patch.dict(os.environ, {"VALKAMA_DB": str(root / "store.sqlite3")})
@@ -98,6 +98,10 @@ class LiveStreamTests(unittest.TestCase):
         self.server = http_surface.PlatformHTTPServer(
             ("127.0.0.1", 0), http_surface.Handler, token_path=root / "installation-token"
         )
+        # A stream's handler closes its store connection after it unsubscribes, so a
+        # stream that has unsubscribed may still hold the store. Only non-daemon handler
+        # threads make `server_close` wait for each of them to close its connection.
+        self.server.daemon_threads = False
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(self.released)
