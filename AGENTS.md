@@ -87,7 +87,9 @@ is complete on its own.
   pin through its stdio front, `mcp_front`, which stops the old release before
   the new one opens the store. A process with no front that went stale while it
   ran still holds its connection, and `static_assets.SourceWatch` is what warns
-  about that one.
+  about that one. `tests/test_store_schema_pin.py` pins the fresh store's
+  declaration to the version it belongs to: a change to that declaration without
+  a raise fails it, and the commit that makes the raise moves the pin there.
 - For Valkama changes run:
 
 ```powershell
