@@ -29,6 +29,7 @@ import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 const props = defineProps<{
   /** The period the page's answer is compared with; null when it was not read. */
@@ -48,6 +49,8 @@ const props = defineProps<{
   usage: Usage
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
+  /** The value's name in runs, where it holds a task's title (`valueRuns`). */
+  nameRuns?: readonly TextRun[]
 }>()
 
 const { t } = useI18n()
@@ -74,7 +77,7 @@ const chart = computed<PeriodChartProps>(() => {
   const said = dayWords(measure, step.value)
   return {
     label: title.value,
-    series: [{ key: SERIES, label: props.name, slot: props.hue }],
+    series: [{ key: SERIES, label: props.name, labelRuns: props.nameRuns, slot: props.hue }],
     columns: usage.series.map((point, index) => {
       const figure = figureOf(measure, spentOf(point))
       const was = beforeSteps.value?.[index]

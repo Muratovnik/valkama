@@ -71,6 +71,7 @@ import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import { hintAnchorGone, hintAnchorResized } from '@/shared/ui/hintManager.ts'
 import type { Box, HintAlign, HintSide } from '@/shared/ui/hintPlacement.ts'
 import type { Point } from '@/shared/ui/hintWay.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 /** A registered exception's argument: a side, and `-start` to stand level with the element's start. */
 type TooltipPlace = HintSide | `${HintSide}-start`
@@ -82,6 +83,11 @@ export type TooltipKind = 'name' | 'clipped' | 'detail'
 interface TooltipLine {
   name: string
   figure?: string
+  /**
+   * The name as the runs its mark draws it in, where it holds a work item's title (`titleRuns`):
+   * its code is code in the hint too. `writtenText` of them is `name`.
+   */
+  runs?: readonly TextRun[]
   share?: string
 }
 

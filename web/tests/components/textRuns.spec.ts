@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { titleRuns } from '@/shared/lib/titleRuns.ts'
-import { drawRuns, runsDrawnIn, writtenText } from '@/shared/ui/textRuns.ts'
+import { cutRuns, drawRuns, runsDrawnIn, runsWithin, writtenText } from '@/shared/ui/textRuns.ts'
 
 function drawn(title: string) {
   const host = document.createElement('span')
@@ -63,6 +63,53 @@ describe('a title drawn in runs', () => {
     expect(writtenText(runsDrawnIn(anchor, 'Bump `RELEASE`') ?? [])).toBe('Bump `RELEASE`')
     // A hint whose words are not the drawn title's is laid as its own text.
     expect(runsDrawnIn(anchor, 'Bump RELEASE')).toBeNull()
+  })
+})
+
+describe('a line drawn in parts', () => {
+  const pair = 'MAIN-7 Raise `STORE_SCHEMA_VERSION` · high'
+
+  it('is cut where its end starts, as written, and never inside a piece of code', () => {
+    const runs = [
+      ...titleRuns('MAIN-7 Raise `STORE_SCHEMA_VERSION`'),
+      { kind: 'text' as const, text: ' · high' },
+    ]
+    const [start, end] = cutRuns(runs, 'MAIN-7 Raise `STORE_SCHEMA_VERSION`'.length)
+    expect(writtenText(start)).toBe('MAIN-7 Raise `STORE_SCHEMA_VERSION`')
+    expect(start.at(-1)).toEqual({ kind: 'code', text: 'STORE_SCHEMA_VERSION' })
+    expect(end).toEqual([{ kind: 'text', text: ' · high' }])
+    // A cut inside a run of text cuts it; a cut inside code leaves the code whole on its side.
+    expect(cutRuns(runs, 'MAIN-7 Ra'.length).map((part) => writtenText(part))).toEqual([
+      'MAIN-7 Ra',
+      'ise `STORE_SCHEMA_VERSION` · high',
+    ])
+    expect(cutRuns(runs, 'MAIN-7 Raise `STORE'.length).map((part) => writtenText(part))).toEqual([
+      'MAIN-7 Raise `STORE_SCHEMA_VERSION`',
+      ' · high',
+    ])
+  })
+
+  it('is found by its parts in order when no one part holds all its words', () => {
+    const anchor = document.createElement('span')
+    const [first, second] = [document.createElement('span'), document.createElement('span')]
+    anchor.append(first, second)
+    drawRuns(first, titleRuns('MAIN-7 Raise `STORE_SCHEMA_VERSION`'))
+    drawRuns(second, [{ kind: 'text', text: ' · high' }])
+    expect(writtenText(runsDrawnIn(anchor, pair) ?? [])).toBe(pair)
+    expect(runsDrawnIn(anchor, 'MAIN-7 Raise STORE_SCHEMA_VERSION · high')).toBeNull()
+  })
+
+  it('lays runs into the place a sentence of the interface keeps for them', () => {
+    const runs = titleRuns('Raise `X`')
+    expect(runsWithin('Task: \u{E000}', '\u{E000}', runs)).toEqual([
+      { kind: 'text', text: 'Task: ' },
+      ...runs,
+    ])
+    expect(writtenText(runsWithin('«\u{E000}» задача', '\u{E000}', runs))).toBe(
+      '«Raise `X`» задача',
+    )
+    // A sentence without the mark is its own words.
+    expect(runsWithin('Task', '\u{E000}', runs)).toEqual([{ kind: 'text', text: 'Task' }])
   })
 })
 

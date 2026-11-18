@@ -32,6 +32,7 @@ import { comparedLines, figureOf } from '@/pages/analytics/utils/usageFigures.ts
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage } from '@/shared/api/analyticsApi.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -102,6 +103,7 @@ function said(one: MovedLine) {
   return {
     key: one.line.key,
     name,
+    runs: words.valueRuns('work_item', one.line.value),
     amount,
     note,
     icon: one.by > 0 ? 'arrow-up' : 'arrow-down',
@@ -214,7 +216,16 @@ function pressAside(key: string, event: MouseEvent) {
               @click="(event: MouseEvent) => line.action && press(line.key, event)"
               @auxclick="(event: MouseEvent) => pressAside(line.key, event)"
             >
-              <span class="overview-changes-name one-line">{{ line.name }}</span>
+              <span
+                v-if="line.runs"
+                v-text-runs="line.runs"
+                class="overview-changes-name one-line"
+              />
+              <span
+                v-else
+                class="overview-changes-name one-line"
+                >{{ line.name }}</span
+              >
               <span class="overview-changes-by">
                 <VIcon
                   class="overview-changes-arrow"

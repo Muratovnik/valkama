@@ -75,6 +75,7 @@ import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -125,6 +126,8 @@ const named = computed<UsageGroupValue>(() => {
   return found ?? { id: props.value, unknown: false }
 })
 const name = computed(() => words.valueLabel(props.by, named.value))
+/** The name in runs, where it holds a task's title: its code is drawn as code in the heading. */
+const nameRuns = computed(() => words.valueRuns(props.by, named.value))
 watch(name, (title) => emit('named', title), { immediate: true })
 const card = computed(() => actions.taskLink(props.by, named.value))
 /** A middle press on the card's link opens it elsewhere, and is a press on it all the same. */
@@ -223,6 +226,7 @@ function rankedOf(breakdown: ValueBreakdown, usage: Usage): RankedRow[] {
     .map((line) => ({
       key: line.key,
       label: words.lineLabel(breakdown, line),
+      labelRuns: words.lineRuns(breakdown, line),
       detail: words.valueDetail(breakdown, line.value),
       value: weight(line),
       valueText: words.lineShare(props.measure, line.spent, whole),
@@ -265,6 +269,12 @@ const narrow = useNarrowCharts(body)
     :close-label="t('analytics.detail.close')"
     @close="emit('close')"
   >
+    <template
+      v-if="nameRuns"
+      #title
+    >
+      <span v-text-runs="nameRuns" />
+    </template>
     <template #facts>
       <div
         class="value-actions"
@@ -359,6 +369,7 @@ const narrow = useNarrowCharts(body)
           :filters="valueFilters(filters, by, value)"
           :measure="measure"
           :name="name"
+          :name-runs="nameRuns"
           :narrow="narrow"
           :read-at="readAt"
           :hue="hue"

@@ -53,9 +53,17 @@ export function titleRuns(title: string): TitleRun[] {
   return runs
 }
 
-/** A reference and its title on one line, «MAIN-12 · title», as runs: written, it is that line. */
-export const referencedTitleRuns = (reference: string, title: string): TitleRun[] => [
+/**
+ * A reference and its title on one line, «MAIN-12 · title», as runs: written, it is that line.
+ * `joint` is what stands between them, where a surface joins them otherwise, as Analytics names a
+ * task «MAIN-12 title» and keeps « · » for the two values of a pair.
+ */
+export const referencedTitleRuns = (
+  reference: string,
+  title: string,
+  joint = ' · ',
+): TitleRun[] => [
   { kind: 'reference', text: reference },
-  { kind: 'text', text: ' · ' },
+  { kind: 'text', text: joint },
   ...titleRuns(title),
 ]

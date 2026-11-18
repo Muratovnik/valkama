@@ -42,6 +42,7 @@ export function useRankedLines(options: {
         key: line.key,
         label,
         labelEnd: words.lineEnd(line),
+        labelRuns: words.lineRuns(options.by(), line),
         detail: words.valueDetail(options.by(), line.value),
         value: measureOf(options.measure(), line.spent) ?? 0,
         valueText: words.lineFigure(options.measure(), line.spent),

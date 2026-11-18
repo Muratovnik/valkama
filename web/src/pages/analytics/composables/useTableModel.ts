@@ -31,6 +31,7 @@ import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 /** A cell's figure and what it leaves out (`FigureWords`), which the cell says under it. */
 export interface TableCell extends FigureWords {
@@ -68,6 +69,8 @@ export interface TableLine {
   detail?: string
   /** The end of a pair's name that stays whole while the rest is cut (`PairName`). */
   nameEnd?: string
+  /** The name in runs, where it holds a task's title (`pairRuns`): its code is drawn as code. */
+  nameRuns?: readonly TextRun[]
 }
 
 /** What the rows of a table are, as its heading row counts them. */
@@ -176,6 +179,7 @@ export function useTableModel(source: () => TableSource) {
       rest: line.kind !== 'category',
       name: words.pairLabel(by, line.value, line.second),
       nameEnd: words.pairEnd(line.second) || undefined,
+      nameRuns: words.pairRuns(by, line.value, line.second),
       valueName: words.valueLabel(by, line.value),
       detail: words.valueDetail(by, line.value),
     }

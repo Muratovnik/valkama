@@ -100,6 +100,7 @@ const legend = computed<PeriodSeries[]>(() =>
   ring.value.sectors.map((sector) => ({
     key: sector.key,
     label: nameOf(sector),
+    labelRuns: sector.row?.labelRuns,
     slot: sector.slot,
     action: sector.row?.action,
     actionable: sector.row?.actionable,

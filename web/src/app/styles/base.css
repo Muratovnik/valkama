@@ -92,7 +92,12 @@ table {
   white-space: nowrap;
 }
 
+/* Its lines are the line's own height: the monospace face sits on the baseline at another
+   ascent than the text's, and at the line's own leading its box stood a pixel past the line's,
+   so each line holding code grew and a list's two clamped lines stood 2px taller. At the flat
+   leading its box stays inside the line's, on the same baseline. */
 .text-code {
+  line-height: var(--line-height-flat);
   overflow-wrap: anywhere;
 }
 

@@ -8,6 +8,12 @@
  * id, so two of one title can be told apart; an account's whole id is never a hint. Work with no
  * value — no task, a session's own run — and a value nobody can place say so in words of their
  * own, per dimension: «unknown» is said only of what nobody can place.
+ *
+ * A task's name holds its title, and code in a title is drawn as code wherever the page draws the
+ * name (`titleRuns`): beside each name that holds one, its runs (`valueRuns`, `pairRuns`,
+ * `lineRuns`), which a chart, its table, its hints, a filter's choice and chip, a tile and the side
+ * panel draw it in. Written, they are the name, backticks included, which is what every place
+ * that holds it as text keeps: an accessible name, a hint's text, a download, a sort, a search.
  */
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -29,9 +35,11 @@ import { aliasOf } from '@/shared/lib/accountAliases.ts'
 import { accountLabel } from '@/shared/lib/accountLabel.ts'
 import type { AnsweredNames } from '@/shared/lib/accountLabel.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { referencedTitleRuns } from '@/shared/lib/titleRuns.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
@@ -77,6 +85,18 @@ function valueDetail(name: UsageDimension, value: UsageGroupValue | null): strin
   const id = value?.id
   if (!value || !id) return
   if (name === 'executor') return value.title ? sessionPlace({ ...value, id }) : undefined
+}
+
+/**
+ * A value's name as the runs it is drawn in, where it holds a task's title: its reference whole
+ * and its title's code as code (`referencedTitleRuns`); undefined for a name that holds no title,
+ * which is drawn as the text it is. Written, the runs are the value's name (`valueLabel`).
+ */
+function valueRuns(name: UsageDimension, value: UsageGroupValue): TextRun[] | undefined {
+  if (name !== 'work_item' || valueKind(value) !== 'category' || !value.reference) return
+  return value.title
+    ? referencedTitleRuns(value.reference, value.title, ' ')
+    : [{ kind: 'reference', text: value.reference }]
 }
 
 /**
@@ -321,11 +341,33 @@ export function useSpendingWords() {
     second?: SpendingLine['second'],
   ) => `${valueLabel(name, value)}${pairEnd(second)}`
 
+  /** A value or a pair as `pairLabel` names it, in runs where either holds a task's title. */
+  function pairRuns(
+    name: UsageDimension,
+    value: UsageGroupValue,
+    second?: SpendingLine['second'],
+  ): TextRun[] | undefined {
+    const first = valueRuns(name, value)
+    const end = second && valueRuns(second.dimension, second.value)
+    if (!first && !end) return
+    const text = (words: string): TextRun[] => (words ? [{ kind: 'text', text: words }] : [])
+    return [
+      ...(first ?? text(valueLabel(name, value))),
+      ...(second
+        ? [...text(' · '), ...(end ?? text(valueLabel(second.dimension, second.value)))]
+        : []),
+    ]
+  }
+
   /** A line of a breakdown by its name: a value or a pair, or the folded tail with how many it holds. */
   const lineLabel = (name: UsageDimension, line: SpendingLine) =>
     line.value
       ? pairLabel(name, line.value, line.second)
       : t('analytics.values.other', { count: line.folded }, line.folded)
+
+  /** A line's name (`lineLabel`) in runs where it holds a task's title; the folded tail has none. */
+  const lineRuns = (name: UsageDimension, line: SpendingLine) =>
+    line.value ? pairRuns(name, line.value, line.second) : undefined
 
   /** The end a line's name keeps whole where it is cut: a pair's (`pairEnd`); none otherwise. */
   const lineEnd = (line: SpendingLine) => (line.value && pairEnd(line.second)) || undefined
@@ -584,15 +626,18 @@ export function useSpendingWords() {
     lineFigureWords,
     lineEnd,
     lineLabel,
+    lineRuns,
     lineShare,
     measure,
     noneLabel,
     pairEnd,
     pairLabel,
+    pairRuns,
     tokenKinds,
     unpriced,
     valueDetail,
     valueLabel,
+    valueRuns,
     withShare,
   }
 }

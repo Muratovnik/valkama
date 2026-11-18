@@ -35,6 +35,7 @@ import { filterKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
+import { runsWithin } from '@/shared/ui/textRuns.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -61,25 +62,33 @@ const words = useSpendingWords()
 const { options } = useFilterOptions()
 const fieldsId = useId()
 
+/** What holds the value's place in a chip's sentence while its runs are laid in it. */
+const VALUE_MARK = '\u{E000}'
+
 /** Each value a filter is set to, named as its field names it, in the dimensions' order. */
 const chips = computed(() =>
   props.dimensions.flatMap((dimension) => {
     const values = props.filters[dimension] ?? []
     const keys = values.map((value) => filterKey(value))
     const named = options(dimension, props.values[dimension], keys)
-    return values.map((value, index) => ({
-      dimension,
-      value,
-      key: `${dimension}:${keys[index]}`,
-      label: t('analytics.frame.filter', {
-        dimension: words.dimension(dimension),
-        value: named.find((option) => option.value === keys[index])?.label ?? value,
-      }),
-    }))
+    return values.map((value, index) => {
+      const option = named.find((one) => one.value === keys[index])
+      const said = (name: string | null) =>
+        t('analytics.frame.filter', { dimension: words.dimension(dimension), value: name })
+      return {
+        dimension,
+        value,
+        key: `${dimension}:${keys[index]}`,
+        label: said(option?.label ?? value),
+        runs: option?.runs && runsWithin(said(VALUE_MARK), VALUE_MARK, option.runs),
+      }
+    })
   }),
 )
 
-const chipNames = computed(() => chips.value.map(({ key, label }) => ({ value: key, label })))
+const chipNames = computed(() =>
+  chips.value.map(({ key, label, runs }) => ({ value: key, label, runs })),
+)
 
 const chipRoom = useTemplateRef<HTMLElement>('chipRoom')
 const chipMeasure = useTemplateRef<HTMLElement>('chipMeasure')

@@ -11,6 +11,7 @@ import { computed } from 'vue'
 import type { RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
 import { rankRows } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
+import PairName from '@/shared/ui/PairName.vue'
 
 const props = defineProps<{
   /** What the table shows, as its caption: "Time by project". */
@@ -72,6 +73,8 @@ const empty = computed(() => !props.rows.length)
           scope="row"
           class="chart-cell chart-name"
         >
+          <!-- The link's words are the name `PairName` writes as text, which the rule cannot see. -->
+          <!-- eslint-disable-next-line vuejs-accessibility/anchor-has-content -->
           <a
             v-if="row.href"
             class="chart-press"
@@ -81,7 +84,10 @@ const empty = computed(() => !props.rows.length)
             @click="(event: MouseEvent) => emit('follow', row.key, event)"
             @auxclick="(event: MouseEvent) => pressAside(row.key, event)"
           >
-            {{ row.label }}
+            <PairName
+              :name="row.label"
+              :runs="row.labelRuns"
+            />
           </a>
           <button
             v-else-if="row.actionable"
@@ -91,9 +97,16 @@ const empty = computed(() => !props.rows.length)
             :data-key="row.key"
             @click="emit('select', row.key)"
           >
-            {{ row.label }}
+            <PairName
+              :name="row.label"
+              :runs="row.labelRuns"
+            />
           </button>
-          <template v-else>{{ row.label }}</template>
+          <PairName
+            v-else
+            :name="row.label"
+            :runs="row.labelRuns"
+          />
           <span
             v-if="row.detail"
             class="chart-detail"

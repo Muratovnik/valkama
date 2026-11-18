@@ -10,8 +10,10 @@ import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
+import { writtenText } from '@/shared/ui/textRuns.ts'
 
 import { analyticsI18n } from '../support/analyticsReads.ts'
 
@@ -270,5 +272,65 @@ describe('the name of an executor and an account', () => {
     const words = wordsIn('en')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
     expect(words.valueDetail('account', account)).toBeUndefined()
+  })
+})
+
+describe('the name of a task whose title holds code', () => {
+  const coded = {
+    id: '00000000-0000-4000-8000-000000000007',
+    unknown: false,
+    reference: 'MAIN-7',
+    title: 'Raise `STORE_SCHEMA_VERSION` to 18',
+  }
+  const model = { id: 'model-a', unknown: false }
+  const line = (second?: SpendingLine['second']): SpendingLine => ({
+    folded: 0,
+    key: 'one',
+    kind: 'category',
+    spent: spent(60),
+    value: coded,
+    ...(second ? { second } : {}),
+  })
+
+  it('is written with its backticks, and drawn in runs that set its code as code', () => {
+    const words = wordsIn('en')
+    expect(words.valueLabel('work_item', coded)).toBe('MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18')
+    expect(words.valueRuns('work_item', coded)).toEqual([
+      { kind: 'reference', text: 'MAIN-7' },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: 'Raise ' },
+      { kind: 'code', text: 'STORE_SCHEMA_VERSION' },
+      { kind: 'text', text: ' to 18' },
+    ])
+  })
+
+  it('keeps a pair whole as written, its end drawn as text, and either side may be the task', () => {
+    const words = wordsIn('en')
+    const byModel = line({ dimension: 'model', value: model })
+    expect(words.lineLabel('work_item', byModel)).toBe(
+      'MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18 · model-a',
+    )
+    expect(writtenText(words.lineRuns('work_item', byModel) ?? [])).toBe(
+      'MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18 · model-a',
+    )
+    const taskSecond = {
+      ...byModel,
+      value: model,
+      second: { dimension: 'work_item', value: coded },
+    }
+    expect(writtenText(words.lineRuns('model', taskSecond as SpendingLine) ?? [])).toBe(
+      'model-a · MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18',
+    )
+  })
+
+  it('has no runs where its name holds no title: no task, a deleted one, a model, the tail', () => {
+    const words = wordsIn('en')
+    expect(words.valueRuns('work_item', { id: null, unknown: false })).toBeUndefined()
+    expect(words.valueRuns('work_item', { ...coded, reference: null, title: null })).toBeUndefined()
+    expect(words.valueRuns('model', model)).toBeUndefined()
+    expect(words.lineRuns('work_item', { ...line(), value: null, kind: 'other' })).toBeUndefined()
+    expect(words.valueRuns('work_item', { ...coded, title: null })).toEqual([
+      { kind: 'reference', text: 'MAIN-7' },
+    ])
   })
 })

@@ -110,6 +110,7 @@ const chosen = computed<string[]>(() =>
 )
 const known = computed(() => new Map(props.options.map((option) => [option.value, option])))
 const labelOf = (value: string) => known.value.get(value)?.label ?? value
+const runsOf = (value: string) => known.value.get(value)?.runs
 const full = computed(() => several.value && chosen.value.length >= props.max)
 const searched = computed(() =>
   searchChoices({
@@ -130,7 +131,9 @@ const internal = computed(() => {
 const display = (entry: unknown) => (typeof entry === 'string' ? labelOf(tokenValue(entry)) : '')
 const shownLabel = computed(() => (several.value ? '' : display(internal.value)))
 const chips = computed(() =>
-  several.value ? chosen.value.map((value) => ({ value, label: labelOf(value) })) : [],
+  several.value
+    ? chosen.value.map((value) => ({ value, label: labelOf(value), runs: runsOf(value) }))
+    : [],
 )
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
 const invalidMark = computed(() => (props.error ? 'true' : undefined))

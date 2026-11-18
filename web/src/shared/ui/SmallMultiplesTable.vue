@@ -18,6 +18,7 @@ import type {
   MultiplesWords,
   SmallMultiple,
 } from '@/shared/ui/multiplesGeometry.ts'
+import PairName from '@/shared/ui/PairName.vue'
 
 const props = defineProps<{
   /** What the table shows, as its caption. */
@@ -111,9 +112,16 @@ const rows = computed(() => {
             @click="(event: MouseEvent) => press(row, event)"
             @auxclick="(event: MouseEvent) => pressAside(row, event)"
           >
-            {{ row.label }}
+            <PairName
+              :name="row.label"
+              :runs="row.labelRuns"
+            />
           </component>
-          <template v-else>{{ row.label }}</template>
+          <PairName
+            v-else
+            :name="row.label"
+            :runs="row.labelRuns"
+          />
         </th>
         <td
           v-for="cell in row.cells"

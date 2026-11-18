@@ -122,6 +122,10 @@ function seriesName(line: StackLine['line']) {
   return reference ?? words.lineLabel(props.by, line)
 }
 
+/** A series' name in runs where it holds a task's title; none where the chart names it by number. */
+const seriesRuns = (line: NonNullable<StackLine['line']>) =>
+  props.brief && props.by === 'work_item' ? undefined : words.lineRuns(props.by, line)
+
 /** The page's colour keys, which the stack's hues are ranked over (`useColourPlaces`). */
 const places = useColourPlaces()
 const stacked = computed(() =>
@@ -137,7 +141,7 @@ const series = computed(() =>
   stacked.value.map((one) => ({
     ...one,
     label: seriesName(one.line),
-    ...(one.line ? { labelEnd: words.lineEnd(one.line) } : {}),
+    ...(one.line ? { labelEnd: words.lineEnd(one.line), labelRuns: seriesRuns(one.line) } : {}),
     ...(one.line ? marks.markOf(one.line) : {}),
   })),
 )

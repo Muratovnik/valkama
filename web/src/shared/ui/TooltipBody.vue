@@ -13,11 +13,15 @@
  * marked by a band and a semibold name, and the width of every name that can be marked is held as
  * wide as it is semibold, so marking one moves nothing and the hint is not measured again.
  *
+ * A name its mark draws in runs, a task's title with code in it, is drawn here in the same runs
+ * (`runs`, `textRuns.ts`): its code is code in the hint as on the chart.
+ *
  * The host estimates the hint's width before it is drawn from the same tokens this grid is laid
  * out by (`bodyWidth` in `TooltipHost`): the swatch, the room between columns, a row's inset.
  */
 import { computed } from 'vue'
 
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import type { TooltipBody, TooltipRow } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -54,7 +58,16 @@ const heldName = (row: TooltipRow) => (row.key ? row.name : undefined)
         class="tooltip-body-swatch series-fill"
         :data-slot="body.head.slot"
       />
-      <span class="tooltip-body-name">{{ body.head.name }}</span>
+      <span
+        v-if="body.head.runs"
+        v-text-runs="body.head.runs"
+        class="tooltip-body-name"
+      />
+      <span
+        v-else
+        class="tooltip-body-name"
+        >{{ body.head.name }}</span
+      >
       <span
         v-if="body.head.figure"
         class="tooltip-body-figure"
@@ -86,6 +99,13 @@ const heldName = (row: TooltipRow) => (row.key ? row.name : undefined)
         :data-slot="row.slot"
       />
       <span
+        v-if="row.runs"
+        v-text-runs="row.runs"
+        class="tooltip-body-name"
+        :data-name="heldName(row)"
+      />
+      <span
+        v-else
         class="tooltip-body-name"
         :data-name="heldName(row)"
         >{{ row.name }}</span

@@ -74,7 +74,7 @@ const slotOf = (one: PlacedMultiple) =>
 
 const nameHint = (one: PlacedMultiple) =>
   namedHint(
-    { label: one.label, value: figureOf(one), slot: slotOf(one) },
+    { label: one.label, labelRuns: one.labelRuns, value: figureOf(one), slot: slotOf(one) },
     whole.value,
     props.formatShare,
   )
@@ -86,7 +86,11 @@ function periodHint(one: PlacedMultiple, index: number) {
   const figure =
     value === null || value === undefined ? (props.words.absent ?? '—') : props.formatValue(value)
   return period
-    ? multiplePeriodHint({ label: one.label, slot: slotOf(one) }, period.label, figure)
+    ? multiplePeriodHint(
+        { label: one.label, labelRuns: one.labelRuns, slot: slotOf(one) },
+        period.label,
+        figure,
+      )
     : undefined
 }
 
@@ -153,7 +157,8 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             ><span :id="wordsId(one)"
               ><PairName
                 :name="one.label"
-                :end="one.labelEnd" /></span
+                :end="one.labelEnd"
+                :runs="one.labelRuns" /></span
           ></component>
           <span class="multiple-value">{{ one.valueText }}</span>
           <span
@@ -205,7 +210,8 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             ><span :id="wordsId(one)"
               ><PairName
                 :name="one.label"
-                :end="one.labelEnd" /></span
+                :end="one.labelEnd"
+                :runs="one.labelRuns" /></span
           ></component>
           <span class="multiple-value">{{ one.valueText }}</span>
         </li>

@@ -34,6 +34,7 @@ import {
   shareWords,
 } from '@/shared/ui/chartGeometry.ts'
 import type { RingSector } from '@/shared/ui/donutGeometry.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import type { TooltipBody, TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 import type { StepPoint, StepTarget } from '@/shared/ui/windowGeometry.ts'
 
@@ -44,23 +45,35 @@ type ShareFormat = ((ratio: number) => string) | undefined
 const lines = (...parts: readonly (string | null | undefined)[]) =>
   parts.filter((part): part is string => Boolean(part)).join('\n')
 
+/** A name's runs where it has them, and nothing where it has none. */
+const runsOf = (runs: readonly TextRun[] | undefined) => (runs ? { runs } : {})
+
 /** What is said under a grid's rows: each line given, none empty. */
 const notesOf = (...parts: readonly (string | null | undefined)[]) =>
   parts.filter((part): part is string => Boolean(part))
 
-/** A series as its hint names it: its name and its hue, where it draws one. */
+/**
+ * A series as its hint names it: its name and its hue, where it draws one. A name its mark draws in
+ * runs (`labelRuns`), a task's title with code in it, is drawn in them in the hint too.
+ */
 interface Named {
   label: string
+  labelRuns?: readonly TextRun[]
   slot?: SeriesSlot
 }
 
 /** The grid of a mark of one series: its swatch and name with a figure, and what is said under. */
 const seriesBody = (
-  { label, slot }: Named,
+  { label, labelRuns, slot }: Named,
   figure: string | undefined,
   notes: readonly string[],
 ): TooltipBody => ({
-  head: { name: label, ...(figure ? { figure } : {}), ...(slot === undefined ? {} : { slot }) },
+  head: {
+    name: label,
+    ...runsOf(labelRuns),
+    ...(figure ? { figure } : {}),
+    ...(slot === undefined ? {} : { slot }),
+  },
   rows: [],
   notes,
 })
@@ -109,6 +122,7 @@ function periodBody(
       key: segment.series.key,
       slot: segment.series.slot,
       name: segment.series.label,
+      ...runsOf(segment.series.labelRuns),
       figure: format(segment.value),
       share: shareWords(segment.value, stacked.total, formatPart) || undefined,
     })),
@@ -209,6 +223,7 @@ export interface RingHintChart {
 export function ringPart(sector: RingSector, whole: number, chart: RingHintChart) {
   return {
     label: sector.row ? sector.row.label : chart.rest(sector.members.length),
+    ...runsOf(sector.row?.labelRuns),
     slot: sector.slot,
     figure: sector.row?.valueText ?? chart.formatValue(sector.value),
     share: shareWords(sector.value, whole, chart.formatShare),
@@ -228,6 +243,7 @@ export function ringHint(sector: RingSector, whole: number, chart: RingHintChart
   const listed = sector.members.slice(0, REST_LISTED).map((member) => ({
     key: member.key,
     name: member.label,
+    ...runsOf(member.labelRuns),
     figure: member.valueText,
     share: bare(member.value),
   }))
@@ -250,7 +266,7 @@ export function ringHint(sector: RingSector, whole: number, chart: RingHintChart
       detail,
     ),
     body: {
-      head: { name: part.label, figure: part.figure, slot: part.slot },
+      head: { name: part.label, ...runsOf(part.runs), figure: part.figure, slot: part.slot },
       rows,
       notes: notesOf(part.share, detail),
     },

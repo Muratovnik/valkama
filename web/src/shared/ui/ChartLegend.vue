@@ -153,6 +153,7 @@ const figureOf = (key: string) => props.figures?.get(key)
           ><PairName
             :name="one.label"
             :end="one.labelEnd"
+            :runs="one.labelRuns"
         /></span>
       </component>
       <span

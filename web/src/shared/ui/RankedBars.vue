@@ -190,6 +190,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
               ><PairName
                 :name="row.label"
                 :end="row.labelEnd"
+                :runs="row.labelRuns"
                 :stacked="freeText"
             /></span>
             <span

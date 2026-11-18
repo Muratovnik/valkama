@@ -7,6 +7,7 @@
  * number it is and the text it reads as, and every word as a prop.
  */
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 function byCodePoint(left: string, right: string) {
   if (left === right) return 0
@@ -89,6 +90,12 @@ export interface RankedRow extends MarkAction {
   kind?: RankedRowKind
   /** The end of a label of two parts that stays whole while the rest is cut (`PairName`). */
   labelEnd?: string
+  /**
+   * The label as the runs it is drawn in, where it holds a work item's title (`titleRuns`): its
+   * code is drawn as code, in the row, its table and its hint. `writtenText` of them is `label`;
+   * without them the label is drawn as the text it is.
+   */
+  labelRuns?: readonly TextRun[]
   /**
    * Whether a row ranked among the categories names no value, such as work on no task in a list
    * that ranks it by its figure: its name is then in the quiet ink, slanted, as a note is.
@@ -173,6 +180,8 @@ export interface PeriodSeries extends MarkAction {
   slot: SeriesSlot
   /** The end of a pair's `label` that stays whole while the rest gives way (`PairName`). */
   labelEnd?: string
+  /** The label as the runs it is drawn in, where it holds a work item's title (`RankedRow`). */
+  labelRuns?: readonly TextRun[]
 }
 
 export interface PeriodColumn {

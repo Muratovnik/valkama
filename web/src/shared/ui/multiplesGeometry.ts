@@ -9,6 +9,7 @@
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import { roundAxis } from '@/shared/ui/chartGeometry.ts'
 import type { MarkAction, ValueAxis } from '@/shared/ui/chartGeometry.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 /**
  * What a multiple is. A category and the folded tail (`other`) share one scale; work with
@@ -28,6 +29,8 @@ export interface SmallMultiple extends MarkAction {
   kind?: MultipleKind
   /** The end of a label of two parts that stays whole while the rest is cut (`PairName`). */
   labelEnd?: string
+  /** The label as the runs it is drawn in, where it holds a work item's title (`RankedRow`). */
+  labelRuns?: readonly TextRun[]
   /** The hue of the value wherever the page draws it; the neutral when it has none. */
   slot?: SeriesSlot
 }

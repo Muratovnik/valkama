@@ -83,6 +83,7 @@ function inspect() {
           ><PairName
             :name="line.name"
             :end="line.nameEnd"
+            :runs="line.nameRuns"
         /></span>
       </a>
       <button
@@ -97,12 +98,14 @@ function inspect() {
           ><PairName
             :name="line.name"
             :end="line.nameEnd"
+            :runs="line.nameRuns"
         /></span>
       </button>
       <PairName
         v-else
         :name="line.name"
         :end="line.nameEnd"
+        :runs="line.nameRuns"
       />
       <span
         v-if="line.detail"

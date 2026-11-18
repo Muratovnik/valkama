@@ -26,6 +26,7 @@ import {
   stackColumns,
 } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
+import PairName from '@/shared/ui/PairName.vue'
 
 const props = withDefaults(defineProps<PeriodChartProps>(), {
   formatShare: undefined,
@@ -110,7 +111,10 @@ const empty = computed(() => !props.columns.length || !props.series.length)
           class="chart-cell chart-heading"
           data-numeric="true"
         >
-          {{ one.label }}
+          <PairName
+            :name="one.label"
+            :runs="one.labelRuns"
+          />
         </th>
         <th
           scope="col"

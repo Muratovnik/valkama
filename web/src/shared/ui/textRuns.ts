@@ -54,6 +54,41 @@ export const writtenText = (runs: readonly TextRun[]) =>
 /** The runs as they read on the screen: code without its backticks. */
 export const drawnText = (runs: readonly TextRun[]) => runs.map((run) => run.text).join('')
 
+/**
+ * The runs before and after the first `at` characters of their text as written, for a line drawn
+ * in two parts, as a pair's name is (`PairName`). A run of text the cut falls inside is cut there;
+ * a piece of code is never cut, and goes whole to the part it starts in.
+ */
+export function cutRuns(runs: readonly TextRun[], at: number): [TextRun[], TextRun[]] {
+  const before: TextRun[] = []
+  const after: TextRun[] = []
+  let from = 0
+  for (const run of runs) {
+    const length = writtenText([run]).length
+    const inside = at - from
+    if (inside >= length || (run.kind === 'code' && inside > 0)) before.push(run)
+    else if (inside <= 0) after.push(run)
+    else {
+      before.push({ ...run, text: run.text.slice(0, inside) })
+      after.push({ ...run, text: run.text.slice(inside) })
+    }
+    from += length
+  }
+  return [before, after]
+}
+
+/**
+ * A sentence of the interface with runs in the place `mark` holds in it, as a filter's chip says
+ * «Task: MAIN-12 Raise `X`»: the words around the place are text. `sentence` is the message
+ * formatted with `mark` for the value, so the order of its words is the language's.
+ */
+export function runsWithin(sentence: string, mark: string, runs: readonly TextRun[]): TextRun[] {
+  const at = sentence.indexOf(mark)
+  if (at < 0) return [{ kind: 'text', text: sentence }]
+  const text = (words: string): TextRun[] => (words ? [{ kind: 'text', text: words }] : [])
+  return [...text(sentence.slice(0, at)), ...runs, ...text(sentence.slice(at + mark.length))]
+}
+
 function element(tag: string, className: string, text = '') {
   const node = document.createElement(tag)
   node.className = className
@@ -173,7 +208,9 @@ export function drawRuns(host: HTMLElement, runs: readonly TextRun[]) {
 
 /**
  * The runs drawn in `anchor` or in an element inside it whose words as written are `text`:
- * what a cut text's whole words are drawn with, so they read as the text they stand for.
+ * what a cut text's whole words are drawn with, so they read as the text they stand for. A line
+ * drawn in parts, each in runs of its own, as a pair's name is (`PairName`), is found by its
+ * parts' runs in order.
  */
 export function runsDrawnIn(anchor: HTMLElement, text: string): readonly TextRun[] | null {
   const hosts = [anchor, ...anchor.querySelectorAll<HTMLElement>(`[${HOST}]`)]
@@ -181,7 +218,8 @@ export function runsDrawnIn(anchor: HTMLElement, text: string): readonly TextRun
     const runs = drawn.get(host)
     if (runs && writtenText(runs) === text) return runs
   }
-  return null
+  const parts = hosts.flatMap((host) => drawn.get(host) ?? [])
+  return parts.length && writtenText(parts) === text ? parts : null
 }
 
 /** The element a drawn character belongs to: the runs' host, else its own element. */

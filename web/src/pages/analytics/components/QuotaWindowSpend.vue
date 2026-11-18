@@ -137,6 +137,7 @@ function rowOf(held: NonNullable<typeof answer.value>, line: SpendingLine) {
   return {
     key: line.key,
     label: words.lineLabel(held.by, line),
+    labelRuns: words.lineRuns(held.by, line),
     detail: words.valueDetail(held.by, line.value),
     kind: line.kind,
     quiet: line.kind === 'none' || line.kind === 'unknown',

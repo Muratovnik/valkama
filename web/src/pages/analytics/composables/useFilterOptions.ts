@@ -32,6 +32,7 @@ export function useFilterOptions() {
                 {
                   value: valueKey(value),
                   label: words.valueLabel(dimension, value),
+                  runs: words.valueRuns(dimension, value),
                   description: words.valueDetail(dimension, value),
                 },
               ]
