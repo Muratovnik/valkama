@@ -51,8 +51,14 @@ ANSWERS = (request_model.RETURN_DO, request_model.RETURN_LATER, request_model.RE
 #: How many tasks one group holds: a group of one is a goal for one task, and twenty is
 #: the most options one field of the owner's question offers.
 FEWEST, MOST = 2, 20
-#: The longest reason a group gives.
-WHY_LIMIT = 500
+#: Who decides on a group.
+OWNER, AGENT, HUMAN = "owner", participation.AGENT, participation.HUMAN
+#: The longest reason a group gives, one line. Each reason an answer writes from it must
+#: hold it whole, so the bound is the narrowest of those reasons: `later`'s, which
+#: `service.PUT_OFF_REASON_LIMIT` bounds less the prefix `<who>: later: ` the decider's
+#: name puts before it (`agent` and `owner` make it the same length). The `drop` reason
+#: and the closing summary leave more room. The form refuses a longer why; no reason is cut.
+WHY_LIMIT = service.PUT_OFF_REASON_LIMIT - max(len(f"{who}: later: ") for who in (OWNER, AGENT))
 #: The longest label of a task the owner's question offers.
 _LABEL_LIMIT = 200
 #: What the owner reads at the head of a refusal of the group's form.
@@ -60,8 +66,6 @@ _FORM = (
     f"{TAG} a group is a new goal without a parent, with its conditions in checklist and"
     f" {FEWEST} to {MOST} items"
 )
-#: Who decides on a group.
-OWNER, AGENT, HUMAN = "owner", participation.AGENT, participation.HUMAN
 
 
 @dataclass(frozen=True)
@@ -373,16 +377,13 @@ def _carry_out(
             conn,
             reference,
             until=group.until,
-            reason=_fit(f"{who}: later: {group.why}", service.PUT_OFF_REASON_LIMIT),
+            reason=f"{who}: later: {group.why}",
             author=author,
             decided=decided,
         )
         return
     cancelled = _state(conn, goal, "cancelled")
-    reason = _fit(
-        f"Not to be done: {group.why}",
-        service.EVENT_DETAIL_LIMIT - len(f"{cancelled}: "),
-    )
+    reason = f"Not to be done: {group.why}"
     for row in rows:
         task = read_model.reference(conn, row)
         _close_summary(conn, task, group.why, author)

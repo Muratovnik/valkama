@@ -537,7 +537,9 @@ A review of work in `triage` proposes tasks that belong together as one new goal
 under no goal or stage, in the goal's space, with no question of the owner open
 on them. `answer` is `do`, `later` or `drop`; `until`, a day or an item's
 reference as `defer` takes it, comes with `later` and only with it; `why` is one
-line of up to 500 characters. The goal names its conditions in `checklist` and
+line of up to 386 characters, the longest that `agent: later: <why>` holds whole
+as a defer reason. A longer one is refused and no reason is cut. The goal names
+its conditions in `checklist` and
 no `parent`, `acceptance`, `claim` or `state`. The goal is created in `triage`,
 the tasks move under it at once, and the answer carries
 `applied.group = {items, answer, carried_out}`.

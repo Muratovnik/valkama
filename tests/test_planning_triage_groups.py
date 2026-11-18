@@ -22,6 +22,9 @@ from tests.test_planning_pending_actions import AGENT, OTHER, REFUSED, SettingHa
 
 #: Why the agent groups its findings.
 WHY = "They are one change to the export"
+#: The longest why a group takes, as the contract states it: 386 characters, which is the
+#: defer reason's 400 less `agent: later: `. Written as the contract's number on purpose.
+LONGEST_WHY = "x" * 386
 #: The conditions of a group's goal.
 CONDITIONS = ["The export writes every field"]
 
@@ -137,6 +140,31 @@ class AgentGroupTests(GroupHarness):
             [("finding", "transitioned", f"cancelled: Not to be done: {WHY}")], self.marked(gone)
         )
         self.assertEqual([], self.owners_list())
+
+    def test_the_longest_why_is_written_whole_by_later_and_drop(self) -> None:
+        self.at(participation.MINIMAL)
+        self.assertEqual(386, len(LONGEST_WHY))
+        later = self.findings(2)
+        answer = self.group(
+            later, "later", title="Later fixes", group={"until": "2026-12-01", "why": LONGEST_WHY}
+        )
+        goal = str(answer["reference"])
+        self.assertEqual(
+            [f"deferred: until 2026-12-01: agent: later: {LONGEST_WHY}"],
+            self.events(goal, "transitioned"),
+        )
+        dropped = self.findings(2)
+        answer = self.group(dropped, "drop", title="Dropped fixes", group={"why": LONGEST_WHY})
+        gone = str(answer["reference"])
+        for task in dropped:
+            self.assertEqual(
+                [f"cancelled: Not to be done: {LONGEST_WHY}"], self.events(task, "transitioned")
+            )
+            summary = json.loads(self.row(task)["summary"])
+            self.assertEqual(LONGEST_WHY, summary["why"])
+        self.assertEqual(
+            [f"cancelled: Not to be done: {LONGEST_WHY}"], self.events(gone, "transitioned")
+        )
 
     def test_the_owners_group_is_their_decision(self) -> None:
         tasks = self.findings(2)
@@ -313,6 +341,11 @@ class RefusalTests(GroupHarness):
             "a parent": ({"parent": str(waiting["reference"])}, 400, form + "parent is named"),
             "no checklist": ({"checklist": None}, 400, form + "checklist names no condition"),
             "acceptance": ({"acceptance": "assignment"}, 400, form + "acceptance is named"),
+            "a why of 387": (
+                {"group": {"why": "x" * 387}},
+                400,
+                form + "why is one line of at most 386 characters",
+            ),
             "a goal": (
                 {"group": {"items": [tasks[0], unaccepted]}},
                 409,

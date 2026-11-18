@@ -31,7 +31,8 @@ is complete on its own.
   `item_completed` and `item_cancelled`, `[item_closed]`, `purpose`), the
   guards a creation or a move meets (`new_item`, `blocker` with a stated reason
   only, `checklist`, `summary` and `review_question` entering review,
-  `question`, `children`), a question with a purpose (`owner_only`,
+  `question`, `children`, a group's `why` past 386 characters), a question
+  with a purpose (`owner_only`,
   `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
   or one a write waiting for the owner carries, a goal an agent proposes, a
   task it files in accepted goals and a task a label's rule accepts, which may
