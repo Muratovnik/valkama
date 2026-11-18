@@ -66,7 +66,7 @@ const proposedSchema = strictObject({
   conditions: boundedList(step).optional(),
   items: boundedList(strictObject({ reference, title })).optional(),
   answer: z.enum(['do', 'later', 'drop']).optional(),
-  why: z.string().min(1).max(500).optional(),
+  why: z.string().min(1).max(386).optional(),
   removed: boundedList(strictObject({ id: z.string().min(1).max(64), text: step })).optional(),
   rewritten: boundedList(
     strictObject({ id: z.string().min(1).max(64), from: step, to: step }),
