@@ -109,7 +109,7 @@ function layout(page: Page) {
       // What a box between the text and the card cuts sideways — a one-line label's end, behind
       // its ellipsis — is not drawn, so a line is read up to that box's edge.
       let clip = { left: -Infinity, right: Infinity }
-      for (let box = parent; box && box !== card; box = box.parentElement)
+      for (let box: HTMLElement | null = parent; box && box !== card; box = box.parentElement)
         if (['clip', 'hidden'].includes(getComputedStyle(box).overflowX)) {
           const edge = box.getBoundingClientRect()
           clip = { left: Math.max(clip.left, edge.left), right: Math.min(clip.right, edge.right) }
