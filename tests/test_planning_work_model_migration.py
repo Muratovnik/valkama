@@ -52,6 +52,7 @@ STEP_NAMES = [
     "commits",
     "commit-refs",
     "refs-without-commits",
+    "baselines",
 ]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
@@ -59,6 +60,7 @@ POSTCONDITION_NAMES = [
     *(f"P{number}" for number in range(18, 31)),
     "deferred-items",
     *(f"P{number}" for number in range(31, 36)),
+    "baselines",
     "second-run",
     "recovery-point",
 ]
@@ -1050,6 +1052,53 @@ class MigratedStoreTests(StoreCase):
         ]
         self.assertEqual((True, {"rows": 0, "deferred": 0}), (found["passed"], found["detail"]))
 
+    def test_baselines_creates_the_counts_at_acceptance_empty_as_a_fresh_store_declares_them(
+        self,
+    ) -> None:
+        """Every goal and stage 2.9 left accepted is `migrated`: none gets a row, the table
+        comes as a fresh store declares it, and its CHECK takes only the two bases."""
+
+        fresh_path = os.path.join(self.directory.name, "fresh", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(fresh_path))
+        store.connect(fresh_path).close()
+        declaration = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?"
+        fresh = sqlite3.connect(fresh_path)
+        try:
+            [(fresh_sql,)] = fresh.execute(declaration, ("work_item_baselines",)).fetchall()
+        finally:
+            fresh.close()
+        [(migrated_sql,)] = self.read(declaration, ("work_item_baselines",))
+        self.assertEqual(fresh_sql, migrated_sql)
+        [(rows,)] = self.read("SELECT COUNT(*) FROM work_item_baselines")
+        self.assertEqual(0, rows)
+        [step] = [step for step in self.report["steps"] if step["name"] == "baselines"]
+        self.assertEqual((True, {"table_created": True}), (step["needed"], step["result"]))
+        details = {entry["name"]: entry for entry in self.report["postconditions"]}
+        self.assertEqual(
+            (True, {"rows": 0}), (details["baselines"]["passed"], details["baselines"]["detail"])
+        )
+        # `row-counts` counts it at nothing and `fresh-tables` leaves it to `row-counts`; a
+        # second run would not take the step again.
+        self.assertEqual(0, details["row-counts"]["detail"]["tables"]["work_item_baselines"])
+        self.assertNotIn("work_item_baselines", details["fresh-tables"]["detail"]["added"])
+        self.assertEqual([], details["second-run"]["detail"]["steps_needed_again"])
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        insert = (
+            "INSERT INTO work_item_baselines(work_item_id, tasks, basis, taken_at)"
+            " VALUES(?, ?, ?, ?)"
+        )
+        for basis in ("accepted", "started"):
+            conn.execute(insert, (self.ids["WM-15"], 3, basis, T5))
+            conn.execute("DELETE FROM work_item_baselines")
+        for basis, tasks in (("migrated", 3), ("owner", 3), ("accepted", -1)):
+            with (
+                self.subTest(basis=basis, tasks=tasks),
+                self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK constraint failed"),
+            ):
+                conn.execute(insert, (self.ids["WM-15"], tasks, basis, T5))
+        conn.rollback()
+
     def test_a_second_run_changes_nothing_and_says_the_migration_ran(self) -> None:
         backups = sorted(os.listdir(os.path.join(self.directory.name, "backups")))
         before = file_digest(self.path)
@@ -1783,6 +1832,12 @@ FAULTS = (
         lambda ids: (ids["WM-9"],),
     ),
     fault("awaiting-rows", "UPDATE work_item_confirmations SET left_at = since"),
+    fault(
+        "baselines",
+        "INSERT INTO work_item_baselines(work_item_id, tasks, basis, taken_at)"
+        " VALUES(?, 3, 'accepted', '2026-01-02T03:04:05Z')",
+        lambda ids: (ids["WM-15"],),
+    ),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
     fault(
@@ -1919,6 +1974,11 @@ P1_FAULTS = (
         f"with {{'hash': '{'A' * 40}'}} is taken, a fresh store refuses it",
     ),
     (
+        "the counts at acceptance refuse the basis started",
+        rebuilt("work_item_baselines", "'accepted','started'", "'accepted'"),
+        "with {'basis': 'started'} is refused (CHECK constraint failed",
+    ),
+    (
         "a table holds a CHECK a fresh store does not declare",
         rebuilt(
             "work_item_refs", "value TEXT NOT NULL,", "value TEXT NOT NULL CHECK(value != ''),"
@@ -2014,6 +2074,31 @@ CLAUSE_FAULTS: tuple[
         ],
         # The attachment names a commit no row holds, which the foreign keys see too.
         ["row-counts", "integrity"],
+    ),
+    (
+        "baselines",
+        "WM-15 holds a count at acceptance and was accepted migrated",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_baselines(work_item_id, tasks, basis, taken_at)"
+                " VALUES(?, 3, 'accepted', '2026-01-02T03:04:05Z')",
+                (ids["WM-15"],),
+            )
+        ],
+        # A row the migration did not foresee, which `row-counts` counts too.
+        ["row-counts", "baselines"],
+    ),
+    (
+        "baselines",
+        "WM-9 holds a count at acceptance and is no goal or stage",
+        lambda ids: [
+            (
+                "INSERT INTO work_item_baselines(work_item_id, tasks, basis, taken_at)"
+                " VALUES(?, 0, 'started', '2026-01-02T03:04:05Z')",
+                (ids["WM-9"],),
+            )
+        ],
+        ["row-counts", "baselines"],
     ),
     (
         "requests-asked",
