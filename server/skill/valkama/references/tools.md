@@ -71,7 +71,9 @@ says what it is:
   `acceptance`, `force` or not. A move to `triage` takes the basis away. A goal or
   stage is accepted by a transition to `ready`, and accepted out of `triage` or
   `deferred` it accepts the work in `triage` under it, stopping at a deferred goal
-  or stage.
+  or stage. Your acceptance leaves out an item the owner is asked whether to do: it
+  stays in `triage` for their answer, the answer's `warnings` names it, and a goal or
+  stage left there keeps the work under it.
 - `started_at` is when work on it began, `waits_for` the open items blocking it,
   `cancelled_blockers`, only when there are any, the cancelled items still linked
   to block it,

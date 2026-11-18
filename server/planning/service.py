@@ -2982,6 +2982,12 @@ def _cascade(
     descent: what is under it keeps a container above it that is not accepted.
     Anything else is not waiting to be accepted and stays as it is.
 
+    An agent's write takes no item along that the owner is asked whether to do, on the
+    item itself (`_asked_itself`): the agent's word was about the container, and only
+    the owner answers that question. The item stays in triage, the answer warns so, and
+    a goal or stage left there stops the descent as a deferred one does. A person's
+    write takes it along and answers the question with it (`_settled_by_owner`).
+
     `basis` is the order of bases read once for the whole descent, since every item
     it reaches has the same containers above it that are not accepted with it:
     `inherited` when, with this container accepted, every one up to the root stands
@@ -2994,7 +3000,15 @@ def _cascade(
         " WHERE i.parent_id = ? AND s.category = 'triage' ORDER BY i.number",
         (identity,),
     ).fetchall()
+    by_agent = calls.from_agent()
     for child in children:
+        asked = _asked_itself(conn, child) if by_agent else None
+        if asked is not None:
+            warnings.append(
+                f"{read_model.reference(conn, child)} stays in triage: the owner has not"
+                f" decided whether it is to be done (question {asked})"
+            )
+            continue
         container = child["kind"] == model.CONTAINER_KIND
         target = states.reachable(conn, child, model.SERVICE_CATEGORY if container else "ready")
         if target is None:
@@ -3018,6 +3032,16 @@ def _cascade(
         # Accepted with its goal or stage by a person, it is answered as if taken on alone.
         _settled_by_owner(conn, found, "triage", target, author)
     return warnings
+
+
+def _asked_itself(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+    """The open question whether to do the item `row`, asked on the item itself, by its
+    id; None while none is (`questions.acceptance_asked` reads one over it too)."""
+
+    asked = questions.acceptance_asked(conn, row)
+    if asked is None or str(asked["work_item_id"]) != str(row["work_item_id"]):
+        return None
+    return str(asked["request_id"])
 
 
 def claim_work_item(
