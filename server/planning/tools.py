@@ -1440,8 +1440,9 @@ TOOLS.extend(
             " answered only by that session, its conversation or any of its subagents; any other"
             " caller, the interface included, is refused with not_addressed. A request whose"
             " addressee ended or went quiet reads expired with session_gone. A question with a"
-            " purpose (review, confirm, return) carries its answer out in the same write, and"
-            " is never declined or changed. Only the owner answers it, in Valkama (owner_only),"
+            " purpose (review, confirm, return, goal, task, cancel, condition), or one a waiting"
+            " write carries, carries its answer out in the same write, and is never declined or"
+            " changed. Only the owner answers it, in Valkama (owner_only),"
             " and only the session that asked withdraws it (not_asker). A consent request is"
             " answered once, by the session it asks.",
             WRITES,
@@ -1485,7 +1486,9 @@ TOOLS.extend(
             "Explicitly withdraw a pending request, retaining its record. A request asked of a"
             " session, and a question with a purpose, are withdrawn only by the session that"
             " asked, from any of its agents; others are refused with not_asker. Withdrawing the"
-            " question of review returns its item to ready, started as it was.",
+            " question of review returns its item to ready, started as it was. Expiring the"
+            " question of a write that waits for the owner takes that write back; only the"
+            " session that asked can.",
             WRITES,
             {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
             ["id", "expected_revision"],

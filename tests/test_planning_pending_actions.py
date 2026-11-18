@@ -751,11 +751,11 @@ class SettingHarness(Harness):
         participation.write_set(self.conn, self.space, name)
         self.conn.commit()
 
-    def tool(self, name: str, **arguments: object) -> dict:
+    def tool(self, name: str, by: calls.Identity = AGENT, **arguments: object) -> dict:
         """The agent's call of a planning tool, and its answer."""
 
         try:
-            with calls.bind(AGENT, name):
+            with calls.bind(by, name):
                 answer = tools.OPS[name](self.conn, arguments)
         except BaseException:
             self.conn.rollback()
@@ -763,6 +763,39 @@ class SettingHarness(Harness):
         self.conn.commit()
         assert isinstance(answer, dict)
         return answer
+
+    def propose(self, title: str = "A goal of the agent's own", **arguments: object) -> dict:
+        """The agent files a goal with no parent through its tool, and the answer."""
+
+        return self.tool("create_work_item", space="ALPHA", title=title, kind="goal", **arguments)
+
+    def awaiting(self, title: str = "The owner's goal") -> str:
+        """A goal of the owner's with one step, whose one task is done: it awaits confirmation."""
+
+        goal = self.filed(title, kind="goal", by=calls.browser())
+        self.person("/api/planning/work-item/apply", id=goal, checklist=["Ship it"])
+        task = self.filed("Its one task", parent=goal, by=calls.browser())
+        self.person(
+            "/api/planning/work-item/apply",
+            id=task,
+            summary={"done": "Done", "next": "Nothing"},
+            transition={"state": "completed"},
+        )
+        self.assertEqual("awaiting_confirmation", self.card(goal)["container_state"])
+        return goal
+
+    def confirm(self, goal: str) -> dict:
+        """The agent ticks the goal's step, which answers what the owner wrote to it, then
+        writes its summary and completes it in one call."""
+
+        [step] = self.card(goal)["checklist"]
+        self.tool("apply_work_item_changes", id=goal, checklist_ticks=[{"item_id": step["id"]}])
+        return self.tool(
+            "apply_work_item_changes",
+            id=goal,
+            summary=CLOSE_SUMMARY,
+            transition={"state": "completed"},
+        )
 
     def card(self, reference: str) -> dict:
         return service.get_work_item(self.conn, reference)
@@ -823,11 +856,6 @@ class ProposedGoalTests(SettingHarness):
     off: by the owner's setting of its space the agent's decision stands, as the basis
     `agent` marked in the summary of decisions, or the owner is asked the question
     `goal`, whose answers `do`, `later` and `drop` take it on, put it off or cancel it."""
-
-    def propose(self, title: str = "A goal of the agent's own", **arguments: object) -> dict:
-        """The agent files a goal with no parent through its tool, and the answer."""
-
-        return self.tool("create_work_item", space="ALPHA", title=title, kind="goal", **arguments)
 
     # -- the goal an agent proposes ---------------------------------------------------
 
@@ -2188,34 +2216,6 @@ class GoalCloseTests(SettingHarness):
     written and the close waits on the owner's question `confirm` of the goal's period of
     waiting, whose answers `confirm` and `leave` make it or leave it to the next session."""
 
-    def awaiting(self, title: str = "The owner's goal") -> str:
-        """A goal of the owner's with one step, whose one task is done: it awaits confirmation."""
-
-        goal = self.filed(title, kind="goal", by=calls.browser())
-        self.person("/api/planning/work-item/apply", id=goal, checklist=["Ship it"])
-        task = self.filed("Its one task", parent=goal, by=calls.browser())
-        self.person(
-            "/api/planning/work-item/apply",
-            id=task,
-            summary={"done": "Done", "next": "Nothing"},
-            transition={"state": "completed"},
-        )
-        self.assertEqual("awaiting_confirmation", self.card(goal)["container_state"])
-        return goal
-
-    def confirm(self, goal: str) -> dict:
-        """The agent ticks the goal's step, which answers what the owner wrote to it, then
-        writes its summary and completes it in one call."""
-
-        [step] = self.card(goal)["checklist"]
-        self.tool("apply_work_item_changes", id=goal, checklist_ticks=[{"item_id": step["id"]}])
-        return self.tool(
-            "apply_work_item_changes",
-            id=goal,
-            summary=CLOSE_SUMMARY,
-            transition={"state": "completed"},
-        )
-
     def period(self, goal: str) -> sqlite3.Row:
         return self.conn.execute(
             "SELECT * FROM work_item_confirmations WHERE work_item_id = ?", (self.id(goal),)
@@ -2491,7 +2491,135 @@ class CloseWithWaitingTests(SettingHarness):
                 self.assertEqual([], self.owners_list())
 
 
+class WhoAnswersTests(SettingHarness):
+    """Who closes a question a waiting write carries: only a person answers it, whatever
+    its purpose, and only the session that asked withdraws it; an answer carried out is
+    neither changed nor declined."""
+
+    def refusal(self, by: calls.Identity, path: str, **payload: object) -> tuple[int, str, str]:
+        """The status, code and message a refused write answers with, written nowhere."""
+
+        with self.assertRaises(REFUSED) as refused:
+            try:
+                with calls.bind(by, path):
+                    api.handle_post(self.conn, path, payload)
+            finally:
+                self.conn.rollback()
+        status, body = api.error_response(refused.exception)
+        return status, str(body["error"]["code"]), str(body["error"]["message"])
+
+    def asked(self, question: str, **payload: object) -> dict[str, object]:
+        return {
+            "id": question,
+            "expected_revision": int(self.request(question)["revision"]),
+            **payload,
+        }
+
+    def as_it_stands(self, *pairs: tuple[str, str]) -> list[tuple]:
+        """Each item's card and each question and action as stored, for a pair of an item
+        and its question."""
+
+        found: list[tuple] = []
+        for reference, question in pairs:
+            action = str(self.request(question)["action_id"])
+            found.append(
+                (self.card(reference), tuple(self.request(question)), tuple(self.action(action)))
+            )
+        return found
+
+    def test_only_a_person_answers_and_the_asker_withdraws(self) -> None:
+        self.at(participation.MAXIMAL)
+        proposed = self.propose()
+        goal, goal_question = proposed["reference"], proposed["waits_for_owner"]["question"]
+        closed = self.awaiting()
+        close_question = self.confirm(closed)["waits_for_owner"]["question"]
+        before = self.as_it_stands((goal, goal_question), (closed, close_question))
+        answer = "/api/planning/request/answer"
+        for by in (OTHER, AGENT):
+            for question, choice in ((goal_question, "do"), (close_question, "confirm")):
+                with self.subTest(by=by.session_id, question=question):
+                    status, code, message = self.refusal(
+                        by, answer, **self.asked(question, answers={"answer": choice})
+                    )
+                    self.assertEqual(
+                        (403, "owner_only", "this is the owner's to answer, in Valkama"),
+                        (status, code, message),
+                    )
+        status, code, _message = self.refusal(
+            OTHER, "/api/planning/request/expire", **self.asked(goal_question)
+        )
+        self.assertEqual((403, "not_asker"), (status, code))
+        # The goal lies in triage unaccepted, the other awaits confirmation, both still wait.
+        self.assertEqual(before, self.as_it_stands((goal, goal_question), (closed, close_question)))
+        withdrawn = self.tool(
+            "expire_work_item_request", **self.asked(goal_question, author="claude")
+        )
+        self.assertEqual(
+            ("expired", "withdrawn", "withdrawn"),
+            (withdrawn["status"], withdrawn["expired_reason"], withdrawn["carried_out"]),
+        )
+        self.assertEqual("withdrawn", self.action(withdrawn["action"]["id"])["outcome"])
+        self.assertEqual(
+            ("triage", None), (self.card(goal)["state"]["category"], self.card(goal)["acceptance"])
+        )
+        self.assertIsNone(self.action(str(self.request(close_question)["action_id"]))["outcome"])
+
+    def test_a_question_a_waiting_write_carries_is_the_owners_whatever_its_purpose(self) -> None:
+        # Every question an action asks today names a purpose; the rule stands on the action.
+        goal = self.filed("Proposed", kind="goal")
+        waiting = self.ask(goal)
+        self.conn.execute(
+            "UPDATE work_item_requests SET purpose = NULL WHERE request_id = ?",
+            (waiting.question,),
+        )
+        self.conn.commit()
+        status, code, _message = self.refusal(
+            AGENT,
+            "/api/planning/request/answer",
+            **self.asked(waiting.question, answers={"answer": "do"}),
+        )
+        self.assertEqual((403, "owner_only"), (status, code))
+
+    def test_an_answer_carried_out_is_not_changed(self) -> None:
+        question = self.propose()["waits_for_owner"]["question"]
+        self.answer(question, "do")
+        goal = "ALPHA-1"
+        self.assertEqual("owner", self.card(goal)["acceptance"]["basis"])
+        before = self.as_it_stands((goal, question))
+        for path, payload in (
+            ("/api/planning/request/change", {"answers": {"answer": "drop"}}),
+            ("/api/planning/request/decline", {}),
+        ):
+            with self.subTest(path=path):
+                status, code, message = self.refusal(
+                    calls.browser(), path, **self.asked(question, **payload)
+                )
+                self.assertEqual((400, "invalid_request"), (status, code))
+                self.assertTrue(message.startswith("[purpose]"), message)
+        self.assertEqual(before, self.as_it_stands((goal, question)))
+
+
+#: What a refused write raises, through the service or the HTTP layer.
+REFUSED = (model.PlanningError, api.PlanningHttpError)
+
+
 class DescriptionTests(unittest.TestCase):
+    def test_the_tools_say_who_answers_and_who_withdraws(self) -> None:
+        described = {entry["name"]: entry["description"] for entry in tools.TOOLS}
+        self.assertIn(
+            "A question with a purpose (review, confirm, return, goal, task, cancel, condition),"
+            " or one a waiting write carries, carries its answer out in the same write, and is"
+            " never declined or changed. Only the owner answers it, in Valkama (owner_only), and"
+            " only the session that asked withdraws it (not_asker). A consent request is"
+            " answered once, by the session it asks.",
+            described["answer_work_item_request"],
+        )
+        self.assertIn(
+            "Expiring the question of a write that waits for the owner takes that write back;"
+            " only the session that asked can.",
+            described["expire_work_item_request"],
+        )
+
     def test_the_batch_says_what_waits_and_what_a_step_change_needs(self) -> None:
         [tool] = [entry for entry in tools.TOOLS if entry["name"] == "apply_work_item_changes"]
         for sentence in (

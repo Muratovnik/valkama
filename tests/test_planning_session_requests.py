@@ -365,7 +365,7 @@ class AgentAskTests(Harness):
                 record["addressee"],
                 record["status"],
                 record["reference"],
-                requests._asker(self.conn, entry["request_id"]),
+                requests._asker(self.conn, requests._row(self.conn, entry["request_id"])),
             ),
             "asked of B, and A, the session of the agent that called, asked it",
         )
@@ -520,7 +520,7 @@ class AgentAskTests(Harness):
                 record["addressee"],
                 record["status"],
                 record["reference"],
-                requests._asker(self.conn, entry["request_id"]),
+                requests._asker(self.conn, requests._row(self.conn, entry["request_id"])),
             ),
             "asked of B on the item, by A",
         )
