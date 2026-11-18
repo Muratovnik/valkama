@@ -128,7 +128,7 @@ wait to the one it merged into. Under goals and stages all accepted it stays put
 off and the owner is asked instead: do it, later or drop it. Until the owner
 answers, you can neither claim it nor move it anywhere but cancelled
 (`acceptance_question`): wait for the answer. A claim, or any move out of
-deferred, ends the wait.
+deferred, ends the wait, and so does merging it into work that is not put off.
 
 ## Sources
 

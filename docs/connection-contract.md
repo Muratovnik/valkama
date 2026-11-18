@@ -3457,7 +3457,10 @@ and its move anywhere but a cancelled state, is refused with
 `acceptance_question`, which `force` does not carry.
 
 A claim, or any move out of `deferred`, a cancel included, ends the condition and
-withdraws its question; moving the item under another parent keeps them. A read
+withdraws its question; moving the item under another parent keeps them. Merged
+into an item that is not put off, the item's question ends withdrawn in the merge
+and moves to the survivor closed, since its answer `do` would move the survivor
+from wherever it stands; a survivor put off takes the question still waiting. A read
 writes nothing: a condition that came stands until a write brings the work back.
 
 **A goal or stage put off** keeps the work under it with whoever holds it, and the

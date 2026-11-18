@@ -4434,7 +4434,8 @@ def merge_work_items(
     released and closed in its cancelled state. What describes the merged item
     itself stays with it: its history, its reports with their threads, its
     description, its parent, a ref the survivor already has, and the links
-    that would now tie the survivor to itself.
+    that would now tie the survivor to itself. A question whether to take up
+    again a merged item put off ends withdrawn unless the survivor is put off too.
 
     Each write is one a single tool makes, with that tool's event, so a build
     that knows nothing of merging reads the result as links, checklists
@@ -4642,6 +4643,7 @@ def _fold(
             reason=questions.closed_reason("cancelled"),
             author=author,
         )
+        _return_without_subject(conn, identity, survivor_state, author)
         # Only a question to the owner is said to wait on the survivor: a list waits for
         # nobody, and a request asked of an agent session waits for that session.
         waiting_on = conn.execute(
@@ -4751,6 +4753,21 @@ def _fold(
     if forced:
         answer["overridden"] = forced
     return answer
+
+
+def _return_without_subject(
+    conn: sqlite3.Connection, identity: str, survivor_state: sqlite3.Row, author: str | None
+) -> None:
+    """End, withdrawn, the question whether to take up again the merged item `identity`
+    put off (`deferral.RETURN`) when the survivor is not put off, before the merge moves it.
+
+    The question asks about work standing in deferred: on a survivor standing elsewhere it
+    has no subject, nothing reads it as a question whether to do the survivor, and its
+    answer `do` would move the survivor from wherever it stands.
+    """
+
+    if survivor_state["category"] != "deferred":
+        questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
 
 
 def _moving_roots(conn: sqlite3.Connection, identity: str) -> list[int]:
