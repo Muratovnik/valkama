@@ -304,9 +304,10 @@ describe('the quota panel', () => {
     const window = accountNamed(page, 'Work').get('.quota-window[data-window="five_hour"]')
     expect(window.findAll('[data-fact]').map((one) => plain(one.text()))).toEqual([reset])
     expect(window.findAll('.window-ahead')).toHaveLength(0)
-    // The bar's words and the line's name say the reset where they said the forecast.
+    // The bar's words and the line's name say the reset where they said the forecast; its reading,
+    // read two minutes before an answer five hours ago, is silent by the page's clock.
     expect(plain(window.get('.window-track').attributes('aria-label') ?? '')).toMatch(
-      /fresh\. Reset at \d{2}:\d{2}, since the last reading\. /u,
+      /silent 5 h 2 min\. Reset at \d{2}:\d{2}, since the last reading\. /u,
     )
     expect(window.get('.step-line').attributes('aria-label')).toEqual(reset)
     // As a table, the account's table says the reset in the forecast's column.

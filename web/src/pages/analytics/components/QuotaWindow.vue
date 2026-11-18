@@ -31,8 +31,11 @@
  * its API price estimate, on an axis of its own. A window that names no start has no span to read
  * it over, and shows none.
  *
+ * A window is fresh or silent by the panel's moment, as its reset is: a reading that was fresh
+ * when the answer came turns silent once it is older than the answer's `fresh_for_seconds`.
+ *
  * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
- * in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
+ * at the panel's moment in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
  * `latest`), and the forecast's key of the hatch is `data-mark="hatch"`.
  */
 import { computed } from 'vue'
@@ -41,7 +44,12 @@ import { Translation, useI18n } from 'vue-i18n'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
-import { forecastCourses, forecastEnds, stands } from '@/pages/analytics/utils/quotaFigures.ts'
+import {
+  forecastCourses,
+  forecastEnds,
+  stands,
+  stateAt,
+} from '@/pages/analytics/utils/quotaFigures.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
@@ -55,6 +63,8 @@ import type { StepAhead, StepWords } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   account: QuotaAccount
+  /** How old a reading may be and still be fresh, in seconds: the answer's `fresh_for_seconds`. */
+  freshFor: number
   /** The moment the panel stands at, in ms. */
   now: number
   shown: 'chart' | 'table'
@@ -69,6 +79,8 @@ const words = useQuotaWords()
 const name = computed(() => words.windowName(props.window))
 /** Whether the window has reset by the panel's moment, though its answer was read before that. */
 const ended = computed(() => !stands(props.window, props.now))
+/** The window's state at the panel's moment, though its answer may have called it fresh. */
+const state = computed(() => stateAt(props.window, props.now, props.freshFor))
 /**
  * The window's forecast as its drawings take it, from the answer's moment to the reset, while the
  * window stands at the panel's moment: a window past its reset forecasts nothing more.
@@ -82,14 +94,14 @@ const courses = computed(() =>
  * been silent, so it never reads as fresh.
  */
 const bar = computed(() => {
-  const { window, now, today } = props
+  const { window, now, today, freshFor } = props
   const forecast = forecastEnds(courses.value)
   const used = window.latest.used_percent
   return {
     share: words.share(used),
-    state: words.stateAt(window, now),
-    label: words.barRead(window, now, today),
-    hint: words.meterHint(window, now, today),
+    state: words.stateWords(window, now, freshFor),
+    label: words.barRead(window, now, today, freshFor),
+    hint: words.meterHint(window, now, today, freshFor),
     forecast,
     /** Whether the bar draws a tail, whose hatch the forecast's line names. */
     hatched: forecast !== null && used < 100 && forecast.high > used,
@@ -109,7 +121,7 @@ const spends = computed(() => seatOf(props.account) !== null && props.window.sta
  * line leads with the key of the bar's hatch.
  */
 const facts = computed(() => {
-  const { window, now, today, shown } = props
+  const { window, now, today, shown, freshFor } = props
   const reset = { key: 'reset', text: words.reset(window, now, today), quiet: true, swatch: false }
   if (shown === 'chart') {
     const forecast = {
@@ -120,7 +132,7 @@ const facts = computed(() => {
     }
     return ended.value ? [reset] : [forecast, reset]
   }
-  const latest = { key: 'latest', text: words.latest(window, now, today), quiet: true }
+  const latest = { key: 'latest', text: words.latest(window, now, today, freshFor), quiet: true }
   return [
     reset,
     ...(paced.value ? [] : [{ key: 'even', text: words.even(window), quiet: true, swatch: false }]),
@@ -171,13 +183,13 @@ const legend = computed(() => ({
  * corridor of its forecast to the reset with what its end says, where the window has one to draw.
  */
 const ahead = computed<StepAhead | null>(() => {
-  const { window, now, today } = props
+  const { window, now, today, freshFor } = props
   if (ended.value || !window.readings.length) return null
   const found = courses.value
   const ends = forecastEnds(found)
   return {
     value: window.latest.used_percent,
-    now: words.nowTarget(window, now, today),
+    now: words.nowTarget(window, now, today, freshFor),
     forecast:
       found && ends ? { ...words.forecastTarget(window, ends, now, today), ...found } : null,
   }
@@ -199,7 +211,7 @@ const readingsCaption = computed(() =>
     level="block"
     :title="name"
     :data-window="window.kind"
-    :data-state="window.state"
+    :data-state="state"
   >
     <div class="quota-window-parts">
       <div class="quota-window-summary">

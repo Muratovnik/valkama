@@ -5,8 +5,9 @@
  * A section of the quota is its five hours, or its week with each model's week beside it. A
  * window counts toward the tightest only while it stands: its reset is still ahead, or it has
  * named none. Of those the tightest is the one most spent, a fresh one before a silent one at the
- * same share, then the first in the answer's order. Its figure is one account's share of one
- * window, said as it is: nothing here adds two windows or two accounts.
+ * same share, each judged at the panel's moment (`stateAt`), then the first in the answer's
+ * order. Its figure is one account's share of one window, said as it is: nothing here adds two
+ * windows or two accounts.
  *
  * A forecast is drawn from one mapping (`forecastCourses`), so the bar's tail, the tile's, the
  * step line's corridor and their words never disagree: two edges from the share spent at the
@@ -44,6 +45,20 @@ export const spendWindows = (account: QuotaAccount) =>
 /** Whether a window still stands at `now` (ms): its reset ahead, or none named. */
 export const stands = (window: QuotaWindow, now: number) =>
   window.resets_at === null || Date.parse(window.resets_at) > now
+
+/**
+ * A window's state at `now` (ms): fresh while its latest reading is at most `freshFor` seconds
+ * old, silent once it is older. The threshold is the answer's own, `fresh_for_seconds`, the rule
+ * the server judged `state` by; that `state` is true at the moment the server answered, so a
+ * panel left open past the threshold would go on calling a reading fresh. Judged by the panel's
+ * moment, as a reset that has passed is (`stands`).
+ */
+export const stateAt = (
+  window: QuotaWindow,
+  now: number,
+  freshFor: number,
+): QuotaWindow['state'] =>
+  now - Date.parse(window.latest.at) <= freshFor * 1000 ? 'fresh' : 'silent'
 
 /**
  * When a week's slower pace spends the window, in ms: the range's low end is what that pace
@@ -122,6 +137,7 @@ export interface QuotaPick {
 
 /** The window of a section most spent across accounts at `now`, or null where none stands. */
 export function tightest(quota: Quota, section: QuotaSection, now: number): QuotaPick | null {
+  const fresh = (one: QuotaWindow) => stateAt(one, now, quota.fresh_for_seconds) === 'fresh'
   let found: QuotaPick | null = null
   for (const account of quota.accounts)
     for (const window of sectionWindows(account, section)) {
@@ -131,7 +147,7 @@ export function tightest(quota: Quota, section: QuotaSection, now: number): Quot
       const tighter =
         !best ||
         used > best.latest.used_percent ||
-        (used === best.latest.used_percent && window.state === 'fresh' && best.state !== 'fresh')
+        (used === best.latest.used_percent && fresh(window) && !fresh(best))
       if (tighter) found = { account, window }
     }
   return found

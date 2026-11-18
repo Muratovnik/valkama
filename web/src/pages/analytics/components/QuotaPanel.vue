@@ -93,6 +93,7 @@ const narrow = useNarrowCharts(root)
               :section="section"
               :today="answerMoment(payload)"
               :now="now"
+              :fresh-for="payload.fresh_for_seconds"
             />
           </template>
           <template #table>
@@ -104,6 +105,7 @@ const narrow = useNarrowCharts(root)
               :section="section"
               :today="answerMoment(payload)"
               :now="now"
+              :fresh-for="payload.fresh_for_seconds"
             />
           </template>
         </ChartSection>

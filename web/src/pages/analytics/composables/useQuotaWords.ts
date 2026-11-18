@@ -5,7 +5,10 @@
  * date on another, and a span the way the app says one.
  *
  * Every figure carries where it came from and how old it is: a reading is said with its source
- * and its age, a silent window with how long it has been silent and the moment it last changed. A
+ * and its age, a silent window with how long it has been silent and the moment it last changed.
+ * Whether a window is fresh or silent is judged at the panel's moment `now` against the answer's
+ * threshold `freshFor`, in seconds (`stateAt`), never taken from the answer's `state`, which was
+ * true only when the server answered. A
  * window with no figure says so in words, so no source, a silent window and a fresh 0 % never
  * read alike. A forecast is said after the key that names its hatch, «Forecast · …», wherever a
  * drawing hatches it, and what a step line points at past its readings — the window now and its
@@ -15,7 +18,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { runsOutAt, stands } from '@/pages/analytics/utils/quotaFigures.ts'
+import { runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
 import { dayOf, momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
@@ -34,6 +37,10 @@ import type { StepPoint, StepTarget, WindowAhead } from '@/shared/ui/windowGeome
 const accountName = (account: QuotaAccount) =>
   account.name ?? agentIdStart(account.account_uuid ?? account.organization)
 
+/** Whether a window is silent at `now` (ms), by the answer's threshold `freshFor` (s). */
+const silent = (window: QuotaWindow, now: number, freshFor: number) =>
+  stateAt(window, now, freshFor) === 'silent'
+
 export function useQuotaWords() {
   const { t } = useI18n()
   const words = useSpendingWords()
@@ -49,18 +56,20 @@ export function useQuotaWords() {
   /** A share of a window in the page's whole percents, never claiming more or less than it is. */
   const share = (percent: number) => words.share(percent / 100)
 
-  const state = (window: QuotaWindow) => t(`analytics.quota.states.${window.state}`)
+  /** A window's state at `now` (ms) in a word, «fresh» or «silent» (`stateAt`). */
+  const state = (window: QuotaWindow, now: number, freshFor: number) =>
+    t(`analytics.quota.states.${stateAt(window, now, freshFor)}`)
   const source = (window: QuotaWindow) => t(`analytics.quota.sources.${window.latest.source}`)
 
   /** How long a window has been silent at `now` (ms): since its latest reading. */
   const silence = (window: QuotaWindow, now: number) =>
     spanWords(Math.max(0, now - Date.parse(window.latest.at)), span)
 
-  /** A window's state as its bar's words say it: «fresh», or «silent 3 h» with how long. */
-  const stateAt = (window: QuotaWindow, now: number) =>
-    window.state === 'silent'
+  /** A window's state at `now` as its bar's words say it: «fresh», or «silent 3 h» with how long. */
+  const stateWords = (window: QuotaWindow, now: number, freshFor: number) =>
+    silent(window, now, freshFor)
       ? t('analytics.quota.silentFor', { for: silence(window, now) })
-      : state(window)
+      : state(window, now, freshFor)
 
   /** Two ends of a forecast as one figure, «57%–61%», and one share where they are said alike. */
   function shareRange(low: number, high: number) {
@@ -88,11 +97,11 @@ export function useQuotaWords() {
    * the window has been silent at `now` (ms), and the forecast its tail draws, after its key, or
    * that the window has reset (`forecastAt`).
    */
-  function barLabel(window: QuotaShareWindow, now: number, today: string) {
+  function barLabel(window: QuotaShareWindow, now: number, today: string, freshFor: number) {
     const values = {
       window: windowName(window),
       share: share(window.latest.used_percent),
-      state: stateAt(window, now),
+      state: stateWords(window, now, freshFor),
       forecast: forecastAt(window, now, today),
     }
     return window.even_percent === null
@@ -166,9 +175,9 @@ export function useQuotaWords() {
     stands(window, now) ? forecastLine(window, today) : reset(window, now, today)
 
   /** How old the latest reading is and who read it; a silent one since when it has not moved. */
-  function latest(window: QuotaWindow, now: number, today: string) {
+  function latest(window: QuotaWindow, now: number, today: string, freshFor: number) {
     const values = { ago: ago(window.latest.at, now), source: source(window) }
-    return window.state === 'silent'
+    return silent(window, now, freshFor)
       ? t('analytics.quota.silentSince', { ...values, at: moment(window.latest.at, today) })
       : t('analytics.quota.read', values)
   }
@@ -177,27 +186,32 @@ export function useQuotaWords() {
    * What a window's bar neither draws nor says: where steady use would stand now, and how old its
    * latest reading is and who read it, a line each, for the bar's hint.
    */
-  const meterHint = (window: QuotaShareWindow, now: number, today: string) =>
-    `${even(window)}\n${latest(window, now, today)}`
+  const meterHint = (window: QuotaShareWindow, now: number, today: string, freshFor: number) =>
+    `${even(window)}\n${latest(window, now, today, freshFor)}`
 
   /** The bar's words and how old its latest reading is and who read it, for a screen reader. */
-  const barRead = (window: QuotaShareWindow, now: number, today: string) =>
+  const barRead = (window: QuotaShareWindow, now: number, today: string, freshFor: number) =>
     t('analytics.quota.barRead', {
-      bar: barLabel(window, now, today),
-      read: latest(window, now, today),
+      bar: barLabel(window, now, today, freshFor),
+      read: latest(window, now, today, freshFor),
     })
 
   /**
    * Where a window stands now, as its step line's «now» says it: its share, and when its latest
    * reading was, how long ago and from whom, or, silent, how long it has been and since when.
    */
-  function nowTarget(window: QuotaShareWindow, now: number, today: string): StepTarget {
+  function nowTarget(
+    window: QuotaShareWindow,
+    now: number,
+    today: string,
+    freshFor: number,
+  ): StepTarget {
     const values = { at: moment(window.latest.at, today), source: source(window) }
     return {
       name: t('analytics.quota.readings.now'),
       figure: share(window.latest.used_percent),
       notes: [
-        window.state === 'silent'
+        silent(window, now, freshFor)
           ? t('analytics.quota.readings.silent', { ...values, for: silence(window, now) })
           : t('analytics.quota.readings.last', { ...values, ago: ago(window.latest.at, now) }),
       ],
@@ -229,17 +243,20 @@ export function useQuotaWords() {
   }
 
   /** A window of money past a limit: its state, its age and its source, and no figure. */
-  const other = (window: QuotaWindow, now: number) =>
+  const other = (window: QuotaWindow, now: number, freshFor: number) =>
     t('analytics.quota.other', {
       window: windowName(window),
-      state: state(window),
+      state: state(window, now, freshFor),
       ago: ago(window.latest.at, now),
       source: source(window),
     })
 
   /** Such a window by its name and state alone, its age and source left to its hint. */
-  const otherState = (window: QuotaWindow) =>
-    t('analytics.quota.otherState', { window: windowName(window), state: state(window) })
+  const otherState = (window: QuotaWindow, now: number, freshFor: number) =>
+    t('analytics.quota.otherState', {
+      window: windowName(window),
+      state: state(window, now, freshFor),
+    })
 
   /** A window's readings as a step line takes them, each said with its moment and source. */
   const points = (window: QuotaShareWindow, today: string): StepPoint[] =>
@@ -302,8 +319,7 @@ export function useQuotaWords() {
     reset,
     sectionName,
     share,
-    state,
-    stateAt,
+    stateWords,
     windowName,
   }
 }

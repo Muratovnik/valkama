@@ -39,6 +39,11 @@ import type { WindowRow, WindowWords } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   account: QuotaAccount
+  /**
+   * How old a reading may be and still be fresh, in seconds: the answer's `fresh_for_seconds`,
+   * against which each window's state is judged at `now` (`stateAt`).
+   */
+  freshFor: number
   /** The moment the panel stands at, in ms. */
   now: number
   section: QuotaSection
@@ -60,9 +65,9 @@ const windows = computed(() => sectionWindows(props.account, props.section))
 const others = computed(() =>
   spendWindows(props.account).map((window) => ({
     key: windowKey(window),
-    text: words.other(window, props.now),
-    state: words.otherState(window),
-    read: words.latest(window, props.now, props.today),
+    text: words.other(window, props.now, props.freshFor),
+    state: words.otherState(window, props.now, props.freshFor),
+    read: words.latest(window, props.now, props.today, props.freshFor),
   })),
 )
 
@@ -72,7 +77,7 @@ const rows = computed<WindowRow[]>(() =>
     label: words.windowName(window),
     valueText: words.share(window.latest.used_percent),
     evenText: window.even_percent === null ? '—' : words.share(window.even_percent),
-    noteText: words.stateAt(window, props.now),
+    noteText: words.stateWords(window, props.now, props.freshFor),
     forecastText: stands(window, props.now)
       ? words.forecast(window, props.today)
       : words.reset(window, props.now, props.today),
@@ -149,6 +154,7 @@ const tableWords = computed<WindowWords>(() => ({
         :window="window"
         :today="today"
         :now="now"
+        :fresh-for="freshFor"
         :shown="shown"
       />
     </template>

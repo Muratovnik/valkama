@@ -68,10 +68,10 @@ export function useQuotaTiles(options: {
         account: `${name} — ${words.accountDetail(account)}`,
       }),
       aside: words.share(window.latest.used_percent),
-      count: words.stateAt(window, now),
+      count: words.stateWords(window, now, quota.fresh_for_seconds),
       busy: read.refreshing,
       meter: {
-        label: words.barLabel(window, now, today),
+        label: words.barLabel(window, now, today, quota.fresh_for_seconds),
         used: window.latest.used_percent,
         even: window.even_percent,
         forecast: forecastEnds(forecastCourses(window, Date.parse(today))),
