@@ -82,7 +82,8 @@ for (const width of [1440, 1024, 390]) {
     await expect(
       lead.getByRole('combobox', { name: 'Состояние: В работе. Перевести в другое' }),
     ).toHaveText('В работе')
-    await expect(drawer.locator('.facts, .fact-term')).toHaveCount(0)
+    // Said once: no fact repeats the state the menu names.
+    await expect(lead.getByText('В работе', { exact: true })).toHaveCount(1)
 
     // One action, and where it stands is the drawer's width to decide.
     const actions = lead.locator('.write-actions button')
@@ -105,8 +106,9 @@ for (const width of [1440, 1024, 390]) {
     await expect(chips.first()).toHaveAttribute('aria-label', 'Фильтр: метка platform')
 
     // Updated and the source left the body; the path stands in Relations.
+    const sourceRows = drawer.locator('.drawer-frame-content .ref-row')
     await expect(drawer.locator('.drawer-frame-content').getByText('Обновлено')).toHaveCount(0)
-    await expect(drawer.locator('.drawer-frame-content .ref-row')).toHaveCount(0)
+    await expect(sourceRows).toHaveCount(0)
     await expect(drawer.locator('.identity-source')).toHaveAttribute(
       'aria-label',
       /docs\/plans\/platform\.md#kb:architecture$/u,
@@ -117,6 +119,9 @@ for (const width of [1440, 1024, 390]) {
     )
     expect(overflow).toBe(0)
     await expectNoSilentClipping(page, `card head at ${width}px`)
+
+    await drawer.getByRole('tab', { name: 'Связи', exact: true }).click()
+    await expect(sourceRows.first()).toContainText('docs/plans/platform.md#kb:architecture')
   })
 }
 
@@ -401,12 +406,13 @@ for (const width of [1440, 390]) {
     const drawer = await openLongCard(page, width)
     // This item stands under no parent, so no row names one: an empty row would still take its
     // gap and read as a blank line among the facts. Every row there is has a value.
-    const names = await drawer.locator('.card-row-label').allTextContents()
-    expect(names).not.toContain('Родитель')
-    const widths = await drawer
-      .locator('.card-row-value')
-      .evaluateAll((facts) => facts.map((fact) => fact.getBoundingClientRect().width))
-    expect(widths).toHaveLength(names.length)
-    expect(Math.min(...widths)).toBeGreaterThan(0)
+    const rows = await drawer.locator('[data-fact]').evaluateAll((all) =>
+      all.map((row) => ({
+        fact: (row as HTMLElement).dataset.fact,
+        value: row.querySelector('.card-row-value')?.getBoundingClientRect().width ?? 0,
+      })),
+    )
+    expect(rows.map(({ fact }) => fact)).toEqual(['priority', 'state', 'labels', 'holder'])
+    for (const { fact, value } of rows) expect(value, `the ${fact} row's value`).toBeGreaterThan(0)
   })
 }

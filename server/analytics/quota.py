@@ -18,7 +18,8 @@ latest sample is within `forecast.FRESH_FOR`, the rule the alerts use, and `sile
 it is older; a fresh 0 % is a value like any other.
 
 The forecast is the quota's own (`forecast.outlook`): the five-hour window's point
-answer, and a week only as the range it gives, never a point. The usage credits and a
+answer, with the share a window that lasts spends by its reset, and a week only as the
+range it gives, never a point. The usage credits and a
 gateway's spend limit are their own kinds and carry no percent, no amount and no
 forecast: no figure here is money, and none is a sum of percentages, within an account or
 across accounts.
@@ -106,10 +107,18 @@ def _forecast(
         return None
     point = found.forecast
     if isinstance(point, forecast.Spent):
-        return {"outcome": "spent", "runs_out_at": None, "basis": None}
+        return {"outcome": "spent", "runs_out_at": None, "at_reset_percent": None, "basis": None}
+    if isinstance(point, forecast.Short):
+        return {
+            "outcome": "runs_out",
+            "runs_out_at": clock.time(point.at),
+            "at_reset_percent": None,
+            "basis": point.basis.kind,
+        }
     return {
-        "outcome": "runs_out" if isinstance(point, forecast.Short) else "lasts",
-        "runs_out_at": clock.time(point.at) if isinstance(point, forecast.Short) else None,
+        "outcome": "lasts",
+        "runs_out_at": None,
+        "at_reset_percent": round(point.reached, 2),
         "basis": point.basis.kind,
     }
 

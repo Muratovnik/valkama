@@ -50,9 +50,12 @@ function key(element: HTMLElement, value: string, shiftKey = false) {
   )
 }
 
-/** The stops either side of a surface, where a Tab past its last control lands. */
+/**
+ * The stops either side of a surface, where a Tab past its last control lands, by the end each
+ * guards (`data-focus-guard`), in the host the surface stands in.
+ */
 function stopsOf(control: HTMLElement) {
-  return control.closest('.overlay-host')?.querySelectorAll<HTMLElement>(':scope > [tabindex="0"]')
+  return control.closest('.overlay-host')?.querySelectorAll<HTMLElement>('[data-focus-guard]')
 }
 
 /** A Tab past the end, as the browser carries it: on to the stop beyond the surface. */

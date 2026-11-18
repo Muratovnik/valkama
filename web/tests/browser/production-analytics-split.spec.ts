@@ -1,15 +1,17 @@
 /**
  * How a dimension's panel beside the rail lays out its parts, in the real app, over thirty tasks.
  * The figures that choose the measure stand whole at the top of the panel; under them the ranked
- * list, a whole row of small charts and the table, in the panel's one scroll, the table scrolling
+ * list across the charts' width, with no small charts, since tasks are named by free text, and the
+ * table, in the panel's one scroll, the table scrolling
  * inside its own frame (`production-analytics-one-scroll.spec.ts` holds that nothing else in it
  * scrolls on its own). Each row of the table and its heading row is one line, and the figures'
  * columns are as narrow as what they hold. A wheel over the table scrolls it in its frame, the
- * panel and the document standing still, and the names stay pinned at the frame's start. The ranked list's last line and «To the table» bring the table
- * into view with the focus on it. Each run prints what it measured.
+ * panel and the document standing still, and the names stay pinned at the frame's start. «To the
+ * table» brings the table into view with the focus on it, and the ranked list's last line, «All
+ * 30», opens every task in the side panel. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { noTask, value } from '../fixtures/analytics.ts'
 import { pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
@@ -167,15 +169,13 @@ for (const [width, height] of [
     // The figures' columns are as narrow as what they hold, so the name's column has the rest.
     expect(Math.max(...measured.slack), 'room left in a figure column').toBeLessThanOrEqual(2)
     expect(measured.name + 2).toBeGreaterThanOrEqual(measured.tableWidth - measured.figures)
-    expect(measured.multiples, 'small charts in view, title and plot').toBeGreaterThanOrEqual(1)
+    expect(measured.multiples, 'no small charts beside a list of tasks').toBe(0)
 
-    // The day chart's value axis and the small charts' scale count agent time in one unit each.
+    // The day chart's value axis counts agent time in one unit.
     const steps = await page.locator('.spending-days .period-scale .chart-tick').allTextContents()
-    const top = (await page.locator('.spending-multiples .multiples-scale').textContent()) ?? ''
-    await record(info, `analytics time axis ${width}x${height}`, { steps, top })
+    await record(info, `analytics time axis ${width}x${height}`, { steps })
     expect(steps.length).toBeGreaterThan(1)
     for (const step of steps) expect(step.trim()).toMatch(/^(0|\d+\s(min|h|d))$/u)
-    expect(top).toMatch(/ 0 to \d+\s(min|h|d)$/u)
 
     // A wheel over the table scrolls it in its own frame, and the panel and the document stand
     // still; the names stay pinned at the frame's start.
@@ -194,22 +194,28 @@ for (const [width, height] of [
     expect(name).toBe('sticky')
   })
 
-test('the ranked list names twelve tasks and its last line brings the table into view, focused', async ({
+test('the ranked list names ten tasks and the rest in one row, and its last line opens all thirty in the side panel', async ({
   page,
 }) => {
   await openSplit(page, 1440, 900)
-  await expect(page.locator('.spending-bars .ranked-row')).toHaveCount(12)
-  const more = page
-    .locator('.spending-bars')
-    .getByRole('button', { name: '18 more — in the table' })
-  await more.click()
-  await expect.poll(() => tableFocused(page)).toEqual({ focused: true, top: 0 })
-  // The charts are still there over the table, in the same scroll.
-  await expect(page.locator('.spending-bars')).toBeAttached()
+  await expect(page.locator('.spending-bars .ranked-row')).toHaveCount(11)
+  await expect(page.locator('.spending-bars .ranked-rest .ranked-label')).toHaveText([
+    'Other, 20 more',
+  ])
+  await page.locator('.spending-bars').getByRole('button', { name: 'All 30' }).click()
+  const every = page.getByRole('dialog', { name: 'Details: Task: every value' })
+  await expect(every.locator('tbody').getByRole('row')).toHaveCount(30)
+  // The page stays under the panel as it was: its charts and its table, in the same scroll.
+  await expect(page.locator('.analytics-panel .spending-bars')).toBeAttached()
+  await expect(page.locator('.analytics-panel .spending-table')).toBeAttached()
   await expect(page.getByRole('button', { name: /^(Expand|Collapse) table$/u })).toHaveCount(0)
 })
 
-test('work on no task, the largest share, is ranked first with a bar and a small chart', async ({
+/** How wide a ranked row's bar is drawn, in pixels. */
+const barWidth = (row: Locator) =>
+  row.locator('.ranked-bar').evaluate((one) => one.getBoundingClientRect().width)
+
+test('work on no task, larger than any task, stands apart after the tasks with a longer bar than theirs', async ({
   page,
 }) => {
   await serve(page, [
@@ -222,12 +228,16 @@ test('work on no task, the largest share, is ranked first with a bar and a small
   ])
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(TASK_REPORT)
+  const none = page.locator('.spending-bars .ranked-rest .ranked-row').last()
+  await expect(none).toHaveAttribute('data-kind', 'none')
+  await expect(none.locator('.ranked-label')).toHaveText('No task')
+  // Work on no task takes the darker neutral, never the folded rest's lighter one, and its bar is
+  // on the tasks' scale, longer than the largest task's.
+  const bar = none.locator('.ranked-bar')
+  await expect(bar).toHaveAttribute('data-slot', 'apart')
   const first = page.locator('.spending-bars .ranked-row').first()
-  await expect(first).toHaveAttribute('data-kind', 'none')
-  await expect(first.locator('.ranked-label')).toHaveText('No task')
-  // Work on no task takes the darker neutral, never the folded rest's lighter one.
-  await expect(first.locator('.ranked-bar')).toHaveAttribute('data-slot', 'apart')
-  await expect(page.locator('.spending-multiples .multiple-name').first()).toHaveText('No task')
+  await expect(first).toHaveAttribute('data-kind', 'category')
+  expect(await barWidth(none)).toBeGreaterThan(await barWidth(first))
 })
 
 test('the table counts the values of the period as the rail’s tile does', async ({ page }) => {

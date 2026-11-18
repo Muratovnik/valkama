@@ -61,6 +61,9 @@ const asked = () => [
 
 const settle = (page: Page) => frames(page.locator(':root'))
 
+/** The entries of `asked` that wait for a reply, each a line with a mark. */
+const MARKED = asked().filter((entry) => entry.awaits_reply).length
+
 async function openAsked(page: Page, locale: Locale, width: number) {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -301,6 +304,7 @@ for (const locale of ['ru', 'en'] as const)
     test.setTimeout(120_000)
     const opened = await openAsked(page, locale, 1400)
     const wrong: string[] = []
+    const read: number[] = []
     for (const [step, width] of SWEEP.entries()) {
       await page.setViewportSize({ width, height: 900 })
       await settle(page)
@@ -310,8 +314,11 @@ for (const locale of ['ru', 'en'] as const)
       const found = await placements(page)
       const rule = found.map((row) => row.expected)
       const at = `${step}@${width}`
+      read.push(found.length)
       wrong.push(...unsettled(frames, rule, at), ...offRule(found).map((line) => `${at}: ${line}`))
     }
+    // A step that read no line would find nothing off the rule.
+    expect(read, 'the marked lines read at each step').toEqual(SWEEP.map(() => MARKED))
     expect(wrong).toEqual([])
     expect(await opened.pageErrors()).toEqual([])
   })
@@ -359,6 +366,8 @@ for (const locale of ['ru', 'en'] as const)
     await settle(page)
     await settle(page)
     expect(await markReads(page), 'layout reads of a marked line while typing').toBe(0)
-    expect(offRule(await placements(page)), 'after typing').toEqual([])
+    const placed = await placements(page)
+    expect(placed, 'the marked lines read after typing').toHaveLength(MARKED)
+    expect(offRule(placed), 'after typing').toEqual([])
     expect(await opened.pageErrors()).toEqual([])
   })

@@ -63,7 +63,11 @@ function host<T extends string | string[]>(start: T, extra: Record<string, unkno
 }
 
 const options = () => [...document.querySelectorAll<HTMLElement>('[role="option"]')]
-const optionNames = () => options().map((option) => option.textContent?.trim())
+/** Each option's name and, apart from it, the note under it, as a reader reads them. */
+const optionNames = () =>
+  options().map((option) => option.querySelector('.combo-title')?.textContent.trim())
+const optionNotes = () =>
+  options().map((option) => option.querySelector('.combo-note')?.textContent.trim())
 
 async function type(input: ReturnType<typeof host>['input'], text: string) {
   input.element.focus()
@@ -88,9 +92,11 @@ describe('SearchCombobox with one value', () => {
     const { input, value } = host('')
     expect(input.element.value).toBe('No goal')
     await type(input, '30')
-    expect(optionNames()).toEqual(['MAIN-30 · SearchBacklog'])
+    expect(optionNames()).toEqual(['MAIN-30 · Search'])
+    expect(optionNotes()).toEqual(['Backlog'])
     await type(input, 'pars')
-    expect(optionNames()).toEqual(['MAIN-12 · Parser reworkDev'])
+    expect(optionNames()).toEqual(['MAIN-12 · Parser rework'])
+    expect(optionNotes()).toEqual(['Dev'])
     await press(input, 'Enter')
     expect(value.value).toBe('MAIN-12')
     expect(options()).toHaveLength(0)

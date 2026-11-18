@@ -110,9 +110,13 @@ async function hiddenHint(page: Page, { control, label }: { control: string; lab
   return { own, shown }
 }
 
+/** The kinds of cut text the sweep names, each by a class the element carries anywhere in its list. */
+const CUT_KINDS = ['nav-item', 'work-action', 'lane-title']
+
 /**
- * Points at a few of each kind of cut text on the page, by the first class each carries, and
- * lists each whole text laid from anywhere but a letter of its words a reader sees.
+ * Points at a few of each kind of cut text on the page, and lists each whole text laid from
+ * anywhere but a letter of its words a reader sees. A kind is one of `CUT_KINDS` the element
+ * carries, else its classes in any order: never the class that happens to come first.
  */
 async function sweepCut(page: Page) {
   const SAMPLE = 3
@@ -120,9 +124,15 @@ async function sweepCut(page: Page) {
   const viewport = page.viewportSize() ?? { width: 0, height: 0 }
   const sampled = new Map<string, number>()
   const wrong: string[] = []
+  let laid = 0
   for (let index = 0, count = await anchors.count(); index < count; index += 1) {
     const anchor = anchors.nth(index)
-    const kind = await anchor.evaluate((node) => node.classList[0] ?? node.tagName)
+    const kind = await anchor.evaluate(
+      (node, kinds) =>
+        kinds.find((each) => node.classList.contains(each)) ??
+        ([...node.classList].toSorted().join('.') || node.tagName),
+      CUT_KINDS,
+    )
     const box = await anchor.boundingBox()
     if ((sampled.get(kind) ?? 0) >= SAMPLE || !box || box.width < 2 || box.height < 2) continue
     const point: [number, number] = [box.x + box.width / 2, box.y + box.height / 2]
@@ -132,11 +142,12 @@ async function sweepCut(page: Page) {
     await rest(page, point)
     const from = await laidFrom(anchor)
     if (!from) continue
+    laid += 1
     if (!from.seen) wrong.push(`${kind} «${from.text}»: laid over words a reader does not see`)
     else if (Math.abs(from.seen.x) > 0.5 || Math.abs(from.seen.y) > 0.5)
       wrong.push(`${kind} «${from.text}»: laid ${from.seen.x}, ${from.seen.y} off its letter`)
   }
-  return { kinds: [...sampled.keys()], wrong }
+  return { kinds: [...sampled.keys()], laid, wrong }
 }
 
 async function openAt(page: Page, width: number) {
@@ -185,6 +196,8 @@ test.describe('at 1280px, where every label stands whole', () => {
     await openAt(page, 1280)
   })
 
+  // Both selectors are shown present in this file: the hint where a label is hidden at 360px,
+  // the whole words where the sweep below lays them over a cut title.
   test('a control whose label stands whole shows no hint', async ({ page }) => {
     for (const { control } of [...RAIL, ACTION]) {
       await rest(page, page.locator(control).first())
@@ -198,6 +211,8 @@ test.describe('at 1280px, where every label stands whole', () => {
   }) => {
     const swept = await sweepCut(page)
     expect(swept.kinds).toEqual(expect.arrayContaining(['nav-item', 'lane-title']))
+    // The lane titles are cut at this width, so whole words were laid, and read, for some.
+    expect(swept.laid).toBeGreaterThan(0)
     expect(swept.wrong).toEqual([])
   })
 })

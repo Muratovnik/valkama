@@ -2,11 +2,13 @@
  * The Analytics page: what agent work was spent on in a period, and how that changed from the
  * period before. A cost is always said to be an estimate at API prices and never a bill.
  */
+import { analyticsDetailMessages } from '@/shared/i18n/analyticsDetailMessages.ts'
 import { analyticsFigureMessages } from '@/shared/i18n/analyticsFigureMessages.ts'
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsQuotaMessages } from '@/shared/i18n/analyticsQuotaMessages.ts'
 import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
+import { analyticsTableMessages } from '@/shared/i18n/analyticsTableMessages.ts'
 import { analyticsTimeMessages } from '@/shared/i18n/analyticsTimeMessages.ts'
 
 export const analyticsMessages = {
@@ -81,6 +83,7 @@ export const analyticsMessages = {
       days: {
         title: '{measure} {per}, {by}',
         soFar: 'running',
+        hatch: 'in progress',
         note: 'Note',
         total: 'total',
         empty: 'No day in this period spent anything.',
@@ -125,34 +128,8 @@ export const analyticsMessages = {
           },
         },
       },
-      table: {
-        title: 'Spending {by}',
-        crossTitle: 'Spending {by} and {across}',
-        change: 'Change',
-        unread: 'The period before was not read, so this table shows this period alone.',
-        download: 'Download CSV',
-        nothingToDownload: 'Nothing to download: this view holds no value.',
-        moved: {
-          up: '↑ {change}',
-          down: '↓ {change}',
-          same: 'The same',
-          none: 'Nothing before',
-          absent: {
-            tokens: {
-              before: 'No tokens before',
-              now: 'No tokens now',
-              both: 'No tokens in either',
-            },
-            cost: {
-              before: 'No price before',
-              now: 'No price now',
-              both: 'No price in either',
-            },
-          },
-        },
-      },
+      table: analyticsTableMessages.en,
       drill: {
-        value: 'Show the tasks of {value}',
         noTask: 'Break down the work with no task by project and launch class',
         noTaskByLaunch: 'Break down the work with no task by launch class',
         day: 'Show the tasks of {day}',
@@ -199,6 +176,7 @@ export const analyticsMessages = {
           reasoning: 'Reasoning',
         },
       },
+      detail: analyticsDetailMessages.en,
       overview: analyticsOverviewMessages.en,
       panel: analyticsPanelMessages.en,
       quota: analyticsQuotaMessages.en,
@@ -276,6 +254,7 @@ export const analyticsMessages = {
       days: {
         title: '{measure} {per}, {by}',
         soFar: 'идёт',
+        hatch: 'идёт',
         note: 'Примечание',
         total: 'всего',
         empty: 'Ни в один день периода ничего не потрачено.',
@@ -320,34 +299,8 @@ export const analyticsMessages = {
           },
         },
       },
-      table: {
-        title: 'Расход {by}',
-        crossTitle: 'Расход {by} и {across}',
-        change: 'Изменение',
-        unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
-        download: 'Скачать CSV',
-        nothingToDownload: 'Скачивать нечего: в этом виде нет ни одного значения.',
-        moved: {
-          up: '↑ {change}',
-          down: '↓ {change}',
-          same: 'Столько же',
-          none: 'Раньше ничего',
-          absent: {
-            tokens: {
-              before: 'Раньше токены не учтены',
-              now: 'Сейчас токены не учтены',
-              both: 'Токены не учтены ни там, ни там',
-            },
-            cost: {
-              before: 'Раньше нет цены',
-              now: 'Сейчас нет цены',
-              both: 'Нет цены ни там, ни там',
-            },
-          },
-        },
-      },
+      table: analyticsTableMessages.ru,
       drill: {
-        value: 'Показать задачи: {value}',
         noTask: 'Разобрать работу без задачи по проектам и способам запуска',
         noTaskByLaunch: 'Разобрать работу без задачи по способам запуска',
         day: 'Показать задачи за {day}',
@@ -394,6 +347,7 @@ export const analyticsMessages = {
           reasoning: 'Рассуждения',
         },
       },
+      detail: analyticsDetailMessages.ru,
       overview: analyticsOverviewMessages.ru,
       panel: analyticsPanelMessages.ru,
       quota: analyticsQuotaMessages.ru,

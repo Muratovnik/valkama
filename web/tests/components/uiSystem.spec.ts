@@ -44,6 +44,18 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+/** A switch that is on, with its state's word shown or not. */
+const toggle = (showStateLabel: boolean) =>
+  mount(ToggleSwitch, {
+    props: {
+      modelValue: true,
+      label: 'AgentMemory',
+      onLabel: 'Enabled',
+      offLabel: 'Disabled',
+      showStateLabel,
+    },
+  })
+
 describe('shared UI contracts', () => {
   it('keeps registered and unknown manifest icons inside one optical box', () => {
     const generic = mount(VIcon, { props: { name: 'settings', size: 20 } })
@@ -256,17 +268,11 @@ describe('shared UI contracts', () => {
   })
 
   it('can keep a switch accessible without repeating its state as visible copy', () => {
-    const wrapper = mount(ToggleSwitch, {
-      props: {
-        modelValue: true,
-        label: 'AgentMemory',
-        onLabel: 'Enabled',
-        offLabel: 'Disabled',
-        showStateLabel: false,
-      },
-    })
+    const wrapper = toggle(false)
     expect(wrapper.get('[role="switch"]').attributes('aria-label')).toBe('AgentMemory')
-    expect(wrapper.find('.toggle-state').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Enabled')
+    // Shown, the same state is the switch's visible copy.
+    expect(toggle(true).text()).toContain('Enabled')
   })
 
   it('publishes a switch transition on its model and nowhere else', async () => {

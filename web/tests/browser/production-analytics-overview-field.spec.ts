@@ -11,7 +11,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { pageAt, record, serve } from './analyticsPage.ts'
+import { LEGEND_SERIES, pageAt, record, serve } from './analyticsPage.ts'
 import { openOverview, WORLD } from './overviewPage.ts'
 import { CHANGES } from './served/analyticsOverviewField.ts'
 import { test } from './test.ts'
@@ -75,13 +75,17 @@ test('a tall window gives the room under the cards to the plot, and 1440 by 900 
   expect(Math.round(usual.plot.width)).toBeGreaterThanOrEqual(800)
 })
 
+/** The frames a second look is given, a second of them at sixty a second. */
+const LOOK_FRAMES = 60
+
 /**
- * How many times the overview's panel rewrote its own style over a second: the field's height
- * is set there, so a second look at the same box that changed it would show here.
+ * How many times the overview's panel rewrote its own style over `LOOK_FRAMES` frames: the
+ * field's height is set there, so a second look at the same box that changed it would show here.
+ * Counted in the page's frames, which a box measured again is drawn in, and not in time.
  */
 const restyles = (page: Page) =>
   page.evaluate(
-    () =>
+    (frames) =>
       new Promise<number>((resolve) => {
         const panel = document.querySelector('.overview-panel')
         if (!panel) throw new Error('no overview')
@@ -90,11 +94,19 @@ const restyles = (page: Page) =>
           count += changes.length
         })
         watch.observe(panel, { attributes: true, attributeFilter: ['style'] })
-        setTimeout(() => {
+        let left = frames
+        const step = () => {
+          left -= 1
+          if (left > 0) {
+            requestAnimationFrame(step)
+            return
+          }
           watch.disconnect()
           resolve(count)
-        }, 1000)
+        }
+        requestAnimationFrame(step)
       }),
+    LOOK_FRAMES,
   )
 
 for (const { changes, world } of CHANGES)
@@ -103,12 +115,14 @@ for (const { changes, world } of CHANGES)
   }, info) => {
     await serve(page, world)
     const panel = await openOverview(page, 1440, 900)
-    for (const card of await panel.locator('.overview-top').all())
-      await expect(card.locator('.ranked-row')).toHaveCount(5)
-    await expect(panel.locator('.period-mark')).toHaveCount(changes)
+    // The tasks', the models' and the projects' cards (`OverviewPanel`), five rows each.
+    const cards = panel.locator('[data-card]')
+    await expect(cards).toHaveCount(3)
+    for (const card of await cards.all()) await expect(card.locator('.ranked-row')).toHaveCount(5)
+    await expect(panel.locator('[data-mark="change"]')).toHaveCount(changes)
     // Across the panel the legend takes one line.
     const legendLines = await panel
-      .locator('.overview-chart .chart-key')
+      .locator(`.overview-chart ${LEGEND_SERIES}`)
       .evaluateAll(
         (keys) => new Set(keys.map((key) => Math.round(key.getBoundingClientRect().top))).size,
       )

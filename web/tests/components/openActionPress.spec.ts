@@ -277,7 +277,10 @@ describe('a session long silent', () => {
     const wrapper = await openPanel()
     expect(buttonNamed(COPY_LABEL)).toBeTruthy()
     expect(document.activeElement).not.toBe(buttonNamed(COPY_LABEL))
-    expect(document.querySelector('.open-panel-steps')).toBeNull()
+    // No step opens a window elsewhere, as the first test's two do.
+    const offered = [...document.querySelectorAll('button')].map((one) => one.textContent.trim())
+    expect(offered).toContain(COPY_LABEL)
+    expect(offered.filter((name) => name.startsWith('Open the '))).toEqual([])
     wrapper.unmount()
   })
 

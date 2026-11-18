@@ -3,24 +3,26 @@
  * Where a window of an account went: the work Valkama recorded on the account from the window's
  * start to the answer's moment, by its API price estimate, ranked, each item with its share of
  * that estimate — by task, the first breakdown, by project or by model (`useWindowSpend`). Its
- * items split one whole, the account's estimate, so it is drawn as the page draws a split: the
- * ranked bars (`RankedBars`) with the first five items and one line for the rest, or a ring
- * (`DonutChart`) of every item that folds its own rest, each item in a hue of its rank there; a
- * switch beside the breakdowns chooses, opening on what `firstSplitView` says of the breakdown —
- * the bars by task, the ring by project or by model — and a person's choice stands until the page
- * is left. Where the quota's section shows its tables (`shown`), it is the bars' table, with no
- * switch: the section's own switch chose for every chart of the card. It stands under the
- * window's readings on an axis of its own: no dollar meets the window's bar or its step line, and
- * no share here is a share of the quota.
+ * items split one whole, the account's estimate, so it is drawn as the page draws a split
+ * (`splitView.ts`): by project or by model the ranked bars (`RankedBars`) with the first five items
+ * and one line for the rest, or a ring (`DonutChart`) of every item that folds its own rest, each
+ * item in a hue of its rank there, a switch beside the breakdowns choosing and the ring first; a
+ * person's choice stands until the page is left. By task, named by free text, it is a list only,
+ * with no switch: the bars of a list of free text (`RankedBars`'s `freeText`), the rest and work
+ * with no task apart under a rule with their bars. Shown as its table (`shown`), it is the bars'
+ * table, with no switch: the side panel's switch it stands under chose (`WindowDetail`). It stands
+ * in that panel, apart from the window's readings: no dollar meets the window's bar or its step
+ * line, and no share here is a share of the quota.
  *
  * Its heading names the stretch it covers. That it is an estimate at API prices, not quota points,
  * and that work in claude.ai and the desktop app, which the window's share counts, is not in it,
- * the section's «ⓘ» says once for every window (`useSectionCaveats`). No work on the account,
+ * the section's «ⓘ» says once for every window (`useSectionCaveats`), and the side panel under its
+ * names. No work on the account,
  * work only its organization recorded with no account known, a wait and a read that failed each
  * say so in words of their own; the organization's work with no account is never drawn as the
  * account's. A wait and a failure stay in this block, with a retry.
  */
-import { computed, ref, useId } from 'vue'
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useHeadingUnder } from '@/pages/analytics/composables/usePanelOutline.ts'
@@ -28,7 +30,7 @@ import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
-import { firstSplitView } from '@/pages/analytics/utils/splitView.ts'
+import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
 import { measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
@@ -59,7 +61,12 @@ const quotaWords = useQuotaWords()
 /** Its heading one under its window's. */
 const headingAs = useHeadingUnder()
 
-const { by, read, retry } = useWindowSpend({
+const {
+  by,
+  drawn: chosen,
+  read,
+  retry,
+} = useWindowSpend({
   account: () => props.account,
   window: () => props.window,
 })
@@ -77,9 +84,10 @@ function choose(value: SpendBy) {
   by.value = value
 }
 
+/** Whether the breakdown is named by free text, the tasks, which is a list only. */
+const listOnly = computed(() => namedByText(by.value))
 /** The drawing a person chose, which stands until the page is left; none before they choose. */
-const chosen = ref<SplitView | null>(null)
-const view = computed(() => chosen.value ?? firstSplitView(by.value))
+const view = computed<SplitView>(() => (listOnly.value ? 'bars' : (chosen.value ?? 'ring')))
 const views = computed(() =>
   (['ring', 'bars'] as const).map((value) => ({ value, label: t(`analytics.shown.${value}`) })),
 )
@@ -225,9 +233,9 @@ const failedAgain = computed(() =>
         :options="options"
         @update:model-value="choose"
       />
-      <!-- Only over a drawing: a window with nothing to draw has no view to choose. -->
+      <!-- Only over a drawing of two: a window with nothing to draw has no view to choose. -->
       <SegmentedControl
-        v-if="shown === 'chart' && state === 'spent'"
+        v-if="shown === 'chart' && state === 'spent' && !listOnly"
         size="compact"
         :model-value="view"
         :label="t('analytics.shown.label', { chart: heading })"
@@ -255,14 +263,15 @@ const failedAgain = computed(() =>
             :label="chartLabel"
             :rows="rows"
             :words="barWords"
-            rank-all
+            :rank-all="!listOnly"
+            :free-text="listOnly"
           />
           <RankedBarsTable
             v-else
             :label="chartLabel"
             :rows="rows"
             :words="barWords"
-            rank-all
+            :rank-all="!listOnly"
           />
           <p
             v-if="apart"

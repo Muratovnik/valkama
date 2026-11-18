@@ -4,9 +4,11 @@
  * caveat of a section — that a cost is an estimate and not a bill, what the tokens count, that
  * the period does not reach the quota, what «Where the window went» is — stands in exactly one
  * hint, the «ⓘ» of the section's heading, and nowhere on the page; and no word is «пока» or «so
- * far», which read as a goodbye under the period still running. Each block once said its caveats
- * whole: the quota opened on two sentences of what does not apply to it, each window said two
- * lines more over its spend, and the words outweighed the figures they qualified.
+ * far», which read as a goodbye under the period still running. The side panel a window opens on
+ * what used it says what that is in its own «ⓘ» alone, never as a line of the panel. Each block
+ * once said its caveats whole: the quota opened on two sentences of what does not apply to it,
+ * each window said two lines more over its spend, and the words outweighed the figures they
+ * qualified.
  *
  * Which caveats each section owes is the inventory's (`fixtures/analyticsWords.ts`), and their
  * words the catalog's. The check is shown to fail: a caveat put back on the page is found there.
@@ -53,14 +55,14 @@ function owed(locale: Locale, section: CaveatSection, minutes: boolean) {
 }
 
 /**
- * What the page shows by default: each block's own words — the text whose nearest box is not an
- * inline one — that stand in a box of their own on screen, leaving out what is laid out for a
- * screen reader alone, a pixel square, and what is not drawn. A hint's words are not on it: they
- * are an element's `data-tooltip`, read here apart.
+ * What the page, or the surface `within` names, shows by default: each block's own words — the
+ * text whose nearest box is not an inline one — that stand in a box of their own on screen,
+ * leaving out what is laid out for a screen reader alone, a pixel square, and what is not drawn. A
+ * hint's words are not on it: they are an element's `data-tooltip`, read here apart.
  */
-const shown = (page: Page) =>
-  page.evaluate(() => {
-    const root = document.querySelector('.analytics-page')
+const shown = (page: Page, within = '.analytics-page') =>
+  page.evaluate((selector) => {
+    const root = document.querySelector(selector)
     if (!root) return { blocks: [], heads: [], hints: [] }
     const unseen = (element: Element) => {
       for (let box: Element | null = element; box && box !== root; box = box.parentElement) {
@@ -86,7 +88,7 @@ const shown = (page: Page) =>
       .filter((head) => !unseen(head))
       .map((head) => head.textContent ?? '')
     return { blocks: [...blocks.values()], heads, hints }
-  })
+  }, within)
 
 /** How many times `part` stands in `whole`. */
 const times = (whole: string, part: string) => whole.split(part).length - 1
@@ -167,12 +169,12 @@ const SPENDING: View[] = [
   },
 ]
 
-/** The quota's two sections, read with work on each window so that it says where it went. */
+/** The quota's two sections, read with work on each window so that it offers where it went. */
 const QUOTA: View[] = [
   {
     name: 'five hours',
     address: pageAt({ by: 'quota_five_hour' }),
-    ready: '.window-spend[data-state="spent"]',
+    ready: '.quota-account',
     section: 'quota',
   },
   {
@@ -186,7 +188,6 @@ const QUOTA: View[] = [
 async function open(page: Page, address: string, ready: string) {
   await page.goto(address)
   await expect(page.locator(ready).first()).toBeVisible()
-  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 
@@ -244,6 +245,36 @@ for (const locale of ['ru', 'en'] as const) {
     await serve(page, SPENT_WORLD)
     const seen = await readEach(page, locale, QUOTA)
     expect(Object.keys(seen)).toEqual(['five hours 0', 'week 0'])
+
+    // The side panel of a window's spend, over the section whose «ⓘ» it covers, says what that
+    // spend is in its own «ⓘ» alone: never as a line, while its heading is read there.
+    await open(page, pageAt({ by: 'quota_five_hour' }), '.quota-account')
+    const spends = page.locator('[data-spend]')
+    expect(await spends.count()).toBeGreaterThan(0)
+    await spends.first().click()
+    const spend = page.getByRole('dialog').locator('.window-spend[data-state="spent"]')
+    await expect(spend).toBeVisible()
+    const heading = plain((await spend.locator('h3').textContent()) ?? '')
+    const inPanel = await shown(page, '.analytics-detail')
+    const panelText = plain(inPanel.blocks.join(' '))
+    const basis = plain(caveatText(messages[locale].analytics, 'analytics.quota.spent.basis'))
+    const about = page.getByRole('dialog').getByRole('button', {
+      name: messages[locale].analytics.detail.about,
+    })
+    await expect(about).toHaveCount(1)
+    await about.click()
+    const tip = page.locator('.info-tip-panel')
+    await expect(tip).toHaveCount(1)
+    const panel = {
+      heading: panelText.includes(heading),
+      basisShown: panelText.includes(basis),
+      long: inPanel.blocks
+        .flatMap((block) => sentencesOf(block))
+        .filter((one) => one.length > LONGEST),
+      inTip: times(plain((await tip.textContent()) ?? ''), basis),
+    }
+    seen['window panel'] = panel
+    expect(panel).toEqual({ heading: true, basisShown: false, long: [], inTip: 1 })
     await record(info, `words quota ${locale}`, seen)
   })
 

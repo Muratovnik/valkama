@@ -92,8 +92,12 @@ describe('the second line', () => {
       'ждёт 2\u{A0}ч',
       'работает 25\u{A0}мин · example-project',
     ])
-    // The goal leaves the first line of a row with two.
-    expect(row(wrapper, 'MAIN-1').querySelector('.nav-row-goal')).toBeNull()
+    // The goal leaves the first line of a row with two: the row says it once, on its second.
+    const first = row(wrapper, 'MAIN-1')
+    expect(first.textContent.split('Structured answers')).toHaveLength(2)
+    expect(first.querySelector('.nav-row-goal')).toBeNull()
+    // An item's row has its number, which a session's row has not (below).
+    expect(first.querySelector('.nav-row-number')?.textContent).toContain('1')
   })
 
   it('says each state in English', () => {
@@ -245,6 +249,7 @@ describe('a session’s row', () => {
     // The glyph of a session stands in the number's column, and the row has no card or pin.
     const session = row(wrapper, 'tools')
     expect(session.querySelector('.nav-row-numeral .nav-row-glyph')).not.toBeNull()
+    // No number, which an item's row carries (the first test above).
     expect(session.querySelector('.nav-row-number')).toBeNull()
     expect(session.querySelector('a')).toBeNull()
     expect(session.querySelector('.nav-row-pin, .nav-row-open')).toBeNull()

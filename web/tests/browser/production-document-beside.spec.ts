@@ -219,10 +219,7 @@ test('the window narrowed past the threshold takes the document over the card, a
   await expect(over.locator('.document-block.is-target')).toContainText('The target')
   await expect(over.locator('.document-block.is-target')).toBeFocused()
   // Over the card, which stays mounted under it, its draft in it.
-  await expect(drawer.locator('..').locator('.overlay-surface').first()).toHaveAttribute(
-    'inert',
-    '',
-  )
+  await expect(drawer).toHaveAttribute('inert', '')
   await expect(drawer.locator('.discussion-form textarea')).toHaveValue('Half a thought')
   // One pane: F6 goes nowhere.
   await page.keyboard.press('F6')

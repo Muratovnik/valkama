@@ -19,6 +19,10 @@
  * either and read no usage of their own: they stand on the period's overview, which the rail's
  * first tiles read, so opening one asks no usage again.
  *
+ * The side panel over the page is a part of the view too (`detail`): a value pressed, a section's
+ * whole table, or what a quota window went to. Opened, it is a new place in the history, so Back
+ * closes it and a reload opens it again.
+ *
  * A preset is kept as its name, not as its dates: «this week» in a link opened next week is
  * next week's week, as the words say, «today» is the day it is opened on, and «now» is the hour
  * up to whenever it is opened.
@@ -71,6 +75,17 @@ export const isQuotaSection = (value: unknown): value is QuotaSection =>
 export type AnalyticsSection =
   UsageDimension | typeof OVERVIEW | typeof TOKEN_KINDS_SECTION | QuotaSection
 
+/**
+ * What the side panel over the page shows, while it is open: one value of a dimension, its id or
+ * null for work with no value there (`value`); every value of the section's own dimension, its
+ * whole table (`all`); or what one window of one account's quota went to (`window`), the account
+ * and the window named by the keys the quota's answer gives them (`accountKey`, `windowKey`).
+ */
+export type AnalyticsDetail =
+  | { by: UsageDimension; kind: 'all' }
+  | { by: UsageDimension; kind: 'value'; value: string | null }
+  | { account: string; kind: 'window'; window: string }
+
 export interface AnalyticsView {
   /** The second dimension a section's table crosses its own with; null for none. */
   across: UsageDimension | null
@@ -79,6 +94,8 @@ export interface AnalyticsView {
    * dimension the bars and the stacks break work down by.
    */
   by: AnalyticsSection
+  /** What the side panel over the page shows; null while it is closed. */
+  detail: AnalyticsDetail | null
   filters: UsageFilters
   /**
    * Where a custom period starts: its first day, included, `2030-03-04`, or the local moment it
@@ -108,6 +125,7 @@ export const DEFAULT_VIEW: AnalyticsView = {
   filters: {},
   open: false,
   across: null,
+  detail: null,
 }
 
 const isSection = (value: unknown): value is AnalyticsSection =>
@@ -189,6 +207,41 @@ function readFilters(text: unknown): UsageFilters {
   return orderFilters(filters)
 }
 
+/** A text the address admits as an id or a key: not empty, and no longer than a value's id. */
+const isKey = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 512
+
+/**
+ * What a link opens the side panel on, or null for a panel this build cannot read or that has
+ * nothing to show over the view: every value of a dimension is the table of the section on show,
+ * so it opens only over that section.
+ */
+function readDetail(text: unknown, section: AnalyticsSection): AnalyticsDetail | null {
+  if (typeof text !== 'string' || !text) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const held = parsed as Record<string, unknown>
+  if (isKey(held.account) && isKey(held.window))
+    return { kind: 'window', account: held.account, window: held.window }
+  if (!isUsageDimension(held.by)) return null
+  if (held.all === true) return held.by === section ? { kind: 'all', by: held.by } : null
+  const { value } = held
+  return value === null || isKey(value) ? { kind: 'value', by: held.by, value } : null
+}
+
+/** The side panel as the address holds it: its parts in one order, so one panel has one address. */
+function writeDetail(detail: AnalyticsDetail): string {
+  if (detail.kind === 'window')
+    return JSON.stringify({ account: detail.account, window: detail.window })
+  if (detail.kind === 'all') return JSON.stringify({ by: detail.by, all: true })
+  return JSON.stringify({ by: detail.by, value: detail.value })
+}
+
 /** The ids by their code points, then «none»: an order that does not depend on the locale. */
 function byValue(left: string | null, right: string | null) {
   if (left === right) return 0
@@ -220,15 +273,17 @@ export function readAddress(state: RouteState | undefined): AnalyticsView {
   const start = held(MOMENT, state?.from)
   const end = held(MOMENT, state?.to)
   const moments = Boolean(start && end && start < end)
+  const by = isSection(state?.by) ? state.by : DEFAULT_VIEW.by
   return {
     period,
     from: moments ? start : held(DATE, state?.from),
     to: moments ? end : held(DATE, state?.to),
-    by: isSection(state?.by) ? state.by : DEFAULT_VIEW.by,
+    by,
     measure: oneOf(MEASURES, state?.measure, DEFAULT_VIEW.measure),
     filters: readFilters(state?.filters),
     open: state?.open === OPEN,
     across: isUsageDimension(state?.across) ? state.across : null,
+    detail: readDetail(state?.detail, by),
   }
 }
 
@@ -246,6 +301,7 @@ export function writeAddress(view: AnalyticsView): Record<string, string> {
   if (Object.keys(filters).length) state.filters = JSON.stringify(filters)
   if (view.open) state.open = OPEN
   if (view.across) state.across = view.across
+  if (view.detail) state.detail = writeDetail(view.detail)
   return state
 }
 

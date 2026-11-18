@@ -95,8 +95,8 @@ export interface RankedRow extends MarkAction {
 export interface PlacedRow extends RankedRow {
   kind: RankedRowKind
   /**
-   * The bar's length as a share of the longest category's, from 0 to 1; null for a row that is
-   * not a category, which is not drawn on the categories' scale.
+   * The bar's length as a share of the longest bar's, from 0 to 1; null for a row that is not a
+   * category and draws no bar (`rankRows`).
    */
   length: number | null
 }
@@ -120,17 +120,22 @@ const REST_ORDER: readonly RankedRowKind[] = ['other', 'none', 'unknown']
  * of them would set a scale that leaves every category short. They draw no bar (`length` null)
  * and are read by their figures. With `rankAll`, as a section of the Analytics page asks, work
  * with no value and unknown work are ranked and drawn on the categories' scale, and only the
- * folded tail closes the chart.
+ * folded tail closes the chart. With `drawApart`, as a list of values named by free text asks,
+ * all three close the chart unranked and each draws its bar, on one scale with the categories
+ * that the longest of every row sets: work on no task can be the largest part of a period, and
+ * a bar shows that where a figure among short ones does not.
  */
 export function rankRows(
   rows: readonly RankedRow[],
   /** Rank work with no value and unknown work among the categories, by their figures. */
   rankAll = false,
+  /** Close the chart with every row that is not a category, each with its bar on one scale. */
+  drawApart = false,
 ): { ranked: PlacedRow[]; rest: PlacedRow[] } {
   const ranks = (row: RankedRow) =>
-    (row.kind ?? 'category') === 'category' || (rankAll && row.kind !== 'other')
+    (row.kind ?? 'category') === 'category' || (rankAll && !drawApart && row.kind !== 'other')
   const categories = rows.filter((row) => ranks(row))
-  const longest = Math.max(0, ...categories.map((row) => drawable(row.value)))
+  const longest = Math.max(0, ...(drawApart ? rows : categories).map((row) => drawable(row.value)))
   const ranked = categories
     .map((row) => ({
       ...row,
@@ -143,10 +148,14 @@ export function rankRows(
         byCodePoint(left.label, right.label) ||
         byCodePoint(left.key, right.key),
     )
+  const apartLength = (row: RankedRow) => {
+    if (!drawApart) return null
+    return longest ? drawable(row.value) / longest : 0
+  }
   const rest = REST_ORDER.flatMap((kind) =>
     rows
       .filter((row) => row.kind === kind && !ranks(row))
-      .map((row) => ({ ...row, kind, length: null })),
+      .map((row) => ({ ...row, kind, length: apartLength(row) })),
   )
   return { ranked, rest }
 }
@@ -156,6 +165,8 @@ export interface PeriodSeries extends MarkAction {
   key: string
   label: string
   slot: SeriesSlot
+  /** The end of a pair's `label` that stays whole while the rest gives way (`PairName`). */
+  labelEnd?: string
 }
 
 export interface PeriodColumn {
@@ -208,6 +219,11 @@ export interface PeriodMark {
 
 export interface PeriodWords {
   empty: string
+  /**
+   * What the legend calls the hatch a period still running is drawn with, beside a hatched
+   * swatch while such a period is on the plot: "in progress".
+   */
+  hatch: string
   /**
    * What a period still running says of itself, in its hint, its name and its row of the
    * table: no word stands under its name on the axis, where it is hatched instead.

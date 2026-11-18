@@ -11,7 +11,11 @@
  * word and its room, and the words are the retry: pressed, they ask once more, their name is
  * «Could not refresh · Retry», and their hint says what a press does. Dropped there instead, the
  * failure on a phone and beside a span of days said in Russian offered no retry of its own.
+ *
+ * A part that reads apart from the page — the side panel over it — says its own failure the same
+ * way (`failed`), whatever the page's reads say.
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.ts'
@@ -19,17 +23,23 @@ import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.t
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
-defineProps<{
-  /** The bar's line has no room for the retry's own word: the words are the retry. */
-  brief?: boolean
-  /** The bar is fitting its line: the failure takes its room, drawn by nobody, failed or not. */
-  held?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** The bar's line has no room for the retry's own word: the words are the retry. */
+    brief?: boolean
+    /** Whether the read again failed, for a part that reads apart; the page's reads otherwise. */
+    failed?: boolean
+    /** The bar is fitting its line: the failure takes its room, drawn by nobody, failed or not. */
+    held?: boolean
+  }>(),
+  { failed: undefined },
+)
 /** Read the view again. */
 const emit = defineEmits<{ retry: [] }>()
 
 const { t } = useI18n()
-const { failed } = usePageStanding()
+const standing = usePageStanding()
+const failed = computed(() => props.failed ?? standing.failed.value)
 </script>
 
 <template>

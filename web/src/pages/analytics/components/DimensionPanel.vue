@@ -7,6 +7,10 @@
  * (`SpendingTable`). A value has one hue in the bars, the small charts and the day chart
  * (`valueSlots`), and its name beside it.
  *
+ * Values named by free text, tasks and sessions, on either side of a pair (`namedByText`), have no
+ * small charts: their list takes the whole width of the charts, which names that run to a sentence
+ * need, where beside the small charts it had less than half.
+ *
  * «Split by» in the section's heading chooses a second dimension, or none, and the address keeps
  * it (`across`). Split, the section is read by both (`useCrossRead`), and the ranked bars, the
  * small charts, the day chart and the table read its pairs, «claude-opus-5-5 · high», each a value
@@ -19,11 +23,12 @@
  * It runs in the panel's one scroll: the figures and the charts at their own height and the table
  * under them, held to about the window's height and scrolling inside its own frame, the one part
  * of the panel that does (`SpendingTable`). A «To the table» line over
- * the charts, like the line under the ranked list that counts the values it leaves out, brings the
- * table into view with the focus on it (`SpendingTable`'s `reveal`).
+ * the charts brings the table into view with the focus on it (`SpendingTable`'s `reveal`).
  *
- * A value or a day pressed to narrow the view goes out with the dimension the answer was read by
- * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
+ * A value pressed to open its side panel goes out with the dimension the answer was read by and
+ * the part of the panel it was pressed in, which says why when it was refused; so does the line
+ * under the ranked list that opens the dimension's full table in the side panel (`all`). A day
+ * pressed or framed narrows the view. An answer whose
  * period before could not be read says so above the figures (`SpendingUnread`). Its heading names
  * the dimension the answer was read by, and the heading's «ⓘ» says the caveats of its figures
  * once (`useSectionCaveats`).
@@ -50,6 +55,7 @@ import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { valueSlots } from '@/pages/analytics/utils/dayMultiples.ts'
 import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
+import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
@@ -67,19 +73,21 @@ const props = defineProps<{
   filters: UsageFilters
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
-  /** Why the last press in a part of the panel did not narrow the view; null otherwise. */
+  /** Why the last press in a part of the panel did not do what it asked; null otherwise. */
   refused: Refusal | null
   usage: Usage
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
 }>()
 /**
- * Read the answer again; narrow the view to a value of the answer's dimension, or to a period
- * pressed or framed in a part of the panel; split the section by a second dimension, or by none.
+ * Read the answer again; open the side panel of a value of the answer's dimension, or of its
+ * full table; narrow the view to a period pressed or framed in a part of the panel; split the
+ * section by a second dimension, or by none.
  */
 const emit = defineEmits<{
+  'all': [dimension: UsageDimension, part: ReportPart]
   'frame': [span: OwnPeriod, label: string]
-  'narrow': [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
+  'inspect': [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
   'retry': []
   'step': [span: OwnPeriod, label: string]
   'update:across': [across: UsageDimension | null]
@@ -142,6 +150,9 @@ const ranked = computed(() =>
     : { usage: props.usage, across: null, slots: slots.value },
 )
 
+/** Whether the charts' values are named by free text, which draws no small charts. */
+const listOnly = computed(() => namedByText(by.value, ranked.value.across))
+
 /** «Split by»: none, or any dimension of the page but the section's own. */
 const NONE = 'none'
 const splitOptions = computed(() => [
@@ -162,7 +173,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 /** Dimmed while a new view is read in place of this answer (`readPending.css`). */
 const pending = useAnewDimmed(usePanelStanding())
 
-/** The table asked for, by the line over the charts or under the ranked list. */
+/** The table asked for, by the line over the charts. */
 const table = ref<InstanceType<typeof SpendingTable> | null>(null)
 const showTable = () => table.value?.reveal()
 </script>
@@ -220,7 +231,10 @@ const showTable = () => table.value?.reveal()
         >
           {{ t('analytics.panel.table.toTable') }}
         </SpendingTableLink>
-        <div class="dimension-pair">
+        <div
+          class="dimension-pair"
+          :class="{ 'dimension-alone': listOnly }"
+        >
           <SpendingBars
             :by="by"
             :across="ranked.across"
@@ -229,17 +243,18 @@ const showTable = () => table.value?.reveal()
             :notice="noticeIn('bars')"
             :rows="ranked.usage.rows"
             :slots="ranked.slots"
-            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
-            @more="showTable"
+            @inspect="(value, label) => emit('inspect', by, value, label, 'bars')"
+            @all="emit('all', by, 'bars')"
           />
           <SpendingMultiples
+            v-if="!listOnly"
             :by="by"
             :across="ranked.across"
             :measure="measure"
             :narrow="narrow"
             :slots="ranked.slots"
             :usage="ranked.usage"
-            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
+            @inspect="(value, label) => emit('inspect', by, value, label, 'bars')"
           />
         </div>
         <SpendingDays
@@ -254,7 +269,7 @@ const showTable = () => table.value?.reveal()
           :usage="ranked.usage"
           @frame="(span, label) => emit('frame', span, label)"
           @step="(span, label) => emit('step', span, label)"
-          @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
+          @inspect="(value, label) => emit('inspect', by, value, label, 'days')"
         />
       </PanelLevel>
       <SpendingTable
@@ -266,7 +281,7 @@ const showTable = () => table.value?.reveal()
         :measure="measure"
         :notice="noticeIn('table')"
         :usage="usage"
-        @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
+        @inspect="(value, label) => emit('inspect', by, value, label, 'table')"
         @reread="cross.retry"
       />
     </PanelLevel>
@@ -283,7 +298,8 @@ const showTable = () => table.value?.reveal()
 }
 
 /* The charts, top to bottom: the line to the table, then the ranked list and the small charts
-   side by side where both read well, the list first, then the day chart. The air at the sides
+   side by side where both read well, the list first, or the list alone across the width where its
+   names are free text, then the day chart. The air at the sides
    holds what a chart reaches past its column (a focus ring, a pressed fill), so nothing in it
    stands wider than its box. */
 .dimension-charts {
@@ -314,7 +330,7 @@ const showTable = () => table.value?.reveal()
 }
 
 @container (width >= 48rem) {
-  .dimension-pair {
+  .dimension-pair:not(.dimension-alone) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }

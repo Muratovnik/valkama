@@ -2,8 +2,9 @@
 /**
  * One account of the quota panel: its name — the owner's, or else the start of its id, the whole
  * id in its hint — its plan, and each window of the section on show (`QuotaWindow`), the week
- * before each model's week. As a table its windows are one table of their figures, each window's
- * facts and readings after it.
+ * before each model's week. As a table its windows are one table of their figures — the share,
+ * the pace, the state with how long a silent one has been silent, and the forecast, or past the
+ * reset that it has reset — each window's facts and readings after it.
  *
  * An account nobody's source read says so and shows no window, and one with no window of the
  * section says that instead, so no source, a window never read and a fresh 0 % never read alike.
@@ -13,6 +14,9 @@
  *
  * It is a group of the panel on a surface of its own, its windows side by side where the width
  * keeps each readable and one under the next where it does not (`PanelLevel`).
+ *
+ * What a reader of the page selects it by: the account is `data-account`, its name; the two parts
+ * of its head are `data-account-head`, `name` for its name and `facts` for what stands beside it.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,7 +24,12 @@ import { useI18n } from 'vue-i18n'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindow from '@/pages/analytics/components/QuotaWindow.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
-import { sectionWindows, spendWindows, windowKey } from '@/pages/analytics/utils/quotaFigures.ts'
+import {
+  sectionWindows,
+  spendWindows,
+  stands,
+  windowKey,
+} from '@/pages/analytics/utils/quotaFigures.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { QuotaAccount } from '@/shared/api/analyticsApi.ts'
@@ -30,6 +39,11 @@ import type { WindowRow, WindowWords } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   account: QuotaAccount
+  /**
+   * How old a reading may be and still be fresh, in seconds: the answer's `fresh_for_seconds`,
+   * against which each window's state is judged at `now` (`stateAt`).
+   */
+  freshFor: number
   /** The moment the panel stands at, in ms. */
   now: number
   section: QuotaSection
@@ -51,9 +65,9 @@ const windows = computed(() => sectionWindows(props.account, props.section))
 const others = computed(() =>
   spendWindows(props.account).map((window) => ({
     key: windowKey(window),
-    text: words.other(window, props.now),
-    state: words.otherState(window),
-    read: words.latest(window, props.now, props.today),
+    text: words.other(window, props.now, props.freshFor),
+    state: words.otherState(window, props.now, props.freshFor),
+    read: words.latest(window, props.now, props.today, props.freshFor),
   })),
 )
 
@@ -63,7 +77,10 @@ const rows = computed<WindowRow[]>(() =>
     label: words.windowName(window),
     valueText: words.share(window.latest.used_percent),
     evenText: window.even_percent === null ? '—' : words.share(window.even_percent),
-    noteText: words.state(window),
+    noteText: words.stateWords(window, props.now, props.freshFor),
+    forecastText: stands(window, props.now)
+      ? words.forecast(window, props.today)
+      : words.reset(window, props.now, props.today),
   })),
 )
 const tableWords = computed<WindowWords>(() => ({
@@ -71,6 +88,7 @@ const tableWords = computed<WindowWords>(() => ({
   value: t('analytics.quota.table.value'),
   even: t('analytics.quota.table.even'),
   note: t('analytics.quota.table.note'),
+  forecast: t('analytics.quota.table.forecast'),
   empty: t('analytics.quota.table.empty'),
 }))
 </script>
@@ -86,7 +104,10 @@ const tableWords = computed<WindowWords>(() => ({
     surface
   >
     <template #heading>
-      <span class="quota-account-name">
+      <span
+        class="quota-account-name"
+        data-account-head="name"
+      >
         <span v-tooltip.detail="{ text: detail, words: name }">{{ name }}</span>
       </span>
     </template>
@@ -94,7 +115,10 @@ const tableWords = computed<WindowWords>(() => ({
       v-if="account.plan || account.seat"
       #beside
     >
-      <p class="quota-account-facts">
+      <p
+        class="quota-account-facts"
+        data-account-head="facts"
+      >
         <span v-if="account.plan">{{
           t('analytics.quota.panel.plan', { plan: account.plan })
         }}</span>
@@ -130,6 +154,7 @@ const tableWords = computed<WindowWords>(() => ({
         :window="window"
         :today="today"
         :now="now"
+        :fresh-for="freshFor"
         :shown="shown"
       />
     </template>

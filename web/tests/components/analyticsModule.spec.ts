@@ -16,12 +16,14 @@ import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthori
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 
 import { DEFAULT_VIEW, writeAddress } from '@/shared/api/analyticsAddress.ts'
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
@@ -355,21 +357,26 @@ describe('the Analytics page', () => {
     // the values offered only when the period changes; nothing for the measure alone. A read the
     // view already asked is not asked again: the values offered for accounts are the page's own
     // read of them, which another section takes as well, and with no filter set this week's read
-    // by model and by account are the values offered for those two.
+    // by model and by account are the values offered for those two. The values offered are one
+    // read for each dimension the answers are split by.
+    const offered = USAGE_DIMENSIONS.length
     expect(counts).toEqual({
       opened: 2,
-      filtersOpened: 8,
+      filtersOpened: offered - 1,
       by: 1,
       measure: 0,
       filter: 2,
-      week: 3 + 9 - 2,
+      week: 3 + offered - 2,
     })
   })
 
   it('waits for the read through the shared state panel', async () => {
     stubAnalyticsReads(() => 'hold')
     const page = await mountAnalytics()
-    expect(page.find('[aria-busy="true"]').exists()).toBe(true)
+    // The page's one shared panel says it waits, on its own box beside its status region.
+    const panels = page.findAllComponents(PlatformStatePanel)
+    expect(panels).toHaveLength(1)
+    expect(panels[0]?.findAll('[aria-busy="true"]')).toHaveLength(1)
   })
 
   it('keeps the last answer on screen while the next view is read', async () => {

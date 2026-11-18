@@ -33,6 +33,12 @@ export const DRAWER_NARROW_BREAKPOINT = 620
 export const DOCUMENT_PANE_STORAGE_KEY = 'valkama-document-pane-width'
 export const DOCUMENT_PANE_DEFAULT_WIDTH = 720
 
+/**
+ * The side panel over the Analytics page, a value's details: its own width, kept apart from a
+ * card's, so that reading a value's charts wide does not widen the next card.
+ */
+export const ANALYTICS_DETAIL_STORAGE_KEY = 'valkama-analytics-detail-width'
+
 /** What a dialog stands at however wide the window gets, as its stylesheet also writes it. */
 export const DIALOG_WIDTH = 640
 /** Beside a card and a document the board keeps a usable column. */

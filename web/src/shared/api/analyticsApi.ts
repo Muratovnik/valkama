@@ -232,14 +232,22 @@ const quotaReadingSchema = strictObject({
   source: quotaSource(),
 })
 
-/** The five hours' point answer: it lasts to the reset, runs out at a time, or is spent. */
+/**
+ * The five hours' point answer: it lasts to the reset with the share it has spent by then, runs
+ * out at a time, or is spent.
+ */
 const pointForecastSchema = strictObject({
   outcome: enumField(['lasts', 'runs_out', 'spent'] as const),
   runs_out_at: moment().nullable(),
+  at_reset_percent: percent().max(100).nullable(),
   basis: enumField(['recent', 'blend', 'window'] as const).nullable(),
-}).refine((point) => (point.outcome === 'runs_out') === (point.runs_out_at !== null), {
-  message: 'a time to run out at only where it runs out',
 })
+  .refine((point) => (point.outcome === 'runs_out') === (point.runs_out_at !== null), {
+    message: 'a time to run out at only where it runs out',
+  })
+  .refine((point) => (point.outcome === 'lasts') === (point.at_reset_percent !== null), {
+    message: 'a share at the reset only where it lasts',
+  })
 
 /** A week's answer, only ever a range: what its slower and its faster pace spend by the reset. */
 const rangeForecastSchema = strictObject({

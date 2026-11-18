@@ -33,15 +33,39 @@ async function liveNodes(page: Page) {
   return nodes
 }
 
-/** Each sign in `scope` as a reader sees it: which it is, its strokes and the size it is drawn at. */
-const drawnSigns = (scope: Locator, selector: string) =>
-  scope.locator(selector).evaluateAll((signs) =>
+/** Each sign the nodes draw as a reader sees it: its strokes and the size it is drawn at. */
+const nodeSigns = (nodes: Locator) =>
+  nodes.locator('.graph-live .session-sign').evaluateAll((signs) =>
     signs.map((sign) => ({
-      sign: [...sign.classList].find((name) => name.startsWith('session-sign-')) ?? '',
       strokes: sign.innerHTML.replaceAll(/\sdata-v-[\da-f]+=""/gu, ''),
       size: [sign.getAttribute('width'), sign.getAttribute('height')],
     })),
   )
+
+/** Each entry of the key by the sign it names (`data-sign`): its words and its glyph's drawing. */
+const keyEntries = (key: Locator) =>
+  key.locator('[data-sign]').evaluateAll((entries) =>
+    entries.map((entry) => {
+      const glyph = entry.querySelector('svg')
+      return {
+        sign: (entry as HTMLElement).dataset.sign ?? '',
+        words: entry.textContent?.trim() ?? '',
+        drawing: {
+          strokes: glyph?.innerHTML.replaceAll(/\sdata-v-[\da-f]+=""/gu, '') ?? '',
+          size: [glyph?.getAttribute('width') ?? null, glyph?.getAttribute('height') ?? null],
+        },
+      }
+    }),
+  )
+
+/** What the key says each sign means, the five a session can be in. */
+const MEANS: Record<string, string> = {
+  working: 'a session working on it',
+  asks: 'asking a person in the middle of a turn',
+  waiting: 'waiting, its turn over',
+  held: 'held by a session, not worked on now',
+  quiet: 'silent for over a day',
+}
 
 const EVERY_SIGN = [
   'session-sign-working',
@@ -107,16 +131,21 @@ test("the graph's key names each sign a node shows, with the node's own glyph at
   const nodes = await liveNodes(page)
   const key = page.locator('.graph-legend-on-field')
   await expect(key).toBeVisible()
-  const keyed = await drawnSigns(key, '.graph-legend-sign .session-sign')
-  const onNodes = await drawnSigns(nodes, '.graph-live .session-sign')
-  expect(keyed.map((sign) => sign.sign)).toEqual(EVERY_SIGN)
-  for (const sign of keyed)
+  const keyed = await keyEntries(key)
+  const onNodes = await nodeSigns(nodes)
+  // Every sign the nodes draw, each named once with what it means, in whatever order.
+  expect(keyed).toHaveLength(Object.keys(MEANS).length)
+  expect(Object.fromEntries(keyed.map(({ sign, words }) => [sign, words]))).toEqual(MEANS)
+  // The key's glyph is the node's own drawing at its own size, both ways.
+  expect(onNodes).toHaveLength(Object.keys(MEANS).length)
+  for (const { drawing, sign } of keyed) expect(onNodes, sign).toContainEqual(drawing)
+  for (const drawn of onNodes)
     expect(
-      onNodes.find((node) => node.sign === sign.sign),
-      sign.sign,
-    ).toEqual(sign)
+      keyed.map((entry) => entry.drawing),
+      'a node sign the key names',
+    ).toContainEqual(drawn)
   const sizes = await key
-    .locator('.graph-legend-sign .session-sign')
+    .locator('[data-sign] svg')
     .evaluateAll((signs) =>
       signs.map((sign) => [
         sign.getBoundingClientRect().width,
@@ -124,12 +153,6 @@ test("the graph's key names each sign a node shows, with the node's own glyph at
       ]),
     )
   console.info('graph key sign boxes', JSON.stringify(sizes))
+  expect(sizes).toHaveLength(keyed.length)
   for (const size of sizes) expect(size).toEqual([14, 14])
-  await expect(key.locator('.graph-legend-sign')).toHaveText([
-    'a session working on it',
-    'asking a person in the middle of a turn',
-    'waiting, its turn over',
-    'held by a session, not worked on now',
-    'silent for over a day',
-  ])
 })

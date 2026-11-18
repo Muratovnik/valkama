@@ -81,6 +81,21 @@ test.prop([anyText])('no text gives an address but http, https or mailto', (text
   }
 })
 
+test('the generated texts give addresses and document candidates to check', () => {
+  // The address property before this test and the candidate property after it hold over
+  // every node of a kind, so a reader that gave none would pass them; the texts they are
+  // run on must reach both kinds.
+  const texts = fc.sample(anyText, { numRuns: 200, seed: 0x70_61_74_68 })
+  const reaching = (has: (node: Record<string, unknown>) => boolean) =>
+    texts.filter((text) =>
+      [parseRichText(text), parseRichInline(text), parseRichDocument(text, { base: 'a/b/c.md' })]
+        .flatMap((tree) => [...walk(tree)])
+        .some((node) => has(node)),
+    ).length
+  expect(reaching((node) => typeof node.href === 'string')).toBeGreaterThan(0)
+  expect(reaching((node) => node.kind === 'document')).toBeGreaterThan(0)
+})
+
 test.prop([anyText])('a document candidate carries no address to follow', (text) => {
   for (const node of walk(parseRichText(text))) {
     if (node.kind === 'document') {

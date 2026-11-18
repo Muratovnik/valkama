@@ -405,7 +405,7 @@ def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace)
         elif options.launcher_action == "listener":
             result = launcher.listener_status(options.directory, port=options.port)
         else:
-            result = launcher.status(options.directory)
+            result = launcher.report(options.directory)
     except launcher.LauncherError as error:
         parser.error(str(error))
     if options.launcher_action == "install":

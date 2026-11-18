@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * One state of a dimension, a dot and its word. It says which state it draws in
+ * `data-dimension` and `data-state`, the pair it is given, and how it draws it in
+ * `data-tone` and `data-emphasis`, which its style reads.
+ */
 import { computed } from 'vue'
 
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'

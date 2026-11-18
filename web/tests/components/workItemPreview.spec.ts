@@ -184,10 +184,10 @@ describe('WorkItemPreview', () => {
       await vi.advanceTimersByTimeAsync(LOADING_DELAY_MS - 121)
       expect(wrapper.get('.preview-note').text()).toBe('')
       await vi.advanceTimersByTimeAsync(1)
-      expect(wrapper.get('.preview-note').text()).toBe(messages.en.platform.states.loading)
+      expect(wrapper.get('.preview-note').text()).toBe('Loading')
       await wrapper.setProps({ item: CLAIMED })
       // The item that answered just after the word waits until the word has been read.
-      expect(wrapper.get('.preview-note').text()).toBe(messages.en.platform.states.loading)
+      expect(wrapper.get('.preview-note').text()).toBe('Loading')
       expect(wrapper.find('.preview-title').exists()).toBe(false)
       await vi.advanceTimersByTimeAsync(LOADING_MIN_SHOWN_MS - 1)
       expect(wrapper.find('.preview-title').exists()).toBe(false)
@@ -247,8 +247,6 @@ describe('what a screen reader hears', () => {
     expect(spoken({ reference: 'MAIN-77', item: null, failure: 'missing' })).toBe(
       'Task MAIN-77 was not found.',
     )
-    expect(spoken({ reference: 'MAIN-77', item: null }, 'ru')).toBe(
-      messages.ru.platform.states.loading,
-    )
+    expect(spoken({ reference: 'MAIN-77', item: null }, 'ru')).toBe('Загрузка')
   })
 })

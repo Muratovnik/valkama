@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import NamedTuple, Protocol
 
 from . import listener_owners, processes
-from .ops import configuration
+from .ops import configuration, desktop_app
 from .store_adoption import rename_when_free
 
 SCHEMA_VERSION = 1
@@ -445,6 +445,27 @@ def status(
         "python": manifest.get("python"),
         "detail": "; ".join([*problems, *([source_detail] if source_detail else [])]) or None,
     }
+
+
+def report(directory: str | os.PathLike[str] | None = None) -> dict[str, object]:
+    """What `launcher status` prints: `status`, and whether the desktop app is current.
+
+    The desktop app is installed apart from the launcher, so a new pin leaves it as it
+    was; `desktop_app` says whether it still packs the `desktop/` sources of the release
+    this launcher pins. It is kept out of `status`, which every request of a stdio front
+    and every install asks, and none of them needs the app read.
+    """
+
+    current = status(directory)
+    source = current.get("source_script")
+    pinned = (
+        Path(source).parent
+        if current["state"] == "installed"
+        and current.get("source_available")
+        and isinstance(source, str)
+        else None
+    )
+    return {**current, "desktop_app": desktop_app.packed_sources(pinned)}
 
 
 def _managed_status(

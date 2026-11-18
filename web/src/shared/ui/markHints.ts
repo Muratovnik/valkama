@@ -1,6 +1,7 @@
 /**
  * The hint of every mark of a chart — a period, a segment of one, a legend entry, a ranked row, a
- * small chart's name, its periods, a sector of a ring, a reading of a window — shown at the mark
+ * small chart's name, its periods, a sector of a ring, a reading of a window and what its line
+ * points at past its readings, the window now and its forecast at the reset — shown at the mark
  * through the one hint host (`vTooltip`, `TooltipHost`) when the pointer rests on it or the
  * keyboard brings focus to it. The hint lies in the hint layer, so pointing and leaving move
  * nothing on the page.
@@ -17,8 +18,9 @@
  *
  * Every hint here is drawn as a grid (`TooltipBody`). A mark of one series names it in the grid's
  * head beside its series' swatch, as the legend draws it, so the hint says which hue it speaks
- * for: the swatch of a ring's sector, a ranked row's bar, a small chart, a legend entry and a
- * step line's reading. A period's head is the period, with a row for each series and its swatch.
+ * for: the swatch of a ring's sector, a ranked row's bar, a small chart, a legend entry, a step
+ * line's reading and its targets past them. A period's head is the period, with a row for each
+ * series and its swatch.
  * The hint's text stays what assistive technology reads and the page marks.
  */
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
@@ -33,7 +35,7 @@ import {
 } from '@/shared/ui/chartGeometry.ts'
 import type { RingSector } from '@/shared/ui/donutGeometry.ts'
 import type { TooltipBody, TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
-import type { StepPoint } from '@/shared/ui/windowGeometry.ts'
+import type { StepPoint, StepTarget } from '@/shared/ui/windowGeometry.ts'
 
 type Format = (value: number) => string
 /** A share of a whole as the reader reads it, with what it is of: «42 % of the total». */
@@ -168,6 +170,23 @@ export function readingHint(point: StepPoint, slot: SeriesSlot): TooltipValue {
   return {
     text: point.text,
     body: seriesBody({ label: point.timeText, slot }, point.valueText, notesOf(point.noteText)),
+  }
+}
+
+/**
+ * What a step line points at past its readings — the window now, its forecast at the reset — in
+ * its hint: what it is with its figure in the head, beside the line's swatch, and the lines under
+ * them, those the line adds (`more`) last.
+ */
+export function targetHint(
+  target: StepTarget,
+  slot: SeriesSlot,
+  more: readonly string[] = [],
+): TooltipValue {
+  const notes = notesOf(...target.notes, ...more)
+  return {
+    text: lines(`${target.name}: ${target.figure}`, ...notes),
+    body: seriesBody({ label: target.name, slot }, target.figure, notes),
   }
 }
 

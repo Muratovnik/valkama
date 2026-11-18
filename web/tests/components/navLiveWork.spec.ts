@@ -17,6 +17,8 @@ import { drawn, rail, row, unmountRails } from '../support/navRail.ts'
 import type { Rail } from '../support/navRail.ts'
 
 const STORAGE = 'valkama-nav-open'
+/** The list's empty line, as an English reader reads it. */
+const EMPTY = 'Nobody is working right now'
 const stored = () => JSON.parse(localStorage.getItem(STORAGE) ?? '{}') as Record<string, boolean>
 
 beforeEach(() => {
@@ -32,6 +34,23 @@ afterEach(() => {
 
 /** What a part of the list draws, an item by its reference and a session by its title. */
 const within = (wrapper: Rail, selector: string) => drawn(wrapper, `.nav-work-list ${selector}`)
+
+/**
+ * What the space `key` lists, read by the hooks the tree declares: each space and each fold says
+ * which it is (`data-nav-node`), and the pinned stand in a group of their own (`role="group"`).
+ * The work to follow now is what stands in the space and in neither.
+ */
+function listOf(wrapper: Rail, key: string) {
+  const space = `[data-nav-node="space:${key}"]`
+  const folded = within(wrapper, `${space} [data-nav-node]`)
+  const pinned = within(wrapper, `${space} [role="group"]`)
+  return {
+    folds: wrapper.findAll(`.nav-work-list ${space} [data-nav-node]`).length,
+    folded,
+    now: within(wrapper, space).filter((one) => !folded.includes(one) && !pinned.includes(one)),
+    pinned,
+  }
+}
 
 describe('the order of the list', () => {
   it('lists the work to follow now freshest first, the rest folded, the pinned apart', () => {
@@ -59,15 +78,12 @@ describe('the order of the list', () => {
         liveSpace('NEXT', [liveRow('NEXT-1', { state: 'working' })]),
       ]),
     )
-    const main = '.nav-tree-space:first-child'
-    expect(within(wrapper, `${main} .nav-tree-body > .nav-rows`)).toEqual([
-      'MAIN-12',
-      'MAIN-30',
-      'MAIN-2',
-    ])
-    expect(wrapper.findAll(`${main} .nav-fold`)).toHaveLength(3)
-    expect(within(wrapper, `${main} .nav-fold`)).toEqual(['MAIN-8', 'MAIN-9', 'MAIN-6'])
-    expect(within(wrapper, `${main} .nav-tree-pinned`)).toEqual(['MAIN-20', 'MAIN-21'])
+    expect(listOf(wrapper, 'MAIN')).toEqual({
+      now: ['MAIN-12', 'MAIN-30', 'MAIN-2'],
+      folds: 3,
+      folded: ['MAIN-8', 'MAIN-9', 'MAIN-6'],
+      pinned: ['MAIN-20', 'MAIN-21'],
+    })
     // The goal is no row of its own: its title is said on its item's second line.
     expect(drawn(wrapper)).not.toContain('MAIN-4')
     expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-detail')?.textContent).toMatch(
@@ -234,6 +250,8 @@ describe('a row the frame no longer has', () => {
   it('stays muted where it stood for twenty seconds, then goes', async () => {
     vi.useFakeTimers()
     const { store, wrapper } = rail(before())
+    // At work, it carries its sign until the frame drops it.
+    expect(row(wrapper, 'MAIN-5').querySelector('.session-sign')).not.toBeNull()
     store.accept(after())
     await flushPromises()
     expect(drawn(wrapper)).toEqual(['MAIN-3', 'MAIN-5', 'MAIN-8'])
@@ -335,17 +353,18 @@ describe('the empty line', () => {
   it('says nobody is working when no space has rows or sessions and none is outside', () => {
     const { wrapper } = rail(liveFrame([]), 'ru')
     expect(wrapper.get('.nav-work-list').text()).toBe('Сейчас никто не работает')
+    expect(rail(liveFrame([])).wrapper.get('.nav-work-list').text()).toBe(EMPTY)
   })
 
   it('is not drawn while sessions work on no item, in a space or outside any', async () => {
     const session = liveSession('00000000-0000-4000-8000-000000000001', { title: 'Alone' })
     const { store, wrapper } = rail(liveFrame([liveSpace('MAIN', [], { sessions: [session] })]))
     expect(drawn(wrapper)).toEqual(['Alone'])
-    expect(wrapper.find('.nav-tree-empty').exists()).toBe(false)
+    expect(wrapper.get('.nav-work-list').text()).not.toContain(EMPTY)
     store.accept(liveFrame([], [session]))
     await flushPromises()
     expect(drawn(wrapper)).toEqual(['Alone'])
-    expect(wrapper.find('.nav-tree-empty').exists()).toBe(false)
+    expect(wrapper.get('.nav-work-list').text()).not.toContain(EMPTY)
   })
 })
 

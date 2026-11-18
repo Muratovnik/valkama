@@ -108,12 +108,18 @@ export async function choose(
   await page.getByRole('menu').getByRole(role, { name }).click()
 }
 
-/** The views the menu lists for this space. */
+/**
+ * The views the menu lists for this space: the options of its saved views' own choice
+ * (`data-choice`, `VMenu`), whatever other choices the menu offers beside them.
+ */
 export async function listed(page: Page, locale: Locale) {
   await openMenu(page, locale)
-  const names = await page.getByRole('menu').getByRole('menuitemradio').allInnerTexts()
+  const names = await page
+    .getByRole('menu')
+    .locator('[data-choice="views"]')
+    .getByRole('menuitemradio')
+    .allInnerTexts()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('menu')).toHaveCount(0)
-  const grouping = new Set<string>([WORDS[locale].grouping, WORDS[locale].flat])
-  return names.map((name) => name.trim()).filter((name) => !grouping.has(name))
+  return names.map((name) => name.trim())
 }

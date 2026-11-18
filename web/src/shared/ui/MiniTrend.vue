@@ -6,7 +6,10 @@
  * never left with the shape alone.
  *
  * A period with no figure (`null`) draws nothing over the floor, and one still running is hatched
- * in its own hue, as in `PeriodColumns`, so a short last column does not read as a drop. The
+ * in its own hue (`hatch.css`), as in `PeriodColumns`, so a short last column does not read as a
+ * drop. With no legend to name the hatch, the words do: they say the last period's figure is
+ * still running, and they are the trend's hint as well as its name, so a reader who points at it
+ * reads them. The
  * columns are told from the ground by their hue and from each other by a gap of ground; a forced
  * palette draws them in its ink and the floor in its quiet ink.
  *
@@ -15,6 +18,8 @@
  * columns' heights and nothing around them.
  */
 import { computed } from 'vue'
+
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 export interface TrendPoint {
   key: string
@@ -42,6 +47,7 @@ function height(point: TrendPoint) {
 
 <template>
   <span
+    v-tooltip.detail="label"
     class="mini-trend"
     role="img"
     :aria-label="label"
@@ -57,7 +63,7 @@ function height(point: TrendPoint) {
         v-if="height(point)"
         class="mini-trend-column series-fill"
         data-slot="1"
-        :class="{ 'mini-trend-incomplete': point.incomplete }"
+        :class="{ hatched: point.incomplete }"
         :style="height(point)"
       />
     </span>
@@ -65,6 +71,8 @@ function height(point: TrendPoint) {
 </template>
 
 <style scoped src="@/shared/ui/seriesFill.css"></style>
+
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped>
 /* The columns share the width, a gap of ground between them, over the floor they stand on. */
@@ -106,14 +114,5 @@ function height(point: TrendPoint) {
   min-block-size: var(--space-hair);
   border-start-start-radius: calc(var(--radius-status) / 2);
   border-start-end-radius: calc(var(--radius-status) / 2);
-}
-
-/* A period still running, hatched in its own hue: what it holds so far, not a drop. */
-.mini-trend-incomplete {
-  mask-image: repeating-linear-gradient(
-    135deg,
-    black 0 var(--space-half),
-    rgb(0 0 0 / 40%) var(--space-half) var(--space-1)
-  );
 }
 </style>

@@ -3,9 +3,11 @@
  * where only a finger can press, with work out of sight on either side: its card and chain
  * actions cover nothing at rest, under the pointer or with the keyboard on them, and nothing moves
  * when they come up; no line holds the state alone but where it and the counts do not fit one,
- * nor the actions but where nothing can come down with them; the title keeps the letters the base drew; the heading takes no more lines than
- * the base but where one of these needs it; and a tile the board brings into view under the
- * heading stands below it at the lane's own gap, however many lines the heading takes.
+ * nor the actions but where nothing can come down with them; a heading that may wrap cuts its
+ * title only where the title is its line's whole; the heading takes no more lines than the base but
+ * where one of these needs it, and the inset of its wrapped lines costs it no more lines than its
+ * 28px of width would, and none above the widths DESIGN.md names; and a tile the board brings into view under the heading
+ * stands below it at the lane's own gap, however many lines the heading takes.
  *
  * What is measured is what is drawn (`laneHeadRows.ts`), in the built app once its fonts are in,
  * against how the base drew the same heading (`laneHeadBase.ts`), every 10px from 320 to 1440 at
@@ -16,9 +18,11 @@
  * text, leaves a part alone on a line or cuts the title. Or the lines after the first start under
  * the reference rather than at the heading's edge, and the same heading laid out from its edge
  * takes fewer: that inset is kept, since a line wrapped from the edge stood 4px left of the
- * chevron. The actions stand alone on a line only where every other layout of as few lines does
- * one of those things too. The title keeps at least the letters the base drew, everywhere: where
- * one line would cut it, the heading takes the base's lines instead.
+ * chevron, and DESIGN.md says what it may cost: what `INDENT` px less width would cost the heading
+ * from its edge, at widths up to `INSET_UP_TO`. The
+ * actions stand alone on a line only where every other layout of as few lines does one of those
+ * things too. How many letters of a title a line holds is no rule: a heading that keeps its lines
+ * and its title's place may hold fewer.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -109,16 +113,72 @@ function faults(reading: Reading, rest: Reading, paired: boolean): string[] {
   return [...new Set([...over, ...alone, ...outside, ...moved])]
 }
 
-/** What one heading at rest gives up against the base: letters of its title, or lines. */
-async function againstBase(head: Locator, rest: Reading, base: Drawn | undefined) {
+/**
+ * The indent of a heading's wrapped lines (DESIGN.md): the arrow's 4px inset, its 16px and their
+ * 8px gap. A heading takes no more lines than it would from its edge across that much less width.
+ */
+const INDENT = 28
+
+/**
+ * The widest board, by locale and by a pointer or only a finger, where the inset of a heading's
+ * wrapped lines may still cost it a line. DESIGN.md: the indent shortens every wrapped line, «so
+ * the row takes a line more across at most the 28px of width above each width where lines from
+ * the edge would first fit it in one line fewer. That happens up to 890px in Russian under a
+ * finger (849px with a mouse; in English 802px under a finger, 782px with a mouse)».
+ */
+const INSET_UP_TO: Record<string, number> = {
+  'en-US|pointer': 782,
+  'en-US|touch': 802,
+  'ru-RU|pointer': 849,
+  'ru-RU|touch': 890,
+}
+
+/**
+ * Whether a heading's parts may wrap onto more lines, as the browser lays it out: where they may
+ * not, the heading is one line and its title is what gives way. Read in the page.
+ */
+const mayWrap = (head: Element) => getComputedStyle(head).flexWrap !== 'nowrap'
+
+/**
+ * A heading that may wrap keeps its title's words (DESIGN.md): what follows the title goes to the
+ * next line rather than cut it, so the title is cut only where it is the whole of its line, and
+ * the actions stand beside it only where it stays whole there.
+ */
+function titleCut(reading: Reading, wraps: boolean): string[] {
+  if (!wraps || reading.titleChars >= reading.titleLength) return []
+  const line = reading.rows.find((row) => row.includes('title')) ?? []
+  const beside = line.filter((member) => !['chevron', 'reference', 'title'].includes(member))
+  return beside.length === 0
+    ? []
+    : [
+        `the title keeps ${reading.titleChars} of ${reading.titleLength} beside the ${beside.join(', ')}`,
+      ]
+}
+
+/**
+ * What one heading at rest costs in lines: a line the inset of its wrapped lines adds above the
+ * width DESIGN.md names, more lines than its edge would take across `INDENT` px less, or a line
+ * more than the base that no rule needs.
+ */
+async function againstBase(
+  head: Locator,
+  rest: Reading,
+  base: Drawn | undefined,
+  { insetUpTo, width }: { insetUpTo: number; width: number },
+) {
   if (!base) return ['the base has no reading here']
-  const found =
-    rest.titleChars < base.letters
-      ? [`the title keeps ${rest.titleChars} letters, the base ${base.letters}`]
-      : []
   const lines = rest.rows.length
-  if (lines <= base.rows || base.covered) return found
   const inset = lines - (await rowsFromTheEdge(head))
+  const narrower = await rowsFromTheEdge(head, INDENT)
+  const found = [
+    ...(inset > 0 && width > insetUpTo
+      ? [`the inset of its wrapped lines costs ${inset} line(s) above ${insetUpTo}px`]
+      : []),
+    ...(lines > narrower
+      ? [`${lines} lines, more than ${narrower} from the edge ${INDENT}px narrower`]
+      : []),
+  ]
+  if (lines <= base.rows || base.covered) return found
   if (lines - base.rows <= inset) return found
   // A line more is forced only where every layout with fewer lines does worse.
   const fewer = await better(head, rest)
@@ -171,9 +231,19 @@ async function readStates(page: Page, head: Locator, hover: boolean) {
 }
 
 /**
+ * The lanes of the wide board, each with its heading: MAIN-401, MAIN-410, MAIN-420 and the two
+ * goals `serveWide` adds, MAIN-491 and MAIN-493, and the work under no goal.
+ */
+const LANES = 6
+
+/** The open lanes among them that stand a goal's actions: MAIN-401, MAIN-491 and MAIN-493. */
+const ACTING = 3
+
+/**
  * Every heading at `width`, with the board at its first states and scrolled to its middle ones,
  * and what is wrong with each, against itself at rest and against the base: at rest only, or
- * under the pointer and the keyboard too where `every`.
+ * under the pointer and the keyboard too where `every`. It says how many headings it read at
+ * each scroll, since a sweep that read none would find nothing wrong.
  */
 async function readWidth(
   page: Page,
@@ -183,6 +253,10 @@ async function readWidth(
   await page.setViewportSize({ width, height: 900 })
   const board = page.locator('.work-item-lanes')
   const found: string[] = []
+  const read: number[] = []
+  const input = `${locale}|${hover ? 'pointer' : 'touch'}`
+  const insetUpTo = INSET_UP_TO[input]
+  if (insetUpTo === undefined) throw new Error(`DESIGN.md names no inset width for ${input}`)
   for (const scroll of ['start', 'middle'] as const) {
     await page.mouse.move(0, 0)
     await board.evaluate((node: HTMLElement, where) => {
@@ -191,6 +265,7 @@ async function readWidth(
     }, scroll)
     await settle(board)
     const heads = page.locator('.lane-head')
+    read.push(await heads.count())
     for (let index = 0; index < (await heads.count()); index += 1) {
       const head = heads.nth(index)
       const name = (await head.locator('.lane-reference, .lane-title').first().textContent()) ?? ''
@@ -206,19 +281,26 @@ async function readWidth(
         found.push(`${where}: an action the pointer or keyboard is on is not up`)
       const alone = await aloneAgainst(head, states)
       found.push(...alone.map((one) => `${where}: ${one}`))
-      const base = baseOf(`${locale}|${hover ? 'pointer' : 'touch'}|${scroll}|${name}`, width)
-      const lost = await againstBase(head, rest, base)
+      const cut = titleCut(rest, await head.evaluate(mayWrap))
+      found.push(...cut.map((one) => `${where}: ${one}`))
+      const base = baseOf(`${input}|${scroll}|${name}`, width)
+      const lost = await againstBase(head, rest, base, { insetUpTo, width })
       found.push(...lost.map((one) => `${where}: ${one}`))
     }
   }
-  return found
+  return { found, read }
 }
 
-/** Every heading at `width` where only a finger presses, and at `TOUCHED` its focus and reach. */
+/**
+ * Every heading at `width` where only a finger presses, and at `TOUCHED` its focus and reach:
+ * what is wrong, the headings read at each scroll, and the headings whose reach was read.
+ */
 async function readTouch(page: Page, width: number, locale: string) {
   const every = TOUCHED.has(width)
-  const found = await readWidth(page, width, { every, hover: false, locale })
-  return every ? [...found, ...(await readReach(page, width))] : found
+  const { found, read } = await readWidth(page, width, { every, hover: false, locale })
+  if (!every) return { found, read, reached: null }
+  const reach = await readReach(page, width)
+  return { found: [...found, ...reach.found], read, reached: reach.read }
 }
 
 /**
@@ -244,6 +326,7 @@ const reaches = (head: Element) =>
 /**
  * Every open goal lane's heading at `width`: its actions up and each reaching a finger's width.
  * A folded lane ends at its heading, and the next lane is drawn over the 4px of reach below it.
+ * It says how many headings it read.
  */
 async function readReach(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
@@ -255,7 +338,8 @@ async function readReach(page: Page, width: number) {
   await settle(board)
   const heads = page.locator('.board-lane.open .lane-head', { has: page.locator('.lane-actions') })
   const found: string[] = []
-  for (let index = 0; index < (await heads.count()); index += 1) {
+  const read = await heads.count()
+  for (let index = 0; index < read; index += 1) {
     const head = heads.nth(index)
     // Where a press lands is asked of the page in view.
     await head.evaluate((node) => {
@@ -267,7 +351,7 @@ async function readReach(page: Page, width: number) {
     const misses = await head.evaluate(reaches)
     found.push(...misses.map((one) => `${width}px heading ${index}: ${one}`))
   }
-  return found
+  return { found, read }
 }
 
 for (const locale of ['en-US', 'ru-RU']) {
@@ -280,10 +364,19 @@ for (const locale of ['en-US', 'ru-RU']) {
       test.setTimeout(900_000)
       await openWide(page, 1280)
       const found: string[] = []
-      for (const width of SWEEP)
-        found.push(
-          ...(await readWidth(page, width, { every: WIDTHS.includes(width), hover: true, locale })),
-        )
+      const read: number[][] = []
+      for (const width of SWEEP) {
+        const one = await readWidth(page, width, {
+          every: WIDTHS.includes(width),
+          hover: true,
+          locale,
+        })
+        found.push(...one.found)
+        read.push(one.read)
+      }
+      expect(read, 'the headings read at each width, at the start and the middle').toEqual(
+        SWEEP.map(() => [LANES, LANES]),
+      )
       expect(found).toEqual([])
     })
   })
@@ -298,7 +391,20 @@ for (const locale of ['en-US', 'ru-RU']) {
       await openWide(page, 390)
       await expect.poll(() => page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
       const found: string[] = []
-      for (const width of SWEEP) found.push(...(await readTouch(page, width, locale)))
+      const read: number[][] = []
+      const reached: (number | null)[] = []
+      for (const width of SWEEP) {
+        const one = await readTouch(page, width, locale)
+        found.push(...one.found)
+        read.push(one.read)
+        reached.push(one.reached)
+      }
+      expect(read, 'the headings read at each width, at the start and the middle').toEqual(
+        SWEEP.map(() => [LANES, LANES]),
+      )
+      expect(reached, 'the headings whose reach was read, at the widths that read it').toEqual(
+        SWEEP.map((width) => (TOUCHED.has(width) ? ACTING : null)),
+      )
       expect(found).toEqual([])
     })
   })

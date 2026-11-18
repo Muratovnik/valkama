@@ -1,0 +1,58 @@
+/**
+ * The table a section of the Analytics page shows its values in, beside the period before, and
+ * its download. Merged into the page's own words as `analytics.table`.
+ */
+export const analyticsTableMessages = {
+  en: {
+    title: 'Spending {by}',
+    crossTitle: 'Spending {by} and {across}',
+    change: 'Change',
+    unread: 'The period before was not read, so this table shows this period alone.',
+    download: 'Download CSV',
+    nothingToDownload: 'Nothing to download: this view holds no value.',
+    moved: {
+      up: '↑ {change}',
+      down: '↓ {change}',
+      same: 'The same',
+      none: 'Nothing before',
+      absent: {
+        tokens: {
+          before: 'No tokens before',
+          now: 'No tokens now',
+          both: 'No tokens in either',
+        },
+        cost: {
+          before: 'No price before',
+          now: 'No price now',
+          both: 'No price in either',
+        },
+      },
+    },
+  },
+  ru: {
+    title: 'Расход {by}',
+    crossTitle: 'Расход {by} и {across}',
+    change: 'Изменение',
+    unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
+    download: 'Скачать CSV',
+    nothingToDownload: 'Скачивать нечего: в этом виде нет ни одного значения.',
+    moved: {
+      up: '↑ {change}',
+      down: '↓ {change}',
+      same: 'Столько же',
+      none: 'Раньше ничего',
+      absent: {
+        tokens: {
+          before: 'Раньше токены не учтены',
+          now: 'Сейчас токены не учтены',
+          both: 'Токены не учтены ни там, ни там',
+        },
+        cost: {
+          before: 'Раньше нет цены',
+          now: 'Сейчас нет цены',
+          both: 'Нет цены ни там, ни там',
+        },
+      },
+    },
+  },
+} as const

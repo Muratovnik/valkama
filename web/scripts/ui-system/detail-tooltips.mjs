@@ -48,7 +48,7 @@ export const DETAIL_TOOLTIPS = new Map([
   ],
   [
     'pages/analytics/components/RailTile.vue <WindowBar> v-tooltip.detail="tile.meter.label"',
-    'where steady use from the window start would stand now, which a quota tile draws only as a tick on its bar, with the share and the state the tile says',
+    'where steady use from the window start would stand now, which a quota tile draws only as a tick on its bar, and its forecast, which it draws only as a hatched tail, named here, with the share and the state the tile says',
   ],
   [
     'pages/analytics/components/QuotaAccount.vue <span> v-tooltip.detail="{ text: detail, words: name }"',
@@ -119,6 +119,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'a period prints nothing of itself, and its segments are blocks of hue that speak through it: its sum against the period before, what changed and its series with their shares are its hint',
   ],
   [
+    'shared/ui/MiniTrend.vue <span> v-tooltip.detail="label"',
+    'a small trend draws columns and prints no word: its highest and last period, the last said as running where it is hatched, are its hint, since it has no legend to name the hatch',
+  ],
+  [
     'shared/ui/DonutChart.vue <path> v-tooltip.detail="hintOf(sector)"',
     'a sector is a band of hue: its name, figure and share of the whole, and for the rest its largest parts, are its hint',
   ],
@@ -137,6 +141,10 @@ export const DETAIL_TOOLTIPS = new Map([
   [
     'shared/ui/StepLine.vue <span> v-tooltip.detail="readingHint(point, 1)"',
     'a reading is a dot on a line: its moment, its share and its source are its hint, beside its line’s hue',
+  ],
+  [
+    'shared/ui/StepLine.vue <span> v-tooltip.detail="target.hint"',
+    'a place past a line’s readings has no words on the screen: where the window stands now and how old its latest reading is, or its forecast’s share at the reset and when that is, are its hint',
   ],
   [
     'shared/ui/RichInlines.vue <a> v-tooltip.detail="hoverTitle(node.reference)"',

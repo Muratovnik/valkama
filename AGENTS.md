@@ -140,6 +140,10 @@ How to run one browser spec, a probe spec kept outside the suite, or the whole
 suite, and which specs that runner leaves out, is in
 `.agents/rules/quality-gates.md`: read it before the first browser run.
 
+What a web test may select a set by, and what lets its check fail, is in
+`.agents/rules/web-tests.md`: read it before writing or changing a test under
+`web/tests`.
+
 `npm run build` is mandatory, and it is not the last step. The server serves the
 snapshot of `web/dist` it read when it started, so a browser check against a
 listener that predates the build inspects the bundle that build replaced, and a

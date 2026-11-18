@@ -34,6 +34,7 @@ import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import type { SharePart } from '@/shared/ui/MiniShareBar.vue'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
+import type { WindowAhead } from '@/shared/ui/windowGeometry.ts'
 
 export interface RailTileModel {
   /** Beside the lead: how the total moved, or the first value's share. */
@@ -52,8 +53,13 @@ export interface RailTileModel {
   trend: { label: string; points: TrendPoint[] } | null
   /** What the lead leaves out, for its hint: an account's whole id. */
   leadDetail?: string
-  /** A window of the quota as a thin bar: its share spent, its pace and whether it is fresh. */
-  meter?: { even: number | null; held: boolean; label: string; used: number } | null
+  /** A window of the quota as a thin bar: its share spent, its pace and its forecast's tail. */
+  meter?: {
+    even: number | null
+    forecast: WindowAhead | null
+    label: string
+    used: number
+  } | null
 }
 
 /** A tile that stands at something other than its figures: words where the figures go. */
@@ -134,7 +140,6 @@ export function useRailTiles(options: {
       key: part.key,
       share: part.share,
       slot: slots.get(part.key) ?? ('other' as const),
-      apart: part.line?.kind === 'none',
     }))
     const said = figures.parts.map(
       (part) =>

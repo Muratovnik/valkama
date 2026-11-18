@@ -9,8 +9,8 @@
  * It is asked whenever the answer on show is replaced or the second dimension changes, and drops
  * the read it replaces, so a slow one never draws over a later one. While it asks, the last crossed
  * answer of the same two dimensions stays on screen; a read that fails says so and may be asked
- * again (`retry`). With no second dimension, or one the section already breaks down by, nothing is
- * asked. It goes through the page's shared reads (`useSharedUsage`), so a split chosen again for
+ * again (`retry`). With no answer on show, no second dimension, or one the section already breaks
+ * down by, nothing is asked. It goes through the page's shared reads (`useSharedUsage`), so a split chosen again for
  * the same view takes the answer it had.
  */
 import { onScopeDispose, shallowRef, watch } from 'vue'
@@ -34,7 +34,8 @@ export function useCrossRead(options: {
   across: () => UsageDimension | null
   /** The filters the answer on show was read with, its scope's project among them. */
   filters: () => UsageFilters
-  usage: () => Usage
+  /** The answer on show; null while there is none. */
+  usage: () => Usage | null
 }) {
   const shared = useSharedUsage()
   const places = useColourPlaces()
@@ -46,8 +47,8 @@ export function useCrossRead(options: {
     reading = null
     const usage = options.usage()
     const across = options.across()
-    const by = pageDimensionOf(usage)
-    if (!across || !by || across === by) {
+    const by = usage && pageDimensionOf(usage)
+    if (!usage || !across || !by || across === by) {
       state.value = { status: 'off' }
       return
     }

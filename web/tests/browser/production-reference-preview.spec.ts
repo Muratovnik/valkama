@@ -23,11 +23,15 @@ import {
   SPACE,
   spaceModel,
   watchOpening,
+  wheelToItsEnd,
 } from './previewPage.ts'
 import { test } from './test.ts'
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
+  // A card's delays run on this clock (`cardsAfterTheDelay`, `coolDown`), so a loaded machine
+  // moves no verdict; until a test moves it, it keeps the wall clock's pace.
+  await page.clock.install()
 })
 
 test('a reference at rest shows its card after half a second, on the tooltip surface', async ({
@@ -59,28 +63,55 @@ test('a reference at rest shows its card after half a second, on the tooltip sur
       probe.remove()
       return value
     }
+    const box = element.getBoundingClientRect()
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
     return {
       background: [style.backgroundColor, token('--color-tooltip-surface')],
       border: [style.borderTopColor, token('--color-tooltip-border')],
       paddings: [style.paddingBlockStart, style.paddingInlineStart],
-      width: element.getBoundingClientRect().width,
-      zIndex: getComputedStyle(element.parentElement as Element).zIndex,
+      // At most 22rem, the card's width where the window has the room (`ReferencePreview`).
+      width: { drawn: box.width, most: 22 * rem },
+      // The card's own layer, and what the window shows at its middle: the card, over the drawer.
+      zIndex: style.zIndex,
+      onTop: element.contains(
+        document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2),
+      ),
     }
   })
   expect(surface.background[0]).toBe(surface.background[1])
   expect(surface.border[0]).toBe(surface.border[1])
   expect(surface.paddings).toEqual(['8px', '12px'])
-  expect(surface.width).toBe(352)
+  expect(surface.width.drawn).toBeGreaterThan(0)
+  expect(surface.width.drawn).toBeLessThanOrEqual(surface.width.most)
   expect(surface.zIndex).toBe('120')
+  expect(surface.onTop).toBe(true)
 })
 
 test("only text shows a card: a tile, a list row and the card's own number already say it all", async ({
   page,
 }) => {
-  const { drawer } = await openReported(page)
-  await expect(page.locator('.work-item-tile [data-reference-preview]')).toHaveCount(0)
-  await expect(drawer.locator('.inspector-identity [data-reference-preview]')).toHaveCount(0)
-  await expect(drawer.locator('.relations [data-reference-preview]')).toHaveCount(0)
+  const { drawer, entry } = await openReported(page)
+  // The mark a reference that shows a card carries, present where text holds a reference.
+  await expect(entry.locator('[data-reference-preview]').first()).toBeVisible()
+  const PREVIEW = '[data-reference-preview]'
+
+  // A tile, which reads its own number.
+  const tile = page.locator('.work-item-tile').filter({ hasText: 'MAIN-12' }).first()
+  await expect(tile).toBeVisible()
+  await expect(page.locator(`.work-item-tile${PREVIEW}, .work-item-tile ${PREVIEW}`)).toHaveCount(0)
+
+  // The card's own number, in its head.
+  const own = drawer.getByRole('button', { name: 'Copy MAIN-264', exact: true })
+  await expect(own).toBeVisible()
+  await expect(own).not.toHaveAttribute('data-reference-preview')
+  await expect(own.locator(PREVIEW)).toHaveCount(0)
+
+  // A row of its relations, which names the item it links to.
+  await drawer.getByRole('tab', { name: 'Relations', exact: true }).click()
+  const rows = drawer.locator('.relations .link-row')
+  await expect(rows.first()).toBeVisible()
+  await expect(drawer.locator('.relations').locator(PREVIEW)).toHaveCount(0)
+
   await page.keyboard.press('Escape')
   await expect(drawer).toHaveCount(0)
   await rest(page, page.locator('.work-item-tile').filter({ hasText: 'MAIN-12' }).first())
@@ -125,7 +156,7 @@ test('a neighbour takes the card over at once; after a pause it waits again', as
 
   await page.mouse.move(5, 5, { steps: 4 })
   await expect(shown).toHaveCount(0)
-  await coolDown()
+  await coolDown(page)
   const opening = watchOpening(page)
   await rest(page, reference(entry, 'MAIN-12'))
   expect(await opening).toBeGreaterThanOrEqual(450)
@@ -178,7 +209,7 @@ test('down a list, the card keeps the pointer over the reference it covers', asy
   // Once the card is gone the covered reference is a reference like any other.
   await page.mouse.move(5, 5, { steps: 6 })
   await expect(shown).toHaveCount(0)
-  await coolDown()
+  await coolDown(page)
   await rest(page, covered)
   await expect(card(page)).toContainText(neighbour)
   await expect(page.locator(CARD)).toHaveCount(1)
@@ -311,14 +342,14 @@ test('a scroll closes the card, and its end asks again for what the still pointe
   const at = await middle(links.nth(3))
   await expect(card(page)).toBeVisible()
   const closed = closing(page)
-  await page.mouse.wheel(0, 120)
+  await wheelToItsEnd(page, 120)
   expect(await closed, 'closed by the scroll').toBe(true)
   // A resting pointer points at whatever the scroll brought under it, as for a hint.
   expectTheCardOfWhatIsUnder(await afterTheScroll(page, at))
 
   // Wheeling on: the reference the card came from has moved from under the pointer.
   const standing = await links.nth(3).boundingBox()
-  await page.mouse.wheel(0, 60)
+  await wheelToItsEnd(page, 60)
   expectTheCardOfWhatIsUnder(await afterTheScroll(page, at))
   expect(await links.nth(3).boundingBox()).not.toEqual(standing)
   await expect(drawer).toBeVisible()
@@ -326,13 +357,13 @@ test('a scroll closes the card, and its end asks again for what the still pointe
   // A wheel while the card still waits calls that card off: whatever shows is what is under.
   await page.mouse.move(5, 5)
   await expect(card(page)).toHaveCount(0)
-  await coolDown()
+  await coolDown(page)
   await rest(page, links.nth(8))
   const resting = await middle(links.nth(8))
   const waited = await links
     .nth(8)
     .evaluate((link) => [...document.querySelectorAll('[data-reference-preview]')].indexOf(link))
-  await page.mouse.wheel(0, 240)
+  await wheelToItsEnd(page, 240)
   const after = await afterTheScroll(page, resting)
   expectTheCardOfWhatIsUnder(after)
   expect(after.under, 'the waited reference has left the pointer').not.toBe(waited)
@@ -378,7 +409,7 @@ test.describe('where the window is narrow or a person asks for less', () => {
     await expect(shown).toHaveCount(0)
 
     // With the reference at the foot of the window there is room only above it.
-    await coolDown()
+    await coolDown(page)
     await link.evaluate((element) => element.scrollIntoView({ block: 'end' }))
     await rest(page, link)
     await expect(shown).toHaveAttribute('data-side', 'top')

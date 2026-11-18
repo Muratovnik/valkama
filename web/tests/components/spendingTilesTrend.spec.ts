@@ -74,9 +74,7 @@ function trendOf(tiles: ReturnType<typeof mountTiles>, measure: Measure) {
       const column = step.querySelector<HTMLElement>('.mini-trend-column')
       return column ? Math.round(Number.parseFloat(column.style.blockSize)) : null
     }),
-    hatched: steps.map((step) =>
-      Boolean(step.querySelector('.mini-trend-column.mini-trend-incomplete')),
-    ),
+    hatched: steps.map((step) => Boolean(step.querySelector('.mini-trend-column.hatched'))),
   }
 }
 
@@ -135,15 +133,17 @@ describe('the trend beside each figure', () => {
   })
 
   it('keeps its place with nothing to draw, and says the total instead', () => {
-    // A period with no steps, and one whose steps spent nothing: the floor alone, in words.
-    for (const usage of [
-      figuresAnswer({ seconds: 0 }),
-      usageAnswer({ first: MONDAY, days: 3, end: NOW, groupBy: [], stretches: [] }).usage,
-    ]) {
+    // A period with no steps, and one whose three days spent nothing: the floor alone, in words,
+    // each day of the second keeping its step with no column.
+    for (const [usage, steps] of [
+      [figuresAnswer({ seconds: 0 }), 0],
+      [usageAnswer({ first: MONDAY, days: 3, end: NOW, groupBy: [], stretches: [] }).usage, 3],
+    ] as const) {
       const tiles = mountTiles(usage)
       for (const measure of ['time', 'tokens', 'cost'] as const) {
         const trend = trendOf(tiles, measure)
-        expect(trend.heights.every((height) => height === null)).toBe(true)
+        expect(trend.keys).toHaveLength(steps)
+        expect(trend.heights).toEqual(Array.from({ length: steps }, () => null))
       }
       expect(trendOf(tiles, 'time').label).toBe('Agent time per day: 0 min')
       // Nothing spent is a zero cost, as the figure itself says it.

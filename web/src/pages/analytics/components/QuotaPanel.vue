@@ -14,8 +14,8 @@
  * keeps it as it stood, and the bar says the read failed, as it does for every read of the page
  * (`useQuota`): a line here moved the heading and every account under it.
  *
- * What used each window is read by the window's own block, to the answer's moment; the panel
- * holds those reads for its chart and its table alike (`provideWindowSpend`).
+ * What used each window opens from the window's block in the side panel over the page
+ * (`WindowDetail`), which reads it to the answer's moment.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -26,9 +26,7 @@ import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.t
 import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
-import { provideWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
-import { accountKey } from '@/pages/analytics/utils/quotaFigures.ts'
-import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
+import { accountKey, answerMoment } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
@@ -56,16 +54,6 @@ const state = computed<PlatformUiState<Quota>>(() => {
   if (!quota.accounts.length) return uiEmpty('analytics.quota.panel.none')
   return read.refreshing ? uiDegraded(quota, quota.now) : uiReady(quota)
 })
-
-provideWindowSpend(() => (props.read.status === 'ready' ? props.read.quota : null))
-
-/**
- * The answer's moment at its own offset, as its other moments are written: the words say every
- * time at the offset of the moment they are given as the answer's and date it against that
- * moment's day (`useQuotaWords`). The answer's `now` is held in UTC (`analyticsApi`), so given as
- * it is, a run-out would be said on UTC's clock and every time dated against UTC's day.
- */
-const todayOf = (quota: Quota) => momentAtOffset(Date.parse(quota.now), quota.utc_offset)
 
 const title = computed(() => words.sectionName(props.section))
 /** What does not reach the quota and what used each window, which the heading's «ⓘ» says. */
@@ -100,8 +88,9 @@ const narrow = useNarrowCharts(root)
               shown="chart"
               :account="account"
               :section="section"
-              :today="todayOf(payload)"
+              :today="answerMoment(payload)"
               :now="now"
+              :fresh-for="payload.fresh_for_seconds"
             />
           </template>
           <template #table>
@@ -111,8 +100,9 @@ const narrow = useNarrowCharts(root)
               shown="table"
               :account="account"
               :section="section"
-              :today="todayOf(payload)"
+              :today="answerMoment(payload)"
               :now="now"
+              :fresh-for="payload.fresh_for_seconds"
             />
           </template>
         </ChartSection>

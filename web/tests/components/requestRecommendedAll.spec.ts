@@ -169,7 +169,7 @@ describe('accepting what is recommended in all the blocks', () => {
     expect(failed.get('.request-foot [role="alert"]').text()).toBe(
       'This request changed or closed. Check its status; your draft is kept.',
     )
-    expect(checkedLabels(failed)).toEqual(['Mergerecommended'])
+    expect(checkedLabels(failed)).toEqual(['Merge'])
     expect(checkedLabels(cardOf(wrapper, 'Third question'))).toEqual([])
     const result = wrapper.get('.request-recommended-result')
     expect(result.text()).toBe('Sent: 1 of 2. Not sent: 1; the reason is in each question.')

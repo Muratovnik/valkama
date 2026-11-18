@@ -390,8 +390,9 @@ test('a review offers no row for your own option anywhere', async ({ page }) => 
   await card.getByRole('button', { name: 'Accept recommended', exact: true }).click()
   for (const row of await card.locator('.request-point').all()) await toggleOf(row).click()
   await expect(card.locator('.request-point-hang').first()).toBeVisible()
+  // The words an own option is named by, which an answered review's summary still prints
+  // (`tests/components/inputRequestReviewAnswer.spec.ts`): no point offers one to choose.
   await expect(card.getByText('Your own option', { exact: true })).toHaveCount(0)
-  await expect(card.locator('.request-point-own')).toHaveCount(0)
 })
 
 test('a way left to choose says so in the line, and Send opens the point at it', async ({

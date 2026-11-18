@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * A line pressed as a link to a section's table: «To the table» over the charts, and the line
- * under the ranked list that counts the values it leaves out. The section brings its table into
- * view and moves the focus to it; this only says so, in the quiet ink of what a list leaves out.
- * It is a line of the list it stands under, with that list's states (`rowStates.css`).
+ * A line pressed as a link to a section's table: «To the table» over the charts, which the section
+ * answers by bringing its table into view with the focus on it, and «All N» under the ranked list,
+ * which opens every value of the section in the side panel. What a press does is its host's; this
+ * only says it, in the quiet ink of what a list leaves out. It is a line of the list it stands
+ * under, with that list's states (`rowStates.css`).
  */
 /** Pressed. */
 const emit = defineEmits<{ press: [] }>()

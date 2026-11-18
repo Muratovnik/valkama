@@ -1,251 +1,173 @@
+/**
+ * The interaction rules of the planning surfaces that hold as text.
+ *
+ * Each check reads a file as code, comments taken out, and asserts a rule over it:
+ * something forbidden is absent, a shared component or a library's configuration is
+ * what a surface is built from, or a declaration the rule names is there. What a
+ * surface does when it is used is the component and browser specs' to say, and a
+ * comment beside a test here names the spec that says it.
+ */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
 import { test } from 'vitest'
 
-import { compactCss } from './support/source.ts'
+import { uncommented } from '../scripts/ui-system/comments.mjs'
+import { collectVueSources } from '../scripts/ui-system/sources.mjs'
+import { compactCss, declarationsOf, sourceCode } from './support/source.ts'
 
-const graph = readFileSync(
-  new URL('../src/widgets/work-item-graph/components/GraphView.vue', import.meta.url),
-  'utf8',
-)
-const drawer = readFileSync(
-  new URL('../src/widgets/work-item-inspector/components/WorkItemInspector.vue', import.meta.url),
-  'utf8',
-)
-const card = readFileSync(
-  new URL('../src/widgets/work-item-views/components/WorkItemTile.vue', import.meta.url),
-  'utf8',
-)
-const drawerDetails = readFileSync(
-  new URL('../src/widgets/work-item-inspector/components/InspectorOverview.vue', import.meta.url),
-  'utf8',
-)
-const drawerFacts = readFileSync(
-  new URL('../src/widgets/work-item-inspector/components/InspectorFacts.vue', import.meta.url),
-  'utf8',
-)
-const drawerDetailsCss = readFileSync(
-  new URL('../src/widgets/work-item-inspector/components/InspectorOverview.css', import.meta.url),
-  'utf8',
-)
-const graphControls = readFileSync(
-  new URL('../src/widgets/work-item-graph/components/GraphControls.vue', import.meta.url),
-  'utf8',
-)
-const graphField = readFileSync(
-  new URL('../src/widgets/work-item-graph/components/GraphField.vue', import.meta.url),
-  'utf8',
-)
-const graphNode = readFileSync(
-  new URL('../src/widgets/work-item-graph/components/GraphNodeCard.vue', import.meta.url),
-  'utf8',
-)
-const graphProjection = readFileSync(
-  new URL('../src/widgets/work-item-graph/composables/useGraphProjection.ts', import.meta.url),
-  'utf8',
-)
-const infoTip = readFileSync(new URL('../src/shared/ui/InfoTip.vue', import.meta.url), 'utf8')
-const inspector = readFileSync(
-  new URL('../src/shared/ui/ResizableInspector.vue', import.meta.url),
-  'utf8',
-)
-const inspectorFrame = readFileSync(
-  new URL('../src/shared/ui/InspectorFrame.vue', import.meta.url),
-  'utf8',
-)
-const overlayHeader = readFileSync(
-  new URL('../src/shared/ui/OverlayHeader.vue', import.meta.url),
-  'utf8',
-)
+const graph = sourceCode('widgets/work-item-graph/components/GraphView.vue')
+const drawer = sourceCode('widgets/work-item-inspector/components/WorkItemInspector.vue')
+const card = sourceCode('widgets/work-item-views/components/WorkItemTile.vue')
+const drawerDetails = sourceCode('widgets/work-item-inspector/components/InspectorOverview.vue')
+const drawerDetailsCss = sourceCode('widgets/work-item-inspector/components/InspectorOverview.css')
+const graphControls = sourceCode('widgets/work-item-graph/components/GraphControls.vue')
+const graphField = sourceCode('widgets/work-item-graph/components/GraphField.vue')
+const graphNode = sourceCode('widgets/work-item-graph/components/GraphNodeCard.vue')
+const infoTip = sourceCode('shared/ui/InfoTip.vue')
+const inspector = sourceCode('shared/ui/ResizableInspector.vue')
+const inspectorFrame = sourceCode('shared/ui/InspectorFrame.vue')
+const overlayHeader = sourceCode('shared/ui/OverlayHeader.vue')
 // The host's markup and its stylesheet, which stands beside it as a file of its own.
-const overlay = ['OverlayHost.vue', 'overlayHost.css']
-  .map((name) => readFileSync(new URL(`../src/shared/ui/${name}`, import.meta.url), 'utf8'))
-  .join('\n')
-const app = readFileSync(new URL('../src/app/App.vue', import.meta.url), 'utf8')
-const cardDrawer = readFileSync(
-  new URL('../src/pages/planning/PlanningCardDrawer.vue', import.meta.url),
-  'utf8',
-)
-const resizer = readFileSync(
-  new URL('../src/shared/ui/OverlayResizer.vue', import.meta.url),
-  'utf8',
-)
-const planningSurface = readFileSync(
-  new URL('../src/pages/planning/PlanningModuleSurface.vue', import.meta.url),
-  'utf8',
-)
-const cardPanel = readFileSync(
-  new URL('../src/pages/planning/PlanningCardPanel.vue', import.meta.url),
-  'utf8',
-)
-const workspace = readFileSync(
-  new URL('../src/pages/planning/PlanningWorkspace.vue', import.meta.url),
-  'utf8',
-)
-const workspaceBar = readFileSync(
-  new URL('../src/pages/planning/PlanningWorkspaceBar.vue', import.meta.url),
-  'utf8',
-)
-const lane = readFileSync(
-  new URL('../src/widgets/work-item-views/components/WorkItemColumn.vue', import.meta.url),
-  'utf8',
-)
-const countBadge = readFileSync(new URL('../src/shared/ui/CountBadge.vue', import.meta.url), 'utf8')
-const semanticState = readFileSync(
-  new URL('../src/shared/ui/SemanticState.vue', import.meta.url),
-  'utf8',
-)
-const settings = readFileSync(
-  new URL('../src/pages/settings/SettingsView.vue', import.meta.url),
-  'utf8',
-)
-const appIcon = readFileSync(new URL('../src/shared/ui/VIcon.vue', import.meta.url), 'utf8')
-const navList = readFileSync(
-  new URL('../src/widgets/app-nav/components/NavModuleList.vue', import.meta.url),
-  'utf8',
-)
+const overlay = sourceCode('shared/ui/OverlayHost.vue')
+const overlayCss = sourceCode('shared/ui/overlayHost.css')
+const app = sourceCode('app/App.vue')
+const cardDrawer = sourceCode('pages/planning/PlanningCardDrawer.vue')
+const planningSurface = sourceCode('pages/planning/PlanningModuleSurface.vue')
+const cardPanel = sourceCode('pages/planning/PlanningCardPanel.vue')
+const workspace = sourceCode('pages/planning/PlanningWorkspace.vue')
+const workspaceBar = sourceCode('pages/planning/PlanningWorkspaceBar.vue')
+const lane = sourceCode('widgets/work-item-views/components/WorkItemColumn.vue')
+const countBadge = sourceCode('shared/ui/CountBadge.vue')
+const semanticState = sourceCode('shared/ui/SemanticState.vue')
+const settings = sourceCode('pages/settings/SettingsView.vue')
+const appIcon = sourceCode('shared/ui/VIcon.vue')
+const navList = sourceCode('widgets/app-nav/components/NavModuleList.vue')
+
+/** A component tag a template renders, with or without attributes. */
+const renders = (tag: string) => new RegExp(`<${tag}(?=[\\s/>])`)
+/** An attribute a template sets to `value`, bound or plain. */
+const sets = (name: string, value: string) => new RegExp(`\\s:?${name}\\s*=\\s*"\\s*${value}\\s*"`)
+/** The members a prop declares as a union of string literals. */
+const union = (code: string, prop: string) =>
+  new RegExp(`\\b${prop}\\?:\\s*([^\\n;]+)`).exec(code)?.[1].match(/'[\w-]+'/g) ?? []
 
 test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-editable', () => {
-  // The focus reducer moved into the projection composable with the fetch and the
-  // derivations it resets; the view's part is handing keyboard events to it, which
-  // `applyFocus` is. A pointer lights nothing: hovering a card dims no other card.
-  assert.match(graphProjection, /from '@\/widgets\/work-item-graph\/utils\/graphFocus\.ts'/)
-  assert.match(graph, /useGraphProjection/)
+  // A pointer lights nothing: hovering a card dims no other card.
   assert.doesNotMatch(graph, /@node-enter|@node-leave|pointer-enter/)
   assert.doesNotMatch(graphField, /node-mouse-enter|node-mouse-leave/)
-  assert.match(graph, /applyFocus\(\{ type: 'focus'/)
-  // The flow is its own component, which the view hands the nodes and the
-  // drawings; Vue Flow is configured there, once.
-  assert.match(graphField, /<VueFlow/)
-  // The camera controls are their own component, in the strip under the flow
-  // rather than on it, so they find the field's camera by its id.
-  assert.match(graph, /<\/GraphField>\s*<GraphControls/)
-  assert.match(graphControls, /<ControlButton/)
-  assert.match(graphControls, /useVueFlow\(\{ id: GRAPH_FLOW_ID \}\)/)
-  assert.match(graphField, /<Background/)
-  assert.match(graphField, /:pan-on-drag="true"/)
-  assert.match(graphField, /zoom-activation-key-code="Control"/)
-  assert.match(graphField, /:nodes-draggable="false"/)
-  assert.match(graphField, /@node-click="\(\{ node \}\) => emit\('node-click', node\.id\)"/)
-  assert.match(graph, /@node-click="onNodeClick"/)
+  // Vue Flow is configured in one place, the field, and nowhere else in the product.
+  assert.deepEqual(
+    collectVueSources()
+      .filter(({ file, source }) => renders('VueFlow').test(uncommented(file, source)))
+      .map(({ file }) => file),
+    ['widgets/work-item-graph/components/GraphField.vue'],
+  )
+  // The camera controls are Vue Flow's, and find the field's camera by the id the field has.
+  assert.match(graphControls, renders('ControlButton'))
+  const flowId = /useVueFlow\(\s*\{\s*id:\s*([\w.]+)\s*\}/.exec(graphControls)?.[1]
+  assert.ok(flowId, 'the controls name no flow')
+  assert.match(graphField, sets('id', flowId))
+  assert.match(graphField, renders('Background'))
+  assert.match(graphField, sets('pan-on-drag', 'true'))
+  assert.match(graphField, sets('zoom-activation-key-code', 'Control'))
+  assert.match(graphField, sets('nodes-draggable', 'false'))
   assert.doesNotMatch(graph, /stepGraphZoom|zoom-surface|transform: `scale/)
   assert.doesNotMatch(graphField, /stepGraphZoom|zoom-surface|transform: `scale/)
+  // The arrows walking the field: browser/production-graph-keyboard.spec.ts. A pressed
+  // card opening its drawer, the controls under the cards rather than on them:
+  // browser/production-graph.spec.ts.
 })
 
 test('the inspector exposes its emits, related navigation, and shared focus ownership', () => {
-  assert.match(drawer, /'?close'?: \[\]/)
-  assert.match(drawer, /'?open'?: \[reference: string, from: InspectorReturn\]/)
-  assert.match(drawer, /'?changed'?: \[\]/)
-  assert.match(drawer, /emit\('open'/)
-  assert.match(planningSurface, /<PlanningCardPanel/)
-  assert.match(cardPanel, /<PlanningCardDrawer/)
-  assert.match(cardDrawer, /<ResizableInspector/)
-  assert.match(drawer, /<DrawerFrame/)
-  assert.match(drawer, /<InspectorTabs/)
+  // The emits are the inspector's interface; what it emits when is
+  // components/inspectorDrafts.spec.ts and components/inspectorReturn.spec.ts.
+  assert.match(drawer, /\b'?close'?\s*:\s*\[\s*\]/)
+  assert.match(drawer, /\b'?open'?\s*:\s*\[[^\]]*\bInspectorReturn\b[^\]]*\]/)
+  assert.match(drawer, /\b'?changed'?\s*:\s*\[\s*\]/)
+  assert.match(planningSurface, renders('PlanningCardPanel'))
+  assert.match(cardPanel, renders('PlanningCardDrawer'))
+  assert.match(cardDrawer, renders('ResizableInspector'))
+  assert.match(drawer, renders('DrawerFrame'))
+  assert.match(drawer, renders('InspectorTabs'))
+  assert.match(drawer, renders('InspectorOverview'))
   assert.doesNotMatch(drawer, /<InspectorDrawer|<InspectorHead/)
-  // Writability is a prop the shell decides, and every write is gated on it
-  // together with the in-flight guard rather than each button deciding again.
-  assert.match(drawer, /:writable="writable && !busy"/)
-  assert.match(drawer, /<InspectorOverview/)
-  // A route-owned entity gets a fresh inspector subtree. A refresh of that same
-  // keyed entity keeps the current panel and only reloads its data.
-  assert.match(planningSurface, /:identity="openIdentity"/)
-  assert.match(cardPanel, /:key="identity"/)
-  assert.match(drawer, /:key="reference"/)
-  assert.match(
-    drawer,
-    /`\$\{props\.projectId\}:\$\{props\.resourceRef\.resource_id\}:\$\{props\.reference\}:\$\{props\.refreshToken\}`/,
-  )
+  // No write while one is in flight: components/inspectorFacts.spec.ts. A refresh of the
+  // same card keeping its panel: components/workItemInspectorState.spec.ts.
 })
 
 test('the work-item inspector uses the persisted overlay drawer without consuming workspace width', () => {
-  assert.match(cardDrawer, /INSPECTOR_DRAWER_STORAGE_KEY/)
-  assert.match(inspector, /<OverlayHost/)
-  assert.match(inspector, /variant="drawer"/)
-  assert.match(inspector, /layer: 'drawer'/)
-  assert.match(inspector, /resizable/)
-  assert.match(inspector, /:width-storage-key="storageKey"/)
+  // The card's drawer keeps a width of its own; the shared drawer persisting it, its
+  // separator, keyboard resizing and teleport: components/resizableInspector.spec.ts.
+  assert.match(cardDrawer, /<ResizableInspector\b[^>]*\s:storage-key="/)
+  assert.match(inspector, renders('OverlayHost'))
+  assert.match(inspector, sets('variant', 'drawer'))
+  assert.match(inspector, /\blayer:\s*'drawer'/)
+  assert.match(inspector, /<OverlayHost\b[^>]*\sresizable[\s/>=]/)
   assert.doesNotMatch(inspector, /position: relative|flex: none|parentElement/)
-  assert.match(overlay, /<Teleport to="body">/)
-  assert.match(overlay, /position: fixed/)
-  assert.match(resizer, /role="separator"/)
-  assert.match(overlay, /@keydown="resizeFromKeyboard"/)
+  assert.ok(declarationsOf(overlayCss, '.overlay-host').includes('position:fixed'))
 })
 
 test('command dialogs layer over the inspector using shared modal focus ownership', () => {
   // The card stays while the composer is open: only an open item and its space decide it.
-  assert.match(planningSurface, /open\.value && boundSpaceResourceRef\.value\n/)
   assert.doesNotMatch(planningSurface, /open(?:\.value)? && !composerOpen/)
-  assert.match(cardDrawer, /<ResizableInspector/)
-  assert.match(inspector, /<OverlayHost/)
-  assert.match(overlay, /interactive\?: boolean/)
-  assert.match(overlay, /'aria-hidden': true, 'inert': true/)
-  assert.match(overlay, /'role': 'dialog'/)
+  // The host alone sets what covers a layer, never a binding on a surface.
   assert.doesNotMatch(overlay, /:inert=|:aria-hidden=|:aria-modal=/)
-  assert.match(overlay, /overlay-layer-command/)
-  assert.match(overlay, /overlay-layer-drawer/)
+  // The covered drawer going inert and hidden under a command, one dialog at a time:
+  // components/overlayOwnership.spec.ts.
 })
 
 test('the inspector keeps item facts and work-item relations in one surface', () => {
   // The overview panel is its own component; what the inspector owns is which
   // panel shows and the item all of them read.
-  assert.match(drawerDetails, /props\.item\.checklist|item\.checklist/)
-  assert.match(drawerDetails, /<InspectorSummary/)
+  assert.match(drawerDetails, renders('InspectorSummary'))
   // The relations section is the links between work items and nothing that an
   // extension registry would have to authorize.
-  assert.match(drawer, /<InspectorRelations/)
+  assert.match(drawer, renders('InspectorRelations'))
   assert.doesNotMatch(drawer, /<KernelRelationsPanel/)
   assert.doesNotMatch(drawerDetails, /relatedMemories|groupReferences|agentmemory/i)
 })
 
 test('one place draws who holds an item, and the shell owns scope presentation', () => {
-  // Claim presentation belongs to the tile and graph node, not their column;
-  // the tile prints its holder through the facet registry's tile rule.
-  // Rendered owner labels are covered in planningPresentation.spec.ts.
-  assert.match(card, /const FACTS: readonly FacetId\[\] = \['holder', 'steps'\]/)
-  assert.match(card, /surfaceMarks\('tile', props\.item, context\.value, FACTS\)/)
+  // Claim presentation belongs to the tile and graph node, not their column. The
+  // holder on a tile and on a node: components/planningPresentation.spec.ts and
+  // components/graphNodeCard.spec.ts.
   assert.doesNotMatch(lane, /bundle-active|t\('work\.active'\)/)
-  assert.match(graphNode, /class="flow-node-owner-state[ "]/)
-  assert.match(
-    readFileSync(new URL('../src/app/components/AppModuleStage.vue', import.meta.url), 'utf8'),
-    /<PlanningModuleSurface/,
-  )
+  assert.match(sourceCode('app/components/AppModuleStage.vue'), renders('PlanningModuleSurface'))
   assert.doesNotMatch(app, /class="scope-active"/)
 })
 
 test('the planning workspace is the one scroll owner and wears shared controls', () => {
   // The view switch is the shared segmented control rather than three buttons of
   // its own, so the row it sits in matches every other module's header.
-  assert.match(workspaceBar, /<SegmentedControl/)
-  assert.match(workspaceBar, /:aria-busy="countsBusy"/)
+  assert.match(workspaceBar, renders('SegmentedControl'))
+  assert.match(workspaceBar, /\s:aria-busy="/)
   // The header row stays and each view scrolls inside the stage. Two scroll
   // containers is how the board used to take the page sideways with it.
-  assert.match(compactCss(workspace), /\.workspace\{[^}]*flex-direction:column/)
-  assert.match(compactCss(workspace), /\.workspace-stage\{[^}]*flex:11auto/)
-  assert.match(compactCss(workspace), /\.workspace-stage\{[^}]*min-height:0/)
+  assert.ok(declarationsOf(workspace, '.workspace').includes('flex-direction:column'))
+  const stage = declarationsOf(workspace, '.workspace-stage')
+  assert.ok(stage.includes('flex:11auto'), stage.join(';'))
+  assert.ok(stage.includes('min-height:0'), stage.join(';'))
 })
 
 test('operational statuses reserve invariant geometry instead of stretching their rows', () => {
-  assert.match(semanticState, /variant\?: 'inline' \| 'badge' \| 'dot'/)
-  assert.match(graphNode, /class="flow-node-meta"/)
-  assert.match(graphNode, /\.flow-node-line\s*\{[^}]*display:\s*grid/s)
-  assert.match(graphNode, /\.flow-node-owner\s*\{[^}]*max-width:\s*100%/s)
+  assert.deepEqual(union(semanticState, 'variant').toSorted(), ["'badge'", "'dot'", "'inline'"])
+  assert.match(graphNode, /\sclass="flow-node-meta"/)
+  assert.ok(declarationsOf(graphNode, '.flow-node-line').includes('display:grid'))
+  assert.ok(declarationsOf(graphNode, '.flow-node-owner').includes('max-width:100%'))
   // The nine `:deep()` rules that reached from the view into this card are its own
   // now, keyed off classes it puts on itself from the node it was handed.
   assert.doesNotMatch(graph, /flow-node-/)
 })
 
 test('count badges own inline and overlay geometry without per-screen overrides', () => {
-  assert.match(countBadge, /placement\?: 'overlay' \| 'inline'/)
+  assert.deepEqual(union(countBadge, 'placement').toSorted(), ["'inline'", "'overlay'"])
 })
 
 test('session filters, module icons, inspector facts, and analytics inspector use explicit action grammar', () => {
-  assert.match(navList, /module\.icon_key/)
+  assert.match(navList, /\bmodule\.icon_key\b/)
   assert.doesNotMatch(appIcon, /sessions:\s*Activity/)
   assert.doesNotMatch(appIcon, /improvements:\s*Activity/)
   assert.doesNotMatch(drawer, /context-working[^\n]+work\.active/)
-  assert.match(drawer, /<InspectorRelations/)
 })
 
 test('settings has no registry screen and no legacy integration activation path', () => {
@@ -256,22 +178,24 @@ test('settings has no registry screen and no legacy integration activation path'
 test('the session inspector separates identity from controls and detail content through the shared frame', () => {
   // The head is one component both overlays wear, so its rule and padding are
   // asserted where they live rather than once per surface that shows them.
-  assert.match(inspectorFrame, /<OverlayHeader/)
-  assert.match(
-    compactCss(overlayHeader),
-    /\.overlay-header\{[^}]*padding:var\(--space-6\)[^}]*border-bottom:/s,
+  assert.match(inspectorFrame, renders('OverlayHeader'))
+  const head = declarationsOf(overlayHeader, '.overlay-header')
+  assert.ok(head.includes('padding:var(--space-6)'), head.join(';'))
+  assert.ok(
+    head.some((each) => each.startsWith('border-bottom:')),
+    head.join(';'),
   )
-  assert.match(
-    compactCss(inspectorFrame),
-    /\.inspector-frame-body\{[^}]*padding:var\(--space-6\)[^}]*overflow-y:auto/s,
-  )
+  const body = declarationsOf(inspectorFrame, '.inspector-frame-body')
+  assert.ok(body.includes('padding:var(--space-6)'), body.join(';'))
+  assert.ok(body.includes('overflow-y:auto'), body.join(';'))
 })
 
 test('info tips escape clipped ancestors and calculate a viewport-fixed position', () => {
-  assert.match(infoTip, /<Teleport to="body">/)
-  assert.match(infoTip, /getBoundingClientRect\(\)/)
+  assert.match(infoTip, sets('to', 'body'))
+  assert.match(infoTip, renders('Teleport'))
   assert.match(infoTip, /position:\s*fixed/)
-  assert.match(infoTip, /window\.innerWidth/)
+  // Where the open tip stands, at its control and clear of every edge of the viewport, also
+  // when the window changes size: components/infoTip.spec.ts.
 })
 
 test('a work-item tile is one control, not a card with an arrow footer', () => {
@@ -279,30 +203,32 @@ test('a work-item tile is one control, not a card with an arrow footer', () => {
   // card that carried its own open affordance reserved a footer row on every
   // tile for one arrow, and a second control in a tile is a second Tab stop for
   // the same destination. The marks that filter are buttons beside the title,
-  // and every one of them is kept out of the Tab order.
+  // and every one of them is kept out of the Tab order. The press opening the
+  // card: components/workItemBoard.spec.ts.
   assert.doesNotMatch(card, /source-open|↗/)
-  assert.match(card, /<button\s+(?:v-tooltip(?:\.\w+)?="[^"]*"\s+)?class="tile-open"/)
-  assert.match(card, /const open = \(\) => emit\('open', props\.item\.reference\)/)
-  assert.equal((card.match(/<button/g) ?? []).length, 1, 'one open target per tile')
-  const filterRuns = (card.match(/filterable: true/g) ?? []).length
+  assert.match(card, /<button\b[^>]*\sclass="tile-open"/)
+  assert.equal((card.match(/<button\b/g) ?? []).length, 1, 'one open target per tile')
+  const filterRuns = (card.match(/\bfilterable:\s*true\b/g) ?? []).length
   assert.ok(filterRuns > 0)
-  assert.equal((card.match(/tabbable: false/g) ?? []).length, filterRuns)
+  assert.equal((card.match(/\btabbable:\s*false\b/g) ?? []).length, filterRuns)
 })
 
 test('Planning components carry presentation tones instead of remapping operational state', () => {
   assert.doesNotMatch(card, /box-shadow: inset|data-tone/)
   assert.doesNotMatch(card, /data-priority/)
-
-  assert.match(graphNode, /if \(ready\) return 'workable'/)
-  assert.match(graphNode, /node\.claim_ref && node\.open/)
-  assert.match(graphNode, /statePresentation\('work-item-node-marker', markerState\)\.tone/)
+  // Ready and a live claim outranking the workflow marker, and the inspector's state
+  // read from its shared presentation: components/planningPresentation.spec.ts.
   assert.doesNotMatch(graphNode, /class="claimed"|'claimed':/)
-
-  assert.match(drawerFacts, /dimension="work-item-state"[\s\S]*:state="standing"/)
-  assert.match(drawerFacts, /const standing = computed\(\(\) => standingOf\(props\.item\)\)/)
-  assert.match(drawerDetails, /<style scoped src="\.\/InspectorOverview\.css">/)
-  assert.match(
-    drawerDetailsCss,
-    /\.step\[data-tone='success'\] & \{\s*background: var\(--color-success\);\s*border-color: var\(--color-success\);/,
+  assert.match(drawerDetails, /<style\b[^>]*\ssrc="\.\/InspectorOverview\.css"/)
+  const done = [
+    ...compactCss(drawerDetailsCss).matchAll(/\[data-tone='success'\][^{}]*\{([^}]*)\}/g),
+  ]
+  assert.ok(
+    done.some(
+      ([, body]) =>
+        body.includes('background:var(--color-success)') &&
+        body.includes('border-color:var(--color-success)'),
+    ),
+    'a finished step is not filled with the success colour',
   )
 })

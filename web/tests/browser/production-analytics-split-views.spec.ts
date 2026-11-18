@@ -1,11 +1,12 @@
 /**
  * The charts of one whole split into parts, in the real app over the browser double: each is drawn
- * as a ring or as ranked bars, switched with its table, and opens on what the owner's rule gives —
- * the ring, but the bars where the parts are as many as the tasks. The oracle is that rule and the
- * charts' contracts: a section by account opens on its ring, one by task on its bars, one split by
- * a second dimension offers the bars alone, the tokens by kind open on their ring, a quota
- * window's block opens on its bars by task and on its ring by project; the overview's cards of
- * first values are no split and offer no switch; and every view of a chart reads the same figures.
+ * as the owner's rule gives — named by identifiers, a ring or ranked bars switched with its table,
+ * opening on the ring; named by free text, the tasks and the sessions, a list only. The oracle is
+ * that rule and the charts' contracts: a section by account opens on its ring, one by task or by
+ * session is a list switched with its table alone, one split by a second dimension offers the bars
+ * alone, the tokens by kind open on their ring, a quota window's spend in its side panel is a list
+ * by task and opens on its ring by project; the overview's cards of first values are no split and
+ * offer no switch; and every view of a chart reads the same figures.
  *
  * A ring writes nothing on its sectors: its legend gives each part its figure and share at the end
  * of its line, the figures of the legend and of the rows apart under it ending at one edge, each
@@ -34,11 +35,11 @@ async function views(where: Locator) {
 /** Each legend line of a ring: its name and the figure before its share. */
 const legendFigures = (chart: Locator) =>
   chart
-    .locator('.chart-entry')
+    .locator('[data-hint-list="legend"] li')
     .evaluateAll((entries) =>
       entries.map((entry) => [
-        entry.querySelector('.chart-key-name')?.textContent ?? '',
-        (entry.querySelector('.chart-figure')?.textContent ?? '').split(' · ')[0] ?? '',
+        entry.querySelector('[data-part="name"]')?.textContent ?? '',
+        (entry.querySelector('[data-part="figure"]')?.textContent ?? '').split(' · ')[0] ?? '',
       ]),
     )
 
@@ -73,9 +74,12 @@ test('each split opens on its own drawing, switches, and reads the same figures 
     await expect(accounts.locator('tbody tr', { hasText: name })).toContainText(figure)
   await record(info, 'split by account', { ring, bars })
 
-  await openReport(page, 1440, pageAt({ by: 'work_item' }))
-  expect(await views(section(page))).toEqual({ offered: ['Ring', 'Bars', 'Table'], shown: 'Bars' })
-  await expect(section(page).locator('.ranked-bars')).toBeVisible()
+  for (const by of ['work_item', 'executor']) {
+    await openReport(page, 1440, pageAt({ by }))
+    expect(await views(section(page))).toEqual({ offered: ['Chart', 'Table'], shown: 'Chart' })
+    await expect(section(page).locator('.ranked-bars.ranked-free')).toBeVisible()
+    await expect(section(page).locator('.donut-chart')).toHaveCount(0)
+  }
 
   await openReport(page, 1440, pageAt({ by: 'model', across: 'effort' }))
   expect(await views(section(page))).toEqual({ offered: ['Bars', 'Table'], shown: 'Bars' })
@@ -89,18 +93,35 @@ test('each split opens on its own drawing, switches, and reads the same figures 
   await expect(page.locator('.overview-top [role="radio"]')).toHaveCount(0)
 })
 
-test('a quota window’s block opens on its bars by task and on its ring by project, with the same figures', async ({
+/**
+ * Opens what used Work's five hours in the side panel, from the window's own button, drawn as a
+ * chart whatever the panel's width chose.
+ */
+async function workSpend(page: Page) {
+  await page
+    .locator('.quota-account')
+    .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
+    .locator('.quota-window[data-window="five_hour"]')
+    .getByRole('button', { name: 'Where the window went' })
+    .click()
+  const panel = page.getByRole('dialog', { name: 'Details: Five hours · Work' })
+  await expect(panel).toHaveCSS('transform', 'none')
+  const chart = panel.getByRole('radio', { name: 'Chart', exact: true })
+  await expect(chart).toBeVisible()
+  if (!(await chart.isChecked())) await chart.click()
+  return panel.locator('[data-detail="window"] .window-spend')
+}
+
+test('a quota window’s spend is a list by task and opens on its ring by project, with the same figures', async ({
   page,
 }, info) => {
   await serve(page, SPENT_WORLD)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto(pageAt({ by: 'quota_five_hour' }))
-  const work = page
-    .locator('.quota-account')
-    .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
-    .locator('.quota-window[data-window="five_hour"] .window-spend')
-  await expect(work.locator('.ranked-bars')).toBeVisible()
-  await expect(work.getByRole('radio', { name: 'Bars', exact: true })).toBeChecked()
+  const work = await workSpend(page)
+  await expect(work.locator('.ranked-bars.ranked-free')).toBeVisible()
+  await expect(work.getByRole('radio', { name: 'Bars', exact: true })).toHaveCount(0)
+  await expect(work.getByRole('radio', { name: 'Ring', exact: true })).toHaveCount(0)
 
   await work.getByRole('radio', { name: 'Projects' }).click()
   await expect(work.getByRole('radio', { name: 'Ring', exact: true })).toBeChecked()
@@ -127,12 +148,14 @@ function legendLayout(chart: Locator) {
     const box = (element: Element | null) => element?.getBoundingClientRect() ?? new DOMRect()
     const column = box(figure)
     const ring = box(figure.querySelector('.donut-ring'))
-    const legend = box(figure.querySelector('.chart-legend'))
-    const lines = [...figure.querySelectorAll('.chart-entry')].map((entry) => {
-      const name = box(entry.querySelector('.chart-key-name'))
-      const value = box(entry.querySelector('.chart-figure'))
+    // The legend's lines are the items of its list, each a name and its figure (`ChartLegend`).
+    const list = figure.querySelector('[data-hint-list="legend"]')
+    const legend = box(list)
+    const lines = [...(list?.querySelectorAll('li') ?? [])].map((entry) => {
+      const name = box(entry.querySelector('[data-part="name"]'))
+      const value = box(entry.querySelector('[data-part="figure"]'))
       const lineHeight = Number.parseFloat(
-        getComputedStyle(entry.querySelector('.chart-figure') ?? entry).lineHeight,
+        getComputedStyle(entry.querySelector('[data-part="figure"]') ?? entry).lineHeight,
       )
       return {
         middleOff: Math.abs(name.top + name.height / 2 - (value.top + value.height / 2)),
@@ -169,12 +192,6 @@ async function openSection(page: Page, width: number, by: string, where: string)
   const block = page.locator(`.analytics-panel ${where}`).first()
   await expect(block).toBeVisible()
   return block
-}
-
-/** Turns the quota's section to its charts, which a narrow page opens as their tables. */
-async function drawCharts(panel: Locator) {
-  const charts = panel.locator('.chart-section > .level-head').getByRole('radio', { name: 'Chart' })
-  if (!(await charts.isChecked())) await charts.click()
 }
 
 /** Opens a section at a width on its ring, which a narrow page reaches by its switch. */
@@ -227,12 +244,8 @@ for (const width of [1440, 390])
     page,
   }, info) => {
     await serve(page, SPENT_WORLD)
-    const panel = await openSection(page, width, 'quota_five_hour', '.quota-panel')
-    await drawCharts(panel)
-    const work = page
-      .locator('.quota-account')
-      .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
-      .locator('.quota-window[data-window="five_hour"] .window-spend')
+    await openSection(page, width, 'quota_five_hour', '.quota-panel')
+    const work = await workSpend(page)
     await work.getByRole('radio', { name: 'Projects' }).click()
     const chart = work.locator('.donut-chart')
     await expect(chart.locator('.donut-sector').first()).toBeVisible()
@@ -245,6 +258,7 @@ for (const width of [1440, 390])
       allOneLine: true,
       sectorText: '',
     })
+    expect(seen.lines, 'the legend’s lines').toBeGreaterThan(1)
     expect(seen.endsSpread).toBeLessThanOrEqual(1)
     expect(seen.worstMiddleOff).toBeLessThanOrEqual(1)
     await work.screenshot(shot(info, `ring-quota-window-${width}.png`))

@@ -92,6 +92,6 @@ for (const width of WIDTHS) {
     const docs = table.locator('tbody tr').nth(3)
     await expect(docs.locator('th')).toHaveText('docs')
     await expect(docs.locator('td').nth(1)).toHaveText('—No figure')
-    expect(await brokenWords(page, '[data-harness="multiples-table"] .chart-cell')).toEqual([])
+    expect(await brokenWords(page, '[data-harness="multiples-table"] :is(th, td)')).toEqual([])
   })
 }

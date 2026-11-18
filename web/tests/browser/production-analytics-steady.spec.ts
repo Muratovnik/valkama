@@ -15,6 +15,7 @@ import type { Page } from '@playwright/test'
 
 import { openReport, record, serve } from './analyticsPage.ts'
 import { drawAllLined } from './drawnViews.ts'
+import { expectNoLineOverPlot } from './plotWords.ts'
 import { STEADY } from './served/analyticsSteady.ts'
 import { test } from './test.ts'
 
@@ -86,9 +87,12 @@ for (const width of WIDTHS)
     const columns = page.locator('.spending-days .period-column')
     const bars = page.locator('.spending-bars .ranked-line')
     await expect(columns).toHaveCount(3)
-    await expect(page.locator('.spending-days .period-mark')).not.toHaveCount(0)
-    // Work on no task and unknown work are ranked among the values, each with its bar.
-    await expect(page.locator('.spending-bars .ranked-rest .ranked-row')).toHaveCount(0)
+    await expect(page.locator('.spending-days [data-mark="change"]')).not.toHaveCount(0)
+    // Work on no task, unknown work and the rest close the list of tasks, a list of names of free
+    // text, unranked under it, each with its bar (`RankedBars`): none stands among the ranked.
+    const apart = '[data-kind]:not([data-kind="category"])'
+    await expect(page.locator(`.spending-bars ol ${apart}`)).toHaveCount(0)
+    await expect(page.locator(`.spending-bars ul ${apart}`)).toHaveCount(3)
     await expect(
       page.locator(
         '.spending-bars .ranked-row:is([data-kind="none"], [data-kind="unknown"]) .ranked-bar',
@@ -96,7 +100,7 @@ for (const width of WIDTHS)
     ).toHaveCount(2)
 
     // No line of words stands over the plot: each day says itself in its hint.
-    await expect(page.locator('.period-readout')).toHaveCount(0)
+    await expectNoLineOverPlot(page, '.spending-days [data-chart="periods"]')
     await page.mouse.move(0, 0)
     const before = await layout(page)
     const hints: string[] = []

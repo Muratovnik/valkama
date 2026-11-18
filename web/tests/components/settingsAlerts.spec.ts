@@ -8,6 +8,8 @@ import SettingsAlerts from '@/pages/settings/components/SettingsAlerts.vue'
 import { messages } from '@/shared/i18n/index.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 
+import { groupHeads } from '../support/settingsGroups.ts'
+
 type Answer = { body: unknown; status?: number }
 type Held = { body: unknown; release: (answer?: Answer) => void }
 
@@ -130,7 +132,10 @@ describe('SettingsAlerts settings', () => {
       const toggle = wrapper.get('[role="switch"]')
       expect(toggle.attributes('data-tooltip')).toBe(words)
       expect(toggle.attributes('data-tooltip-kind')).toBe('detail')
-      expect(wrapper.find('.settings-group-head p').exists()).toBe(false)
+      // On the switch, and in no paragraph under the group's heading.
+      expect(groupHeads(wrapper)).toHaveLength(1)
+      for (const head of groupHeads(wrapper)) expect(head.said).toBe(head.heading)
+      expect(wrapper.text()).not.toContain(words)
     },
   )
 

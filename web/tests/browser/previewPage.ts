@@ -103,16 +103,41 @@ export async function ontoCard(
   })
 }
 
-export const pause = (ms: number) => new Promise((done) => setTimeout(done, ms))
+/**
+ * Past the half second a card waits on a resting pointer, and the 120 ms it then waits for a
+ * read before it says it is reading, with room to spare.
+ */
+const PAST_THE_DELAY_MS = 800
+/** Past the 300 ms after a card goes in which the next one still opens at once. */
+const PAST_THE_WARM_MS = 350
 
-/** How many cards show once the delay a card would take has passed: what never came. */
+/**
+ * A wheel over what scrolls, awaited to the end of the scroll it starts. The browser scrolls on
+ * its own clock, not the page's, so the page's clock run past a delay would not wait for it.
+ */
+export async function wheelToItsEnd(page: Page, by: number) {
+  const ended = page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        addEventListener('scrollend', () => resolve(), { capture: true, once: true })
+      }),
+  )
+  await page.mouse.wheel(0, by)
+  await ended
+}
+
+/**
+ * How many cards show once the delay a card would take has passed: what never came, or what
+ * stayed. The delay runs on the page's clock, which the spec installs before the page opens, so
+ * a slow machine neither shortens it nor stretches it.
+ */
 export async function cardsAfterTheDelay(page: Page) {
-  await pause(800)
+  await page.clock.runFor(PAST_THE_DELAY_MS)
   return card(page).count()
 }
 
-/** Long enough off a reference that the next one waits its delay again. */
-export const coolDown = () => pause(350)
+/** Long enough off a reference that the next one waits its delay again, on the page's clock. */
+export const coolDown = (page: Page) => page.clock.runFor(PAST_THE_WARM_MS)
 
 /**
  * Milliseconds from now until a card is on the page, as the page itself counts them,

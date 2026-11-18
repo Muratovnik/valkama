@@ -397,6 +397,8 @@ test('focus on a day and on its segments shows the day’s one hint, and it stay
   await record(info, 'day-hint-focus', { first, stood })
 
   expect(stood.map((one) => one.cell)).toEqual(['1:0', '1:1', '1:0', '1:'])
+  // Two frames at the least after each of the four keys (`frames`).
+  expect(kept.length, 'the frames noted').toBeGreaterThanOrEqual(8)
   for (const [at, frame] of kept.entries()) {
     expect(frame, `frame ${at}: one hint`).toHaveLength(1)
     expect(frame[0]?.id, `frame ${at}: the same hint element`).toBe(first.id)

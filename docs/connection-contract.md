@@ -2056,7 +2056,8 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
                       {"at": "2030-03-06T12:55:00.000+03:00", "used_percent": 50.0,
                        "source": "poll"}],
          "forecast": {"outcome": "runs_out",
-                      "runs_out_at": "2030-03-06T13:40:00.000+03:00", "basis": "blend"}},
+                      "runs_out_at": "2030-03-06T13:40:00.000+03:00",
+                      "at_reset_percent": null, "basis": "blend"}},
         {"kind": "week", "model": null, "state": "fresh",
          "resets_at": "2030-03-08T12:00:00.000+03:00",
          "latest": {"…": "as above", "used_percent": 41.0},
@@ -2096,7 +2097,7 @@ A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
 | `started_at` | its reset less its length, five hours or seven days; `null` without a reset |
 | `even_percent` | how much of the window steady use from its start would have spent by `now`: the pace tick. `null` without a reset or once the reset has passed |
 | `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it |
-| `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts`, `runs_out` with `runs_out_at`, or `spent`, and `basis`, the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
+| `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts` with `at_reset_percent`, the share of the window its pace will have spent by the reset, at most 100 and rounded to the hundredth as a week's range is; `runs_out` with `runs_out_at`; or `spent`. `runs_out_at` and `at_reset_percent` are `null` for the other outcomes. `basis` is the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
 
 A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,
 `state`, `resets_at` and `latest` with `at` and `source` alone: no percent, no amount

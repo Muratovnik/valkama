@@ -210,26 +210,16 @@ for (const locale of ['en', 'ru'] as const) {
     expect(said).toEqual([])
   })
 
-  test(`no hint in a card's «…» menu, its Relations or its Chain says what its anchor shows, ${locale}`, async ({
+  // The card's «…» menu is not swept: `VMenu` gives a hint to its trigger alone and none to a
+  // row, so no row can say again what it shows. That a popup's own rows still speak while it
+  // silences the rest is production-hint-under-popup.spec.ts's.
+  test(`no hint in a card's Relations or its Chain says what its anchor shows, ${locale}`, async ({
     page,
   }) => {
     const small = smallChain()
-    const live: { streams?: Awaited<ReturnType<typeof installLiveStreams>> } = {}
     const drawer = await card(page, locale, 1280, async () => {
       await serveChain(page, small.chain, small.items)
-      live.streams = await installLiveStreams(page)
     })
-    // The menu holds the pin, which a live frame says.
-    // The frame first: a space's stream is sent it as it opens, and the stream the
-    // shell started with closes then.
-    await live.streams?.live(busyFrame())
-    await expect.poll(() => live.streams?.open()).toHaveLength(1)
-    await drawer.locator('.menu-trigger').click()
-    const menu = page.locator('.menu-popup')
-    await expect(menu.locator('.menu-item').first()).toBeVisible()
-    const inMenu = await sweep(page, menu)
-    await page.keyboard.press('Escape')
-    await expect(menu).toHaveCount(0)
     await drawer.getByRole('tab', { name: /^(Relations|Связи)$/u }).click()
     await expect(drawer.locator('.relations .link-row').first()).toBeVisible()
     const inRelations = await sweep(page, drawer)
@@ -238,7 +228,7 @@ for (const locale of ['en', 'ru'] as const) {
     const inChain = await sweep(page, drawer)
     expect(inRelations.pointed).toBeGreaterThan(2)
     expect(inChain.pointed).toBeGreaterThan(2)
-    expect([...inMenu.said, ...inRelations.said, ...inChain.said]).toEqual([])
+    expect([...inRelations.said, ...inChain.said]).toEqual([])
   })
 
   test(`no hint in the \`@\` list says what its anchor shows, and a cut path says itself whole, ${locale}`, async ({
