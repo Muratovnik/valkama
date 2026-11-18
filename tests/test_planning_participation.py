@@ -7,17 +7,22 @@ still fails here.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
 from collections.abc import Mapping
+from pathlib import Path
 from unittest import mock
 
-from server import store
+from server import mcp_surface, store
+from server.ops import skills, tray
 from server.planning import api, calls, model, participation, questions, requests, service, tools
 from server.planning import store as planning_store
 from tests.planning_fixtures import standing_in
+from tests.test_mcp_surface import Stdin, Stdout
 
 #: Each point and switch in the sets minimal, default, maximal and manual.
 DESIGNED = {
@@ -726,6 +731,68 @@ class QueueTests(Harness):
         self.conn.commit()
         assert isinstance(answer, dict)
         return answer
+
+
+class AgentTextTests(Harness):
+    """The setting changes what the server does, never what it tells an agent the rules are."""
+
+    def texts(self) -> tuple[str, str, bytes]:
+        """What an agent's client reads of the rules: the answer to `initialize`, the tools
+        with their descriptions and schemas from `tools/list`, and the skill."""
+
+        messages = (
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        )
+        lines = [json.dumps(message).encode("utf-8") for message in messages]
+        stdout = Stdout()
+        home = os.path.dirname(os.environ["VALKAMA_DB"])
+        with (
+            mock.patch.dict(os.environ, {"USERPROFILE": home, "HOME": home}),
+            mock.patch.object(sys, "stdin", Stdin(b"\n".join(lines) + b"\n")),
+            mock.patch.object(sys, "stdout", stdout),
+            mock.patch.object(tray, "start", return_value=None),
+        ):
+            mcp_surface.mcp_main()
+        handshake, listed = (
+            json.loads(line) for line in stdout.buffer.getvalue().decode("utf-8").splitlines()
+        )
+        skill = Path(__file__).resolve().parent.parent.joinpath(*skills.SOURCE_PARTS, "SKILL.md")
+        return (
+            json.dumps(handshake["result"], sort_keys=True),
+            json.dumps(listed["result"]["tools"], sort_keys=True),
+            skill.read_bytes(),
+        )
+
+    def test_a_set_changes_answers_and_not_the_agent_texts(self) -> None:
+        answers, texts = [], []
+        for name in ("minimal", "default", "manual"):
+            self.person(space="ALPHA", set=name)
+            with calls.bind(AGENT, "create_work_item"):
+                answer = tools.OPS["create_work_item"](
+                    self.conn, {"space": "ALPHA", "title": f"A goal at {name}", "kind": "goal"}
+                )
+            self.conn.commit()
+            assert isinstance(answer, dict)
+            card = service.get_work_item(self.conn, str(answer["reference"]))
+            state = None if card["state"] is None else card["state"]["category"]
+            basis = None if card["acceptance"] is None else card["acceptance"]["basis"]
+            waits = answer.get("waits_for_owner") or {}
+            answers.append((state, basis, waits.get("point")))
+            texts.append(self.texts())
+        # The agent decides at minimal: the goal stands accepted on its own decision.
+        # The owner decides at default and manual: it lies in triage and waits for them.
+        self.assertEqual(
+            [
+                (None, "agent", None),
+                ("triage", None, "proposed_goal"),
+                ("triage", None, "proposed_goal"),
+            ],
+            answers,
+        )
+        self.assertIn('"name": "create_work_item"', texts[0][1], "the tool list was read")
+        self.assertEqual([texts[0]] * 3, texts)
 
 
 if __name__ == "__main__":
