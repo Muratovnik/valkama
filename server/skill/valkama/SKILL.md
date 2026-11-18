@@ -407,7 +407,7 @@ A reversible technical choice that does not show in the result is yours: make it
 and say so in the summary. Removing or rewriting a step of a goal or stage needs
 `checklist_reason`; a step whose wording you only clarify goes by its id with
 `clarifies: true` and is written at once. A cancel that follows an owner's
-answer names it in `following`.
+answer names it in `following`; that answer does not count against the cancel.
 
 ## Merging items that are one change
 

@@ -3835,7 +3835,9 @@ anything to the item first -- a comment saying what it did about them -- empties
 the window and the close goes through; `force: true` carries it through as it
 does every guard and records `overridden` with `person_spoke`, and the answer
 still carries `from_person`. A `transition` group is judged the same way, with
-the window counted from before the batch.
+the window counted from before the batch. A cancel whose `transition.following`
+names an answered question leaves out that question's `question_answered` event:
+the guard reads the rest of the window, so any other act of a person still refuses.
 
 A person closing an item is not guarded, nor is a write made outside any call. An
 item a person closed or cancelled is told to the agent by its next write's

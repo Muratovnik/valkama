@@ -152,6 +152,7 @@ def findings(
     basis: object = None,
     held: bool | None = None,
     to_check: str = "",
+    following: str | None = None,
     settings: participation.Settings,
 ) -> tuple[list[Finding], list[str]]:
     """Hard refusals and soft warnings for moving `item` to `target` state.
@@ -160,8 +161,10 @@ def findings(
     whether a holder stands on the item after the write, for a write that takes
     the claim itself; left out, it is read from the item. `to_check` is what the
     owner is to check, which a move into review needs: it becomes the owner's
-    question there, and review asks what a close asks besides. `settings` is the
-    write's snapshot of the participation setting, which the lease is read by.
+    question there, and review asks what a close asks besides. `following` is the
+    owner's answered question a cancel follows from, whose answer does not count
+    as a person's act (`person_spoke`). `settings` is the write's snapshot of the
+    participation setting, which the lease is read by.
     """
 
     current = conn.execute(
@@ -284,7 +287,7 @@ def findings(
     if undecided:
         refusals.append(("acceptance_question", undecided))
     if closing:
-        spoke = person_spoke(conn, item, reference)
+        spoke = person_spoke(conn, item, reference, following=following)
         if spoke:
             refusals.append(("person_spoke", spoke))
     if target["category"] == "completed" and entering and item["kind"] == model.CONTAINER_KIND:
@@ -432,12 +435,16 @@ def acceptance_question(
     )
 
 
-def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def person_spoke(
+    conn: sqlite3.Connection, item: sqlite3.Row, reference: str, *, following: str | None = None
+) -> str:
     """What a person did that the agent closing this item has not been told.
 
     Only an agent answers to this: a person closes as they see fit, and the runner
     is not deciding anything. What this call itself wrote is left out, so a batch's
-    comment does not clear the way for its own transition.
+    comment does not clear the way for its own transition. `following` is the owner's
+    answered question a cancel follows from: the agent named that answer, so it is
+    left out; any other act of a person still refuses.
     """
 
     if not calls.from_agent():
@@ -446,13 +453,22 @@ def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) ->
     events = person_events.since_last_agent_write(
         conn, str(item["work_item_id"]), own_call=None if own is None else own[0]
     )
+    if following is not None:
+        events = [
+            event
+            for event in events
+            if not (event["kind"] == "question_answered" and event.get("request_id") == following)
+        ]
     if not events:
         return ""
+    named = (
+        " The answer that `following` names does not count here." if following is not None else ""
+    )
     return (
         f"a person acted on {reference} through the interface since an agent last wrote to it:"
         f" {person_events.describe(events)}. Read the item with get_work_item and take that"
         " into account; once you have written what you did about it, close again, or pass"
-        " force to close over it"
+        f" force to close over it.{named}"
     )
 
 

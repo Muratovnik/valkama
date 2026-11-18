@@ -2006,6 +2006,7 @@ def _transition(
         reason=reason,
         basis=row["acceptance"] or gives,
         to_check=check,
+        following=followed,
         settings=participation.load(conn),
     )
     refusals = [finding for finding in refusals if finding[0] not in spared]
