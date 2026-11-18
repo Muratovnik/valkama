@@ -25,6 +25,7 @@ from typing import TypeVar, cast
 
 from . import agents as planning_agents
 from . import (
+    baselines,
     calls,
     closing,
     deferral,
@@ -73,17 +74,17 @@ MAX_SEARCH_PAGE = 200
 _SPACE_COLUMNS = "planning_space_id, name, key, provider_kind, launch_place, updated_at"
 
 
-_Write = TypeVar("_Write", bound=Callable[..., dict])
+_Write = TypeVar("_Write", bound=Callable[..., dict | None])
 
 
 def _marked(write: _Write) -> _Write:
     """A write of the service inside its own marks: its answer names what came to wait."""
 
     @functools.wraps(write)
-    def run(conn: sqlite3.Connection, *args: object, **kwargs: object) -> dict:
+    def run(conn: sqlite3.Connection, *args: object, **kwargs: object) -> dict | None:
         with marking(conn) as entered:
             answer = write(conn, *args, **kwargs)
-        if entered:
+        if entered and answer is not None:
             answer[closing.AWAITING] = entered
         return answer
 
@@ -2175,6 +2176,7 @@ def _cascade(
     return warnings
 
 
+@_marked
 def claim_work_item(
     conn: sqlite3.Connection,
     reference: str,
@@ -2333,6 +2335,10 @@ def _starting(conn: sqlite3.Connection, row: sqlite3.Row, move_state: bool = Tru
                 " a claim that moves no state holds only work under way or blocked"
             )
         return _Start([], [])
+    if row["started_at"] is None:
+        # The first start of a task starts each goal and stage over it, which then
+        # takes the count of a goal or stage accepted empty (`baselines`).
+        closing.note(conn, row["parent_id"])
     if current["category"] not in states.STARTABLE:
         updates = [f"started_at = {_NOW}"] if row["started_at"] is None else []
         return _Start(updates, parameters)
@@ -2424,8 +2430,10 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
     Every write route opens it, and so does every write here that changes the work
     under a goal or stage, so no path passes it by; one inside another joins it. At
     the end of the outermost the marked containers enter or leave the wait for their
-    confirmation, the words left on one that stopped waiting go (`waiting.drop`), and
-    the list this yields names the references of those that came to wait.
+    confirmation, the count taken at acceptance of each goal and stage the write
+    reached is taken or dropped (`baselines.settle`), the words left on one that
+    stopped waiting go (`waiting.drop`), and the list this yields names the
+    references of those that came to wait.
 
     `person` is where the history stood before a person's write, which the route
     passes to the frame it opens: what that write told nobody is left for the next
@@ -2436,6 +2444,7 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
 
     with closing.frame(conn) as settled:
         yield settled.entered
+    baselines.settle(conn, settled.marked)
     if person is not None:
         waiting.after_person(conn, person)
     for identity in settled.left:
@@ -2740,6 +2749,7 @@ def _ticked_by(step: Mapping[str, object], lease: leases.Lease) -> bool:
     return ids is not None and ids[0] == calls.label_id(lease.session_id)
 
 
+@_marked
 def claim_ready_work_item(
     conn: sqlite3.Connection,
     *,
@@ -3032,6 +3042,7 @@ def record_overrides(
     return names
 
 
+@_marked
 def claim_checklist_item(
     conn: sqlite3.Connection,
     reference: str,
