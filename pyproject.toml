@@ -337,6 +337,7 @@ source_modules = [
   "server.planning.pending",
   "server.planning.questions",
   "server.planning.read_model",
+  "server.planning.standing",
   "server.planning.transitions",
   "server.planning.triage",
 ]

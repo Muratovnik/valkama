@@ -1987,8 +1987,9 @@ A category counts the items of the scope that stand in a state of it. An accepte
 goal or stage stands in no category and is in none of these counts. Work in an open
 category is counted as it stands now; `completed` and `cancelled` count the items that
 came to stand there inside the period, and only those. An item came to stand where it
-is at its last state entry, the newest `created`, `transitioned` or `opened` event of
-its history, or at its creation when its history holds none. `oldest` is the item of an
+is at its last state entry in history order: the last `created`, `transitioned` or
+`opened` event of its history as written (the highest id, not the latest `created_at`),
+or at its creation when its history holds none. `oldest` is the item of an
 open category that came to stand there first, with that moment as `since`; it is `null`
 for a category nothing stands in, and always for `completed` and `cancelled`. How long
 ago that was is the reader's to say: the answer holds no clock of the server.
