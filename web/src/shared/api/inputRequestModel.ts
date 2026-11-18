@@ -1,6 +1,7 @@
 import { boundedList, boundedText, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import { actionSchema } from '@/shared/api/inputRequestAction.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { otherSpaceSchema } from '@/shared/api/planningSpaceModel.ts'
 import { planningCoverageSchema, planningTargetSchema } from '@/shared/api/planningTarget.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
@@ -207,6 +208,17 @@ const listSchema = strictObject({
   limit: positiveInt().max(200),
   total: positiveInt(true),
   has_more: z.boolean(),
+  /**
+   * One line per space read whose triage stack waits past its thresholds: no question, so
+   * in no count or page. The age is the reader's to count from `oldest_at`.
+   */
+  triage_due: z.array(
+    strictObject({
+      space: otherSpaceSchema,
+      count: positiveInt(),
+      oldest_at: boundedText(ISO, 96),
+    }),
+  ),
 })
 
 export type InputRequestOption = z.infer<typeof optionSchema>

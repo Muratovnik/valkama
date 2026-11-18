@@ -53,6 +53,7 @@ export function requestList(items = [requestEntry()]): InputRequestList {
     limit: 100,
     total: items.length,
     has_more: false,
+    triage_due: [],
   }
 }
 

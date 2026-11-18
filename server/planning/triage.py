@@ -23,6 +23,10 @@ The store takes the mark away (`store.TRIAGE_MARK_TRIGGERS`) when anything chang
 what the review saw, so a mark stands only on an item in triage; it records no event
 then, the write that took it away says why.
 
+A space whose stack has grown past the owner's thresholds shows a line that it is
+time for a review (`due`). It is read from the stack each time and stored nowhere, so
+it goes once the stack is reviewed.
+
 The module sits below the service, which calls it inside its writes and reads: it
 reads and writes the store itself and imports none of the writes.
 """
@@ -33,8 +37,9 @@ import json
 import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import timedelta
 
-from . import model, questions, standing
+from . import leases, model, participation, questions, standing
 
 #: The items of the spaces named, as one JSON array, that wait in the stack, each with
 #: its entry and its mark. `accepted` climbs from each goal or stage with no parent
@@ -86,6 +91,7 @@ _OPEN_OWNER_QUESTION = (
     "SELECT 1 FROM work_item_requests r WHERE r.work_item_id = ? AND "  # noqa: S608 - constant text
     + questions.OWNER_QUESTION
 )
+_SPACE = "SELECT key, name FROM planning_spaces WHERE planning_space_id = ?"
 
 
 @dataclass(frozen=True)
@@ -166,6 +172,42 @@ def field(conn: sqlite3.Connection, ids: Iterable[str]) -> Mapping[str, dict]:
     }
 
 
+def due(conn: sqlite3.Connection, settings: participation.Settings, space: str) -> dict | None:
+    """The line that it is time to review the stack of one space, by its id, or None.
+
+    It stands while the space's reminder is on (`triage_reminder`) and the items of its
+    stack no review has marked are at least `triage_count`, or the oldest of them entered
+    at least `triage_age_days` days ago by the Planning clock (`leases.utc_now`). It says
+    how many there are and when the oldest entered; the reader counts the age, so the
+    answer carries no clock of the server. A store an earlier build wrote has no stack,
+    and no line.
+    """
+
+    if not settings.on(space, "triage_reminder"):
+        return None
+    try:
+        unseen = [found for found in waiting(conn, space) if found.seen_at is None]
+    except sqlite3.OperationalError as error:
+        if "no such" not in str(error):
+            raise
+        return None
+    if not unseen:
+        return None
+    oldest_at = unseen[0].entered_at
+    entered = leases.moment(oldest_at)
+    aged = entered is not None and entered <= leases.utc_now() - timedelta(
+        days=settings.number(space, "triage_age_days")
+    )
+    if len(unseen) < settings.number(space, "triage_count") and not aged:
+        return None
+    key, name = conn.execute(_SPACE, (space,)).fetchone()
+    return {
+        "space": {"key": str(key), "name": str(name)},
+        "count": len(unseen),
+        "oldest_at": oldest_at,
+    }
+
+
 def refusal(conn: sqlite3.Connection, work_item_id: str) -> str:
     """Why an item the store holds does not wait in the stack, in the words a refused mark gives.
 
@@ -190,4 +232,4 @@ def refusal(conn: sqlite3.Connection, work_item_id: str) -> str:
     return "it waits in the stack already"
 
 
-__all__ = ["Waiting", "entered", "field", "mark", "refusal", "waiting"]
+__all__ = ["Waiting", "due", "entered", "field", "mark", "refusal", "waiting"]

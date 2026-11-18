@@ -1475,6 +1475,28 @@ its own form: `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
 `condition` and `triage`, each answered once, by the owner, and carried out in
 the same write ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
 
+Beside the questions, every answer of that read carries `triage_due`: one line
+for each space read whose work waiting for a triage review has grown past the
+owner's thresholds, such as
+`[{"space": {"key": "MAIN", "name": "Main"}, "count": 120, "oldest_at": "2026-11-02T09:12:00Z"}]`.
+The work counted is the items in `triage` that no question to the owner holds,
+with no parent or under goals and stages all accepted and open, that no review
+has marked `triage_seen`. A space has a line while its `triage_reminder` is `on`
+and that work counts at least `triage_count` items, or the oldest of them came
+to `triage` at least `triage_age_days` days ago (see
+[the owner's participation](#writes-that-wait-for-the-owner)); `count` is how
+many there are and `oldest_at` when the oldest came. The answer carries no clock
+of the server: the reader counts the age from `oldest_at`. A line is no
+question: it is not in `items`, `total`, `limit`, `offset` or `has_more`, and it
+takes no answer. Nothing stores it, so it goes once the work is reviewed, and
+the MCP list of requests does not carry it.
+
+The lines belong to the whole list, not to a page, so only the first page
+carries them: `triage_due` is empty when `offset` is above 0, and a reader that
+reads on while `has_more` holds takes them from that first page. It is empty too
+when `status` names anything but `pending` and when `reference` names one item.
+A source the read could not reach is named in `coverage` and has no line.
+
 ### The card's waiting question
 
 `/open/<reference>?reveal=question` leads to the card as the plain address does, under the
