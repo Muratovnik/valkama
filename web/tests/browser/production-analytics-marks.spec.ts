@@ -3,12 +3,12 @@
  * the table does, in the real app. The oracle is the requirement: a segment of a day, a ranked
  * row and a day the keyboard stands on each show a hint, and none of them moves the plot, the
  * panel's first block or the table by a pixel; so does a ranked row the panel has to scroll to,
- * pointed at or brought under a resting pointer by the wheel. A ranked row prints its figure and
- * its share, so its hint is what it does not print: here, a task's name too long for its two lines,
- * said whole. No line of words stands over a plot, so the drawing field keeps that room; a task's
- * segment opens the task's side panel, whose «Open the card» opens the card over the page, the
- * module still Analytics, and closing them gives back the section, the period and the scroll.
- * Each run prints what it measured.
+ * pointed at or brought under a resting pointer by the wheel. A ranked row prints its name, its
+ * figure and its share, so its hint is what the name leaves out: here an account's whole id, the
+ * account named by its start. No line of words stands over a plot, so the drawing field keeps
+ * that room; a task's segment opens the task's side panel, whose «Open the card» opens the card
+ * over the page, the module still Analytics, and closing them gives back the section, the period
+ * and the scroll. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -18,31 +18,23 @@ import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { openReport, pageAt, record, serve, serveTask } from './analyticsPage.ts'
-import { openOverview, TASKS, worked, WORLD } from './overviewPage.ts'
+import {
+  ACCOUNT_REPORT,
+  ACCOUNTS,
+  openReport,
+  pageAt,
+  record,
+  serve,
+  serveTask,
+  WHOLE_ID,
+} from './analyticsPage.ts'
+import { drawAllLined } from './drawnViews.ts'
+import { openOverview, worked, WORLD } from './overviewPage.ts'
 import { workItem, workItemRef } from './planningFixtures.ts'
 import { expectNoLineOverPlot } from './plotWords.ts'
 import { test } from './test.ts'
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
-
-/** A title past what a list's two lines hold at any width here; the words are made up. */
-const longTitle = (part: number) =>
-  `${'Rework the import of planning documents into the board and check each step, '.repeat(7)}part ${String(part)}`
-
-/**
- * `WORLD` with every task named past two lines, so each task's row is cut and its hint says the
- * name whole: the one thing such a row does not print.
- */
-const CUT_NAMES: TimedStretch[] = WORLD.map((stretch) => {
-  const at = TASKS.indexOf(stretch.group.work_item as (typeof TASKS)[number])
-  return at < 0
-    ? stretch
-    : { ...stretch, group: { ...stretch.group, work_item: task(at + 1, longTitle(at + 1)) } }
-})
-
-/** What a task's row says in its hint: its name whole, to the end its row cuts. */
-const WHOLE_NAME = / part \d$/u
 
 /** Where the parts a hint must not move stand: the plot, the panel's first block, the table. */
 const standing = (page: Page) =>
@@ -79,8 +71,10 @@ async function hintOf(page: Page, reach: () => Promise<void>, show: () => Promis
 test('a segment, a ranked row and a day the keyboard stands on each say themselves in a hint, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, CUT_NAMES)
-  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await serve(page, ACCOUNTS)
+  const analytics = await openReport(page, 1440, ACCOUNT_REPORT)
+  // Six accounts draw as a ring until asked for their bars.
+  await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 900 })
   const days = analytics.locator('.spending-days')
   await expect(days).toHaveAttribute('data-shown', 'chart')
@@ -96,14 +90,14 @@ test('a segment, a ranked row and a day the keyboard stands on each say themselv
   )
   expect(onSegment.says).toMatch(/ of the total\n/u)
 
-  // A ranked row: what its printed name and figure leave out, its name cut on its second line.
+  // A ranked row: what its printed name, figure and share leave out, the account's whole id.
   const row = analytics.locator('.spending-bars .ranked-line').first()
   const onRow = await hintOf(
     page,
     () => row.scrollIntoViewIfNeeded(),
     () => row.hover(),
   )
-  expect(onRow.says).toMatch(WHOLE_NAME)
+  expect(onRow.says).toMatch(WHOLE_ID)
 
   // A day the keyboard stands on: its sum, then its series, a line each.
   const stop = days.locator('.period-column[tabindex="0"]')
@@ -142,11 +136,13 @@ const reach = (page: Page) =>
     }
   })
 
-test('a ranked row the panel scrolls to reach says its name whole, and nothing moves', async ({
+test('a ranked row the panel scrolls to reach says what its name leaves out, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, CUT_NAMES)
-  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await serve(page, ACCOUNTS)
+  const analytics = await openReport(page, 1440, ACCOUNT_REPORT)
+  // Six accounts draw as a ring until asked for their bars.
+  await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 400 })
   const days = analytics.locator('.spending-days')
   await expect(days).toHaveAttribute('data-shown', 'chart')
@@ -165,15 +161,17 @@ test('a ranked row the panel scrolls to reach says its name whole, and nothing m
   expect(after.scrolled, 'pointing at the row scrolled the panel').toBeGreaterThan(0)
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row reached by the scroll', { before, after, ...seen })
-  expect(seen.says).toMatch(WHOLE_NAME)
+  expect(seen.says).toMatch(WHOLE_ID)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 
 test('a ranked row a wheel brings under a resting pointer says itself, and nothing moves', async ({
   page,
 }, info) => {
-  await serve(page, CUT_NAMES)
-  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await serve(page, ACCOUNTS)
+  const analytics = await openReport(page, 1440, ACCOUNT_REPORT)
+  // Six accounts draw as a ring until asked for their bars.
+  await drawAllLined(analytics)
   await page.setViewportSize({ width: 1440, height: 400 })
   await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'chart')
   const start = await reach(page)
@@ -198,7 +196,7 @@ test('a ranked row a wheel brings under a resting pointer says itself, and nothi
   await expect.poll(under, { message: 'a ranked row came under the pointer' }).not.toBeNull()
   const seen = await shownAndGone(page)
   await record(info, 'a ranked row under a resting pointer', { under: await under(), ...seen })
-  expect(seen.says).toMatch(WHOLE_NAME)
+  expect(seen.says).toMatch(WHOLE_ID)
   expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 
