@@ -1189,8 +1189,9 @@ These times move with the machine's load: on a machine busy with other work the 
 code took two to five times as long. `tests/test_hooks_tree_cost.py` therefore holds what they
 stand for instead of the times. With nothing written, the tree adds no statement,
 only its three columns, each an uncorrelated subquery that SQLite answers by a search.
-The feed of those 100 comments takes at most 12 statements beyond the two reads, one
-of them for each level climbed, and 100 more comments on 100 other items add none.
+The feed takes one statement for each level climbed and none for each item or row:
+comments on one stage and on every stage take as many statements, and 100 more
+comments on 100 other items add none.
 
 A hook of a newer release can meet a store that release has not opened yet, for
 the seconds between `launcher install` and the first session that switches. When
