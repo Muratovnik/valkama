@@ -59,7 +59,9 @@ is complete on its own.
   answer of a write, the `work_item` of `claim_ready_work_item`, and the
   handshake text about reading — and for commits — the ref kind `commit`,
   commits among an item's refs, `kind=commit` and `space` on `GET /api/ref`,
-  and the handshake text about commits — as
+  and the handshake text about commits — and for the directory of spaces —
+  a `work_item_count` that is `null` for a space whose store could not be
+  read — as
   `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
   covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a
@@ -270,15 +272,16 @@ one facade.
 Planning owns the work loop, including execution and exact session context.
 Memory and Settings supply its supporting capabilities, and Analytics is where a
 person reads the usage and quota of agent work: time, tokens, an API-price
-estimate, subscription quota. The module list is code:
-`server/platform/modules.py` declares the five modules, so adding one is a code
+estimate, subscription quota. Volumes is where a person reads how much work
+stands in each state, what it took and what is left. The module list is code:
+`server/platform/modules.py` declares the six modules, so adding one is a code
 change and nothing at runtime turns one on or off. `GET /api/modules` and the
 MCP tool `list_platform_modules` answer from that list without reading the
 store. Analytics holds the id of a retired flow-metrics module, and only the id
 came back: the flow metrics with their portfolio and compare read models, and the
 Improvements, Skills management and Sessions monitoring screens, must not return
-to the list. `tests/test_work_focus_migration.py` holds the new declarations, Analytics's
-and Agent decisions', to none of the old one's read models, events, actions or
+to the list. `tests/test_work_focus_migration.py` holds the new declarations, Analytics's,
+Agent decisions' and Volumes', to none of the old one's read models, events, actions or
 capability. Removing those screens does not remove session identity, work-item history, execution links or
 installed client skills and settings.
 

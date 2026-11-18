@@ -44,7 +44,7 @@ from . import item_tree, leases, model, participation, queue, read_model, states
 
 #: The scopes a chain is read in.
 SCOPES = ("chain", "tree")
-#: How many UTC days, today included, the `recent` window covers.
+#: How many days, today included, the `recent` window covers.
 RECENT_DAYS = 7
 #: The link kinds a chain answers as edges. `discovered-from` is also what
 #: extends the boundary; `blocks` only describes it, and may come from outside.
@@ -52,7 +52,7 @@ EDGE_KINDS = ("blocks", "discovered-from")
 
 
 def utc_now() -> datetime:
-    """The clock `recent` is read against. Tests replace it through this module."""
+    """The clock the chain read takes `today` from. Tests replace it through this module."""
 
     return datetime.now(UTC)
 
@@ -166,8 +166,8 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         "scope": scope,
         **_counts(found),
         "origins": _origins(found, root_id, rows, key),
-        "series": _series(found),
-        "recent": _recent(found, utc_now().date()),
+        "series": series(found, utc_offset=0),
+        "recent": recent(found, utc_now().date(), utc_offset=0),
         "members": [
             {name: value for name, value in member.items() if name != "_parent_id"}
             for member in found
@@ -284,21 +284,34 @@ def _origins(found: list[dict], root_id: str, rows: dict[str, sqlite3.Row], key:
     return [{name: value for name, value in group.items() if name != "_order"} for group in ordered]
 
 
-def _day(stamp: object) -> str:
-    return str(stamp)[:10]
+def day_of(stamp: object, utc_offset: int) -> str:
+    """The day a stored UTC stamp falls on for a caller `utc_offset` minutes from UTC.
+
+    A stamp that cannot be read is taken as its first ten characters, as before.
+    """
+
+    moment = leases.moment(stamp)
+    if moment is None:
+        return str(stamp)[:10]
+    return (moment + timedelta(minutes=utc_offset)).date().isoformat()
 
 
-def _series(found: list[dict]) -> list[dict]:
-    """Per UTC day with any change: what was created and closed, and the totals so far."""
+def series(found: list[dict], utc_offset: int = 0) -> list[dict]:
+    """Per day with any change, on the caller's clock: created and closed, and the totals so far.
 
-    created = Counter(_day(member["created_at"]) for member in found)
-    closed = Counter(_day(member["closed_at"]) for member in found if member["closed_at"])
-    series = []
+    `utc_offset` is the caller's offset from UTC in minutes; each stamp moves by it before its day is taken.
+    """
+
+    created = Counter(day_of(member["created_at"], utc_offset) for member in found)
+    closed = Counter(
+        day_of(member["closed_at"], utc_offset) for member in found if member["closed_at"]
+    )
+    rows = []
     total = closed_total = 0
     for day in sorted(set(created) | set(closed)):
         total += created[day]
         closed_total += closed[day]
-        series.append(
+        rows.append(
             {
                 "day": day,
                 "created": created[day],
@@ -307,17 +320,20 @@ def _series(found: list[dict]) -> list[dict]:
                 "closed_total": closed_total,
             }
         )
-    return series
+    return rows
 
 
-def _recent(found: list[dict], today: date) -> dict:
-    """The last `RECENT_DAYS` UTC days, today included, and which way they lean."""
+def recent(found: list[dict], today: date, utc_offset: int = 0) -> dict:
+    """The last `RECENT_DAYS` days, today included, on the caller's clock, and which way they lean.
+
+    `today` is the caller's day; the window is read against it, and nothing here reads the clock.
+    """
 
     first = (today - timedelta(days=RECENT_DAYS - 1)).isoformat()
     last = today.isoformat()
 
     def within(stamp: object) -> bool:
-        return stamp is not None and first <= _day(stamp) <= last
+        return stamp is not None and first <= day_of(stamp, utc_offset) <= last
 
     created = sum(1 for member in found if within(member["created_at"]))
     closed = sum(1 for member in found if within(member["closed_at"]))

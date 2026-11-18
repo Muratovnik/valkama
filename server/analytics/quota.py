@@ -32,9 +32,9 @@ import sqlite3
 from collections.abc import Iterable
 from typing import TypeAlias
 
+from ..planning import usage
 from ..quota import forecast, names, samples, seats
 from ..quota import store as quota_store
-from . import usage
 
 #: How far back an account's samples, or an organization's work, make it an entry.
 LOOKBACK = dt.timedelta(days=7)

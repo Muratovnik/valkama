@@ -23,6 +23,7 @@ from server.planning import (
     model,
     participation,
     questions,
+    read_model,
     service,
     tools,
 )
@@ -377,7 +378,7 @@ class DecisionRowTests(Harness):
 
     def setUp(self) -> None:
         super().setUp()
-        self.space = service.space_identity(self.conn, "ALPHA")
+        self.space = read_model.space_identity(self.conn, "ALPHA")
         self.reference = self.item("ALPHA", "One table for both scopes", ["app"])
 
     def at(self, name: str) -> None:

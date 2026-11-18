@@ -348,6 +348,24 @@ forbidden_modules = [
   "server.planning.sweep",
 ]
 
+# The Volumes reads count what the store holds and write nothing, so they sit below
+# the service, which calls one of them in its write frame (`baselines`). What they
+# share with the service's reads (a space by its name, whose call closed a request)
+# lives in a module below it. A new Volumes read module joins this list.
+[[tool.importlinter.contracts]]
+name = "The Volumes reads sit below the service"
+type = "forbidden"
+source_modules = [
+  "server.planning.baselines",
+  "server.planning.estimates",
+  "server.planning.goal_volumes",
+  "server.planning.volume_flow",
+  "server.planning.volumes",
+]
+forbidden_modules = [
+  "server.planning.service",
+]
+
 [tool.mypy]
 python_version = "3.11"
 cache_dir = ".cache/mypy"

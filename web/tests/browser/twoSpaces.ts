@@ -44,6 +44,7 @@ function directory() {
         space_ref: secondSpace,
         title: SECOND_TITLE,
         work_item_count: 0,
+        numbers: { triage: 0, ready: 0, active: 0, waiting_owner: 0 },
       })),
     ],
     planning_spaces: [],

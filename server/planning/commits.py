@@ -90,7 +90,6 @@ from . import (
     participation,
     read_model,
     request_model,
-    service,
 )
 
 #: The tool a client hook's own call is bound under (`calls.bind`): what it writes is
@@ -1100,17 +1099,55 @@ def _recorded(conn: sqlite3.Connection, project_id: str, hashes: list[str]) -> s
 #: How many commits one read of those on no card lists at most, and unasked.
 UNATTACHED_MOST = 500
 UNATTACHED_LIMIT = 100
+UNATTACHED_BOTH = "[commit] the commits on no card are read by a space or by a project, not both"
+
+
+class UnknownProjectsError(model.PlanningError):
+    """The projects a commit is held to cannot be known: the registry lists no such
+    project, or it cannot be read at all.
+
+    Its own class, refused as any planning refusal is, so a reader that only counts the
+    commits on no card can tell a scope whose list cannot be read from any other refusal
+    without reading its words.
+    """
+
 
 #: A commit on no card: a session's, attached to no item, and not one a rewrite replaced.
-#: A commit no session reported, migrated or attached by hand, is never on the list.
+#: A commit no session reported, migrated or attached by hand, is never on the list. Kept
+#: to the projects of `:projects`, a JSON array, or to none when it is null: the whole store.
 _ON_NO_CARD = (
     "c.session_id IS NOT NULL AND c.rewritten_to IS NULL"
     " AND NOT EXISTS (SELECT 1 FROM work_item_commits a WHERE a.commit_id = c.commit_id)"
-    " AND c.project_id IN (SELECT value FROM json_each(:projects))"
+    " AND (:projects IS NULL OR c.project_id IN (SELECT value FROM json_each(:projects)))"
 )
 #: When the commit was made, by its committer time, which Git gives with its offset;
 #: the time Valkama learned of it when Git gave none.
-_MADE = "julianday(COALESCE(c.committed_at, c.reported_at))"
+_MADE_AT = "COALESCE(c.committed_at, c.reported_at)"
+_MADE = f"julianday({_MADE_AT})"
+#: The same moment as a UTC time to the second, `2030-03-04T21:30:00Z`, the form a day of
+#: the caller's is read from; null when the stored time cannot be read as one.
+MADE_UTC = f"strftime('%Y-%m-%dT%H:%M:%SZ', {_MADE_AT})"
+
+
+def made_on_no_card(
+    conn: sqlite3.Connection, projects: Sequence[str] | None
+) -> list[tuple[int, str | None]]:
+    """The commits on no card of these projects, or of the whole store with None: each
+    one's row id and when it was made (`MADE_UTC`)."""
+
+    return [
+        (int(row[0]), row[1])
+        for row in conn.execute(
+            f"SELECT c.commit_id, {MADE_UTC} FROM commits c WHERE {_ON_NO_CARD}",  # noqa: S608 - fixed clauses
+            {"projects": _projects(projects)},
+        )
+    ]
+
+
+def _projects(projects: Sequence[str] | None) -> str | None:
+    """`:projects` of `_ON_NO_CARD`: the projects as a JSON array, or null for the whole store."""
+
+    return None if projects is None else json.dumps(list(projects))
 
 
 def unattached(
@@ -1121,39 +1158,49 @@ def unattached(
     since: str | None = None,
     limit: int = UNATTACHED_LIMIT,
 ) -> dict[str, Any]:
-    """The commits on no card of a project, or of a space's projects: `total` and `items`.
+    """The commits on no card of a project, of a space's projects, or with neither of the
+    whole store: `total` and `items`.
 
-    A space's projects are those the registry binds to it. `since` keeps the commits
-    made at or after a time with its offset; `total` counts every commit the scope
-    and `since` keep, and `items` the newest `limit` of them, newest first.
+    A space's projects are those the registry binds to it. The whole store reads no
+    registry but for the projects' names, and names none it cannot read. `since` keeps
+    the commits made at or after a time with its offset; `total` counts every commit
+    the scope and `since` keep, and `items` the newest `limit` of them, newest first.
     """
 
-    if (space is None) == (project is None):
-        raise model.PlanningError(
-            "[commit] the commits on no card are read by a space or by a project: name one"
-        )
+    if space is not None and project is not None:
+        raise model.PlanningError(UNATTACHED_BOTH)
     if not 0 <= limit <= UNATTACHED_MOST:
         raise model.PlanningError(f"limit must be between 0 and {UNATTACHED_MOST}")
     after = request_model.timestamp(since, "since")
-    listing = _readable(project_registry.read_registry())
+    listing = project_registry.read_registry()
+    projects: list[str] | None = None
     if project is not None:
-        projects = [registered(project, listing)["project_id"]]
-    else:
-        identity = service.space_identity(conn, space)
+        projects = [registered(project, _readable(listing))["project_id"]]
+    elif space is not None:
+        identity = read_model.space_identity(conn, space)
         key = conn.execute(
             "SELECT key FROM planning_spaces WHERE planning_space_id = ?", (identity,)
         ).fetchone()[0]
-        projects = item_projects.space_project_ids(conn, str(key), listing=listing)
-    names = {str(entry["project_id"]): str(entry["display_name"]) for entry in listing["projects"]}
+        projects = item_projects.space_project_ids(conn, str(key), listing=_readable(listing))
+    names = (
+        {str(entry["project_id"]): str(entry["display_name"]) for entry in listing["projects"]}
+        if listing["status"] == "available"
+        else {}
+    )
     scope = f"{_ON_NO_CARD} AND (:since IS NULL OR {_MADE} >= julianday(:since))"
-    parameters = {"projects": json.dumps(projects), "since": after, "limit": limit}
+    parameters = {"projects": _projects(projects), "since": after, "limit": limit}
     counted = f"SELECT COUNT(*) FROM commits c WHERE {scope}"  # noqa: S608 - fixed clauses
     total = conn.execute(counted, parameters).fetchone()[0]
     columns = "c.project_id, c.hash, c.subject, c.committed_at, c.session_id, c.agent_id"
     newest = f"SELECT {columns}, c.client, c.reported_at FROM commits c WHERE {scope}"  # noqa: S608 - fixed clauses
-    rows = conn.execute(
-        f"{newest} ORDER BY {_MADE} DESC, c.commit_id DESC LIMIT :limit", parameters
-    ).fetchall()
+    # A count alone, as the Volumes read asks for it, lists nothing and reads no rows.
+    rows = (
+        conn.execute(
+            f"{newest} ORDER BY {_MADE} DESC, c.commit_id DESC LIMIT :limit", parameters
+        ).fetchall()
+        if limit
+        else []
+    )
     return {
         "total": int(total),
         "items": [
@@ -1309,7 +1356,7 @@ def registered(
     found = _readable(project_registry.read_registry() if listing is None else listing)
     roots = {str(entry["project_id"]): str(entry["canonical_root"]) for entry in found["projects"]}
     if repository not in roots:
-        raise model.PlanningError(
+        raise UnknownProjectsError(
             f"[commit] {repository} is not a registered project: {', '.join(sorted(roots))}"
         )
     return {"project_id": repository, "root": roots[repository]}
@@ -1319,7 +1366,7 @@ def _readable(listing: project_registry.RegistryResult) -> project_registry.Regi
     """The registry as read, refused when it could not be: no project is known then."""
 
     if listing["status"] != "available":
-        raise model.PlanningError(item_projects.REGISTRY_UNREADABLE)
+        raise UnknownProjectsError(item_projects.REGISTRY_UNREADABLE)
     return listing
 
 

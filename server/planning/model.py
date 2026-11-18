@@ -81,6 +81,9 @@ ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "agent", "
 #: How a project came to an item (`item_projects`), strongest first: named by whoever
 #: filed or edited it, derived from its commits, or its space's former project.
 PROJECT_SOURCES = ("named", "commits", "migrated")
+#: When the tasks under a goal or stage were counted (`planning.baselines`): at its
+#: acceptance, or when work under a goal or stage accepted empty first started.
+BASELINE_BASES = ("accepted", "started")
 #: Where an agent launched from a card works, a setting of its space: the root of the
 #: space's default project, or the root of a project the card names. The first is
 #: what every space starts with; only the owner's settings change it.

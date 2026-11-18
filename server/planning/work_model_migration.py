@@ -90,6 +90,11 @@ otherwise cascade into them:
   its answer acted on by the agent. Its postcondition of the same name holds the table
   empty, no request naming an action or carrying a purpose of the owner's
   participation, and no `action_dropped` in the history.
+- **baselines** creates the table of how many tasks stood under a goal or stage when
+  it was accepted (`work_item_baselines`), empty: every acceptance 2.9 left is
+  `migrated`, and that count is not known for one. Its postcondition of the same name
+  holds a row only to a goal or stage accepted on another basis, which from then on
+  every write keeps.
 
 The postcondition **agent-basis** holds that no item stands accepted on an agent's own
 decision (`agent`): before 3.0 no setting let an agent decide, so nothing was.
@@ -103,7 +108,8 @@ written: nobody recorded an acceptance before this, and `migrated` says exactly 
 The postconditions `fresh-shape` to `second-run` and `store-identity` to `commit-projects` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
 row counts of the tables `oracle` counted, of the projects `item-projects` fills, of the rows `confirmations`
-writes and of the commit tables `commits` creates and `commit-refs` fills; `fresh-tables` holds every other
+writes, of the commit tables `commits` creates and `commit-refs` fills and of the baselines, none;
+`fresh-tables` holds every other
 table to being empty and declared by a fresh store. `no-commit-refs` to `commit-projects` hold each item's
 refs, attachments and projects from commits to what `oracle` read of the file and the refs.
 """
@@ -2367,6 +2373,49 @@ def _agent_basis_none(conn: sqlite3.Connection, context: Context) -> Mapping[str
     return {"accepted_by_agent": len(found)}
 
 
+# -- baselines: the tasks under a goal or stage when it was accepted -----------------
+
+_BASELINES = "work_item_baselines"
+#: The step and the postcondition that hold the counts taken at acceptance, named by
+#: what they do rather than numbered.
+BASELINES = "baselines"
+
+
+def _baselines_present(conn: sqlite3.Connection) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_BASELINES,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _baselines_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return not _baselines_present(conn)
+
+
+def _create_baselines(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table of the tasks under each goal or stage when it was accepted, empty.
+
+    Every goal and stage 2.9 left accepted has the basis `migrated`, and how many
+    tasks stood under it when it was accepted is not known now: none gets a row.
+    """
+
+    del context
+    created = not _baselines_present(conn)
+    conn.execute(planning_store.ITEM_BASELINES)
+    return {"table_created": created}
+
+
+def _check_baselines(conn: sqlite3.Connection, context: Context) -> None:
+    if _baselines_needed(conn, context):
+        raise UnmetError(f"{_BASELINES} is missing")
+    rows = int(conn.execute(f"SELECT COUNT(*) FROM {_BASELINES}").fetchone()[0])  # noqa: S608 - constant name
+    if rows:
+        raise UnmetError(f"{_BASELINES} holds {rows} rows, not 0")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -2456,6 +2505,13 @@ STEPS = (
         _create_pending,
         _pending_needed,
         _check_pending,
+    ),
+    Step(
+        BASELINES,
+        "the tasks under a goal or stage when it was accepted",
+        _create_baselines,
+        _baselines_needed,
+        _check_baselines,
     ),
 )
 
@@ -2566,12 +2622,15 @@ def _expected_counts(oracle: Oracle) -> dict[str, int]:
     expected[_CONFIRMATIONS] = sum(
         1 for state in oracle.derived.values() if state == closing_rules.AWAITING
     )
+    # The baselines step writes no row: every acceptance 2.9 left is `migrated`.
+    expected[_BASELINES] = 0
     return expected
 
 
-def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """The tables `oracle` counted, the projects `item-projects` fills and the rows `confirmations` and `commit-refs` write hold the
-    rows foreseen; any other table is `fresh-tables`'s."""
+def _holds_row_counts(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The tables `oracle` counted, the projects `item-projects` fills, the rows
+    `confirmations` and `commit-refs` write and the baselines nobody writes hold the rows
+    foreseen; any other table is `fresh-tables`'s."""
 
     oracle = _oracle(context)
     counts = _counts(conn)
@@ -3411,6 +3470,34 @@ def _holds_commit_projects(conn: sqlite3.Connection, context: Context) -> Mappin
     return {"projects_from_commits": int(held)}
 
 
+def _baselines(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every count taken at acceptance is a goal's or a stage's whose acceptance stands
+    on a basis other than `migrated`, open or closed: a close keeps the acceptance."""
+
+    del context
+    references = _references(conn)
+    found = [
+        f"{references.get(str(identity), identity)} holds a count at acceptance and"
+        + (
+            " is no goal or stage"
+            if kind != _CONTAINER
+            else " stands unaccepted"
+            if basis is None
+            else f" was accepted {basis}"
+        )
+        for identity, kind, basis in conn.execute(
+            f"SELECT b.work_item_id, i.kind, i.acceptance FROM {_BASELINES} b"  # noqa: S608 - constant name
+            " JOIN work_items i ON i.work_item_id = b.work_item_id"
+            " WHERE i.kind <> ? OR i.acceptance IS NULL OR i.acceptance = ?"
+            " ORDER BY b.work_item_id",
+            (_CONTAINER, _MIGRATED),
+        )
+    ]
+    _unmet(found, "counts taken at acceptance")
+    rows = int(conn.execute(f"SELECT COUNT(*) FROM {_BASELINES}").fetchone()[0])  # noqa: S608 - constant name
+    return {"rows": rows}
+
+
 def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
@@ -3478,6 +3565,9 @@ POSTCONDITIONS = (
     Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
     Postcondition(PENDING_ACTIONS, "no request waits on an action", _pending_none),
     Postcondition(AGENT_BASIS, "no item accepted on an agent's own decision", _agent_basis_none),
+    Postcondition(
+        BASELINES, "a count at acceptance only where an acceptance was not migrated", _baselines
+    ),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

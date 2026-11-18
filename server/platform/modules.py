@@ -1,6 +1,6 @@
 """The modules this build ships, declared in code: the ``valkama-modules`` wire.
 
-Planning, Analytics, Agent decisions, Memory and Settings are the product. Analytics is
+Planning, Analytics, Agent decisions, Volumes, Memory and Settings are the product. Analytics is
 where agent work's usage is read -- time, tokens, an API-price estimate, subscription quota.
 Its read model `analytics.usage` is `GET /api/analytics/usage`; `analytics.quota`, each
 account's quota windows now, is `GET /api/analytics/quota`; `analytics.uses`, how often
@@ -13,6 +13,12 @@ existing store opens unchanged, and no code reads or writes it.
 
 Agent decisions is where the decisions agents took are read: the summary model
 `planning.decisions`, served as `GET /api/planning/decisions`.
+
+Volumes is where a person reads how much work stands in each state, what it took and
+what is left: `planning.volumes`, served as `GET /api/planning/volumes`, for a scope and a
+period. Planning reads what each goal or stage took through `planning.goal-volumes`,
+`GET /api/planning/goal-volumes`, on its list and its card. Volumes reads the store's
+states; it is none of the retired flow metrics.
 
 `modules_payload` keeps the wire it replaced. Each module is a registration --
 its manifest plus `state`, `mutable`, `revision` and `updated_at` -- because
@@ -129,8 +135,8 @@ _MODULES = (
             "labels",
             "holder",
         ],
-        ["planning.spaces", "planning.work-items"],
-        ["planning.space", "planning.work-items"],
+        ["planning.spaces", "planning.work-items", "planning.goal-volumes"],
+        ["planning.space", "planning.work-items", "planning.goal-volumes"],
         ["module.planning.create-work-item", "module.planning.open-work-item"],
         ["module.planning.create-work-item", "module.planning.open-work-item"],
         ["planning-spaces", "work-items"],
@@ -178,6 +184,27 @@ _MODULES = (
         [],
     ),
     _module(
+        "volumes",
+        "understand",
+        "platform.modules.volumes",
+        "layers",
+        # The period, the filter of tasks by kind and label, and the rows of the tree
+        # that stand open.
+        ["period", "from", "to", "kind", "label", "open"],
+        ["planning.volumes"],
+        ["planning.volumes"],
+        # A commit with no item, attached from the list the page counts.
+        ["module.volumes.attach-commit"],
+        ["module.volumes.attach-commit"],
+        ["volumes"],
+        [],
+        # As Analytics: a task's card opens over the page and the address names it.
+        ["project", "work-item"],
+        ["work-item"],
+        ["work-item"],
+        [],
+    ),
+    _module(
         "memory",
         "capabilities",
         "platform.modules.memory",
@@ -217,7 +244,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-11-17T12:00:00Z"
+DECLARED_AT = "2026-11-18T12:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

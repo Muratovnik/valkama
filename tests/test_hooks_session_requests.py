@@ -27,6 +27,7 @@ from server.planning import (
     model,
     participation,
     questions,
+    read_model,
     requests,
     service,
     waiting,
@@ -270,7 +271,7 @@ class ConsentTests(Asked):
 
     def test_the_agent_whose_cancel_waits_hears_the_answer_valkama_asked_for_it(self) -> None:
         participation.write_set(
-            self.conn, service.space_identity(self.conn, self.space), participation.MINIMAL
+            self.conn, read_model.space_identity(self.conn, self.space), participation.MINIMAL
         )
         self.conn.commit()
         self.agent(

@@ -25,6 +25,7 @@ from typing import TypeVar, cast
 
 from . import agents as planning_agents
 from . import (
+    baselines,
     calls,
     closing,
     decisions,
@@ -44,6 +45,7 @@ from . import (
     store,
     subscriptions,
     transitions,
+    volumes,
     waiting,
     words,
 )
@@ -76,17 +78,17 @@ MAX_SEARCH_PAGE = 200
 _SPACE_COLUMNS = "planning_space_id, name, key, provider_kind, launch_place, updated_at"
 
 
-_Write = TypeVar("_Write", bound=Callable[..., dict])
+_Write = TypeVar("_Write", bound=Callable[..., dict | None])
 
 
 def _marked(write: _Write) -> _Write:
     """A write of the service inside its own marks: its answer names what came to wait."""
 
     @functools.wraps(write)
-    def run(conn: sqlite3.Connection, *args: object, **kwargs: object) -> dict:
+    def run(conn: sqlite3.Connection, *args: object, **kwargs: object) -> dict | None:
         with marking(conn) as entered:
             answer = write(conn, *args, **kwargs)
-        if entered:
+        if entered and answer is not None:
             answer[closing.AWAITING] = entered
         return answer
 
@@ -112,7 +114,7 @@ def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
     for row in conn.execute(
         f"SELECT {_SPACE_COLUMNS} FROM planning_spaces ORDER BY name"  # noqa: S608
     ):
-        counts = _space_counts(conn, str(row["planning_space_id"]))
+        counts = _space_counts(conn, row)
         spaces.append(
             {
                 **_space_record(row),
@@ -130,7 +132,7 @@ def list_planning_spaces(conn: sqlite3.Connection) -> list[dict]:
 def get_planning_space(conn: sqlite3.Connection, reference: str) -> dict:
     """One space, by id, key or name — whichever the caller has."""
 
-    identity = space_identity(conn, reference)
+    identity = read_model.space_identity(conn, reference)
     row = conn.execute(
         f"SELECT {_SPACE_COLUMNS} FROM planning_spaces WHERE planning_space_id = ?",  # noqa: S608
         (identity,),
@@ -221,7 +223,8 @@ def list_work_items(
     or stage names what a task under it names), in every space unless `space` is
     given; a project no item names lists none.
 
-    `other_spaces` makes `space` a read of that space: its items, and the items of
+    `other_spaces` makes `space` a read of that space, by the one rule of what a read
+    of a space holds (`item_projects.space_read`): its items, and the items of
     other spaces that name one of the projects the registry binds to it, each record
     marked with `other_space`, the `{key, name}` of the space it lies in, or None
     for the space's own. The space's queue never gives another space's item, so
@@ -247,29 +250,13 @@ def list_work_items(
     honest account of what it left out asks `list_work_items_page`.
     """
 
-    clauses: list[str] = []
-    parameters: list[object] = []
-    space_row = _space_row(conn, space) if space is not None else None
+    space_row = read_model.space_row(conn, space) if space is not None else None
     space_id = str(space_row["planning_space_id"]) if space_row is not None else None
     wanted = item_projects.project_id(project, "project") if project is not None else None
-    kept = item_projects.naming(conn, [wanted]) if wanted is not None else None
     marked = space_row is not None and other_spaces
-    if space_row is not None:
-        foreign = (
-            item_projects.space_project_ids(conn, str(space_row["key"])) if other_spaces else []
-        )
-        if kept is not None:
-            # Narrowed to one project, other spaces bring what names it, if it is the space's.
-            foreign = [found for found in foreign if found == wanted]
-        if foreign:
-            clauses.append(
-                "(i.planning_space_id = ? OR i.work_item_id IN (SELECT value FROM json_each(?)))"
-            )
-            reached = kept if kept is not None else item_projects.naming(conn, foreign)
-            parameters.extend([space_id, json.dumps(reached)])
-        else:
-            clauses.append("i.planning_space_id = ?")
-            parameters.append(space_id)
+    clauses, parameters = item_projects.space_read(
+        conn, space_row, wanted, other_spaces=other_spaces
+    )
     if state is not None:
         workflows = (
             [str(store.workflow_for_space(conn, space_id)["workflow_id"])]
@@ -297,9 +284,6 @@ def list_work_items(
     if parent is not None:
         clauses.append("i.parent_id = ?")
         parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
-    if kept is not None:
-        clauses.append("i.work_item_id IN (SELECT value FROM json_each(?))")
-        parameters.append(json.dumps(kept))
     start = model.count_field(offset, "offset")
     query = with_clauses(
         "SELECT i.*, s.position AS state_position, p.key AS space_key, p.name AS space_name"
@@ -477,7 +461,9 @@ def search_work_items(
     """
 
     text = model.text_field(query, "query", limit=200)
-    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
+    space_id = (
+        str(read_model.space_row(conn, space)["planning_space_id"]) if space is not None else None
+    )
     found = words.stems(text)
     if found and model.exact_reference(text) is None and model.exact_number(text) is None:
         rows = words.search_rows(
@@ -630,7 +616,7 @@ def set_launch_place(conn: sqlite3.Connection, space: str, launch_place: object)
         raise model.PlanningError("launch_place must be " + " or ".join(model.LAUNCH_PLACES))
     if not conn.in_transaction:
         conn.execute("BEGIN IMMEDIATE")
-    identity = space_identity(conn, space)
+    identity = read_model.space_identity(conn, space)
     conn.execute(
         "UPDATE planning_spaces SET launch_place = ?,"
         " updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')"
@@ -1122,7 +1108,7 @@ def _placed_space(
 ) -> sqlite3.Row:
     """The space a new item lies in: the one it names, held to `item_projects.placement`."""
 
-    named = None if space is None else _space_row(conn, space)
+    named = None if space is None else read_model.space_row(conn, space)
     parent_space = None
     if parent:
         parent_space = str(
@@ -1138,7 +1124,9 @@ def _placed_space(
         parent_space=parent_space,
         session_id=calls.confirmed_session(),
     )
-    return named if named is not None and str(named["key"]) == key else _space_row(conn, key)
+    return (
+        named if named is not None and str(named["key"]) == key else read_model.space_row(conn, key)
+    )
 
 
 @_marked
@@ -3074,6 +3062,7 @@ def _asked_itself(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
     return str(asked["request_id"])
 
 
+@_marked
 def claim_work_item(
     conn: sqlite3.Connection,
     reference: str,
@@ -3277,6 +3266,10 @@ def _starting(
                 " a claim that moves no state holds only work under way or blocked"
             )
         return _Start([], [])
+    if row["started_at"] is None:
+        # The first start of a task starts each goal and stage over it, which then
+        # takes the count of a goal or stage accepted empty (`baselines`).
+        closing.note(conn, row["parent_id"])
     if current["category"] not in states.STARTABLE:
         updates = [f"started_at = {_NOW}"] if row["started_at"] is None else []
         return _Start(updates, parameters)
@@ -3389,11 +3382,13 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
     Every write route opens it, and so does every write here that changes the work
     under a goal or stage, so no path passes it by; one inside another joins it. At
     the end of the outermost the marked containers enter or leave the wait for their
-    confirmation, the words left on one that stopped waiting go (`waiting.drop`) and so
-    does an agent's close that waits on its confirmation (`dropped`), and the list this
-    yields names the references of those that came to wait. An agent's close waits on
-    a goal as it stood with nothing open under it, so a write that changes how the goal
-    stands (`Settled.moved`) ends it: work filed under it, the wait entered or left.
+    confirmation, the count taken at acceptance of each goal and stage the write
+    reached is taken or dropped (`baselines.settle`), the words left on one that
+    stopped waiting go (`waiting.drop`) and so does an agent's close that waits on its
+    confirmation (`dropped`), and the list this yields names the references of those
+    that came to wait. An agent's close waits on a goal as it stood with nothing open
+    under it, so a write that changes how the goal stands (`Settled.moved`) ends it:
+    work filed under it, the wait entered or left.
 
     `person` is where the history stood before a person's write, which the route
     passes to the frame it opens: what that write told nobody is left for the next
@@ -3404,6 +3399,7 @@ def marking(conn: sqlite3.Connection, person: waiting.Place | None = None) -> It
 
     with closing.frame(conn) as settled:
         yield settled.entered
+    baselines.settle(conn, settled.marked)
     if person is not None:
         waiting.after_person(conn, person)
     for identity in settled.left:
@@ -3720,6 +3716,7 @@ def _ticked_by(step: Mapping[str, object], lease: leases.Lease) -> bool:
     return ids is not None and ids[0] == calls.label_id(lease.session_id)
 
 
+@_marked
 def claim_ready_work_item(
     conn: sqlite3.Connection,
     *,
@@ -3762,7 +3759,7 @@ def claim_ready_work_item(
     settings = participation.load(conn)
     if not settings.on(scope.space_id, "queue"):
         # Before anything is written: the queue that is off releases no lease either.
-        key = _space_row(conn, scope.space_id)["key"]
+        key = read_model.space_row(conn, scope.space_id)["key"]
         raise model.QueueOffError(
             f"the owner hands out work in {key} by hand: take the item they named with"
             " claim_work_item"
@@ -3829,11 +3826,11 @@ def _queue_scope(
     space keeps the tasks of this space that name it.
     """
 
-    named = _space_row(conn, space) if space is not None else None
+    named = read_model.space_row(conn, space) if space is not None else None
     within_id = None
     if within is not None:
         row = read_model.item_row(conn, within)
-        under = _space_row(conn, row["planning_space_id"])
+        under = read_model.space_row(conn, row["planning_space_id"])
         reference = model.human_id(str(under["key"]), int(row["number"]))
         if row["kind"] != model.CONTAINER_KIND:
             raise model.PlanningError(
@@ -3847,7 +3844,7 @@ def _queue_scope(
         within_id = str(row["work_item_id"])
     if named is None:
         found = item_projects.session_space(conn, calls.confirmed_session())
-        named = _space_row(conn, found) if found is not None else None
+        named = read_model.space_row(conn, found) if found is not None else None
     if named is None:
         keys = [str(key) for (key,) in conn.execute("SELECT key FROM planning_spaces ORDER BY key")]
         raise model.PlanningError(
@@ -4255,6 +4252,7 @@ def record_overrides(
     return names
 
 
+@_marked
 def claim_checklist_item(
     conn: sqlite3.Connection,
     reference: str,
@@ -5251,43 +5249,25 @@ def with_clauses(query: str, clauses: list[str]) -> str:
     return query
 
 
-def _space_counts(conn: sqlite3.Connection, planning_space_id: str) -> dict:
-    row = conn.execute(
-        "SELECT COUNT(*) AS total,"
-        " SUM(CASE WHEN s.is_terminal = 0 THEN 1 ELSE 0 END) AS open,"
-        " SUM(CASE WHEN s.category = 'active' THEN 1 ELSE 0 END) AS active,"
-        " SUM(CASE WHEN s.category = 'completed' THEN 1 ELSE 0 END) AS completed"
-        " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
-        " WHERE i.planning_space_id = ?",
-        (planning_space_id,),
-    ).fetchone()
-    return {
-        "total": int(row["total"] or 0),
-        "open": int(row["open"] or 0),
-        "active": int(row["active"] or 0),
-        "completed": int(row["completed"] or 0),
-    }
+def _space_counts(conn: sqlite3.Connection, space: sqlite3.Row) -> dict:
+    """The space's own items, counted by the one count by category the Volumes read takes.
 
-
-def space_identity(conn: sqlite3.Connection, reference: object) -> str:
-    """The id of the space a caller named by its id, key or name.
-
-    It reads nothing but the space's identity, so a store another build wrote,
-    whose spaces lack a column the record reads, still answers it.
+    `total` holds every item, the accepted open goals and stages of the service state
+    too, and `open` all but the completed and the cancelled.
     """
 
-    return str(_space_row(conn, reference)["planning_space_id"])
-
-
-def _space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
-    text = model.text_field(reference, "planning space", limit=200)
-    row = conn.execute(
-        "SELECT * FROM planning_spaces WHERE planning_space_id = ? OR key = ? OR name = ?",
-        (text, text, text),
-    ).fetchone()
-    if row is None:
-        raise model.PlanningError(f"no planning space named {text}")
-    return row
+    counted = volumes.category_counts(conn, volumes.space_scope(conn, space, other_spaces=False))
+    held = {
+        category: found["tasks"] + found["goals"] + found["stages"]
+        for category, found in counted.items()
+    }
+    total = sum(held.values())
+    return {
+        "total": total,
+        "open": total - sum(held[category] for category in model.TERMINAL_CATEGORIES),
+        "active": held["active"],
+        "completed": held["completed"],
+    }
 
 
 def _workflow_payload(conn: sqlite3.Connection, workflow: sqlite3.Row) -> dict:

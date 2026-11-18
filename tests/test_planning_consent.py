@@ -35,6 +35,7 @@ from server.planning import (
     pending,
     person_events,
     questions,
+    read_model,
     request_model,
     requests,
     service,
@@ -84,7 +85,7 @@ class Harness(unittest.TestCase):
         self.addCleanup(self.conn.close)
         service.create_planning_space(self.conn, name="Alpha", key="ALPHA")
         self.conn.commit()
-        self.space = service.space_identity(self.conn, "ALPHA")
+        self.space = read_model.space_identity(self.conn, "ALPHA")
         # The requests lapse by the wall clock and the round by the lease clock: the test
         # starts both at the same moment and moves only the lease clock.
         self.clock = datetime.now(UTC).replace(microsecond=0)

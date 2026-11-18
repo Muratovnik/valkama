@@ -9,8 +9,9 @@ that closed, reopened, moved, filed or deleted the item that made the difference
   and `service.marking` open), and a frame opened inside another joins it. Every path
   that changes whether an item is open, which container it stands under, or whether it
   stands anywhere, calls `note` for the container before it changes it: the frame keeps
-  what that container derived before the write's first change to it. At the end of the
-  outermost frame `settle` reads what each marked container derives after.
+  what that goal or stage derived before the write's first change to it, and what it
+  stood accepted on. At the end of the outermost frame `settle` reads what each marked
+  goal or stage derives after, and `Settled.marked` hands the marks to `baselines`.
 - **Entering the wait** (before not `awaiting_confirmation`, after so): a row of
   `work_item_confirmations` records the period of waiting, the top-level session of
   the agent whose call it was follows the container (`subscriptions.follow`) -- so a
@@ -152,6 +153,11 @@ _ENTER = (
 )
 
 
+#: An item's kind, the basis it stood accepted on and since when, as a write found it
+#: before its first change to the item.
+Stood = tuple[str, str | None, str | None]
+
+
 @dataclass(frozen=True)
 class _Mark:
     #: What the container derived before the write changed it.
@@ -160,6 +166,8 @@ class _Mark:
     confirmable: bool
     #: Who the write names, for what leaving the wait records under its call.
     author: str | None
+    #: What it stood on before the write changed it, None when it was not there.
+    stood: Stood | None = None
 
 
 @dataclass
@@ -170,6 +178,9 @@ class Settled:
     entered: list[str] = field(default_factory=list)
     #: The ids of the containers that stopped awaiting it.
     left: list[str] = field(default_factory=list)
+    #: Every item the write marked, by id in mark order, with what it stood on before
+    #: the write: what the counts taken at acceptance are settled over (`baselines`).
+    marked: dict[str, Stood | None] = field(default_factory=dict)
     #: The ids of the containers that stood to be confirmed and now stand otherwise:
     #: work under them came to be open, they entered or left the wait, or they closed.
     moved: list[str] = field(default_factory=list)
@@ -196,6 +207,7 @@ def frame(conn: sqlite3.Connection) -> Iterator[Settled]:
     finally:
         _MARKS.reset(token)
     settle(conn, marks, settled)
+    settled.marked = {identity: mark.stood for identity, mark in marks.items()}
 
 
 def note(conn: sqlite3.Connection, identity: object, author: str | None = None) -> None:
@@ -214,7 +226,9 @@ def note(conn: sqlite3.Connection, identity: object, author: str | None = None) 
         return
     found = str(identity)
     tree = item_tree.below(conn, [found])
-    marks[found] = _Mark(tree.container_state(found), tree.confirmable(found), author)
+    marks[found] = _Mark(
+        tree.container_state(found), tree.confirmable(found), author, _stood(conn, found)
+    )
 
 
 def settle(conn: sqlite3.Connection, marks: dict[str, _Mark], settled: Settled) -> None:
@@ -365,6 +379,13 @@ def _leave(conn: sqlite3.Connection, identity: str, author: str | None) -> None:
 
     conn.execute("DELETE FROM work_item_confirmations WHERE work_item_id = ?", (identity,))
     questions.end(conn, identity, "withdrawn", author, purpose=CONFIRM)
+
+
+def _stood(conn: sqlite3.Connection, identity: str) -> Stood | None:
+    found = conn.execute(
+        "SELECT kind, acceptance, accepted_at FROM work_items WHERE work_item_id = ?", (identity,)
+    ).fetchone()
+    return None if found is None else (str(found[0]), found[1], found[2])
 
 
 def _row(conn: sqlite3.Connection, identity: str) -> tuple[str, str | None, str | None] | None:

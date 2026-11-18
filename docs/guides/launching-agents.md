@@ -102,7 +102,8 @@ session fleet, inbox, tool stream, `/api/sessions`, `/api/session-seen`, and
 Sessions SSE view are retired. The flow-metrics Analytics dashboards and
 exports, Improvements, and the Skills catalogue and activation API are also
 retired; the Analytics module that stands in the navigation now is for the usage
-of agent work. This does not
+of agent work. Volumes, a module of its own, reads how much work stands in each
+state and what it took; it brings none of the retired dashboards back. This does not
 change installed skill files or agent-client settings.
 
 How sessions reach Valkama in the first place is in [Client hooks](client-hooks.md).

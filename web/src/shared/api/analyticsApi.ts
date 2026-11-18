@@ -11,7 +11,7 @@
 
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import { TITLE, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
-import { tokensSchema } from '@/shared/api/planningUsageApi.ts'
+import { SEAT, tokensSchema } from '@/shared/api/planningUsageApi.ts'
 import { enumField, invalid } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
@@ -217,9 +217,6 @@ const QUOTA_SOURCES = ['statusline', 'mod', 'poll', 'import'] as const
 const SHARE_KINDS = ['five_hour', 'week', 'week_model'] as const
 /** The windows of money spent past a limit, which the answer gives no figure of. */
 const SPEND_KINDS = ['extra_usage', 'spend_limit'] as const
-
-/** A provisional seat: `week:` and its week's reset to the ten minutes. */
-const SEAT = /^week:\d{4}-\d{2}-\d{2}T\d{2}:\d0Z$/u
 
 /** A share of a window, from 0; above 100 only where the source said it overran. */
 const percent = () => z.number().nonnegative()

@@ -1026,7 +1026,10 @@ detached from its last item is on it again.
 - `space=<key>` — the commits of the projects the registry binds to the space,
   its default project among them;
 - `project=<id>` — the commits of one registered project, bound to a space or
-  not.
+  not;
+- neither — every commit of the store on no card, whatever its project. The
+  registry gives only the names here, and when it cannot be read every
+  `display_name` is `null`.
 
 ```json
 {"total": 2,
@@ -1048,12 +1051,13 @@ client whose hook reported it.
 - `total` counts every commit the scope and `since` keep, however many `limit`
   lists.
 
-Each refusal is `invalid_request` (400): neither scope or both
-(`[commit] the commits on no card are read by a space or by a project: name one`),
+Each refusal is `invalid_request` (400): both scopes
+(`[commit] the commits on no card are read by a space or by a project, not both`),
 a project the registry does not record
 (`[commit] <id> is not a registered project: <ids>`), a space the store does not
-have (`no planning space named <key>`), a registry that cannot be read, a `since`
-without its offset or that is no time, and a `limit` above 500 or below 0.
+have (`no planning space named <key>`), a registry that cannot be read for a
+space or a project, a `since` without its offset or that is no time, and a
+`limit` above 500 or below 0.
 
 `POST /api/planning/work-item/commit` attaches one of them, or with
 `"remove": true` detaches a commit, as one entry of the `commits` group of
@@ -1688,10 +1692,12 @@ answers with `interface_version` and `usage`:
 | `by_item` | one line per item: `work_item_id`, `reference`, `title`, `elapsed_seconds`, `agent_seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. A chain's starts at its root and lists every member; a session's lists the items it worked on, then its line with no item, whose `work_item_id` is `null`. An item since deleted keeps its id, with a `null` number and title |
 
 An item's read adds `work_item_id`, `reference`, `title` and `scope`, and says who spent
-the work and under which account:
+the work, under which account and how much of each account's week it took:
 
 | Field | What it holds |
 | --- | --- |
+| `sessions` | how many sessions worked on the item, or with `chain` or `tree` on any of its members: each session whose stretches of work went to it, with its subagents', and each session whose confirmed write calls acted on it, counted once. It can be larger than the list of sessions on the item's card, which holds only the writers |
+| `quota` | `weeks` and `unknown_share`, below |
 | `account_stretches` | the work in time order, one line for each run of stretches under one account: `account`, `started_at` (its first stretch's start), `ended_at` (the latest end among them), `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. Two neighbouring lines never share an account, and an unknown account is a value of its own, so not every line after the first is a change of account: a change is a line under a known account after one under a different known account, with or without lines under an unknown account between them, and a line under an unknown account is never one. `a`, unknown, `a` has no change; `a`, unknown, `b` has one, where `b` starts. Stretches of agents working side by side follow one another by their start |
 | `accounts` | each account the work ran under, the most time first, then the most cost: `account`, `share` of `agent_seconds`, and the same figures |
 | `roles` | the work by who did it, ranked the same way: `role` — `main` for the session's own agent, `subagent`, or `advisor` for an adviser's own calls, whoever it advised — with `launch_class`, `effort` and the same figures |
@@ -1723,6 +1729,28 @@ one unit of what its segments add up to, and each segment the period read adds i
 half a unit of its own figure. Three segments of 10.0004 s at $0.0000304 each make one line
 of 30.001 s and $0.000091 here, and 30.0 s and $0.00009 in the period read. Where every
 segment's seconds and cost are whole units, the two are equal.
+
+`quota` is the item's part of each account's weekly quota, for the same stretches of work
+as the rest of the read, so with `tree` for the whole tree. Each stretch is on the seat the
+[quota samples](#subscription-quota-samples-and-accounts) put it on. `weeks` has one line per
+seat the work was on, the latest week first:
+
+| Field | What it holds |
+| --- | --- |
+| `account` | `organization`, and `account_uuid`, `null` for a seat no account, or two, can be shown to name |
+| `seat` | the seat, which names one week of that account |
+| `week_ends_at` | when that week resets |
+| `share` | the item's cost at API prices on that seat, divided by the cost of every stretch on the seat that week, the item's and everyone else's; `null` when the seat's work that week had no cost |
+| `week_used_percent` | how much of the week is spent, by the latest `week` sample of the seat; `null` with none |
+| `percent` | `share` times `week_used_percent`, rounded to two places; `null` when either is |
+
+`unknown_share` is the part of the item's cost on stretches with no seat that can be shown,
+`null` when the item's work had no cost. No figure is a sum of percentages: lines of
+different accounts and weeks are never added up, as in
+[each account's quota](#each-accounts-subscription-quota). The figure assumes a quota is
+spent in proportion to the API price, which no published formula confirms. It also leans
+high: a week's percent holds work no stretch here records, such as another client's or a
+chat in a browser, while the share counts only the recorded stretches.
 
 A session's adds
 `session_id`, `first_at`, `last_at`, `excluded` (`human`, `subagent`, `external` and
@@ -1857,6 +1885,386 @@ session, the `title` is one of two values in the answer that two reads of the sa
 give differently. The other is `seat`: a quota sample that arrives later, such as imported
 history, can say where earlier work was, and one that names an account's UUID turns a seat's
 key into its account.
+
+### How much work stands and what it took
+
+The Volumes read counts the work of a scope by where it stands: how much waits in each
+category now, which card has stood there longest, and how much came to be completed or
+cancelled in a period, what waits for the owner, which commits stand on no card, what
+each goal took and what its open work has left, what work stands outside goals, how work
+flowed day by day, and the done work its estimates are judged by. It answers
+`GET /api/planning/volumes` with `interface_version` `valkama-planning-api` and
+`volumes`; `GET /api/planning/goal-volumes` gives the rows of the goals and stages it is asked for,
+whole (see [A goal's row](#a-goals-row)). A later build only adds fields and sections to
+these answers. No MCP tool reads them: the numbers would cost an agent context.
+
+| Parameter | What it takes |
+| --- | --- |
+| `scope_kind` | required: `global`, every space of the store this service writes, or `space` |
+| `data_scope_id`, `space_key` | with `space`, required: the space, named exactly as the shell names it |
+| `project_id` | with `space`, optional: a project, which narrows the space to the items that name it |
+| `from`, `to` | required: a date or a time with its offset, as in [What agent work spent in a period](#what-agent-work-spent-in-a-period). The period holds at most 2,400 days |
+| `utc_offset` | required: the caller's offset from UTC in minutes, from `-840` to `840`; a date means the start of that day at it |
+| `kind` | optional, repeatable: `task`, `bug` or `improvement`; the read keeps the tasks of any kind named (see [Filtering by kind and label](#filtering-by-kind-and-label)) |
+| `label` | optional, repeatable: a label; the read keeps the tasks carrying every label named |
+
+A space's scope holds the items the space's board holds, so a number opens the board on
+the same work: the space's items, and the items of other spaces that name one of the
+projects the registry binds to the space, as `list_work_items` reads a space (see
+[Tool results](#tool-results)). A goal or stage names what the tasks under it name, at
+any depth. With `project_id`, the scope keeps the space's items that name the project,
+and other spaces' items that name it when it is one of the space's projects; a project
+of another space that the space's items name keeps only the space's own.
+
+```json
+{"interface_version": "valkama-planning-api",
+ "volumes": {
+   "scope": {"kind": "space",
+             "space_ref": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001",
+                           "space_key": "MAIN"},
+             "project_ref": null},
+   "period": {"from": "2030-03-04T00:00:00+03:00", "to": "2030-03-11T00:00:00+03:00",
+              "utc_offset": 180},
+   "filter": null,
+   "measured_from": "2030-02-17T16:03:29.000Z",
+   "counts": {
+     "categories": [
+       {"category": "triage", "tasks": 40, "goals": 1, "stages": 1,
+        "oldest": {"work_item_id": "6f1c2a8e-0000-4000-8000-000000000012",
+                   "reference": "MAIN-12", "since": "2030-01-03T10:00:00Z"}},
+       {"category": "completed", "tasks": 31, "goals": 1, "stages": 0, "oldest": null},
+       {"…": "the other six categories"}],
+     "waiting_owner": {"count": 12,
+                       "oldest": {"request_id": "6f1c2a8e-0000-4000-8000-000000000090",
+                                  "reference": "MAIN-90", "since": "2030-02-28T09:00:00.000Z"}},
+     "unattached_commits": 3},
+   "goals": [{"…": "a goal's row, with the rows of its stages in children"}],
+   "outside": {
+     "tasks": 43,
+     "by_project": [
+       {"project": {"id": "app", "unknown": false, "name": "App", "combinations": null},
+        "categories": {"triage": 30, "deferred": 2, "ready": 3, "active": 1, "review": 0,
+                       "completed": 4, "blocked": 0, "cancelled": 1}},
+       {"…": "a row for several projects, and one for none"}],
+     "by_label": [
+       {"label": "ui", "categories": {"triage": 9, "…": "the other seven categories"}},
+       {"label": null, "categories": {"triage": 21, "…": "the other seven categories"}}]},
+   "flow": {
+     "days": [{"day": "2030-03-04", "created": 14, "closed": 11, "decisions": 6, "commits": 9},
+              {"…": "every other day of the period"}],
+     "totals": {"created": 70, "closed": 64, "decisions": 24, "commits": 51},
+     "pace": {"open": 640,
+              "recent": {"days": 7, "created": 70, "closed": 64, "trend": "growing"},
+              "series": [{"day": "2030-01-03", "created": 3, "closed": 0, "total": 3,
+                          "closed_total": 0}]}},
+   "estimates": {
+     "min_basis": 5, "basis": 210,
+     "rows": [
+       {"level": "project_kind",
+        "project": {"id": "app", "unknown": false, "name": "App", "combinations": null},
+        "space": null, "kind": "task", "label": null, "tasks": 64,
+        "agent_seconds": {"median": 1260.0, "q1": 540.0, "q3": 2880.0, "mean": 2310.5},
+        "tokens_anew": {"median": 61000, "q1": 24000, "q3": 150000, "mean": 118000},
+        "estimated_api_cost_usd": {"median": 2.1, "q1": 0.85, "q3": 5.4, "mean": 4.75}},
+       {"level": "project_kind_label", "label": "ui", "…": "the same project and kind"}]}}}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `scope` | the scope read: `kind`, `space_ref` (`{data_scope_id, space_key}`, or `null` for `global`) and `project_ref` (`{project_id}`, or `null`) |
+| `period` | the period asked for, with `from` and `to` at the caller's offset |
+| `filter` | the filter asked for, `{"kinds": [...], "labels": [...]}` with each in the order named and once, or `null` when the read names no `kind` and no `label` |
+| `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
+| `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest`; under a filter `goals` and `stages` are `null` |
+| `counts.waiting_owner` | the questions to the owner still open on the scope's items: `count`, and `oldest`, the one asked first, with `request_id`, the `reference` of its item and its `created_at` as `since`, or `null` when none waits |
+| `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store; `null` when that list refuses the scope, a project only items name or a space or project read while the projects registry cannot be read, and the rest of the answer stands |
+| `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
+| `outside` | the scope's tasks under no goal: `tasks`, how many, and the rows `by_project` and `by_label` (see below) |
+| `flow` | how work flowed through the scope: `days`, `totals` and `pace` (see [The flow](#the-flow)) |
+| `estimates` | the scope's done work that estimates are judged by: `min_basis`, `basis` and `rows` (see [Estimates](#estimates)) |
+
+A category counts the items of the scope that stand in a state of it. An accepted open
+goal or stage stands in no category and is in none of these counts. Work in an open
+category is counted as it stands now; `completed` and `cancelled` count the items that
+came to stand there inside the period, and only those. An item came to stand where it
+is at its last state entry, the newest `created`, `transitioned` or `opened` event of
+its history, or at its creation when its history holds none. `oldest` is the item of an
+open category that came to stand there first, with that moment as `since`; it is `null`
+for a category nothing stands in, and always for `completed` and `cancelled`. How long
+ago that was is the reader's to say: the answer holds no clock of the server.
+
+A question waits for the owner while it is pending, asks the owner rather than an agent
+session, is no list on a comment, and has not run out past its deadline or with its
+execution: the same test the owner's alert and the queue's `question` apply. The commits
+on no card do not depend on which items the scope holds, only on its projects: those of
+the project read, those the registry binds to the space, or every commit of the store.
+
+`outside` counts the scope's tasks with no parent, each as the categories count it: in
+an open category as it stands now, in `completed` or `cancelled` only when it came to
+stand there inside the period; `tasks` is how many count. Each row says how many of its
+tasks stand in each of the eight categories, all eight named, and the rows come with the
+most tasks first. `by_project` gives each task one row, so its rows add up to `tasks`:
+the project it names, its tasks naming several projects together, or those naming none.
+`project` is written as the `project` group of
+[What agent work spent in a period](#what-agent-work-spent-in-a-period) is: `id` and
+`name`, as the projects registry gives it or `null`, with `unknown` `false`; the row of
+several has `id` `null` and lists in `combinations` every set of projects its tasks
+name, each as `{"id", "name"}`, which the other rows hold as `null`. `by_label` gives a
+task the row of each of its labels, and a task with none the row whose `label` is `null`,
+so those rows add up to no total.
+
+The read counts the store this service writes, where usage is counted. A space of an
+attached store is refused rather than counted short.
+
+| Refusal (`400`, `invalid_request`) | When |
+| --- | --- |
+| `scope_kind must be global or space` | `scope_kind` is missing or neither |
+| `a space scope names data_scope_id and space_key` | a space scope lacks one of them |
+| `a global scope names no space and no project` | a global scope names one |
+| `volumes read the store this service writes; <KEY> lives in an attached store` | the space is in an attached store |
+| `no planning space <KEY>` | the store holds no such space, or the `data_scope_id` is no store this service knows |
+| `no project <id>` | neither the projects registry nor any item of the store names the project |
+| `kind filters tasks: task, bug or improvement` | a `kind` that is no kind of a task, `goal` and `stage` among them |
+| `no work item carries label <label>` | a `label` no item of the store carries; a label the store holds but the scope does not gives an empty answer instead |
+| the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
+| `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
+
+#### A goal's row
+
+A row says what a goal or a stage took over all its time, whatever the period. The
+`goals` of the Volumes read holds one for each goal, with the rows of the stages under
+it in `children`, in number order; `GET /api/planning/goal-volumes` gives the rows of
+the goals and stages it names, without `children`, in the order named.
+
+```json
+{"work_item_id": "6f1c2a8e-0000-4000-8000-000000000007", "reference": "MAIN-7",
+ "title": "Ship the importer", "kind": "goal",
+ "state": null, "container_state": "in_progress", "open": true, "parent_reference": null,
+ "other_space": null, "partial": false,
+ "tasks": {"total": 120, "closed": 78, "completed": 74, "cancelled": 4,
+           "by_category": {"triage": 6, "deferred": 2, "ready": 20, "active": 5, "review": 7,
+                           "completed": 74, "blocked": 2, "cancelled": 4}},
+ "baseline": {"tasks": 70, "basis": "accepted", "taken_at": "2030-01-05T09:00:00Z"},
+ "baseline_absent": null,
+ "spent": {"agent_seconds": 79200.0,
+           "tokens": {"input": 120000, "cached_read": 9000000, "cache_write_5m": 300000,
+                      "cache_write_1h": null, "output": 410000, "reasoning": null},
+           "estimated_api_cost_usd": 412.5, "unpriced_tokens": 0, "quality": "mixed",
+           "partly_measured": 0},
+ "spent_with_cancelled": {"agent_seconds": 81000.0, "…": "the same figures"},
+ "sessions": 61, "commits": 140, "commits_unknown_repository": 3,
+ "remaining": {"agent_seconds": 30100.0,
+               "tokens": {"input": 41000, "cached_read": 2100000, "cache_write_5m": 90000,
+                          "cache_write_1h": 0, "output": 120000, "reasoning": 0},
+               "estimated_api_cost_usd": 150.2, "basis": 31, "estimated": 40, "unestimated": 2},
+ "children": [{"…": "the row of each stage directly under it"}]}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `kind` | `goal`, or `stage` for one under a parent |
+| `state`, `container_state` | where it stands, as a record says it: `state` a public state, or `null` for an accepted open goal or stage, whose `container_state` is what it derives (see [The work model](#the-work-model)) |
+| `open` | whether it stands in neither completed nor cancelled |
+| `parent_reference` | the goal or stage it is filed under, or `null` |
+| `other_space` | `{key, name}` of the goal's space when that is not the space read; `null` for the space's own goals, in a `global` read and in `goal-volumes` |
+| `partial` | some of the items under it are outside the scope, which adds up only the rest |
+| `tasks` | its tasks (`task`, `bug`, `improvement`) under it now, at any depth and in any state, that the scope holds: `total`, `closed` of them, `completed` and `cancelled`, and `by_category`, the eight categories, every one |
+| `baseline` | how many tasks stood under it when it was accepted: `tasks`, `basis` and `taken_at`; or `null` |
+| `baseline_absent` | why `baseline` is `null`, or `null` when it is given |
+| `spent` | what its items spent, leaving out every item that stands cancelled now |
+| `spent_with_cancelled` | what all its items spent |
+| `sessions` | the sessions that spent on any of its items or made a confirmed write to one, each once |
+| `commits` | the commits of a known repository attached to any of its items, each once |
+| `commits_unknown_repository` | the records of commits of no known repository attached to its items: records, not commits |
+| `remaining` | what its open tasks have left by their estimates: `agent_seconds`, `tokens` by kind and `estimated_api_cost_usd`, with `basis`, `estimated` and `unestimated` (see [Estimates](#estimates)); `null` when no open task stands under it |
+
+The items of a goal are the items under it now, at any depth, with the goal itself.
+An item moved out of it, or filed under another goal, leaves with what it spent; a move
+between its own stages changes nothing of the goal. A goal's spending leaves out the
+items that were cancelled; the sum with them stands beside it. An item cancelled takes
+only its own work out of `spent`, and the items under it count by where each stands: a
+stage cancelled takes its work and its cancelled tasks out, and a task done under it
+stays. For each of the two numbers, a row is its own work, the rows of its stages and
+the work of the tasks directly under it, and `spent_with_cancelled` of a goal read
+whole is what [How much work an item took](#how-much-work-an-item-took) gives for it
+with scope `tree`.
+
+Each number holds `agent_seconds`, `tokens` by kind, `estimated_api_cost_usd` and
+`unpriced_tokens` as an item's usage holds them, with `quality` and `partly_measured` of
+the items it adds up. Time is agent time, the sum of the stretches: it adds up from
+tasks to goals; the union a card's line shows does not. `partly_measured` counts the
+tasks it adds up that started before `measured_from`, or were created before it when
+they never started: each may have spent more than its usage says.
+
+`tasks` counts the cancelled tasks too: `cancelled` is how many there are. A task moved
+out of the goal is not among them, wherever it went.
+
+`baseline` is the count of the tasks under the goal or stage, at any depth and in any
+state, when it was accepted (`basis` `accepted`). One accepted with no task under it
+takes the count when the first task under it starts (`basis` `started`): a plan of
+nothing says nothing. Entering triage or deferred takes the acceptance away and the
+count with it; accepted again, it is counted anew. Without a count, `baseline_absent`
+says why, the first of these that holds:
+
+| `baseline_absent` | When |
+| --- | --- |
+| `filtered` | the read names a `kind` or a `label`: the count is of all its tasks, of every kind and label, and a task's kind and labels change after it (see [Filtering by kind and label](#filtering-by-kind-and-label)) |
+| `partial` | the row is `partial`: the count is of all its tasks, `tasks` only of the scope's |
+| `not_accepted` | it is not accepted: it stands in triage or deferred, or was closed from there |
+| `migrated` | it was accepted before the work model, which kept no count of what stood under it then |
+| `not_started` | it was accepted with no task under it, and none under it has started yet |
+
+`sessions` counts the sessions of [How much work an item took](#how-much-work-an-item-took)
+over all its items at once: a session that worked on two of them is one session, so a
+row's number is not the sum of its tasks' and stages'. `commits` counts the commits
+attached now, a commit a rewrite replaced not among them, the way an item's read lists
+them; a commit attached to two of its items is one. A commit of no known repository
+keeps its hash as it was written, abbreviated too, so one commit may stand as two
+records: those are counted apart, as records.
+
+A space's read adds up what its scope holds of each goal. A goal of the space is all
+its own work there, unless a project narrows the read; a goal of another space comes
+into it through the tasks that name one of the space's projects, and only they and
+the goals and stages over them are added up. A row with anything else under it is
+`partial`.
+
+`goal-volumes` takes `id`, a reference or a work item id, from 1 to 100 times, and reads
+each goal or stage whole: its row is never `partial` and names no `other_space`. It
+answers `interface_version` `valkama-planning-api` and `goals`.
+
+| Refusal | When |
+| --- | --- |
+| `400` `invalid_request`: `id takes 1 to 100 goals or stages` | no `id`, or more than 100 |
+| `400` `invalid_request`: `<REF> is a task: goal volumes read goals and stages` | an `id` names a task |
+| `404` `not_found`: `no work item <id>` | an `id` names no item |
+
+#### The flow
+
+`flow` says how work moved through the scope on each day of the period, a day of the
+caller's clock at `utc_offset`. `days` holds every day the period touches, oldest first,
+the quiet ones too, and `totals` adds them up.
+
+| Field | What a day counts |
+| --- | --- |
+| `created` | the scope's tasks created that day |
+| `closed` | the scope's tasks whose present entry into completed or cancelled fell on that day: a task reopened and closed again counts on the later day |
+| `decisions` | the owner's decisions: requests of the scope's items answered or declined that day by a call from the interface. The latest call that answered, changed or declined a request says whose it is, so an agent's answer is no decision, and an answer changed later is still one decision, on the day of its latest change |
+| `commits` | the commits of a known repository made that day, by the committer time Git gave or, without one, when Valkama learned of the commit, that are attached now to an item of the scope or stand on no card of its projects; each commit once |
+
+Only tasks are created and closed here: making or closing a goal or a stage is not work
+flowing. The projects whose commits on no card a scope holds are the project read, the
+projects the registry binds to the space read, or, in a `global` read, every known
+repository. A commit of no known repository is left out: its hash is kept as it was
+written, so one commit may stand as two records.
+
+`pace` reads the scope's tasks as [Reading a chain of work](#reading-a-chain-of-work)
+reads a chain's members, with a day of the caller's clock in place of a UTC day: `open`,
+how many stand open now; `recent`, the last 7 days up to today, whatever the period; and
+`series`, each day with a change since the first. With `utc_offset` `0`, the pace of a
+scope that holds one goal's tasks and nothing else is what the chain of that goal gives
+in scope `tree`.
+
+#### Estimates
+
+An estimate says what an open task has left, judged by done tasks like it. The done
+tasks it is judged by, the basis, are the tasks of the store (`task`, `bug`,
+`improvement`) that stand completed, spent agent time, and were counted whole: they
+started, or were created when they never started, no earlier than `measured_from`. A
+cancelled task's spending says nothing of what done work costs, and a task done with
+nothing spent was carried over or closed with no work.
+
+A task's group is its project and its kind; a task naming several projects or none
+adds its space, so that work of no project in two spaces is not mixed. An open task
+that has spent `s` of agent time is judged on the first rung of this ladder that holds
+at least `min_basis`, five, done tasks that spent more than `s`:
+
+1. its group, the tasks sharing a label with it;
+2. its group;
+3. its project, or its space's tasks of several projects or of none, of any kind.
+
+Its time left is the mean of `v - s` over those tasks, `v` being what each spent,
+without the tenth of them, rounded down, that had the most left: a few very long
+tasks would otherwise pull the mean up. Its tokens of each kind and its cost left are
+the mean of `v - s` over the same tasks, and never below zero. A task with no such
+rung has no estimate: it has spent more than the work it could be judged by, and
+nothing left would be untrue. A task's cost is what its priced rows cost.
+
+A goal's or stage's `remaining` adds up the estimates of all its open tasks that the
+scope holds, in triage and deferred too: the goal does not close while they are open,
+and `tasks.by_category` says how many of them are put off. `estimated` and
+`unestimated` count its open tasks with an estimate and without one, and `basis` the
+different done tasks its estimates were judged by. With no open task under it
+`remaining` is `null`; when none of them has an estimate it holds zeros with
+`estimated` `0`. A reader shows `basis` beside the estimate, and says the estimate is
+incomplete while `unestimated` is above zero.
+
+The groups are read across the store whatever the scope: a project is one project in
+every space. The table describes the basis the scope holds. Each row of
+`level` `project_kind` holds the done tasks of one project and kind, the most tasks
+first, and is followed by a row of `level` `project_kind_label` for each label one of
+them carries, the most tasks first; a task with no label stands only in the row of its
+project and kind. `project` is written as in `outside`, and `space` is `{key, name}` of
+the space in a row of several projects or of none, `null` otherwise. `tasks` is how
+many done tasks a row holds; `agent_seconds`, `tokens_anew` (the input, cache write and
+output tokens) and `estimated_api_cost_usd` each give their `median`, the quartiles
+`q1` and `q3` by linear interpolation between the values in order, and `mean`, tokens
+in whole units. The mean, not the median, is what adds up over a goal's tasks. `basis`
+is how many done tasks the scope holds.
+
+An estimate is a rough figure. About half of the goals checked halfway through their
+work came within a factor of two, so a reader rounds it, to an hour and a million
+tokens, rather than show it to the second.
+
+#### Filtering by kind and label
+
+`kind` and `label` keep the scope's tasks that match, by the rules of the board's
+filter, so a number under a filter opens the board on the same tasks with the same
+filter: a task matches when its kind is any of the kinds named, or any kind when none
+is, and when it carries every label named. Both together keep what both keep:
+`kind=bug&kind=task&label=ui` keeps the bugs and the tasks labelled `ui`. A goal or a
+stage never matches: it has no kind of a task, and its labels are not labels of work.
+A filter narrows the tasks every section counts; a goal row then adds up only those
+tasks, without the work of its goals and stages, and carries no count at acceptance.
+
+| Part | Under a filter |
+| --- | --- |
+| `counts.categories` | `tasks` counts the tasks that match and `oldest` is the one of them that came to stand there first; `goals` and `stages` are `null`, not `0` |
+| `counts.waiting_owner` | the questions to the owner on the tasks that match |
+| `counts.unattached_commits` | as without a filter: a commit on no card has no task whose kind and labels could match, and the number opens the list a commit is attached from |
+| `goals` | the goals, and in `children` the stages, with a task that matches under them; the others have no row. A row is the rows of its stages and its tasks that match: `spent`, `spent_with_cancelled`, `sessions`, `commits`, `tasks` and `remaining` count those tasks alone, never the work of a goal or stage itself. `baseline` is `null` with `baseline_absent` `filtered`: the count was taken of every task, and how many of them were of a kind or carried a label then is not known. What each task has left is what it has left without a filter, since the groups it is judged by are read across the store; the filter only chooses whose estimates add up |
+| `outside` | the tasks that match with no parent; with a `label` named, `by_label` holds the rows of the labels named alone, since a row of another label would only show where it meets the filter |
+| `flow` | `created`, `closed` and `pace` read the tasks that match, `decisions` their requests and `commits` the commits attached to them; no commit on no card is counted |
+| `estimates` | the table describes the done tasks of the scope's basis that match, and `basis` counts them; with a `label` named, the rows of `level` `project_kind_label` are those of the labels named alone, since a row of another label would only show where it meets the filter |
+
+#### A space's card in the portfolio
+
+The directory of spaces, `GET /api/platform/planning` at global scope, which «All
+spaces» reads with `directory_only=true`, lists each space with `numbers`: the four
+numbers of its card. They are counted as the Volumes read counts the space, with no
+filter, so a card's numbers are those of the space's Volumes page and open its board on
+the same work. Unlike that read, the directory counts a space of an attached store too:
+the four numbers take nothing from usage.
+
+```json
+{"space_ref": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001", "space_key": "MAIN"},
+ "title": "Main work", "work_item_count": 412,
+ "numbers": {"triage": 41, "ready": 20, "active": 5, "waiting_owner": 12},
+ "numbers_absent": null,
+ "default_project": "app", "projects": [{"project_id": "app", "display_name": "App"}]}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `work_item_count` | the space's own items, in every state; `null` when its store could not be read |
+| `numbers.triage` | every card of the space's scope in triage: its tasks, goals and stages |
+| `numbers.ready`, `numbers.active` | the scope's tasks in `ready` and in `active` |
+| `numbers.waiting_owner` | the questions to the owner still open on the scope's items, the `count` of `counts.waiting_owner` |
+| `numbers_absent` | why `numbers` is `null`, or `null` when they are given |
+
+| `numbers_absent` | When |
+| --- | --- |
+| `old_store` | an earlier build wrote the space's store, which is attached and read as it is: its states stand in the categories of before. The rest of the record is what the store gives |
+| `unreadable` | the space's store was listed when the read began, then did not open or did not answer. The record holds what is known without it: `space_ref`, the projects the registry binds, the key as `title`, and `work_item_count` `null`, since no count is known. The directory still answers for every other space |
 
 ### How often each analytics surface is opened
 

@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface
-from server.planning import calls, commits, participation, requests, service
+from server.planning import calls, commits, participation, read_model, requests, service
 
 from .commit_fixtures import CLAUDE, PROJECT
 from .test_commits_api import ApiCase
@@ -456,7 +456,7 @@ class HeldCloseTests(GoalWindowCase):
         answer that makes the close runs no net and names nothing again."""
 
         participation.write_set(
-            self.conn, service.space_identity(self.conn, "MAIN"), participation.MAXIMAL
+            self.conn, read_model.space_identity(self.conn, "MAIN"), participation.MAXIMAL
         )
         self.conn.commit()
         goal = self.filed("Goal", kind="goal")

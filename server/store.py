@@ -258,8 +258,17 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # decide, so the ratchet makes it refuse a store at 20. The same schema marks the
 # decisions an agent took on its own (`agent_decisions`), and holds the writes that wait
 # for the owner's answer (`pending_actions`, named by their questions' `action_id`), both
-# empty in a migrated store. The work-model migration carries a store at 17 straight to 20.
-STORE_SCHEMA_VERSION = 20
+# empty in a migrated store.
+#
+# 21 keeps how many tasks stood under a goal or stage when it was accepted, or when the
+# first task under one accepted empty started (`work_item_baselines`), empty in a
+# migrated store: every acceptance 2.9 left is `migrated`, and its count is not known.
+# A write that accepts a goal or stage, starts the first task under it, or takes its
+# acceptance away (triage, deferred) takes or drops its row; a build at 20 would do
+# neither and leave a row standing for an acceptance that no longer holds, or none for
+# one that does, so the ratchet makes it refuse a store at 21. The work-model
+# migration carries a store at 17 straight to 21.
+STORE_SCHEMA_VERSION = 21
 
 
 class StoreTooNewError(RuntimeError):

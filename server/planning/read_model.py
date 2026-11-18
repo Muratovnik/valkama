@@ -87,6 +87,29 @@ def item_by_id(conn: sqlite3.Connection, work_item_id: str) -> sqlite3.Row:
     return row
 
 
+def space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
+    """The space a caller named by its id, key or name."""
+
+    text = model.text_field(reference, "planning space", limit=200)
+    row = conn.execute(
+        "SELECT * FROM planning_spaces WHERE planning_space_id = ? OR key = ? OR name = ?",
+        (text, text, text),
+    ).fetchone()
+    if row is None:
+        raise model.PlanningError(f"no planning space named {text}")
+    return row
+
+
+def space_identity(conn: sqlite3.Connection, reference: object) -> str:
+    """The id of the space a caller named by its id, key or name.
+
+    It reads nothing but the space's identity, so a store another build wrote,
+    whose spaces lack a column the record reads, still answers it.
+    """
+
+    return str(space_row(conn, reference)["planning_space_id"])
+
+
 def state_by_id(conn: sqlite3.Connection, state_id: str) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM workflow_states WHERE state_id = ?", (state_id,)).fetchone()
     if row is None:
@@ -1285,17 +1308,35 @@ def table_of_contents(
     }
 
 
-#: Which calls name a session behind the writes to item `:id`; `sessions` lists them.
-_SESSION_CALLS = (
-    " FROM execution_events WHERE kind = :kind AND work_item_id = :id"
+#: Which calls name a session behind the writes to the items `{items}` names.
+_SESSION_CALLS_OF = (
+    " FROM execution_events WHERE kind = :kind AND work_item_id {items}"
     " AND identity_state = :confirmed AND COALESCE(session_id, '') != ''"
+)
+#: Which calls name a session behind the writes to item `:id`; `sessions` lists them.
+_SESSION_CALLS = _SESSION_CALLS_OF.format(items="= :id")
+#: The pairs of item and session behind the items `:ids`: the calls above, and the usage
+#: rows that spent on them; `session_ids` reads them.
+_SESSIONS_OF_ITEMS = (
+    "SELECT work_item_id, session_id"  # noqa: S608 - fixed clauses
+    + _SESSION_CALLS_OF.format(items="IN (SELECT value FROM json_each(:ids))")
+    + " UNION SELECT work_item_id, session_id FROM usage_segments"
+    " WHERE work_item_id IN (SELECT value FROM json_each(:ids)) AND session_id != ''"
 )
 
 
-def _session_calls(identity: str) -> dict[str, str]:
-    """The values `_SESSION_CALLS` names."""
+#: The commits attached now to the items `{items}` names. A commit a rewrite replaced is
+#: not among them: its attachments moved to the commit that replaced it.
+ATTACHED_OF = (
+    " FROM work_item_commits a JOIN commits c ON c.commit_id = a.commit_id"
+    " WHERE a.work_item_id {items} AND c.rewritten_to IS NULL"
+)
 
-    return {"id": identity, "kind": calls.KIND, "confirmed": calls.CONFIRMED}
+
+def _session_calls(identity: str, name: str = "id") -> dict[str, str]:
+    """The values `_SESSION_CALLS_OF` names, the items as `name`."""
+
+    return {name: identity, "kind": calls.KIND, "confirmed": calls.CONFIRMED}
 
 
 def part_counts(
@@ -1319,8 +1360,7 @@ def part_counts(
         " (SELECT COUNT(*) FROM work_item_links WHERE from_id = :id)"
         " + (SELECT COUNT(*) FROM work_item_links WHERE to_id = :id),"
         " (SELECT COUNT(*) FROM work_item_refs WHERE work_item_id = :id),"
-        " (SELECT COUNT(*) FROM work_item_commits a JOIN commits c"
-        "  ON c.commit_id = a.commit_id WHERE a.work_item_id = :id AND c.rewritten_to IS NULL),"
+        " (SELECT COUNT(*)" + ATTACHED_OF.format(items="= :id") + "),"
         " (SELECT COUNT(*) FROM work_item_events WHERE work_item_id = :id"
         "  AND action = 'mentioned'),"
         " (SELECT COUNT(DISTINCT session_id)" + _SESSION_CALLS + "),"
@@ -1481,10 +1521,9 @@ def commits(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
 
     rows = conn.execute(
         "SELECT c.project_id, c.hash, c.subject, c.committed_at, c.session_id, c.agent_id,"
-        " a.attached_by, a.label FROM work_item_commits a"
-        " JOIN commits c ON c.commit_id = a.commit_id"
-        " WHERE a.work_item_id = ? AND c.rewritten_to IS NULL"
-        " ORDER BY a.created_at DESC, a.commit_id DESC",
+        " a.attached_by, a.label"
+        + ATTACHED_OF.format(items="= ?")
+        + " ORDER BY a.created_at DESC, a.commit_id DESC",
         (work_item_id,),
     ).fetchall()
     names: dict[str, str] = {}
@@ -1665,6 +1704,45 @@ def sessions(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
         }
         for entry in found.values()
     ]
+
+
+def session_ids(conn: sqlite3.Connection, ids: Iterable[str]) -> dict[str, set[str]]:
+    """The sessions behind each of these items, in one read: the ones that wrote to it by
+    the rule of `sessions`, and the ones whose usage rows spent on it, a subagent's under
+    its session. An item with neither is absent.
+
+    A count of sessions over several items is the size of the union of theirs, never the
+    sum of their counts: one session on two items is one session.
+    """
+
+    found: dict[str, set[str]] = {}
+    for item, session in conn.execute(
+        _SESSIONS_OF_ITEMS,
+        _session_calls(json.dumps(sorted(set(ids))), "ids"),
+    ):
+        found.setdefault(str(item), set()).add(str(session))
+    return found
+
+
+def attached_commits(
+    conn: sqlite3.Connection, ids: Iterable[str]
+) -> dict[str, set[tuple[int, bool]]]:
+    """The commits attached now to each of these items, as `commits` reads one item's, in
+    one read: each commit's row id and whether its repository is known. An item with none
+    is absent.
+
+    A commit of no known repository is stored as its hash was written, abbreviated too,
+    so two of its rows may be one commit: its row id counts records, not commits.
+    """
+
+    found: dict[str, set[tuple[int, bool]]] = {}
+    for item, commit, known in conn.execute(
+        "SELECT a.work_item_id, c.commit_id, c.project_id IS NOT NULL"  # noqa: S608 - fixed clauses
+        + ATTACHED_OF.format(items="IN (SELECT value FROM json_each(?))"),
+        (json.dumps(sorted(set(ids))),),
+    ):
+        found.setdefault(str(item), set()).add((int(commit), bool(known)))
+    return found
 
 
 def _identity(event: sqlite3.Row) -> dict:

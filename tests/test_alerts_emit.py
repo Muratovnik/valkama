@@ -27,7 +27,7 @@ from server import mcp_surface, store
 from server.alerts import emit, messages
 from server.alerts import settings as alert_settings
 from server.ops import toast
-from server.planning import api, calls, participation, questions, requests, service
+from server.planning import api, calls, participation, questions, read_model, requests, service
 from server.planning import model as planning_model
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -339,7 +339,7 @@ class DecidedTests(EmitHarness):
 
     def test_a_decision_the_agent_took_raises_no_toast_beside_an_open_question(self) -> None:
         participation.write_set(
-            self.conn, service.space_identity(self.conn, "MAIN"), participation.MINIMAL
+            self.conn, read_model.space_identity(self.conn, "MAIN"), participation.MINIMAL
         )
         self.conn.commit()
         self.ask()
@@ -358,7 +358,7 @@ class DecidedTests(EmitHarness):
         self.assertEqual((1, []), (len(self.shown), self.removed))
         # Positive control: a decision that waits for the owner is a toast of its own.
         participation.write_set(
-            self.conn, service.space_identity(self.conn, "MAIN"), participation.DEFAULT
+            self.conn, read_model.space_identity(self.conn, "MAIN"), participation.DEFAULT
         )
         self.conn.commit()
         self.agent(

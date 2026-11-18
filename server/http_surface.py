@@ -63,6 +63,7 @@ from .projects import scopes
 from .quota import names as quota_names
 from .quota import poll as quota_poll
 from .quota import settings as quota_settings
+from .quota import shares as quota_shares
 from .refs import resolve_ref, show_commit
 from .sessions import op_ingest_session_event, session_context
 from .static_assets import DIST_DIR, SOURCE_ROOT
@@ -484,7 +485,9 @@ def _publishes(notify: _Notify | None, path: str) -> bool:
 
 
 def _planning_read(call: _Call) -> _Answer | None:
-    if {"data_scope_id", "space_key"} & call.parameters.keys():
+    # A read that names its scope exactly answers it itself; the rest take the read model's.
+    exact = {"data_scope_id", "space_key"} & call.parameters.keys()
+    if exact and call.path not in planning_api.SCOPED_READS:
         if call.path != "/api/planning":
             raise planning_api.PlanningHttpError(
                 400, "invalid_request", "Exact scope is supported by the Planning model read"
@@ -498,7 +501,11 @@ def _planning_read(call: _Call) -> _Answer | None:
                 ),
             )
         )
-    answer = planning_api.handle_get(call.store(), call.path, call.parameters)
+    # Planning reads an item's usage and Quota its share of each week; the item's usage
+    # read joins them here, as the exact card read is handed its loader.
+    answer = planning_api.handle_get(
+        call.store(), call.path, call.parameters, item_quota=quota_shares.of_segments
+    )
     if answer is not None and call.path == "/api/planning":
         return _read_model_answer(answer[1])
     return answer

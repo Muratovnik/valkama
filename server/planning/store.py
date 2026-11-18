@@ -500,6 +500,32 @@ COMMITS = (
 )
 _COMMITS = "".join(f"{statement};\n" for statement in COMMITS)
 
+_BASELINE_BASIS_SQL = ",".join(f"'{basis}'" for basis in model.BASELINE_BASES)
+#: How many tasks stood under a goal or stage when it was accepted, or when work under
+#: one accepted empty first started (`planning.baselines`): one row for as long as its
+#: acceptance stands, none for an acceptance the work-model migration gave. A fresh
+#: store creates it from this text, and so does the work-model migration.
+ITEM_BASELINES = (
+    "CREATE TABLE IF NOT EXISTS work_item_baselines(\n"
+    "    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    tasks INTEGER NOT NULL CHECK(tasks >= 0),\n"
+    f"    basis TEXT NOT NULL CHECK(basis IN ({_BASELINE_BASIS_SQL})),\n"
+    "    taken_at TEXT NOT NULL\n"
+    ") WITHOUT ROWID"
+)
+
+
+def has_table(conn: sqlite3.Connection, name: str) -> bool:
+    """Whether a store has a table. An attached store is read as it is, and an older
+    one lacks what later schemas added: it has nothing of that to say."""
+
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+        ).fetchone()
+        is not None
+    )
+
 
 def table_definition(table: str, name: str) -> str:
     """The `CREATE TABLE` of one rebuilt table under `name`, as a fresh store holds it."""
@@ -636,6 +662,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {AGENT_DECISIONS};
 {_PENDING}{_ITEM_PROJECTS}
 {_COMMITS}
+{ITEM_BASELINES};
 """
 
 
@@ -1079,6 +1106,7 @@ SCHEMA_TABLES = (
     "pending_actions",
     "commits",
     "work_item_commits",
+    "work_item_baselines",
 )
 
 

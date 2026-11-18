@@ -67,7 +67,7 @@ exception or a silent absence.
 
 ## Module list
 
-The server declares `planning`, `analytics`, `decisions`, `memory`, and `settings` in its
+The server declares `planning`, `analytics`, `decisions`, `volumes`, `memory`, and `settings` in its
 code, and that list is the whole answer: no store row records it and nothing
 changes it at runtime. `GET /api/modules` and the MCP tool `list_platform_modules` return
 each module's manifest inside a registration that keeps the wire's `state`,
@@ -91,6 +91,16 @@ It reads the `planning.decisions` model, served as `GET /api/planning/decisions`
 at both operating levels: every space at Global, the exact space at Space. It
 has no screen yet, so the shell shows it as an unavailable view until that screen
 arrives.
+
+`volumes` (Volumes) is the destination for how much work stands in each state, what
+it took and what is left. It reads the `planning.volumes` model, served as
+`GET /api/planning/volumes`, at both operating levels: every space at Global, the
+exact space or one of its projects at Space. Its one action,
+`module.volumes.attach-commit`, attaches a commit with no item from the list the
+page counts. Planning declares `planning.goal-volumes` beside it, served as
+`GET /api/planning/goal-volumes`: what each goal or stage took, which its list and
+its card read. Both reads are described in `connection-contract.md`. Volumes has no
+screen yet either, and the shell shows it as an unavailable view until it has one.
 
 A store does not record the list. Store schema 9 dropped the
 `platform_modules` rows an earlier build wrote, their audit in

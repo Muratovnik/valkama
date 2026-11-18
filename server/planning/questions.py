@@ -23,6 +23,11 @@ The conditions read a request row named `r`. The module sits below the read mode
 the leases and the service, which call it inside their writes, so it reads and
 writes the store itself and imports none of them; it imports `calls` for the call a
 write records.
+
+Whose call closed a request is read here as well, for the same reason: the request
+reads and the Volumes reads below the service both ask it (`with_by_person`), so
+the rule that a decision is the owner's when the call came through the interface
+is stated once.
 """
 
 from __future__ import annotations
@@ -30,9 +35,9 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 
-from . import calls, model, request_model
+from . import calls, model, request_model, store
 
 #: A request row `r` that asks the owner, open or closed: neither a list on a
 #: comment nor a request asked of an agent session.
@@ -103,13 +108,24 @@ def expired(conn: sqlite3.Connection, request_id: str, at: str) -> str | None:
 def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
     """The questions still open for the owner to answer, on one item or everywhere in this store."""
 
-    query = _PENDING
-    parameters: tuple[str, ...] = ()
-    if work_item_id is not None:
-        query += " AND r.work_item_id = ?"
-        parameters = (work_item_id,)
+    if work_item_id is None:
+        return open_on(conn, "1 = 1")
+    return open_on(conn, "r.work_item_id = ?", (work_item_id,))
+
+
+def open_on(
+    conn: sqlite3.Connection, where: str, parameters: Sequence[object] = ()
+) -> list[sqlite3.Row]:
+    """The questions still open for the owner to answer on the items `where` keeps.
+
+    `where` is a condition on the request row `r` and its item `work_items i`, with
+    `parameters` for its placeholders, such as the items a read of a space holds.
+    """
+
+    escaped = where.replace("{", "{{").replace("}", "}}")
     at = request_model.now()
-    return [row for row in _read(conn, query, parameters) if lapse(row, at) is None]
+    rows = _read(conn, f"{_PENDING} AND ({escaped})", tuple(parameters))
+    return [row for row in rows if lapse(row, at) is None]
 
 
 def asked(
@@ -256,6 +272,49 @@ def _read(
     standing = ", ".join(f"NULL AS {name}" for name in missing)
     source = f"(SELECT *, {standing} FROM work_item_requests)"  # noqa: S608 - column names from OWNER_QUESTION
     return conn.execute(query.format(requests=source), parameters).fetchall()
+
+
+def with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+    """Requests with whether the latest call that closed or changed each came through the interface.
+
+    True for a browser write, false for any other call that answered, changed,
+    declined or withdrew it, and null while no call has: still open, run out by
+    itself, or written with no call, as on a comment. The latest such event
+    decides, so a changed answer is the changer's. The `author` beside it is text
+    the caller wrote and says nothing here; the fact stays once, on the call row.
+    One statement for every request of a read.
+    """
+
+    closed = [record["request_id"] for record in records if record["resolved_at"] is not None]
+    sources: dict[str, object] = {}
+    # One from before calls were recorded has no such row to read: nothing there
+    # came through a call anyone proved.
+    if closed and store.has_table(conn, "execution_events"):
+        # By the request rather than its item: a merge moves a request and leaves
+        # its history where it was written. A call row that is there always has a
+        # source, so a join that found none means no call.
+        sources = {
+            str(row["detail"]): row["identity_source"]
+            for row in conn.execute(
+                "SELECT e.detail, c.identity_source FROM work_item_events e"
+                " LEFT JOIN execution_events c ON c.id = e.call_id"
+                " WHERE e.id IN (SELECT MAX(id) FROM work_item_events"
+                " WHERE action IN"
+                " ('request_answered','request_changed','request_declined','request_expired')"
+                " AND detail IN (SELECT value FROM json_each(?)) GROUP BY detail)",
+                (json.dumps(closed),),
+            )
+        }
+    return [
+        {**record, "by_person": _through_interface(sources.get(record["request_id"]))}
+        for record in records
+    ]
+
+
+def _through_interface(source: object) -> bool | None:
+    """Whether a call of this source came through the interface; null with no call."""
+
+    return None if source is None else source == calls.BROWSER
 
 
 def closed_reason(category: str) -> str:

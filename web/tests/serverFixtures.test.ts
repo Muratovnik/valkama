@@ -6,8 +6,7 @@
  * are stale), so a key the server adds, drops or reshapes fails here.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { readdirSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
@@ -46,8 +45,12 @@ import {
 import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
+  validatePlatformPlanningPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
+import { validateGoalVolumesAnswer, validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
+
+import { readServerFixture, SERVER_FIXTURES } from './support/serverFixtures.ts'
 
 const STEP_KINDS = [
   'focus-folder',
@@ -59,8 +62,8 @@ const STEP_KINDS = [
   'explain',
 ] as const
 
-const directory = fileURLToPath(new URL('./fixtures/server/', import.meta.url))
-const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${name}`, 'utf8'))
+const directory = SERVER_FIXTURES
+const read = readServerFixture
 
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
@@ -82,6 +85,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'documents-resolve-unbound.json': validateResolved,
   'documents-resolve.json': validateResolved,
   'documents-search.json': validateFound,
+  'goal-volumes.json': validateGoalVolumesAnswer,
   'live-frame.json': validateLiveFrame,
   'open-places.json': validateOpenPlaces,
   'open-plan-copy.json': validateOpenPlan,
@@ -95,6 +99,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'open-plan-silent.json': validateOpenPlan,
   'open-plan-session.json': validateOpenPlan,
   'planning-chain-tree.json': (value) => validateWorkItemChain(value),
+  'planning-portfolio.json': (value) => validatePlatformPlanningPayload(value),
   'planning-read-model.json': (value) => validateReadModel(value),
   'planning-search.json': validateGlobalPlanningSearch,
   'request-answered.json': validateInputRequestDetail,
@@ -104,6 +109,9 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'requests.json': validateInputRequestList,
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
+  'volumes-filtered.json': validateVolumesAnswer,
+  'volumes-project.json': validateVolumesAnswer,
+  'volumes-space.json': validateVolumesAnswer,
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
@@ -269,6 +277,30 @@ describe('the server fixtures', () => {
     expect(
       validateSessionUsageAnswer(read('usage-session.json')).by_item.at(-1)?.unpriced_tokens,
     ).toBe(0)
+  })
+
+  it("give a card's sessions and its share of each account's week", () => {
+    // Two sessions spent on the card and a third, which follows it, wrote to it. One stretch
+    // of its work, $0.01 of $0.26, is all its seat's cost that week, which the poll put at 40 %.
+    const usage = validateItemUsageAnswer(read('usage-item.json'))
+    expect(usage.sessions).toBe(3)
+    expect(
+      usage.quota.weeks.map(({ account, seat, share, percent }) => ({
+        account,
+        seat,
+        share,
+        percent,
+      })),
+    ).toEqual([
+      {
+        account: { organization: 'org-fixture', account_uuid: 'acct-fixture' },
+        seat: 'week:2026-11-16T09:00Z',
+        share: 1,
+        percent: 40,
+      },
+    ])
+    // The rest, $0.25 of $0.26, is on no seat: the fixture's other rows name no organization.
+    expect(usage.quota.unknown_share).toBeCloseTo(0.25 / 0.26, 4)
   })
 
   it('name the seat of the work, which the page reads without taking it for its own', () => {

@@ -34,6 +34,7 @@ from server.planning import (
     pending,
     person_events,
     questions,
+    read_model,
     request_model,
     requests,
     service,
@@ -477,7 +478,7 @@ class CarryOutTests(Harness):
         # the goal off: the task still waits, but the goal it was to be taken on in is no
         # longer accepted, so the answer takes nothing on.
         participation.write_set(
-            self.conn, service.space_identity(self.conn, "ALPHA"), participation.MANUAL
+            self.conn, read_model.space_identity(self.conn, "ALPHA"), participation.MANUAL
         )
         goal = self.filed("The owner's goal", kind="goal", by=calls.browser())
         with calls.bind(AGENT, "create_work_item"):
@@ -748,7 +749,7 @@ class SettingHarness(Harness):
         clock = mock.patch.object(leases, "utc_now", lambda: NOW)
         clock.start()
         self.addCleanup(clock.stop)
-        self.space = service.space_identity(self.conn, "ALPHA")
+        self.space = read_model.space_identity(self.conn, "ALPHA")
 
     def at(self, name: str) -> None:
         participation.write_set(self.conn, self.space, name)

@@ -15,6 +15,8 @@ const spaces: PlatformPlanningReady['spaces'] = [
     space_ref: { data_scope_id: STORE, space_key: 'MAIN' },
     title: 'Main work',
     work_item_count: 12,
+    numbers: { triage: 4, ready: 3, active: 2, waiting_owner: 1 },
+    numbers_absent: null,
     default_project: 'alpha',
     projects: [
       { project_id: 'alpha', display_name: 'Alpha' },
@@ -25,14 +27,16 @@ const spaces: PlatformPlanningReady['spaces'] = [
     space_ref: { data_scope_id: STORE, space_key: 'NEW' },
     title: 'New space',
     work_item_count: 0,
+    numbers: { triage: 0, ready: 0, active: 0, waiting_owner: 0 },
+    numbers_absent: null,
     default_project: null,
     projects: [],
   },
 ]
 
-function portfolio(locale: 'en' | 'ru' = 'en') {
+function portfolio(locale: 'en' | 'ru' = 'en', shown = spaces) {
   return mount(PlanningPortfolio, {
-    props: { spaces },
+    props: { spaces: shown },
     global: { plugins: [createI18n({ legacy: false, locale, messages })] },
   })
 }
@@ -58,6 +62,22 @@ describe('«All spaces»', () => {
     expect(card?.get('.space-count').text()).toBe('Задач: 0')
     expect(card?.get('.projects-names').text()).toBe('Проектов нет')
     expect(card?.get('button.open-space').text()).toBe('Открыть пространство')
+  })
+
+  it('shows no count for a space whose store could not be read', () => {
+    const unread = {
+      space_ref: { data_scope_id: STORE, space_key: 'FAR' },
+      title: 'FAR',
+      work_item_count: null,
+      numbers: null,
+      numbers_absent: 'unreadable' as const,
+      default_project: null,
+      projects: [],
+    }
+    const [card] = portfolio('en', [unread]).findAll('.portfolio-space')
+    expect(card?.get('.space-title').text()).toBe('FAR')
+    expect(card?.find('.space-count').exists()).toBe(false)
+    expect(card?.text()).not.toContain('null')
   })
 
   it('opens the whole space a card stands for, an empty one as well', async () => {

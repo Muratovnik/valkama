@@ -82,6 +82,7 @@ export const en = {
       sessions: 'Sessions',
       analytics: 'Analytics',
       decisions: 'Agent decisions',
+      volumes: 'Volumes',
       improvements: 'Improvements',
       skills: 'Skills',
       memory: 'Memory',

@@ -22,7 +22,7 @@ hold other work at any depth and are never claimed; there are eight categories;
 work is accepted on a recorded basis; and an accepted open goal or stage shows
 what it derives from the work under it instead of a state. The order work is
 taken in was set by hand, a `rank` stored as the item's `position`; in 3.0 it is
-computed from the work model. The store moves to schema 20 through
+computed from the work model. The store moves to schema 21 through
 `valkama migrate work-model`.
 
 Several of the old names would mean something else under the new model. A
@@ -199,6 +199,11 @@ and no compatibility layer.
      `answered` by those recommendations, with its `answers` and a `note` that
      says so, where it came back `pending`; the batch's `questions` entry then
      names its `status`, `answers` and `note` beside its `request_id`;
+   - a space of the directory `GET /api/platform/planning` carries the four
+     numbers of its card, `numbers`, or why it has none, `numbers_absent`; a
+     store that does not open or answer no longer fails the whole directory:
+     each of its spaces is listed by what is known without it, with
+     `work_item_count` `null`, where the field was always a number;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from
@@ -292,6 +297,7 @@ and no compatibility layer.
 | an agent's cancel of work outside its own, or that other sessions do, made at once | read `waits_for_owner` or `waits_for_sessions` in the answer: the cancel is made, if it still applies, when the owner or those sessions agree |
 | a session whose work another agent cancels hears only the cancel | answer its `consent` request: `agree`, `object` with a `reason`, or `move_out` your work and then `moved_out` |
 | an agent's removal or rewording of a step of a goal or stage, its completion of a goal, or its put-off of an accepted one, made at once | send `checklist_reason` with such a step change, or `clarifies: true` on a step that only says the same better, and read `waits_for_owner` in the answer; close the item in a later call than a write that waits |
+| a directory space's `work_item_count`, always a number | a number, or `null` with `numbers_absent` `unreadable` when the space's store could not be read |
 
 ## Consequences
 

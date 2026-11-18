@@ -25,6 +25,7 @@ from . import (
     chain,
     commits,
     decisions,
+    goal_volumes,
     held,
     images,
     item_projects,
@@ -42,6 +43,7 @@ from . import (
     subscriptions,
     usage,
     views,
+    volumes,
     waiting,
 )
 
@@ -181,10 +183,20 @@ def error_response(error: BaseException) -> tuple[int, dict]:
 
 
 def handle_get(
-    conn: sqlite3.Connection, path: str, parameters: Mapping[str, list[str]]
+    conn: sqlite3.Connection,
+    path: str,
+    parameters: Mapping[str, list[str]],
+    *,
+    item_quota: usage.QuotaReader | None = None,
 ) -> tuple[int, dict] | None:
-    """Answer one neutral read, or return None when the path is not ours."""
+    """Answer one neutral read, or return None when the path is not ours.
 
+    `item_quota` reads the quota of an item's usage, and only the item's usage read takes
+    it: a caller that can read Quota passes it, and without it that read has no `quota`.
+    """
+
+    if path == _ITEM_USAGE:
+        return 200, _item_usage(conn, parameters, item_quota)
     reader = _READS.get(path)
     if reader is None:
         return None
@@ -483,12 +495,18 @@ def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
     }
 
 
-def _item_usage(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+def _item_usage(
+    conn: sqlite3.Connection,
+    parameters: Mapping[str, list[str]],
+    quota: usage.QuotaReader | None = None,
+) -> dict:
     """What work on one item took; `scope` `tree` or `chain` takes in what it grew into."""
 
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "usage": usage.for_item(conn, _required(parameters, "id"), _first(parameters, "scope")),
+        "usage": usage.for_item(
+            conn, _required(parameters, "id"), _first(parameters, "scope"), quota=quota
+        ),
     }
 
 
@@ -547,7 +565,9 @@ def _participation(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]
     """The owner's participation in one space, or without `space` the common setting."""
 
     space = _first(parameters, "space")
-    return participation.shown(conn, None if space is None else service.space_identity(conn, space))
+    return participation.shown(
+        conn, None if space is None else read_model.space_identity(conn, space)
+    )
 
 
 def _decisions(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -560,7 +580,7 @@ def _decisions(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
     space = _first(parameters, "space")
     return decisions.page(
         conn,
-        space=None if space is None else service.space_identity(conn, space),
+        space=None if space is None else read_model.space_identity(conn, space),
         project=_first(parameters, "project"),
         points=[value for value in parameters.get("point") or [] if value != ""],
         start=_first(parameters, "from"),
@@ -571,7 +591,7 @@ def _decisions(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
 
 
 def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """The commits on no card of a space's projects or of one project, newest first."""
+    """The commits on no card of a space's projects, of one project or of the whole store, newest first."""
 
     limit = _count(parameters, "limit")
     return commits.unattached(
@@ -582,6 +602,59 @@ def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
         limit=commits.UNATTACHED_LIMIT if limit is None else limit,
     )
 
+
+#: What the volumes read takes: its scope (`project_id` alone may be left out), its period,
+#: and a filter of its tasks, each part of which may be repeated or left out.
+_VOLUMES_SCOPE = ("scope_kind", "data_scope_id", "space_key", "project_id")
+_VOLUMES_PERIOD = ("from", "to", "utc_offset")
+_VOLUMES_FILTER = ("kind", "label")
+
+
+def _volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """How much work stands in a scope and what came to a close in a period."""
+
+    unknown = sorted(set(parameters) - {*_VOLUMES_SCOPE, *_VOLUMES_PERIOD, *_VOLUMES_FILTER})
+    if unknown:
+        raise PlanningHttpError(400, "invalid_request", f"{unknown[0]} is not a parameter")
+    named = {name: _first(parameters, name) for name in _VOLUMES_SCOPE}
+    scope = volumes.scope(
+        conn,
+        named["scope_kind"],
+        data_scope_id=named["data_scope_id"],
+        space_key=named["space_key"],
+        project_id=named["project_id"],
+    )
+    offset = _required(parameters, "utc_offset")
+    try:
+        minutes = int(offset, 10)
+    except ValueError as error:
+        raise PlanningHttpError(
+            400, "invalid_request", "utc_offset must be a whole number of minutes"
+        ) from error
+    period = volumes.period(_required(parameters, "from"), _required(parameters, "to"), minutes)
+    kept = volumes.work_filter(conn, parameters.get("kind", []), parameters.get("label", []))
+    return {
+        "interface_version": PLANNING_API_INTERFACE,
+        "volumes": volumes.read(conn, volumes.Request(scope, period, kept)),
+    }
+
+
+def _goal_volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """What each goal or stage named took, whole, in the order named."""
+
+    return {
+        "interface_version": PLANNING_API_INTERFACE,
+        "goals": goal_volumes.read(conn, parameters.get("id", [])),
+    }
+
+
+#: The reads under `/api/planning/` that name their scope exactly, by `data_scope_id` and
+#: `space_key`, and answer for the store this service writes. Every other read here
+#: takes no data scope.
+SCOPED_READS = frozenset({"/api/planning/volumes"})
+
+#: The item's usage read, the one read that takes a reader of the quota.
+_ITEM_USAGE = "/api/planning/work-item/usage"
 
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
@@ -594,7 +667,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     # keys on exact paths and a segment would need a second matching rule.
     "/api/planning/work-item": _work_item,
     "/api/planning/work-item/chain": _chain,
-    "/api/planning/work-item/usage": _item_usage,
+    _ITEM_USAGE: _item_usage,
     "/api/planning/session/usage": _session_usage,
     "/api/planning/search": _search,
     "/api/planning/requests": _requests,
@@ -603,6 +676,8 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/participation": _participation,
     "/api/planning/decisions": _decisions,
     "/api/planning/commits/unattached": _unattached,
+    "/api/planning/volumes": _volumes,
+    "/api/planning/goal-volumes": _goal_volumes,
 }
 
 
@@ -1283,7 +1358,7 @@ def _write_participation(conn: sqlite3.Connection, payload: Mapping[str, object]
     if unknown:
         raise PlanningHttpError(400, "invalid_request", f"unknown field: {', '.join(unknown)}")
     named = _field(payload, "space")
-    space = None if named is None else service.space_identity(conn, named)
+    space = None if named is None else read_model.space_identity(conn, named)
     if form == "key":
         participation.write_value(conn, space, payload["key"], _field(payload, "value"))
     elif form == "set":

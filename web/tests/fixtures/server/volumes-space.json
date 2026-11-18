@@ -1,0 +1,1123 @@
+{
+  "interface_version": "valkama-planning-api",
+  "volumes": {
+    "scope": {
+      "kind": "space",
+      "space_ref": {
+        "data_scope_id": "00000000-0000-4000-8000-000000000004",
+        "space_key": "MAIN"
+      },
+      "project_ref": null
+    },
+    "period": {
+      "from": "2026-01-02T03:04:05+03:00",
+      "to": "2026-01-02T03:04:05+03:00",
+      "utc_offset": 180
+    },
+    "filter": null,
+    "measured_from": "2026-01-02T03:04:05.000Z",
+    "counts": {
+      "categories": [
+        {
+          "category": "triage",
+          "tasks": 6,
+          "goals": 3,
+          "stages": 1,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000005",
+            "reference": "MAIN-1",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "deferred",
+          "tasks": 1,
+          "goals": 0,
+          "stages": 0,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000050",
+            "reference": "MAIN-19",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "ready",
+          "tasks": 2,
+          "goals": 0,
+          "stages": 0,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000038",
+            "reference": "MAIN-12",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "active",
+          "tasks": 5,
+          "goals": 0,
+          "stages": 0,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000010",
+            "reference": "MAIN-3",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "review",
+          "tasks": 0,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        },
+        {
+          "category": "completed",
+          "tasks": 1,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        },
+        {
+          "category": "blocked",
+          "tasks": 0,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        },
+        {
+          "category": "cancelled",
+          "tasks": 1,
+          "goals": 0,
+          "stages": 0,
+          "oldest": null
+        }
+      ],
+      "waiting_owner": {
+        "count": 2,
+        "oldest": {
+          "request_id": "00000000-0000-4000-8000-000000000007",
+          "reference": "MAIN-1",
+          "since": "2026-01-02T03:04:05.000000Z"
+        }
+      },
+      "unattached_commits": 1
+    },
+    "goals": [
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000017",
+        "reference": "MAIN-4",
+        "title": "Goal with participants",
+        "kind": "goal",
+        "state": null,
+        "container_state": "in_progress",
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 0,
+            "active": 1,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": {
+          "tasks": 1,
+          "basis": "started",
+          "taken_at": "2026-01-02T03:04:05Z"
+        },
+        "baseline_absent": null,
+        "spent": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "sessions": 2,
+        "commits": 0,
+        "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
+        "children": [
+          {
+            "work_item_id": "00000000-0000-4000-8000-000000000043",
+            "reference": "MAIN-5",
+            "title": "Its stage",
+            "kind": "stage",
+            "state": null,
+            "container_state": "in_progress",
+            "open": true,
+            "parent_reference": "MAIN-4",
+            "other_space": null,
+            "partial": false,
+            "tasks": {
+              "total": 1,
+              "closed": 0,
+              "completed": 0,
+              "cancelled": 0,
+              "by_category": {
+                "triage": 0,
+                "deferred": 0,
+                "ready": 0,
+                "active": 1,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0,
+                "cancelled": 0
+              }
+            },
+            "baseline": {
+              "tasks": 1,
+              "basis": "started",
+              "taken_at": "2026-01-02T03:04:05Z"
+            },
+            "baseline_absent": null,
+            "spent": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": null,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": null,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 0,
+              "quality": null,
+              "partly_measured": 0
+            },
+            "spent_with_cancelled": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": null,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": null,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 0,
+              "quality": null,
+              "partly_measured": 0
+            },
+            "sessions": 1,
+            "commits": 0,
+            "commits_unknown_repository": 0,
+            "remaining": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": 0,
+                "cached_read": 0,
+                "cache_write_5m": 0,
+                "cache_write_1h": 0,
+                "output": 0,
+                "reasoning": 0
+              },
+              "estimated_api_cost_usd": 0.0,
+              "basis": 0,
+              "estimated": 0,
+              "unestimated": 1
+            },
+            "children": []
+          }
+        ]
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000034",
+        "reference": "MAIN-7",
+        "title": "Live goal",
+        "kind": "goal",
+        "state": {
+          "key": "triage",
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "container_state": null,
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 0,
+            "active": 1,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": null,
+        "baseline_absent": "not_accepted",
+        "spent": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "sessions": 1,
+        "commits": 0,
+        "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
+        "children": []
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000046",
+        "reference": "MAIN-9",
+        "title": "Tree goal",
+        "kind": "goal",
+        "state": null,
+        "container_state": "in_progress",
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": false,
+        "tasks": {
+          "total": 4,
+          "closed": 2,
+          "completed": 1,
+          "cancelled": 1,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 2,
+            "active": 0,
+            "review": 0,
+            "completed": 1,
+            "blocked": 0,
+            "cancelled": 1
+          }
+        },
+        "baseline": {
+          "tasks": 3,
+          "basis": "started",
+          "taken_at": "2026-01-02T03:04:05Z"
+        },
+        "baseline_absent": null,
+        "spent": {
+          "agent_seconds": 900.0,
+          "tokens": {
+            "input": 120,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 24,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": 1.5,
+          "unpriced_tokens": 48,
+          "quality": "observed",
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 1200.0,
+          "tokens": {
+            "input": 160,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 32,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": 1.75,
+          "unpriced_tokens": 48,
+          "quality": "observed",
+          "partly_measured": 0
+        },
+        "sessions": 1,
+        "commits": 0,
+        "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 2
+        },
+        "children": [
+          {
+            "work_item_id": "00000000-0000-4000-8000-000000000041",
+            "reference": "MAIN-10",
+            "title": "Tree stage",
+            "kind": "stage",
+            "state": null,
+            "container_state": "not_started",
+            "open": true,
+            "parent_reference": "MAIN-9",
+            "other_space": null,
+            "partial": false,
+            "tasks": {
+              "total": 2,
+              "closed": 0,
+              "completed": 0,
+              "cancelled": 0,
+              "by_category": {
+                "triage": 0,
+                "deferred": 0,
+                "ready": 2,
+                "active": 0,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0,
+                "cancelled": 0
+              }
+            },
+            "baseline": null,
+            "baseline_absent": "not_started",
+            "spent": {
+              "agent_seconds": 300.0,
+              "tokens": {
+                "input": 40,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": 8,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 48,
+              "quality": "observed",
+              "partly_measured": 0
+            },
+            "spent_with_cancelled": {
+              "agent_seconds": 300.0,
+              "tokens": {
+                "input": 40,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": 8,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 48,
+              "quality": "observed",
+              "partly_measured": 0
+            },
+            "sessions": 1,
+            "commits": 0,
+            "commits_unknown_repository": 0,
+            "remaining": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": 0,
+                "cached_read": 0,
+                "cache_write_5m": 0,
+                "cache_write_1h": 0,
+                "output": 0,
+                "reasoning": 0
+              },
+              "estimated_api_cost_usd": 0.0,
+              "basis": 0,
+              "estimated": 0,
+              "unestimated": 2
+            },
+            "children": [
+              {
+                "work_item_id": "00000000-0000-4000-8000-000000000039",
+                "reference": "MAIN-11",
+                "title": "Tree nested stage",
+                "kind": "stage",
+                "state": null,
+                "container_state": "not_started",
+                "open": true,
+                "parent_reference": "MAIN-10",
+                "other_space": null,
+                "partial": false,
+                "tasks": {
+                  "total": 1,
+                  "closed": 0,
+                  "completed": 0,
+                  "cancelled": 0,
+                  "by_category": {
+                    "triage": 0,
+                    "deferred": 0,
+                    "ready": 1,
+                    "active": 0,
+                    "review": 0,
+                    "completed": 0,
+                    "blocked": 0,
+                    "cancelled": 0
+                  }
+                },
+                "baseline": null,
+                "baseline_absent": "not_started",
+                "spent": {
+                  "agent_seconds": 0.0,
+                  "tokens": {
+                    "input": null,
+                    "cached_read": null,
+                    "cache_write_5m": null,
+                    "cache_write_1h": null,
+                    "output": null,
+                    "reasoning": null
+                  },
+                  "estimated_api_cost_usd": null,
+                  "unpriced_tokens": 0,
+                  "quality": null,
+                  "partly_measured": 0
+                },
+                "spent_with_cancelled": {
+                  "agent_seconds": 0.0,
+                  "tokens": {
+                    "input": null,
+                    "cached_read": null,
+                    "cache_write_5m": null,
+                    "cache_write_1h": null,
+                    "output": null,
+                    "reasoning": null
+                  },
+                  "estimated_api_cost_usd": null,
+                  "unpriced_tokens": 0,
+                  "quality": null,
+                  "partly_measured": 0
+                },
+                "sessions": 0,
+                "commits": 0,
+                "commits_unknown_repository": 0,
+                "remaining": {
+                  "agent_seconds": 0.0,
+                  "tokens": {
+                    "input": 0,
+                    "cached_read": 0,
+                    "cache_write_5m": 0,
+                    "cache_write_1h": 0,
+                    "output": 0,
+                    "reasoning": 0
+                  },
+                  "estimated_api_cost_usd": 0.0,
+                  "basis": 0,
+                  "estimated": 0,
+                  "unestimated": 1
+                },
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000035",
+        "reference": "MAIN-15",
+        "title": "Tree goal not accepted yet",
+        "kind": "goal",
+        "state": {
+          "key": "triage",
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "container_state": null,
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": null,
+        "baseline_absent": "not_accepted",
+        "spent": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "sessions": 0,
+        "commits": 0,
+        "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
+        "children": [
+          {
+            "work_item_id": "00000000-0000-4000-8000-000000000036",
+            "reference": "MAIN-16",
+            "title": "Tree stage not accepted yet",
+            "kind": "stage",
+            "state": {
+              "key": "triage",
+              "name": "Triage",
+              "category": "triage",
+              "is_terminal": false
+            },
+            "container_state": null,
+            "open": true,
+            "parent_reference": "MAIN-15",
+            "other_space": null,
+            "partial": false,
+            "tasks": {
+              "total": 1,
+              "closed": 0,
+              "completed": 0,
+              "cancelled": 0,
+              "by_category": {
+                "triage": 1,
+                "deferred": 0,
+                "ready": 0,
+                "active": 0,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0,
+                "cancelled": 0
+              }
+            },
+            "baseline": null,
+            "baseline_absent": "not_accepted",
+            "spent": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": null,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": null,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 0,
+              "quality": null,
+              "partly_measured": 0
+            },
+            "spent_with_cancelled": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": null,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": null,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 0,
+              "quality": null,
+              "partly_measured": 0
+            },
+            "sessions": 0,
+            "commits": 0,
+            "commits_unknown_repository": 0,
+            "remaining": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": 0,
+                "cached_read": 0,
+                "cache_write_5m": 0,
+                "cache_write_1h": 0,
+                "output": 0,
+                "reasoning": 0
+              },
+              "estimated_api_cost_usd": 0.0,
+              "basis": 0,
+              "estimated": 0,
+              "unestimated": 1
+            },
+            "children": []
+          }
+        ]
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000052",
+        "reference": "MAIN-23",
+        "title": "Converted card",
+        "kind": "goal",
+        "state": null,
+        "container_state": "in_progress",
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 0,
+            "active": 1,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": {
+          "tasks": 1,
+          "basis": "accepted",
+          "taken_at": "2026-01-02T03:04:05Z"
+        },
+        "baseline_absent": null,
+        "spent": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "sessions": 0,
+        "commits": 0,
+        "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
+        "children": []
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000056",
+        "reference": "MAIN-25",
+        "title": "Goal an agent proposes",
+        "kind": "goal",
+        "state": {
+          "key": "triage",
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "container_state": null,
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": false,
+        "tasks": {
+          "total": 0,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": null,
+        "baseline_absent": "not_accepted",
+        "spent": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": null,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": null,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 0,
+          "quality": null,
+          "partly_measured": 0
+        },
+        "sessions": 1,
+        "commits": 0,
+        "commits_unknown_repository": 0,
+        "remaining": null,
+        "children": []
+      }
+    ],
+    "outside": {
+      "tasks": 8,
+      "by_project": [
+        {
+          "project": {
+            "id": null,
+            "unknown": false,
+            "name": null,
+            "combinations": null
+          },
+          "categories": {
+            "triage": 4,
+            "deferred": 1,
+            "ready": 0,
+            "active": 2,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        {
+          "project": {
+            "id": "example-project",
+            "unknown": false,
+            "name": "example-project",
+            "combinations": null
+          },
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ],
+      "by_label": [
+        {
+          "label": null,
+          "categories": {
+            "triage": 4,
+            "deferred": 1,
+            "ready": 0,
+            "active": 2,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        {
+          "label": "ui",
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ]
+    },
+    "flow": {
+      "days": [
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 16,
+          "closed": 2,
+          "decisions": 0,
+          "commits": 1
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        }
+      ],
+      "totals": {
+        "created": 16,
+        "closed": 2,
+        "decisions": 0,
+        "commits": 1
+      },
+      "pace": {
+        "open": 14,
+        "recent": {
+          "days": 7,
+          "created": 16,
+          "closed": 2,
+          "trend": "growing"
+        },
+        "series": [
+          {
+            "day": "2026-01-02",
+            "created": 16,
+            "closed": 2,
+            "total": 16,
+            "closed_total": 2
+          }
+        ]
+      }
+    },
+    "estimates": {
+      "min_basis": 5,
+      "basis": 1,
+      "rows": [
+        {
+          "level": "project_kind",
+          "project": {
+            "id": null,
+            "unknown": false,
+            "name": null,
+            "combinations": null
+          },
+          "space": {
+            "key": "MAIN",
+            "name": "Contract"
+          },
+          "kind": "task",
+          "label": null,
+          "tasks": 1,
+          "agent_seconds": {
+            "median": 300.0,
+            "q1": 300.0,
+            "q3": 300.0,
+            "mean": 300.0
+          },
+          "tokens_anew": {
+            "median": 48,
+            "q1": 48,
+            "q3": 48,
+            "mean": 48
+          },
+          "estimated_api_cost_usd": {
+            "median": 1.0,
+            "q1": 1.0,
+            "q3": 1.0,
+            "mean": 1.0
+          }
+        }
+      ]
+    }
+  }
+}
