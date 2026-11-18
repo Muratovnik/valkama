@@ -185,7 +185,7 @@ describe('the bars', () => {
     expect(byClass.find('[data-kind="other"]').exists()).toBe(false)
   })
 
-  it('name the first ten tasks, fold the rest into one row and leave them to the table, in one line that asks for it', async () => {
+  it('name the first ten tasks, fold the rest into one row, and count every task in one line that opens them all', async () => {
     const many = (count: number) =>
       answer(
         ['work_item'],
@@ -198,7 +198,7 @@ describe('the bars', () => {
     const ten = mountBars(many(10), 'work_item')
     expect(namedRows(ten)).toHaveLength(10)
     expect(ten.find('[data-kind="other"]').exists()).toBe(false)
-    expect(ten.find('.spending-bars-more').exists()).toBe(false)
+    expect(ten.find('[data-all]').exists()).toBe(false)
 
     const thirty = mountBars(many(30), 'work_item')
     const labels = thirty.findAll('.ranked-row .ranked-label').map((label) => label.text())
@@ -210,13 +210,14 @@ describe('the bars', () => {
     expect(barsOf(thirty).find((row) => row.kind === 'other')?.value).toBeCloseTo(
       (210 * 600) / 3600,
     )
-    const more = thirty.get('.spending-bars-more')
-    expect(more.text()).toBe('20 more — in the table')
-    await more.trigger('click')
-    expect(thirty.emitted('more')).toHaveLength(1)
-    expect(
-      mountBars(many(30), 'work_item', { locale: 'ru' }).get('.spending-bars-more').text(),
-    ).toBe('ещё 20 — в таблице')
+    // The line counts every task of the period, the ten named and the twenty folded.
+    const all = thirty.get('[data-all]')
+    expect(all.text()).toBe('All 30')
+    await all.trigger('click')
+    expect(thirty.emitted('all')).toHaveLength(1)
+    expect(mountBars(many(30), 'work_item', { locale: 'ru' }).get('[data-all]').text()).toBe(
+      'Все 30',
+    )
   })
 
   const CATEGORY = { work_item: task(1, 'One'), launch_class: value('general') }
@@ -441,7 +442,7 @@ describe('the drawings of the split', () => {
     expect(narrow.findComponent(DonutChart).exists()).toBe(false)
   })
 
-  it('leaves no value to the table under the ring, and the first twelve to the bars', async () => {
+  it('leaves no value out under the ring, and the first twelve to the bars with a line to all', async () => {
     const many = answer(
       ['model'],
       Array.from({ length: 14 }, (_, index) => ({
@@ -451,11 +452,11 @@ describe('the drawings of the split', () => {
       })),
     ).usage.rows
     const section = mountBars(many, 'model')
-    // The ring folds its own rest: no line asks for the table.
-    expect(section.text()).not.toContain('2 more in the table')
+    // The ring folds its own rest: no line asks for every value; the bars' does, the control.
+    expect(section.find('[data-all]').exists()).toBe(false)
     expect(seriesNames(section).at(-1)).toMatch(/^Other, \d+ more$/u)
     await showView(section, '.spending-bars', 'Bars')
     expect(namedRows(section)).toHaveLength(12)
-    expect(section.text()).toContain('2 more')
+    expect(section.get('[data-all]').text()).toBe('All 14')
   })
 })

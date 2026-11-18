@@ -2,6 +2,7 @@
  * The Analytics page: what agent work was spent on in a period, and how that changed from the
  * period before. A cost is always said to be an estimate at API prices and never a bill.
  */
+import { analyticsDetailMessages } from '@/shared/i18n/analyticsDetailMessages.ts'
 import { analyticsFigureMessages } from '@/shared/i18n/analyticsFigureMessages.ts'
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
@@ -151,7 +152,6 @@ export const analyticsMessages = {
         },
       },
       drill: {
-        value: 'Show the tasks of {value}',
         noTask: 'Break down the work with no task by project and launch class',
         noTaskByLaunch: 'Break down the work with no task by launch class',
         day: 'Show the tasks of {day}',
@@ -198,6 +198,7 @@ export const analyticsMessages = {
           reasoning: 'Reasoning',
         },
       },
+      detail: analyticsDetailMessages.en,
       overview: analyticsOverviewMessages.en,
       panel: analyticsPanelMessages.en,
       quota: analyticsQuotaMessages.en,
@@ -345,7 +346,6 @@ export const analyticsMessages = {
         },
       },
       drill: {
-        value: 'Показать задачи: {value}',
         noTask: 'Разобрать работу без задачи по проектам и способам запуска',
         noTaskByLaunch: 'Разобрать работу без задачи по способам запуска',
         day: 'Показать задачи за {day}',
@@ -392,6 +392,7 @@ export const analyticsMessages = {
           reasoning: 'Рассуждения',
         },
       },
+      detail: analyticsDetailMessages.ru,
       overview: analyticsOverviewMessages.ru,
       panel: analyticsPanelMessages.ru,
       quota: analyticsQuotaMessages.ru,

@@ -181,13 +181,17 @@ describe('the days', () => {
   })
 
   // A press on a part of a day once acted for the day: it now does what the part's row does.
-  it('let a value narrow from its segment and legend entry, and the folded tail lead nowhere', async () => {
+  it('let a value open its side panel from its segment and legend entry, and the folded tail lead nowhere', async () => {
     const days = mountDays(
       week([...STRETCHES, { day: 1, group: { work_item: noTask }, spend: { seconds: 9 * 3600 } }]),
     )
-    const none = days.findAll('button.period-segment')
-    expect(none.length).toBeGreaterThan(0)
-    expect(new Set(none.map((one) => one.attributes('data-series')))).toEqual(new Set(['none']))
+    // Every value the read can filter by is a control, each task and work with no task alike; a
+    // task the app has no card link for here is one too, and the folded tail is not.
+    const series = (at: string) => days.findAll(at).map((one) => one.attributes('data-series'))
+    expect(series('.period-segment')).toEqual(expect.arrayContaining(['none', 'other']))
+    const values = series('.period-segment').filter((key) => key !== 'other')
+    expect(new Set(series('button.period-segment'))).toEqual(new Set(values))
+    const none = days.findAll('button.period-segment[data-series="none"]')
     const folded = days.findAll('.period-segment[data-series="other"]')
     expect(folded.length).toBeGreaterThan(0)
     for (const one of folded) {
@@ -199,7 +203,7 @@ describe('the days', () => {
     await none[0]?.trigger('click')
     await days.get('button.chart-key[data-series="none"]').trigger('click')
     await days.findAll('.period-segment[data-series="other"]')[0]?.trigger('click')
-    expect(days.emitted('narrow')).toEqual([
+    expect(days.emitted('inspect')).toEqual([
       [null, 'No task'],
       [null, 'No task'],
     ])

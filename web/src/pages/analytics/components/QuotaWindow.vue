@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * One window of one account in the quota panel, in three parts 12px apart: what stands now, the
- * step line of its readings (`StepLine`) and what used the window (`QuotaWindowSpend`).
+ * step line of its readings (`StepLine`) and «Where the window went», which opens what used the
+ * window in the side panel over the page (`WindowDetail`).
  *
  * What stands now leads with one line, the share spent as the window's figure and its state in
  * words beside it, «75% used · silent 3 d», over the bar with its pace tick (`WindowBar`), then
@@ -29,8 +30,8 @@
  * where its answer was read before the reset.
  *
  * What used the window is the work Valkama recorded on the account since the window's start, by
- * its API price estimate, on an axis of its own. A window that names no start has no span to read
- * it over, and shows none.
+ * its API price estimate, on an axis of its own (`QuotaWindowSpend`). A window that names no start
+ * has no span to read it over, and offers none. The button that opens it is `data-spend`.
  *
  * A window is fresh or silent by the panel's moment, as its reset is: a reading that was fresh
  * when the answer came turns silent once it is older than the answer's `fresh_for_seconds`.
@@ -43,13 +44,15 @@ import { computed } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
-import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
+import { useWindowDetail } from '@/pages/analytics/composables/useDetail.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import {
+  accountKey,
   forecastCourses,
   forecastEnds,
   stands,
   stateAt,
+  windowKey,
 } from '@/pages/analytics/utils/quotaFigures.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
@@ -58,6 +61,7 @@ import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.t
 import StepLine from '@/shared/ui/StepLine.vue'
 import StepLineTable from '@/shared/ui/StepLineTable.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import VButton from '@/shared/ui/VButton.vue'
 import WindowBar from '@/shared/ui/WindowBar.vue'
 import { stepTop } from '@/shared/ui/windowGeometry.ts'
 import type { StepAhead, StepWords } from '@/shared/ui/windowGeometry.ts'
@@ -113,6 +117,11 @@ const paced = computed(() => props.window.even_percent !== null)
 const points = computed(() => words.points(props.window, props.today))
 /** Whether what used the window can be read: the account has a seat and the window a start. */
 const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
+/** What opens the side panel on what used the window; none outside the page. */
+const openSpend = useWindowDetail()
+function spend() {
+  openSpend?.(accountKey(props.account), windowKey(props.window), name.value)
+}
 
 /**
  * The facts said in words: the forecast after its key, in the text's ink where there is one, and
@@ -275,14 +284,15 @@ const readingsCaption = computed(() =>
         :words="stepWords"
         :forecast="ahead?.forecast ?? null"
       />
-      <QuotaWindowSpend
-        v-if="spends"
+      <VButton
+        v-if="spends && openSpend"
         class="quota-window-uses"
-        :account="account"
-        :window="window"
-        :today="today"
-        :shown="shown"
-      />
+        size="compact"
+        data-spend
+        @click="spend"
+      >
+        {{ t('analytics.detail.window.open') }}
+      </VButton>
     </div>
   </PanelLevel>
 </template>
@@ -335,6 +345,11 @@ const readingsCaption = computed(() =>
 
 .quota-window-quiet {
   color: var(--color-text-muted);
+}
+
+/* «Where the window went» is a control of the window, at its start rather than across it. */
+.quota-window-uses {
+  justify-self: start;
 }
 
 /* The key of the bar's hatch, as the step line's legend draws it: a short bar of the stripes on

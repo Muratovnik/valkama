@@ -19,8 +19,11 @@
  * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
  * and order in its hint, and holds the download; the download it asks for is what the table shows,
- * in its order, as a CSV file (`tableFile`). A row's name pressed to narrow the view goes out as
- * `narrow`. Asked to (`reveal`), it brings itself into view with the focus on it.
+ * in its order, as a CSV file (`tableFile`). A row's name pressed to open the value's side panel
+ * goes out as `inspect`. Asked to (`reveal`), it brings itself into view with the focus on it.
+ *
+ * Given words to find (`find`), it shows only the rows whose name holds them, whatever their case,
+ * and says when none does; its count and its download are of the rows shown.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -61,12 +64,14 @@ const props = defineProps<{
   filters: UsageFilters
   measure: Measure
   usage: Usage
-  /** Why the last press here did not narrow the view, in words; empty otherwise. */
+  /** Words a row's name must hold to be shown; every row without them. */
+  find?: string
+  /** Why the last press here did not open what it asked for, in words; empty otherwise. */
   notice?: string
 }>()
-/** A value pressed to narrow the view to it; the crossed read again. */
+/** A value pressed to open its side panel; the crossed read again. */
 const emit = defineEmits<{
-  narrow: [value: string | null, label: string]
+  inspect: [value: string | null, label: string]
   reread: []
 }>()
 
@@ -105,7 +110,18 @@ const model = useTableModel(() => ({
   across: crossed.value?.across ?? null,
 }))
 
-const { sort, sortBy, lines, direction, marks } = useTableSort(model, () => locale.value)
+const { sort, sortBy, lines: sorted, direction, marks } = useTableSort(model, () => locale.value)
+
+/** The words looked for, as a name is compared with them. */
+const sought = computed(() => props.find?.trim().toLocaleLowerCase(locale.value) ?? '')
+/** The rows shown, in their order: those whose name holds the words looked for. */
+const lines = computed(() =>
+  sought.value
+    ? sorted.value.filter((line) =>
+        `${line.name} ${line.nameEnd ?? ''}`.toLocaleLowerCase(locale.value).includes(sought.value),
+      )
+    : sorted.value,
+)
 
 /** Every column's heading, the names' first; each sorts the rows by its column. */
 const headings = computed(() => [
@@ -137,7 +153,9 @@ function download() {
   offerDownload(file.name, file.text, 'text/csv;charset=utf-8')
 }
 
-const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
+const emptyWords = computed(() => ({
+  empty: sought.value ? t('analytics.filters.noMatches') : t('analytics.bars.empty'),
+}))
 
 const root = ref<HTMLElement | null>(null)
 
@@ -166,7 +184,7 @@ defineExpose({ reveal })
   >
     <SpendingTableHead
       :by="by"
-      :lines="model.lines"
+      :lines="lines"
       :measure="measure"
       :split="Boolean(across)"
       :summary="summary"
@@ -215,7 +233,7 @@ defineExpose({ reveal })
       v-else
       class="spending-table-frame"
       :label="model.title"
-      :empty="!model.lines.length"
+      :empty="!lines.length"
       :words="emptyWords"
     >
       <thead>
@@ -258,7 +276,7 @@ defineExpose({ reveal })
           <SpendingTableName
             :by="by"
             :line="line"
-            @narrow="(value, label) => emit('narrow', value, label)"
+            @inspect="(value, label) => emit('inspect', value, label)"
           />
           <SpendingTableFigure
             v-for="cell in line.cells"

@@ -56,6 +56,8 @@ const scopeProject = computed(() =>
 const openCardId = computed(
   () => planningSurface.value?.selectedId ?? cardOverlay.value?.selectedId ?? null,
 )
+/** Whether a card stands over the module, which a side panel of the module waits under. */
+const cardOver = computed(() => props.route.entity?.kind === 'work-item')
 defineExpose({ openCardId, refresh })
 </script>
 <template>
@@ -85,6 +87,7 @@ defineExpose({ openCardId, refresh })
     <AnalyticsView
       :route-state="route.state"
       :project-id="scopeProject"
+      :covered="cardOver"
       @state="(state, mode) => emit('state', state, mode)"
     />
   </ModuleFrame>

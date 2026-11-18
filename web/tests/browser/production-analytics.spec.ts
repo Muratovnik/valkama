@@ -394,7 +394,8 @@ for (const width of [1440, 390]) {
     await drawLined(analytics.locator('.spending-bars'))
     // Ten tasks and the other fifteen in one row apart, which draws its bar on the same scale.
     await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(11)
-    await expect(analytics.locator('.spending-bars-more')).toHaveText('15 more — in the table')
+    // Under the list, every value of the period, which opens in the side panel.
+    await expect(analytics.locator('.spending-bars [data-all]')).toHaveText('All 25')
     const measured = await bars(page)
     await record(info, `analytics large other ${width}`, measured)
     expect(measured.rest).toEqual(['Other, 15 more'])

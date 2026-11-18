@@ -1,17 +1,19 @@
 /**
  * What the Analytics page does past its charts, in the real app at the widths it is used at: the
  * table of the breakdown beside the period before, its download, and the way from any bar or day
- * to a task in two presses.
+ * to a task's card.
  *
  * The table stands whole in both languages, scrolls sideways inside its own frame with its row
  * names kept in view, and says once when the period before was not read. The download is offered
- * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model, or a day
- * pressed by keyboard or by mouse beside its coloured stack, narrows the view to it as a new place
+ * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model opens the
+ * model's side panel, whose «Narrow the page to it» narrows the view to it, and a day pressed by
+ * keyboard or by mouse beside its coloured stack narrows the view to the day, each as a new place
  * in the history, while a segment of the stack acts for its own model as its bar does, so Back
  * returns, as a section opened from a card or the rail does, and as a split chosen in a section's
- * heading does, while the period and the measure change the place in hand; the task's bar then
- * opens the task's card over the page, whose address keeps the view and names the card, and the
- * opening is counted once. Each run prints what it measured.
+ * heading does, while the period and the measure change the place in hand; the task's bar or row
+ * then opens the task's panel, whose «Open the card» opens the card over the page, its address
+ * keeping the view with the panel and naming the card, and the opening is counted once. Each run
+ * prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -262,7 +264,7 @@ test('the view downloads as a CSV file named by its period, with a byte order ma
 })
 
 for (const width of WIDTHS)
-  test(`a model's bar and a day each lead to a task in two presses at ${width}px`, async ({
+  test(`a model's bar and a day each lead to a task's card through its panel at ${width}px`, async ({
     page,
   }, info) => {
     await serve(page, WORLD)
@@ -289,20 +291,36 @@ for (const width of WIDTHS)
 
     // By pointer: model-a, then its one task. A bar is named by its action, and a row of the
     // table a narrow page shows first by the value it heads.
-    await bars.getByRole('button', { name: /^(Show the tasks of )?model-a$/u }).click()
-    // A narrowing breaks the view down by task, which the address names.
+    await bars.getByRole('button', { name: /^(Details of )?model-a$/u }).click()
+    // Its panel is a place of its own, and narrowing from it breaks the view down by task, which
+    // the address names.
+    const modelPanel = at({ by: 'model', detail: '{"by":"model","value":"model-a"}' })
+    await expect.poll(() => path(page)).toBe(modelPanel)
+    await page
+      .getByRole('dialog', { name: 'Details: model-a' })
+      .getByRole('button', { name: 'Narrow the page to it' })
+      .click()
     const narrowed = at({ by: 'work_item', filters: '{"model":["model-a"]}' })
     await expect.poll(() => path(page)).toBe(narrowed)
     await page.goBack()
+    await expect.poll(() => path(page)).toBe(modelPanel)
+    await page.goBack()
     await expect.poll(() => path(page)).toBe(byModel)
     await page.goForward()
+    await page.goForward()
     await expect.poll(() => path(page)).toBe(narrowed)
-    const link = bars.getByRole('link', { name: 'MAIN-264 Import the planning documents' })
+    const task = 'MAIN-264 Import the planning documents'
+    const link = bars.getByRole('link', { name: `Details of ${task}` })
     await expect(link).toHaveAttribute('href', '/open/MAIN-264')
     await link.click()
+    const taskDetail = JSON.stringify({ by: 'work_item', value: IMPORT.id })
+    const taskPanel = page.getByRole('dialog', { name: `Details: ${task}` })
+    await taskPanel.getByRole('link', { name: 'Open the card' }).click()
     await expect
       .poll(() => path(page))
-      .toBe(cardOver(shown({ by: 'work_item', filters: '{"model":["model-a"]}' })))
+      .toBe(
+        cardOver(shown({ by: 'work_item', filters: '{"model":["model-a"]}', detail: taskDetail })),
+      )
     await expect(page.locator('.drawer')).toContainText(workItem.title)
     await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(1)
 
@@ -328,8 +346,8 @@ for (const width of WIDTHS)
     )
     expect(landsOn).toBe(true)
     await page.mouse.click(point.x, point.y)
-    await expect.poll(() => path(page)).toBe(narrowed)
-    await page.goBack()
+    await expect.poll(() => path(page)).toBe(modelPanel)
+    await page.keyboard.press('Escape')
     await expect.poll(() => path(page)).toBe(byModel)
     await expect(days).toHaveAttribute('data-shown', 'chart')
     // Over the stack, where no segment stands, the press is the day's own.
@@ -359,19 +377,22 @@ for (const width of WIDTHS)
     const dayRing = await focusRing(tuesday)
     await page.keyboard.press('Enter')
     await expect.poll(() => path(page)).toBe(tuesdayAlone)
-    const row = analytics
-      .locator('.spending-table')
-      .getByRole('link', { name: 'MAIN-264 Import the planning documents' })
+    const row = analytics.locator('.spending-table').getByRole('link', { name: task })
     const rowPresses = await tabTo(page, row)
     const rowRing = await focusRing(row)
     await page.keyboard.press('Enter')
-    await expect
-      .poll(() => path(page))
-      .toBe(
-        cardOver(
-          shown({ period: 'custom', from: '2026-11-10', to: '2026-11-10', by: 'work_item' }),
-        ),
-      )
+    const tuesdayTask = shown({
+      period: 'custom',
+      from: '2026-11-10',
+      to: '2026-11-10',
+      by: 'work_item',
+      detail: taskDetail,
+    })
+    await expect.poll(() => path(page)).toBe(pageAt(tuesdayTask))
+    const card = taskPanel.getByRole('link', { name: 'Open the card' })
+    const cardPresses = await tabTo(page, card)
+    await page.keyboard.press('Enter')
+    await expect.poll(() => path(page)).toBe(cardOver(tuesdayTask))
     await expect(page.locator('.drawer')).toContainText(workItem.title)
     await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(2)
 
@@ -383,6 +404,7 @@ for (const width of WIDTHS)
       dayRing,
       rowPresses,
       rowRing,
+      cardPresses,
     })
     expect(cursor).not.toBe('pointer')
     for (const ring of [dayRing, rowRing]) {

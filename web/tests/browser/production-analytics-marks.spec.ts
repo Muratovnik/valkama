@@ -5,8 +5,9 @@
  * panel's first block or the table by a pixel; so does a ranked row the panel has to scroll to,
  * pointed at or brought under a resting pointer by the wheel, its cut name a space apart from its
  * share; no line of words stands over a plot, so the drawing field keeps that room; a task's
- * segment opens the task's card over the page, the module still Analytics, and closing it gives
- * back the section, the period and the scroll. Each run prints what it measured.
+ * segment opens the task's side panel, whose «Open the card» opens the card over the page, the
+ * module still Analytics, and closing them gives back the section, the period and the scroll.
+ * Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -241,7 +242,7 @@ async function viewShown(page: Page) {
   }
 }
 
-test('a task’s segment opens its card over the page, which closes back to the section, period and scroll', async ({
+test('a task’s segment opens its panel and from it its card over the page, which close back to the section, period and scroll', async ({
   page,
 }, info) => {
   await serve(page, HELD_WORLD)
@@ -258,18 +259,27 @@ test('a task’s segment opens its card over the page, which closes back to the 
   expect(before.panel, 'the panel scrolled to the day chart').toBeGreaterThan(0)
 
   await segment.click()
+  const details = page.getByRole('dialog', { name: `Details: MAIN-264 ${workItem.title}` })
+  await expect(details).toBeVisible()
+  const detail = JSON.stringify({ by: 'work_item', value: HELD.id })
+  await expect.poll(() => path(page)).toBe(pageAt({ ...VIEW, detail }))
+  expect(uses.filter((kind) => kind === 'task_open')).toEqual([])
+  await details.getByRole('link', { name: 'Open the card' }).click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toContainText(workItem.title)
   // The module is still Analytics: its path, its view in the address, and the card named there.
   expect(new URL(page.url()).pathname.startsWith('/modules/analytics/')).toBe(true)
   const opened = parsePlatformRoute(new URL(page.url()))
   expect(opened.module_id).toBe('analytics')
-  expect(opened.state).toEqual(VIEW)
+  expect(opened.state).toEqual({ ...VIEW, detail })
   expect(planningWorkItemRef(opened.entity)).toEqual(workItemRef)
   await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(1)
 
   await drawer.locator('.drawer-frame-close').click()
   await expect(drawer).toBeHidden()
+  await expect(details).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(details).toBeHidden()
   await expect.poll(() => path(page)).toBe(address)
   const after = await viewShown(page)
   await record(info, 'analytics segment card', { before, after })

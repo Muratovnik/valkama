@@ -202,7 +202,7 @@ test('what changed names the tasks that moved most, in the measure’s own units
   expect(tallest[0]).toBeLessThanOrEqual(Math.max(...tallest.slice(1)))
 })
 
-test('a card’s heading opens its section, and a row narrows the view as a bar does', async ({
+test('a card’s heading opens its section, and a row opens its value’s panel as a bar does', async ({
   page,
 }) => {
   await serve(page, WORLD)
@@ -215,12 +215,17 @@ test('a card’s heading opens its section, and a row narrows the view as a bar 
   // In place, as a section chosen on the rail beside the panel is.
   await page.locator('.analytics-rail [data-section="overview"]').click()
   await expect(page.locator('.analytics-rail [aria-current="page"]')).toHaveText(/^Overview/u)
-  await models.getByRole('button', { name: 'Show the tasks of model-b' }).click()
+  await models.getByRole('button', { name: 'Details of model-b' }).click()
+  await expect.poll(() => path(page)).toBe(pageAt({ detail: '{"by":"model","value":"model-b"}' }))
+  const details = page.getByRole('dialog', { name: 'Details: model-b' })
+  await details.getByRole('button', { name: 'Narrow the page to it' }).click()
   await expect
     .poll(() => path(page))
     .toBe(pageAt({ by: 'work_item', filters: '{"model":["model-b"]}' }))
   // A task's row is a link to its card, as a bar by task is.
   await page.goBack()
+  await page.goBack()
+  await expect(details).toBeHidden()
   await expect(panel.locator('[data-card="work_item"] a.ranked-line').first()).toHaveAttribute(
     'href',
     /MAIN-1/u,

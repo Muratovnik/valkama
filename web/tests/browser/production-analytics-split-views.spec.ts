@@ -4,9 +4,9 @@
  * opening on the ring; named by free text, the tasks and the sessions, a list only. The oracle is
  * that rule and the charts' contracts: a section by account opens on its ring, one by task or by
  * session is a list switched with its table alone, one split by a second dimension offers the bars
- * alone, the tokens by kind open on their ring, a quota window's block is a list by task and opens
- * on its ring by project; the overview's cards of first values are no split and offer no switch;
- * and every view of a chart reads the same figures.
+ * alone, the tokens by kind open on their ring, a quota window's spend in its side panel is a list
+ * by task and opens on its ring by project; the overview's cards of first values are no split and
+ * offer no switch; and every view of a chart reads the same figures.
  *
  * A ring writes nothing on its sectors: its legend gives each part its figure and share at the end
  * of its line, the figures of the legend and of the rows apart under it ending at one edge, each
@@ -93,16 +93,32 @@ test('each split opens on its own drawing, switches, and reads the same figures 
   await expect(page.locator('.overview-top [role="radio"]')).toHaveCount(0)
 })
 
-test('a quota window’s block is a list by task and opens on its ring by project, with the same figures', async ({
+/**
+ * Opens what used Work's five hours in the side panel, from the window's own button, drawn as a
+ * chart whatever the panel's width chose.
+ */
+async function workSpend(page: Page) {
+  await page
+    .locator('.quota-account')
+    .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
+    .locator('.quota-window[data-window="five_hour"]')
+    .getByRole('button', { name: 'Where the window went' })
+    .click()
+  const panel = page.getByRole('dialog', { name: 'Details: Five hours · Work' })
+  await expect(panel).toHaveCSS('transform', 'none')
+  const chart = panel.getByRole('radio', { name: 'Chart', exact: true })
+  await expect(chart).toBeVisible()
+  if (!(await chart.isChecked())) await chart.click()
+  return panel.locator('[data-detail="window"] .window-spend')
+}
+
+test('a quota window’s spend is a list by task and opens on its ring by project, with the same figures', async ({
   page,
 }, info) => {
   await serve(page, SPENT_WORLD)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto(pageAt({ by: 'quota_five_hour' }))
-  const work = page
-    .locator('.quota-account')
-    .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
-    .locator('.quota-window[data-window="five_hour"] .window-spend')
+  const work = await workSpend(page)
   await expect(work.locator('.ranked-bars.ranked-free')).toBeVisible()
   await expect(work.getByRole('radio', { name: 'Bars', exact: true })).toHaveCount(0)
   await expect(work.getByRole('radio', { name: 'Ring', exact: true })).toHaveCount(0)
@@ -178,12 +194,6 @@ async function openSection(page: Page, width: number, by: string, where: string)
   return block
 }
 
-/** Turns the quota's section to its charts, which a narrow page opens as their tables. */
-async function drawCharts(panel: Locator) {
-  const charts = panel.locator('.chart-section > .level-head').getByRole('radio', { name: 'Chart' })
-  if (!(await charts.isChecked())) await charts.click()
-}
-
 /** Opens a section at a width on its ring, which a narrow page reaches by its switch. */
 async function ringAt(page: Page, width: number, by: string, where: string) {
   const block = await openSection(page, width, by, where)
@@ -234,12 +244,8 @@ for (const width of [1440, 390])
     page,
   }, info) => {
     await serve(page, SPENT_WORLD)
-    const panel = await openSection(page, width, 'quota_five_hour', '.quota-panel')
-    await drawCharts(panel)
-    const work = page
-      .locator('.quota-account')
-      .filter({ has: page.locator('.quota-account-name', { hasText: /^Work$/u }) })
-      .locator('.quota-window[data-window="five_hour"] .window-spend')
+    await openSection(page, width, 'quota_five_hour', '.quota-panel')
+    const work = await workSpend(page)
     await work.getByRole('radio', { name: 'Projects' }).click()
     const chart = work.locator('.donut-chart')
     await expect(chart.locator('.donut-sector').first()).toBeVisible()

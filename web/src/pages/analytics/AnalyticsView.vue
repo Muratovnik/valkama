@@ -27,11 +27,16 @@
  * not made: the view stays as its address says, and the words where it was asked say why, so the
  * page never shows a view its link would not give back.
  *
- * A value or a period pressed in the report — a day, an hour or a minute — narrows the view to it
- * and breaks it down by task, as a new place in the history, so Back returns to the view it was
- * pressed in. Work with no task is broken down instead by where it came from (`useLineActions`).
- * A frame along a chart of periods sets the page's period to the periods it covers, the section
- * kept, as a new place too.
+ * A value pressed in the report — a bar, a sector, a segment, a legend entry, a name in a table —
+ * opens its side panel over the page (`DetailPanel`, `useDetail`), and the page stays as it was;
+ * the panel is a part of the view, so Back closes it and a reload opens it again. A task's value
+ * is a link to its card as well, which a press with a modifier or the middle button opens
+ * elsewhere (`useLineActions`). The panel's «Narrow the page to it» narrows the view to the value
+ * and breaks it down by task, as a press of the value once did, as a new place in the history;
+ * work with no task is broken down instead by where it came from. A period pressed in the
+ * report — a day, an hour or a minute — narrows the view to it and breaks it down by task, a new
+ * place too, so Back returns to the view it was pressed in. A frame along a chart of periods sets
+ * the page's period to the periods it covers, the section kept, as a new place too.
  *
  * The page opens on its overview (`OverviewPanel`), the period at a glance; a dimension's section
  * is its whole report.
@@ -39,16 +44,18 @@
  * The periods still running, «Now» and «Today», read themselves again on an interval while the
  * page is seen (`useLiveRefresh`); no other period does.
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
+import DetailPanel from '@/pages/analytics/components/DetailPanel.vue'
 import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
 import QuotaPanel from '@/pages/analytics/components/QuotaPanel.vue'
 import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 import { provideColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
+import { useDetail } from '@/pages/analytics/composables/useDetail.ts'
 import { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
@@ -56,11 +63,11 @@ import { useQuota } from '@/pages/analytics/composables/useQuota.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { provideReadWaits } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useRefusal } from '@/pages/analytics/composables/useRefusal.ts'
+import { useSectionFocus } from '@/pages/analytics/composables/useSectionFocus.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
-import type { ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import {
   addressFits,
@@ -77,8 +84,6 @@ import type { AnalyticsSection, AnalyticsView } from '@/shared/api/analyticsAddr
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
-import { focusOnNothing } from '@/shared/lib/focusRight.ts'
-import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -87,12 +92,14 @@ import WaitStatus from '@/shared/ui/WaitStatus.vue'
 
 const props = withDefaults(
   defineProps<{
+    /** Whether a card stands over the page, which the side panel waits under, closed. */
+    covered?: boolean
     /** The project the page is scoped to; every figure is that project's. */
     projectId?: string | null
     /** The module's part of the address: what `writeAddress` wrote, or nothing. */
     routeState?: Readonly<Record<string, string | number | boolean>>
   }>(),
-  { routeState: undefined, projectId: null },
+  { routeState: undefined, projectId: null, covered: false },
 )
 /** The view's new address: a change in place, or a new place in the history (`push`). */
 const emit = defineEmits<{
@@ -114,8 +121,8 @@ const { filtersRefused, refuse, reportRefused } = useRefusal(() => view.value)
 
 /**
  * Writes a change of the view into its address; false, with nothing written, if it does not fit.
- * A section opened — from the rail or a card's heading — and a narrowing are new places Back
- * returns from (`push`); the period, the measure, the filters and the second dimension change
+ * A section opened — from the rail or a card's heading — a narrowing and the side panel opened or
+ * closed are new places Back returns from (`push`); the period, the measure, the filters and the second dimension change
  * the place in hand (`replace`). Each caller names which, so none falls to a default.
  */
 function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace'): boolean {
@@ -123,13 +130,6 @@ function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace'): boolean
   if (!addressFits(changed)) return false
   emit('state', writeAddress(changed), mode)
   return true
-}
-
-/** The view narrowed to one value of a dimension, broken down as that value is (`narrowedBy`). */
-function narrow(dimension: UsageDimension, value: string | null, label: string, part: ReportPart) {
-  const filters = orderFilters({ ...view.value.filters, [dimension]: [value] })
-  if (change({ filters, ...lines.narrowedBy(dimension, value) }, 'push')) return
-  refuse(part, t('analytics.drill.full', { value: label }))
 }
 
 /**
@@ -207,57 +207,19 @@ function chooseSection(by: AnalyticsSection) {
   else if (by !== view.value.by) change({ by }, 'push')
 }
 
-/** The panel that shows the section on show, which a section opened from a card takes focus to. */
+/** The panel that shows the section on show, and the way back to the list on a narrow page. */
 const panelBox = ref<HTMLElement | null>(null)
-
-/** The overview card whose heading opened the section on show, given focus back on return. */
-let openedFrom: UsageDimension | null = null
-
-/**
- * A section opened from a card's heading. The heading goes with the overview, and the focus with
- * it to the page, so beside the rail it moves to the section's panel, which the section names; in
- * place of the list it moves to the way back, as any section chosen there does.
- */
-function openFromCard(dimension: UsageDimension) {
-  openedFrom = dimension
-  chooseSection(dimension)
-  if (!narrowScreen.value) moveFocus(panelBox.value)
-}
-
-/**
- * Back on the overview the focus returns to the heading of the card that opened the section,
- * once it is drawn, unless the reader has taken it out of the panel since: to a tile of the rail,
- * say, which the overview was chosen from.
- */
-watch(
-  [overview, () => read.state.value],
-  () => {
-    const card = openedFrom
-    if (!overview.value || !card) return
-    const heading = panelBox.value?.querySelector<HTMLElement>(
-      `[data-card="${card}"] .overview-top-open`,
-    )
-    if (!heading) return
-    openedFrom = null
-    if (focusOnNothing() || panelBox.value?.contains(document.activeElement)) heading.focus()
-  },
-  { flush: 'post' },
-)
-
-/**
- * Where focus goes as the list and a section take turns: the way back, or the section left. Only
- * a move between them does that; the page found too narrow on opening or on a resize moves none.
- */
 const back = ref<InstanceType<typeof VButton> | null>(null)
-watch(
-  () => view.value.open,
-  async (opened, was) => {
-    if (opened === was || !narrowScreen.value) return
-    await nextTick()
-    if (opened) (back.value?.$el as HTMLElement | undefined)?.focus()
-    else rail.value?.focusSelected()
-  },
-)
+const { openFromCard } = useSectionFocus({
+  back: () => back.value?.$el as HTMLElement | undefined,
+  choose: chooseSection,
+  drawn: () => read.state.value,
+  focusList: () => rail.value?.focusSelected(),
+  narrow: () => narrowScreen.value,
+  open: () => view.value.open,
+  overview: () => overview.value,
+  panel: panelBox,
+})
 
 /** Whether the field of each dimension is open under the bar, which asks what each offers. */
 const adding = ref(false)
@@ -287,6 +249,15 @@ const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
 
 /** The quota of each account now, read whatever the view, on its own interval (`useQuota`). */
 const quota = useQuota()
+
+/** The side panel over the page: what opens and closes it, and what it asks of the page. */
+const detail = useDetail({
+  change,
+  covered: () => props.covered,
+  lines,
+  refuse,
+  view: () => view.value,
+})
 const tiles = computed(() => ({ ...usageTiles.value, ...quota.tiles.value }))
 
 /** The bar's refresh reads the page, every tile of the rail and the quota again, as of now. */
@@ -410,7 +381,7 @@ const emptyDescription = computed(() => {
               :project-scoped="Boolean(projectId)"
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
-              @narrow="narrow"
+              @inspect="detail.inspect"
               @step="narrowToPeriod"
               @frame="(span, label) => narrowToPeriod(span, label, true)"
               @open="openFromCard"
@@ -434,7 +405,8 @@ const emptyDescription = computed(() => {
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
               @update:across="(across) => change({ across }, 'push')"
-              @narrow="narrow"
+              @inspect="detail.inspect"
+              @all="detail.all"
               @step="narrowToPeriod"
               @frame="(span, label) => narrowToPeriod(span, label, true)"
               @retry="read.retry"
@@ -443,6 +415,22 @@ const emptyDescription = computed(() => {
         </PlatformStatePanel>
       </section>
     </div>
+    <DetailPanel
+      :across="view.across"
+      :compared="read.comparedWith.value"
+      :detail="detail.detail.value"
+      :filters="read.readWith.value"
+      :live="live"
+      :measure="view.measure"
+      :notice="detail.notice.value"
+      :open="detail.open.value"
+      :page="read.state.value"
+      :quota="quota.read.value"
+      :read-at="read.askedAt.value"
+      @close="detail.close"
+      @inspect="detail.inspectHere"
+      @narrow="detail.narrow"
+    />
   </section>
 </template>
 

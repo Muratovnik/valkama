@@ -17,9 +17,9 @@
  * cut one is too. Each run prints what it measured.
  *
  * A control of a bar, a small chart or the legend is named by what pressing it does, which for a
- * pair names its model alone: «Show the tasks of claude-opus-5-5» named the high and the medium
- * row alike, and their descriptions said only their figures, so a screen reader told them apart
- * by nothing. Each is described by its whole pair, as the browser computes it, and no two of one
+ * pair names its model alone: «Details of claude-opus-5-5» names the high and the medium row
+ * alike, and descriptions that said only their figures left a screen reader nothing to tell them
+ * apart by. Each is described by its whole pair, as the browser computes it, and no two of one
  * chart are named and described alike; a single value's controls keep their name and description.
  *
  * A table's name is laid whole only while it is cut. The press's hit area stands 12px past its
@@ -191,17 +191,17 @@ for (const locale of ['en', 'ru'] as const)
         await expect(presses.nth(index)).toHaveAccessibleName(pair)
     })
 
-/** The controls of each chart that names its values, where a press narrows the view to one. */
+/** The controls of each chart that names its values, where a press opens one's side panel. */
 const CONTROLS = {
   bars: '.spending-bars .ranked-line:is(button, a)',
   multiples: '.spending-multiples .multiple-name:is(button, a)',
   legend: `.spending-days ${LEGEND_SERIES}:is(button, a)`,
 } as const
 
-/** What a control that narrows the view to a model is called, in each language. */
+/** What a control that opens a model's side panel is called, in each language. */
 const ACTION = {
-  en: (model: string) => `Show the tasks of ${model}`,
-  ru: (model: string) => `Показать задачи: ${model}`,
+  en: (model: string) => `Details of ${model}`,
+  ru: (model: string) => `Подробнее: ${model}`,
 }
 
 /** Each control a selector finds, by the name and description the browser computed for it. */

@@ -1,9 +1,10 @@
 /**
- * Work with no task on the Analytics page, in the real app. The oracle is the requirement: it has
- * no card to open, so its row on the overview's card of tasks breaks the view down by where that
- * work came from — each pair of a project and a launch class — in one press, as a new place in the
- * history. The breakdown sums to the figure the row showed, the bar names the filter in words and
- * takes it out, and Back returns to the overview. The figure expected is the fixture's own hours.
+ * Work with no task on the Analytics page, in the real app. The oracle is the requirement: its row
+ * on the overview's card of tasks opens its side panel, which has no card to offer, and the
+ * panel's «Narrow the page to it» breaks the view down by where that work came from — each pair of
+ * a project and a launch class — each a new place in the history. The breakdown sums to the figure
+ * the row showed, the bar names the filter in words and takes it out, and Back returns through the
+ * panel to the overview. The figure expected is the fixture's own hours.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -54,7 +55,7 @@ const WORLD: TimedStretch[] = [
   stretch(2, task(1, 'Import the planning documents'), ['alpha', value('bero')], 3),
 ]
 
-test('work with no task on the card of tasks breaks down by project and launch class in one press', async ({
+test('work with no task on the card of tasks breaks down by project and launch class from its panel', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -64,11 +65,21 @@ test('work with no task on the card of tasks breaks down by project and launch c
   const hours = `${NO_TASK_HOURS.reduce((sum, one) => sum + one, 0)}\u{A0}h`
   const row = page
     .locator('[data-card="work_item"]')
-    .getByRole('button', { name: 'Break down the work with no task by project and launch class' })
+    .getByRole('button', { name: 'Details of No task' })
   await expect(row.locator('.ranked-label')).toHaveText('No task')
   await expect(row.locator('.ranked-value')).toHaveText(hours)
 
   await row.click()
+  const opened = pageAt({ detail: '{"by":"work_item","value":null}' })
+  await expect.poll(() => path(page)).toBe(opened)
+  const details = page.getByRole('dialog', { name: 'Details: No task' })
+  // No card to offer, where a task's panel offers one (`production-analytics-value-panel.spec.ts`).
+  await expect(details.getByRole('link', { name: 'Open the card' })).toHaveCount(0)
+  const narrow = details.getByRole('button', { name: 'Narrow the page to it' })
+  await expect(narrow).toHaveAccessibleDescription(
+    'Break down the work with no task by project and launch class',
+  )
+  await narrow.click()
   await expect
     .poll(() => path(page))
     .toBe(pageAt({ by: 'project', filters: '{"work_item":[null]}', across: 'launch_class' }))
@@ -95,8 +106,12 @@ test('work with no task on the card of tasks breaks down by project and launch c
   await expect(chip).toHaveCount(0)
   await expect.poll(() => path(page)).toBe(pageAt({ by: 'project', across: 'launch_class' }))
 
-  // Back returns to the overview the row was pressed in.
+  // Back returns to the panel the narrowing was asked in, and then to the overview.
+  await page.goBack()
+  await expect.poll(() => path(page)).toBe(opened)
+  await expect(details).toBeVisible()
   await page.goBack()
   await expect.poll(() => path(page)).toBe(pageAt())
+  await expect(details).toBeHidden()
   await expect(page.locator('.analytics-rail [aria-current="page"]')).toHaveText(/^Overview/u)
 })

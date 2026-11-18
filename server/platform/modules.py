@@ -148,7 +148,7 @@ _MODULES = (
         "platform.modules.analytics",
         "chart-no-axes-combined",
         # The page's view: web `shared/api/analyticsAddress.ts`.
-        ["period", "from", "to", "by", "measure", "filters", "open", "across"],
+        ["period", "from", "to", "by", "measure", "filters", "open", "across", "detail"],
         ["analytics.usage", "analytics.quota", "analytics.uses"],
         ["analytics.usage", "analytics.quota", "analytics.uses"],
         ["module.analytics.report-use"],

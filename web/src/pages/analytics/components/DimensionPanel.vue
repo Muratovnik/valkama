@@ -23,11 +23,12 @@
  * It runs in the panel's one scroll: the figures and the charts at their own height and the table
  * under them, held to about the window's height and scrolling inside its own frame, the one part
  * of the panel that does (`SpendingTable`). A «To the table» line over
- * the charts, like the line under the ranked list that counts the values it leaves out, brings the
- * table into view with the focus on it (`SpendingTable`'s `reveal`).
+ * the charts brings the table into view with the focus on it (`SpendingTable`'s `reveal`).
  *
- * A value or a day pressed to narrow the view goes out with the dimension the answer was read by
- * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
+ * A value pressed to open its side panel goes out with the dimension the answer was read by and
+ * the part of the panel it was pressed in, which says why when it was refused; so does the line
+ * under the ranked list that opens the dimension's full table in the side panel (`all`). A day
+ * pressed or framed narrows the view. An answer whose
  * period before could not be read says so above the figures (`SpendingUnread`). Its heading names
  * the dimension the answer was read by, and the heading's «ⓘ» says the caveats of its figures
  * once (`useSectionCaveats`).
@@ -72,19 +73,21 @@ const props = defineProps<{
   filters: UsageFilters
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
-  /** Why the last press in a part of the panel did not narrow the view; null otherwise. */
+  /** Why the last press in a part of the panel did not do what it asked; null otherwise. */
   refused: Refusal | null
   usage: Usage
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
 }>()
 /**
- * Read the answer again; narrow the view to a value of the answer's dimension, or to a period
- * pressed or framed in a part of the panel; split the section by a second dimension, or by none.
+ * Read the answer again; open the side panel of a value of the answer's dimension, or of its
+ * full table; narrow the view to a period pressed or framed in a part of the panel; split the
+ * section by a second dimension, or by none.
  */
 const emit = defineEmits<{
+  'all': [dimension: UsageDimension, part: ReportPart]
   'frame': [span: OwnPeriod, label: string]
-  'narrow': [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
+  'inspect': [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
   'retry': []
   'step': [span: OwnPeriod, label: string]
   'update:across': [across: UsageDimension | null]
@@ -170,7 +173,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 /** Dimmed while a new view is read in place of this answer (`readPending.css`). */
 const pending = useAnewDimmed(usePanelStanding())
 
-/** The table asked for, by the line over the charts or under the ranked list. */
+/** The table asked for, by the line over the charts. */
 const table = ref<InstanceType<typeof SpendingTable> | null>(null)
 const showTable = () => table.value?.reveal()
 </script>
@@ -240,8 +243,8 @@ const showTable = () => table.value?.reveal()
             :notice="noticeIn('bars')"
             :rows="ranked.usage.rows"
             :slots="ranked.slots"
-            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
-            @more="showTable"
+            @inspect="(value, label) => emit('inspect', by, value, label, 'bars')"
+            @all="emit('all', by, 'bars')"
           />
           <SpendingMultiples
             v-if="!listOnly"
@@ -251,7 +254,7 @@ const showTable = () => table.value?.reveal()
             :narrow="narrow"
             :slots="ranked.slots"
             :usage="ranked.usage"
-            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
+            @inspect="(value, label) => emit('inspect', by, value, label, 'bars')"
           />
         </div>
         <SpendingDays
@@ -266,7 +269,7 @@ const showTable = () => table.value?.reveal()
           :usage="ranked.usage"
           @frame="(span, label) => emit('frame', span, label)"
           @step="(span, label) => emit('step', span, label)"
-          @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
+          @inspect="(value, label) => emit('inspect', by, value, label, 'days')"
         />
       </PanelLevel>
       <SpendingTable
@@ -278,7 +281,7 @@ const showTable = () => table.value?.reveal()
         :measure="measure"
         :notice="noticeIn('table')"
         :usage="usage"
-        @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
+        @inspect="(value, label) => emit('inspect', by, value, label, 'table')"
         @reread="cross.retry"
       />
     </PanelLevel>
