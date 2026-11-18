@@ -40,14 +40,15 @@ splitting one or a part off it, or handing items to other agents.
 3. **File it only when none does.** `create_work_item` with a `title` and a
    `description` that is the brief: goal, context, constraints, the "done when"
    and its verify command. Name the projects the change touches (`projects`).
-   Leave `space` out unless the projects live in two spaces: the server puts the
-   item under its parent's space, else in its projects' home space. A finding in
-   another project's code goes to that project, and so to its space. A plan in
-   the repository is referenced by `source` (`docs/plan.md#kb:a7f3`), not
-   copied, and a file the description names is written as Naming a file says.
-   Umbrella work is
-   `kind: goal`, or `stage` under a parent at any depth; children name it as
-   `parent`, and nobody claims it. Work filed outside accepted open goals and
+   Leave `space` out unless the projects live in two spaces or the item names no
+   project (a goal, a triage review item): give `space` then. Otherwise the
+   server puts the item under its parent's space, else in its projects' home
+   space. A finding in another project's code goes to that project, and so to
+   its space. A plan in the repository is referenced by `source`
+   (`docs/plan.md#kb:a7f3`), not copied, and a file the description names is
+   written as Naming a file says. Umbrella work is `kind: goal`, or `stage`
+   under a parent at any depth; children name it as `parent`, and nobody
+   claims it. Work filed outside accepted open goals and
    stages starts in triage: send `acceptance: "assignment"` only on the owner's word.
    Pass `claim: true` and `checklist` when you take a task at once. Link the
    related items your search found (`relates-to`, `blocks`) and name the goal or

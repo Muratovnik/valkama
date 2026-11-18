@@ -578,10 +578,11 @@ A review of work in `triage` proposes tasks that belong together as one new goal
  "group": {"items": ["MAIN-41", "MAIN-42"], "answer": "later", "until": "2026-12-01", "why": "…"}}
 ```
 
-`items` names 2 to 20 distinct tasks that wait in the triage stack: in `triage`,
+`items` names 1 to 20 distinct tasks that wait in the triage stack: in `triage`,
 under no goal or stage, in the goal's space, with no question of the owner open
-on them. `answer` is `do`, `later` or `drop`; `until`, a day or an item's
-reference as `defer` takes it, comes with `later` and only with it; `why` is one
+on them. A task alone is one of priority `high` or `urgent`, its priority read
+when the group is written. `answer` is `do`, `later` or `drop`; `until`, a day or
+an item's reference as `defer` takes it, comes with `later` and only with it; `why` is one
 line of up to 386 characters, the longest that `agent: later: <why>` holds whole
 as a defer reason. A longer one is refused and no reason is cut. The goal names
 its conditions in `checklist` and
@@ -596,12 +597,14 @@ the answer out (`carried_out: true`): `do` accepts the goal on `agent` with its
 tasks `inherited`; `later` puts it off until `until`, its reason
 `agent: later: <why>`; `drop` cancels each task, its reason
 `Not to be done: <why>`, then the goal. One decision is marked, at `finding`, on
-the goal's event that records the answer: `group «<title>»: do 3 items`. A
-person's group is the owner's write, made at once.
+the goal's event that records the answer: `group «<title>»: do 3 items`, or
+`do 1 item` for a group of one. A person's group is the owner's write, made at
+once.
 
 Where the owner decides, nothing is carried out (`carried_out: false`): the goal
 stays in `triage` with its tasks under it, `waits_for_owner` names the point
-`finding`, and the question of purpose `triage`, `Group of <n> items: «<title>»`,
+`finding`, and the question of purpose `triage`, `Group of <n> items: «<title>»`
+(`Group of 1 item` for one),
 offers `answer` (`do`, `later`, `drop`, the agent's recommended with its
 `why`), `items` (a `multi_choice`, one option per task with its lowercase
 reference as id and `MAIN-41 · <title>` as label, all recommended), `until` and
@@ -658,7 +661,8 @@ and the action `dropped`.
 
 | Code | Status | When |
 | --- | --- | --- |
-| `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 2 to 20 items: <what is wrong>` |
+| `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 1 to 20 items: <what is wrong>` |
+| `[group]` | 409 | a task alone below `high`: `[group] a group of one takes a task of priority high or urgent: MAIN-41 is medium` |
 | `[group]` | 409 | a task that does not wait in the stack: `[group] MAIN-41 is not waiting for a triage review: <why>`, the why being `it is in another space`, `it is a goal or stage`, `it is not in triage`, `it lies under MAIN-3` or `it waits for the owner's answer` |
 | `[triage]` | 400 | the owner's answer: `do` or `later` with no task ticked, `[triage] tick what is to be done, or answer drop`; `later` with no `until` of its own or the agent's, `[triage] later needs until: a date (2026-12-01) or an item reference` |
 | `cancel_list` | 409 | `drop` while open work not in `triage` stands under the goal, and `cancels` is missing or names another list: the list and its `list_token`, as a cancel's first call hands them over |
