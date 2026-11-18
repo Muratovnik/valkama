@@ -149,7 +149,10 @@ describe('where a window went', () => {
   it('names its period in its heading, and leaves what it is and is not to an «ⓘ»', async () => {
     stubAnalyticsReads(usage, quota)
     const page = await openFiveHours()
-    const sectionAbout = page.get('.quota-panel .chart-section > .level-head .level-about-press')
+    // The section's «ⓘ», by its name: the quota shows one section.
+    const named = 'button[aria-label="About this section"]'
+    expect(page.findAll(named)).toHaveLength(1)
+    const sectionAbout = page.get(named)
     await sectionAbout.trigger('click')
     const basis =
       'Where a window went is the API price estimate of the work Valkama recorded on the account, not quota points, without the work in claude.ai and the desktop app.'
