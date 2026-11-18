@@ -5,9 +5,10 @@
  *
  * Every window's share spent is solid, a silent one's too, which says in words how long it has
  * been silent. Its forecast is a hatched tail inside the track, from the share spent: a week's
- * range in two parts, parted where its slower pace ends; five hours that run out to the track's
- * end; none for five hours that last (the answer names no share for them), for a window too new
- * for a forecast, for one spent or read past 100 %; and from the track's start at 0 %. The
+ * range in two parts, parted where its slower pace ends; five hours that last to the share their
+ * answer says they spend by the reset; five hours that run out to the track's end; none for a
+ * window too new for a forecast, for one spent or read past 100 %; and from the track's start at
+ * 0 %. The
  * forecast's line leads with the hatch's key, «Forecast ·», with a swatch where a tail is drawn;
  * the swatch hangs in the card's start gutter, so the line's words start where the reset's do.
  * Each step line past its readings points at «now» and, where a forecast has a share to draw to,
@@ -61,7 +62,15 @@ const FIVE_HOURS: Record<string, Drawn> = {
     corridor: true,
     places: ['now', 'reset'],
   },
-  '7e6d5c4b five_hour': { fill: null, tail: [], swatch: false, corridor: false, places: ['now'] },
+  // A fresh 0 % that lasts to the reset: the tail from the track's start to the 35 % its answer
+  // says it spends by then (DESIGN.md, `WindowBar`).
+  '7e6d5c4b five_hour': {
+    fill: null,
+    tail: [[0, 35]],
+    swatch: true,
+    corridor: true,
+    places: ['now', 'reset'],
+  },
   'a1b2c3d4 five_hour': {
     fill: 74,
     tail: [[74, 100]],

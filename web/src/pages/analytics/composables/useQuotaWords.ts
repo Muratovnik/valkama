@@ -18,7 +18,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
+import { lastingEnd, runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
 import { dayOf, momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
@@ -143,14 +143,18 @@ export function useQuotaWords() {
     return t('analytics.quota.forecast.range', { low, high })
   }
 
-  /** The five hours as a point — lasts, runs out at a time, spent — and a week as a range. */
+  /**
+   * The five hours as a point — lasts with the share spent by the reset, runs out at a time,
+   * spent — and a week as a range.
+   */
   function forecast(window: QuotaShareWindow, today: string) {
     const found = window.forecast
     if (!found) return t('analytics.quota.forecast.none')
     if ('low_percent' in found) return range(window, found, today)
+    if (found.outcome === 'spent') return t('analytics.quota.forecast.spent')
     if (found.outcome === 'runs_out' && found.runs_out_at)
       return t('analytics.quota.forecast.runs_out', { at: moment(found.runs_out_at, today) })
-    return t(`analytics.quota.forecast.${found.outcome === 'spent' ? 'spent' : 'lasts'}`)
+    return t('analytics.quota.forecast.lasts', { share: share(lastingEnd(window)) })
   }
 
   /**
@@ -230,11 +234,12 @@ export function useQuotaWords() {
     today: string,
   ): StepTarget {
     const found = window.forecast
+    // A figure under 100 % says the whole forecast where it reaches it at the reset: a week's
+    // range, and five hours that last.
     const plain =
       found !== null &&
-      'low_percent' in found &&
       window.latest.used_percent < 100 &&
-      found.high_percent < 100
+      ('low_percent' in found ? found.high_percent < 100 : found.outcome === 'lasts')
     return {
       name: t('analytics.quota.readings.forecast'),
       figure: shareRange(ends.low, ends.high),

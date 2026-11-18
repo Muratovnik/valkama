@@ -1178,10 +1178,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   hatched, in the series hue of the share it continues. On the bar it is a tail inside the
   track from the share spent to the forecast's share at the reset, 2px of ground past the fill: a
   week's range as two parts parted by the same 2px where its slower pace ends, since both paces
-  spend at least that much and only the faster spends the rest; five hours that run out to the
-  track's end; from the track's start at 0 %; and no tail where the forecast names no share to
-  draw to — five hours that last, a window too new for a forecast, one spent or read past 100 %,
-  whose fill stops at the track's end. A reading draws no dot at rest, the line alone, and no
+  spend at least that much and only the faster spends the rest; five hours that last to the
+  share their answer says they spend by the reset, and five hours that run out to the track's
+  end; from the track's start at 0 %; and no tail where the forecast names no share past the
+  share spent — a pace that spends nothing more, a window too new for a forecast, one spent or
+  read past 100 %, whose fill stops at the track's end. A reading draws no dot at rest, the line alone, and no
   end marker either: the line holds to now past its last reading, so a dot there stood hours
   before now on a silent window. The reading pointed at or focused draws its dot and says its
   moment, its share and its source in its hint, as every mark does; the one a key stands on
@@ -2632,8 +2633,8 @@ What stands now leads with one line, the share as the window's figure and its st
 «41% used · fresh», «13% used · silent 5 h», over its bar, its share solid and its forecast a
 hatched tail; then its forecast in the text's ink after the key of that hatch, a swatch where a
 tail is drawn, hung in the card's start gutter so the line's words start where the lines under it
-do, and «Forecast ·» — the five hours a point, lasting to the reset or running out at
-a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
+do, and «Forecast ·» — the five hours a point, lasting to the reset with the share spent by
+then, or running out at a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
 end there says the week runs out before its reset and about when its slower pace spends it, a
 high end there that it may, and ends said alike one value — and when it resets in absolute and
 relative time, quieter, each line 4px from the next. The bar's tail, the tile's and the step

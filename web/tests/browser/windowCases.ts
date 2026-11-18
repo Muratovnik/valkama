@@ -40,7 +40,7 @@ export const windowBars = [
   },
   {
     case: 'zero',
-    label: 'Five hours: 0% used, steady use 20%, fresh. Forecast · Lasts to the reset',
+    label: 'Five hours: 0% used, steady use 20%, fresh. Forecast · Lasts to the reset, 12% by then',
     used: 0,
     even: 20,
     forecast: { low: 12, high: 12 },

@@ -4,8 +4,8 @@
  *
  * - «Work», named by the owner and read by the poll: five hours at 62 % and fresh, the week at
  *   41 % and fresh, a model's week at 12.5 % and silent, and its usage credits.
- * - An account with no name, read by the status line: five hours at a fresh 0 %, the week at
- *   88 % and silent, the tightest week.
+ * - An account with no name, read by the status line: five hours at a fresh 0 % that last to the
+ *   reset, 35 % spent by then, the week at 88 % and silent, the tightest week.
  * - An organization that worked and that no source read.
  * - A provisional seat, known for its week alone: five hours at 74 % and fresh, the tightest five
  *   hours, and its week at 20 %.
@@ -99,7 +99,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
             [HOUR, 35],
             [2 * MINUTE, 62],
           ],
-          forecast: { outcome: 'runs_out', runs_out_at: at(moment + 70 * MINUTE), basis: 'blend' },
+          forecast: {
+            outcome: 'runs_out',
+            runs_out_at: at(moment + 70 * MINUTE),
+            at_reset_percent: null,
+            basis: 'blend',
+          },
         }),
         window({
           kind: 'week',
@@ -142,7 +147,7 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
           left: 4 * HOUR,
           source: 'statusline',
           readings: [[3 * MINUTE, 0]],
-          forecast: { outcome: 'lasts', runs_out_at: null, basis: 'window' },
+          forecast: { outcome: 'lasts', runs_out_at: null, at_reset_percent: 35, basis: 'window' },
         }),
         window({
           kind: 'week',
@@ -182,7 +187,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
             [3 * HOUR, 30],
             [5 * MINUTE, 74],
           ],
-          forecast: { outcome: 'runs_out', runs_out_at: at(moment + 40 * MINUTE), basis: 'recent' },
+          forecast: {
+            outcome: 'runs_out',
+            runs_out_at: at(moment + 40 * MINUTE),
+            at_reset_percent: null,
+            basis: 'recent',
+          },
         }),
         window({
           kind: 'week',
@@ -258,7 +268,7 @@ export function quotaOfEdges(
           [2 * HOUR, 60],
           [10 * MINUTE, 100],
         ],
-        forecast: { outcome: 'spent', runs_out_at: null, basis: 'recent' },
+        forecast: { outcome: 'spent', runs_out_at: null, at_reset_percent: null, basis: 'recent' },
       }),
       window({
         kind: 'week',

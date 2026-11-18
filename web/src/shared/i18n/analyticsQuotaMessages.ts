@@ -57,7 +57,7 @@ export const analyticsQuotaMessages = {
     reset: 'Reset at {at}, since the last reading',
     noReset: 'No reset named yet',
     forecast: {
-      lasts: 'Lasts to the reset',
+      lasts: 'Lasts to the reset, {share} by then',
       runs_out: 'Runs out at {at}',
       spent: 'Spent',
       range: 'By the reset: {low} to {high}',
@@ -181,7 +181,7 @@ export const analyticsQuotaMessages = {
     reset: 'Сброс был в {at}, после последнего показания',
     noReset: 'Сброс ещё не назван',
     forecast: {
-      lasts: 'Хватит до сброса',
+      lasts: 'Хватит до сброса, к нему {share}',
       runs_out: 'Кончится в {at}',
       spent: 'Израсходовано',
       range: 'К сбросу: от {low} до {high}',

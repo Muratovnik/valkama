@@ -12,7 +12,7 @@
  * A forecast is drawn from one mapping (`forecastCourses`), so the bar's tail, the tile's, the
  * step line's corridor and their words never disagree: two edges from the share spent at the
  * answer's moment to the reset, a week's slower and faster pace, the five hours' one outcome as
- * both. Neither passes 100 %, which a quota cannot: an edge that would runs on flat from where it
+ * both: to the share it spends by the reset where it lasts, to 100 % where it runs out. Neither passes 100 %, which a quota cannot: an edge that would runs on flat from where it
  * reaches it, as the words say a range that reaches 100 % (`useQuotaWords`).
  */
 import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
@@ -73,6 +73,18 @@ export function runsOutAt(window: QuotaShareWindow, low: number, now: number): n
   return left > 0 ? now + ((100 - used) / (low - used)) * left : null
 }
 
+/**
+ * Where five hours that last to the reset stand by then: the share their answer says the pace
+ * spends (`at_reset_percent`), never below the share spent already, as the drawing and the words
+ * both take it.
+ */
+export function lastingEnd(window: QuotaShareWindow): number {
+  const used = window.latest.used_percent
+  const found = window.forecast
+  const named = found && 'at_reset_percent' in found ? found.at_reset_percent : null
+  return Math.max(used, named ?? used)
+}
+
 /** An edge of a forecast: the share at each moment it turns, from the answer's moment to the reset. */
 type ForecastCourse = { at: number; value: number }[]
 
@@ -80,9 +92,10 @@ type ForecastCourse = { at: number; value: number }[]
  * A window's forecast as two edges from its share at the answer's moment `now` (ms) to its reset:
  * a week's slower pace (`low`) and faster (`high`), each from the range's end it reaches by the
  * reset and, past 100 %, flat from when its pace spends the window (`runsOutAt`); the five hours'
- * running out as both, to 100 % at its `runs_out_at` and flat on; a window spent, or read past
- * 100 %, flat where it stands. Null where nothing is drawn: no forecast, no reset ahead of `now`,
- * or five hours that last to the reset, whose answer names no share to draw to.
+ * one outcome as both: lasting, straight to the share it spends by the reset
+ * (`at_reset_percent`), running out, to 100 % at its `runs_out_at` and flat on; a window spent,
+ * or read past 100 %, flat where it stands. Null where nothing is drawn: no forecast, or no reset
+ * ahead of `now`.
  */
 export function forecastCourses(
   window: QuotaShareWindow,
@@ -111,7 +124,11 @@ export function forecastCourses(
     return { high: edge(found.high_percent), low: edge(found.low_percent) }
   }
   if (found.outcome === 'spent') return { high: flat(100), low: flat(100) }
-  if (found.outcome === 'lasts' || found.runs_out_at === null) return null
+  if (found.outcome === 'lasts') {
+    const course = toward(lastingEnd(window), null)
+    return { high: course, low: course }
+  }
+  if (found.runs_out_at === null) return null
   const course = toward(100, Math.min(reset, Math.max(now, Date.parse(found.runs_out_at))))
   return { high: course, low: course }
 }

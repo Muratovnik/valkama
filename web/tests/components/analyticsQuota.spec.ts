@@ -17,6 +17,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { forecastCourses, sectionWindows } from '@/pages/analytics/utils/quotaFigures.ts'
+
 import type { QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
@@ -238,11 +240,12 @@ describe('the quota panel', () => {
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const five = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
     const zero = windowOf(accountNamed(five, '7e6d5c4b'), 'five_hour')
-    // Lasting to the reset names no share to draw to, so the bar has no tail and no key.
-    expect(zero).toMatchObject({ lead: '0% used · fresh', filled: false, tail: 0, keyed: false })
+    // Lasting to the reset at 35 %: a tail from the track's start, keyed on the forecast's line.
+    expect(zero).toMatchObject({ lead: '0% used · fresh', filled: false, tail: 1, keyed: true })
     expect(zero.latest).toBe('Read 3 min ago from the status line')
-    // The five hours forecast a point: it lasts, or runs out at a time, drawn to the track's end.
-    expect(zero.forecast).toBe('Forecast · Lasts to the reset')
+    // The five hours forecast a point: it lasts with the share spent by the reset, or runs out at
+    // a time, drawn to the track's end.
+    expect(zero.forecast).toBe('Forecast · Lasts to the reset, 35% by then')
     expect(windowOf(accountNamed(five, 'Work'), 'five_hour')).toMatchObject({
       forecast: expect.stringMatching(/^Forecast · Runs out at \d{2}:\d{2}$/u),
       tail: 1,
@@ -387,7 +390,12 @@ describe('the quota panel’s times', () => {
       started_at: '2026-11-14T21:30:00+03:00',
       even_percent: 63.33,
       readings: [{ at: '2026-11-14T21:40:00+03:00', used_percent: 10, source: 'poll' }, latest],
-      forecast: { outcome: 'runs_out', runs_out_at: '2026-11-15T01:50:00+03:00', basis: 'blend' },
+      forecast: {
+        outcome: 'runs_out',
+        runs_out_at: '2026-11-15T01:50:00+03:00',
+        at_reset_percent: null,
+        basis: 'blend',
+      },
     }
     stubAnalyticsReads(usage, workWith(at, [five]))
     const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
@@ -448,5 +456,64 @@ describe('the quota panel’s times', () => {
     expect(plain(accountNamed(page, 'Work').get('[data-cell="forecast"]').text())).toBe(
       'Too few readings for a forecast',
     )
+  })
+})
+
+/**
+ * Five hours that last to their reset draw the share they will have spent by then, as five hours
+ * that run out and a week's range do (DESIGN.md, `WindowBar` and the quota's sections): a hatched
+ * tail on the bar and the tile from the share spent to the share the answer names at the reset, a
+ * corridor on the step line to it, the swatch on the forecast's line, and words that say that
+ * share. The figures are `quotaAt`'s: 7e6d5c4b's five hours stand at a fresh 0 % four hours before
+ * their reset and last to it with 35 % spent by then.
+ */
+describe('five hours that last to the reset', () => {
+  it('run their forecast straight from the share spent to the share named at the reset', () => {
+    const night = quotaAt(NOW).accounts[1]
+    if (!night) throw new Error('the second account')
+    const found = sectionWindows(night, 'quota_five_hour')
+    expect(found).toHaveLength(1)
+    const [five] = found
+    if (!five) throw new Error('its five hours')
+    const course = [
+      { at: NOW.getTime(), value: 0 },
+      { at: NOW.getTime() + 4 * HOUR, value: 35 },
+    ]
+    expect(forecastCourses(five, NOW.getTime())).toEqual({ high: course, low: course })
+  })
+
+  it('draw a keyed tail to that share on the tile and in the panel, and say it in both languages', async () => {
+    stubAnalyticsReads(usage, quotaOf([1]))
+    const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
+    // The tile names the one five hours there are, its tail from the track's start to 35 %.
+    const tileTail = tile(page, 'quota_five_hour').findAll('[data-mark="ahead"]')
+    expect(tileTail).toHaveLength(1)
+    expect(tileTail[0]?.attributes('style')).toContain('inline-size: 35%')
+    expect(tile(page, 'quota_five_hour').get('.window-track').attributes('aria-label')).toBe(
+      'Five hours: 0% used, steady use 20%, fresh. Forecast · Lasts to the reset, 35% by then',
+    )
+    const window = accountNamed(page, '7e6d5c4b').get('.quota-window[data-window="five_hour"]')
+    const tail = window.findAll('[data-mark="ahead"]')
+    expect(tail).toHaveLength(1)
+    expect(tail[0]?.attributes('style')).toContain('inline-size: 35%')
+    expect(window.find('[data-fact="forecast"] [data-mark="hatch"]').exists()).toBe(true)
+    expect(plain(window.get('[data-fact="forecast"]').text())).toBe(
+      'Forecast · Lasts to the reset, 35% by then',
+    )
+    // As a table the readings end with the forecast at the reset: the figure says it all.
+    await showTable(page)
+    const rows = accountNamed(page, '7e6d5c4b')
+      .findAll('.quota-window-readings tbody tr')
+      .map((row) => plain(row.text()))
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toMatch(/^Forecast by the reset35%Resets /u)
+    page.unmount()
+
+    stubAnalyticsReads(usage, quotaOf([1]))
+    const ru = await mountAnalytics({ routeState: { by: 'quota_five_hour' } }, 'ru')
+    const said = accountNamed(ru, '7e6d5c4b').get(
+      '.quota-window[data-window="five_hour"] [data-fact="forecast"]',
+    )
+    expect(plain(said.text())).toBe('Прогноз · Хватит до сброса, к нему 35 %')
   })
 })
