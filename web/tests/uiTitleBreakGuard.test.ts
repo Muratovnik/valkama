@@ -7,7 +7,7 @@ import { test } from 'vitest'
 
 import { scanUiTree } from '../scripts/check-ui-system.mjs'
 import { collectVueSources } from '../scripts/ui-system/sources.mjs'
-import { scanTitleBreaks, UNBROKEN_TITLES } from '../scripts/ui-system/title-breaks.mjs'
+import { OTHER_TITLES, scanTitleBreaks } from '../scripts/ui-system/title-breaks.mjs'
 
 const drawn = (template: string) => [
   {
@@ -15,6 +15,14 @@ const drawn = (template: string) => [
     source: `<script setup lang="ts"></script>\n<template>${template}</template>`,
   },
 ]
+
+/** A title written as text is refused naming the work item's primitive, then the other title's. */
+const WRITTEN_REFUSAL =
+  /as text; a work item's title is drawn through v-work-item-title .*v-slash-breaks/u
+
+/** A title drawn through `v-slash-breaks` is refused naming the work item's primitive. */
+const SLASHED_REFUSAL =
+  /: draws v-slash-breaks=.*a work item's title is drawn through v-work-item-title/u
 
 test('the tree as it stands writes no title as text but the ones it registers', () => {
   assert.deepEqual(scanTitleBreaks(collectVueSources()), [])
@@ -47,13 +55,19 @@ test('a new surface that writes a title as text is refused, however it names it'
     '<span>{{\n  member.title\n}}</span>',
   ]) {
     const violations = scanTitleBreaks(drawn(template), new Map())
-    assert.match(violations.join('\n'), /draw it with v-slash-breaks/u, template)
+    assert.match(violations.join('\n'), WRITTEN_REFUSAL, template)
   }
 })
 
-test('a title drawn through the directive, and words that only mention one, are not refused', () => {
+test('a title drawn through its primitive, and words that only mention one, are not refused', () => {
   for (const template of [
-    '<strong v-slash-breaks="option.title" class="combo-title" />',
+    '<strong v-work-item-title="option.title" class="combo-title" />',
+    '<span v-text-runs="option.runs" class="combo-title" />',
+    // Text that is no title breaks after a `/` through the directive, as before.
+    '<strong v-slash-breaks="option.label" class="combo-title" />',
+    '<span v-slash-breaks="subtitle" />',
+    `<span v-slash-breaks="t('app.title')" />`,
+    '<span :title="item.title" v-slash-breaks="item.path" />',
     '<span :title="item.title">{{ item.reference }}</span>',
     "<span>{{ t('app.title') }}</span>",
     '<span>{{ moduleTitle(module) }}</span>',
@@ -66,12 +80,47 @@ test('a title drawn through the directive, and words that only mention one, are 
   assert.deepEqual(scanTitleBreaks([{ file: 'future/label.ts', source: script }], new Map()), [])
 })
 
+test('a title drawn through v-slash-breaks is refused, naming the work item title primitive', () => {
+  for (const template of [
+    '<strong v-slash-breaks="option.title" class="combo-title" />',
+    "<span v-slash-breaks='item.title'></span>",
+    '<component :is="tag" v-slash-breaks="node?.title ?? fallback" class="name" />',
+    '<li v-slash-breaks="`${row.title} ·`">x</li>',
+    '<span\n  v-slash-breaks="\n    member.title\n  "\n/>',
+  ]) {
+    const violations = scanTitleBreaks(drawn(template), new Map())
+    assert.equal(violations.length, 1, template)
+    assert.match(violations[0], SLASHED_REFUSAL, template)
+  }
+  // Its place is named by the element it stands on, which a register entry lets through.
+  const named = scanTitleBreaks(
+    drawn('<h2 class="head"><strong v-slash-breaks="title" /></h2>'),
+    new Map(),
+  )
+  assert.equal(named.length, 1)
+  assert.ok(
+    named[0].startsWith('future/Row.vue: draws v-slash-breaks="title" in h2.head > strong,'),
+    named[0],
+  )
+  const register = new Map([
+    ['future/Row.vue v-slash-breaks="title" in h2.head > strong', "the interface's words"],
+  ])
+  assert.deepEqual(
+    scanTitleBreaks(drawn('<h2 class="head"><strong v-slash-breaks="title" /></h2>'), register),
+    [],
+  )
+  assert.match(
+    scanTitleBreaks(drawn('<h2 class="head"><strong /></h2>'), register).join('\n'),
+    /registers future\/Row.vue v-slash-breaks="title" in h2.head > strong, which the tree no longer writes/u,
+  )
+})
+
 test('the register lets through only what it names, and names only what the tree holds', () => {
   const register = new Map([['future/Row.vue {{ title }} in h3', "a heading's words"]])
   assert.deepEqual(scanTitleBreaks(drawn('<h3>{{ title }}</h3>'), register), [])
   assert.equal(scanTitleBreaks(drawn('<h3>{{ item.title }}</h3>'), register).length, 2)
   assert.match(scanTitleBreaks(drawn('<h3 />'), register).join('\n'), /no longer writes; drop it/u)
-  for (const reason of UNBROKEN_TITLES.values()) assert.ok(reason.length > 0)
+  for (const reason of OTHER_TITLES.values()) assert.ok(reason.length > 0)
 })
 
 test('a title inside a template literal is a title written as text', () => {
@@ -81,7 +130,7 @@ test('a title inside a template literal is a title written as text', () => {
     "<span>{{ `${t('a')}: ${row?.title ?? ''}` }}</span>",
   ]) {
     const violations = scanTitleBreaks(drawn(template), new Map())
-    assert.match(violations.join('\n'), /draw it with v-slash-breaks/u, template)
+    assert.match(violations.join('\n'), WRITTEN_REFUSAL, template)
   }
   for (const template of [
     '<span>{{ `title: ${count}` }}</span>',

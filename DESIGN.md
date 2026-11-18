@@ -1399,9 +1399,18 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   description, a download, and a copy — a selection inside a drawn title puts each piece
   of code it holds whole on the clipboard between its backticks. The list's find reads a
   title as it is drawn, without them. `production-title-code.spec.ts` measures the
-  surfaces. Analytics is the one place this does not reach yet: it names a task by its
-  reference and title as one string through its shared chart parts (a table's row, a
-  bar, a legend, a filter, a chart's hint), and there the backticks are drawn as written.
+  surfaces. Analytics names a task by its reference and title, «MAIN-12 Raise
+  `` `X` ``», and hands that name with its runs (`valueRuns`, `lineRuns` in
+  `useSpendingWords`) to every place that draws it: a list's and a card's rows, a legend,
+  a small chart's name, the table twins, a hint's rows, a filter's choice and chip, a
+  tile of the rail, the overview's changes and the side panel's heading. A chart's name is
+  drawn by `PairName`, which cuts a pair's runs where its end starts; where nothing says a
+  name holds a title it is drawn as the text it is. The page draws no title as SVG text.
+  Its names as text — an accessible name, a hint's copy, a download, a sort, a table's
+  search — keep the backticks. `production-analytics-title-code.spec.ts` measures it. The
+  guard refuses a template that draws a title through `v-slash-breaks` too, unless
+  `title-breaks.mjs` registers why it is no work item's title: that directive draws code
+  as the backticks it was written with.
 - **Free text:** `RichText` owns every text an agent or a person wrote — a
   description, a comment, a report section, a question, an attempt's result, a
   ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,

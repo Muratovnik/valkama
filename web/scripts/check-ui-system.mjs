@@ -38,7 +38,7 @@ import {
   scanTypeStyles,
   scanUiSources,
 } from './ui-system/styles.mjs'
-import { scanTitleBreaks, UNBROKEN_TITLES } from './ui-system/title-breaks.mjs'
+import { OTHER_TITLES, scanTitleBreaks } from './ui-system/title-breaks.mjs'
 import { scanTooltipImports } from './ui-system/tooltip-imports.mjs'
 import { scanTrimmedWords } from './ui-system/trimmed-word.mjs'
 
@@ -52,7 +52,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const budget = product ? LINE_BUDGET : new Map()
   const sizes = product ? CONTROL_SIZE_BUDGET : new Map()
   const fills = product ? FILL_BUDGET : new Map()
-  const titles = product ? UNBROKEN_TITLES : new Map()
+  const titles = product ? OTHER_TITLES : new Map()
   const hints = product ? NATIVE_TITLES : new Map()
   const details = product ? DETAIL_TOOLTIPS : new Map()
   const sided = product ? SIDED_TOOLTIPS : new Map()
