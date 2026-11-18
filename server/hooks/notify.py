@@ -692,7 +692,11 @@ class _Tree:
         return bool(self.roots)
 
     def climb(self, items: set[str]) -> None:
-        """Read `items` and every item over them not read yet, a statement a level."""
+        """Read `items` and every item over them not read yet, a statement a level.
+
+        The next level is what the whole level read names and nothing read holds: a
+        parent among the rows of the same statement is read already, whichever row
+        came first."""
 
         wanted = {item for item in items if item not in self.nodes}
         if not wanted or not self.watches():
@@ -700,12 +704,13 @@ class _Tree:
         for _level in range(MOST_DEPTH):
             listed = sorted(wanted)
             rows = self.conn.execute(_NODES.format(items=",".join("?" * len(listed))), listed)
-            wanted = set()
+            parents = set()
             for row in rows:
                 parent = None if row[1] is None else str(row[1])
                 self.nodes[str(row[0])] = (parent, bool(row[2]), str(row[3]), str(row[4]))
-                if parent is not None and parent not in self.nodes:
-                    wanted.add(parent)
+                if parent is not None:
+                    parents.add(parent)
+            wanted = parents - self.nodes.keys()
             if not wanted:
                 return
 
@@ -1598,12 +1603,14 @@ def _own_agents(entries: list[dict], session_id: str, agent_id: str | None) -> l
 
     Its subagent's report reaches the orchestrator anyway, so a quote would say it
     twice, and with no quote nothing is cut. Without a quote, two events of one kind by
-    one agent at one time read the same, as a claim that started the item and the close
-    in one call do: the line is told once. It never wakes: nothing here says `asks` or
-    `answers`, so at `Stop` and in the watcher it waits for the next tool call as any
-    news that does not ask. A list on a comment, asked or withdrawn, and a request asked
-    of another session are no line: `_owed` took them out before, since the work never
-    comes to wait for the owner on one. A subagent hears none of this.
+    one agent at one time read the same, and so do two of one kind in one call, as a
+    claim that started the item and the close do: the line is told once. A call is
+    known by its row, not by its time: each event takes the second it is written in,
+    so the events of one call can stand a second apart. It never wakes: nothing here
+    says `asks` or `answers`, so at `Stop` and in the watcher it waits for the next tool
+    call as any news that does not ask. A list on a comment, asked or withdrawn, and a
+    request asked of another session are no line: `_owed` took them out before, since
+    the work never comes to wait for the owner on one. A subagent hears none of this.
     """
 
     from ..planning import person_events
@@ -1618,12 +1625,15 @@ def _own_agents(entries: list[dict], session_id: str, agent_id: str | None) -> l
         and entry["kind"] in person_events.WORK_KINDS
     ]
     ours = []
-    lines = set()
+    times: set[tuple] = set()
+    calls: set[tuple] = set()
     for entry in candidates:
-        line = (entry["kind"], entry["at"], entry["agent"])
-        if line in lines:
+        at = (entry["kind"], entry["agent"], entry["at"])
+        call = (entry["kind"], entry["agent"], entry["call"])
+        if at in times or call in calls:
             continue
-        lines.add(line)
+        times.add(at)
+        calls.add(call)
         entry.pop("text", None)
         entry.pop("cut", None)
         entry["yours"] = True

@@ -117,6 +117,11 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
             http_surface.Handler,
             token_path=Path(self.directory.name) / "installation-token",
         )
+        # The handler of a stream closes its store connection last, after it unsubscribes,
+        # so a stream that has unsubscribed may still hold the store. With threads it
+        # does not leave behind, `server_close` waits for every handler to close its
+        # connection before the directory goes.
+        self.server.daemon_threads = False
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.write_headers = {
@@ -262,8 +267,8 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
             if response is not None:
                 response.close()
             client.close()
-        # The handler notices the closed socket on its next keep-alive and lets
-        # go of the store; the directory cannot be removed while it holds it.
+        # The handler notices the closed socket on its next keep-alive and ends the
+        # stream; `tearDown` waits for it to let go of the store.
         deadline = time.monotonic() + 3
         while watchers.WATCHERS._queues and time.monotonic() < deadline:
             time.sleep(0.05)

@@ -536,10 +536,11 @@ the same rules as a person's act and beside the mentions above:
   above) keeps it out as well. Each is one short line,
   `- status at <time> by your agent <id>`, that quotes nothing: the subagent's
   report reaches the orchestrator anyway. Two such events of one kind by one agent
-  at one time are one line, as the claim that starts an item and the close in one
-  call are. Nothing else its subagents wrote is told, a comment, a reply or a
-  mention included. These lines never wake the session or continue its turn: at
-  `Stop` and in the watcher they wait for the next tool call or prompt, and they
+  at one time are one line, and so are two of one kind in one call, as the claim
+  that starts an item and the close are: each event takes the second it is written
+  in, so those two can stand a second apart. Nothing else its subagents wrote is
+  told, a comment, a reply or a mention included. These lines never wake the
+  session or continue its turn: at `Stop` and in the watcher they wait for the next tool call or prompt, and they
   fold past three notices on an item as any other agent's news. Where an
   orchestrator never wrote on the item itself, its place for this news starts
   before its session's first call there, so the one call in which a subagent took
@@ -1177,12 +1178,19 @@ read through the calls' index on the session. Its cost grows with the rows writt
 since, not with the size of the tree. Measured in-process on Windows, a goal of 274
 items, the orchestrator holding one task in it, `collect` with the feed against
 the same call answered from its two reads, median of 200 runs each, interleaved,
-three runs (`tests/test_hooks_tree_cost.py` holds the bounds, 0.5 ms and 2 ms):
+three runs:
 
 | Since the last read | Added |
 | --- | --- |
 | nothing written | 0.00 / 0.01 / 0.00 ms |
 | 100 comments by another session across the tree, 200 rows | 0.86 / 0.87 / 0.85 ms |
+
+These times move with the machine's load: on a machine busy with other work the same
+code took two to five times as long. `tests/test_hooks_tree_cost.py` therefore holds what they
+stand for instead of the times. With nothing written, the tree adds no statement,
+only its three columns, each an uncorrelated subquery that SQLite answers by a search.
+The feed of those 100 comments takes at most 12 statements beyond the two reads, one
+of them for each level climbed, and 100 more comments on 100 other items add none.
 
 A hook of a newer release can meet a store that release has not opened yet, for
 the seconds between `launcher install` and the first session that switches. When
