@@ -766,6 +766,21 @@ class _Scenario:
             )
             service.set_summary(conn, cancelled, {"done": "Not needed.", "next": "Nothing."})
             service.transition_work_item(conn, cancelled, "cancelled", acceptance="assignment")
+            # Outside goals, a task of the project with a label; and a commit on no card, made
+            # now, so the flow's period around today holds it whatever the day.
+            service.create_work_item(
+                conn,
+                space=SPACE,
+                title="Work of the project outside goals",
+                labels=["ui"],
+                projects=[PROJECT],
+            )
+            made = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, committed_at, session_id, client,"
+                " reported_at) VALUES (?, ?, 'feat: on no card', ?, 'sess-goal', 'claude', ?)",
+                (PROJECT, "c" * 40, made, made),
+            )
             under_stage = conn.execute(
                 "SELECT work_item_id FROM work_items WHERE title = 'Tree work under the stage'"
             ).fetchone()[0]

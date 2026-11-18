@@ -34,7 +34,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from . import calls, model, request_model, store
 
@@ -107,13 +107,24 @@ def expired(conn: sqlite3.Connection, request_id: str, at: str) -> str | None:
 def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
     """The questions still open for the owner to answer, on one item or everywhere in this store."""
 
-    query = _PENDING
-    parameters: tuple[str, ...] = ()
-    if work_item_id is not None:
-        query += " AND r.work_item_id = ?"
-        parameters = (work_item_id,)
+    if work_item_id is None:
+        return open_on(conn, "1 = 1")
+    return open_on(conn, "r.work_item_id = ?", (work_item_id,))
+
+
+def open_on(
+    conn: sqlite3.Connection, where: str, parameters: Sequence[object] = ()
+) -> list[sqlite3.Row]:
+    """The questions still open for the owner to answer on the items `where` keeps.
+
+    `where` is a condition on the request row `r` and its item `work_items i`, with
+    `parameters` for its placeholders, such as the items a read of a space holds.
+    """
+
+    escaped = where.replace("{", "{{").replace("}", "}}")
     at = request_model.now()
-    return [row for row in _read(conn, query, parameters) if lapse(row, at) is None]
+    rows = _read(conn, f"{_PENDING} AND ({escaped})", tuple(parameters))
+    return [row for row in rows if lapse(row, at) is None]
 
 
 def asked(
@@ -133,7 +144,9 @@ def asked(
     return frozenset(str(row["work_item_id"]) for row in rows if lapse(row, at) is None)
 
 
-def _read(conn: sqlite3.Connection, query: str, parameters: tuple[str, ...]) -> list[sqlite3.Row]:
+def _read(
+    conn: sqlite3.Connection, query: str, parameters: tuple[object, ...]
+) -> list[sqlite3.Row]:
     """The rows of a query over `_FACTS`, from the store as this build writes it or an earlier one.
 
     The store this build writes is asked first, so its read costs one statement;

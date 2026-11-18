@@ -871,7 +871,10 @@ detached from its last item is on it again.
 - `space=<key>` — the commits of the projects the registry binds to the space,
   its default project among them;
 - `project=<id>` — the commits of one registered project, bound to a space or
-  not.
+  not;
+- neither — every commit of the store on no card, whatever its project. The
+  registry gives only the names here, and when it cannot be read every
+  `display_name` is `null`.
 
 ```json
 {"total": 2,
@@ -893,12 +896,13 @@ client whose hook reported it.
 - `total` counts every commit the scope and `since` keep, however many `limit`
   lists.
 
-Each refusal is `invalid_request` (400): neither scope or both
-(`[commit] the commits on no card are read by a space or by a project: name one`),
+Each refusal is `invalid_request` (400): both scopes
+(`[commit] the commits on no card are read by a space or by a project, not both`),
 a project the registry does not record
 (`[commit] <id> is not a registered project: <ids>`), a space the store does not
-have (`no planning space named <key>`), a registry that cannot be read, a `since`
-without its offset or that is no time, and a `limit` above 500 or below 0.
+have (`no planning space named <key>`), a registry that cannot be read for a
+space or a project, a `since` without its offset or that is no time, and a
+`limit` above 500 or below 0.
 
 `POST /api/planning/work-item/commit` attaches one of them, or with
 `"remove": true` detaches a commit, as one entry of the `commits` group of
@@ -1720,7 +1724,8 @@ key into its account.
 
 The Volumes read counts the work of a scope by where it stands: how much waits in each
 category now, which card has stood there longest, and how much came to be completed or
-cancelled in a period, what each goal took, and how work flowed day by day. It answers
+cancelled in a period, what waits for the owner, which commits stand on no card, what
+each goal took, what work stands outside goals, and how work flowed day by day. It answers
 `GET /api/planning/volumes` with `interface_version` `valkama-planning-api` and
 `volumes`; `GET /api/planning/goal-volumes` gives the rows of the goals and stages it is asked for,
 whole (see [A goal's row](#a-goals-row)). A later build only adds fields and sections to
@@ -1758,8 +1763,22 @@ of another space that the space's items name keeps only the space's own.
         "oldest": {"work_item_id": "6f1c2a8e-0000-4000-8000-000000000012",
                    "reference": "MAIN-12", "since": "2030-01-03T10:00:00Z"}},
        {"category": "completed", "tasks": 31, "goals": 1, "stages": 0, "oldest": null},
-       {"…": "the other six categories"}]},
+       {"…": "the other six categories"}],
+     "waiting_owner": {"count": 12,
+                       "oldest": {"request_id": "6f1c2a8e-0000-4000-8000-000000000090",
+                                  "reference": "MAIN-90", "since": "2030-02-28T09:00:00.000Z"}},
+     "unattached_commits": 3},
    "goals": [{"…": "a goal's row, with the rows of its stages in children"}],
+   "outside": {
+     "tasks": 43,
+     "by_project": [
+       {"project": {"id": "app", "unknown": false, "name": "App", "combinations": null},
+        "categories": {"triage": 30, "deferred": 2, "ready": 3, "active": 1, "review": 0,
+                       "completed": 4, "blocked": 0, "cancelled": 1}},
+       {"…": "a row for several projects, and one for none"}],
+     "by_label": [
+       {"label": "ui", "categories": {"triage": 9, "…": "the other seven categories"}},
+       {"label": null, "categories": {"triage": 21, "…": "the other seven categories"}}]},
    "flow": {
      "days": [{"day": "2030-03-04", "created": 14, "closed": 11, "decisions": 6, "commits": 9},
               {"…": "every other day of the period"}],
@@ -1776,7 +1795,10 @@ of another space that the space's items name keeps only the space's own.
 | `period` | the period asked for, with `from` and `to` at the caller's offset |
 | `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
 | `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest` |
+| `counts.waiting_owner` | the questions to the owner still open on the scope's items: `count`, and `oldest`, the one asked first, with `request_id`, the `reference` of its item and its `created_at` as `since`, or `null` when none waits |
+| `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store |
 | `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
+| `outside` | the scope's tasks under no goal: `tasks`, how many, and the rows `by_project` and `by_label` (see below) |
 | `flow` | how work flowed through the scope: `days`, `totals` and `pace` (see [The flow](#the-flow)) |
 
 A category counts the items of the scope that stand in a state of it. An accepted open
@@ -1789,6 +1811,26 @@ open category that came to stand there first, with that moment as `since`; it is
 for a category nothing stands in, and always for `completed` and `cancelled`. How long
 ago that was is the reader's to say: the answer holds no clock of the server.
 
+A question waits for the owner while it is pending, asks the owner rather than an agent
+session, is no list on a comment, and has not run out past its deadline or with its
+execution: the same test the owner's alert and the queue's `question` apply. The commits
+on no card do not depend on which items the scope holds, only on its projects: those of
+the project read, those the registry binds to the space, or every commit of the store.
+
+`outside` counts the scope's tasks with no parent, each as the categories count it: in
+an open category as it stands now, in `completed` or `cancelled` only when it came to
+stand there inside the period; `tasks` is how many count. Each row says how many of its
+tasks stand in each of the eight categories, all eight named, and the rows come with the
+most tasks first. `by_project` gives each task one row, so its rows add up to `tasks`:
+the project it names, its tasks naming several projects together, or those naming none.
+`project` is written as the `project` group of
+[What agent work spent in a period](#what-agent-work-spent-in-a-period) is: `id` and
+`name`, as the projects registry gives it or `null`, with `unknown` `false`; the row of
+several has `id` `null` and lists in `combinations` every set of projects its tasks
+name, each as `{"id", "name"}`, which the other rows hold as `null`. `by_label` gives a
+task the row of each of its labels, and a task with none the row whose `label` is `null`,
+so those rows add up to no total.
+
 The read counts the store this service writes, where usage is counted. A space of an
 attached store is refused rather than counted short.
 
@@ -1800,6 +1842,7 @@ attached store is refused rather than counted short.
 | `volumes read the store this service writes; <KEY> lives in an attached store` | the space is in an attached store |
 | `no planning space <KEY>` | the store holds no such space, or the `data_scope_id` is no store this service knows |
 | `no project <id>` | neither the projects registry nor any item of the store names the project |
+| `[commit] <id> is not a registered project: <ids>`, and the refusal of a registry that cannot be read | the commits on no card of the scope cannot be read, as [Commits on no card](#commits-on-no-card) refuses them: a project only items name, or a space or project read while the registry cannot be |
 | the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
 | `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
 

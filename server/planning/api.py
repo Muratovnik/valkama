@@ -557,7 +557,7 @@ def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
 
 
 def _unattached(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """The commits on no card of a space's projects or of one project, newest first."""
+    """The commits on no card of a space's projects, of one project or of the whole store, newest first."""
 
     limit = _count(parameters, "limit")
     return commits.unattached(

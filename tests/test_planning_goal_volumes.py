@@ -622,9 +622,10 @@ class StatementTests(GoalCase):
         self.goal_volumes(*references)
         self.assertEqual(once, reading())
         self.assertEqual(3, len(self.volumes("MAIN")["goals"]))
-        # The frame's first counted moment reads usage too, and the flow reads the scope's
-        # commits twice, those attached to its items and those on no card, whatever its goals.
-        self.assertEqual({**once, "of usage": 3, "commits": 3}, reading())
+        # The frame's first counted moment reads usage too, the flow reads the scope's commits
+        # twice, those attached to its items and those on no card, whatever its goals, and the
+        # counts take how many stand on no card in one more.
+        self.assertEqual({**once, "of usage": 3, "commits": 4}, reading())
 
 
 class RefusalTests(GoalCase):

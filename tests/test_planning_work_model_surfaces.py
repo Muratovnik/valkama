@@ -263,6 +263,7 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/commits/unattached": [
         _q(lambda _case: {"space": KEY}),
         _q(lambda _case: {"project": PROJECT}),
+        _none,
     ],
     "/api/planning/volumes": [
         _q(lambda _case: {"scope_kind": "global", **VOLUMES_PERIOD}),

@@ -10,11 +10,16 @@ The read is a frame — the scope, the period and the moment usage was first cou
 to items — and its sections, each one function of the request (`SECTIONS`). The
 counts by category are the first section: work in an open category is counted as
 it stands now, with the card longest in it, and work that came to be completed or
-cancelled is counted when it came to stand there inside the period. The goals come
-next: the open ones and those closed in the period, each with what it took over all
-its time and its stages under it (`goal_volumes`). The flow closes the read: the
-scope's tasks created and closed on each day of the period, the owner's decisions and
-the commits, with the pace of its tasks (`volume_flow`).
+cancelled is counted when it came to stand there inside the period. Beside them
+stand the questions waiting for the owner on the scope's items, by the one rule of a
+question to the owner (`questions.open_on`), and the commits on no card of the
+scope's projects, or of the whole store, as the total of their list
+(`commits.unattached`). The goals come next: the open ones and those closed in the
+period, each with what it took over all its time and its stages under it
+(`goal_volumes`). Then the work outside goals: the scope's tasks under no goal, by
+project and by label, counted by category as the counts are. The flow closes the
+read: the scope's tasks created and closed on each day of the period, the owner's
+decisions and the commits, with the pace of its tasks (`volume_flow`).
 
 Only the store this service writes is read. Usage is written there alone, and an
 attached store is read as an earlier build left it, so a space of one is refused
@@ -23,13 +28,23 @@ rather than counted short.
 
 from __future__ import annotations
 
+import json
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import NamedTuple
 
 from ..projects import project_registry, scopes
 from ..store_identity.metadata import read_store_metadata
-from . import goal_volumes, item_projects, model, usage, volume_flow
+from . import (
+    commits,
+    goal_volumes,
+    item_projects,
+    model,
+    questions,
+    read_model,
+    usage,
+    volume_flow,
+)
 
 SCOPE_KINDS = ("global", "space")
 UNKNOWN_SCOPE = "scope_kind must be global or space"
@@ -168,7 +183,8 @@ def _known_project(conn: sqlite3.Connection, project: str) -> bool:
 #: Each item of a scope with its category and the moment it came to stand where it is:
 #: its last state entry (`model.STATE_ENTRY_ACTIONS`), or its creation when it has none.
 _STANDING = (
-    "SELECT i.work_item_id, i.number, i.kind, i.parent_id, i.created_at, s.category,"
+    "SELECT i.work_item_id, i.number, i.kind, i.parent_id, i.created_at, i.labels,"
+    " s.category,"
     " p.key AS space_key,"
     " COALESCE((SELECT e.created_at FROM work_item_events e"
     "  WHERE e.work_item_id = i.work_item_id"
@@ -211,10 +227,10 @@ def category_counts(
     }
     first: dict[str, tuple] = {}
     for row in rows:
+        if not _counted(row, period):
+            continue
         category = str(row["category"])
         since = usage.stored_micro(str(row["since"]))
-        if period is not None and category in model.TERMINAL_CATEGORIES and not period.holds(since):
-            continue
         counted = found[category]
         shape = model.outward_kind(row["kind"], row["parent_id"])
         counted["goals" if shape == "goal" else "stages" if shape == "stage" else "tasks"] += 1
@@ -227,6 +243,15 @@ def category_counts(
                 "since": str(row["since"]),
             }
     return found
+
+
+def _counted(row: sqlite3.Row, period: Period | None) -> bool:
+    """Whether a card counts where it stands: always in an open category, and in completed
+    or cancelled only when it came to stand there inside the period, when there is one."""
+
+    if period is None or str(row["category"]) not in model.TERMINAL_CATEGORIES:
+        return True
+    return period.holds(usage.stored_micro(str(row["since"])))
 
 
 def _categories(conn: sqlite3.Connection, request: Request) -> list[dict]:
@@ -245,8 +270,45 @@ def _categories(conn: sqlite3.Connection, request: Request) -> list[dict]:
     ]
 
 
+def _waiting_owner(conn: sqlite3.Connection, scope: Scope) -> dict:
+    """The questions open for the owner on the scope's items, and the one asked first."""
+
+    rows = questions.open_on(conn, scope.where(), scope.parameters)
+    if not rows:
+        return {"count": 0, "oldest": None}
+    first = min(
+        rows, key=lambda row: (usage.stored_micro(str(row["created_at"])), str(row["request_id"]))
+    )
+    item = read_model.item_by_id(conn, str(first["work_item_id"]))
+    return {
+        "count": len(rows),
+        "oldest": {
+            "request_id": str(first["request_id"]),
+            "reference": read_model.reference(conn, item),
+            "since": str(first["created_at"]),
+        },
+    }
+
+
+def _unattached_commits(conn: sqlite3.Connection, scope: Scope) -> int:
+    """How many commits stand on no card of the project read, of the space's projects or of
+    the whole store: the total of the list the number opens."""
+
+    if scope.project is not None:
+        listed = commits.unattached(conn, project=scope.project, limit=0)
+    elif scope.space is not None:
+        listed = commits.unattached(conn, space=str(scope.space["key"]), limit=0)
+    else:
+        listed = commits.unattached(conn, limit=0)
+    return int(listed["total"])
+
+
 def _counts(conn: sqlite3.Connection, request: Request) -> dict:
-    return {"categories": _categories(conn, request)}
+    return {
+        "categories": _categories(conn, request),
+        "waiting_owner": _waiting_owner(conn, request.scope),
+        "unattached_commits": _unattached_commits(conn, request.scope),
+    }
 
 
 # -- the goals -------------------------------------------------------------------
@@ -278,6 +340,102 @@ def _goals(conn: sqlite3.Connection, request: Request) -> list[dict]:
         space_id=None if scope.space is None else str(scope.space["planning_space_id"]),
         children=True,
     )
+
+
+# -- the work outside goals ------------------------------------------------------
+
+
+def _outside(conn: sqlite3.Connection, request: Request) -> dict:
+    """The scope's tasks under no goal, by project and by label, counted by category.
+
+    A task counts as it does in the counts (`_counted`). By project, each task stands
+    in one row: its one project, several or none, written as a project group of the
+    Analytics read, so the rows add up to `tasks`. By label, a task stands in the row
+    of each of its labels and one with none in the row of no label, so those rows add
+    up to no total. Each row says all eight categories; the most tasks first.
+    """
+
+    rows = [
+        row
+        for row in _standing(
+            conn,
+            request.scope,
+            "i.kind != ?",
+            "i.parent_id IS NULL",
+            parameters=(model.CONTAINER_KIND,),
+        )
+        if _counted(row, request.period)
+    ]
+    held = item_projects.ids_of_items(conn, [str(row["work_item_id"]) for row in rows])
+    by_project: dict[usage.Value, list[sqlite3.Row]] = {}
+    sets: dict[usage.Value, set[frozenset[str]]] = {}
+    by_label: dict[str | None, list[sqlite3.Row]] = {}
+    for row in rows:
+        projects = held.get(str(row["work_item_id"]), frozenset())
+        group: usage.Value = usage.SEVERAL if len(projects) > 1 else next(iter(projects), None)
+        by_project.setdefault(group, []).append(row)
+        sets.setdefault(group, set()).add(projects)
+        labels: list[str | None] = [*model.labels(json.loads(str(row["labels"])))]
+        for label in labels or [None]:
+            by_label.setdefault(label, []).append(row)
+    names = _project_names(held.values())
+    projects_first = sorted(
+        by_project.items(), key=lambda entry: usage.ranking(len(entry[1]), None, (entry[0],))
+    )
+    labels_first = sorted(
+        by_label.items(), key=lambda entry: (-len(entry[1]), entry[0] is None, entry[0] or "")
+    )
+    return {
+        "tasks": len(rows),
+        "by_project": [
+            {"project": _project(group, names, sets[group]), "categories": _by_category(found)}
+            for group, found in projects_first
+        ],
+        "by_label": [
+            {"label": label, "categories": _by_category(found)} for label, found in labels_first
+        ],
+    }
+
+
+def _by_category(rows: list[sqlite3.Row]) -> dict[str, int]:
+    """How many of these tasks stand in each of the eight categories, in the model's order."""
+
+    found = dict.fromkeys(model.PUBLIC_CATEGORIES, 0)
+    for row in rows:
+        found[str(row["category"])] += 1
+    return found
+
+
+def _project_names(held: Iterable[frozenset[str]]) -> dict[str, str]:
+    """The registry's name of each project these tasks name; none when it cannot be read."""
+
+    named: set[str] = set().union(*held)
+    if not named:
+        return {}
+    listing = project_registry.read_registry()
+    if listing["status"] != "available":
+        return {}
+    return {
+        str(entry["project_id"]): str(entry["display_name"])
+        for entry in listing["projects"]
+        if str(entry["project_id"]) in named
+    }
+
+
+def _project(group: usage.Value, names: dict[str, str], sets: set[frozenset[str]]) -> dict:
+    """A row's project as a project group of the Analytics read is written: its `id` and
+    `name`, null for none and for several, and for several each set of projects named."""
+
+    return {
+        **usage.value(group, unknown=False),
+        "name": names.get(group) if isinstance(group, str) else None,
+        "combinations": [
+            [{"id": project, "name": names.get(project)} for project in projects]
+            for projects in sorted(sorted(found) for found in sets)
+        ]
+        if group is usage.SEVERAL
+        else None,
+    }
 
 
 # -- the flow --------------------------------------------------------------------
@@ -325,6 +483,7 @@ Section = Callable[[sqlite3.Connection, Request], object]
 SECTIONS: tuple[tuple[str, Section], ...] = (
     ("counts", _counts),
     ("goals", _goals),
+    ("outside", _outside),
     ("flow", _flow),
 )
 

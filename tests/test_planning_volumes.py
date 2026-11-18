@@ -10,6 +10,7 @@ a space to the items naming it, and brings other spaces' only when it is the spa
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import tempfile
@@ -311,6 +312,21 @@ class StoreCountTests(VolumesCase):
         self.place(alpha, "r", state="cancelled", projects=("app",))
         self.place_entries("ALPHA:r", "2026-11-12T00:00:00Z")
         self.place(alpha, "j", state="deferred", projects=("lib",))
+        # Outside goals: a task naming both projects, and labels on some of the work; w
+        # carries one too, but it was done after the period and stands in no row.
+        self.place(main, "p", state="ready", projects=("app", "lib"))
+        for name, labels in (
+            ("MAIN:t0", ("ui", "api")),
+            ("MAIN:x", ("ui",)),
+            ("MAIN:v", ("api",)),
+            ("MAIN:w", ("ui",)),
+            ("ALPHA:u", ("ui",)),
+            ("MAIN:a", ("ui",)),
+        ):
+            self.conn.execute(
+                "UPDATE work_items SET labels = ? WHERE work_item_id = ?",
+                (json.dumps(labels), *self.ids(name)),
+            )
         self.conn.commit()
 
     def place_entries(self, name: str, *stamps: str) -> None:
@@ -384,6 +400,102 @@ class StoreCountTests(VolumesCase):
         self.assertEqual(self.ids("MAIN:H"), {main["triage"]["oldest"]["work_item_id"]})
         self.assertEqual(self.ids("ALPHA:k1"), {main["ready"]["oldest"]["work_item_id"]})
 
+    def outside(self, items: set[str]) -> list[str]:
+        """The tasks under no goal that count: a closed one only when it closed in the period."""
+
+        rows = self.rows()
+        return [
+            identity
+            for identity, counts in ((i, self.counted({i})) for i in items)
+            if rows[identity]["kind"] != "container"
+            and rows[identity]["parent_id"] is None
+            and any(counts[category]["tasks"] for category in CATEGORIES)
+        ]
+
+    def test_outside_goals_the_rows_add_up_to_the_tasks_under_no_goal(self) -> None:
+        rows = self.rows()
+        projects: dict[str, set[str]] = {}
+        for identity, project in self.conn.execute(
+            "SELECT work_item_id, project_id FROM work_item_projects"
+        ):
+            projects.setdefault(str(identity), set()).add(str(project))
+        labels = {
+            identity: json.loads(str(text))
+            for identity, text in self.conn.execute("SELECT work_item_id, labels FROM work_items")
+        }
+
+        def by_category(found: list[str]) -> dict[str, int]:
+            return {
+                category: sum(rows[i]["category"] == category for i in found)
+                for category in CATEGORIES
+            }
+
+        for space, project in self.READS:
+            with self.subTest(space=space, project=project):
+                outside = self.volumes(space, project)["outside"]
+                tasks = self.outside(self.board_set(space, project))
+                self.assertEqual(len(tasks), outside["tasks"])
+                self.assertEqual(
+                    len(tasks),
+                    sum(sum(row["categories"].values()) for row in outside["by_project"]),
+                )
+                expected: dict[object, list[str]] = {}
+                for identity in tasks:
+                    held = projects.get(identity, set())
+                    key = "several" if len(held) > 1 else next(iter(held), None)
+                    expected.setdefault(key, []).append(identity)
+                self.assertEqual(
+                    {key: by_category(found) for key, found in expected.items()},
+                    {
+                        (
+                            "several"
+                            if row["project"]["combinations"] is not None
+                            else row["project"]["id"]
+                        ): row["categories"]
+                        for row in outside["by_project"]
+                    },
+                )
+                named: dict[str | None, list[str]] = {}
+                for identity in tasks:
+                    for label in labels[identity] or [None]:
+                        named.setdefault(label, []).append(identity)
+                self.assertEqual(
+                    {label: by_category(found) for label, found in named.items()},
+                    {row["label"]: row["categories"] for row in outside["by_label"]},
+                )
+        # The case is what it says. MAIN reads its t0, x, v, f, y, m, s1 and p and ALPHA's
+        # u and r, which name its project; w, e, n and z closed outside the period, and a
+        # sits under a goal. The most tasks first, and between rows of one task a project
+        # before several.
+        outside = self.volumes("MAIN")["outside"]
+        self.assertEqual(10, outside["tasks"])
+        self.assertEqual(
+            [(None, 6), ("app", 2), ("lib", 1), (None, 1)],
+            [
+                (row["project"]["id"], sum(row["categories"].values()))
+                for row in outside["by_project"]
+            ],
+        )
+        several = outside["by_project"][3]["project"]
+        self.assertEqual(
+            {
+                "id": None,
+                "unknown": False,
+                "name": None,
+                "combinations": [[{"id": "app", "name": "app"}, {"id": "lib", "name": "lib"}]],
+            },
+            several,
+        )
+        self.assertEqual(
+            {"id": "app", "unknown": False, "name": "app", "combinations": None},
+            outside["by_project"][1]["project"],
+        )
+        self.assertEqual(
+            [(None, 6), ("ui", 3), ("api", 2)],
+            [(row["label"], sum(row["categories"].values())) for row in outside["by_label"]],
+        )
+        self.assertEqual(list(CATEGORIES), list(outside["by_label"][0]["categories"]))
+
 
 class BoardSetTests(VolumesCase):
     """A space counts the items its board reads, and a project narrows both alike."""
@@ -435,6 +547,158 @@ class GoalAndStageTests(VolumesCase):
         self.assertEqual(
             self.counted(self.board_set("MAIN"))["deferred"], self.tally(found["deferred"])
         )
+
+
+class WaitingTests(VolumesCase):
+    """Questions on MAIN's work and ALPHA's: to the owner, to a session, answered, run out."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.place("MAIN", "a")
+        self.place("MAIN", "b", state="ready")
+        self.place("ALPHA", "k", projects=("app",))
+        self.place("ALPHA", "o")
+        self.conn.execute("INSERT INTO sessions(id, client) VALUES ('sess-x', 'codex')")
+        self.asked = {
+            "first": self.question("MAIN:a", "2026-11-05T09:00:00.000Z"),
+            "second": self.question("MAIN:a", "2026-11-06T09:00:00.000Z"),
+            "elsewhere": self.question("ALPHA:k", "2026-11-04T09:00:00.000Z"),
+            "unbound": self.question("ALPHA:o", "2026-11-01T09:00:00.000Z"),
+        }
+        # Never waiting for the owner: asked of a session, answered, run out past its deadline.
+        self.question("MAIN:b", "2026-11-02T09:00:00.000Z", addressee="sess-x")
+        self.question("MAIN:b", "2026-11-02T10:00:00.000Z", status="answered")
+        self.question("MAIN:b", "2026-11-02T11:00:00.000Z", expires_at="2026-11-03T00:00:00Z")
+        self.conn.commit()
+
+    def question(
+        self,
+        name: str,
+        created: str,
+        *,
+        status: str = "pending",
+        addressee: str | None = None,
+        expires_at: str | None = None,
+    ) -> str:
+        identity = f"request-{created}"
+        self.conn.execute(
+            "INSERT INTO work_item_requests(request_id, work_item_id, kind, prompt, fields_json,"
+            " status, author, created_at, addressee, expires_at)"
+            " VALUES (?, ?, 'question', 'Which way?', '[]', ?, 'asking-agent', ?, ?, ?)",
+            (identity, *self.ids(name), status, created, addressee, expires_at),
+        )
+        return identity
+
+    def waiting_directly(self, items: set[str]) -> list[str]:
+        """The questions to the owner still waiting on these items, counted from the rows."""
+
+        return [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT request_id, work_item_id FROM work_item_requests"
+                " WHERE status = 'pending' AND comment_id IS NULL AND addressee IS NULL"
+                " AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at",
+                (datetime.now(UTC).isoformat(),),
+            )
+            if str(row[1]) in items
+        ]
+
+    def test_waiting_counts_the_owner_questions(self) -> None:
+        rows = self.rows()
+        for space, project in (("MAIN", None), ("MAIN", "app"), ("ALPHA", None), (None, None)):
+            with self.subTest(space=space, project=project):
+                waiting = self.volumes(space, project)["counts"]["waiting_owner"]
+                expected = self.waiting_directly(self.board_set(space, project))
+                self.assertEqual(len(expected), waiting["count"])
+                first = self.conn.execute(
+                    "SELECT work_item_id, created_at FROM work_item_requests WHERE request_id = ?",
+                    (expected[0],),
+                ).fetchone()
+                row = rows[str(first[0])]
+                self.assertEqual(
+                    {
+                        "request_id": expected[0],
+                        "reference": f"{row['space_key']}-{row['number']}",
+                        "since": str(first[1]),
+                    },
+                    waiting["oldest"],
+                )
+        # The case is what it says: MAIN waits on its two and on ALPHA's k, which names its
+        # project, oldest first; ALPHA's o names none of MAIN's.
+        main = self.volumes("MAIN")["counts"]["waiting_owner"]
+        self.assertEqual(
+            (3, self.asked["elsewhere"]), (main["count"], main["oldest"]["request_id"])
+        )
+        self.assertEqual(4, self.volumes()["counts"]["waiting_owner"]["count"])
+        self.assertEqual(
+            {"count": 0, "oldest": None},
+            self.volumes("MAIN", "lib")["counts"]["waiting_owner"],
+        )
+
+
+class UnattachedCommitTests(VolumesCase):
+    """Commits of `app` (MAIN's project) and `lib` (ALPHA's): attached, on no card, rewritten."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.place("MAIN", "a")
+        attached = self.commit("app", "a")
+        self.conn.execute(
+            "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+            " VALUES (?, ?, 'manual')",
+            (*self.ids("MAIN:a"), attached),
+        )
+        self.commit("app", "b")
+        kept = self.commit("app", "c")
+        self.commit("lib", "d")
+        # Never on no card: one a rewrite replaced, and one no session reported.
+        self.commit("app", "e", rewritten_to=kept)
+        self.commit("lib", "f", session=None)
+        self.conn.commit()
+
+    def commit(
+        self,
+        project: str,
+        digit: str,
+        *,
+        session: str | None = "sess-a",
+        rewritten_to: int | None = None,
+    ) -> int:
+        found = self.conn.execute(
+            "INSERT INTO commits(project_id, hash, committed_at, session_id, reported_at,"
+            " rewritten_to) VALUES (?, ?, '2026-11-12T10:00:00Z', ?, '2026-11-12T10:00:01Z', ?)",
+            (project, digit * 40, session, rewritten_to),
+        ).lastrowid
+        assert found is not None
+        return found
+
+    def listed(self, **query: str) -> int:
+        answer = api.handle_get(
+            self.conn,
+            "/api/planning/commits/unattached",
+            {key: [value] for key, value in query.items()},
+        )
+        assert answer is not None
+        self.assertEqual(200, answer[0])
+        return int(answer[1]["total"])
+
+    def test_unattached_commits_match_their_list(self) -> None:
+        pairs = (
+            (self.volumes("MAIN"), self.listed(space="MAIN"), 2),
+            (self.volumes("MAIN", "app"), self.listed(project="app"), 2),
+            (self.volumes(), self.listed(), 3),
+        )
+        for volumes, total, expected in pairs:
+            with self.subTest(scope=volumes["scope"]):
+                self.assertEqual(
+                    (expected, expected), (volumes["counts"]["unattached_commits"], total)
+                )
+        directly = self.conn.execute(
+            "SELECT COUNT(*) FROM commits c WHERE c.session_id IS NOT NULL"
+            " AND c.rewritten_to IS NULL"
+            " AND c.commit_id NOT IN (SELECT commit_id FROM work_item_commits)"
+        ).fetchone()[0]
+        self.assertEqual(directly, self.volumes()["counts"]["unattached_commits"])
 
 
 class FrameTests(VolumesCase):

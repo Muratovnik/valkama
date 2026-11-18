@@ -21,10 +21,14 @@
       "categories": [
         {
           "category": "triage",
-          "tasks": 0,
+          "tasks": 1,
           "goals": 0,
           "stages": 0,
-          "oldest": null
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000055",
+            "reference": "MAIN-26",
+            "since": "2026-01-02T03:04:05Z"
+          }
         },
         {
           "category": "deferred",
@@ -79,7 +83,12 @@
           "stages": 0,
           "oldest": null
         }
-      ]
+      ],
+      "waiting_owner": {
+        "count": 0,
+        "oldest": null
+      },
+      "unattached_commits": 1
     },
     "goals": [
       {
@@ -277,6 +286,44 @@
         ]
       }
     ],
+    "outside": {
+      "tasks": 1,
+      "by_project": [
+        {
+          "project": {
+            "id": "example-project",
+            "unknown": false,
+            "name": "example-project",
+            "combinations": null
+          },
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ],
+      "by_label": [
+        {
+          "label": "ui",
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ]
+    },
     "flow": {
       "days": [
         {
@@ -330,10 +377,10 @@
         },
         {
           "day": "2026-01-02",
-          "created": 1,
+          "created": 2,
           "closed": 0,
           "decisions": 0,
-          "commits": 0
+          "commits": 1
         },
         {
           "day": "2026-01-02",
@@ -344,25 +391,25 @@
         }
       ],
       "totals": {
-        "created": 1,
+        "created": 2,
         "closed": 0,
         "decisions": 0,
-        "commits": 0
+        "commits": 1
       },
       "pace": {
-        "open": 1,
+        "open": 2,
         "recent": {
           "days": 7,
-          "created": 1,
+          "created": 2,
           "closed": 0,
           "trend": "growing"
         },
         "series": [
           {
             "day": "2026-01-02",
-            "created": 1,
+            "created": 2,
             "closed": 0,
-            "total": 1,
+            "total": 2,
             "closed_total": 0
           }
         ]
