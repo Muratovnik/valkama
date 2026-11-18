@@ -514,6 +514,50 @@ ITEM_BASELINES = (
     ") WITHOUT ROWID"
 )
 
+#: A question to the owner on the row `NEW`: `questions.OWNER_QUESTION` read off the
+#: request a trigger sees. A trigger cannot name a constant of the code, and
+#: `questions` reads this module, so the text is written here and a test holds the two
+#: equal.
+_NEW_OWNER_QUESTION = "NEW.status = 'pending' AND NEW.comment_id IS NULL AND NEW.addressee IS NULL"
+#: The triggers that take a triage mark away, each by the table it stands on. Not the
+#: writes but the store does it, because a mark goes with anything that changes what
+#: the review saw, and the writes that do are many: the item leaving triage or moving
+#: under a goal or out of one, a comment on it, a thread a merge moves onto it, a
+#: question to the owner asked on it, and one a merge moves onto it still pending.
+TRIAGE_MARK_TRIGGERS = {
+    "triage_marks_item_moved": "work_items",
+    "triage_marks_comment": "work_item_comments",
+    "triage_marks_thread_moved": "work_item_comments",
+    "triage_marks_question": "work_item_requests",
+    "triage_marks_question_moved": "work_item_requests",
+}
+_UNMARK = "BEGIN DELETE FROM triage_marks WHERE work_item_id = NEW.work_item_id; END"
+#: The items a triage review saw and left where they are (`planning.triage`): one row
+#: per item, when, by whom and in which call, and the triggers that take it away. A
+#: fresh store creates them from this text, and so does the work-model migration.
+TRIAGE_MARKS = (
+    "CREATE TABLE IF NOT EXISTS triage_marks(\n"
+    "    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    seen_at TEXT NOT NULL,\n"
+    "    author TEXT NOT NULL,\n"
+    "    call_id INTEGER REFERENCES execution_events(id)\n"
+    ")",
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_item_moved\n"
+    "AFTER UPDATE OF state_id, parent_id ON work_items\n"
+    "WHEN NEW.state_id IS NOT OLD.state_id OR NEW.parent_id IS NOT OLD.parent_id\n" + _UNMARK,
+    f"CREATE TRIGGER IF NOT EXISTS triage_marks_comment\nAFTER INSERT ON work_item_comments\n{_UNMARK}",
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_thread_moved\n"
+    "AFTER UPDATE OF work_item_id ON work_item_comments\n"
+    "WHEN NEW.work_item_id IS NOT OLD.work_item_id\n" + _UNMARK,
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_question\n"
+    "AFTER INSERT ON work_item_requests\n"
+    f"WHEN {_NEW_OWNER_QUESTION}\n{_UNMARK}",
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_question_moved\n"
+    "AFTER UPDATE OF work_item_id ON work_item_requests\n"
+    f"WHEN NEW.work_item_id IS NOT OLD.work_item_id AND {_NEW_OWNER_QUESTION}\n{_UNMARK}",
+)
+_TRIAGE_MARKS = "".join(f"{statement};\n" for statement in TRIAGE_MARKS)
+
 
 def has_table(conn: sqlite3.Connection, name: str) -> bool:
     """Whether a store has a table. An attached store is read as it is, and an older
@@ -663,7 +707,7 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {_PENDING}{_ITEM_PROJECTS}
 {_COMMITS}
 {ITEM_BASELINES};
-"""
+{_TRIAGE_MARKS}"""
 
 
 def interactions_migration_needed(conn: sqlite3.Connection) -> bool:
@@ -1107,6 +1151,7 @@ SCHEMA_TABLES = (
     "commits",
     "work_item_commits",
     "work_item_baselines",
+    "triage_marks",
 )
 
 

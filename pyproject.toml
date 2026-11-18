@@ -338,6 +338,7 @@ source_modules = [
   "server.planning.questions",
   "server.planning.read_model",
   "server.planning.transitions",
+  "server.planning.triage",
 ]
 forbidden_modules = [
   "server.planning.api",
