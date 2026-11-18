@@ -759,19 +759,37 @@ NET_SECONDS = 5.0
 _NET_FORMAT = "--format=%H%x00%cI%x00%ce%x00%s"
 #: When the call that took the item's claim was received: the lease's `acquired_at`.
 _CLAIM_RECEIVED = "SELECT received_at FROM execution_events WHERE id = ?"
-#: The newest claim or takeover of a step, by its text, or of the item, by a confirmed
-#: call of one session.
-_STEP_TAKEN = (
-    "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
-    " WHERE e.work_item_id = ? AND e.detail = ?"
-    " AND e.action IN ('checklist_claimed', 'checklist_taken_over')"
-    " AND c.session_id = ? AND c.identity_state = ?"
+#: Whose takes open a task's window: the task itself.
+_THE_TASK = "taken_on(id) AS (SELECT :item)"
+#: Whose takes open a goal's or stage's window: every task under it, at any depth.
+#: `UNION` keeps each once, so a cycle in a damaged store ends.
+_TASKS_UNDER = (
+    "under(id) AS (SELECT work_item_id FROM work_items WHERE parent_id = :item"
+    " UNION SELECT w.work_item_id FROM under u JOIN work_items w ON w.parent_id = u.id),"
+    " taken_on(id) AS (SELECT u.id FROM under u JOIN work_items i ON i.work_item_id = u.id"
+    " WHERE i.kind <> :goal_or_stage)"
 )
+#: The newest claim or takeover of each item of `taken_on` by confirmed calls of one
+#: session, a row for each item that has one.
 _ITEM_TAKEN = (
     "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
-    " WHERE e.work_item_id = ? AND e.action IN ('claimed', 'taken_over')"
-    " AND c.session_id = ? AND c.identity_state = ?"
+    " JOIN taken_on t ON t.id = e.work_item_id WHERE e.action IN ('claimed', 'taken_over')"
+    " AND c.session_id = :session AND c.identity_state = :proved GROUP BY e.work_item_id"
 )
+#: The same of each step of each item of `taken_on`, a step matched by its text as the
+#: event of its claim records it.
+_STEP_TAKEN = (
+    "SELECT MAX(e.created_at) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " JOIN taken_on t ON t.id = e.work_item_id"
+    " WHERE e.action IN ('checklist_claimed', 'checklist_taken_over')"
+    " AND e.detail IN (SELECT substr(json_extract(s.value, '$.text'), 1, 120)"
+    "  FROM work_items i, json_each(i.checklist) s WHERE i.work_item_id = e.work_item_id)"
+    " AND c.session_id = :session AND c.identity_state = :proved"
+    " GROUP BY e.work_item_id, e.detail"
+)
+#: The takes that open a task's window, and a goal's or stage's, each in one statement.
+_TAKES_OF_TASK = f"WITH RECURSIVE {_THE_TASK} {_ITEM_TAKEN} UNION ALL {_STEP_TAKEN}"
+_TAKES_UNDER = f"WITH RECURSIVE {_TASKS_UNDER} {_ITEM_TAKEN} UNION ALL {_STEP_TAKEN}"
 
 
 @dataclass(frozen=True)
@@ -873,12 +891,24 @@ def window_start(conn: sqlite3.Connection, row: sqlite3.Row) -> int | None:
        still holds a step does not matter: a step ticked in the closing call, or before
        it, has no claim left to read, and the take is what the session made.
     3. Else no window: a session that took neither the item nor a step made nothing for it.
+
+    A goal or stage has no holder, so rules 1 and 2 never reach the card itself: its
+    window starts at the earliest take of rule 2 read over every task under it, at any
+    depth, and those tasks' steps, and rule 3 holds when the session took none of them.
+    The window so takes in the commits made between the close of the last task and the
+    confirmation of the goal.
     """
 
+    goal_or_stage = str(row["kind"]) == model.CONTAINER_KIND
     # A store an earlier build wrote, read as it is, has no `claim_call_id` (`leases`);
     # `in row` would search a Row's values, not its names.
     columns = row.keys()
-    if row["claim_ref"] and "claim_call_id" in columns and row["claim_call_id"] is not None:
+    if (
+        not goal_or_stage
+        and row["claim_ref"]
+        and "claim_call_id" in columns
+        and row["claim_call_id"] is not None
+    ):
         received = conn.execute(_CLAIM_RECEIVED, (int(row["claim_call_id"]),)).fetchone()
         claimed = leases.moment(received[0]) if received is not None else None
         if claimed is not None:
@@ -886,16 +916,17 @@ def window_start(conn: sqlite3.Connection, row: sqlite3.Row) -> int | None:
     session = calls.confirmed_session()
     if session is None:
         return None
-    takes = [
-        conn.execute(_ITEM_TAKEN, (row["work_item_id"], session, calls.CONFIRMED)).fetchone()[0]
-    ]
-    takes += [
-        conn.execute(
-            _STEP_TAKEN, (row["work_item_id"], step["text"][:120], session, calls.CONFIRMED)
-        ).fetchone()[0]
-        for step in model.checklist(row["checklist"])
-    ]
-    starts = [moment for moment in map(leases.moment, takes) if moment is not None]
+    takes = conn.execute(
+        _TAKES_UNDER if goal_or_stage else _TAKES_OF_TASK,
+        {
+            "item": str(row["work_item_id"]),
+            "goal_or_stage": model.CONTAINER_KIND,
+            "session": session,
+            "proved": calls.CONFIRMED,
+        },
+    )
+    moments = (leases.moment(taken) for (taken,) in takes)
+    starts = [moment for moment in moments if moment is not None]
     return int(min(starts).timestamp()) if starts else None
 
 
