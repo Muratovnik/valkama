@@ -58,6 +58,7 @@ from . import (
     model,
     questions,
     read_model,
+    standing,
     usage,
     volume_flow,
 )
@@ -333,15 +334,13 @@ def _known_project(conn: sqlite3.Connection, project: str) -> bool:
 
 # -- the counts by category ------------------------------------------------------
 
-#: Each item of a scope with its category and the moment it came to stand where it is:
-#: its last state entry (`model.STATE_ENTRY_ACTIONS`), or its creation when it has none.
+#: Each item of a scope with its category and the moment it came to stand where it is
+#: (`standing.ENTERED_AT`, as the triage stack reads it).
 _STANDING = (
     "SELECT i.work_item_id, i.number, i.kind, i.parent_id, i.created_at, i.labels,"
     " s.category,"
     " p.key AS space_key,"
-    " COALESCE((SELECT e.created_at FROM work_item_events e"
-    "  WHERE e.work_item_id = i.work_item_id"
-    "  AND e.action IN ({entries}) ORDER BY e.id DESC LIMIT 1), i.created_at) AS since"
+    " {entered} AS since"
     " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
     " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
     " WHERE {where}"
@@ -353,12 +352,9 @@ def _standing(
 ) -> list[sqlite3.Row]:
     """The scope's items, each where it stands and since when, kept by `more` conditions too."""
 
-    entries = ", ".join("?" * len(model.STATE_ENTRY_ACTIONS))
     where = " AND ".join((scope.where(), *more))
-    query = _STANDING.format(entries=entries, where=where)
-    return conn.execute(
-        query, (*model.STATE_ENTRY_ACTIONS, *scope.parameters, *parameters)
-    ).fetchall()
+    query = _STANDING.format(entered=standing.ENTERED_AT, where=where)
+    return conn.execute(query, (*scope.parameters, *parameters)).fetchall()
 
 
 def category_counts(

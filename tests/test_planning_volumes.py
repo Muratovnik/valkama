@@ -20,7 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import store
-from server.planning import api, commits, model, service
+from server.planning import api, commits, model, service, triage
 from server.projects import scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -948,3 +948,23 @@ class RefusalTests(VolumesCase):
             "volumes read the store this service writes; SIDE lives in an attached store",
             self.refused(self.space(data_scope_id=side, space_key="SIDE")),
         )
+
+
+class EntryMomentTests(VolumesCase):
+    def test_the_entry_moment_is_the_last_entry_by_id_in_both_reads(self) -> None:
+        # The history's last entry is the one written last: the highest id. Its stamp is
+        # earlier than the stamp of the entry before it, so a reading by the latest stamp
+        # and one by history order part here. The stack and the Volumes read must both
+        # give the last entry's stamp.
+        drift = self.place(
+            "MAIN", "drift", entries=("2026-11-12T09:00:00Z", "2026-11-05T09:00:00Z")
+        )
+        expected = "2026-11-05T09:00:00Z"
+
+        with self.subTest("the stack"):
+            self.assertEqual(expected, triage.entered(self.conn, drift))
+            (waiting,) = triage.waiting(self.conn, self.trees["MAIN"].space_id)
+            self.assertEqual((drift, expected), (waiting.work_item_id, waiting.entered_at))
+        with self.subTest("the volumes read"):
+            oldest = self.categories(self.volumes("MAIN"))["triage"]["oldest"]
+            self.assertEqual((drift, expected), (oldest["work_item_id"], oldest["since"]))

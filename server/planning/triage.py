@@ -13,8 +13,8 @@ nothing else decides it:
 An item under a goal or stage nobody has accepted is not in the stack: the answer
 about that goal decides it.
 
-An item entered the stack at its last state entry (`model.STATE_ENTRY_ACTIONS`), or
-at its creation when the history records none: put-off work that came back and work
+An item entered the stack at its last state entry in history order (`standing.ENTERED_AT`),
+or at its creation when the history records none: put-off work that came back and work
 moved out of a goal enter it anew. The stack is read oldest entry first, then by the
 space's key and the item's number, so a page cut by an offset holds each item once.
 
@@ -34,14 +34,8 @@ import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from . import model, questions
+from . import model, questions, standing
 
-_ENTRIES = ", ".join(f"'{action}'" for action in model.STATE_ENTRY_ACTIONS)
-#: When the item `i` came to stand where it is: its last state entry, or its creation.
-_ENTERED_AT = (
-    "COALESCE((SELECT MAX(e.created_at) FROM work_item_events e"  # noqa: S608 - constant actions
-    f" WHERE e.work_item_id = i.work_item_id AND e.action IN ({_ENTRIES})), i.created_at)"
-)
 #: The items of the spaces named, as one JSON array, that wait in the stack, each with
 #: its entry and its mark. `accepted` climbs from each goal or stage with no parent
 #: down through accepted open ones only, so an item under it stands in accepted open
@@ -55,7 +49,7 @@ _WAITING = (
     " UNION SELECT w.work_item_id FROM accepted a JOIN work_items w ON w.parent_id = a.id"
     " JOIN workflow_states s ON s.state_id = w.state_id"
     f" WHERE w.kind = '{model.CONTAINER_KIND}' AND s.category = '{model.SERVICE_CATEGORY}')"
-    f" SELECT i.work_item_id, p.key, i.number, {_ENTERED_AT} AS entered_at,"
+    f" SELECT i.work_item_id, p.key, i.number, {standing.ENTERED_AT} AS entered_at,"
     " m.seen_at, m.author"
     " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
     " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
@@ -72,7 +66,7 @@ _SPACES_OF = (
     "SELECT DISTINCT planning_space_id FROM work_items"
     " WHERE work_item_id IN (SELECT value FROM json_each(?))"
 )
-_ENTERED = f"SELECT {_ENTERED_AT} FROM work_items i WHERE i.work_item_id = ?"  # noqa: S608 - constant text
+_ENTERED = f"SELECT {standing.ENTERED_AT} FROM work_items i WHERE i.work_item_id = ?"  # noqa: S608 - constant text
 _MARK = (
     "INSERT INTO triage_marks(work_item_id, seen_at, author, call_id)"
     " VALUES(?, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?, ?)"
