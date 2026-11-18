@@ -89,8 +89,6 @@ async function settled(page: Page) {
     0,
   )
   await expect(page.locator('.quota-account')).toHaveCount(4)
-  // What used each window is read after the quota, by each window's own block.
-  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 

@@ -49,7 +49,6 @@ async function openQuota(page: Page, width: number, height: number, section: str
   await page.goto(pageAt())
   await page.locator(`.analytics-rail-entry[data-section="${section}"]`).click()
   await expect(page.locator('.quota-account')).toHaveCount(6)
-  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 

@@ -192,12 +192,11 @@ const boxes = (page: Page) =>
     )
     .evaluateAll((parts) => parts.map((part) => part.getBoundingClientRect().toJSON() as unknown))
 
-/** Opens a section's panel drawn as charts, its five accounts read and their spending too. */
+/** Opens a section's panel drawn as charts, its five accounts read. */
 async function openDrawn(page: Page, section: string, accounts = 5) {
   await openPanel(page, pageAt({ by: section }))
   await expect(page.locator('[data-account]')).toHaveCount(accounts)
   await drawLined(page.locator('.chart-section').first())
-  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 

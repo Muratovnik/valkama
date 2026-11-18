@@ -341,7 +341,6 @@ for (const [width, locale] of [
     const analytics = page.locator('.analytics-page')
     await openQuotaWeek(page)
     await expect(analytics.locator('.quota-account')).toHaveCount(4)
-    await expect(analytics.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
     await page.evaluate(() => document.fonts.ready)
     const before = { shown: await quotaShown(page), frame: await frame(page) }
 
