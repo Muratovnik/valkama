@@ -17,7 +17,7 @@ import functools
 import json
 import unittest
 
-from server.planning import api, calls, participation, pending, service
+from server.planning import api, calls, participation, pending, service, triage
 from tests.test_planning_pending_actions import AGENT, OTHER, REFUSED, SettingHarness
 
 #: Why the agent groups its findings.
@@ -396,6 +396,131 @@ class RefusalTests(GroupHarness):
         named = (*tasks, ready, unaccepted, str(waiting["reference"]))
         last = max(int(reference.split("-")[1]) for reference in named)
         self.assertEqual(f"ALPHA-{last + 1}", created)
+
+
+class OwnerAnswerTests(GroupHarness):
+    """The owner's answer to the question `triage`, given through Valkama's HTTP route and
+    carried out in the write that gives it: the tasks left unticked go back to the stack,
+    a ticked one that left the group takes no part, and the answer acts on the goal."""
+
+    def waiting_group(self, count: int = 4, answer: str = "do") -> tuple[str, list[str], str]:
+        """A group of `count` findings waiting for the owner: the goal, its tasks and the
+        question."""
+
+        tasks = self.findings(count)
+        written = self.group(tasks, answer)
+        return str(written["reference"]), tasks, str(written["waits_for_owner"]["question"])
+
+    def owner_answers(self, question: str, answer: str, items: list[str], **more: object) -> dict:
+        """The owner's answer through the HTTP route, ticking `items`: the answer's record."""
+
+        path = "/api/planning/request/answer"
+        payload = {
+            "id": question,
+            "expected_revision": int(self.request(question)["revision"]),
+            "answers": {"answer": answer, "items": [item.lower() for item in items], **more},
+            "author": "user",
+        }
+        try:
+            with calls.bind(calls.browser(), path):
+                written = api.handle_post(self.conn, path, payload)
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        assert written is not None
+        return written[1]
+
+    def test_a_card_taken_out_returns_to_the_stack(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        [action] = self.waiting_on(goal)
+        kept = [tasks[0], tasks[2], tasks[3]]
+        record = self.owner_answers(question, "do", kept)
+        self.assertEqual(
+            {"answer": "do", "moved_out": [tasks[1]], "skipped": []}, record["carried_out"]
+        )
+        card = self.card(goal)
+        self.assertEqual(
+            (None, "not_started", "owner"),
+            (card["state"], card["container_state"], card["acceptance"]["basis"]),
+        )
+        for task in kept:
+            self.assertEqual(("ready", "inherited", goal), self.where(task))
+        # The task taken out stands at the top level in triage, back in the stack, unmarked,
+        # having entered it with the answer that moved it out.
+        self.assertEqual(("triage", None, None), self.where(tasks[1]))
+        self.assertEqual([f"{tasks[1]}: owner: not in this group"], self.events(goal, "child_left"))
+        moved = self.conn.execute(
+            "SELECT created_at, detail FROM work_item_events WHERE work_item_id = ?"
+            " AND action = 'transitioned' ORDER BY id DESC LIMIT 1",
+            (self.id(tasks[1]),),
+        ).fetchone()
+        self.assertEqual(f"triage: moved out of {goal}: owner: not in this group", moved["detail"])
+        [waiting] = triage.waiting(self.conn, self.space, items=[self.id(tasks[1])])
+        self.assertEqual((moved["created_at"], None), (waiting.entered_at, waiting.seen_at))
+        # The answer is the agent's, so the action ends carried out, and the question with it.
+        self.assertEqual("carried_out", self.action(action.id)["outcome"])
+        self.assertEqual("answered", self.request(question)["status"])
+        self.assertEqual(([], []), (self.waiting_on(goal), self.owners_list()))
+        self.assertEqual([], self.decided(), "the owner's answer is no agent's decision")
+
+    def test_an_answer_that_cannot_be_carried_out_is_refused(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        before = (self.counts(), self.items())
+        cases = (
+            ("do", [], {}, "[triage] tick what is to be done, or answer drop"),
+            (
+                "later",
+                tasks,
+                {},
+                "[triage] later needs until: a date (2026-12-01) or an item reference",
+            ),
+        )
+        for answer, items, more, message in cases:
+            with self.subTest(answer=answer):
+                status, code, said = self.refusal(
+                    functools.partial(self.owner_answers, question, answer, items, **more)
+                )
+                self.assertEqual((400, "invalid_request", message), (status, code, said))
+                self.assertEqual(before, (self.counts(), self.items()), "nothing written")
+                self.assertEqual("pending", self.request(question)["status"])
+                for task in tasks:
+                    self.assertEqual(("triage", None, goal), self.where(task))
+
+    def test_a_card_put_under_the_group_later_is_moved_out(self) -> None:
+        goal, tasks, question = self.waiting_group()
+        [later] = self.findings(1)
+        self.tool("apply_work_item_changes", id=later, update={"parent": goal})
+        self.assertEqual(("triage", None, goal), self.where(later))
+        record = self.owner_answers(question, "do", tasks)
+        self.assertEqual(
+            {"answer": "do", "moved_out": [later], "skipped": []}, record["carried_out"]
+        )
+        self.assertEqual(("triage", None, None), self.where(later))
+        self.assertEqual([f"{later}: owner: not in this group"], self.events(goal, "child_left"))
+        for task in tasks:
+            self.assertEqual(("ready", "inherited", goal), self.where(task))
+
+    def test_an_answer_left_with_nothing_to_do_is_dropped(self) -> None:
+        # The one task kept was taken out of the group meanwhile: the answer moves the
+        # rest out, skips it, and no longer applies; the goal stays in triage.
+        goal, tasks, question = self.waiting_group(2)
+        [action] = self.waiting_on(goal)
+        self.person("/api/planning/work-item/move-out", id=tasks[0], reason="it is its own")
+        record = self.owner_answers(question, "do", [tasks[0]])
+        self.assertEqual(
+            {"answer": "do", "moved_out": [tasks[1]], "skipped": [tasks[0]]},
+            record["carried_out"],
+        )
+        self.assertEqual("dropped", self.action(action.id)["outcome"])
+        self.assertEqual(
+            ["finding: no item ticked lies under the goal in triage"],
+            self.events(goal, "action_dropped"),
+        )
+        self.assertEqual(("triage", None, None), self.where(goal))
+        for task in tasks:
+            self.assertEqual(("triage", None, None), self.where(task))
+        self.assertEqual("answered", self.request(question)["status"])
 
 
 if __name__ == "__main__":

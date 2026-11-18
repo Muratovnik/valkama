@@ -22,7 +22,7 @@ const ACTION_POINTS = [
   'goal_defer',
 ] as const
 /** How a waiting write ended, as the store's CHECK holds them. */
-const ACTION_OUTCOMES = ['carried_out', 'declined', 'dropped', 'withdrawn'] as const
+export const ACTION_OUTCOMES = ['carried_out', 'declined', 'dropped', 'withdrawn'] as const
 
 const reference = boundedText(WORK_ITEM_REFERENCE, 20)
 const title = boundedText(TITLE, 200)

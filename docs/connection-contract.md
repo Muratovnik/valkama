@@ -565,12 +565,33 @@ reference as id and `MAIN-41 · <title>` as label, all recommended), `until` and
 it waits, no agent claims or moves a task of the group (`acceptance_question`),
 and no rule of a label accepts one.
 
+The owner's answer is carried out as theirs in the write that gives it, the tasks
+it keeps being the ones `items` ticks. First every open child of the goal lying
+in `triage` that is not ticked, one put under the goal after the question among
+them, leaves it by `move_out` with the reason `owner: not in this group`: it
+goes back to the triage stack, unmarked, entering it with the answer. A ticked
+task that no longer lies under the goal in `triage` (moved out, accepted,
+closed or merged meanwhile) takes no part and stays as it is. Then `do` accepts
+the goal on `owner`, and the ticked tasks under it in `triage` take `inherited`.
+A `do` with no ticked task left under the goal in `triage` no longer applies:
+the action ends `dropped` (`finding: no item ticked lies under the goal in
+triage`), the goal staying in `triage` as a card of the stack; so does any
+answer once the goal left `triage` or was accepted, with nothing done. The
+action ends `carried_out` when the owner's answer is the agent's, `declined`
+otherwise. The answer's record says what was done:
+
+```json
+"carried_out": {"answer": "do", "moved_out": ["MAIN-42"], "skipped": ["MAIN-43"]}
+```
+
 | Code | Status | When |
 | --- | --- | --- |
 | `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 2 to 20 items: <what is wrong>` |
 | `[group]` | 409 | a task that does not wait in the stack: `[group] MAIN-41 is not waiting for a triage review: <why>`, the why being `it is in another space`, `it is a goal or stage`, `it is not in triage`, `it lies under MAIN-3` or `it waits for the owner's answer` |
+| `[triage]` | 400 | the owner's answer: `do` or `later` with no task ticked, `[triage] tick what is to be done, or answer drop`; `later` with no `until` of its own or the agent's, `[triage] later needs until: a date (2026-12-01) or an item reference` |
 
-Either refusal creates nothing and spends no number.
+Either `[group]` refusal creates nothing and spends no number; a `[triage]`
+refusal writes nothing and leaves the question open.
 
 #### Retired words
 

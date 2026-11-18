@@ -202,3 +202,30 @@ describe('a question about a write that waits for the owner', () => {
     }
   })
 })
+
+/** A question's record as the answer to it comes back, saying what the answer did. */
+function answered(carried: unknown) {
+  const entry = question(9, 'triage')
+  const request = { ...(entry.request as object), carried_out: carried }
+  return { interface_version: 'valkama-planning-requests', ...entry, request }
+}
+
+describe("the record of the owner's answer", () => {
+  it('reads what the answer did: a category, an outcome, or what a group answer moved', () => {
+    const group = { answer: 'do', moved_out: ['TASK-42'], skipped: ['TASK-43'] }
+    for (const carried of ['completed', 'left_for_next_session', 'dropped', group]) {
+      expect(validateInputRequestDetail(answered(carried)).request.carried_out).toEqual(carried)
+    }
+  })
+
+  it('is refused with what no answer does', () => {
+    const cases = [
+      'answered',
+      { answer: 'do', moved_out: [] },
+      { answer: 'out', moved_out: [], skipped: [] },
+    ]
+    for (const carried of cases) {
+      expect(() => validateInputRequestDetail(answered(carried)), JSON.stringify(carried)).toThrow()
+    }
+  })
+})

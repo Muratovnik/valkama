@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -467,7 +467,8 @@ def inapplicable(conn: sqlite3.Connection, action: Action) -> str | None:
     if row["state_terminal"]:
         return f"the item closed in {row['state_key']}"
     accepted = row["acceptance"] is not None
-    if action.point == "proposed_goal":
+    # A group of findings waits on its goal as a proposed goal does: in triage, unaccepted.
+    if action.point in ("proposed_goal", "finding"):
         if row["state_category"] != "triage":
             return f"the goal left triage for {row['state_key']}"
         return "the goal was accepted" if accepted else None
@@ -483,6 +484,15 @@ def inapplicable(conn: sqlite3.Connection, action: Action) -> str | None:
     if action.point == "goal_defer":
         return None if accepted else "it is not accepted"
     return None
+
+
+def own_variant(choices: Iterable[str]) -> model.PlanningError:
+    """The refusal of an answer that names none of the `choices` a carrier carries out."""
+
+    return model.PlanningError(
+        f"[purpose] answer is one of {', '.join(choices)}: an own variant carries nothing out;"
+        " say more in note"
+    )
 
 
 def _task_in_goal(conn: sqlite3.Connection, action: Action, row: sqlite3.Row) -> str | None:
