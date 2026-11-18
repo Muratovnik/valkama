@@ -941,7 +941,8 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
 
     A list on a comment asked or withdrawn is no question (`_no_lists`). A request asked
     of a session is told on an item's own path only to the session that asked it, and
-    only what another session or a person made of it; the session asked hears it through
+    only what another session or a person made of it, so not its asking where Valkama's
+    call asked for this session's agent (a waiting action's); the session asked hears it through
     the tree's news (`_feed`), and nobody else hears it, its holders and those who follow
     the item included. Its asking by this session's own subagent is no question to the
     owner, so the orchestrator gets no line of it either. Its answer is the one the
@@ -960,6 +961,9 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
                 continue
             asker = person_events.author_of(conn, item, found)
             if asker is None or asker[0] != session_id:
+                continue
+            if found["kind"] == "question_asked":
+                # Valkama's call asked it for this session's agent: its own asking.
                 continue
             if found["kind"] == "question_answered":
                 found["answers"] = found["answered_you"] = True
