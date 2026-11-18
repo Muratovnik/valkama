@@ -33,7 +33,7 @@ import { hintsSurface } from './hintsSurface.ts'
 import { marksSurface } from './marksSurface.ts'
 import { MenuSurface } from './menuSurface.ts'
 import { now } from './planningFixtures.ts'
-import { previewSurface } from './previewSurface.ts'
+import { PreviewCardsSurface, previewSurface } from './previewSurface.ts'
 
 import './harness.css'
 
@@ -184,6 +184,7 @@ const Harness = defineComponent({
     if (requestedSurface === 'marks') return marksSurface
     if (requestedSurface === 'menu') return () => h(MenuSurface)
     if (requestedSurface === 'preview') return previewSurface
+    if (requestedSurface === 'preview-cards') return () => h(PreviewCardsSurface)
     if (contextHarness) {
       return () =>
         h('main', { class: 'harness-shell' }, [

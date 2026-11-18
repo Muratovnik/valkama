@@ -231,3 +231,35 @@
   min-block-size: var(--space-4);
   color: var(--color-text-muted);
 }
+
+/* References to hover for the card the window floats: in the flow, down the window's right
+   edge, or along its bottom, the nearest at the corner. */
+.preview-cards-harness {
+  min-height: 100vh;
+  padding: var(--space-4);
+  background: var(--color-canvas);
+  font: var(--font-detail);
+}
+
+.preview-cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+
+  [data-place='right'] & {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    flex-direction: column;
+    align-items: end;
+  }
+
+  [data-place='bottom'] & {
+    position: fixed;
+    inset-block-end: 0;
+    inset-inline: 0;
+    flex-wrap: wrap-reverse;
+    justify-content: end;
+  }
+}

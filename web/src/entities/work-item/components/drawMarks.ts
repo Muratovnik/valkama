@@ -53,6 +53,7 @@ import { iconGlyph } from '@/shared/ui/iconGlyph.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import SessionSign from '@/shared/ui/SessionSign.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import { vWholeWords } from '@/shared/ui/wholeWords.ts'
 
 /** How a surface places one run. */
 export interface MarkRun {
@@ -175,6 +176,15 @@ function shownWords(mark: FacetMark, words: MarkWords): string | null {
   return words.say(mark.text)
 }
 
+/**
+ * A mark's words on screen. In the hover card they wrap between words alone (`vWholeWords`):
+ * a holder's session start, `5d1e0c2a-9f3b`, ended a line at its hyphen and went on in the next.
+ */
+const drawWords = (surface: FacetSurface, attributes: Record<string, string>, shown: string) =>
+  surface === 'preview'
+    ? withDirectives(h('span', attributes), [[vWholeWords, shown]])
+    : h('span', attributes, shown)
+
 /** What a mark draws beside its glyph: its short words, its word alone, or its word. */
 function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolean): VNode[] {
   const word = wordClass(run.surface)
@@ -185,13 +195,14 @@ function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolea
     return named ? [] : [h('span', { class: 'facet-word facet-word-hidden' }, whole)]
   if (mark.short !== undefined)
     return [
-      h('span', { 'class': word, 'aria-hidden': 'true' }, shown),
+      drawWords(run.surface, { 'class': word, 'aria-hidden': 'true' }, shown),
       // The shared copy for assistive technology, which a hint does not count as cut text.
       h('span', { class: 'facet-word-hidden visually-hidden' }, whole),
     ]
   // A word alone is a word of its own, which takes the mark's tone.
-  if (mark.form === 'word') return [h('span', { class: `${word} facet-word-alone` }, shown)]
-  return [h('span', { class: word }, shown)]
+  if (mark.form === 'word')
+    return [drawWords(run.surface, { class: `${word} facet-word-alone` }, shown)]
+  return [drawWords(run.surface, { class: word }, shown)]
 }
 
 const isActive = (mark: FacetMark, run: MarkRun) =>
