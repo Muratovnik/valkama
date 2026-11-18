@@ -205,6 +205,49 @@ def put_off_fields(until: str) -> list[dict]:
     return [choice, later, cancels]
 
 
+#: The field of the question about a triage review's group that names its tasks, each an
+#: option the owner leaves ticked to keep it in the group.
+TRIAGE_ITEMS = "items"
+
+
+def triage_fields(
+    answer: str, why: str, items: list[tuple[str, str]], until: str | None
+) -> list[dict]:
+    """The fields of the question about a group of findings an agent proposes as one goal.
+
+    Under the ids put-off work asks with, `do` takes the goal on with the tasks ticked,
+    `later` puts it off with them until `until`, which left empty is the agent's, and
+    `drop` cancels them and the goal, with `cancels` the list token when open work not
+    in triage stands under it. `items` offers each task by its option id and label, all
+    recommended; the agent recommends its own answer, saying why.
+    """
+
+    choice, later, cancels = (dict(field) for field in RETURN_FIELDS)
+    answers: list[dict[str, object]] = [
+        {"id": RETURN_DO, "label": "Do"},
+        {"id": RETURN_LATER, "label": "Later"},
+        {"id": RETURN_DROP, "label": "Not to do"},
+    ]
+    for option in answers:
+        if option["id"] == answer:
+            option.update(recommended=True, why=why)
+    choice["options"] = answers
+    listed = {
+        "id": TRIAGE_ITEMS,
+        "label": "Items to do",
+        "type": "multi_choice",
+        "required": False,
+        "options": [{"id": option, "label": label, "recommended": True} for option, label in items],
+    }
+    later["required"] = False
+    later["description"] = (
+        f"The agent puts it off until {until}; left empty, that stands."
+        if until
+        else "A day YYYY-MM-DD or the item it waits on: later needs one."
+    )
+    return [choice, listed, later, cancels]
+
+
 #: The answers a session gives about a cancel of its work: it agrees, it objects with a
 #: reason, or it has moved its work out of what the cancel closes.
 CONSENT_AGREE = "agree"

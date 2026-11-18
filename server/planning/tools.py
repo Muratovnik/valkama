@@ -21,6 +21,7 @@ from . import (
     acknowledgements,
     api,
     calls,
+    groups,
     images,
     item_projects,
     mention_records,
@@ -464,7 +465,10 @@ TOOLS = [
         " the item changes. space is where it lies: leave it out and the server places it"
         " under its parent's space, else in the home space of its projects, else in your"
         " session's space. Projects of two spaces need space, one of them. A goal or"
-        " stage names no projects.",
+        " stage names no projects. group, with kind goal, a checklist and no parent,"
+        " proposes the goal for 2 to 20 tasks waiting for a triage review: they move"
+        " under it, and the answer group names (do, later with until, drop) is carried"
+        " out at once, or waits for the owner as waits_for_owner says.",
         WRITES,
         {
             "space": _SPACE,
@@ -533,6 +537,28 @@ TOOLS = [
                     },
                     "required": ["other", "kind"],
                 },
+            },
+            "group": {
+                "type": "object",
+                "description": "The tasks of the triage stack this new goal groups, each"
+                " lying under no goal, and your answer about them, applied after the links."
+                " The answer's applied.group names the items, the answer and carried_out.",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "minItems": groups.FEWEST,
+                        "maxItems": groups.MOST,
+                        "items": WORK_ITEM_REFERENCE,
+                    },
+                    "answer": {"type": "string", "enum": list(groups.ANSWERS)},
+                    "until": {
+                        "type": "string",
+                        "description": "With later alone: a day YYYY-MM-DD or the item it"
+                        " waits on.",
+                    },
+                    "why": {"type": "string", "maxLength": groups.WHY_LIMIT},
+                },
+                "required": ["items", "answer", "why"],
             },
             "author": _AUTHOR,
             "verbose": _VERBOSE,

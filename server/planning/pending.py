@@ -56,8 +56,9 @@ KINDS = ("accept", "transition", "checklist", "defer", "parent", "group")
 VALKAMA = "Valkama"
 #: The longest detail of an event.
 DETAIL_LIMIT = 512
-#: The purposes whose question shows the cancel list as it stands (`part`).
-_LISTED = frozenset({"goal", "cancel"})
+#: The purposes whose question shows the cancel list as it stands (`part`): a goal's, a
+#: cancel's and a group's, whose `drop` cancels the goal by it.
+_LISTED = frozenset({"goal", "cancel", "triage"})
 #: Why a cancel no longer applies when its list alone changed: the owner may confirm
 #: the list as it stands instead (`requests.Carrier.by_list`).
 LIST_CHANGED = "the work it cancels changed since"
@@ -79,9 +80,11 @@ class Proposal:
     saw of the item that the answer must still find (`inapplicable` reads, by point:
     `parent` in `params` and in `seen` for a task in a goal, and `accepted` in `seen`
     too for one being moved there; `item`, `cancels` and `dependents` for a cancel, as `cancel_seen`
-    gives them). `proposed` is what the question shows was proposed (`removed` and
-    `rewritten` for a condition, `until` for putting a goal off, `summary` for a
-    close), and `what` the line of the summary of decisions once it is carried out.
+    gives them; for a group, `items`, each task with the state it stood in). `proposed` is
+    what the question shows was proposed (`removed` and `rewritten` for a condition,
+    `until` for putting a goal off, `summary` for a close, and for a group its
+    `conditions`, `items`, `answer`, `until` and `why`), and `what` the line of the
+    summary of decisions once it is carried out.
     """
 
     kind: str
