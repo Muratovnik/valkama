@@ -4,7 +4,9 @@ The contract held here, stated from the owner's request rather than read from th
 week alerts at 75 % and at 90 % spent, per account and window, a model's own week too;
 the five-hour window alerts when its forecast says it runs out before its reset. One alert
 per level per window, kept in the store so a restart gives none again, and a new reset
-starts the levels again. A reading older than fifteen minutes raises nothing. A session's
+starts the levels again, as does a counter one feed reads zeroed under the same reset --
+the climb after it warns once a level -- while another feed's stale lower reading or a
+wobble of a point does not. A reading older than fifteen minutes raises nothing. A session's
 reading belongs to the organization its transcript names, so it waits, unalerted, until
 the transcript reader has read that far, and then alerts once. The toast says the level,
 the reset, the data's age and what to do, in the owner's language; the owner can switch
@@ -222,6 +224,63 @@ class WeekTests(_Quota):
         self.assertEqual([], self.evaluate(121))
 
 
+class WeekRestartTests(_Quota):
+    """A week whose counter its provider zeroed under the same reset warns again on the
+    climb after it, once a level; a fall the count does not take for a restart warns of
+    nothing again."""
+
+    def test_a_counter_zeroed_inside_the_week_gives_each_level_again_once(self) -> None:
+        self.statusline(60, week=92)
+        [first] = self.evaluate(61)
+        self.assertEqual("Valkama: the week's quota passed 90%", texts(first)[0])
+        # The same session reads the week zeroed, its reset unchanged.
+        self.statusline(HOUR, week=0)
+        self.assertEqual([], self.evaluate(HOUR + 1))
+        # The climb comes back six hours after the zeroing, past the five hours an
+        # evaluation reads, so the week's own samples have to say where it restarted.
+        self.statusline(7 * HOUR, week=80)
+        [seventy_five] = self.evaluate(7 * HOUR + 1)
+        self.assertEqual("Valkama: the week's quota passed 75%", texts(seventy_five)[0])
+        self.statusline(8 * HOUR, week=91)
+        [ninety] = self.evaluate(8 * HOUR + 1)
+        self.assertEqual("Valkama: the week's quota passed 90%", texts(ninety)[0])
+        self.assertEqual([], self.evaluate(8 * HOUR + 2))
+        self.statusline(8 * HOUR + MINUTE, week=95)
+        self.assertEqual([], self.evaluate(8 * HOUR + MINUTE + 1))
+        # The keys took the samples each level was given on again.
+        self.assertEqual(
+            [
+                ("75", samples.instant(moment(7 * HOUR).isoformat())),
+                ("90", samples.instant(moment(8 * HOUR).isoformat())),
+            ],
+            [
+                tuple(row)
+                for row in self.conn.execute(
+                    "SELECT level, sample_at FROM quota_alerts ORDER BY level"
+                )
+            ],
+        )
+
+    def test_another_session_s_stale_low_reading_gives_nothing_again(self) -> None:
+        self.working("sess-2", ORG_A)
+        self.read()
+        self.statusline(60, week=92)
+        self.assertEqual(1, len(self.evaluate(61)))
+        # The other session last read the week before it was spent, and reads 0 now.
+        self.statusline(HOUR, week=0, session="sess-2")
+        self.assertEqual([], self.evaluate(HOUR + 1))
+        self.statusline(2 * HOUR, week=93)
+        self.assertEqual([], self.evaluate(2 * HOUR + 1))
+
+    def test_a_wobble_of_a_point_gives_nothing_again(self) -> None:
+        self.statusline(60, week=92)
+        self.assertEqual(1, len(self.evaluate(61)))
+        self.statusline(HOUR, week=91)
+        self.assertEqual([], self.evaluate(HOUR + 1))
+        self.statusline(2 * HOUR, week=92)
+        self.assertEqual([], self.evaluate(2 * HOUR + 1))
+
+
 class NameTests(_Quota):
     """The toast names the account by the name the owner gave its organization, or by none."""
 
@@ -296,6 +355,17 @@ class FiveHourTests(_Quota):
         self.assertEqual([], self.evaluate(2 * HOUR + 2 * MINUTE))
         self.statusline(4 * HOUR + 30 * MINUTE, five=100, week=21, five_reset=NEXT_FIVE_RESET)
         self.assertEqual(1, len(self.evaluate(4 * HOUR + 31 * MINUTE)))
+
+    def test_a_counter_zeroed_inside_a_spent_window_warns_of_it_spent_again_once(self) -> None:
+        self.statusline(2 * HOUR, five=100, week=20)
+        self.assertEqual(1, len(self.evaluate(2 * HOUR + MINUTE)))
+        # The same session reads the window zeroed, its reset unchanged, and spent again.
+        self.statusline(2 * HOUR + 10 * MINUTE, five=0, week=20)
+        self.assertEqual([], self.evaluate(2 * HOUR + 11 * MINUTE))
+        self.statusline(2 * HOUR + 40 * MINUTE, five=100, week=21)
+        [spent] = self.evaluate(2 * HOUR + 41 * MINUTE)
+        self.assertEqual("Valkama: the five-hour quota is spent", texts(spent)[0])
+        self.assertEqual([], self.evaluate(2 * HOUR + 42 * MINUTE))
 
 
 class FreshnessTests(_Quota):

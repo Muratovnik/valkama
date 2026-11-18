@@ -31,11 +31,24 @@ spent in a quiet stretch is not lost: its next reading is fresh and finds the le
 yet given.
 
 The key. An alert given is a row of `quota_alerts`: the account, the window, the reset it
-named and the level, written in the transaction that decides it, so a restart does not
-give it again. Two resets within `forecast.RESET_SLACK` are one window, as the forecast
-reads them; a new reset starts the levels again. A reading that reaches 90 % before 75 %
-was given gives the 90 % alert alone and keeps both levels. Where the owner turned quota
-alerts off nothing is kept, so turning them on warns of a level still fresh.
+named, the level and the sample it was given on, written in the transaction that decides
+it, so a new process does not give it again. Two resets within `forecast.RESET_SLACK` are
+one window, as the forecast reads them; a new reset starts the levels again. A reading
+that reaches 90 % before 75 % was given gives the 90 % alert alone and keeps both levels.
+Where the owner turned quota alerts off nothing is kept, so turning them on warns of a
+level still fresh.
+
+A counter zeroed inside the window starts the levels again too: a level given on a sample
+before the latest restart of the window's count (`forecast.count`) counts as not given, so
+the climb after it warns again, once, and the key takes the sample it was given on anew.
+Only a feed's own fall of `forecast.RESTART_FALL` restarts the count; another feed's stale
+lower reading and a wobble of a point do not. The five-hour series holds its whole window.
+A week's reaches back five hours only, so where a level the fresh readings reach was given
+already, the week's samples since its start are read once for the pass -- one range of
+`quota_samples` by its `at` index, of the week kinds, every account's, up to seven days and
+the reset slack, rows kept only where a value changed, and a session's sample one indexed
+lookup of its organization (`seats.organization_at`) -- to find its restarts; the week
+alerts on the fresh readings from its latest restart on.
 
 Where it runs: in the listener, after each pass of its usage reader (`housekeeping`),
 which runs under autostart with no window open. A toast goes through `alerts.emit`, and no
@@ -95,16 +108,21 @@ class _Due:
 
     `levels` are every level the window has reached, lowest first; the toast is about the
     last. `runs_out_at` is when the five-hour window runs out, `None` when it is spent.
+    `restarted` is the moment the window's count last restarted, `None` where it never did:
+    a level given on a sample before it counts as not given.
     """
 
     sample: _Sample
     levels: tuple[str, ...]
     runs_out_at: float | None = None
+    restarted: int | None = None
 
 
-def _known(conn: sqlite3.Connection, since: str) -> list[_Sample]:
-    """The samples of the windows an alert reads since `since`, oldest first, whose account
-    is known: each of them with a seat, a percent and a reset."""
+def _known(
+    conn: sqlite3.Connection, since: str, kinds: tuple[str, ...] = quota_store.ALERT_KINDS
+) -> list[_Sample]:
+    """The samples of the windows of `kinds` since `since`, oldest first, whose account is
+    known: each of them with a seat, a percent and a reset."""
 
     return [
         _Sample(
@@ -118,20 +136,69 @@ def _known(conn: sqlite3.Connection, since: str) -> list[_Sample]:
             one.resets_at,
             one.feed,
         )
-        for one in seats.account_samples(conn, since, quota_store.ALERT_KINDS)
+        for one in seats.account_samples(conn, since, kinds)
         if one.seat is not None and one.percent is not None and one.resets_at is not None
     ]
 
 
-def _week_dues(series: list[_Sample], now: int, stamp: str) -> list[_Due]:
+def _readings(series: Iterable[_Sample], length: int) -> list[forecast.Reading]:
+    """A series as the forecast reads it, each reading with its feed."""
+
+    return [
+        forecast.Reading(_millis(one.at), one.percent, _millis(one.resets_at), length, one.feed)
+        for one in series
+    ]
+
+
+def _restarted(series: Iterable[_Sample], length: int, resets_at: str) -> int | None:
+    """The moment the count of the window resetting at `resets_at` last restarted
+    (`forecast.count`), `None` where it never did."""
+
+    restarts = forecast.count(_readings(series, length), length, _millis(resets_at)).restarts
+    return restarts[-1] if restarts else None
+
+
+def _week_due(
+    series: list[_Sample], now: int, stamp: str, restarted: int | None = None
+) -> _Due | None:
+    """The week at the levels its fresh readings reach, from `restarted` on where its count
+    restarted."""
+
     fresh = [
-        one for one in series if forecast.fresh(_millis(one.at), now) and one.resets_at > stamp
+        one
+        for one in series
+        if forecast.fresh(_millis(one.at), now)
+        and one.resets_at > stamp
+        and (restarted is None or _millis(one.at) >= restarted)
     ]
     if not fresh:
-        return []
+        return None
     top = max(fresh, key=lambda one: (one.percent, one.at))
     reached = tuple(level for level in WEEK_LEVELS if top.percent >= int(level))
-    return [_Due(top, reached)] if reached else []
+    return _Due(top, reached, restarted=restarted) if reached else None
+
+
+def _week_dues(conn: sqlite3.Connection, found: list[_Due], now: int, stamp: str) -> list[_Due]:
+    """The weeks at a level, each read again from its count's latest restart on where a
+    level it reaches was given already: the window's samples since its start, read once."""
+
+    again = [due for due in found if set(due.levels) & set(_given(conn, due))]
+    if not again:
+        return found
+    start = min(_millis(due.sample.resets_at) for due in again) - forecast.WEEK
+    since = samples.instant(
+        (_EPOCH + dt.timedelta(milliseconds=start - forecast.RESET_SLACK)).isoformat()
+    )
+    windows: dict[tuple[str, str, str, str], list[_Sample]] = {}
+    for sample in _known(conn, since, _WEEKS):
+        windows.setdefault(sample.series, []).append(sample)
+    dues = [due for due in found if due not in again]
+    for due in again:
+        series = windows.get(due.sample.series, [])
+        restarted = _restarted(series, forecast.WEEK, due.sample.resets_at)
+        renewed = due if restarted is None else _week_due(series, now, stamp, restarted)
+        dues += [] if renewed is None else [renewed]
+    return dues
 
 
 def _five_hour_dues(series: list[_Sample], now: int) -> list[_Due]:
@@ -139,13 +206,7 @@ def _five_hour_dues(series: list[_Sample], now: int) -> list[_Due]:
     if not forecast.fresh(_millis(latest.at), now):
         return []
     window = forecast.Window(forecast.FIVE_HOURS, latest.percent, _millis(latest.resets_at))
-    readings = [
-        forecast.Reading(
-            _millis(one.at), one.percent, _millis(one.resets_at), forecast.FIVE_HOURS, one.feed
-        )
-        for one in series
-    ]
-    found = forecast.outlook(window, readings, now)
+    found = forecast.outlook(window, _readings(series, forecast.FIVE_HOURS), now)
     if not (
         isinstance(found, forecast.FiveHourOutlook)
         and found.alert_eligible
@@ -153,7 +214,8 @@ def _five_hour_dues(series: list[_Sample], now: int) -> list[_Due]:
     ):
         return []
     at = found.forecast.at if isinstance(found.forecast, forecast.Short) else None
-    return [_Due(latest, (EXHAUSTED,), at)]
+    restarted = _restarted(series, forecast.FIVE_HOURS, latest.resets_at)
+    return [_Due(latest, (EXHAUSTED,), at, restarted)]
 
 
 def _dues(conn: sqlite3.Connection, now: dt.datetime) -> list[_Due]:
@@ -168,34 +230,39 @@ def _dues(conn: sqlite3.Connection, now: dt.datetime) -> list[_Due]:
     for sample in _known(conn, since):
         by_series.setdefault(sample.series, []).append(sample)
     dues: list[_Due] = []
+    weeks: list[_Due] = []
     for (_, _, kind, _), series in by_series.items():
         if kind in _WEEKS:
-            dues += _week_dues(series, millis, stamp)
+            week = _week_due(series, millis, stamp)
+            weeks += [] if week is None else [week]
         else:
             dues += _five_hour_dues(series, millis)
-    return dues
+    return dues + _week_dues(conn, weeks, millis, stamp)
 
 
 def _given(conn: sqlite3.Connection, due: _Due) -> list[str]:
-    """The levels of this window the owner was given already."""
+    """The levels of this window the owner was given already, since its count's latest
+    restart where it restarted."""
 
     sample = due.sample
     reset = _millis(sample.resets_at)
     return [
         str(level)
-        for level, resets_at in conn.execute(
-            "SELECT level, resets_at FROM quota_alerts"
+        for level, resets_at, sample_at in conn.execute(
+            "SELECT level, resets_at, sample_at FROM quota_alerts"
             " WHERE organization = ? AND seat = ? AND kind = ? AND model = ?",
             sample.series,
         )
         if forecast.same_window(_millis(str(resets_at)), reset)
+        and (due.restarted is None or _millis(str(sample_at)) >= due.restarted)
     ]
 
 
 def _keep(conn: sqlite3.Connection, dues: Iterable[_Due], now: dt.datetime) -> list[_Due]:
     """Write the key of every level not given yet, in one transaction; the dues to show.
 
-    A due is shown when its top level is new: the levels below it are kept with it.
+    A due is shown when its top level is new: the levels below it are kept with it. A level
+    given again after a restart takes the sample it is given on now.
     """
 
     stamp = samples.instant(now.isoformat())
@@ -214,7 +281,10 @@ def _keep(conn: sqlite3.Connection, dues: Iterable[_Due], now: dt.datetime) -> l
             for level in new:
                 conn.execute(
                     "INSERT INTO quota_alerts(organization, seat, kind, model, resets_at, level,"
-                    " account_uuid, sample_at, raised_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    " account_uuid, sample_at, raised_at) VALUES (?,?,?,?,?,?,?,?,?)"
+                    " ON CONFLICT(organization, seat, kind, model, resets_at, level) DO UPDATE"
+                    " SET account_uuid = excluded.account_uuid, sample_at = excluded.sample_at,"
+                    " raised_at = excluded.raised_at",
                     (
                         *sample.series,
                         sample.resets_at,
