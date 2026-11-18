@@ -15,8 +15,8 @@
  * An entry acts as a bar of the breakdown by task does (`useLineActions`): pressed, it opens the
  * value's side panel, sent out as `inspect` — a task's is a link to its card as well, which a
  * press with a modifier or the middle button opens elsewhere, and work with no task a control —
- * and work nobody can place is a line. With no period before read, the block says so with the page's own way to read it again, and with
- * nothing moved, that nothing did.
+ * and work nobody can place is a line. With no period before read, the block says so with the
+ * page's own way to read it again, and with nothing moved, that nothing did.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -273,10 +273,13 @@ function pressAside(key: string, event: MouseEvent) {
 
 /* An entry: the name on its line, cut to it, and under it the arrow, the amount in tabular
    figures and the words for a side with nothing, which give way before the amount does. A control
-   is the line it stands for, across the card's width. */
+   is the line it stands for, across the card's width and as tall as its two lines: a button's
+   floor of a control's row made work with no task a pixel taller than a task's link, and the card
+   taller than a card of five rows. */
 .overview-changes-line {
   display: grid;
   inline-size: 100%;
+  min-block-size: 0;
   padding: 0 var(--space-2);
   border: 0;
   color: var(--color-text);
