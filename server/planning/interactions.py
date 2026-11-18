@@ -298,7 +298,7 @@ def _exact_parameters(parameters: Mapping[str, list[str]], extras: set[str]) -> 
 
 def _request_item(conn: sqlite3.Connection, record: dict, key: str) -> None:
     item = read_model.item_by_id(conn, record["work_item_id"])
-    if item["planning_space_id"] != service.space_identity(conn, key):
+    if item["planning_space_id"] != read_model.space_identity(conn, key):
         raise api.PlanningHttpError(409, "unavailable", "request_outside_planning_space")
 
 
@@ -437,7 +437,7 @@ def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
                 item = service.get_work_item(
                     conn, model.text_field(operation.get("id"), "id", limit=128)
                 )
-                if item["planning_space_id"] != service.space_identity(
+                if item["planning_space_id"] != read_model.space_identity(
                     conn, space_ref["space_key"]
                 ):
                     raise api.PlanningHttpError(409, "unavailable", "item_outside_planning_space")

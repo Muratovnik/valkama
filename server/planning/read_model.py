@@ -86,6 +86,29 @@ def item_by_id(conn: sqlite3.Connection, work_item_id: str) -> sqlite3.Row:
     return row
 
 
+def space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
+    """The space a caller named by its id, key or name."""
+
+    text = model.text_field(reference, "planning space", limit=200)
+    row = conn.execute(
+        "SELECT * FROM planning_spaces WHERE planning_space_id = ? OR key = ? OR name = ?",
+        (text, text, text),
+    ).fetchone()
+    if row is None:
+        raise model.PlanningError(f"no planning space named {text}")
+    return row
+
+
+def space_identity(conn: sqlite3.Connection, reference: object) -> str:
+    """The id of the space a caller named by its id, key or name.
+
+    It reads nothing but the space's identity, so a store another build wrote,
+    whose spaces lack a column the record reads, still answers it.
+    """
+
+    return str(space_row(conn, reference)["planning_space_id"])
+
+
 def state_by_id(conn: sqlite3.Connection, state_id: str) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM workflow_states WHERE state_id = ?", (state_id,)).fetchone()
     if row is None:

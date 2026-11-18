@@ -6,7 +6,7 @@ Each day of the period, a day of the caller's clock, counts four things:
 - `closed`: the tasks whose present entry into completed or cancelled fell on it;
 - `decisions`: the owner's decisions, each a request of an item of the scope that was
   answered or declined that day by a call from the interface. The latest call that
-  closed or changed a request says whose it is (`requests.with_by_person`), so an
+  closed or changed a request says whose it is (`questions.with_by_person`), so an
   agent's answer is no decision and a changed answer is still one;
 - `commits`: the commits of a known repository made that day that are attached now to
   an item of the scope (`read_model.ATTACHED_OF`), or stand on no card of the scope's
@@ -27,7 +27,7 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
 
-from . import chain, commits, model, read_model, requests, usage
+from . import chain, commits, model, questions, read_model, usage
 
 #: The scope's requests closed with an answer or a decline, and when.
 _CLOSED_REQUESTS = (
@@ -118,7 +118,7 @@ def _decisions(conn: sqlite3.Connection, where: str, parameters: Sequence[object
     ]
     return [
         record["resolved_at"]
-        for record in requests.with_by_person(conn, closed)
+        for record in questions.with_by_person(conn, closed)
         if record["by_person"] is True
     ]
 

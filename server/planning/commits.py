@@ -79,7 +79,7 @@ from typing import Any, TypeVar
 from .. import git_worktrees
 from ..hooks import commit_records, notify
 from ..projects import project_registry
-from . import calls, held, item_projects, leases, model, read_model, request_model, service
+from . import calls, held, item_projects, leases, model, read_model, request_model
 
 #: The tool a client hook's own call is bound under (`calls.bind`): what it writes is
 #: Valkama's, and the session and agent of the commit live on the commit's row.
@@ -1092,7 +1092,7 @@ def unattached(
     if project is not None:
         projects = [registered(project, listing)["project_id"]]
     else:
-        identity = service.space_identity(conn, space)
+        identity = read_model.space_identity(conn, space)
         key = conn.execute(
             "SELECT key FROM planning_spaces WHERE planning_space_id = ?", (identity,)
         ).fetchone()[0]

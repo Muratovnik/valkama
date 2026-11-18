@@ -103,7 +103,7 @@ def stale_claims(conn: sqlite3.Connection, *, space: str | None = None) -> list[
     parameters: list[object] = [json.dumps(model.HELD_CATEGORIES)]
     if space is not None:
         clauses.append("w.planning_space_id = ?")
-        parameters.append(service.space_identity(conn, space))
+        parameters.append(read_model.space_identity(conn, space))
     query = service.with_clauses(
         "SELECT w.*, p.key || '-' || w.number AS reference, s.key, s.name, s.category,"
         " s.is_terminal,"
