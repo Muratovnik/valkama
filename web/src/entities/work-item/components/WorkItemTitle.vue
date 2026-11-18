@@ -20,7 +20,7 @@ const runs = computed(() => titleRuns(props.title))
     :key="index"
   >
     <span
-      v-if="run.whole"
+      v-if="run.kind === 'reference'"
       class="title-reference"
       >{{ run.text }}</span
     ><span

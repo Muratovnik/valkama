@@ -59,8 +59,8 @@ describe('a path among identifiers', () => {
 
   it('leaves a card title’s path breakable, and keeps an identifier in it whole', () => {
     expect(titleRuns('Move docs/plans/long-name.md after MAIN-12')).toEqual([
-      { text: 'Move docs/plans/long-name.md after ', whole: false },
-      { text: 'MAIN-12', whole: true },
+      { kind: 'text', text: 'Move docs/plans/long-name.md after ' },
+      { kind: 'reference', text: 'MAIN-12' },
     ])
   })
 })
