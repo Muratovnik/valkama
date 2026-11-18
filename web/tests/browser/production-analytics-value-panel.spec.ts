@@ -199,7 +199,8 @@ function expectPlaced(measured: Awaited<ReturnType<typeof placed>>, count: numbe
 
 /**
  * The one «ⓘ» of the figures, named `about`, ends the line of their heading: after it, centred on
- * it, inside their part, which stands inside the panel (`expectPlaced`), and over their first line.
+ * it, inside their part, which stands inside the panel (`expectPlaced`), and over their first
+ * line, measured by its name: a figure is `display: contents` and has no box of its own.
  */
 async function expectAboutEnds(part: Locator, words: { about: string; figures: string }) {
   const press = part.getByRole('button', { name: words.about })
@@ -207,7 +208,7 @@ async function expectAboutEnds(part: Locator, words: { about: string; figures: s
   const named = await edges(part.getByRole('heading', { name: words.figures }))
   const info = await edges(press)
   const whole = await edges(part)
-  const first = await edges(part.locator('[data-figure]').first())
+  const first = await edges(part.locator('[data-figure] dt').first())
   expect(info.left, '«ⓘ» after the heading').toBeGreaterThanOrEqual(named.right)
   expect(Math.abs(middle(info) - middle(named)), '«ⓘ» on the heading’s line').toBeLessThanOrEqual(1)
   expect(info.right, '«ⓘ» inside its part').toBeLessThanOrEqual(whole.right)
