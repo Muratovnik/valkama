@@ -8,7 +8,8 @@
  * range in two parts, parted where its slower pace ends; five hours that run out to the track's
  * end; none for five hours that last (the answer names no share for them), for a window too new
  * for a forecast, for one spent or read past 100 %; and from the track's start at 0 %. The
- * forecast's line leads with the hatch's key, «Forecast ·», with a swatch where a tail is drawn.
+ * forecast's line leads with the hatch's key, «Forecast ·», with a swatch where a tail is drawn;
+ * the swatch hangs in the card's start gutter, so the line's words start where the reset's do.
  * Each step line past its readings points at «now» and, where a forecast has a share to draw to,
  * runs its corridor to the reset and points at its end: the corridor inside the plot, each
  * place's hint at its mark and clear of the line's head, nothing moving while pointed at; the
@@ -27,6 +28,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import { quotaAt, quotaOfEdges } from '../fixtures/quota.ts'
 import { NOW, openPanel, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
+import { swatchLines } from './quotaSwatch.ts'
 import { aheadOfLines, cornersOutside, hintAtDot, latestHint } from './stepAhead.ts'
 import type { LineAhead } from './stepAhead.ts'
 import { test } from './test.ts'
@@ -360,6 +362,23 @@ for (const lang of ['en', 'ru'] as const)
             one.forecast !== words.forecast.none,
           )
           expect(one.legend, `${one.key}: the corridor named`).toBe(one.corridor)
+        }
+        // The hatch's swatch hangs in the card's start gutter: the forecast line's words start
+        // where the reset's under them do, and the swatch stands whole inside the card.
+        const keyed = await swatchLines(page)
+        measured[`${section} swatches`] = keyed
+        expect(keyed, `${section}: the windows keyed by a swatch`).toHaveLength(
+          Object.values(cases).filter(({ swatch }) => swatch).length,
+        )
+        for (const one of keyed) {
+          expect(
+            Math.abs(one.forecast - one.reset),
+            `${one.key}: the forecast's words at ${one.forecast}, the reset's at ${one.reset}`,
+          ).toBeLessThanOrEqual(0.5)
+          expect({ inCard: one.inCard, seen: one.seen }, `${one.key}: its swatch`).toEqual({
+            inCard: true,
+            seen: true,
+          })
         }
         for (const [index, line] of lines.entries())
           expect(cornersOutside(line), `line ${index}: corners outside its plot`).toEqual([])

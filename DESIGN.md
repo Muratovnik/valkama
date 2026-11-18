@@ -2631,7 +2631,8 @@ readings and what used it.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · fresh», «13% used · silent 5 h», over its bar, its share solid and its forecast a
 hatched tail; then its forecast in the text's ink after the key of that hatch, a swatch where a
-tail is drawn and «Forecast ·» — the five hours a point, lasting to the reset or running out at
+tail is drawn, hung in the card's start gutter so the line's words start where the lines under it
+do, and «Forecast ·» — the five hours a point, lasting to the reset or running out at
 a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
 end there says the week runs out before its reset and about when its slower pace spends it, a
 high end there that it may, and ends said alike one value — and when it resets in absolute and

@@ -8,7 +8,8 @@
  * the forecast in the text's ink and when the window resets, in absolute and relative time,
  * quieter. The bar draws the forecast as a hatched tail past the share spent, and the forecast's
  * line leads with the key of that hatch, a swatch and «Forecast ·», the swatch while a tail is
- * drawn: the hatch was once a silent window's and nothing on the page said so. Where steady use
+ * drawn: the hatch was once a silent window's and nothing on the page said so. The swatch hangs in
+ * the card's start gutter, so the line's words start where the lines under it do. Where steady use
  * would stand and how old the latest reading is and who read it are the bar's hint and its words
  * for a screen reader, not lines of the block: four lines of the same weight once stood over
  * every window. As a table the bar is a row of its account's table, which holds the share, the
@@ -337,13 +338,16 @@ const readingsCaption = computed(() =>
 }
 
 /* The key of the bar's hatch, as the step line's legend draws it: a short bar of the stripes on
-   the line's baseline, before the words that name it. */
+   the line's baseline, before the words that name it. It hangs in the card's start gutter, its
+   width and the space after it outside the line, so the line's words start where the lines under
+   them do: led by the key, they started 16px further in. The gutter it hangs in is the account's
+   16px inset (`PanelLevel`), or the gap between two windows side by side, as wide. */
 .quota-window-swatch {
   display: inline-block;
   vertical-align: baseline;
   inline-size: var(--space-3);
   block-size: var(--space-2);
-  margin-inline-end: var(--space-1);
+  margin-inline: calc(-1 * var(--space-3) - var(--space-1)) var(--space-1);
   background: var(--color-series-1);
   border-radius: 999px;
 
