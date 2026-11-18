@@ -140,7 +140,8 @@ const copied = useWorkItemCopy(() => props.reference)
           ><span
             v-whole-words="project"
             class="preview-project"
-          /> ·
+          />
+          ·
         </template>
         <time :datetime="when.iso">{{ when.text }}</time>
       </p>
