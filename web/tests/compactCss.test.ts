@@ -48,6 +48,14 @@ test('compactCss keeps a descendant apart from a compound, however either is wri
   assert.deepEqual(declarationsOf(css, '.g.h'), [])
 })
 
+test('compactCss puts the parent wherever a nested rule writes `&`, not only at its start', () => {
+  // A selector that names `&` anywhere is not prefixed with the parent: each `&`
+  // is the parent, so `.row &` inside `.b` is a `.b` inside a `.row`.
+  const css = '.b { .row & { color: red; } .x & + & { color: blue; } & > .c { color: gray; } }'
+  assert.equal(compactCss(css), '.row .b{color:red}.x .b+.b{color:blue}.b>.c{color:gray}')
+  assert.deepEqual(declarationsOf(css, '.row .b'), ['color:red'])
+})
+
 test('declarationsOf reads the rule of exactly one selector, its declarations in any order', () => {
   const css = [
     '<template><p>{{ a }}</p></template>',

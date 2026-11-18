@@ -145,9 +145,9 @@ function parseBlock(css: string): Block {
 /**
  * Desugar native nesting into the descendant selectors it stands for.
  *
- * `&` takes the parent selector's place; a nested rule that starts with a
- * combinator or a bare compound gets the parent and a descendant space, which is
- * what the CSS Nesting spec prepends for it. An at-rule keeps its own block and
+ * Each `&` takes the parent selector's place, wherever the nested rule writes it;
+ * a nested rule with no `&` gets the parent and a descendant space, which is what
+ * the CSS Nesting spec prepends for it. An at-rule keeps its own block and
  * its contents flatten inside it, so a `@container` around a nested rule still
  * reads as the query it is.
  *
@@ -171,7 +171,7 @@ function flattenNesting(sheet: string): string {
         rule.selector.split(',').map((part) => {
           const one = part.trim()
           if (!parent) return one
-          return one.startsWith('&') ? one.replace(/^&/, parent) : `${parent} ${one}`
+          return one.includes('&') ? one.replaceAll('&', parent) : `${parent} ${one}`
         }),
       )
       out += flatten(rule.body, selectors)
