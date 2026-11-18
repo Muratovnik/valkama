@@ -356,6 +356,10 @@
       "open": true,
       "container_state": null,
       "acceptance": null,
+      "triage_stack": {
+        "seen_at": null,
+        "seen_by": null
+      },
       "started_at": "2026-01-02T03:04:05Z",
       "waits_for": [],
       "claim_ref": "",
@@ -439,6 +443,10 @@
       "open": true,
       "container_state": null,
       "acceptance": null,
+      "triage_stack": {
+        "seen_at": null,
+        "seen_by": null
+      },
       "started_at": null,
       "waits_for": [],
       "claim_ref": "",
@@ -480,6 +488,10 @@
       "open": true,
       "container_state": null,
       "acceptance": null,
+      "triage_stack": {
+        "seen_at": "2026-01-02T03:04:05Z",
+        "seen_by": "worker-a"
+      },
       "started_at": null,
       "waits_for": [],
       "claim_ref": "",

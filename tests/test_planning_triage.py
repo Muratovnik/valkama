@@ -38,7 +38,7 @@ from server.planning.routing import PlanningRouting
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
-from tests.test_planning_closing import APPLY, AS_B, MERGE, NOW, UPDATE, Tree
+from tests.test_planning_closing import APPLY, AS_A, AS_B, MERGE, NOW, UPDATE, Tree
 
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
 QUESTION = {"kind": "question", "prompt": "Is this one change or two?", "fields": [FIELD]}
@@ -711,3 +711,138 @@ class DueTests(Stack):
             with self.subTest(name):
                 expected = [line] if name in with_line else []
                 self.assertEqual(expected, self.listed(**parameters)["triage_due"])
+
+
+class ReadTests(Stack):
+    """The stack as a reader sees it: the field on an item's records and the list's filter.
+
+    s1 is marked and s2 is not; t lies under a goal nobody accepted, which its answer
+    decides, so it is not in the stack. The other findings date their entries so that
+    the order of the stack shows: oldest entry first, a tie going to the smaller number.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.s1 = self.found("s1, seen by a review")
+        self.s2 = self.found("s2, not seen yet")
+        unaccepted = self.found("G, a goal nobody accepted", "goal")
+        self.t = self.found("t, under the goal nobody accepted", parent=unaccepted)
+        self.later, self.earliest, self.tied = (
+            self.found(name) for name in ("entered second", "entered first", "entered second too")
+        )
+        self.entries_at(self.later, T2)
+        self.entries_at(self.earliest, T1)
+        self.entries_at(self.tied, T2)
+        self.entries_at(self.s2, T3)
+        self.entries_at(self.s1, T1)
+        self.mark = self.agent(BATCH, AS_B, id=self.s1, triage_seen=True)["applied"]["triage_seen"]
+
+    def listed(self, seen: str, **filters: object) -> list[str]:
+        """The references `list_work_items` gives, as an agent reads them."""
+
+        answer = self.agent("list_work_items", AS_B, triage_stack=seen, **filters)
+        return [str(row["reference"]) for row in answer["work_items"]]
+
+    def http_list(self, **parameters: str) -> dict:
+        answer = api.handle_get(
+            self.conn,
+            "/api/planning/work-items",
+            {name: [value] for name, value in parameters.items()},
+        )
+        assert answer is not None
+        return answer[1]
+
+    def test_the_stack_reads_on_the_card_and_the_list(self) -> None:
+        """O20: the card carries the mark of an item in the stack, nulls for one unmarked
+        and nothing for one outside; `unseen` and `seen` list the stack in its order."""
+
+        seen_by = self.mark_of(self.s1)[1]  # type: ignore[index]
+        marked = {"seen_at": self.mark["seen_at"], "seen_by": seen_by}
+        unmarked = {"seen_at": None, "seen_by": None}
+        cards = {
+            ref: self.agent("get_work_item", AS_B, id=ref) for ref in (self.s1, self.s2, self.t)
+        }
+        self.assertEqual(marked, cards[self.s1]["triage_stack"])
+        self.assertEqual(unmarked, cards[self.s2]["triage_stack"])
+        self.assertNotIn("triage_stack", cards[self.t])
+        # The card places the field right after `acceptance`.
+        names = list(cards[self.s1])
+        self.assertEqual("triage_stack", names[names.index("acceptance") + 1])
+        # The full record and the brief one carry it as the card does.
+        for brief in (False, True):
+            with self.subTest(brief=brief):
+                read = {"brief": ["true"]} if brief else {}
+                records = {
+                    ref: api.handle_get(
+                        self.conn, "/api/planning/work-item", {"id": [ref], **read}
+                    )[1]  # type: ignore[index]
+                    for ref in (self.s1, self.s2, self.t)
+                }
+                records = {ref: found.get("work_item", found) for ref, found in records.items()}
+                self.assertEqual(marked, records[self.s1]["triage_stack"])
+                self.assertEqual(unmarked, records[self.s2]["triage_stack"])
+                self.assertNotIn("triage_stack", records[self.t])
+
+        oldest_first = [self.earliest, self.later, self.tied, self.s2]
+        self.assertEqual(oldest_first, self.listed("unseen", space="MAIN"))
+        self.assertEqual([self.s1], self.listed("seen", space="MAIN"))
+        # Each item of the HTTP list carries its field; one the filter leaves out is absent.
+        rows = self.http_list(space="MAIN", triage_stack="unseen")["work_items"]
+        self.assertEqual(oldest_first, [row["reference"] for row in rows])
+        self.assertEqual([unmarked] * 4, [row["triage_stack"] for row in rows])
+        everything = {row["reference"]: row for row in self.http_list(space="MAIN")["work_items"]}
+        self.assertEqual(marked, everything[self.s1]["triage_stack"])
+        self.assertNotIn("triage_stack", everything[self.t])
+        self.assertNotIn("triage_stack", everything[self.goal])
+
+    def test_the_filter_pages_and_narrows_as_any_list_does(self) -> None:
+        """Pages cut the stack's order once each; another filter narrows it; a value the
+        filter does not take is refused with the values it does."""
+
+        waiting = self.made("w, waiting in the accepted goal", parent=self.goal)
+        self.person(APPLY, id=waiting, transition={"state": "triage"})
+        whole = self.listed("unseen", space="MAIN")
+        self.assertIn(waiting, whole)
+
+        walked: list[str] = []
+        offset: int | None = 0
+        while offset is not None:
+            page = self.http_list(
+                space="MAIN", triage_stack="unseen", limit="2", offset=str(offset)
+            )
+            walked += [row["reference"] for row in page["work_items"]]
+            offset = page["next_offset"]
+        self.assertEqual(whole, walked)
+
+        self.assertEqual([waiting], self.listed("unseen", parent=self.goal))
+        self.assertEqual([], self.listed("seen", parent=self.goal))
+        self.assertEqual([], self.listed("unseen", kind="goal"))
+        with self.assertRaises((model.PlanningError, api.PlanningHttpError)) as caught:
+            self.http_list(space="MAIN", triage_stack="all")
+        self.assertIn("triage_stack must be one of seen, unseen", str(caught.exception))
+
+    def test_a_request_to_a_session_leaves_the_stack(self) -> None:
+        """O32: a request one session asks of another is no question to the owner, so the
+        mark of s1 stays and both stay where the filter finds them."""
+
+        for item in (self.s1, self.s2):
+            self.agent(
+                "create_work_item_request",
+                AS_A,
+                id=item,
+                kind="question",
+                prompt="Did you see this one?",
+                fields=[FIELD],
+                addressees=[AS_B["sessionId"]],
+            )
+        self.assertEqual(
+            2,
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_requests WHERE addressee = ? AND status = 'pending'",
+                (AS_B["sessionId"],),
+            ).fetchone()[0],
+        )
+
+        self.assertIsNotNone(self.mark_of(self.s1))
+        self.assertEqual([self.s1], self.listed("seen", space="MAIN"))
+        self.assertIn(self.s2, self.listed("unseen", space="MAIN"))

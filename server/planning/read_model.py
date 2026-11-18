@@ -36,6 +36,7 @@ from . import (
     sections,
     states,
     subscriptions,
+    triage,
 )
 from . import closing as closing_rules
 
@@ -317,6 +318,23 @@ def closing(
         (identity, identity),
     ).fetchone()
     return _closed(row, (str(found[0]), found[1]) if found is not None else None)
+
+
+def triage_stacks(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict[str, dict]:
+    """`triage_stack` for every item among `rows` that waits in the triage stack, by item id.
+
+    One statement finds the triage states and one reads the stack (`triage.field`), and
+    only when a row stands in one of them, so a store an earlier build wrote, which
+    has no triage, is read as it is. `present` reads an absent item as one without the
+    field.
+    """
+
+    standing = {
+        str(state[0])
+        for state in conn.execute("SELECT state_id FROM workflow_states WHERE category = 'triage'")
+    }
+    waiting = [str(row["work_item_id"]) for row in rows if str(row["state_id"]) in standing]
+    return dict(triage.field(conn, waiting)) if waiting else {}
 
 
 def closings(
@@ -846,6 +864,7 @@ def present(
     projects: Mapping[str, list[dict]] | None = None,
     read_space: str | None = None,
     settings: participation.Settings | None = None,
+    stack: Mapping[str, dict] | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -868,7 +887,8 @@ def present(
     read of one space is of, which `withheld` asks another space's item by
     (`queue.withheld`). `settings` is the participation setting as such a read, or
     the write that answers, loaded it once (`participation.load`); absent, an item
-    somebody holds loads it, since its lease is read by it.
+    somebody holds loads it, since its lease is read by it. `stack` is what
+    `triage_stacks` read for such a read; absent, an item in triage reads its own.
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
@@ -885,6 +905,7 @@ def present(
         projects=projects,
         read_space=read_space,
         settings=settings,
+        stack=stack,
     )
     identity = str(row["work_item_id"])
     if not full:
@@ -1014,6 +1035,7 @@ def _record(
     projects: Mapping[str, list[dict]] | None = None,
     read_space: str | None = None,
     settings: participation.Settings | None = None,
+    stack: Mapping[str, dict] | None = None,
 ) -> tuple[dict, leases.Lease | None]:
     """What the brief record, the full one and the card share, and the lease it read.
 
@@ -1025,6 +1047,14 @@ def _record(
 
     state = state_by_id(conn, str(row["state_id"]))
     shown = states.public_state(state)
+    # Only an item that waits in the triage stack carries the field.
+    identity = str(row["work_item_id"])
+    if stack is not None:
+        waiting = stack.get(identity)
+    elif state["category"] == "triage":
+        waiting = triage.field(conn, [identity], str(row["planning_space_id"])).get(identity)
+    else:
+        waiting = None
     record = {
         "work_item_id": row["work_item_id"],
         "planning_space_id": row["planning_space_id"],
@@ -1037,6 +1067,7 @@ def _record(
         "open": not state["is_terminal"],
         "container_state": None,
         "acceptance": acceptance(row),
+        **({} if waiting is None else {"triage_stack": waiting}),
         "started_at": None,
         "waits_for": [],
         "claim_ref": row["claim_ref"],
@@ -1057,7 +1088,6 @@ def _record(
     # Readiness is computed here, once, so the list, the board and the graph all
     # answer the same question the same way. The Board era left it to each view,
     # and they disagreed about a held item and about a container.
-    identity = str(row["work_item_id"])
     # A read of many items hands over every closing it loaded at once.
     record["closed_at"], record["last_claim_ref"] = (
         closing(conn, row, bool(state["is_terminal"]))
@@ -1136,6 +1166,7 @@ CARD_FIELDS = (
     "open",
     "container_state",
     "acceptance",
+    "triage_stack",
     "started_at",
     "waits_for",
     "cancelled_blockers",

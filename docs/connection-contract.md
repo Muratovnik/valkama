@@ -200,7 +200,14 @@ in every space unless `space` is given. With `space`, it keeps that space's
 items that name it, and other spaces' items that name it when it is one of the
 space's projects. A goal or stage stores no projects and names those of every
 task under it, at any depth, so it is kept when one of them names the project;
-a project no item names lists nothing.
+a project no item names lists nothing. They take `triage_stack` as well,
+`unseen` or `seen`: the list keeps the items that wait for a triage review (see
+`triage_stack` in [The work model](#the-work-model)) that no review marked, or
+those one did, oldest entry first. An item entered at its last change of state,
+or at its creation when its history records none; a tie goes to the smaller space
+key, then the smaller number. Any other value is refused:
+`triage_stack must be one of seen, unseen`. The other filters narrow it as they
+narrow each other.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -313,6 +320,7 @@ model; the card's `state` has no `is_terminal`:
 | `open` | whether its work is still open: false in a `completed` or `cancelled` state. A reader decides openness by it, since an accepted open goal or stage has no `state` to read `is_terminal` from |
 | `container_state` | for an accepted open goal or stage, `not_started`, `in_progress` or `awaiting_confirmation`; `null` for every other item, a goal or stage in `triage`, `deferred`, `completed` or `cancelled` included, whose `state` says where it stands |
 | `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule`, `agent` (an agent's own decision where the owner's participation setting leaves it to the agent) or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
+| `triage_stack` | `{seen_at, seen_by}`, only on an item that waits for a triage review: in a `triage` state, under no goal or stage or under goals and stages all accepted and open, and with no question to the owner open on it. When a review marked it seen and who; both `null` while no review did. Absent from every other item |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `cancelled_blockers` | the cancelled items still linked `blocks` to it, by reference, which `waits_for` no longer names: the work it waited for will not be done. Only on open work and only when there is one; it lasts while the link stands |
@@ -325,7 +333,8 @@ Four other answers carry only some of these fields:
 - an MCP list row (`list_work_items`, unless `verbose`) carries `state`, as its
   key (`null` for an accepted open goal or stage), `container_state` where the
   item has one, `queue_order` where the queue gives it and `withheld` where it
-  does not; none of `open`, `acceptance`, `started_at`, `waits_for` or `workable`;
+  does not; none of `open`, `acceptance`, `triage_stack`, `started_at`, `waits_for`
+  or `workable`;
 - an HTTP chain member of `GET /api/planning/work-item/chain` carries `state`,
   `open`, `container_state` and `workable`; none of `acceptance`, `started_at` or
   `waits_for`;
@@ -734,7 +743,8 @@ take it, given and not given rows alike; a goal or stage takes the parts of the
 key from its own priority, the earliest start under it and its parent. Without a
 space the rows of different spaces interleave, a tie going to the smaller space
 key. The key reads stored fields and the tree of items, never the clock or a
-lease.
+lease. A list read with `triage_stack` takes the stack's order instead, which is
+total as well.
 
 A row of a list read -- `list_work_items`, its pages, `work_items` of
 `GET /api/planning` -- and a chain member carry `queue_order`: the row's 1-based

@@ -88,6 +88,10 @@ says what it is:
   and `reached_at` once that came and the owner is asked; `returned`, on work in
   triage that came back, says why (`because`: `date`, `completed`, `cancelled`
   or `deleted`, with the `item`) and when.
+- `triage_stack`, only on an item waiting for a triage review, is `{seen_at, seen_by}`:
+  when a review marked it seen and who, both null while none did. `list_work_items`
+  with `triage_stack: "unseen"` lists the items no review marked, oldest first, and
+  `"seen"` the marked ones.
 - `get_work_item_chain` with `scope: "tree"` reads everything under an item at
   any depth; `scope: "chain"`, the default, adds what was discovered from it.
 
