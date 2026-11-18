@@ -1391,37 +1391,46 @@ an account's UUID nor a seat, belongs to no account and is not in the answer.
 
 ### The owner's names for accounts
 
-The usage rows and the quota samples hold an account's organization id and nothing that
-names it, so the owner names it, and Valkama keeps one name per organization in the store's
-`quota_account_names` table: `account`, the organization's id, `name` and `updated_at`, the
-UTC time of the write to the millisecond. An organization with no name has no row. Settings
-writes the name; the Analytics page on every device and the quota alerts read it, and the
-store's snapshots and restore carry it with the other quota tables. Other server modules
-read it through `server.quota.names.names_of(conn, organizations)`, which answers the names
-of any number of organizations in one query, by organization, leaving out one with none.
+The usage rows and the quota samples hold ids and nothing that names them, so the owner
+names them, and Valkama keeps the names in the store's `quota_account_names` table:
+`account`, the key a name is given to, `name` and `updated_at`, the UTC time of the write
+to the millisecond. A key is one of two:
+
+- an account's key, as the `seat` dimension and the quota answer give it: its
+  organization, a slash, and its UUID or `weekly:` with the time of week its week resets,
+  `<ISO weekday>T<HH:MM>Z` in UTC;
+- an organization's id alone. Its name labels the organization, and each of its accounts
+  that has no name of its own.
+
+An account known by its UUID also answers to the name given to its weekly-reset key, so a
+name given before the UUID turned up stays with it. A key with no name has no row.
+Settings writes the name; the Analytics page on every device and the quota alerts read it,
+and the store's snapshots and restore carry it with the other quota tables. Other server
+modules read it through `server.quota.names.names_of(conn, keys)`, which answers the names
+of any number of keys in one query, by key, leaving out one with none.
 
 | Route | What it does |
 | --- | --- |
-| `GET /api/quota/account-names` | every name: `{"names": {"<organization>": "<name>"}}`, `{"names": {}}` until one is given |
-| `PUT /api/quota/account-names` | `{"names": {"<organization>": "<name>"}, "replace": true}` names each account given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for an organization that has none, and an empty one changes nothing |
+| `GET /api/quota/account-names` | every name: `{"names": {"<key>": "<name>"}}`, `{"names": {}}` until one is given |
+| `PUT /api/quota/account-names` | `{"names": {"<key>": "<name>"}, "replace": true}` names each key given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for a key that has none, and an empty one changes nothing |
 
 A name is one line: its runs of spaces and line breaks are collapsed to one space and its
-ends trimmed, and what is left is at most 80 characters, counted as characters rather
-than UTF-16 units, with no control character. An organization is 1 to 512 characters with
-no NUL. A write that breaks either rule, names more than 1000 accounts, or carries a field
-other than `names` and `replace` is refused whole with `400`,
-`{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing. The read
-answers under the `Host` rule alone; the write takes the browser's credential, as the
-quota settings do.
+ends trimmed, and what is left is at most 80 characters, counted as characters rather than
+UTF-16 units, with no control character. A key is 1 to 512 characters with no NUL, and one
+with a slash is an account's key as above. A write that breaks either rule, names more than
+1000 accounts, or carries a field other than `names` and `replace` is refused whole with
+`400`, `{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing.
+The read answers under the `Host` rule alone; the write takes the browser's credential, as
+the quota settings do.
 
 A device that kept names of its own, as builds before this one did in the settings each
 browser and the desktop app keep, writes them once with `"replace": false` the first time
 it opens Settings or Analytics, so a name given since on another device stays, and drops
 them once the write succeeded. A write that failed leaves them for the next open.
 
-A quota alert names the account by its organization's name where there is one, before the
-share spent, and says no name where there is none, nor where the owner chose notifications
-whose text reveals nothing of the work.
+A quota alert names the account by the name the owner gave it, else by its organization's,
+before the share spent, and says no name where there is neither, nor where the owner chose
+notifications whose text reveals nothing of the work.
 
 ### The poll of the usage endpoint
 

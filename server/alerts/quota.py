@@ -19,8 +19,8 @@ next pass takes it up. A reading with no seat, or whose account is not known, ra
 nothing: there is no account to warn about. The key is the account's organization and the
 seat: a seat names one account of its organization for the week it names, whether its UUID
 is known or not, so the key holds when the UUID turns up later. The toast says the name the
-owner gave the organization's account (`quota.names`), and where there is none it says no
-name at all.
+owner gave the account, else the one given its organization (`quota.names`), and where
+there is neither it says no name at all.
 
 Freshness. Samples are kept only when a value changed (`quota.samples`), so a series'
 latest sample says when it last moved. One older than `forecast.FRESH_FOR` raises
@@ -65,7 +65,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from ..ops import toast
-from ..quota import forecast, names, samples, seats
+from ..quota import accounts, forecast, names, samples, seats
 from ..quota import store as quota_store
 from . import emit, messages
 from . import settings as alert_settings
@@ -97,6 +97,8 @@ class _Sample:
     resets_at: str
     #: The feed it belongs to (`seats.AccountSample.feed`), which the forecast reads.
     feed: str
+    #: Whose it is, for the toast's name.
+    account: accounts.Account
 
     @property
     def series(self) -> tuple[str, str, str, str]:
@@ -136,6 +138,7 @@ def _known(
             one.percent,
             one.resets_at,
             one.feed,
+            one.account,
         )
         for one in seats.account_samples(conn, since, kinds)
         if one.seat is not None and one.percent is not None and one.resets_at is not None
@@ -366,9 +369,17 @@ def due(
     if not dues:
         return []
     shown = _keep(conn, dues, moment)
-    # The owner's name for each account's organization, read once for every toast.
-    named = names.names_of(conn, (one.sample.organization for one in shown))
-    return [_show(one, named.get(one.sample.organization), moment, settings, zone) for one in shown]
+    # The owner's names for each account and its organization, read once for every toast.
+    named = names.names_of(
+        conn, (key for one in shown for key in names.keys_of(one.sample.account))
+    )
+    return [_show(one, _name(named, one.sample.account), moment, settings, zone) for one in shown]
+
+
+def _name(named: dict[str, str], account: accounts.Account) -> str | None:
+    """What the toast calls the account: the owner's name for it, else for its organization."""
+
+    return names.own_name(named, account) or named.get(account.organization)
 
 
 def after_pass(conn: sqlite3.Connection, *, now: dt.datetime | None = None) -> None:

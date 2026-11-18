@@ -53,7 +53,7 @@ from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from . import forecast
+from . import forecast, samples
 
 #: What an account known by its weekly reset alone is called after its organization.
 WEEKLY = "weekly:"
@@ -85,6 +85,28 @@ class Account:
 
         tail = self.account_uuid or f"{WEEKLY}{self.weekly_reset}"
         return f"{self.organization}/{tail}"
+
+
+#: What may follow `weekly:` in a key: the ISO weekday and the time, to ten minutes, in UTC.
+_WEEKLY_TAIL = (frozenset("1234567"), "T", frozenset("012"), frozenset("0123456789"), ":",
+                frozenset("012345"), "0", "Z")  # fmt: skip
+
+
+def is_account_key(key: str) -> bool:
+    """Whether `key` is an account's key (`Account.key`): an organization, a slash, and a
+    UUID or `weekly:` with a time of week. An organization id alone is not one."""
+
+    organization, slash, tail = key.partition("/")
+    if not slash or not organization or "/" in tail:
+        return False
+    if tail.startswith(WEEKLY):
+        slot = tail.removeprefix(WEEKLY)
+        return (
+            len(slot) == len(_WEEKLY_TAIL)
+            and all(char in shape for char, shape in zip(slot, _WEEKLY_TAIL, strict=True))
+            and slot[2:4] <= "23"
+        )
+    return samples.is_id(tail)
 
 
 def _week_of(seat: str) -> dt.datetime:
@@ -301,6 +323,7 @@ __all__ = [
     "WORKING_FOR",
     "Account",
     "Resolver",
+    "is_account_key",
     "organization_at",
     "weekly_reset",
 ]

@@ -282,7 +282,12 @@ class WeekRestartTests(_Quota):
 
 
 class NameTests(_Quota):
-    """The toast names the account by the name the owner gave its organization, or by none."""
+    """The toast names the account by the name the owner gave it, else the one given its
+    organization, or by none."""
+
+    #: The account a session's reading of the week resetting at `WEEK_RESET` (a Friday,
+    #: 09:00 UTC) is known by while no reading names its UUID.
+    WEEKLY = f"{ORG_A}/weekly:5T09:00Z"
 
     def test_a_session_s_reading_is_named_by_its_organization_s_name(self) -> None:
         # A session's reading names no account's UUID: the name is the organization's.
@@ -292,6 +297,27 @@ class NameTests(_Quota):
         self.assertEqual("Valkama: the week's quota passed 75%", texts(shown)[0])
         self.assertTrue(texts(shown)[1].startswith("Main account · 76% used"), texts(shown)[1])
         self.assertNotIn("Side account", "".join(texts(shown)))
+
+    def test_an_account_s_own_name_comes_before_its_organization_s(self) -> None:
+        names.write(self.conn, {"names": {ORG_A: "Team", self.WEEKLY: "Thursday seat"}})
+        self.statusline(60, week=76)
+        [shown] = self.evaluate(61)
+        self.assertTrue(texts(shown)[1].startswith("Thursday seat · 76% used"), texts(shown)[1])
+        self.assertNotIn("Team", "".join(texts(shown)))
+
+    def test_an_account_known_by_its_uuid_keeps_the_name_its_weekly_reset_was_given(
+        self,
+    ) -> None:
+        # The poll names the seat's UUID, so the session's reading is that account's.
+        self.poll(30, samples.Window("week", 70.0, WEEK_RESET))
+        names.write(self.conn, {"names": {ORG_A: "Team", self.WEEKLY: "Named before"}})
+        self.statusline(60, week=76)
+        [shown] = self.evaluate(61)
+        self.assertTrue(texts(shown)[1].startswith("Named before · 76% used"), texts(shown)[1])
+        names.write(self.conn, {"names": {f"{ORG_A}/acct-1": "Own"}})
+        self.statusline(HOUR, week=91)
+        [shown] = self.evaluate(HOUR + 1)
+        self.assertTrue(texts(shown)[1].startswith("Own · 91% used"), texts(shown)[1])
 
     def test_with_no_name_the_toast_says_what_it_said_before(self) -> None:
         names.write(self.conn, {"names": {ORG_B: "Side account"}})
