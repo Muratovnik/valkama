@@ -84,10 +84,16 @@ table {
 }
 
 /* A reference in a line of runs (`textRuns.ts`) is one word: a line breaks around it, never
-   at its hyphen. Code there is set in the monospace face (`code` below), each of its words a
-   box of its own (`.whole-word`). */
-.text-reference {
+   at its hyphen. Code there is set in the monospace face (`code` below) and breaks where the
+   line's words do, at a space and after a `/`, but never after a hyphen, which is held to the
+   character after it; a word of it wider than its line breaks inside rather than run out. */
+.text-reference,
+.text-code-join {
   white-space: nowrap;
+}
+
+.text-code {
+  overflow-wrap: anywhere;
 }
 
 /* A word no line breaks inside (`wholeWords.ts`): a box of its own, which goes to the next

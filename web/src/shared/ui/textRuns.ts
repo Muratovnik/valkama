@@ -9,9 +9,11 @@
  * - text breaks at a space, after a hyphen and after each `/` (`slashBreaks.ts`);
  * - a reference is one word to a reader, so no line break falls at its hyphen;
  * - code is set in the monospace face (`code` in `base.css`), without the backticks it was
- *   written between. Each of its words is a box of its own (`.whole-word`), so it does not break
- *   at a hyphen, and it breaks after a `/` as the rest of the line does; only a word wider than
- *   its line breaks inside, where it has to, and never runs past its box.
+ *   written between. It breaks at a space and after a `/` as the rest of the line does, and
+ *   never after a hyphen: each hyphen is held to the character after it (`.text-code-join`).
+ *   Only a word wider than its line breaks inside, where it has to, and never runs past its
+ *   box. Its lines are the line's own: a word of code drawn as a box of its own was one line to
+ *   a clamp however many it took, and a tile held to three lines grew to six.
  *
  * A selection copied is the text as written: each piece of code drawn here that the selection
  * holds whole goes to the clipboard between its backticks again. The page holds no
@@ -42,6 +44,8 @@ const TICK = '`'
 const HOST = 'data-text-runs'
 /** The class of a code run's element. */
 const CODE = 'text-code'
+/** The class that holds a hyphen in code to the character after it (`base.css`). */
+const CODE_JOIN = 'text-code-join'
 
 /** The runs as written: code back between its backticks. */
 export const writtenText = (runs: readonly TextRun[]) =>
@@ -57,20 +61,26 @@ function element(tag: string, className: string, text = '') {
   return node
 }
 
-/** A word of code: a box for each piece up to a `/`, and a place to break after each. */
-const codeWord = (word: string) =>
-  slashPieces(word).flatMap((piece, index) => [
-    ...(index ? [element('span', SLASH_BREAK)] : []),
-    element('span', 'whole-word', piece),
-  ])
+/** Code's characters with each run of hyphens held to the character after it, so no line breaks there. */
+const joined = (text: string): (Node | string)[] =>
+  text
+    .split(/(-+[^\s/-])/u)
+    .filter(Boolean)
+    .map((part) => (/^-+[^\s/-]$/u.test(part) ? element('span', CODE_JOIN, part) : part))
+
+/** A piece of code up to a `/` and the place to break after it, as `slashBreaks.ts` draws one. */
+function codePiece(piece: string, last: boolean): (Node | string)[] {
+  if (last) return joined(piece)
+  const span = element('span', SLASH_BREAK)
+  span.replaceChildren(...joined(piece))
+  return [span]
+}
 
 function code(text: string) {
   const node = element('code', CODE)
+  const pieces = slashPieces(text)
   node.replaceChildren(
-    ...text
-      .split(/(\s+)/u)
-      .filter(Boolean)
-      .flatMap((piece): (Node | string)[] => (/^\s+$/u.test(piece) ? [piece] : codeWord(piece))),
+    ...pieces.flatMap((piece, index) => codePiece(piece, index === pieces.length - 1)),
   )
   return node
 }

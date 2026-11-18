@@ -1,8 +1,8 @@
 /**
  * What a title's runs are drawn as (`textRuns.ts`): code in the monospace `code` element without
- * its backticks on the screen, each of its words a box that breaks after a `/` and not at its
- * hyphen, a reference in a box no line breaks inside, and the rest broken after each `/`. A
- * selection copied from inside it holds the backticks of each piece of code it holds whole.
+ * its backticks on the screen, broken after a `/` and never after a hyphen, which is held to the
+ * character after it; a reference in a box no line breaks inside; and the rest broken after each
+ * `/`. A selection copied from inside it holds the backticks of each piece of code it holds whole.
  */
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -15,37 +15,27 @@ function drawn(title: string) {
   return host
 }
 
+const texts = (scope: Element, selector: string) =>
+  Array.from(scope.querySelectorAll(selector), (node) => node.textContent)
+
 describe('a title drawn in runs', () => {
   it('draws its code in the `code` element without the backticks it was written between', () => {
     const host = drawn('Raise `STORE_SCHEMA_VERSION` to 18 after MAIN-12')
     expect(host.textContent).toBe('Raise STORE_SCHEMA_VERSION to 18 after MAIN-12')
-    const codes = host.querySelectorAll('code')
-    expect([...codes].map((code) => code.textContent)).toEqual(['STORE_SCHEMA_VERSION'])
-    expect([...codes[0].querySelectorAll('.whole-word')].map((word) => word.textContent)).toEqual([
-      'STORE_SCHEMA_VERSION',
-    ])
-    expect([...host.querySelectorAll('.text-reference')].map((one) => one.textContent)).toEqual([
-      'MAIN-12',
-    ])
+    expect(texts(host, 'code')).toEqual(['STORE_SCHEMA_VERSION'])
+    expect(texts(host, '.text-reference')).toEqual(['MAIN-12'])
   })
 
-  it('makes each piece of a path in code a box of its own, with a place to break after its `/`', () => {
-    const host = drawn('Move `web/src/work-item/a-b.ts` and `npm run build`')
+  it('gives a path in code a place to break after each `/`, and none after a hyphen', () => {
+    const host = drawn('Move `web/src/work-item/a-b.ts` and `npm run-all --fix`')
     const [path, command] = host.querySelectorAll('code')
-    expect([...path.querySelectorAll('.whole-word')].map((word) => word.textContent)).toEqual([
-      'web/',
-      'src/',
-      'work-item/',
-      'a-b.ts',
-    ])
-    expect(path.querySelectorAll('.slash-break')).toHaveLength(3)
-    // Words of code break at their spaces, which stay text between the boxes.
-    expect([...command.querySelectorAll('.whole-word')].map((word) => word.textContent)).toEqual([
-      'npm',
-      'run',
-      'build',
-    ])
-    expect(command.textContent).toBe('npm run build')
+    expect(texts(path, '.slash-break')).toEqual(['web/', 'src/', 'work-item/'])
+    // Each hyphen with the character after it, which no line break comes between.
+    expect(texts(path, '.text-code-join')).toEqual(['-i', '-b'])
+    expect(path.textContent).toBe('web/src/work-item/a-b.ts')
+    // A space in code stays a place to break; a hyphen after it is held to what follows.
+    expect(texts(command, '.text-code-join')).toEqual(['-a', '--f'])
+    expect(command.textContent).toBe('npm run-all --fix')
   })
 
   it('draws a title with no code as it did: a reference whole, the rest broken after a `/`', () => {
@@ -115,7 +105,7 @@ describe('a selection copied from a title drawn in runs', () => {
   it('leaves a piece of code it cuts without backticks, and the rest to the browser', () => {
     const host = drawn('Raise `STORE_SCHEMA_VERSION` to 18')
     document.body.append(host)
-    const word = host.querySelector('code .whole-word')?.firstChild
+    const word = host.querySelector('code')?.firstChild
     if (!word) throw new Error('no code drawn')
     // Part of the code alone: the browser copies what it shows.
     expect(

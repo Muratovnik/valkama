@@ -1389,9 +1389,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `v-work-item-title` on a surface that knows it holds a title, and `v-text-runs` with the
   runs its host hands it on a control that draws any text — `CommandList`,
   `SearchCombobox`, an editor's suggestion, a dialog's context line — which never cuts a
-  string of its own. A word of code is a box of its own, so it breaks after a `/` as the
-  rest of the title does and never at a hyphen; one wider than its line breaks inside and
-  stays in its box, and a surface that ends a title in an ellipsis or a clamp still does.
+  string of its own. Code breaks at a space and after a `/` as the rest of the title does,
+  and never after a hyphen, which is held to the character after it; a word of it wider
+  than its line breaks inside and stays in its box. Its lines are the title's own lines, so
+  a surface that ends a title in an ellipsis or a clamp still does: drawn as a box of its
+  own, one long word of code was one line to the board's clamp and its tile grew to six.
   A cut title's whole words are laid in the same runs. Everything that is text rather than
   drawing holds the title as written, backticks included: a name or a hint attribute, a
   description, a download, and a copy — a selection inside a drawn title puts each piece

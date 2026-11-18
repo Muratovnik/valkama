@@ -165,12 +165,15 @@ for (const width of [390, 1280]) {
       })
     }
 
-    for (const [surface, lines] of [
-      ['the board', 3],
-      ["the graph's card", 2],
+    for (const [surface, lines, kind, title] of [
+      ['the board', 3, 'a long title', LONG],
+      ["the graph's card", 2, 'a long title', LONG],
+      // One word of code over many lines was one line to the clamp when it was drawn as a box.
+      ['the board', 3, 'a word of code wider than its line', WIDE_WORD],
+      ["the graph's card", 2, 'a word of code wider than its line', WIDE_WORD],
     ] as const) {
-      test(`a title with code is still cut to ${lines} lines in ${surface}`, async ({ page }) => {
-        const text = await TITLE_SURFACES[surface](page, LONG)
+      test(`${kind} with code is still cut to ${lines} lines in ${surface}`, async ({ page }) => {
+        const text = await TITLE_SURFACES[surface](page, title)
         await expect(text.locator('code').first()).toBeVisible()
         const cut = await text.evaluate((element) => {
           const style = getComputedStyle(element)
