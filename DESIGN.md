@@ -1195,17 +1195,24 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   there, what that leaves out and when the reset is. The corridor runs from now to the reset in
   the readings' hue under the same hatch, a band between the slower and the faster pace for a
   week and a ribbon to 100 % at the run-out and flat on for five hours, and the legend names it
-  «Forecast». The arrows walk the readings, then «now», then the forecast. A step line opens on
+  «Forecast». Where the window's count restarted inside it, its reset unchanged, the line falls
+  at a reading, and the restart is a place on the line at that moment with its hint, painted only
+  while pointed at or focused as the others are: the forecast's ring around the fall, «Counter
+  zeroed» with its moment and that the window's reset time did not change, the fact alone, since
+  the readings cannot tell what zeroed it. The arrows walk the readings, each restart before the
+  reading at its moment, then «now», then the forecast. A step line opens on
   «To now and the forecast», from the window's start to now and the forecast past it, with a
   switch to the whole window up to its reset: drawn to the reset, a running week left its
   readings the first third of the plot. Where the span ends before the reset the corridor runs
   to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
   reset by the page's clock, even one read before it, draws neither the corridor nor the places
-  and shows its whole window alone, its line held to the moment it was read. A 0 % has no fill,
+  past its readings and shows its whole window alone, its line held to the moment it was read,
+  its restarts still marked on it. A 0 % has no fill,
   and a window with no figure draws the track alone; the fill stands apart from the ground and
   the track by lightness, so both read in grayscale and under a forced palette in its inks,
   where the hatch and the rings take its ink too. Their table twins are `WindowBarTable` and
-  `StepLineTable`, each holding the forecast as well.
+  `StepLineTable`, each holding the forecast as well, and the second each restart as a row
+  before the reading at its moment.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, is held to about the

@@ -143,6 +143,9 @@ export const analyticsQuotaMessages = {
       silent: 'Silent {for}; last reading at {at}, from {source}',
       forecast: 'Forecast by the reset',
       past: 'The reset is past the right edge; Whole window shows it',
+      restart: 'Counter zeroed',
+      restartReset: 'Window reset time unchanged: {at}',
+      restarts: 'Counter zeroed at {at}.',
     },
   },
   ru: {
@@ -272,6 +275,9 @@ export const analyticsQuotaMessages = {
       silent: 'Молчит {for}; последнее показание в {at}, источник: {source}',
       forecast: 'Прогноз к сбросу',
       past: 'Сброс — за правым краем; его показывает «Всё окно»',
+      restart: 'Счётчик обнулён',
+      restartReset: 'Время сброса окна не изменилось: {at}',
+      restarts: 'Счётчик обнулён в {at}.',
     },
   },
 } as const

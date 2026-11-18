@@ -123,3 +123,24 @@ describe('a week’s forecast below 100 %', () => {
     expect(said('ru', window)).toBe('К сбросу: от 57 % до 61 %')
   })
 })
+
+describe('a restart of a window’s count', () => {
+  it('is said as the fact, with its moment and the reset that did not move, in both languages', () => {
+    // A week resetting in two days, its count restarted at 09:00 on the answer's day.
+    const restarted = { ...week(5, 48 * HOUR, 20, 30), restarts: ['2026-11-11T09:00:00.000+03:00'] }
+    for (const [locale, name, reset] of [
+      ['en', 'Counter zeroed', 'Window reset time unchanged: '],
+      ['ru', 'Счётчик обнулён', 'Время сброса окна не изменилось: '],
+    ] as const) {
+      const [restart, ...more] = wordsIn(locale).restarts(restarted, TODAY)
+      expect(more).toHaveLength(0)
+      expect(restart).toMatchObject({ name, figure: '09:00', timeText: '09:00', key: 'restart-0' })
+      expect(restart?.at).toBe(Date.parse('2026-11-11T06:00:00.000Z'))
+      expect(restart?.notes).toHaveLength(1)
+      // The reset two days on, said with its day as every moment off the answer's day is.
+      expect(restart?.notes[0]?.startsWith(reset)).toBe(true)
+      expect(restart?.notes[0]).toMatch(/13.*10:00$/u)
+    }
+    expect(wordsIn('en').restarts(week(5, 48 * HOUR, 20, 30), TODAY)).toEqual([])
+  })
+})

@@ -41,12 +41,14 @@ export interface StepTargetPlace {
   /** The moments it covers, for a frame stretched to it with the keyboard. */
   covers: StepSpan
   hint: ReturnType<typeof targetHint>
-  kind: 'now' | 'reset'
+  /** «Now», the forecast at the reset, or a restart of the count on the line (`useStepWalk`). */
+  kind: 'now' | 'reset' | 'restart'
   /**
    * Where its mark stands: from the top of what it marks (`high`) to its foot (`low`), as shares
-   * of the drawing's height, one place for «now», and at its stretch's start or end (`side`).
+   * of the drawing's height, one place for «now», and at its stretch's start, middle or end
+   * (`side`).
    */
-  mark: { high: number; low: number; side: '0%' | '100%' }
+  mark: { high: number; low: number; side: '0%' | '50%' | '100%' }
   /**
    * The box the keyboard's ring is drawn on: from `start` to the plot's end, or `size` wide from
    * `start`, or the last `size` of the plot where it has no `start`.

@@ -1,10 +1,11 @@
 /*
- * The marks of a step line (`StepLine`, `useStepAhead`), read as its own scoped style: each
- * reading's dot and the box it stands in, the corridor of the forecast past them, the hatch over the whole field cut to the corridor's outline, and the marks
- * of the two places past the readings — «now» and the forecast at the reset — each a ring in the
- * line's hue around the ground, never a reading's dot. Every mark is painted only while pointed
- * at or focused, its box kept at rest for its hint. None of them takes the pointer: one layer over
- * the field does, for all of them (`StepLine`).
+ * The marks of a step line (`StepLine`, `useStepAhead`, `useStepWalk`), read as its own scoped
+ * style: each reading's dot and the box it stands in, the corridor of the forecast past them, the
+ * hatch over the whole field cut to the corridor's outline, and the marks of its places — a
+ * restart of the count on the line, and past the readings «now» and the forecast at the reset —
+ * each a ring in the line's hue around the ground, never a reading's dot. Every mark is painted
+ * only while pointed at or focused, its box kept at rest for its hint. None of them takes the
+ * pointer: one layer over the field does, for all of them (`StepLine`).
  */
 
 /* A reading: a mark in the line's hue, ringed in the ground, at its step's start and value
@@ -108,8 +109,10 @@
 }
 
 /* The forecast: a ring around the band's end, from its faster edge (`--step-high`) to its slower
-   (`--step-low`), at the plot's end, as tall as a round ring where the two meet. */
-.step-reset-mark {
+   (`--step-low`), at the plot's end, as tall as a round ring where the two meet. A restart: the
+   same ring around the line's fall at its moment, from the share before it to the share after. */
+.step-reset-mark,
+.step-restart-mark {
   inset-block-start: calc(
     var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-high) - var(--space-1)
   );
@@ -132,6 +135,8 @@
 }
 
 .step-reset-mark.step-shown,
-.step-target:focus-visible > .step-reset-mark {
+.step-target:focus-visible > .step-reset-mark,
+.step-restart-mark.step-shown,
+.step-target:focus-visible > .step-restart-mark {
   scale: 1.5 1;
 }

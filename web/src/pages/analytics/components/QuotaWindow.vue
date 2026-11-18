@@ -30,7 +30,9 @@
  * silent window's line stops at its last reading, since nothing was measured after it, while a
  * fresh one's holds to now, a source writing a reading only when a value changes. A window past
  * its reset by the panel's moment has neither and shows its whole window alone, even
- * where its answer was read before the reset.
+ * where its answer was read before the reset. Where the window's count restarted inside it, the
+ * line marks each restart at its fall and the table lists it among the readings
+ * (`restarts`): the line would otherwise fall to nothing with no word of why.
  *
  * What used the window is the work Valkama recorded on the account since the window's start, by
  * its API price estimate, on an axis of its own (`QuotaWindowSpend`). A window that names no start
@@ -116,6 +118,7 @@ const bar = computed(() => {
 /** Whether the window has a pace: it named its start and its reset. */
 const paced = computed(() => props.window.even_percent !== null)
 const points = computed(() => words.points(props.window, props.today))
+const restarts = computed(() => words.restarts(props.window, props.today))
 /** Whether what used the window can be read: the account has a seat and the window a start. */
 const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
 /** What opens the side panel on what used the window; none outside the page. */
@@ -270,6 +273,7 @@ const readingsCaption = computed(() =>
         :legend="legend"
         :ahead="ahead"
         :ended="ended"
+        :restarts="restarts"
       />
       <StepLineTable
         v-else
@@ -278,6 +282,7 @@ const readingsCaption = computed(() =>
         :points="points"
         :words="stepWords"
         :forecast="ahead?.forecast ?? null"
+        :restarts="restarts"
       />
       <VButton
         v-if="spends && openSpend"

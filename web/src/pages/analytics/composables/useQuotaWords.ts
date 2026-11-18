@@ -13,8 +13,9 @@
  * window with no figure says so in words, so no source, a silent window and a fresh 0 % never
  * read alike. A forecast is said as «Forecast · …», the name the legend gives the hatch of a
  * drawing that hatches it, and what a step line points at past its readings — the window now and its
- * forecast at the reset — is said here for its hint and its table. Nothing here adds two shares,
- * and nothing names money.
+ * forecast at the reset — is said here for its hint and its table, as is where the window's count
+ * restarted inside it, said as the fact alone. Nothing here adds two shares, and nothing names
+ * money.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -32,7 +33,7 @@ import type {
   QuotaWindow,
 } from '@/shared/api/analyticsApi.ts'
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
-import type { StepPoint, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
+import type { StepPoint, StepRestart, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
 
 /** Whether a window is silent at `now` (ms), by the answer's threshold `freshFor` (s). */
 const silent = (window: QuotaWindow, now: number, freshFor: number) =>
@@ -279,16 +280,37 @@ export function useQuotaWords() {
     })
 
   /**
-   * The step line's words for a reader who cannot see it: every reading with its moment, and the
-   * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`).
+   * Where a window's count restarted inside it, as its step line marks each and its table lists
+   * it: «Counter zeroed» with its moment, and that the window's reset did not move. The words
+   * name the fact alone, since the samples cannot tell what zeroed it.
    */
-  const readingsLabel = (
+  const restarts = (window: QuotaShareWindow, today: string): StepRestart[] =>
+    window.restarts.map((restart, index) => {
+      const at = moment(restart, today)
+      return {
+        key: `restart-${index}`,
+        at: Date.parse(restart),
+        timeText: at,
+        name: t('analytics.quota.readings.restart'),
+        figure: at,
+        notes: window.resets_at
+          ? [t('analytics.quota.readings.restartReset', { at: moment(window.resets_at, today) })]
+          : [],
+      }
+    })
+
+  /**
+   * The step line's words for a reader who cannot see it: every reading with its moment, the
+   * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`), and
+   * the moments its count restarted, where it did.
+   */
+  function readingsLabel(
     account: QuotaAccount,
     window: QuotaShareWindow,
     now: number,
     today: string,
-  ) =>
-    t('analytics.quota.readings.label', {
+  ) {
+    const label = t('analytics.quota.readings.label', {
       forecast: forecastAt(window, now, today),
       window: windowName(window),
       account: accountName(account),
@@ -300,6 +322,11 @@ export function useQuotaWords() {
         )
         .join(', '),
     })
+    const restarted = restarts(window, today).map((restart) => restart.timeText)
+    return restarted.length
+      ? `${label} ${t('analytics.quota.readings.restarts', { at: restarted.join(', ') })}`
+      : label
+  }
 
   return {
     accountName,
@@ -318,6 +345,7 @@ export function useQuotaWords() {
     otherState,
     points,
     readingsLabel,
+    restarts,
     reset,
     sectionName,
     share,
