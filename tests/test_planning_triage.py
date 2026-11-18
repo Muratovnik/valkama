@@ -16,13 +16,19 @@ files the findings, which stand in triage with no basis.
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest import mock
 
-from server.planning import api, leases, model, questions, sweep, triage
-from tests.test_planning_closing import APPLY, AS_B, MERGE, UPDATE, Tree
+from server.planning import api, deferral, interactions, leases, model, questions, sweep, triage
+from server.planning.routing import PlanningRouting
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
+from tests.registry_fixtures import project_binding, project_entry, registry_bytes
+from tests.test_planning_closing import APPLY, AS_B, MERGE, NOW, UPDATE, Tree
 
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
 QUESTION = {"kind": "question", "prompt": "Is this one change or two?", "fields": [FIELD]}
@@ -45,6 +51,7 @@ DECISION = {
 }
 ANSWER = "/api/planning/request/answer"
 MOVE_OUT = "/api/planning/work-item/move-out"
+PARTICIPATION = "/api/planning/participation"
 BATCH = "apply_work_item_changes"
 #: A deferral whose day comes on the next clock tick, after which the sweep brings it back.
 DEFER_UNTIL = "2026-11-18"
@@ -512,3 +519,110 @@ class DeclarationTests(Stack):
                 (T1,),
             )
         self.conn.rollback()
+
+
+class DueTests(Stack):
+    """The line that the stack is due for a review, beside the person's list of questions.
+
+    The oracle is the rule of the line: the space's reminder is on, and the items of its
+    stack with no mark are at least `triage_count`, or the oldest of them entered at
+    least `triage_age_days` days before the clock reads. The line names the space, counts
+    those items and says when the oldest entered; it is no question, so the questions
+    the list holds stay as they were.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.db = os.environ["VALKAMA_DB"]
+        root = Path(self.db).parent
+        self.space_ref = {
+            "data_scope_id": read_store_metadata(self.conn)["data_scope_id"],
+            "space_key": "MAIN",
+        }
+        self.registry = root / "projects.json"
+        self.registry.write_bytes(
+            registry_bytes(
+                [
+                    project_entry(
+                        "app",
+                        root,
+                        bindings=[project_binding("app", planning_space_entity(self.space_ref))],
+                    )
+                ]
+            )
+        )
+
+    def setting(self, key: str, value: object) -> None:
+        self.person(PARTICIPATION, space="MAIN", key=key, value=value)
+
+    def listed(self, **parameters: str) -> dict:
+        """The person's read of every source's open questions, as the interface asks it."""
+
+        routing = PlanningRouting(self.conn, self.db, registry_reader=self.registry.read_bytes)
+        asked = {"scope_kind": "global", "status": "pending", **parameters}
+        return interactions.request_list(routing, {key: [value] for key, value in asked.items()})
+
+    def filed_at(self, title: str, moment: str) -> str:
+        reference = self.found(title)
+        self.entries_at(reference, moment)
+        return reference
+
+    def five_due(self) -> tuple[dict, list[str]]:
+        """O2's stack: the list read with four findings, then a fifth filed; the line stands.
+
+        Returns the first read and the five findings, oldest first."""
+
+        self.setting("triage_count", 5)
+        self.setting("triage_age_days", 365)
+        filed = [
+            self.filed_at(f"f{number}", f"2026-11-17T0{number}:00:00Z") for number in range(1, 5)
+        ]
+        before = self.listed()
+        filed.append(self.filed_at("f5", "2026-11-17T09:00:00Z"))
+        line = {
+            "space": {"key": "MAIN", "name": "Crew"},
+            "count": 5,
+            "oldest_at": "2026-11-17T01:00:00Z",
+        }
+        self.assertEqual([line], self.listed()["triage_due"])
+        return before, filed
+
+    def test_the_line_appears_at_the_count(self) -> None:
+        before, _filed = self.five_due()
+
+        self.assertEqual([], before["triage_due"], "four findings are under the count of five")
+
+    def test_the_line_appears_at_the_age(self) -> None:
+        self.setting("triage_count", 100)
+        self.setting("triage_age_days", 10)
+        entered = deferral.stamp(NOW - timedelta(days=9))
+        self.filed_at("f1", entered)
+
+        self.assertEqual([], self.listed()["triage_due"], "nine days are under the age of ten")
+        with mock.patch.object(leases, "utc_now", lambda: NOW + timedelta(days=1)):
+            due = self.listed()["triage_due"]
+
+        self.assertEqual(
+            [{"space": {"key": "MAIN", "name": "Crew"}, "count": 1, "oldest_at": entered}], due
+        )
+
+    def test_the_line_goes_once_the_stack_is_reviewed(self) -> None:
+        before, filed = self.five_due()
+
+        for reference in filed:
+            self.agent(BATCH, AS_B, id=reference, triage_seen=True)
+
+        after = self.listed()
+        self.assertEqual([], after["triage_due"])
+        self.assertEqual(
+            (before["total"], before["items"]),
+            (after["total"], after["items"]),
+            "the line was never a question: the list's count is what it was before it",
+        )
+
+    def test_the_line_follows_the_reminder(self) -> None:
+        self.five_due()
+
+        self.setting("triage_reminder", "off")
+
+        self.assertEqual([], self.listed()["triage_due"])

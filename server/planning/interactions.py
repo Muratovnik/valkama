@@ -21,7 +21,7 @@ from ..store_identity.refs import (
     route_entity_parameter,
     validate_planning_space_ref,
 )
-from . import api, model, read_model, requests, service
+from . import api, model, participation, read_model, requests, service, triage
 from .routing import PlanningRouting
 
 READ_PATHS = frozenset(
@@ -353,6 +353,10 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     Each source is read whole, so the page is cut from the sorted list of all of them
     and `total` counts them all; the answer stays one page however many there are,
     and a reader takes the next from `offset` while `has_more` says so.
+
+    Beside the questions stands `triage_due`: a line for each space read whose stack
+    of triage waits past the owner's thresholds (`triage.due`). It is no question, so
+    it is no item, counts in no total and takes no answer.
     """
 
     limit = _limit(parameters, 100, requests.PAGE)
@@ -377,6 +381,7 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         resources = [space_ref]
     items: list[dict] = []
     coverage: list[dict] = []
+    due: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for space_ref in resources:
         # A global read names why a source was skipped; an exact one refuses
@@ -404,7 +409,14 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
                                 "request": record,
                             }
                         )
+                line = triage.due(
+                    conn,
+                    participation.load(conn),
+                    read_model.space_identity(conn, space_ref["space_key"]),
+                )
             entry.update(status="searched", reason=None)
+            if line is not None:
+                due.append(line)
         except (api.PlanningHttpError, ValueError, sqlite3.Error, KeyError, TypeError):
             if scope_kind != "global":
                 raise
@@ -420,6 +432,7 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         "limit": limit,
         "total": len(items),
         "has_more": offset + limit < len(items),
+        "triage_due": due,
     }
 
 
