@@ -118,9 +118,11 @@ class CostTests(CostCase):
 YEAR = 365
 YEAR_STRETCHES = 25_000
 ACCOUNTS = ("acct-1", "acct-2", "acct-3")
-#: The stretches and the freshness, and the seats' two reads: the samples, each with the
-#: organization its session worked for then, and the accounts their seats name.
-MAX_SEAT_STATEMENTS = 4
+#: The stretches and the freshness, and the seats' three reads: the samples, each with the
+#: organization its session worked for then; every seat an account's UUID names; and every
+#: sample of the seats read, whatever its time, which say each seat's account
+#: (`quota.accounts.Resolver`). None is a read per seat or per stretch.
+MAX_SEAT_STATEMENTS = 5
 
 
 class SeatCostCase(UsageStore):
