@@ -40,6 +40,8 @@ from server.planning import (
     sweep,
     tools,
 )
+from server.planning import store as planning_store
+from tests.web_lists import WEB_API, web_list
 
 AGENT = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a")
 #: A subagent of the same session: what it asks, the session's conversation follows.
@@ -2781,6 +2783,20 @@ class DescriptionTests(unittest.TestCase):
         self.assertEqual(500, schema["checklist_reason"]["maxLength"])
         step = schema["checklist"]["properties"]["items"]["items"]["anyOf"][1]
         self.assertEqual({"id", "text", "done", "clarifies"}, set(step["properties"]))
+
+
+class WebListTests(unittest.TestCase):
+    """The web's strict reader of a question refuses a purpose, a point or an outcome its
+    lists lack, and with it the whole list of questions: its lists are the store's."""
+
+    def test_the_web_reads_every_purpose_a_question_has(self) -> None:
+        listed = web_list(WEB_API / "inputRequestModel.ts", "REQUEST_PURPOSES")
+        self.assertEqual(list(request_model.PURPOSES), listed)
+
+    def test_the_web_reads_every_point_and_outcome_of_a_waiting_write(self) -> None:
+        path = WEB_API / "inputRequestAction.ts"
+        self.assertEqual(list(planning_store.PENDING_POINTS), web_list(path, "ACTION_POINTS"))
+        self.assertEqual(list(planning_store.PENDING_OUTCOMES), web_list(path, "ACTION_OUTCOMES"))
 
 
 if __name__ == "__main__":

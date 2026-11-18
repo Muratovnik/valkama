@@ -1,4 +1,5 @@
 import { boundedList, boundedText, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
+import { actionSchema } from '@/shared/api/inputRequestAction.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { planningCoverageSchema, planningTargetSchema } from '@/shared/api/planningTarget.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
@@ -84,6 +85,25 @@ const versionSchema = strictObject({
   answered_at: boundedText(ISO, 96),
 })
 
+/**
+ * What a question asks for beyond an answer, as the store's CHECK holds them: a review, a
+ * goal's confirmation and work that came back, then the owner's part in an agent's writes —
+ * a goal, a task in a goal, a cancel, a condition, the consent of the sessions a cancel
+ * stops, and a finding. A strict reader refuses a purpose it does not list, and with it the
+ * whole list, so the list grows with the server's in the same release.
+ */
+const REQUEST_PURPOSES = [
+  'review',
+  'confirm',
+  'return',
+  'goal',
+  'task',
+  'cancel',
+  'condition',
+  'consent',
+  'triage',
+] as const
+
 const requestSchema = strictObject({
   request_id: boundedText(UUID, 36),
   work_item_id: boundedText(UUID, 36),
@@ -136,8 +156,10 @@ const requestSchema = strictObject({
     .nullable(),
   /** The comment a list stands under; null for any other question. */
   comment_id: positiveInt().nullable().optional(),
-  /** What the owner's answer carries out: review, confirm or return; null for any other question. */
-  purpose: z.enum(['review', 'confirm', 'return']).nullable(),
+  /** What the owner's answer carries out; null for any other question. */
+  purpose: z.enum(REQUEST_PURPOSES).nullable(),
+  /** The write the question is about, which waits for the owner; only on such a question. */
+  action: actionSchema.optional(),
 })
   .refine(
     (request) => new Set(request.fields.map((field) => field.id)).size === request.fields.length,
