@@ -899,7 +899,16 @@ class ProposedGoalTests(SettingHarness):
             (question["purpose"], question["action_id"], question["addressee"], question["status"]),
         )
         self.assertEqual([waits["question"]], self.owners_list())
+        self.assertEqual(
+            "An agent proposes the goal ALPHA-1: A goal of the agent's own. Take it on, put it"
+            " off, or drop it.",
+            question["prompt"],
+        )
         [choice, until, cancels] = json.loads(question["fields_json"])
+        self.assertEqual(
+            ["Take it on", "Put it off", "Drop it"],
+            [option["label"] for option in choice["options"]],
+        )
         self.assertEqual(
             [("do", True), ("later", False), ("drop", False)],
             [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],
@@ -1178,6 +1187,15 @@ class TaskInGoalTests(SettingHarness):
             [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],
         )
         self.assertEqual(("until", "later"), (until["id"], until["under"]["option"]))
+        self.assertEqual(
+            f"An agent files the task {task} in {self.goal}: A new task in the goal. Take it on,"
+            " put it off, move it out of the goal, or drop it.",
+            question["prompt"],
+        )
+        self.assertEqual(
+            ["Take it on", "Put it off", "Move it out of the goal", "Drop it"],
+            [option["label"] for option in choice["options"]],
+        )
         # The ready task moved under the goal stays where it was, and waits on its own question.
         card = self.card(moving)
         self.assertEqual(("ready", None), (card["state"]["category"], card["parent_id"]))
@@ -1185,7 +1203,16 @@ class TaskInGoalTests(SettingHarness):
         self.assertEqual(
             ("task_in_goal", f"moved {moving} under {self.goal}"), (waits["point"], waits["what"])
         )
-        self.assertEqual("task", self.request(waits["question"])["purpose"])
+        asked = self.request(waits["question"])
+        self.assertEqual(
+            ("task", "Leave it where it was"),
+            (asked["purpose"], json.loads(asked["fields_json"])[0]["options"][2]["label"]),
+        )
+        self.assertEqual(
+            f"An agent moves the task {moving} into {self.goal}: Ready task u. Take it on, put it"
+            " off, leave it where it was, or drop it.",
+            asked["prompt"],
+        )
         self.assertEqual(
             [filed["waits_for_owner"]["question"], waits["question"]], self.owners_list()
         )
@@ -1366,8 +1393,17 @@ class CancelOutsideTests(SettingHarness):
             ("cancel", action.id, None, "pending"),
             (question["purpose"], question["action_id"], question["addressee"], question["status"]),
         )
-        self.assertIn(REASON, question["prompt"])
+        # The prompt says the answers as the options name them, as every point's does.
+        title = self.card(self.task)["title"]
+        self.assertEqual(
+            f"An agent cancels {self.task}, filed outside its own work: {title}. Its reason:"
+            f" {REASON}. Cancel it, or keep it.",
+            question["prompt"],
+        )
         [choice, cancels] = json.loads(question["fields_json"])
+        self.assertEqual(
+            ["Cancel it", "Keep it"], [option["label"] for option in choice["options"]]
+        )
         self.assertEqual(
             [("cancel", True), ("keep", False)],
             [(option["id"], bool(option.get("recommended"))) for option in choice["options"]],

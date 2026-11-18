@@ -1003,7 +1003,10 @@ def _ask_about_task(
             f"accepted {reference} under {goal}",
             seen={"parent": goal_id},
         )
-        prompt = f"An agent files the task {reference} in {goal}: {row['title']}."
+        prompt = (
+            f"An agent files the task {reference} in {goal}: {row['title']}. Take it on, put"
+            " it off, move it out of the goal, or drop it."
+        )
     else:
         done = "moved" if moved_from["acceptance"] is not None else "accepted"
         proposal = pending.Proposal(
@@ -1015,14 +1018,17 @@ def _ask_about_task(
                 "accepted": moved_from["acceptance"] is not None,
             },
         )
-        prompt = f"An agent moves the task {reference} into {goal}: {row['title']}."
+        prompt = (
+            f"An agent moves the task {reference} into {goal}: {row['title']}. Take it on,"
+            " put it off, leave it where it was, or drop it."
+        )
     return pending.ask(
         conn,
         identity,
         "task_in_goal",
         proposal,
         purpose="task",
-        prompt=prompt + " Take it on, put it off, leave it out of the goal, or drop it.",
+        prompt=prompt,
         fields=request_model.fields(request_model.task_fields(moving=moved_from is not None)),
         author=author,
     )
