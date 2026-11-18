@@ -1,0 +1,160 @@
+{
+  "interface_version": "valkama-planning-requests",
+  "target": {
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
+      "space_key": "MAIN"
+    },
+    "reference": "MAIN-30",
+    "writable": true
+  },
+  "request": {
+    "request_id": "00000000-0000-4000-8000-000000000059",
+    "work_item_id": "00000000-0000-4000-8000-000000000060",
+    "reference": "MAIN-30",
+    "title": "Group of export findings",
+    "kind": "question",
+    "prompt": "Group of 2 items: «Group of export findings»",
+    "fields": [
+      {
+        "id": "answer",
+        "label": "Answer",
+        "options": [
+          {
+            "id": "do",
+            "label": "Do"
+          },
+          {
+            "id": "later",
+            "label": "Later",
+            "recommended": true,
+            "why": "One fix"
+          },
+          {
+            "id": "drop",
+            "label": "Not to do"
+          }
+        ],
+        "required": true,
+        "type": "choice"
+      },
+      {
+        "id": "items",
+        "label": "Items to do",
+        "options": [
+          {
+            "id": "main-28",
+            "label": "MAIN-28 · Finding in the export",
+            "recommended": true
+          },
+          {
+            "id": "main-29",
+            "label": "MAIN-29 · Another finding in the export",
+            "recommended": true
+          }
+        ],
+        "required": false,
+        "type": "multi_choice"
+      },
+      {
+        "description": "The agent puts it off until 2026-12-01; left empty, that stands.",
+        "id": "until",
+        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "options": [],
+        "required": false,
+        "type": "text",
+        "under": {
+          "field": "answer",
+          "option": "later"
+        }
+      },
+      {
+        "id": "cancels",
+        "label": "The list token, for a goal or stage with open work under it",
+        "options": [],
+        "required": false,
+        "type": "text",
+        "under": {
+          "field": "answer",
+          "option": "drop"
+        }
+      }
+    ],
+    "answers": null,
+    "own": null,
+    "field_notes": null,
+    "note": null,
+    "answer_version": 0,
+    "status": "pending",
+    "author": "agent",
+    "answered_by": "",
+    "execution_id": null,
+    "session_id": null,
+    "addressee": null,
+    "expires_at": null,
+    "created_at": "2026-01-02T03:04:05.000000Z",
+    "resolved_at": null,
+    "revision": 0,
+    "expired_reason": null,
+    "comment_id": null,
+    "purpose": "triage",
+    "action": {
+      "id": "00000000-0000-4000-8000-000000000061",
+      "point": "finding",
+      "asked_by": "agent",
+      "asked_at": "2026-01-02T03:04:05.000000Z",
+      "reason": "One fix",
+      "proposed": {
+        "answer": "later",
+        "conditions": [
+          "The export writes every field"
+        ],
+        "items": [
+          {
+            "reference": "MAIN-28",
+            "title": "Finding in the export"
+          },
+          {
+            "reference": "MAIN-29",
+            "title": "Another finding in the export"
+          }
+        ],
+        "until": "2026-01-02",
+        "why": "One fix"
+      },
+      "outcome": null,
+      "cancel_list": {
+        "cancels": [
+          {
+            "reference": "MAIN-28",
+            "title": "Finding in the export",
+            "kind": "task",
+            "state": {
+              "key": "triage",
+              "name": "Triage",
+              "category": "triage"
+            },
+            "container_state": null,
+            "holder": []
+          },
+          {
+            "reference": "MAIN-29",
+            "title": "Another finding in the export",
+            "kind": "task",
+            "state": {
+              "key": "triage",
+              "name": "Triage",
+              "category": "triage"
+            },
+            "container_state": null,
+            "holder": []
+          }
+        ],
+        "dependents": [],
+        "list_token": "de58e5f2ca845941"
+      }
+    },
+    "by_person": null,
+    "history": []
+  }
+}

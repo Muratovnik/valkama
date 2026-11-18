@@ -700,6 +700,7 @@ def create_work_item(
     acceptance: object = None,
     projects: object = None,
     claimed: bool = False,
+    grouped: bool = False,
 ) -> dict:
     """A new item, placed where the work model puts it, accepted when it is accepted work.
 
@@ -727,7 +728,10 @@ def create_work_item(
     the executor; without it the active state is refused (`executor`).
     `projects` names the projects a task changes, each `named`
     (`item_projects`); a goal or stage names none. `space` may be left out: the
-    item then lies where `item_projects.placement` puts it.
+    item then lies where `item_projects.placement` puts it. `grouped` says the goal is
+    a triage review's group, which the same write proposes (`groups.propose`): the
+    setting `proposed_goal` is read for the group there, so the goal lies in triage
+    here and nobody is asked about it yet.
     """
 
     named_kind = model.public_kind(kind)
@@ -744,7 +748,7 @@ def create_work_item(
     parent_row = _parent_row(conn, space_id, parent)
     parent_id = None if parent_row is None else str(parent_row["work_item_id"])
     entry = _entry_basis(named)
-    proposed = _proposed_goal(conn, space_id, stored_kind, parent_id, entry)
+    proposed = None if grouped else _proposed_goal(conn, space_id, stored_kind, parent_id, entry)
     if proposed == participation.AGENT:
         entry = model.AGENT_BASIS
     given = _given(conn, parent_id, entry)
@@ -911,6 +915,18 @@ _ACCEPTANCE_POINTS = {
 }
 
 
+@dataclasses.dataclass(frozen=True)
+class Decided:
+    """An agent's own decision a move carries out where the owner's setting left it to the
+    agent, as a triage review's group (`groups.propose`): the point of the summary of
+    decisions and the line its mark says. A move into accepted work that carries one out
+    gives an item with no basis the basis `agent`, and the mark stands on the event that
+    recorded the move, its `accepted` or its `transitioned`."""
+
+    point: str
+    what: str
+
+
 def _accepted(
     conn: sqlite3.Connection,
     identity: str,
@@ -920,6 +936,7 @@ def _accepted(
     named: str | None = None,
     in_goal: bool = False,
     ruled: str | None = None,
+    decided: Decided | None = None,
 ) -> int:
     """Record that a write accepted the item on `basis`: its `accepted` event, which it
     answers, and the mark of an acceptance an agent makes alone in the summary of decisions.
@@ -929,10 +946,13 @@ def _accepted(
     basis decides, and under such a chain, where the order of bases gives `inherited`,
     the basis the write names: the agent's word that the owner gave the work is
     `assignment` whatever basis the order gives. `ruled` is the label a rule accepted by.
+    A decision the move carries out (`decided`) is marked as it says instead.
     """
 
     accepted = _log(conn, identity, "accepted", _accepted_detail(basis, ruled), author)
-    if calls.from_agent():
+    if decided is not None:
+        decisions.mark(conn, accepted, decided.point, decided.what)
+    elif calls.from_agent():
         said = named if basis == "inherited" else basis
         point = "task_in_goal" if in_goal else _ACCEPTANCE_POINTS.get(said or "")
         if point is not None:
@@ -1963,6 +1983,22 @@ def transition_work_item(
     )
 
 
+def decided_move(
+    conn: sqlite3.Connection,
+    reference: str,
+    state: str,
+    *,
+    reason: str,
+    decided: Decided,
+    author: str | None,
+) -> dict:
+    """Move an item as an agent's own decision the owner's setting left to the agent, a
+    write Valkama composes and so not gated: into accepted work on the basis `agent`, or
+    to cancelled, marked in the summary of decisions as `decided` says (`Decided`)."""
+
+    return _transition(conn, reference, state, reason=reason, author=author, decided=decided)
+
+
 #: The refusal a launch's put-back is spared: it returns a task to where it stood.
 _PUT_BACK_SPARES = frozenset({"deferred"})
 
@@ -2069,13 +2105,16 @@ def _transition(
     following: object = None,
     gated: bool = False,
     agreed: str | None = None,
+    decided: Decided | None = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`; `ruled` is the
     label whose rule accepts the item on this move (`label_rule`); `agreed` is the line
-    of the summary of decisions a cancel the sessions agreed to marks (`cancel_agreed`)."""
+    of the summary of decisions a cancel the sessions agreed to marks (`cancel_agreed`);
+    `decided` the agent's own decision the move carries out (`decided_move`)."""
 
     row = _row_for_write(conn, reference, expected_revision)
-    named = model.named_basis(acceptance)
+    # The agent's own decision names its basis, as an assignment does.
+    named = model.AGENT_BASIS if decided is not None else model.named_basis(acceptance)
     identity = str(row["work_item_id"])
     current = read_model.state_by_id(conn, str(row["state_id"]))
     target = _destination(conn, row, states.resolve(conn, str(row["workflow_id"]), state))
@@ -2164,6 +2203,7 @@ def _transition(
             named=named,
             in_goal=accept_gate is not None and accept_gate.point == "task_in_goal",
             ruled=ruled,
+            decided=decided,
         )
     _settled_by_owner(conn, identity, str(current["category"]), target, author)
     if opened:
@@ -2182,6 +2222,8 @@ def _transition(
             decisions.mark(conn, moved, gate.point, _cancel_what(conn, row, followed))
         if agreed is not None:
             decisions.mark(conn, moved, "cancel_shared", agreed)
+        if decided is not None and gives is None:
+            decisions.mark(conn, moved, decided.point, decided.what)
         if confirming == participation.AGENT:
             decisions.mark(conn, moved, "goal_close", _close_what(conn, row))
     if held:
@@ -2265,6 +2307,7 @@ def defer_work_item(
     expected_revision: int | None = None,
     author: str | None = None,
     gated: bool = False,
+    decided: Decided | None = None,
 ) -> dict:
     """Put an item off until a day, a time or another item's close (`deferral`).
 
@@ -2280,7 +2323,8 @@ def defer_work_item(
     putting off of an accepted goal or stage takes back the owner's acceptance, and is
     the owner's to make where `goal_defer` says `human`. Then the item stays as it is
     and the answer names what waits in `waits_for_owner` (`_ask_about_put_off`); left
-    to the agent, it is marked in the summary of decisions.
+    to the agent, it is marked in the summary of decisions. An agent's own decision the
+    put-off carries out (`decided`, Valkama's composed write) is marked as it says.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
@@ -2320,6 +2364,7 @@ def defer_work_item(
         reason=f"until {said}: {why}",
         author=author,
         spared=_DEFER_SPARES,
+        decided=decided,
     )
     if putting_off == participation.AGENT:
         decisions.mark(
@@ -2639,6 +2684,21 @@ _FILED_BY = (
 )
 
 
+def filed_by_caller(conn: sqlite3.Connection, identity: str) -> bool:
+    """Whether the caller's own work filed the item: its `created` was written by a call
+    of the caller's session, confirmed. An item filed with no confirmed session, or by
+    another session, lies outside it (`cancel_outside`)."""
+
+    caller = calls.confirmed_session()
+    filed = conn.execute(_FILED_BY, (identity,)).fetchone()
+    return (
+        caller is not None
+        and filed is not None
+        and filed["identity_state"] == calls.CONFIRMED
+        and filed["session_id"] == caller
+    )
+
+
 def _following(
     conn: sqlite3.Connection, row: sqlite3.Row, following: object, cancel: bool
 ) -> str | None:
@@ -2706,14 +2766,7 @@ def _cancel_point(
         settings = participation.load(conn)
         mode = settings.mode(str(row["planning_space_id"]), "cancel_shared")
         return _CancelGate("cancel_shared", FOLLOWING if followed else mode, busy)
-    filed = conn.execute(_FILED_BY, (str(row["work_item_id"]),)).fetchone()
-    own = (
-        caller is not None
-        and filed is not None
-        and filed["identity_state"] == calls.CONFIRMED
-        and filed["session_id"] == caller
-    )
-    if own:
+    if filed_by_caller(conn, str(row["work_item_id"])):
         return None
     if followed is not None:
         return _CancelGate("cancel_outside", FOLLOWING)

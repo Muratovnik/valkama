@@ -56,11 +56,17 @@ const dependentSchema = strictObject({
 /**
  * What the write proposes, by its point: nothing for a goal or a task, which the card
  * itself shows; `state` for a cancel, `until` for putting a goal off, `removed` and
- * `rewritten` for a condition, `summary` for a goal's close (empty when it gave none).
+ * `rewritten` for a condition, `summary` for a goal's close (empty when it gave none);
+ * for a group of findings its goal's `conditions` when asked, its `items`, the agent's
+ * `answer`, `until` with `later`, and `why`.
  */
 const proposedSchema = strictObject({
   state: z.string().min(1).max(64).optional(),
   until: z.string().min(1).optional(),
+  conditions: boundedList(step).optional(),
+  items: boundedList(strictObject({ reference, title })).optional(),
+  answer: z.enum(['do', 'later', 'drop']).optional(),
+  why: z.string().min(1).max(500).optional(),
   removed: boundedList(strictObject({ id: z.string().min(1).max(64), text: step })).optional(),
   rewritten: boundedList(
     strictObject({ id: z.string().min(1).max(64), from: step, to: step }),

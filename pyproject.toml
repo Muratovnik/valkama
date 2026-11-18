@@ -344,6 +344,7 @@ source_modules = [
 forbidden_modules = [
   "server.planning.api",
   "server.planning.consent",
+  "server.planning.groups",
   "server.planning.requests",
   "server.planning.service",
   "server.planning.split",

@@ -106,7 +106,7 @@ await confirmation: check each and complete it, as the skill's Close section say
 
 | Tool | Also answers |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist`, `links` or `group`; `started`; `split_from` and `moved_steps`, the ids of the steps it took, for a part split off a task, and `overridden` when `force` split it off another session's task; `waits_for_owner` (`action`, `point`, `question`, `what`) when the owner decides on it and it waits in `triage` for their answer |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
 | `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `waits_for_owner` (as `create_work_item` gives it) when the owner decides on one of its writes, `waits_for_sessions` (`action`, `point`, `sessions`, `until`) when a cancel waits for the sessions whose work it ends, `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.commits` the `attached` and `removed` commits, each `repository` and `hash`, and how many were `unchanged`; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`, or for an entry with `addressees` its `requests`, each `request_id` with its `addressee`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, `released` when the close ended a claim, and, entering review or completing, `conditions_changed` when steps were taken off, reworded or moved to another item |
@@ -239,7 +239,7 @@ permission mode needs no such care.
 home space of its projects, else in your session's space; projects of two
 spaces need `space`, one of them. A named `space` must be the parent's space,
 or one of the projects' home spaces when they have one; a `[placement]` refusal
-names the candidates. Three more arguments act on the
+names the candidates. Four more arguments act on the
 new item in the same call, all or nothing:
 
 | Argument | Shape |
@@ -247,8 +247,19 @@ new item in the same call, all or nothing:
 | `claim` | `true` |
 | `checklist` | `["…", {"text": "…", "done": true}]` or `{"items": [...]}`, steps as below |
 | `links` | `[{"other": "MAIN-12", "kind": "discovered-from"}]`, at most 100 |
+| `group` | `{"items": ["MAIN-41", "MAIN-42"], "answer": "do", "why": "…"}`, with `until` beside `later` |
 
-A refused claim, step or link creates nothing and spends no number.
+A refused claim, step, link or group creates nothing and spends no number.
+
+`group` makes a new goal of 2 to 20 tasks waiting for a triage review: each in
+triage, under no goal, in the goal's space, with no question of the owner open.
+The goal needs `kind: "goal"` and its conditions in `checklist`, and takes no
+`parent`, `acceptance`, `claim` or `state` (`[group]`). The tasks move under it at
+once. Your `answer` (`do`, `later` with `until`, `drop`) is carried out in the same
+call, and `applied.group.carried_out` is `true`; or it waits for the owner, as
+`waits_for_owner` says, and while it waits no task of the group is claimed or
+moved. A task that does not wait in the stack is refused with
+`[group] MAIN-41 is not waiting for a triage review: <why>`.
 
 `split_from` names an open task to split a part off, and `steps` the ids of its
 steps the part takes. The part stands beside the task, under the same parent,

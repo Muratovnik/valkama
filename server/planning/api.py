@@ -26,6 +26,7 @@ from . import (
     commits,
     decisions,
     goal_volumes,
+    groups,
     held,
     images,
     item_projects,
@@ -717,10 +718,13 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     Each step after the creation is the write its single tool makes, inside one
     savepoint with the creation, so a refused link or claim leaves no item, no
     spent number and no call row behind. Without `claim` or `links` the answer
-    is the one this route always gave; with them it adds `applied`.
+    is the one this route always gave; with them it adds `applied`. A `group` is held
+    to its form before anything is created (`groups.form`).
     """
 
     steps = _steps(payload, CREATE_GROUPS)
+    if payload.get("group") is not None:
+        groups.form(payload)
     if not steps:
         return _created(conn, payload)
     with _all_or_nothing(conn):
@@ -780,6 +784,8 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         projects=payload.get("projects"),
         # `_create` claims it in the same all-or-nothing change, before anything is kept.
         claimed=payload.get("claim") is True,
+        # Its group, proposed in the same change, decides who decides on it.
+        grouped=payload.get("group") is not None,
     )
 
 
@@ -1451,10 +1457,12 @@ _STATE_CHANGES = ("convert", "transition", "defer", "move_out")
 _LEAVES_TRIAGE = ("transition", "defer", "move_out")
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
+#: `group` proposes the new goal for tasks waiting for a triage review (`groups`).
 CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
     ("checklist", frozenset({"items"})),
     ("links", frozenset({"other", "kind"})),
+    ("group", frozenset({"items", "answer", "until", "why"})),
 )
 #: The groups that are lists of entries rather than one object.
 _APPLY_LISTS = frozenset(
@@ -1628,6 +1636,10 @@ def _apply_step(
     if group == "links":
         _link(conn, {**entry, **base})
         return {}, 1
+    if group == "group":
+        proposed = groups.propose(conn, _text(base, "id"), groups.parse(entry), _author(base))
+        waits = {} if proposed.waits is None else {"waits_for_owner": proposed.waits.answer()}
+        return waits, proposed.applied()
     if group in ("comment", "comments"):
         written = _comment(conn, {**entry, **base})
         # The root a reply joined, as the single tool's answer says it, and its list.

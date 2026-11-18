@@ -113,7 +113,7 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim`, `links` or `group`, and `waits_for_owner` when a group waits for the owner ([A group of findings](#a-group-of-findings)); `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`, `by_previous_holder`; `overridden` when `force` carried another holder's claim through |
 | `apply_work_item_changes` | `applied`, what each group changed, with `applied.triage_seen` (`{seen_at}` or `{cleared: true}`) when the batch marked an item, `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim`; `unreported_commits`, `unreported_total` and `unreported_unread` when a close found any (see [The net at a close](#the-net-at-a-close)) |
@@ -468,8 +468,8 @@ question Valkama asked itself (a put-off goal that came back, which nobody
 withdraws), and the call's `author` when it proved no session. `proposed` holds
 the `until` of a put-off, the steps `removed` (`id`, `text`) and `rewritten`
 (`id`, `from`, `to`) of a step change, or the `summary` of a completion.
-`cancel_list`, read as it stands, comes with `goal` and `cancel`, and `consent`
-with `cancel_shared`. The compact form carries `purpose` and `action.point`.
+`cancel_list`, read as it stands, comes with `goal`, `cancel` and `triage`, and
+`consent` with `cancel_shared`. The compact form carries `purpose` and `action.point`.
 
 The owner's answer makes the write, if it still applies, as the owner's: the
 basis it gives is `owner`, and the `accepted`, `opened`, `transitioned` and
@@ -521,6 +521,54 @@ carry it.
 | `[consent]` | 400 | a consent answer that is not `agree`, `object` with a `reason` or `moved_out`, or `moved_out` while the session's work is still in the list |
 | `owner_only` | 403 | an agent's answer to a question with a purpose but `consent`, or to one a waiting write carries; an agent's write of the setting |
 | `not_asker` | 403 | a withdrawal by another session than the one that asked, or of a question Valkama asked |
+
+#### A group of findings
+
+A review of work in `triage` proposes tasks that belong together as one new goal:
+`create_work_item` of a goal, and `POST /api/planning/work-items`, take the step
+`group` after `links`:
+
+```json
+{"kind": "goal", "title": "…", "checklist": ["…"],
+ "group": {"items": ["MAIN-41", "MAIN-42"], "answer": "later", "until": "2026-12-01", "why": "…"}}
+```
+
+`items` names 2 to 20 distinct tasks that wait in the triage stack: in `triage`,
+under no goal or stage, in the goal's space, with no question of the owner open
+on them. `answer` is `do`, `later` or `drop`; `until`, a day or an item's
+reference as `defer` takes it, comes with `later` and only with it; `why` is one
+line of up to 500 characters. The goal names its conditions in `checklist` and
+no `parent`, `acceptance`, `claim` or `state`. The goal is created in `triage`,
+the tasks move under it at once, and the answer carries
+`applied.group = {items, answer, carried_out}`.
+
+Who decides reads two points, `finding` and `proposed_goal`, and the owner does
+if either says `human`; for `drop` also where `cancel_outside` says `human` and
+a task was filed outside the agent's own work. Otherwise the same call carries
+the answer out (`carried_out: true`): `do` accepts the goal on `agent` with its
+tasks `inherited`; `later` puts it off until `until`, its reason
+`agent: later: <why>`; `drop` cancels each task, its reason
+`Not to be done: <why>`, then the goal. One decision is marked, at `finding`, on
+the goal's event that records the answer: `group «<title>»: do 3 items`. A
+person's group is the owner's write, made at once.
+
+Where the owner decides, nothing is carried out (`carried_out: false`): the goal
+stays in `triage` with its tasks under it, `waits_for_owner` names the point
+`finding`, and the question of purpose `triage`, `Group of <n> items: «<title>»`,
+offers `answer` (`do`, `later`, `drop`, the agent's recommended with its
+`why`), `items` (a `multi_choice`, one option per task with its lowercase
+reference as id and `MAIN-41 · <title>` as label, all recommended), `until` and
+`cancels`. Its `action.proposed` holds the goal's `conditions` when asked, the
+`items` (`reference`, `title`), `answer`, `until` with `later`, and `why`. While
+it waits, no agent claims or moves a task of the group (`acceptance_question`),
+and no rule of a label accepts one.
+
+| Code | Status | When |
+| --- | --- | --- |
+| `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 2 to 20 items: <what is wrong>` |
+| `[group]` | 409 | a task that does not wait in the stack: `[group] MAIN-41 is not waiting for a triage review: <why>`, the why being `it is in another space`, `it is a goal or stage`, `it is not in triage`, `it lies under MAIN-3` or `it waits for the owner's answer` |
+
+Either refusal creates nothing and spends no number.
 
 #### Retired words
 
