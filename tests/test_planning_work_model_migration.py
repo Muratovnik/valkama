@@ -56,6 +56,7 @@ STEP_NAMES = [
     "agent-decisions",
     "pending-actions",
     "baselines",
+    "triage-marks",
 ]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
@@ -68,6 +69,7 @@ POSTCONDITION_NAMES = [
     "pending-actions",
     "agent-basis",
     "baselines",
+    "triage-marks",
     "second-run",
     "recovery-point",
 ]
@@ -873,6 +875,7 @@ class MigratedStoreTests(StoreCase):
                         "label_settings",
                         "participation_settings",
                         "pending_actions",
+                        "triage_marks",
                         "work_item_deferrals",
                         "work_item_waiting_notices",
                     ]
@@ -1281,6 +1284,61 @@ class MigratedStoreTests(StoreCase):
                 0
             ],
         )
+        conn.rollback()
+
+    def test_triage_marks_start_empty(self) -> None:
+        """The table of the triage marks and its five triggers come as a fresh store
+        declares them, word for word; no item is marked and no `triage_seen` is in the
+        history, since no review has run; a second run would take no step; and the
+        triggers act on the migrated store, after the steps that rebuild their tables."""
+
+        fresh_path = os.path.join(self.directory.name, "fresh", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(fresh_path))
+        store.connect(fresh_path).close()
+        declaration = (
+            "SELECT name, sql FROM sqlite_master WHERE name = 'triage_marks'"
+            " OR (type = 'trigger' AND name LIKE 'triage_marks%') ORDER BY name"
+        )
+        fresh = sqlite3.connect(fresh_path)
+        try:
+            declared = fresh.execute(declaration).fetchall()
+        finally:
+            fresh.close()
+        self.assertEqual(
+            sorted(["triage_marks", *planning_store.TRIAGE_MARK_TRIGGERS]),
+            [str(row[0]) for row in declared],
+        )
+        self.assertEqual(declared, [tuple(row) for row in self.read(declaration)])
+        self.assertEqual(0, self.read("SELECT COUNT(*) FROM triage_marks")[0][0])
+        self.assertEqual(
+            0, self.read("SELECT COUNT(*) FROM work_item_events WHERE action = 'triage_seen'")[0][0]
+        )
+        [step] = [step for step in self.report["steps"] if step["name"] == "triage-marks"]
+        self.assertEqual(
+            (True, {"created": ["triage_marks", *planning_store.TRIAGE_MARK_TRIGGERS]}),
+            (step["needed"], step["result"]),
+        )
+        details = {entry["name"]: entry for entry in self.report["postconditions"]}
+        self.assertEqual(
+            (True, {"marks": 0, "triage_seen_events": 0}),
+            (details["triage-marks"]["passed"], details["triage-marks"]["detail"]),
+        )
+        for name in ("fresh-shape", "indexes"):
+            self.assertTrue(details[name]["passed"], name)
+        # `fresh-tables` holds the table it finds added to be declared fresh and empty.
+        self.assertIn("triage_marks", details["fresh-tables"]["detail"]["added"])
+        self.assertEqual([], details["second-run"]["detail"]["steps_needed_again"])
+        conn = store.connect(self.path)
+        self.addCleanup(conn.close)
+        conn.execute(
+            "INSERT INTO triage_marks(work_item_id, seen_at, author) VALUES(?, ?, 'worker-a')",
+            (self.ids["WM-9"], T5),
+        )
+        conn.execute(
+            "INSERT INTO work_item_comments(work_item_id, body) VALUES(?, 'Seen again')",
+            (self.ids["WM-9"],),
+        )
+        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM triage_marks").fetchone()[0])
         conn.rollback()
 
     def test_baselines_creates_the_counts_at_acceptance_empty_as_a_fresh_store_declares_them(
@@ -2086,6 +2144,17 @@ FAULTS = (
         " VALUES(?, 3, 'accepted', '2026-01-02T03:04:05Z')",
         lambda ids: (ids["WM-15"],),
     ),
+    fault(
+        "triage-marks",
+        "INSERT INTO triage_marks(work_item_id, seen_at, author)"
+        " VALUES(?, '2026-01-02T03:04:05Z', 'worker-a')",
+        lambda ids: (ids["WM-9"],),
+    ),
+    fault(
+        "triage-marks",
+        "INSERT INTO work_item_events(work_item_id, action, detail) VALUES(?, 'triage_seen', 'seen')",
+        lambda ids: (ids["WM-9"],),
+    ),
     fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
     fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
     fault(
@@ -2268,6 +2337,19 @@ def _quiet(sql: str, parameters: tuple) -> list[tuple[str, tuple]]:
 CLAUSE_FAULTS: tuple[
     tuple[str, str, Callable[[dict[str, str]], list[tuple[str, tuple]]], list[str]], ...
 ] = (
+    (
+        "triage-marks",
+        "triage_marks_comment is declared otherwise",
+        lambda _ids: [
+            ("DROP TRIGGER triage_marks_comment", ()),
+            (
+                "CREATE TRIGGER triage_marks_comment AFTER INSERT ON work_item_comments"
+                " BEGIN SELECT 1; END",
+                (),
+            ),
+        ],
+        ["triage-marks"],
+    ),
     (
         "request-shapes",
         "work_item_waiting_notices takes a row with scope 'other'",
