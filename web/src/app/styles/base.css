@@ -90,9 +90,9 @@ table {
    line's first baseline, which a glyph beside the text lines up with, went down with it. */
 .whole-word {
   display: inline-block;
+  vertical-align: top;
   max-inline-size: 100%;
   overflow-wrap: anywhere;
-  vertical-align: top;
 }
 
 html,

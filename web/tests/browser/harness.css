@@ -237,8 +237,8 @@
 .preview-cards-harness {
   min-height: 100vh;
   padding: var(--space-4);
-  background: var(--color-canvas);
   font: var(--font-detail);
+  background: var(--color-canvas);
 }
 
 .preview-cards-row {
