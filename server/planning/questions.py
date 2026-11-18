@@ -194,14 +194,25 @@ def acceptance_asked(
     return next(iter(_acceptance(conn, row, purposes)), None)
 
 
-def acceptance_on(conn: sqlite3.Connection, row: sqlite3.Row) -> list[sqlite3.Row]:
-    """Every open question whether to do the item `row` that stands on the item itself,
-    by the rule of `acceptance_asked`: what a person's claim or move of it answers."""
+#: The questions to the owner still pending on one item whose purpose is in the JSON
+#: array of the second parameter.
+_LEFT = (
+    _PENDING + " AND r.work_item_id = ?"  # noqa: S608 - constant text
+    " AND r.purpose IN (SELECT value FROM json_each(?)) ORDER BY r.created_at, r.request_id"
+)
 
+
+def acceptance_left(
+    conn: sqlite3.Connection, work_item_id: str, category: str
+) -> list[sqlite3.Row]:
+    """Every open question whether to do the item that stands on the item itself and asked
+    that while it stood in `category` (`ACCEPTANCE`): what a person's write that moved it
+    out of there answered, read after the move."""
+
+    asking = json.dumps([purpose for purpose, stands in ACCEPTANCE.items() if stands == category])
+    at = request_model.now()
     return [
-        facts
-        for facts in _acceptance(conn, row, tuple(ACCEPTANCE))
-        if facts["work_item_id"] == row["work_item_id"]
+        facts for facts in _read(conn, _LEFT, (work_item_id, asking)) if lapse(facts, at) is None
     ]
 
 

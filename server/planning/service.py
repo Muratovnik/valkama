@@ -1314,18 +1314,6 @@ def _accepted_in_goal(
     return participation.load(conn).mode(str(row["planning_space_id"]), "task_in_goal")
 
 
-def _decides(current: sqlite3.Row, target: sqlite3.Row) -> bool:
-    """Whether a move takes an item out of triage or deferred, where the owner may be asked
-    whether to do it, into another category without closing it: a person's such move is
-    their answer (`_taken_by_owner`), and a close ends the questions as it closes."""
-
-    return (
-        current["category"] in model.UNACCEPTED_CATEGORIES
-        and target["category"] != current["category"]
-        and not target["is_terminal"]
-    )
-
-
 def _accept_by_label(
     conn: sqlite3.Connection, identity: str, added: Sequence[str], author: str | None
 ) -> None:
@@ -1849,7 +1837,7 @@ def transition_work_item(
 
     While the owner is asked whether to do an item, an agent moves it out of triage or
     deferred only to a cancel (`acceptance_question`); a person's move out is their
-    answer, and the question on the item ends withdrawn (`_taken_by_owner`).
+    answer, and the question on the item ends withdrawn (`_settled_by_owner`).
     """
 
     return _transition(
@@ -2032,7 +2020,6 @@ def _transition(
         answer["warnings"] = warnings
         answer["waits_for_owner"] = waits.answer()
         return answer
-    decided = _owners_questions(conn, row) if _decides(current, target) else []
     updates = ["state_id = ?"]
     parameters: list[object] = [str(target["state_id"])]
     updates += _accepting(row, target, gives, parameters)
@@ -2069,7 +2056,7 @@ def _transition(
             in_goal=in_goal == participation.AGENT,
             ruled=ruled,
         )
-    _taken_by_owner(conn, decided, author)
+    _settled_by_owner(conn, identity, str(current["category"]), target, author)
     if opened:
         # Entering the service state names no state: it is the goal's or stage's opening.
         _log(conn, identity, "opened", note, author)
@@ -3028,6 +3015,8 @@ def _cascade(
             warnings += _cascade(conn, found, accepted, basis, author)
         else:
             _log(conn, found, "transitioned", f"{target['key']}: accepted with {accepted}", author)
+        # Accepted with its goal or stage by a person, it is answered as if taken on alone.
+        _settled_by_owner(conn, found, "triage", target, author)
     return warnings
 
 
@@ -3099,7 +3088,6 @@ def claim_work_item(
                 f"{read_model.reference(conn, row)} is already held by {held};"
                 " pass force to take the work over"
             )
-        decided = _owners_questions(conn, row)
         try:
             _hold(conn, row, label, start.updates, start.parameters)
         except model.RevisionConflictError:
@@ -3112,7 +3100,6 @@ def claim_work_item(
         else:
             _log(conn, identity, "claimed", "", author)
         _started(conn, identity, start, author, start_reason)
-        _taken_by_owner(conn, decided, author)
         waiting.deliver(conn, row)
     overridden = record_overrides(conn, identity, carried, author)
     requeued = _settle(conn, identity, author, "released") if release else None
@@ -3152,7 +3139,7 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
             f"[closed] {read_model.reference(conn, row)} is closed; reopen it first"
         )
     if not calls.from_agent():
-        # A person's claim is their answer (`_taken_by_owner`).
+        # A person's claim is their answer (`_settled_by_owner`).
         return
     asked = questions.acceptance_asked(conn, row)
     if asked is not None:
@@ -3170,23 +3157,27 @@ def _holdable(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
 TAKEN_BY_OWNER = "taken by the owner"
 
 
-def _owners_questions(conn: sqlite3.Connection, row: sqlite3.Row) -> list[sqlite3.Row]:
-    """The questions whether to do the item that a person's claim or move of it answers,
-    read before the write moves it: those on the item itself (`questions.acceptance_on`).
-    A question over it stays, and an agent's write answers none."""
+def _settled_by_owner(
+    conn: sqlite3.Connection, identity: str, left: str, entered: sqlite3.Row, author: str | None
+) -> None:
+    """End the questions whether to do the item that a person's write moving it out of the
+    category `left` into `entered` answered, called by every write that moves a card.
 
-    if calls.from_agent():
-        return []
-    return questions.acceptance_on(conn, row)
+    A person's write that takes an item out of triage or deferred, where the owner may
+    be asked whether to do it, into another category without closing it decides that
+    question: a claim, a move, a putting off, or the acceptance of the goal or stage
+    over it that takes it along (`_cascade`). Each such question on the item itself
+    (`questions.acceptance_left`) is withdrawn, and a write waiting on one is dropped as
+    taken by the owner. A question over the item stays, an agent's write answers none,
+    and a close ends the questions as it closes.
+    """
 
-
-def _taken_by_owner(conn: sqlite3.Connection, asked: list[sqlite3.Row], author: str | None) -> None:
-    """End the questions a person's claim or move answered (`_owners_questions`): each is
-    withdrawn, and a write waiting on one is dropped as taken by the owner."""
-
-    for question in asked:
+    if calls.from_agent() or left not in model.UNACCEPTED_CATEGORIES:
+        return
+    if entered["category"] == left or entered["is_terminal"]:
+        return
+    for question in questions.acceptance_left(conn, identity, left):
         action = pending.of_request(question)
-        identity = str(question["work_item_id"])
         if action is not None:
             found = pending.get(conn, action)
             pending.end(conn, found, pending.DROPPED, author=author, why=TAKEN_BY_OWNER)
@@ -3276,6 +3267,9 @@ def _started(
         )
     if start.target is not None:
         _log(conn, identity, "transitioned", f"{start.target['key']}: {reason}", author)
+    if start.current is not None and start.target is not None:
+        # A person's claim is their answer.
+        _settled_by_owner(conn, identity, str(start.current["category"]), start.target, author)
     if start.current is not None and start.current["category"] == "deferred":
         _put_off_ends(conn, identity, author)
 

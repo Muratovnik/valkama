@@ -470,12 +470,16 @@ class CarryOutTests(Harness):
         self.assertEqual([], self.ran)
 
     def test_an_action_that_no_longer_applies_is_dropped_and_the_answer_stands(self) -> None:
-        # The stage asked about is accepted with the goal over it, which the person
-        # takes on: their move answers the questions on that goal, not the stage's.
+        # The stage asked about is accepted with the goal over it, which an agent takes on
+        # by assignment: an agent's write answers no question for the owner, so the
+        # stage's stays (a person's would end it, `AcceptanceQuestionTests`).
         stage = self.filed("A stage of it", kind="stage", parent=self.goal)
         waiting = self.ask(stage)
-        self.person("/api/planning/work-item/apply", id=self.goal, transition={"state": "ready"})
+        with calls.bind(AGENT, "apply_work_item_changes"):
+            service.transition_work_item(self.conn, self.goal, "ready", acceptance="assignment")
+        self.conn.commit()
         self.assertIsNotNone(service.get_work_item(self.conn, stage)["acceptance"])
+        self.assertEqual("pending", self.request(waiting.question)["status"])
         record = self.answer(waiting.question, "do")
         self.assertEqual("dropped", record["carried_out"])
         stored = self.request(waiting.question)
@@ -1656,6 +1660,46 @@ class AcceptanceQuestionTests(SettingHarness):
             [f"task_in_goal: {service.TAKEN_BY_OWNER}"], self.events(task, "action_dropped")
         )
         self.assertEqual([], self.owners_list())
+
+    def settled_by_the_owner(self, task: str, asked: str, action: str) -> None:
+        """The question whether to do `task` ended withdrawn, the write waiting on it dropped
+        as taken by the owner, and nothing left in the owner's list."""
+
+        stored = self.request(asked)
+        self.assertEqual(("expired", "withdrawn"), (stored["status"], stored["expired_reason"]))
+        self.assertEqual("dropped", self.action(action)["outcome"])
+        self.assertEqual(
+            [f"task_in_goal: {service.TAKEN_BY_OWNER}"], self.events(task, "action_dropped")
+        )
+        self.assertEqual([], self.owners_list())
+
+    def test_a_persons_claim_of_the_task_is_their_answer(self) -> None:
+        self.at(participation.MANUAL)
+        task, asked = self.waiting_task("A task the owner takes")
+        [action] = self.waiting_on(task)
+        self.person("/api/planning/work-item/claim", id=task)
+        self.assertEqual(("active", "inherited"), self.where(task))
+        self.settled_by_the_owner(task, asked, action.id)
+
+    def test_a_persons_putting_off_is_their_answer(self) -> None:
+        self.at(participation.MANUAL)
+        task, asked = self.waiting_task("A task the owner puts off")
+        [action] = self.waiting_on(task)
+        self.person("/api/planning/work-item/defer", id=task, until=UNTIL, reason="not this week")
+        self.assertEqual(("deferred", None), self.where(task))
+        self.settled_by_the_owner(task, asked, action.id)
+
+    def test_a_persons_acceptance_of_the_goal_answers_the_work_it_takes_along(self) -> None:
+        self.at(participation.MANUAL)
+        task, asked = self.waiting_task("A task waiting in the goal")
+        [action] = self.waiting_on(task)
+        # The owner puts the goal off and then takes it on again: the task in triage
+        # under it is accepted with it.
+        self.person("/api/planning/work-item/defer", id=self.goal, until=UNTIL, reason="later")
+        self.assertEqual("pending", self.request(asked)["status"])
+        self.person("/api/planning/work-item/apply", id=self.goal, transition={"state": "ready"})
+        self.assertEqual(("ready", "inherited"), self.where(task))
+        self.settled_by_the_owner(task, asked, action.id)
 
     def test_an_assignment_an_agent_takes_on_is_summarised(self) -> None:
         finding = self.filed("A finding the agent is asked to do")
