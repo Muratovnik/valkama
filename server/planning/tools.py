@@ -313,7 +313,8 @@ _TRANSITION_FORM = (
     " ends the item's pending questions and lists, expired as item_completed or"
     " item_cancelled. Reopening restores no claim and no question. An"
     " agent's close is refused with person_spoke while a person acted on the item in"
-    " the interface since an agent last wrote to it; the refusal quotes it."
+    " the interface since an agent last wrote to it; the refusal quotes it. The answer a"
+    " cancel's transition.following names does not count there."
 )
 #: A list the owner ticks under a root comment, a report or a summary: a question of
 #: one multi_choice field that nobody waits for.
@@ -911,7 +912,7 @@ TOOLS = [
         " writes waits is refused whole. checklist_reason says why a step of a goal or stage"
         " is removed or rewritten; a step sent by its id with clarifies: true only clarifies"
         " its wording and is written at once. transition.following names the owner's answer a"
-        " cancel follows. While the owner has not answered whether an item is to be done,"
+        " cancel follows, which is no act of a person against that cancel. While the owner has not answered whether an item is to be done,"
         " only a cancel moves it out of triage (acceptance_question).",
         WRITES,
         {
@@ -1208,7 +1209,8 @@ TOOLS = [
                         "maxLength": 64,
                         "description": "With a cancel only: the request_id of the owner's"
                         " answered question, on this item or a goal or stage over it, that"
-                        " the cancel follows from. Such a cancel asks the owner nothing.",
+                        " the cancel follows from. Such a cancel asks the owner nothing, and"
+                        " that answer does not count as a person's act against it.",
                     },
                 },
                 "required": ["state"],

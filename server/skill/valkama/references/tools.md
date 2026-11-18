@@ -489,7 +489,8 @@ A move to review warns, and is not refused, when the item has no `session` ref,
 no attached commit and no write a confirmed session made.
 An agent's move to a completed or cancelled state is also refused with
 `person_spoke` while a person acted on the item since an agent last wrote to it;
-the refusal names what they did. A `comment` sent in the same
+the refusal names what they did. The answer a cancel's `transition.following` names
+is left out; any other act still refuses it. A `comment` sent in the same
 `apply_work_item_changes` call does not lift it. An agent's move that completes an
 item or takes it out of review is refused with `question` while a question to the
 owner is open on it, `force` or not; cancelling is not.
