@@ -8,7 +8,8 @@ waits for that session alone, and the session hears it. Every reader must agree,
 so the rule is stated once here, as the one condition a request row meets to be
 a question to the owner, `OWNER_QUESTION`, and the one test of whether a request
 has lapsed although nothing wrote that down, `lapse`. A read of many items asks
-`asked` once for all of them.
+`asked` once for all of them. Whether the owner is asked whether to do an item, which
+an agent's claim and its move out of triage or deferred meet, is `acceptance_asked`.
 
 A request row is written in two places only: `ask` inserts one with its
 `request_created`, and `end` ends every one still pending on an item: one still
@@ -34,7 +35,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from . import calls, model, request_model, store
 
@@ -144,6 +145,108 @@ def asked(
     return frozenset(str(row["work_item_id"]) for row in rows if lapse(row, at) is None)
 
 
+#: A question to the owner, by its id, answered and standing on one of the items named
+#: as one JSON array, with the source of the call that gave the answer it holds: the
+#: latest answer or change of it. A merge moves a request and leaves its history where
+#: it was written, so the history is read by the request.
+_ANSWERED = (
+    "SELECT c.identity_source FROM work_item_requests r"  # noqa: S608 - constant text
+    " LEFT JOIN work_item_events e ON e.id = (SELECT MAX(id) FROM work_item_events"
+    "  WHERE action IN ('request_answered', 'request_changed') AND detail = r.request_id)"
+    " LEFT JOIN execution_events c ON c.id = e.call_id"
+    " WHERE r.request_id = ? AND r.status = 'answered' AND "
+    + OWNER_ASKED
+    + " AND r.work_item_id IN (SELECT value FROM json_each(?))"
+)
+
+
+def answered_by_owner(conn: sqlite3.Connection, request_id: str, items: Iterable[str]) -> bool:
+    """Whether `request_id` is a question to the owner on one of `items` that a person
+    answered, in Valkama's interface, and nobody changed since through another call."""
+
+    found = conn.execute(_ANSWERED, (request_id, json.dumps(sorted(set(items))))).fetchone()
+    return found is not None and found[0] == calls.BROWSER
+
+
+#: The questions whether to do the item they stand on, by purpose, with the category the
+#: item stands in while the question asks that: whether to take up again work put off
+#: that came back (`return`), and whether to take on a goal, a task in a goal or a group
+#: of findings lying in triage. A `goal` on an accepted goal asks whether to put it off,
+#: not whether to do it.
+ACCEPTANCE = {"return": "deferred", "goal": "triage", "task": "triage", "triage": "triage"}
+#: The questions to the owner still pending on the items of a chain, the first item and
+#: every item over it while the second parameter is true, with the category each item
+#: stands in; those whose purpose and category are a pair of the JSON object of the
+#: third parameter. The first item's come first. `UNION` keeps each item once, so a
+#: cycle in a damaged store ends instead of looping.
+_ACCEPTANCE = (
+    "WITH RECURSIVE over(id) AS (SELECT ?"  # noqa: S608 - constant text
+    " UNION SELECT w.parent_id FROM over o JOIN work_items w ON w.work_item_id = o.id"
+    " WHERE w.parent_id IS NOT NULL AND ?) "
+    + _PENDING
+    + " AND r.work_item_id IN (SELECT id FROM over)"
+    " AND EXISTS (SELECT 1 FROM workflow_states s JOIN json_each(?) a"
+    "  ON a.key = r.purpose AND a.value = s.category WHERE s.state_id = i.state_id)"
+    " ORDER BY r.work_item_id = ? DESC, r.created_at, r.request_id"
+)
+
+
+def acceptance_asked(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row | Mapping[str, object],
+    *,
+    purposes: Iterable[str] = tuple(ACCEPTANCE),
+) -> sqlite3.Row | None:
+    """The open question to the owner whether to do the item `row`, or None.
+
+    Asked on the item itself (`ACCEPTANCE`), or, while the item has no basis, on an
+    item over it: work under a goal the owner has not decided on is decided by that
+    answer. Accepted work under such a goal stays with whoever holds it. The item's own
+    question comes first. `row` names `work_item_id`, `parent_id` and `acceptance`;
+    an item not written yet names no `work_item_id`, and is asked about through its
+    parent. `purposes` narrows the questions that count to those purposes.
+    """
+
+    return next(iter(_acceptance(conn, row, purposes)), None)
+
+
+#: The questions to the owner still pending on one item whose purpose is in the JSON
+#: array of the second parameter.
+_LEFT = (
+    _PENDING + " AND r.work_item_id = ?"  # noqa: S608 - constant text
+    " AND r.purpose IN (SELECT value FROM json_each(?)) ORDER BY r.created_at, r.request_id"
+)
+
+
+def acceptance_left(
+    conn: sqlite3.Connection, work_item_id: str, category: str
+) -> list[sqlite3.Row]:
+    """Every open question whether to do the item that stands on the item itself and asked
+    that while it stood in `category` (`ACCEPTANCE`): what a person's write that moved it
+    out of there answered, read after the move."""
+
+    asking = json.dumps([purpose for purpose, stands in ACCEPTANCE.items() if stands == category])
+    at = request_model.now()
+    return [
+        facts for facts in _read(conn, _LEFT, (work_item_id, asking)) if lapse(facts, at) is None
+    ]
+
+
+def _acceptance(
+    conn: sqlite3.Connection, row: sqlite3.Row | Mapping[str, object], purposes: Iterable[str]
+) -> list[sqlite3.Row]:
+    """The open questions `acceptance_asked` reads, the item's own first."""
+
+    climbs = row["acceptance"] is None
+    start = row["work_item_id"] if row["work_item_id"] is not None else row["parent_id"]
+    if start is None:
+        return []
+    asking = json.dumps({key: ACCEPTANCE[key] for key in purposes})
+    found = _read(conn, _ACCEPTANCE, (str(start), int(climbs), asking, str(start)))
+    at = request_model.now()
+    return [facts for facts in found if lapse(facts, at) is None]
+
+
 def _read(
     conn: sqlite3.Connection, query: str, parameters: tuple[object, ...]
 ) -> list[sqlite3.Row]:
@@ -235,12 +338,14 @@ def ask(
     expires_at: str | None = None,
     addressee: str | None = None,
     comment_id: int | None = None,
+    action_id: str | None = None,
 ) -> str:
     """Insert one request on an item and its `request_created`; answer its id.
 
     The one insert of a request row. Its caller has checked and parsed what it
     passes, and checks after the insert what it must of the row; `purpose` names
-    one of `request_model.PURPOSES`, or nothing.
+    one of `request_model.PURPOSES`, or nothing, and `action_id` the action waiting
+    for the owner the request is about (`pending`), or nothing.
     """
 
     if purpose is not None:
@@ -248,8 +353,8 @@ def ask(
     identity = model.new_id()
     conn.execute(
         "INSERT INTO work_item_requests(request_id,work_item_id,comment_id,kind,prompt,"
-        "fields_json,author,execution_id,session_id,expires_at,created_at,addressee,purpose)"
-        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "fields_json,author,execution_id,session_id,expires_at,created_at,addressee,purpose,"
+        "action_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             identity,
             work_item_id,
@@ -264,6 +369,7 @@ def ask(
             request_model.now(),
             addressee,
             purpose,
+            action_id,
         ),
     )
     log_event(conn, work_item_id, "request_created", identity, author)
@@ -277,8 +383,10 @@ def end(
     author: str | None,
     *,
     purpose: str | None = None,
+    action_id: str | None = None,
 ) -> list[str]:
-    """End every request still pending on an item, or those of one `purpose`, unanswered.
+    """End every request still pending on an item, or those of one `purpose` or of one
+    action waiting for the owner (`action_id`), unanswered.
 
     One still waiting becomes `expired` with `reason`, one of
     `request_model.EXPIRED_REASONS`, and gets its `request_expired`, whoever it
@@ -296,6 +404,9 @@ def end(
     if purpose is not None:
         query += " AND r.purpose = ?"
         parameters += (purpose,)
+    if action_id is not None:
+        query += " AND r.action_id = ?"
+        parameters += (action_id,)
     rows = _read(conn, query + " ORDER BY r.created_at, r.request_id", parameters)
     at = request_model.now()
     ended = []
@@ -322,10 +433,10 @@ def end(
 
 def log_event(
     conn: sqlite3.Connection, work_item_id: str, action: str, request_id: str, author: str | None
-) -> None:
-    """Record one event of a request on its item, by the call in progress."""
+) -> int:
+    """Record one event of a request on its item, by the call in progress; answer its id."""
 
-    conn.execute(
+    cursor = conn.execute(
         "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
         (
             work_item_id,
@@ -335,3 +446,4 @@ def log_event(
             calls.call_id(conn, work_item_id),
         ),
     )
+    return int(cursor.lastrowid or 0)

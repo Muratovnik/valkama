@@ -76,7 +76,9 @@ def _moved(item: dict) -> dict:
     `awaiting_confirmation` the goals and stages the write left with nothing open
     under them, which now wait for their confirmation; `moved_out` the goal or stage
     a move out took the item out of, with the reason; `converted` what a conversion
-    made of the item and the task it left.
+    made of the item and the task it left; `waits_for_owner` the write the owner's
+    setting kept back for their answer, with the question they answer, and
+    `waits_for_sessions` a cancel that waits for the sessions whose work it ends.
     """
 
     return {
@@ -89,6 +91,8 @@ def _moved(item: dict) -> dict:
             "awaiting_confirmation",
             "moved_out",
             "converted",
+            "waits_for_owner",
+            "waits_for_sessions",
         )
         if item.get(name)
     }

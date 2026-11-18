@@ -26,8 +26,8 @@
           "goals": 0,
           "stages": 0,
           "oldest": {
-            "work_item_id": "00000000-0000-4000-8000-000000000055",
-            "reference": "MAIN-26",
+            "work_item_id": "00000000-0000-4000-8000-000000000058",
+            "reference": "MAIN-27",
             "since": "2026-01-02T03:04:05Z"
           }
         },
@@ -44,7 +44,7 @@
           "goals": 0,
           "stages": 0,
           "oldest": {
-            "work_item_id": "00000000-0000-4000-8000-000000000039",
+            "work_item_id": "00000000-0000-4000-8000-000000000038",
             "reference": "MAIN-12",
             "since": "2026-01-02T03:04:05Z"
           }
@@ -171,7 +171,7 @@
         },
         "children": [
           {
-            "work_item_id": "00000000-0000-4000-8000-000000000042",
+            "work_item_id": "00000000-0000-4000-8000-000000000041",
             "reference": "MAIN-10",
             "title": "Tree stage",
             "kind": "stage",
@@ -249,7 +249,7 @@
             },
             "children": [
               {
-                "work_item_id": "00000000-0000-4000-8000-000000000040",
+                "work_item_id": "00000000-0000-4000-8000-000000000039",
                 "reference": "MAIN-11",
                 "title": "Tree nested stage",
                 "kind": "stage",

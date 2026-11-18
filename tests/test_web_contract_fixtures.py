@@ -259,9 +259,14 @@ class _Scenario:
         conn = store.connect()
         try:
             with calls.bind(who(creator, "a7c3e9f1d2b4a608"), "create_work_item"):
+                # Filed on the owner's word, so the work under it is accepted and taken.
                 goal = str(
                     service.create_work_item(
-                        conn, space=SPACE, title="Goal with participants", kind="goal"
+                        conn,
+                        space=SPACE,
+                        title="Goal with participants",
+                        kind="goal",
+                        acceptance="assignment",
                     )["reference"]
                 )
             stage = service.create_work_item(
@@ -308,6 +313,29 @@ class _Scenario:
         finally:
             conn.close()
         return self.http(f"/api/modules/planning/request?{self.scope(id=request['request_id'])}")
+
+    def proposed_goal(self) -> dict:
+        """The question about a goal an agent proposes, with the write that waits for the
+        owner's answer."""
+
+        agent = calls.Identity(
+            state=calls.CONFIRMED,
+            source=calls.CLAUDE_HOOK,
+            session_id="6f1c2a8e-0000-4000-8000-0000000000b1",
+            tool_use_id="t",
+            client="claude",
+        )
+        conn = store.connect()
+        try:
+            with calls.bind(agent, "create_work_item"):
+                answer = service.create_work_item(
+                    conn, space=SPACE, title="Goal an agent proposes", kind="goal"
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        question = answer["waits_for_owner"]["question"]
+        return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
 
     def put_off(self) -> dict[str, dict]:
         """A card put off until another item, and one that came back when the item it
@@ -1046,6 +1074,7 @@ class _Scenario:
             "request-session-gone": self.session_gone(),
             **self.put_off(),
             **self.converted(),
+            "request-proposed-goal": self.proposed_goal(),
             # After every item above, so it counts the space as the answers left it.
             **self.volumes(),
             # The directory «All spaces» reads, with the four numbers of the space's card.

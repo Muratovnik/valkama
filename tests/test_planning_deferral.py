@@ -593,6 +593,36 @@ class OwnerQuestionTests(Deferral):
         self.assertEqual(before, self.written())
         self.assertEqual("ready", self.answer(self.asked, "do")["carried_out"])
 
+    def test_a_merge_into_work_not_put_off_withdraws_the_question(self) -> None:
+        # B works on the item the put-off one turns out to duplicate.
+        s = self.made("s", parent=self.goal, steps=["Work"])
+        self.agent("claim_work_item", AS_B, id=s)
+        self.person(MERGE, id=s, items=[self.t], reason="one change", force=True)
+        # The question asked about work put off: on work under way it asks about nothing.
+        [asked] = self.returns(s)
+        self.assertEqual(
+            (self.asked["request_id"], "expired", "withdrawn"),
+            (asked["request_id"], asked["status"], asked["expired_reason"]),
+        )
+        self.assertIn(
+            asked["request_id"], [event[0] for event in self.events(self.t, "request_expired")]
+        )
+        self.assertEqual("active", self.category(s))
+        self.assertTrue(service.get_work_item(self.conn, s)["claim_ref"])
+        self.holds()
+
+    def test_a_merge_into_work_put_off_moves_the_question_that_waits(self) -> None:
+        d = self.made("d", parent=self.goal, steps=["Work"])
+        self.defer(d)
+        self.person(MERGE, id=d, items=[self.t], reason="one change")
+        [asked] = self.returns(d)
+        self.assertEqual(
+            (self.asked["request_id"], "pending"), (asked["request_id"], asked["status"])
+        )
+        self.assertEqual("ready", self.answer(asked, "do")["carried_out"])
+        self.assertEqual(("ready", "inherited"), (self.category(d), self.basis(d)))
+        self.holds()
+
 
 class AwaitedItemTests(Deferral):
     """Work under an accepted goal waits on an item that closes, closes again or goes.

@@ -1,7 +1,7 @@
 """The modules this build ships, declared in code: the ``valkama-modules`` wire.
 
-Planning, Analytics, Memory and Settings are the product. Analytics is where
-agent work's usage is read -- time, tokens, an API-price estimate, subscription quota.
+Planning, Analytics, Agent decisions, Memory and Settings are the product. Analytics is
+where agent work's usage is read -- time, tokens, an API-price estimate, subscription quota.
 Its read model `analytics.usage` is `GET /api/analytics/usage`; `analytics.quota`, each
 account's quota windows now, is `GET /api/analytics/quota`; `analytics.uses`, how often
 each of its surfaces was opened, is `GET /api/analytics/uses`, and the action
@@ -10,6 +10,9 @@ Which of them exist is decided here, by the build, and nowhere else: no store ro
 records it and nothing turns one off. The list used to be rows in `platform_modules` that the Kernel seeded
 and Settings toggled; that table is still declared in `core` only so an
 existing store opens unchanged, and no code reads or writes it.
+
+Agent decisions is where the decisions agents took are read: the summary model
+`planning.decisions`, served as `GET /api/planning/decisions`.
 
 `modules_payload` keeps the wire it replaced. Each module is a registration --
 its manifest plus `state`, `mutable`, `revision` and `updated_at` -- because
@@ -157,6 +160,24 @@ _MODULES = (
         [],
     ),
     _module(
+        "decisions",
+        "understand",
+        "platform.modules.decisions",
+        "agent",
+        ["point", "period", "from", "to", "open"],
+        ["planning.decisions"],
+        ["planning.decisions"],
+        [],
+        [],
+        ["decisions"],
+        [],
+        # As Analytics: a task's card opens over the summary and the address names it.
+        ["project", "work-item"],
+        ["work-item"],
+        ["work-item"],
+        [],
+    ),
+    _module(
         "memory",
         "capabilities",
         "platform.modules.memory",
@@ -196,7 +217,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-11-16T12:00:00Z"
+DECLARED_AT = "2026-11-17T12:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

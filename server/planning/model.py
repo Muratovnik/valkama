@@ -73,9 +73,11 @@ WORK_ITEM_KINDS = TASK_KINDS | {CONTAINER_KIND}
 PUBLIC_KINDS = ("task", "bug", "improvement", "goal", "stage")
 _CONTAINER_WORDS = frozenset({"goal", "stage"})
 
-#: Why accepted work was accepted: the basis an acceptance records. `migrated` is
-#: the work-model migration's alone: no tool and no HTTP write takes it.
-ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
+#: Why accepted work was accepted: the basis an acceptance records. `agent` is an
+#: agent's own decision where the owner's participation setting leaves it to the
+#: agent, as for a goal it proposes. `migrated` is the work-model migration's alone:
+#: no tool and no HTTP write takes it.
+ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "agent", "migrated")
 #: How a project came to an item (`item_projects`), strongest first: named by whoever
 #: filed or edited it, derived from its commits, or its space's former project.
 PROJECT_SOURCES = ("named", "commits", "migrated")
@@ -89,6 +91,9 @@ LAUNCH_PLACES = ("space", "item_project")
 #: The one basis a caller names itself: an agent taking on work it was asked to do.
 #: A person's write is the owner's without naming it, and the rest the server gives.
 NAMED_BASIS = "assignment"
+#: The basis of an agent's own decision, which the server gives where the owner's
+#: participation setting leaves the decision to the agent.
+AGENT_BASIS = "agent"
 
 
 class RetiredWord(NamedTuple):
@@ -242,6 +247,9 @@ EVENT_ACTIONS = (
     # many steps it took, `MAIN-15: 2 steps`, and on the part the task's reference.
     "split_off",
     "split_from",
+    # An action that waited for the owner and was dropped without being carried out
+    # (`planning.pending`): `<point>: <why>`, such as `proposed_goal: merged into MAIN-12`.
+    "action_dropped",
     # A commit attached to the item or detached from it, `<project_id> <hash>` as the
     # detail, and an attachment a rewrite carried to the new commit, `<project_id>
     # <old> -> <new>`. No schema raise: the open widens the CHECK (`widen_event_actions`).
@@ -354,6 +362,14 @@ class OwnerOnlyError(PlanningError):
 
     Its own code: the answer may be right, but it decides what the owner decides —
     accepting work, confirming a goal, taking up work that came back.
+    """
+
+
+class QueueOffError(PlanningError):
+    """The queue of a space whose owner hands out work by hand, asked for its next task.
+
+    Its own code: the call is well formed and nothing is wrong with the work; the
+    owner names the item, and it is taken by its number instead.
     """
 
 

@@ -130,7 +130,8 @@
               "source": "mcp",
               "session_id": null,
               "agent_id": null
-            }
+            },
+            "point": "assignment"
           },
           {
             "action": "transitioned",

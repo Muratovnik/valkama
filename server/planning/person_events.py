@@ -103,6 +103,9 @@ KINDS = {
     "checklist_removed": "steps_edited",
     # Steps that left with a part split off: they left the item, as an edit takes them.
     "split_off": "steps_edited",
+    # A write that waited for the owner, dropped without being carried out: news of the
+    # owner's participation, not of where the work stands, which it leaves as it was.
+    "action_dropped": "action_dropped",
 }
 #: The kinds that say where the work stands: its state changed, it got its summary, it
 #: was left without a holder or changed holders, it came to wait for the owner or
@@ -210,6 +213,16 @@ _ASKER = (
     " JOIN execution_events c ON c.id = e.call_id"
     " WHERE e.work_item_id = ? AND e.action = 'request_created' AND e.detail = ?"
     " AND c.identity_state = 'confirmed' ORDER BY e.id LIMIT 1"
+)
+#: Who asked a question about a waiting action: the call that asked the action
+#: (`pending_actions.asked_call`, as `pending.asked_session` reads it), also where a call
+#: of Valkama's own wrote the question for that agent. A row with no session for one
+#: Valkama asked itself or a call that proved none; no row for a question of no action.
+_ACTION_ASKER = (
+    "SELECT CASE WHEN c.identity_state = 'confirmed' AND c.identity_source != 'valkama'"
+    " THEN c.session_id END, c.agent_id FROM work_item_requests r"
+    " JOIN pending_actions a ON a.action_id = r.action_id"
+    " LEFT JOIN execution_events c ON c.id = a.asked_call WHERE r.request_id = ?"
 )
 
 
@@ -733,16 +746,20 @@ def author_of(
     """The session and agent a reply or a question's event answers, or None.
 
     The author of the thread's root, or whoever asked the question: read from the
-    call that wrote it, never from a name it signed. None for a person's root, a
-    row no confirmed call wrote, and a question a merge moved here, whose
-    `request_created` stayed on the item it was asked on.
+    call that wrote it, never from a name it signed. A question about a waiting
+    action was asked by the call that asked the action, even where Valkama's call
+    wrote it for that agent (`_ACTION_ASKER`). None for a person's root, a row no
+    confirmed call wrote, a question Valkama asked of its own, and a question a merge
+    moved here, whose `request_created` stayed on the item it was asked on.
     """
 
     if "reply_to" in entry:
         row = conn.execute(_ROOT_AUTHOR, (entry["reply_to"],)).fetchone()
     else:
         question = entry.get("reply_to_request", entry.get("request_id"))
-        row = conn.execute(_ASKER, (work_item_id, question)).fetchone()
+        row = conn.execute(_ACTION_ASKER, (question,)).fetchone()
+        if row is None:
+            row = conn.execute(_ASKER, (work_item_id, question)).fetchone()
     if row is None or row[0] is None:
         return None
     return str(row[0]), None if row[1] is None else str(row[1])
@@ -845,7 +862,9 @@ def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dic
     if action.startswith("request_"):
         return _request_entry(conn, kind, at, action, detail)
     if action == "checklist_replaced":
-        return _entry(kind, at, text=f"{detail} steps")
+        # `<count>`, then the positions only clarified and the reason, as the service writes it.
+        count = detail[: len(detail) - len(detail.lstrip("0123456789"))]
+        return _entry(kind, at, text=f"{count} steps{detail[len(count) :]}")
     if action in ("comment_resolved", "comment_reopened"):
         # `<id>: <decision>` or `<id>`, as `service.resolve_comment` logs it.
         root, _colon, decision = detail.partition(": ")

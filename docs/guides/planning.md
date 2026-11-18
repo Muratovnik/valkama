@@ -99,9 +99,10 @@ its work.
 A claim also says whether anyone is still behind it. When the client proves its
 session, the claim is a lease on that session: `live` while the session is
 active and has shown a sign of life — a hook event or a Valkama write — in the
-last 3 days, `stale` once it ended or went quiet, and `unconfirmed` when no
+lease term of the item's space, `lease_quiet_days` (3 days unless the owner
+changed it), `stale` once it ended or went quiet, and `unconfirmed` when no
 session was proved, which is also how every older claim and every claim made in
-the browser reads. An `unconfirmed` claim lapses after 3 days without an event
+the browser reads. An `unconfirmed` claim lapses after that many days without an event
 on the item, the owner's own included. An open question to the owner on the item
 stops both counts. Another session needs `force` to take a live claim, even when
 it signs with the same author. A stale claim is released by whoever meets it

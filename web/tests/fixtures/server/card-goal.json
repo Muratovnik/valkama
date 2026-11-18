@@ -26,16 +26,13 @@
         "title": "Goal with participants",
         "kind": "goal",
         "priority": "medium",
-        "state": {
-          "state_id": "00000000-0000-4000-8000-000000000003",
-          "key": "triage",
-          "name": "Triage",
-          "category": "triage",
-          "is_terminal": false
-        },
+        "state": null,
         "open": true,
-        "container_state": null,
-        "acceptance": null,
+        "container_state": "in_progress",
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
         "started_at": "2026-01-02T03:04:05Z",
         "waits_for": [],
         "claim_ref": "",
@@ -66,7 +63,32 @@
         "events": [
           {
             "action": "created",
-            "detail": "triage",
+            "detail": "",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000018",
+              "agent_id": "a7c3e9f1d2b4a608"
+            }
+          },
+          {
+            "action": "accepted",
+            "detail": "assignment",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000018",
+              "agent_id": "a7c3e9f1d2b4a608"
+            },
+            "point": "assignment"
+          },
+          {
+            "action": "opened",
+            "detail": "",
             "author": "agent",
             "at": "2026-01-02T03:04:05Z",
             "identity": {

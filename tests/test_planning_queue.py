@@ -4,7 +4,7 @@ Each case is one condition of the queue's rule, worked by hand from the rule, no
 from the code: a task in a ready state is given when nobody holds it or a step of
 it, nothing unfinished blocks it, no question to the owner waits on it, its
 workflow leads from its state into work, and no goal or stage over it stands in
-triage or deferred, waits on a blocker or is closed. A record names every
+triage or deferred, waits to be cancelled, waits on a blocker or is closed. A record names every
 condition that fails in `withheld`, in one fixed order, and reads `workable`
 exactly when it names none.
 
@@ -26,7 +26,17 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface, sessions, store
-from server.planning import api, chain, model, requests, service, views
+from server.planning import (
+    api,
+    calls,
+    chain,
+    model,
+    pending,
+    request_model,
+    requests,
+    service,
+    views,
+)
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -35,6 +45,8 @@ from tests.registry_fixtures import project_binding, project_entry, registry_byt
 
 #: The one field of a question to the owner.
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
+#: The agent whose cancel waits.
+AGENT = calls.Identity(calls.CONFIRMED, calls.CLAUDE_PAIR, session_id="session-a")
 
 
 class QueueCase(unittest.TestCase):
@@ -84,6 +96,23 @@ class QueueCase(unittest.TestCase):
         return requests.create(
             self.conn, tree.refs[name], kind="question", prompt="Which way?", fields=[FIELD]
         )
+
+    def wait_to_cancel(self, tree: Tree, name: str, point: str = "cancel_outside") -> str:
+        """An agent's cancel of the item, kept for the owner's answer at `point`; the action."""
+
+        identity = str(service.get_work_item(self.conn, tree.refs[name])["work_item_id"])
+        with calls.bind(AGENT, "apply_work_item_changes"):
+            waiting = pending.ask(
+                self.conn,
+                identity,
+                point,
+                pending.Proposal("transition", {"state": "cancelled"}, f"cancel {name}"),
+                purpose="cancel",
+                prompt="Cancel it?",
+                fields=request_model.fields(request_model.cancel_fields()),
+                author="claude",
+            )
+        return waiting.action
 
     def register(self, *projects: tuple[str, Tree | None, bool]) -> dict[str, Path]:
         """Register projects, each with a root of its own: its id, the space it is bound to
@@ -258,6 +287,27 @@ class ConditionTests(QueueCase):
         self.assertEqual(["ancestor_deferred"], self.withheld(tree, "t"))
         self.assertIsNone(self.given(tree))
 
+    def test_a_task_under_a_goal_whose_cancel_waits_is_given_once_the_cancel_ends(self) -> None:
+        for point in ("cancel_outside", "cancel_shared"):
+            with self.subTest(point=point):
+                tree = self.space()
+                tree.add("G", kind="goal", state="container")
+                tree.add("S", kind="stage", state="container", parent="G")
+                tree.add("t", state="ready", parent="S")
+                tree.add("u", state="ready")
+                action = self.wait_to_cancel(tree, "G", point)
+                # Work over the stage and beside it: only what is under the goal waits.
+                self.assertEqual(["ancestor_cancelling"], self.withheld(tree, "t"))
+                self.assertEqual([], self.withheld(tree, "u"))
+                self.assertEqual("u", self.given(tree))
+                self.assertIsNone(self.given(tree))
+                with calls.bind(AGENT, "expire_work_item_request"):
+                    pending.end(
+                        self.conn, pending.get(self.conn, action), pending.WITHDRAWN, author="a"
+                    )
+                self.assertEqual([], self.withheld(tree, "t"))
+                self.assertEqual("t", self.given(tree))
+
     def test_a_task_under_a_stage_that_waits_is_given_once_the_blocker_is_done(self) -> None:
         tree = self.space()
         tree.add("G", kind="goal", state="container")
@@ -303,6 +353,7 @@ class ConditionTests(QueueCase):
         tree.block("B", "t")
         tree.block("B", "F")
         self.ask(tree, "t")
+        self.wait_to_cancel(tree, "G")
         self.assertEqual(
             [
                 "not_ready",
@@ -311,6 +362,7 @@ class ConditionTests(QueueCase):
                 "question",
                 "ancestor_triage",
                 "ancestor_deferred",
+                "ancestor_cancelling",
                 "ancestor_waits",
             ],
             self.withheld(tree, "t"),

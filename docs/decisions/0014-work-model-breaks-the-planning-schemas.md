@@ -22,7 +22,7 @@ hold other work at any depth and are never claimed; there are eight categories;
 work is accepted on a recorded basis; and an accepted open goal or stage shows
 what it derives from the work under it instead of a state. The order work is
 taken in was set by hand, a `rank` stored as the item's `position`; in 3.0 it is
-computed from the work model. The store moves to schema 19 through
+computed from the work model. The store moves to schema 21 through
 `valkama migrate work-model`.
 
 Several of the old names would mean something else under the new model. A
@@ -84,7 +84,12 @@ and no compatibility layer.
      `owner_only`, a withdrawal by anyone but the session that asked it with
      `not_asker`, and declining it, changing its answer or answering it with an
      own variant with `[purpose]`; withdrawing the question of review returns
-     its item to `ready`;
+     its item to `ready`. The same holds for the purposes `goal`, `task`,
+     `cancel` and `condition`, and for every question that a write waiting for
+     the owner carries, whatever its purpose: only a person answers it, and a
+     question Valkama asked about such a write is withdrawn by no session. A
+     request of purpose `consent` is answered by the session it asks, once, and
+     never declined or changed (`[purpose]`);
    - a goal or stage is refused a move to `completed` while an item under it,
      at any depth, is open (`children`), and `force` does not carry it;
    - the ending of a launch moves its item nowhere: an outcome `complete` or
@@ -116,6 +121,61 @@ and no compatibility layer.
      cancelled state, is refused with `acceptance_question`, which `force` does
      not carry. A close, a delete or a merge that brings work back answers
      with `returned`;
+   - the same refusal holds while the owner is asked whether to do an item in
+     `triage` (a question of `purpose` `goal`, `task` or `triage`): an agent's
+     claim of it, its move out of `triage` anywhere but a cancelled state, an
+     `acceptance: assignment` included, and a `create_work_item` that claims
+     what it leaves waiting are refused, and so is a claim or move of an item
+     with no basis under a goal or stage the owner is asked about; work already
+     accepted under it is not. An agent's move of a task in `triage` into
+     accepted work under goals and stages all accepted waits for the owner
+     where the setting `task_in_goal` is `human`, answering `waits_for_owner`
+     and leaving the task in `triage`. A person's claim or move of the item ends
+     its question `withdrawn` and drops the write waiting on it;
+   - an agent's `create_work_item` of a goal with no parent meets the setting
+     `proposed_goal`: where it is `human`, as in the set a store starts at, the
+     goal lies in `triage` without a basis and the answer names
+     `waits_for_owner` (`action`, `point`, `question`, `what`), the question of
+     `purpose` `goal`, answered `do`, `later` or `drop`; where it is `agent` the
+     goal stands accepted at once on the new basis `agent`. A put-off goal that
+     comes back while the setting is `human` is asked about the same way, by
+     Valkama. A task an agent files under goals and stages all accepted and open
+     waits in `triage` under them where `task_in_goal` is `human`, on the
+     question `task`, and a task filed into `triage`, or given a label there, is
+     accepted at once on the basis `label_rule` when one of its labels has a
+     rule that makes it ready;
+   - while one write of a point waits for the owner on an item, another write of
+     that point there is refused with `[participation]`, and the same write sent
+     again answers the same `waits_for_owner` and writes nothing;
+   - where the owner hands out work by hand, the space's setting `queue` being
+     `off`, `claim_ready_work_item` and its HTTP write are refused with
+     `queue_off` (409), writing nothing;
+   - an agent's cancel of an item its own work did not file waits for the
+     owner where the setting `cancel_outside` is `human`, answering
+     `waits_for_owner` and leaving the item as it was. An agent's cancel of work
+     other live sessions do is no longer made at once: each of those sessions
+     is asked by a request of `purpose` `consent`, which it answers `agree`,
+     `object` with a `reason`, or `moved_out` once nothing it holds is left in
+     what the cancel closes (`[consent]` otherwise). Where the setting
+     `cancel_shared` is `human` the owner is asked beside them and the answer
+     names `waits_for_owner`; otherwise, and for a cancel with
+     `transition.following`, the answer names `waits_for_sessions`, and the
+     cancel is made as Valkama's write once every session agreed, moved its
+     work out or ended, or passes to the owner on an objection or after a day.
+     A `move_out` with which an asked session answers keeps the item's
+     holders, state and basis instead of returning it to `triage`;
+   - an agent's removal or rewording of a step of a goal or stage needs
+     `checklist_reason` (`[checklist]` otherwise) and, where the setting
+     `condition` is `human`, waits for the owner, answering `waits_for_owner`
+     and keeping the steps as they were until the answer `allow`; a step sent
+     by its `id` with `clarifies: true` only clarifies its wording and is
+     written at once. An agent's completion of a goal, which confirms it
+     whether the work under it is all closed or nothing stands under it at
+     all, waits for the owner where `goal_close` is `human`, writing what the
+     call sent before it and answering `waits_for_owner` on the question
+     `confirm`, and its put-off of an accepted goal or stage waits
+     where `goal_defer` is `human`. A call whose `transition` closes the item
+     while another of its writes waits is refused whole (`close_with_waiting`);
    - a commit is attached to an item rather than written as a ref: the `refs`
      group and `POST /api/planning/work-item/ref` refuse the kind `commit`,
      naming the `commits` group, an item record's `refs` holds no commit, and
@@ -129,6 +189,16 @@ and no compatibility layer.
      reads, where 2.9 wrote `<reason>: <step text>`; the reason is recorded only
      in the `released` of a claim released with it and in a move back to the
      queue;
+   - a request of kind `decision`, from `create_work_item_request`, the
+     `questions` group or asked of sessions, recommends an answer in every
+     required field: an option with `recommended` in a `choice` or a
+     `multi_choice`, a `verdict`'s `recommended`. One with a required field that
+     recommends nothing, a required `text` or `boolean` among them, is refused
+     with `[decision]` naming the fields. Where the owner's setting leaves
+     decisions to the agent, an agent's decision to the owner comes back
+     `answered` by those recommendations, with its `answers` and a `note` that
+     says so, where it came back `pending`; the batch's `questions` entry then
+     names its `status`, `answers` and `note` beside its `request_id`;
    - a space of the directory `GET /api/platform/planning` carries the four
      numbers of its card, `numbers`, or why it has none, `numbers_absent`; a
      store that does not open or answer no longer fails the whole directory:
@@ -208,18 +278,25 @@ and no compatibility layer.
 | a `blocks` link to enter `blocked` | a stated `reason`; work that waits on an item stays where it is, linked `blocks` |
 | `{"state": "review"}` with open steps or no summary | every step ticked, a `summary`, and `to_check`: what the owner is to check |
 | an agent completing an item, or taking it out of `review`, over an open question to the owner | wait for the owner's answer, or withdraw a question you asked |
-| an agent answering, declining or changing the answer of any question to the owner | leave a question with a `purpose` to the owner; only the session that asked withdraws it |
+| an agent answering, declining or changing the answer of any question to the owner | leave a question with a `purpose`, or one a waiting write carries, to the owner; only the session that asked withdraws it |
+| an agent's goal with no parent, or its task under accepted goals, accepted at once | read `waits_for_owner` in the answer: the item lies in `triage` until the owner answers; go on with what does not depend on it |
+| a second write of the same kind while the first waits for the owner | wait for the answer, or withdraw the question of the first |
+| `claim_ready_work_item` in a space whose owner hands out work by hand | `claim_work_item` on the item the owner named |
 | completing a goal or stage with open work under it | close, cancel or move out what is open under it; completing it then is the confirmation |
 | a launch that ends `complete` moves its item to `review` | the launched agent moves it to `review` with `to_check` |
 | cancelling a goal or stage with open work under it in one move | the move, refused with `cancel_list`; then the same move with `cancels` set to its `list_token` |
 | `update` with `parent: ""` | `move_out` with the `reason` the item leaves its goal or stage for |
 | moving accepted work under a goal or stage in triage or deferred | accept that goal or stage first, or move the item out |
 | `transition` into a deferred state | `defer` with `until` and `reason`; the work comes back by itself |
-| an agent claiming or moving work the owner is asked to take up again | wait for the owner's answer; only a cancel moves it before then |
+| an agent claiming or moving work the owner is asked to do or to take up again, or work with no basis under a goal or stage the owner is asked about | wait for the owner's answer; only a cancel moves it before then |
 | `refs: [{"kind": "commit", "value": "…"}]` | `commits: [{"repository": "<project id>", "hash": "…"}]` |
 | a card's commits among its `refs` | its `commits` |
 | `GET /api/ref?kind=commit&value=…&space=…` | `GET /api/commit?repository=<project id>&hash=…` |
 | the reason before the step's text in an expired step's `checklist_released` | the step's text alone; the reason in a `released` or a move back that went with it |
+| a `decision` with a required field that recommends nothing | a `question`; a decision recommends an answer in every required field, and when it comes back `answered` by that recommendation, act on the answer |
+| an agent's cancel of work outside its own, or that other sessions do, made at once | read `waits_for_owner` or `waits_for_sessions` in the answer: the cancel is made, if it still applies, when the owner or those sessions agree |
+| a session whose work another agent cancels hears only the cancel | answer its `consent` request: `agree`, `object` with a `reason`, or `move_out` your work and then `moved_out` |
+| an agent's removal or rewording of a step of a goal or stage, its completion of a goal, or its put-off of an accepted one, made at once | send `checklist_reason` with such a step change, or `clarifies: true` on a step that only says the same better, and read `waits_for_owner` in the answer; close the item in a later call than a write that waits |
 | a directory space's `work_item_count`, always a number | a number, or `null` with `numbers_absent` `unreadable` when the space's store could not be read |
 
 ## Consequences

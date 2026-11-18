@@ -21,7 +21,7 @@ import unittest
 from unittest import mock
 
 from server.hooks import notify
-from server.planning import leases, person_events, service
+from server.planning import leases, participation, person_events, service
 from tests.test_hooks_tree_notices import (
     AS_A2,
     AS_B,
@@ -57,12 +57,10 @@ class Lapsed(Harness):
     def quiet(self, session: str) -> None:
         """The session last seen past its lease: nobody is behind its claim any more."""
 
+        quiet = leases.quiet_period(participation.load(self.conn), None)
         self.conn.execute(
             "UPDATE sessions SET last_seen = ? WHERE id = ?",
-            (
-                (leases.utc_now() - leases.QUIET_PERIOD).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                session,
-            ),
+            ((leases.utc_now() - quiet).strftime("%Y-%m-%dT%H:%M:%SZ"), session),
         )
         self.conn.commit()
 

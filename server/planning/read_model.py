@@ -31,6 +31,7 @@ from . import (
     leases,
     mentions,
     model,
+    participation,
     queue,
     sections,
     states,
@@ -844,6 +845,7 @@ def present(
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
     read_space: str | None = None,
+    settings: participation.Settings | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -864,7 +866,9 @@ def present(
     under it. `projects` is what `item_projects.of_items` read for such a read in
     one walk; absent, the item reads its own. `read_space` is the space, by id, a
     read of one space is of, which `withheld` asks another space's item by
-    (`queue.withheld`).
+    (`queue.withheld`). `settings` is the participation setting as such a read, or
+    the write that answers, loaded it once (`participation.load`); absent, an item
+    somebody holds loads it, since its lease is read by it.
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
@@ -880,6 +884,7 @@ def present(
         tree=tree,
         projects=projects,
         read_space=read_space,
+        settings=settings,
     )
     identity = str(row["work_item_id"])
     if not full:
@@ -1008,6 +1013,7 @@ def _record(
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
     read_space: str | None = None,
+    settings: participation.Settings | None = None,
 ) -> tuple[dict, leases.Lease | None]:
     """What the brief record, the full one and the card share, and the lease it read.
 
@@ -1065,12 +1071,16 @@ def _record(
     asked = (
         facts.question(identity) if facts.asked is not None and identity in facts.nodes else None
     )
-    lease = leases.lease(conn, row, asked=asked) if full else None
-    record["claim_state"] = (
-        (lease.state if lease is not None else None)
-        if full
-        else leases.state(conn, row, asked=asked)
-    )
+    lease: leases.Lease | None = None
+    if row["claim_ref"]:
+        # Only a held item's lease reads the setting, so only it loads one of its own.
+        snapshot = participation.load(conn) if settings is None else settings
+        lease = leases.lease(conn, row, settings=snapshot, asked=asked) if full else None
+        record["claim_state"] = (
+            (lease.state if lease is not None else None)
+            if full
+            else leases.state(conn, row, settings=snapshot, asked=asked)
+        )
     record["container_state"] = facts.container_state(identity)
     record["started_at"] = facts.started_at(identity)
     record["waits_for"] = facts.waits_for(identity)
@@ -1446,9 +1456,14 @@ def _comments_page(conn: sqlite3.Connection, identity: str, after: int) -> tuple
 
 
 def claim(conn: sqlite3.Connection, row: sqlite3.Row) -> dict | None:
-    """The lease on the item as the full record carries it, or None while nobody holds it."""
+    """The lease on the item as the full record carries it, or None while nobody holds it.
 
-    lease = leases.lease(conn, row)
+    A read of one part, so it loads the setting its lease is read by itself.
+    """
+
+    if not row["claim_ref"]:
+        return None
+    lease = leases.lease(conn, row, settings=participation.load(conn))
     return None if lease is None else lease.as_dict()
 
 
@@ -1592,28 +1607,46 @@ def _cut_comments(
     return flat, None, None
 
 
-def _events(conn: sqlite3.Connection, identity: str, limit: int | None) -> list[dict]:
-    """An item's history, oldest first: every event, or only the newest `limit`."""
+_EVENT_ROWS = (
+    "SELECT e.id, e.action, e.detail, e.author, e.created_at,"
+    " c.identity_state, c.identity_source, c.session_id, c.agent_id, {point} AS point"
+    " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id{marks}"
+    " WHERE e.work_item_id = ?"
+)
+#: Each event with the point an agent's own decision marked it at (`planning.decisions`).
+_MARKED_EVENTS = _EVENT_ROWS.format(
+    point="d.point", marks=" LEFT JOIN agent_decisions d ON d.event_id = e.id"
+)
+#: The same for an attached store an earlier build wrote, which marks nothing.
+_UNMARKED_EVENTS = _EVENT_ROWS.format(point="NULL", marks="")
 
-    return [
-        {
+
+def _events(conn: sqlite3.Connection, identity: str, limit: int | None) -> list[dict]:
+    """An item's history, oldest first: every event, or only the newest `limit`.
+
+    An event an agent's own decision marked carries the mark's `point`; any other
+    has no such key.
+    """
+
+    try:
+        rows = _newest(conn, _MARKED_EVENTS, "e.id", (identity,), limit)
+    except sqlite3.OperationalError as error:
+        if str(error) != "no such table: agent_decisions":
+            raise
+        rows = _newest(conn, _UNMARKED_EVENTS, "e.id", (identity,), limit)
+    found = []
+    for event in rows:
+        shown = {
             "action": event["action"],
             "detail": event["detail"],
             "author": event["author"],
             "at": event["created_at"],
             "identity": _identity(event),
         }
-        for event in _newest(
-            conn,
-            "SELECT e.id, e.action, e.detail, e.author, e.created_at,"
-            " c.identity_state, c.identity_source, c.session_id, c.agent_id"
-            " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
-            " WHERE e.work_item_id = ?",
-            "e.id",
-            (identity,),
-            limit,
-        )
-    ]
+        if event["point"] is not None:
+            shown["point"] = event["point"]
+        found.append(shown)
+    return found
 
 
 def _events_total(conn: sqlite3.Connection, identity: str) -> int:

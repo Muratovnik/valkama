@@ -32,7 +32,7 @@ from server.executions import lifecycle as executions
 from server.executions import results as execution_results
 from server.executions import service as execution_service
 from server.planning import calls as planning_calls
-from server.planning import leases, sweep
+from server.planning import leases, participation, sweep
 from server.planning import model as planning_model
 from server.planning import service as planning
 from server.planning import views as planning_views
@@ -458,7 +458,9 @@ class LaunchLifecycleTests(LaunchHarness):
             self.conn, fresh, "dev", author="codex", acceptance="assignment"
         )
         self.conn.commit()
-        self.assertEqual([], planning_views.stale_claims(self.conn))
+        self.assertEqual(
+            [], planning_views.stale_claims(self.conn, settings=participation.load(self.conn))
+        )
 
         old = self.item("abandoned")
         planning.claim_work_item(self.conn, old, author="ghost")
@@ -482,7 +484,7 @@ class LaunchLifecycleTests(LaunchHarness):
             (identity,),
         )
         self.conn.commit()
-        stale = planning_views.stale_claims(self.conn)
+        stale = planning_views.stale_claims(self.conn, settings=participation.load(self.conn))
         self.assertEqual([old], [item["reference"] for item in stale])
         self.assertEqual("ghost", stale[0]["claim_ref"])
         self.assertGreaterEqual(stale[0]["quiet_days"], 3)

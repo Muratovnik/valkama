@@ -15,7 +15,15 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping
 
-from . import calls, deferral, item_tree, leases, model, person_events, questions
+from . import (
+    calls,
+    item_tree,
+    leases,
+    model,
+    participation,
+    person_events,
+    questions,
+)
 
 Finding = tuple[str, str]
 
@@ -26,7 +34,7 @@ Finding = tuple[str, str]
 #: under a goal or stage that is done, or work in review with nothing for the owner
 #: to answer — or an agent would go over the owner's open question, where
 #: withdrawing its own question is its way out, or decide for the owner whether work
-#: put off is to be done (`acceptance_question`), or cancel work under a goal or stage
+#: in triage or put off is to be done (`acceptance_question`), or cancel work under a goal or stage
 #: it was never shown (`cancel_list`, which the service refuses with the list).
 UNFORCED = frozenset(
     {
@@ -144,6 +152,8 @@ def findings(
     basis: object = None,
     held: bool | None = None,
     to_check: str = "",
+    following: str | None = None,
+    settings: participation.Settings,
 ) -> tuple[list[Finding], list[str]]:
     """Hard refusals and soft warnings for moving `item` to `target` state.
 
@@ -151,7 +161,10 @@ def findings(
     whether a holder stands on the item after the write, for a write that takes
     the claim itself; left out, it is read from the item. `to_check` is what the
     owner is to check, which a move into review needs: it becomes the owner's
-    question there, and review asks what a close asks besides.
+    question there, and review asks what a close asks besides. `following` is the
+    owner's answered question a cancel follows from, whose answer does not count
+    as a person's act (`person_spoke`). `settings` is the write's snapshot of the
+    participation setting, which the lease is read by.
     """
 
     current = conn.execute(
@@ -203,7 +216,7 @@ def findings(
                     " checklist steps before starting it",
                 )
             )
-        warning = lease_warning(conn, item, reference)
+        warning = lease_warning(conn, item, reference, settings=settings)
         if warning:
             warnings.append(warning)
     if target["category"] == "review" and entering:
@@ -270,11 +283,11 @@ def findings(
     asked = owner_question(conn, item, current, target, reference)
     if asked:
         refusals.append(("question", asked))
-    undecided = return_question(conn, item, current, target, reference)
+    undecided = acceptance_question(conn, item, current, target, reference)
     if undecided:
         refusals.append(("acceptance_question", undecided))
     if closing:
-        spoke = person_spoke(conn, item, reference)
+        spoke = person_spoke(conn, item, reference, following=following)
         if spoke:
             refusals.append(("person_spoke", spoke))
     if target["category"] == "completed" and entering and item["kind"] == model.CONTAINER_KIND:
@@ -392,40 +405,46 @@ def converting_question(conn: sqlite3.Connection, item: sqlite3.Row, reference: 
     )
 
 
-def return_question(
+def acceptance_question(
     conn: sqlite3.Connection,
     item: sqlite3.Row,
     current: sqlite3.Row,
     target: sqlite3.Row,
     reference: str,
 ) -> str:
-    """What stops an agent's move of put-off work the owner is asked about.
+    """What stops an agent's move of work the owner is asked whether to do.
 
-    Whether work that came back under goals and stages all accepted is to be done
-    is the owner's question (`deferral.RETURN`): a move out of deferred, or putting
-    it off again, would answer it for them. Only a cancel goes before the answer, and
-    ends the question as it closes; a person's move is their answer.
+    Whether work in triage or put off is to be done is the owner's question while it
+    is open on the item, or over an item with no basis (`questions.acceptance_asked`):
+    a move out, or putting it off again, would answer it for them, and so would a move
+    that names an assignment. Only a cancel goes before the answer, and ends the
+    question as it closes; a person's move is their answer.
     """
 
-    if current["category"] != "deferred" or target["category"] == "cancelled":
+    if current["category"] not in model.UNACCEPTED_CATEGORIES:
         return ""
-    if not calls.from_agent():
+    if target["category"] == "cancelled" or not calls.from_agent():
         return ""
-    asked = deferral.asked(conn, str(item["work_item_id"]))
+    asked = questions.acceptance_asked(conn, item)
     if asked is None:
         return ""
     return (
-        f"the owner has not decided whether {reference} is to be done (question {asked}):"
-        " wait for the answer; only a cancel moves it before then"
+        f"the owner has not decided whether {reference} is to be done"
+        f" (question {asked['request_id']}): wait for the answer; only a cancel moves it"
+        " before then"
     )
 
 
-def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def person_spoke(
+    conn: sqlite3.Connection, item: sqlite3.Row, reference: str, *, following: str | None = None
+) -> str:
     """What a person did that the agent closing this item has not been told.
 
     Only an agent answers to this: a person closes as they see fit, and the runner
     is not deciding anything. What this call itself wrote is left out, so a batch's
-    comment does not clear the way for its own transition.
+    comment does not clear the way for its own transition. `following` is the owner's
+    answered question a cancel follows from: the agent named that answer, so it is
+    left out; any other act of a person still refuses.
     """
 
     if not calls.from_agent():
@@ -434,25 +453,41 @@ def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) ->
     events = person_events.since_last_agent_write(
         conn, str(item["work_item_id"]), own_call=None if own is None else own[0]
     )
+    if following is not None:
+        events = [
+            event
+            for event in events
+            if not (event["kind"] == "question_answered" and event.get("request_id") == following)
+        ]
     if not events:
         return ""
+    named = (
+        " The answer that `following` names does not count here." if following is not None else ""
+    )
     return (
         f"a person acted on {reference} through the interface since an agent last wrote to it:"
         f" {person_events.describe(events)}. Read the item with get_work_item and take that"
         " into account; once you have written what you did about it, close again, or pass"
-        " force to close over it"
+        f" force to close over it.{named}"
     )
 
 
-def lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def lease_warning(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    reference: str,
+    *,
+    settings: participation.Settings,
+) -> str:
     """What to say when the executor the guard accepted may not be there.
 
     A claim still counts as an executor: refusing an unconfirmed one would
     refuse every claim made before identity existed and every client without
-    it. A claim the owner took in the browser needs no such remark.
+    it. A claim the owner took in the browser needs no such remark. `settings`
+    is the snapshot of the write that asks.
     """
 
-    lease = leases.lease(conn, item)
+    lease = leases.lease(conn, item, settings=settings)
     if lease is None or lease.source == calls.BROWSER:
         return ""
     if lease.state == leases.UNCONFIRMED:

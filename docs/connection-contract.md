@@ -312,12 +312,12 @@ model; the card's `state` has no `is_terminal`:
 | `state` | `key`, `name`, `category` and `is_terminal` of its workflow state; `null` exactly for an accepted open goal or stage |
 | `open` | whether its work is still open: false in a `completed` or `cancelled` state. A reader decides openness by it, since an accepted open goal or stage has no `state` to read `is_terminal` from |
 | `container_state` | for an accepted open goal or stage, `not_started`, `in_progress` or `awaiting_confirmation`; `null` for every other item, a goal or stage in `triage`, `deferred`, `completed` or `cancelled` included, whose `state` says where it stands |
-| `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule` or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
+| `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule`, `agent` (an agent's own decision where the owner's participation setting leaves it to the agent) or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
 | `cancelled_blockers` | the cancelled items still linked `blocks` to it, by reference, which `waits_for` no longer names: the work it waited for will not be done. Only on open work and only when there is one; it lasts while the link stands |
 | `workable` | whether its space's take-next queue may give it now: `withheld` is empty. It is the rule `claim_ready_work_item` takes work by |
-| `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open), `outside_space` (a read of another space holds it, for a project of that space it names: that space's queue never gives it). Empty exactly when `workable` |
+| `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_cancelling` (a cancel of a goal or stage over it waits for the owner or for the sessions it asked), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open), `outside_space` (a read of another space holds it, for a project of that space it names: that space's queue never gives it). Empty exactly when `workable` |
 | `projects` | the projects it changes, by `project_id`: each with the registry's `display_name` (`null` while the registry does not record it) and its `source`, `named`, `commits` or `migrated` (see [The projects an item changes](#the-projects-an-item-changes)). A goal's or stage's are those of every task under it |
 
 Four other answers carry only some of these fields:
@@ -375,10 +375,152 @@ and open, and otherwise the basis the accepting write gave, `owner` from the
 browser and the `acceptance` an agent sent. A stage accepted under a goal that is
 not accepted thus gives its work the stage's own basis, as a claim of that work
 would, and leaves the goal as it is. A goal or stage in `deferred` stops the
-descent, and nothing under it changes.
+descent, and nothing under it changes. An agent's write leaves out an item on
+which the owner's question whether to do it stands: it stays in `triage` for the
+answer, named in `warnings` as `MAIN-12 stays in triage: the owner has not decided
+whether it is to be done (question <id>)`, and a goal or stage left so stops the
+descent as a deferred one does. A person's write takes it along, and that ends
+the question as withdrawn.
 
 A record carries no `container` and no `ready` field: `kind` says which items
 hold others, and `workable` which may be taken.
+
+#### Writes that wait for the owner
+
+The owner decides which of an agent's writes are the agent's to make and which
+are the owner's, by a participation setting that only the server reads; no tool
+argument or answer says what it is, and the tool descriptions and the skill read
+the same at any setting. A point of the setting is `agent` or `human`:
+
+| Point | The agent's write it decides |
+| --- | --- |
+| `proposed_goal` | `create_work_item` of a goal with no parent, which then lies in `triage` |
+| `task_in_goal` | a task filed under goals and stages all accepted and open, or moved there by `parent` or out of `triage` into them |
+| `cancel_outside` | a cancel of an item that its own work did not file |
+| `cancel_shared` | a cancel of work other live sessions do |
+| `condition` | a removal or rewording of a step of a goal or stage |
+| `goal_close` | the completion of a goal, which confirms it: its work all closed, or nothing under it |
+| `goal_defer` | `defer` of an accepted goal or stage |
+| `decision` | a request of kind `decision`: at `agent` it comes back `answered` by its recommendations |
+| `finding` | the review of work in `triage`; a finding an agent files lies in `triage` at any setting |
+
+Two switches stand beside them, `queue` (`on`, or `off` where the owner hands out
+work by hand, see [The order of work](#the-order-of-work)) and `triage_reminder`,
+and four numbers: `triage_age_days` (10, from 1 to 365), `triage_count` (100,
+from 1 to 10,000), `lease_quiet_days` (3, from 1 to 60, the
+[lease term](#claims-are-leases)) and `recent_close_minutes` (30, from 1 to
+1,440). The sets `minimal`, `default`, `maximal` and `manual` name a value for
+every point and switch; a store starts at `default`, which is `human` at
+`proposed_goal`, `decision`, `cancel_shared`, `condition` and `finding` and
+`agent` at the rest. A space overrides single values and inherits the others,
+later changes of the common ones included; a rule of a label says whether a task
+that carries it is ready to be accepted, and the space's rule wins over the
+common one. `GET /api/planning/participation`, with `space` or without it for the
+common setting, reads the scope: its `set` (`custom` once a value differs from
+every set), the `sets`, each key's `value`, whether it is the scope's `own` and
+what it would have `inherited`, and the label rules. `POST /api/planning/participation`
+writes one `key` and `value` (`null` inherits again), a whole `set`, or a `label`
+with `ready` and `description`, and answers with the read; an agent's call is
+refused with `owner_only` (403, `the owner changes participation in Valkama`).
+
+Where the point says `agent`, the write is made at once, and an agent's decision
+is marked on the event that records it: `GET /api/planning/decisions` (`space`,
+`project`, repeated `point`, `from`, `to`, `limit` up to 200, `offset`) lists
+the marks newest first, and the full record's event carries its `point`. Where
+it says `human`, nothing of the write is written. The item stays as it was, the
+owner is asked a question on it, and the answer of the write carries:
+
+```json
+"waits_for_owner": {"action": "5f0c2a…", "point": "cancel_outside",
+                    "question": "9a41…", "what": "cancel MAIN-12"}
+```
+
+`what` is the line the summary of decisions would carry. The same write sent
+again while it waits answers the same and writes nothing; another write of the
+point on the item is refused with `[participation]`. The top-level session that
+asked follows the item, unless it holds it. A goal waits in `triage` without a
+basis, and an agent's claim of it, or of a task with no basis under it, and its
+move anywhere but a cancelled state meet `acceptance_question` until the answer.
+
+The question has a `purpose` and one required choice `answer`, the option the
+agent asked for recommended: `goal` (`do`, `later` with the text `until`, `drop`
+with the text `cancels`, a cancel list's token), `task` (`do`, `later` with
+`until`, `out`, `drop`), `cancel` (`cancel` with `cancels`, `keep`), `condition`
+(`allow`, `keep`) and, for `goal_close`, the `confirm` of the goal's period of
+waiting, or the agent's own for a goal with nothing under it (`confirm`, `leave`,
+labelled `Leave it open`: no period of waiting stands behind it, so the goal stays
+open and no session is handed it).
+Only a person answers it, in Valkama (`owner_only`), and its answer is never
+declined or changed (`[purpose]`); only the session that asked withdraws it
+(`not_asker`). Read whole, it carries the `action`:
+
+```json
+"action": {"id": "5f0c2a…", "point": "cancel_shared", "asked_by": "claude (session 3c9e…)",
+           "asked_at": "2026-11-16T15:12:00Z", "reason": "superseded by MAIN-40",
+           "proposed": {}, "outcome": null,
+           "cancel_list": {"cancels": [], "dependents": [], "list_token": "1f2e…"},
+           "consent": [{"session": "codex (session 71aa…)", "answer": "object",
+                        "reason": "…", "at": "2026-11-16T15:30:00Z"}]}
+```
+
+`asked_by` is the holder label of the session whose call asked, `Valkama` for a
+question Valkama asked itself (a put-off goal that came back, which nobody
+withdraws), and the call's `author` when it proved no session. `proposed` holds
+the `until` of a put-off, the steps `removed` (`id`, `text`) and `rewritten`
+(`id`, `from`, `to`) of a step change, or the `summary` of a completion.
+`cancel_list`, read as it stands, comes with `goal` and `cancel`, and `consent`
+with `cancel_shared`. The compact form carries `purpose` and `action.point`.
+
+The owner's answer makes the write, if it still applies, as the owner's: the
+basis it gives is `owner`, and the `accepted`, `opened`, `transitioned` and
+`checklist_replaced` events that record it end with `as asked by <asker>`, after
+`: ` behind a state key or a count alone and after `; ` behind a reason. The
+action ends `carried_out`, or `declined` for an answer that leaves the item as it
+was. One that no longer applies (the item moved, a step it changes was changed,
+the goal is no longer in `triage`) ends `dropped` and leaves an `action_dropped`
+event, `<point>: <why>`, the answer standing as given; so does one whose item
+closes, merges or a person claims or moves meanwhile. A `cancel` or `drop` over
+a cancel list that grew or changed is refused with `cancel_list` and the new list.
+Expiring the question takes the write back (`withdrawn`).
+
+A cancel of work other live sessions do asks each of them, by a call of
+Valkama's for the agent, a request of purpose `consent`, answered by that
+session once with `{"answer": "agree"}`, `{"answer": "object", "reason": "…"}`,
+or `{"answer": "moved_out"}` once `move_out` took its work out of what the cancel
+closes (`[consent]` otherwise). Where `cancel_shared` says `human` the owner is
+asked beside them, and the owner's answer decides. Otherwise, and for a cancel
+whose `transition.following` names an answered question of the owner on the
+item or above it, the write answers:
+
+```json
+"waits_for_sessions": {"action": "5f0c2a…", "point": "cancel_shared",
+                       "sessions": ["claude (session 3c9e…)", "codex (session 71aa…)"],
+                       "until": "2026-11-17T15:12:00Z"}
+```
+
+and the cancel is made as Valkama's write once each session agreed, moved its
+work out or ended, or passes to the owner on an objection or at `until`, a day
+after it was asked. A `following` that names no such question, or comes with any
+move but a cancel, is refused with `[participation]`.
+
+A change of a goal's or stage's steps that removes or rewrites one needs
+`checklist_reason` (up to 500 characters; `[checklist]` without it), in the
+`apply_work_item_changes` call and as `reason` of
+`POST /api/planning/work-item/checklist`. A step sent by its `id` with
+`clarifies: true` and a new text only clarifies its wording: it is written at
+once at any setting and marked `condition`. A call whose `transition` closes the
+item while another of its writes waits is refused whole with
+`close_with_waiting` (409), before any guard of the move, and `force` does not
+carry it.
+
+| Code | Status | When |
+| --- | --- | --- |
+| `[participation]` | 400 | another write of the point waits on the item: `[participation] MAIN-12 already waits for the owner on cancel_outside: withdraw that question first`; a `following` that names no answered question of the owner |
+| `close_with_waiting` | 409 | `the checklist change in this call waits for the owner, so the item cannot close in it: close it after the answer, or send the change in another call` |
+| `[checklist]` | 400 | `removing or rewriting a step of a goal or stage needs checklist_reason`; `clarifies` on a step not named by its `id` with a new text |
+| `[consent]` | 400 | a consent answer that is not `agree`, `object` with a `reason` or `moved_out`, or `moved_out` while the session's work is still in the list |
+| `owner_only` | 403 | an agent's answer to a question with a purpose but `consent`, or to one a waiting write carries; an agent's write of the setting |
+| `not_asker` | 403 | a withdrawal by another session than the one that asked, or of a question Valkama asked |
 
 #### Retired words
 
@@ -520,6 +662,19 @@ written, the release of lapsed leases included:
 
 A task of any space is claimed by number with `claim_work_item`, whatever the
 queue a session reads.
+
+Where the owner hands out work by hand, the space's setting `queue` is `off`, and
+`claim_ready_work_item` and its HTTP write are refused with `queue_off` (409):
+`the owner hands out work in MAIN by hand: take the item they named with
+claim_work_item`, the space being the one whose queue the call reads. The refusal
+writes nothing, the release of lapsed leases included. Nothing under a goal or
+stage whose cancel waits for the owner or for the sessions it asked is given
+(`ancestor_cancelling`). An agent's claim of an item the owner is asked whether
+to do (a question of purpose `goal`, `task` or `triage`) or to take up again
+(`return`), or of an item with no basis under a goal or stage so asked, is
+refused with `acceptance_question`, as is its move of that item anywhere but a
+cancelled state, and `force` does not carry it. A person's claim or move takes
+the item and ends the question `withdrawn` and the write waiting on it `dropped`.
 
 Every read of many items stands on one total order: the state's place in its
 workflow, the key of work, the space's key, the number. `list_work_items` and its
@@ -1257,7 +1412,18 @@ it shows and does not move, so a draft stays where it is.
 
 The panel holds the questions that wait for a person. A
 [list on a comment](#a-list-on-a-comment) waits for nobody, so the panel neither
-shows nor counts one.
+shows nor counts one, and a request asked of an agent session, such as one of
+purpose `consent`, is that session's to answer and not shown there.
+
+The panel reads `GET /api/modules/planning/requests` page by page: `limit` (1 to
+200, 100 by default) and `offset` cut one page from every source read whole and
+sorted, `total` counts them all, and `has_more` says another page follows. It
+reads on while `has_more` holds, so it shows the whole list; a page that brings
+nothing new ends the read early, the list having changed under it, and then the
+panel says that some questions may be missing. A question with a purpose shows
+its own form: `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
+`condition` and `triage`, each answered once, by the owner, and carried out in
+the same write ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
 
 ### The card's waiting question
 
@@ -3188,8 +3354,13 @@ and never written by one:
 | --- | --- |
 | nobody holds the item | `null` |
 | the claim names no call, the call is not `confirmed`, or it has no session | `unconfirmed` |
-| the session has no row, is `ended` or `failed`, or was last seen more than 3 days ago | `stale` |
+| the session has no row, is `ended` or `failed`, or was last seen longer ago than the lease term | `stale` |
 | otherwise | `live` |
+
+The lease term is the setting `lease_quiet_days` of the item's space, 3 days unless
+the owner changed it ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
+What is read about a session with no item, how long it counts as live and the
+notices of its hook among it, takes the common value.
 
 A claim made before calls were recorded, by a build that does not record them,
 or in the browser reads `unconfirmed`: none of them names a session.
@@ -3254,9 +3425,9 @@ and its `parts` counts the lease:
 
 `holder` is `claim_ref`. `acquired_at` is when the claiming call arrived and is
 `null` for a claim that names no call; `last_seen` is the session's, and
-`expires_at` is `last_seen` plus 3 days while the lease is `live`, and for an
+`expires_at` is `last_seen` plus the lease term while the lease is `live`, and for an
 `unconfirmed` claim the item's last history event (its `updated_at` when it has
-none) plus 3 days; `null` while an open question to the owner stops the count,
+none) plus the lease term; `null` while an open question to the owner stops the count,
 and for a `stale` lease. It answers how long a session that shows no sign of
 life keeps a live lease, and promises nothing about a session that ends: from
 that moment the lease is `stale`, `expires_at` is `null`, and the grace above
@@ -3324,7 +3495,7 @@ Who may release or take over a claim follows the lease:
   another session that signs with the same `author`, and a call with no
   confirmed session at all.
 - `claim_work_item` on an item under a `stale` lease, or an `unconfirmed` claim
-  past its 3 days, releases it before it does anything else, in the grace or
+  past its lease term, releases it before it does anything else, in the grace or
   not, with the steps the same session holds there: whoever asks for that item
   takes it now, without `force`, and the session that comes back later finds it
   taken. Its history reads `released` and then `claimed`.
@@ -3347,7 +3518,7 @@ Who may release or take over a claim follows the lease:
   | --- | --- |
   | `session-ended` | ended or failed |
   | `session-missing` | has no row |
-  | `lease-expired` | was last seen more than 3 days ago, or, for a claim or step no session proved, the item had no event for 3 days |
+  | `lease-expired` | was last seen longer ago than the lease term, or, for a claim or step no session proved, the item had no event for that term |
 
   Releases written before the reasons were told apart say `lease-expired`,
   whatever the cause, and stay as they were written.
@@ -3363,18 +3534,18 @@ Who may release or take over a claim follows the lease:
   claim: the call is that session's sign of life.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases. It has no session to go quiet, so it lapses when its item has had no
-  history event for 3 days, and so does a step whose holder no session proved.
+  history event for the lease term, and so does a step whose holder no session proved.
   The owner's own claim made in the browser lapses the same way. It reads
   `unconfirmed` until the release.
 
 With nobody calling, [the planning sweep](#the-planning-sweep) releases every
 lapsed hold: each claim and claimed step whose stale lease is past its grace, or
-whose `unconfirmed` hold is past its 3 days. A grace is over at exactly 12 hours
+whose `unconfirmed` hold is past its lease term. A grace is over at exactly 12 hours
 after `ended_at`, so a pass at that second releases the lease.
 
 The space's list of abandoned claims (`stale_claims` in the read model) holds
 every claim of an item at work or blocked whose lease is `stale`, in its grace or
-not, and every `unconfirmed` claim whose 3 days without an event are over, until
+not, and every `unconfirmed` claim whose lease term without an event is over, until
 a release takes it away.
 
 A claim still counts as the executor that starting an item requires. Starting
@@ -3389,7 +3560,7 @@ request and within the start-up budget, and then again every 10 minutes on a
 connection of their own, on the thread `valkama-planning-sweep`, for as long as
 they run. Two processes passing at once need no agreement: a step changes
 nothing the second time, and every write checks the revision it read. Ten minutes is a
-margin against terms of 12 hours and 3 days, and between passes
+margin against terms of 12 hours and a lease term of a day or more, and between passes
 `claim_ready_work_item` and `claim_work_item` still release what they meet.
 
 A pass runs its steps in order, each in a transaction of its own:
@@ -3860,7 +4031,10 @@ and its move anywhere but a cancelled state, is refused with
 `acceptance_question`, which `force` does not carry.
 
 A claim, or any move out of `deferred`, a cancel included, ends the condition and
-withdraws its question; moving the item under another parent keeps them. A read
+withdraws its question; moving the item under another parent keeps them. Merged
+into an item that is not put off, the item's question ends withdrawn in the merge
+and moves to the survivor closed, since its answer `do` would move the survivor
+from wherever it stands; a survivor put off takes the question still waiting. A read
 writes nothing: a condition that came stands until a write brings the work back.
 
 **A goal or stage put off** keeps the work under it with whoever holds it, and the
@@ -4069,7 +4243,9 @@ anything to the item first -- a comment saying what it did about them -- empties
 the window and the close goes through; `force: true` carries it through as it
 does every guard and records `overridden` with `person_spoke`, and the answer
 still carries `from_person`. A `transition` group is judged the same way, with
-the window counted from before the batch.
+the window counted from before the batch. A cancel whose `transition.following`
+names an answered question leaves out that question's `question_answered` event:
+the guard reads the rest of the window, so any other act of a person still refuses.
 
 A person closing an item is not guarded, nor is a write made outside any call. An
 item a person closed or cancelled is told to the agent by its next write's
@@ -4213,8 +4389,11 @@ closed item takes no new request.
 A request record says why one ended unanswered in `expired_reason`: `deadline`,
 `withdrawn`, `execution_closed`, `item_completed`, `item_cancelled`, or the
 `session_gone` that is only read; `null` otherwise. `purpose` names what the owner's
-answer carries out -- `review`, `confirm` or `return` -- and is `null` on every
-other request. The compact form of `get_work_item`'s `questions` carries each of
+answer carries out -- `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
+`condition` or `triage` -- or, on a request asked of a session, `consent`, and is
+`null` on every other request. A question a write that waits for the owner
+carries also names its `action_id`
+([Writes that wait for the owner](#writes-that-wait-for-the-owner)). The compact form of `get_work_item`'s `questions` carries each of
 the two only where it is set.
 
 Fields have stable IDs and one of five types: `text`, `choice`, `multi_choice`,

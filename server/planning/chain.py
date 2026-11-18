@@ -40,7 +40,7 @@ import sqlite3
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 
-from . import item_tree, leases, model, queue, read_model, states
+from . import item_tree, leases, model, participation, queue, read_model, states
 
 #: The scopes a chain is read in.
 SCOPES = ("chain", "tree")
@@ -118,6 +118,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
     tree = item_tree.of_spaces(conn, [space_id])
     places = queue.places(queue.of_spaces(conn, [space_id], tree))
     sources = item_tree.below(conn, read_model.service_ends(links, "from_id"))
+    settings = participation.load(conn)
 
     found = []
     for identity in sorted(members, key=lambda item: queue.list_key(rows[item], tree)):
@@ -141,7 +142,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 "open": not terminal,
                 "container_state": tree.container_state(identity),
                 "claim_ref": row["claim_ref"],
-                "claim_state": leases.state(conn, row),
+                "claim_state": leases.state(conn, row, settings=settings),
                 "parent_reference": model.human_id(key, int(rows[parent]["number"]))
                 if parent is not None and parent in rows
                 else None,

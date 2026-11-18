@@ -104,6 +104,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'planning-search.json': validateGlobalPlanningSearch,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
+  'request-proposed-goal.json': validateInputRequestDetail,
   'request-session-gone.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
   'usage-item.json': validateItemUsageAnswer,
@@ -379,5 +380,8 @@ describe('the server fixtures', () => {
       'expired',
       'session_gone',
     ])
+    // A goal an agent proposes: the question carries the write that waits for the owner.
+    const proposed = validateInputRequestDetail(read('request-proposed-goal.json')).request
+    expect([proposed.purpose, proposed.action?.point]).toEqual(['goal', 'proposed_goal'])
   })
 })

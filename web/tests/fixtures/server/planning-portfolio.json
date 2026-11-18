@@ -14,12 +14,12 @@
             "space_key": "MAIN"
           },
           "title": "Contract",
-          "work_item_count": 25,
+          "work_item_count": 26,
           "numbers": {
-            "triage": 11,
+            "triage": 10,
             "ready": 2,
             "active": 5,
-            "waiting_owner": 1
+            "waiting_owner": 2
           },
           "numbers_absent": null,
           "default_project": "example-project",

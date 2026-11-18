@@ -17,7 +17,11 @@ EXPIRED_REASONS = ("deadline", "withdrawn", "execution_closed", "item_completed"
 #: accepted, a goal or stage whose work is all closed to be confirmed, put-off work
 #: that came back to be taken up again. Null on any other request. Declared here,
 #: beside the statuses, because the store's CHECK reads it.
-PURPOSES = ("review", "confirm", "return")
+#: The purposes of the owner's participation (`planning.pending`) follow: a goal an
+#: agent proposed or put off, a task in a goal, a cancel, a condition removed or
+#: rewritten, the consent of the sessions whose work a cancel ends, and a finding.
+PARTICIPATION_PURPOSES = ("goal", "task", "cancel", "condition", "consent", "triage")
+PURPOSES = ("review", "confirm", "return", *PARTICIPATION_PURPOSES)
 #: The field of the question a move into review asks, by what its answer carries out:
 #: `accept` completes the work, `return` sends it back to work. The question's note
 #: is the owner's comment on either.
@@ -41,18 +45,27 @@ REVIEW_FIELDS = (
 #: it to the next session that takes work in its space.
 CONFIRM_CONFIRM = "confirm"
 CONFIRM_LEAVE = "leave"
-CONFIRM_FIELDS = (
-    {
-        "id": REVIEW_ANSWER,
-        "label": "Answer",
-        "type": "choice",
-        "required": True,
-        "options": [
-            {"id": CONFIRM_CONFIRM, "label": "Confirm it"},
-            {"id": CONFIRM_LEAVE, "label": "Leave it to the next session"},
-        ],
-    },
-)
+
+
+def _confirm_fields(leave: str) -> tuple[dict, ...]:
+    return (
+        {
+            "id": REVIEW_ANSWER,
+            "label": "Answer",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": CONFIRM_CONFIRM, "label": "Confirm it"},
+                {"id": CONFIRM_LEAVE, "label": leave},
+            ],
+        },
+    )
+
+
+CONFIRM_FIELDS = _confirm_fields("Leave it to the next session")
+#: The same field when an agent closes a goal with nothing under it: no period of waiting
+#: stands behind it, so `leave` leaves it open and hands it to no session.
+CONFIRM_OPEN_FIELDS = _confirm_fields("Leave it open")
 #: The fields of the question put-off work asks when its condition came under goals
 #: and stages all accepted: `do` takes it up, `later` puts it off again until `until`
 #: (a day or an item's reference, as `defer` reads it), and `drop` cancels it, with
@@ -91,6 +104,143 @@ RETURN_FIELDS = (
         "under": {"field": REVIEW_ANSWER, "option": RETURN_DROP},
     },
 )
+
+
+def goal_fields(*, recommend: bool) -> list[dict]:
+    """The fields of the question about a goal the owner decides on: one an agent
+    proposed, or one that came back from being put off. Under the ids put-off work
+    asks with, `do` accepts it, `later` puts it off until `until` and `drop` cancels it,
+    with `cancels` the list token for a goal with open work under it. `recommend` marks
+    `do`, which the agent that proposed it asks for; Valkama's asking recommends nothing.
+    """
+
+    choice, until, cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": RETURN_DO, "label": "Take it on", **({"recommended": True} if recommend else {})},
+        {"id": RETURN_LATER, "label": "Put it off"},
+        {"id": RETURN_DROP, "label": "Drop it"},
+    ]
+    return [choice, until, cancels]
+
+
+#: The answer about a task in a goal that keeps it out of the goal.
+TASK_OUT = "out"
+
+
+def task_fields(*, moving: bool) -> list[dict]:
+    """The fields of the question about a task an agent files in an accepted goal, or
+    moves there (`moving`). Under the ids put-off work asks with, `do` takes it on in the
+    goal, `later` puts it off under the goal until `until`, `out` keeps it out of the
+    goal and `drop` cancels it; the agent asks for `do`."""
+
+    choice, until, _cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": RETURN_DO, "label": "Take it on", "recommended": True},
+        {"id": RETURN_LATER, "label": "Put it off"},
+        {"id": TASK_OUT, "label": "Leave it where it was" if moving else "Move it out of the goal"},
+        {"id": RETURN_DROP, "label": "Drop it"},
+    ]
+    return [choice, until]
+
+
+#: The answers about an agent's cancel the owner decides on: `cancel` makes it, `keep`
+#: leaves the item as it is.
+CANCEL_CANCEL = "cancel"
+CANCEL_KEEP = "keep"
+
+
+def cancel_fields() -> list[dict]:
+    """The fields of the question about a cancel the owner decides on: `cancel` cancels
+    the item, with `cancels` the list token for a goal or stage with open work under
+    it, as a cancel's second call names it; `keep` leaves it. The agent asks for
+    `cancel`."""
+
+    choice, _until, cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": CANCEL_CANCEL, "label": "Cancel it", "recommended": True},
+        {"id": CANCEL_KEEP, "label": "Keep it"},
+    ]
+    cancels["under"] = {"field": REVIEW_ANSWER, "option": CANCEL_CANCEL}
+    return [choice, cancels]
+
+
+#: The answers about steps of a goal or stage an agent removes or rewords: `allow` makes
+#: the change, `keep` leaves the steps as they stand.
+CONDITION_ALLOW = "allow"
+CONDITION_KEEP = "keep"
+
+
+def condition_fields() -> list[dict]:
+    """The field of the question about steps of a goal or stage an agent removes or
+    rewords: `allow` or `keep`; the agent asks for `allow`."""
+
+    return [
+        {
+            "id": REVIEW_ANSWER,
+            "label": "Answer",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": CONDITION_ALLOW, "label": "Allow the change", "recommended": True},
+                {"id": CONDITION_KEEP, "label": "Keep the steps"},
+            ],
+        }
+    ]
+
+
+def put_off_fields(until: str) -> list[dict]:
+    """The fields of the question about an accepted goal or stage an agent puts off until
+    `until`: `do` keeps it accepted, `later` puts it off until the answer's `until`, which
+    left empty is the agent's, and `drop` cancels it, with `cancels` the list token for
+    one with open work under it. The agent asks for `later`."""
+
+    choice, later, cancels = (dict(field) for field in RETURN_FIELDS)
+    choice["options"] = [
+        {"id": RETURN_DO, "label": "Keep it accepted"},
+        {"id": RETURN_LATER, "label": "Put it off", "recommended": True},
+        {"id": RETURN_DROP, "label": "Drop it"},
+    ]
+    later["required"] = False
+    later["description"] = f"The agent puts it off until {until}; left empty, that stands."
+    return [choice, later, cancels]
+
+
+#: The answers a session gives about a cancel of its work: it agrees, it objects with a
+#: reason, or it has moved its work out of what the cancel closes.
+CONSENT_AGREE = "agree"
+CONSENT_OBJECT = "object"
+CONSENT_MOVED_OUT = "moved_out"
+CONSENT_ANSWERS = (CONSENT_AGREE, CONSENT_OBJECT, CONSENT_MOVED_OUT)
+CONSENT_REASON = "reason"
+
+
+def consent_fields() -> list[dict]:
+    """The fields of the request asking a session about a cancel of its work: `answer`,
+    and under `object` the `reason`, which an objection needs."""
+
+    return [
+        {
+            "id": REVIEW_ANSWER,
+            "label": "Answer",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": CONSENT_AGREE, "label": "Agree"},
+                {"id": CONSENT_OBJECT, "label": "Object"},
+                {"id": CONSENT_MOVED_OUT, "label": "Moved my work out"},
+            ],
+        },
+        {
+            "id": CONSENT_REASON,
+            "label": "Why you object",
+            "type": "text",
+            "required": True,
+            "options": [],
+            "under": {"field": REVIEW_ANSWER, "option": CONSENT_OBJECT},
+        },
+    ]
+
+
 MAX_NOTE = 8000
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each
@@ -521,6 +671,69 @@ def answers(
             raise model.PlanningError(f"answer {identity} does not match its field")
         result[identity] = answer
     return result
+
+
+#: The note on a decision answered by its recommendation, where the owner's setting
+#: leaves the choice to the agent that asked.
+RECOMMENDED_NOTE = (
+    "Decided by its recommendation: the owner's setting leaves this choice to the agent."
+)
+
+
+def recommendation(field: dict) -> object:
+    """What a field recommends answering: a verdict's `recommended`, the option a choice
+    recommends, the options a multi_choice recommends; None when it recommends nothing,
+    as a text or a boolean never does."""
+
+    if field["type"] == "verdict":
+        return field.get("recommended")
+    picked = [option["id"] for option in field["options"] if option.get("recommended")]
+    if not picked:
+        return None
+    return picked if field["type"] == "multi_choice" else picked[0]
+
+
+def recommends_every_required(descriptors: list[dict]) -> None:
+    """Refuse a decision with a required field that recommends no answer, naming each."""
+
+    missing = [
+        field["id"] for field in descriptors if field["required"] and recommendation(field) is None
+    ]
+    if missing:
+        raise model.PlanningError(
+            "[decision] a decision recommends an answer in every required field:"
+            f" {', '.join(missing)}; ask a question when there is nothing to recommend"
+        )
+
+
+def recommended_answers(descriptors: list[dict]) -> dict:
+    """The answer a decision's recommendations give: each field shown by the answers
+    before it that recommends one; a field that recommends nothing stays unanswered."""
+
+    given: dict = {}
+    for field in descriptors:
+        value = recommendation(field)
+        if value is not None and shown(field, given):
+            given[field["id"]] = value
+    return answers(given, descriptors)
+
+
+def chosen_labels(descriptors: list[dict], given: dict) -> list[str]:
+    """What an answer chose, as the person reads it: each option's label, and a verdict
+    with the label of its field."""
+
+    chosen: list[str] = []
+    for field in descriptors:
+        if field["id"] not in given:
+            continue
+        value = given[field["id"]]
+        if field["type"] == "verdict":
+            chosen.append(f"{field['label']}: {value}")
+            continue
+        labels = {option["id"]: option["label"] for option in field["options"]}
+        values = value if isinstance(value, list) else [value]
+        chosen.extend(str(labels.get(entry, entry)) for entry in values)
+    return chosen
 
 
 def same_answer(descriptors: list[dict], given: dict, stored: dict) -> bool:
@@ -968,7 +1181,8 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     adds `verdicts` and `undecided`, which stand whole before any row, and a list
     on a comment `comment_id`, the comment it stands under, and `undecided`, its
     field while nothing on it is ticked. One that ended unanswered says why in
-    `expired_reason`, and one with a purpose names it in `purpose`.
+    `expired_reason`, and one with a purpose names it in `purpose`; one about a write
+    that waits for the owner names that write's point in `action`.
     `clipped` appears when anything was left out or cut: past `MAX_COMPACT_TEXT`
     in a text, or past `MAX_COMPACT_JSON` the replaced answer first, then every
     label, then the later fields of the current one.
@@ -991,6 +1205,7 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
         # purpose carries out: each only where it is set.
         **({"expired_reason": record["expired_reason"]} if record.get("expired_reason") else {}),
         **({"purpose": record["purpose"]} if record.get("purpose") else {}),
+        **({"action": {"point": record["action"]["point"]}} if record.get("action") else {}),
         **(_verdicts(descriptors, record) if review else {}),
         **(_list_undecided(descriptors, record) if listed else {}),
         "answer": [],

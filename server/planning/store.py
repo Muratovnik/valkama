@@ -150,6 +150,141 @@ DEFERRALS_UNTIL_ITEM_INDEX = (
     " ON work_item_deferrals(until_item_id) WHERE until_item_id IS NOT NULL"
 )
 
+#: The keys of the owner's participation setting (`planning.participation` says what
+#: each means and which values it takes): the points and switches a set gives, then
+#: the numbers beside them.
+PARTICIPATION_KEYS = (
+    "queue",
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "decision",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+    "triage_reminder",
+    "triage_age_days",
+    "triage_count",
+    "lease_quiet_days",
+    "recent_close_minutes",
+)
+_PARTICIPATION_KEY_SQL = ",".join(f"'{key}'" for key in PARTICIPATION_KEYS)
+#: The owner's participation setting, one row per value set: without a space the common
+#: value, with one that space's own. A key with no row takes the value above it, and
+#: above the common one the default set the code holds, so a store with no row reads as
+#: that set. The value is text, checked by its key in the code; `call_id` is the
+#: person's call that wrote it. It goes with its space.
+PARTICIPATION_SETTINGS = f"""CREATE TABLE IF NOT EXISTS participation_settings(
+    planning_space_id TEXT REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
+    key TEXT NOT NULL CHECK(key IN ({_PARTICIPATION_KEY_SQL})),
+    value TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    updated_at TEXT NOT NULL
+)"""
+#: One value per scope and key; the common scope is the one without a space.
+PARTICIPATION_SETTINGS_SCOPE = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS participation_settings_scope"
+    " ON participation_settings(ifnull(planning_space_id, ''), key)"
+)
+#: The owner's rules of a label, in the same two scopes: `ready` 1 makes a finding with
+#: the label ready at once, 0 refuses in a space the common rule, null takes the rule
+#: above; `description` says what the label means. A row holds at least one of them.
+LABEL_SETTINGS = """CREATE TABLE IF NOT EXISTS label_settings(
+    planning_space_id TEXT REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    ready INTEGER CHECK(ready IN (0, 1)),
+    description TEXT,
+    call_id INTEGER REFERENCES execution_events(id),
+    updated_at TEXT NOT NULL,
+    CHECK(ready IS NOT NULL OR description IS NOT NULL)
+)"""
+LABEL_SETTINGS_SCOPE = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS label_settings_scope"
+    " ON label_settings(ifnull(planning_space_id, ''), label)"
+)
+#: Both tables and their indexes, as a fresh store and the work-model migration create them.
+PARTICIPATION = (
+    PARTICIPATION_SETTINGS,
+    PARTICIPATION_SETTINGS_SCOPE,
+    LABEL_SETTINGS,
+    LABEL_SETTINGS_SCOPE,
+)
+_PARTICIPATION = "".join(f"{statement};\n" for statement in PARTICIPATION)
+
+#: The points at which an agent's own decision is marked for the owner to read back
+#: (`planning.decisions`): the participation points, and an acceptance by assignment.
+DECISION_POINTS = (
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "decision",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+    "assignment",
+)
+_DECISION_POINT_SQL = ",".join(f"'{point}'" for point in DECISION_POINTS)
+#: An agent's decision, as a mark on the event that recorded it: when, which item and
+#: which session are the event's and its call's, so the mark holds only the point and
+#: what was decided. It goes with its event, and the event with its item.
+AGENT_DECISIONS = f"""CREATE TABLE IF NOT EXISTS agent_decisions(
+    event_id INTEGER PRIMARY KEY REFERENCES work_item_events(id) ON DELETE CASCADE,
+    point TEXT NOT NULL CHECK(point IN ({_DECISION_POINT_SQL})),
+    what TEXT NOT NULL
+)"""
+
+#: The points at which an agent's write can wait for the owner (`planning.pending`):
+#: `decision` is a question and no write, and `finding` is the review of findings at once.
+PENDING_POINTS = (
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+)
+#: How a waiting action ended: done on the answer, declined by it, dropped as no longer
+#: applying or with its item gone another way, or withdrawn by the session that asked.
+PENDING_OUTCOMES = ("carried_out", "declined", "dropped", "withdrawn")
+_PENDING_POINT_SQL = ",".join(f"'{point}'" for point in PENDING_POINTS)
+_PENDING_OUTCOME_SQL = ",".join(f"'{outcome}'" for outcome in PENDING_OUTCOMES)
+#: A write an agent asked for that waits for the owner's answer: the point, the write as
+#: checked and what its asker saw (`action_json`), the call that asked, and once it
+#: ended, how and by which call. Its questions name it (`work_item_requests.action_id`).
+#: It goes with its item.
+PENDING_ACTIONS = f"""CREATE TABLE IF NOT EXISTS pending_actions(
+    action_id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    point TEXT NOT NULL CHECK(point IN ({_PENDING_POINT_SQL})),
+    action_json TEXT NOT NULL,
+    asked_call INTEGER NOT NULL REFERENCES execution_events(id),
+    created_at TEXT NOT NULL,
+    outcome TEXT CHECK(outcome IN ({_PENDING_OUTCOME_SQL})),
+    ended_call INTEGER REFERENCES execution_events(id),
+    ended_at TEXT,
+    CHECK((outcome IS NULL) = (ended_at IS NULL))
+)"""
+#: One open action per item and point.
+PENDING_ACTIONS_OPEN = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS pending_actions_open"
+    " ON pending_actions(work_item_id, point) WHERE outcome IS NULL"
+)
+#: The questions and requests of one action, which its end closes together.
+REQUESTS_ACTION_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_requests_action"
+    " ON work_item_requests(action_id) WHERE action_id IS NOT NULL"
+)
+#: The table, its index and the index of the requests, as a fresh store and the
+#: work-model migration create them.
+PENDING = (PENDING_ACTIONS, PENDING_ACTIONS_OPEN, REQUESTS_ACTION_INDEX)
+_PENDING = "".join(f"{statement};\n" for statement in PENDING)
+
 
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
 
@@ -274,7 +409,8 @@ _PURPOSE_SQL = ",".join(f"'{purpose}'" for purpose in request_model.PURPOSES)
 #: A question, a decision or a list, asked of the owner or of one agent session, and
 #: how it ended. Closing its item ends one still pending (`questions.end`), as done or
 #: cancelled. The 3.0 migration rebuilds the table from this text, so the columns
-#: later schemas appended stand in the order they were appended, `purpose` last.
+#: later schemas appended stand in the order they were appended, then `purpose` and the
+#: action waiting for the owner the question is about (`action_id`), last.
 _WORK_ITEM_REQUESTS = f"""(
     request_id TEXT PRIMARY KEY,
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
@@ -293,7 +429,8 @@ _WORK_ITEM_REQUESTS = f"""(
     revision INTEGER NOT NULL DEFAULT 0,
     expired_reason TEXT CHECK(expired_reason IN ({_EXPIRED_REASON_SQL})){_appended("work_item_requests")},
     {ADDRESSEE_COLUMN},
-    purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL}))
+    purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL})),
+    action_id TEXT REFERENCES pending_actions(action_id) ON DELETE CASCADE
 )"""
 _REBUILT = {
     "planning_spaces": _PLANNING_SPACES,
@@ -521,8 +658,9 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {DEFERRALS};
 {DEFERRALS_UNTIL_AT_INDEX};
 {DEFERRALS_UNTIL_ITEM_INDEX};
-
-{_ITEM_PROJECTS}
+{_PARTICIPATION}
+{AGENT_DECISIONS};
+{_PENDING}{_ITEM_PROJECTS}
 {_COMMITS}
 {ITEM_BASELINES};
 """
@@ -597,9 +735,28 @@ def rebuild_table(conn: sqlite3.Connection, table: str, definition: str, rows: s
 
     Dropping a table others reference cascades into them while foreign keys are
     enforced, so a caller rebuilding such a table turns them off first, outside its
-    transaction, where SQLite takes the pragma.
+    transaction, where SQLite takes the pragma (`store.schema_change` does). With
+    them on, such a table is refused before anything is written.
     """
 
+    if conn.execute("PRAGMA foreign_keys").fetchone()[0]:
+        referencing = sorted(
+            {
+                str(row[0])
+                for row in conn.execute(
+                    "SELECT m.name FROM sqlite_master m, pragma_foreign_key_list(m.name) f"
+                    " WHERE m.type = 'table' AND m.name != ? COLLATE NOCASE"
+                    ' AND f."table" = ? COLLATE NOCASE',
+                    (table, table),
+                )
+            }
+        )
+        if referencing:
+            raise RuntimeError(
+                f"rebuilding {table} with foreign keys on would delete the rows of"
+                f" {', '.join(referencing)} that reference it; turn foreign keys off"
+                " outside the transaction first"
+            )
     stored = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
     ).fetchone()
@@ -943,6 +1100,10 @@ SCHEMA_TABLES = (
     "work_item_confirmations",
     "work_item_deferrals",
     "work_item_projects",
+    "participation_settings",
+    "label_settings",
+    "agent_decisions",
+    "pending_actions",
     "commits",
     "work_item_commits",
     "work_item_baselines",

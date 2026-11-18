@@ -33,12 +33,25 @@ is complete on its own.
   only, `checklist`, `summary` and `review_question` entering review,
   `question`, `children`), a question with a purpose (`owner_only`,
   `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
-  a launch that no longer moves its item to review, a cancel of a goal or stage
-  with open work under it (`cancel_list`, `cancels`), a parent cleared only by
+  or one a write waiting for the owner carries, a goal an agent proposes, a
+  task it files in accepted goals and a task a label's rule accepts, which may
+  wait for the owner or be accepted at once (`waits_for_owner`, `agent`,
+  `label_rule`), a second write of a point that waits (`[participation]`),
+  the queue where the owner hands out work by hand (`queue_off`),
+  a decision that recommends an answer in every required field and may come
+  back answered by it (`[decision]`), a launch that no longer moves its item
+  to review, a cancel of a goal or stage with open work under it (`cancel_list`, `cancels`), a parent cleared only by
   `move_out` and never under an unaccepted goal (`[parent]`), work put off
-  only by `defer` and brought back by itself (`deferred`, `returned`,
-  `acceptance_question`), the step's text alone as the detail of an expired
-  step's `checklist_released`, and the retired words
+  only by `defer` and brought back by itself (`deferred`, `returned`), work
+  the owner is asked whether to do or take up again (`acceptance_question`),
+  a cancel of work outside the agent's own or that other sessions do, which
+  waits for the owner or for those sessions (`waits_for_owner`,
+  `waits_for_sessions`, `consent`, `[consent]`),
+  an agent's change of a goal's or stage's steps, its confirmation or its
+  put-off, which may wait for the owner (`checklist_reason`, `clarifies`,
+  `close_with_waiting`),
+  the step's text alone as the detail of an expired step's
+  `checklist_released`, and the retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the
   scope `space` and the module levels — and for reading an item by parts — the
@@ -256,15 +269,15 @@ Planning owns the work loop, including execution and exact session context.
 Memory and Settings supply its supporting capabilities, and Analytics is where a
 person reads the usage and quota of agent work: time, tokens, an API-price
 estimate, subscription quota. The module list is code:
-`server/platform/modules.py` declares the four modules, so adding one is a code
+`server/platform/modules.py` declares the five modules, so adding one is a code
 change and nothing at runtime turns one on or off. `GET /api/modules` and the
 MCP tool `list_platform_modules` answer from that list without reading the
 store. Analytics holds the id of a retired flow-metrics module, and only the id
 came back: the flow metrics with their portfolio and compare read models, and the
 Improvements, Skills management and Sessions monitoring screens, must not return
-to the list. `tests/test_work_focus_migration.py` holds the new declaration to
-none of the old one's read models, events, actions or capability. Removing those
-screens does not remove session identity, work-item history, execution links or
+to the list. `tests/test_work_focus_migration.py` holds the new declarations, Analytics's
+and Agent decisions', to none of the old one's read models, events, actions or
+capability. Removing those screens does not remove session identity, work-item history, execution links or
 installed client skills and settings.
 
 The extension registry (services, connections, assignments, grants, actions,

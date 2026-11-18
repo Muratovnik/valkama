@@ -18,6 +18,23 @@ from server.ui_state import PlatformHttpError
 from tests.retired_modules import FORMER_MODULES
 
 
+def declared_names(manifest: dict) -> set[str]:
+    """Every read model, event, action and capability a manifest declares."""
+
+    return {
+        *manifest["required_read_models"],
+        *manifest["sse_subscriptions"],
+        *manifest["primary_actions"],
+        *manifest["secondary_actions"],
+        *manifest["feature_capabilities"],
+        *(
+            name
+            for level in manifest["semantics"].values()
+            for name in (*level["read_models"], *level["action_semantics"])
+        ),
+    }
+
+
 class WorkFocusMigrationTests(unittest.TestCase):
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
@@ -132,25 +149,16 @@ class WorkFocusMigrationTests(unittest.TestCase):
         # The id is the retired module's; what it declared is not. Usage and quota
         # analytics may not reopen the flow dashboard's read models, events,
         # actions or capability under the old name.
+        self.assert_brings_back_none_of_the_flow_metrics("analytics")
+
+    def test_agent_decisions_bring_back_none_of_the_flow_metrics(self) -> None:
+        self.assert_brings_back_none_of_the_flow_metrics("decisions")
+
+    def assert_brings_back_none_of_the_flow_metrics(self, module_id: str) -> None:
         retired = FORMER_MODULES["analytics"]
-        current = next(m for m in modules.module_manifests() if m["module_id"] == "analytics")
-
-        def declared(manifest: dict) -> set[str]:
-            return {
-                *manifest["required_read_models"],
-                *manifest["sse_subscriptions"],
-                *manifest["primary_actions"],
-                *manifest["secondary_actions"],
-                *manifest["feature_capabilities"],
-                *(
-                    name
-                    for level in manifest["semantics"].values()
-                    for name in (*level["read_models"], *level["action_semantics"])
-                ),
-            }
-
-        self.assertTrue(declared(retired))
-        self.assertTrue(declared(retired).isdisjoint(declared(current)))
+        current = next(m for m in modules.module_manifests() if m["module_id"] == module_id)
+        self.assertTrue(declared_names(retired))
+        self.assertTrue(declared_names(retired).isdisjoint(declared_names(current)))
 
     def test_session_http_returns_compact_exact_context_without_event_feed(self) -> None:
         self.populated_source()

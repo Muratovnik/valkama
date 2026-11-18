@@ -67,7 +67,7 @@ exception or a silent absence.
 
 ## Module list
 
-The server declares `planning`, `analytics`, `memory`, and `settings` in its
+The server declares `planning`, `analytics`, `decisions`, `memory`, and `settings` in its
 code, and that list is the whole answer: no store row records it and nothing
 changes it at runtime. `GET /api/modules` and the MCP tool `list_platform_modules` return
 each module's manifest inside a registration that keeps the wire's `state`,
@@ -85,6 +85,12 @@ opening with `POST /api/analytics/uses`. All four are described in
 `connection-contract.md`. Improvements, Skills, and standalone Sessions registrations,
 pages, and APIs are retired, as are the flow-metrics Analytics dashboards and
 exports that an earlier build registered under the same id.
+
+`decisions` (Agent decisions) is the destination for the decisions agents took.
+It reads the `planning.decisions` model, served as `GET /api/planning/decisions`,
+at both operating levels: every space at Global, the exact space at Space. It
+has no screen yet, so the shell shows it as an unavailable view until that screen
+arrives.
 
 A store does not record the list. Store schema 9 dropped the
 `platform_modules` rows an earlier build wrote, their audit in
@@ -203,7 +209,8 @@ with a `state`. An item with no live work is not in the map, and no MCP tool ans
 carries it. The sessions behind an item are the one whose confirmed call took its claim
 and the ones its open steps' holders name; a subagent's claim or step names its parent's
 session. A session counts while its row says active and its last sign of life is no older
-than a claim's lease, three days. A subscription is kept longer, fourteen days.
+than a claim's lease term, the common `lease_quiet_days` (three days unless the owner
+changed it). A subscription is kept longer, fourteen days.
 
 A session is at work when a turn of its own runs, or when it has a live subagent: active,
 started since the session last really started, and with a transcript written within two

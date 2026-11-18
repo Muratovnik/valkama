@@ -17,7 +17,17 @@ from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from server import mcp_surface, sessions, store
-from server.planning import api, calls, leases, model, person_events, service, sweep, waiting
+from server.planning import (
+    api,
+    calls,
+    leases,
+    model,
+    participation,
+    person_events,
+    service,
+    sweep,
+    waiting,
+)
 
 B = "b0000000-0000-4000-8000-00000000000b"
 E = "e0000000-0000-4000-8000-00000000000e"
@@ -94,12 +104,10 @@ class Harness(unittest.TestCase):
     def quiet(self, session: str) -> None:
         """The session last seen past its lease: nobody is behind its work any more."""
 
+        quiet = leases.quiet_period(participation.load(self.conn), None)
         self.conn.execute(
             "UPDATE sessions SET last_seen = ? WHERE id = ?",
-            (
-                (leases.utc_now() - leases.QUIET_PERIOD).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                session,
-            ),
+            ((leases.utc_now() - quiet).strftime("%Y-%m-%dT%H:%M:%SZ"), session),
         )
         self.conn.commit()
 

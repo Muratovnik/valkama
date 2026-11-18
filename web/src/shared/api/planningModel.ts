@@ -22,11 +22,7 @@ import {
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { itemProjectsField } from '@/shared/api/itemProjectsModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
-import {
-  EVENT_ACTIONS,
-  EVENT_DETAIL_MAX,
-  LABELS_DETAIL_MAX,
-} from '@/shared/api/planningEventActions.ts'
+import { eventSchema } from '@/shared/api/planningEventActions.ts'
 import {
   conditionsChangedField,
   deferredField,
@@ -66,7 +62,14 @@ export const WORK_ITEM_KINDS = ['bug', 'goal', 'improvement', 'stage', 'task'] a
  */
 export const CONTAINER_STATES = ['not_started', 'in_progress', 'awaiting_confirmation'] as const
 /** Why accepted work was accepted. */
-const ACCEPTANCE_BASES = ['owner', 'assignment', 'inherited', 'label_rule', 'migrated'] as const
+const ACCEPTANCE_BASES = [
+  'owner',
+  'assignment',
+  'inherited',
+  'label_rule',
+  'agent',
+  'migrated',
+] as const
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export const LINK_KINDS = ['blocks', 'discovered-from', 'duplicates', 'relates-to'] as const
 const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
@@ -179,7 +182,7 @@ const workItemRowSchema = recordObject({
   queue_order: positiveInt().nullable(),
 })
 
-const summarySchema = strictObject({
+export const summarySchema = strictObject({
   done: blankable(4000),
   next: blankable(4000),
   why: blankable(4000).optional(),
@@ -326,30 +329,6 @@ const commentSchema = z.union([
     reply_to_request: z.null(),
   }),
 ])
-
-/**
- * Who made the call that wrote an event, as far as the call proved it. `author`
- * is what the caller wrote about itself; this is what the call carried. An
- * event older than identity has no source and names nobody.
- */
-const eventIdentitySchema = strictObject({
-  state: enumField(['confirmed', 'unconfirmed'] as const),
-  source: boundedText(/^[a-z][a-z-]{0,63}$/u, 64).nullable(),
-  session_id: callField(),
-  agent_id: callField(),
-})
-
-/** A detail is a short line, but for the label sets a `labels_changed` event carries. */
-const eventSchema = strictObject({
-  action: enumField(EVENT_ACTIONS),
-  detail: blankable(LABELS_DETAIL_MAX),
-  author: actor(),
-  at: boundedText(ISO, 96),
-  identity: eventIdentitySchema,
-}).refine((event) => event.action === 'labels_changed' || event.detail.length <= EVENT_DETAIL_MAX, {
-  message: 'expected a detail of at most 512 characters',
-  path: ['detail'],
-})
 
 /**
  * A session that follows the item, as the call that subscribed proved it. `label` is the holder

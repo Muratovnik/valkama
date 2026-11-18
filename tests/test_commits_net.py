@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface
-from server.planning import service
+from server.planning import calls, commits, participation, read_model, requests, service
 
 from .commit_fixtures import CLAUDE, PROJECT
 from .test_commits_api import ApiCase
@@ -339,3 +339,150 @@ class WhoseCloseTests(NetCase, ApiCase):
         self.assertEqual([c], self.named(answer))
         self.assertIn(self.line(c), answer["warnings"])
         self.assertEqual([], self.attached())
+
+
+class GoalWindowCase(NetCase):
+    """A goal of the owner's over work of `alpha`, which the session does through the tools.
+
+    A goal or stage has no holder, so its window opens at the session's earliest take of
+    a task under it, at any depth, or of such a task's step.
+    """
+
+    def filed(self, title: str, *, kind: str = "task", parent: str | None = None) -> str:
+        """An item the owner files in the interface; a task holds `alpha`."""
+
+        with calls.bind(calls.browser(), "/api/planning/work-item/create"):
+            made = service.create_work_item(
+                self.conn,
+                space="MAIN",
+                title=title,
+                kind=kind,
+                parent=parent,
+                projects=[PROJECT] if kind == "task" else None,
+            )
+        self.conn.commit()
+        return str(made["reference"])
+
+    def done(self, task: str, minutes: int) -> list[str]:
+        """The session claims the task, commits c1 `minutes` in and completes the task, then
+        commits c2 ten minutes later; the hashes, newest first, as the net names them."""
+
+        self.claim(task)
+        c1 = self.made("c1", minutes)
+        self.assertEqual([c1], self.named(self.close(task, "done")), "the task's own net")
+        c2 = self.made("c2", minutes + 10)
+        return [c2, c1]
+
+    def confirm(self, card: str) -> dict:
+        """The session's confirmation of a goal or stage as the stdio loop runs it, after a
+        word on the card that answers the owner's filing of it."""
+
+        self.tool("apply_work_item_changes", id=card, comment={"body": "Its work is done."})
+        answer = mcp_surface.run_tool_call(
+            self.conn,
+            "apply_work_item_changes",
+            {"id": card, "summary": SUMMARY, "transition": {"state": "completed"}},
+            meta=META,
+        )
+        assert isinstance(answer, dict)
+        return answer
+
+    def category(self, card: str) -> str:
+        return str(service.get_work_item(self.conn, card)["state"]["category"])
+
+
+class GoalWindowTests(GoalWindowCase):
+    def test_an_agent_s_confirmation_names_what_its_tasks_and_after_them_made(self) -> None:
+        goal = self.filed("Goal", kind="goal")
+        task = self.filed("Its task", parent=goal)
+        self.made("before", -30)
+        both = self.done(task, 30)
+        answer = self.confirm(goal)
+        self.assertNotIn("waits_for_owner", answer, "the default lets the agent confirm")
+        self.assertEqual("completed", self.category(goal))
+        self.assertEqual(both, self.named(answer), "from the task's claim, and after its close")
+
+    def test_an_agent_s_close_of_a_stage_has_the_same_window(self) -> None:
+        goal = self.filed("Goal", kind="goal")
+        stage = self.filed("Stage", kind="stage", parent=goal)
+        task = self.filed("Its task", parent=stage)
+        self.made("before", -30)
+        both = self.done(task, 30)
+        answer = self.confirm(stage)
+        self.assertEqual("completed", self.category(stage))
+        self.assertEqual(both, self.named(answer))
+        c3 = self.made("c3", 50)
+        self.assertEqual([c3, *both], self.named(self.confirm(goal)), "a task two levels down")
+
+    def test_a_step_of_a_task_under_the_goal_opens_its_window(self) -> None:
+        goal = self.filed("Goal", kind="goal")
+        task = self.filed("Its task", parent=goal)
+        listed = self.tool("apply_work_item_changes", id=task, checklist=["the step"])
+        step = str(listed["applied"]["checklist"][0]["item_id"])
+        self.made("before", -30)
+        self.tool("claim_work_item_checklist_item", id=task, item_id=step)
+        c1 = self.made("c1", 30)
+        self.close(task, "done", checklist_ticks=[{"item_id": step}])
+        c2 = self.made("c2", 40)
+        self.assertEqual([c2, c1], self.named(self.confirm(goal)), "from the step's claim")
+
+    def test_a_session_that_took_no_task_under_the_goal_has_no_window(self) -> None:
+        """Another session does the goal's task, and this one only a task outside it: the
+        commits in the goal's repository are not this session's to answer for."""
+
+        goal = self.filed("Goal", kind="goal")
+        task = self.filed("Its task", parent=goal)
+        outside = self.filed("Elsewhere")
+        self.claim(outside)
+        theirs = {"sessionId": OTHER, "threadId": OTHER}
+        mcp_surface.run_tool_call(self.conn, "claim_work_item", {"id": task}, meta=theirs)
+        self.made("c", 30)
+        mcp_surface.run_tool_call(
+            self.conn,
+            "apply_work_item_changes",
+            {"id": task, "summary": SUMMARY, "transition": {"state": "completed"}},
+            meta=theirs,
+        )
+        self.assertEqual("completed", self.category(task))
+        answer = self.confirm(goal)
+        self.assertEqual("completed", self.category(goal))
+        self.says_nothing(answer)
+
+
+class HeldCloseTests(GoalWindowCase):
+    def test_a_close_that_waits_names_the_commits_and_the_owners_answer_does_not(self) -> None:
+        """At the maximal set, the session's confirmation of a goal whose task it did waits
+        for the owner: its answer names what the confirmation would have, and the owner's
+        answer that makes the close runs no net and names nothing again."""
+
+        participation.write_set(
+            self.conn, read_model.space_identity(self.conn, "MAIN"), participation.MAXIMAL
+        )
+        self.conn.commit()
+        goal = self.filed("Goal", kind="goal")
+        task = self.filed("Its task", parent=goal)
+        self.made("before", -30)
+        both = self.done(task, 30)
+        answer = self.confirm(goal)
+        waits = answer["waits_for_owner"]
+        self.assertEqual("goal_close", waits["point"])
+        self.assertEqual(both, self.named(answer), "the window is the close's own")
+        question = waits["question"]
+        revision = self.conn.execute(
+            "SELECT revision FROM work_item_requests WHERE request_id = ?", (question,)
+        ).fetchone()[0]
+        with commits.closes() as found:
+            with calls.bind(calls.browser(), "/api/planning/request/resolve"):
+                record = requests.resolve(
+                    self.conn,
+                    question,
+                    status="answered",
+                    expected_revision=int(revision),
+                    answers={"answer": "confirm"},
+                    author="user",
+                )
+            self.conn.commit()
+        self.assertEqual("carried_out", record["carried_out"])
+        self.assertEqual("completed", self.category(goal))
+        self.assertEqual([], found, "the owner's answer notes no window")
+        self.says_nothing(commits.with_unreported(self.conn, found, dict(record)))

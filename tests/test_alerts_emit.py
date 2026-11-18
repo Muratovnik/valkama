@@ -27,7 +27,7 @@ from server import mcp_surface, store
 from server.alerts import emit, messages
 from server.alerts import settings as alert_settings
 from server.ops import toast
-from server.planning import api, calls, questions, requests, service
+from server.planning import api, calls, participation, questions, read_model, requests, service
 from server.planning import model as planning_model
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -319,6 +319,57 @@ class ListTests(EmitHarness):
         )
         self.settle()
         self.assertIn((self.ref, messages.GROUP), self.removed, "positive control: a close does")
+
+
+class DecidedTests(EmitHarness):
+    """A decision answered by its recommendation in the write that asks it waits for nobody."""
+
+    DECISION: ClassVar[list[dict]] = [
+        {
+            "id": "order",
+            "label": "Order",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": "a", "label": "A first", "recommended": True},
+                {"id": "b", "label": "B"},
+            ],
+        }
+    ]
+
+    def test_a_decision_the_agent_took_raises_no_toast_beside_an_open_question(self) -> None:
+        participation.write_set(
+            self.conn, read_model.space_identity(self.conn, "MAIN"), participation.MINIMAL
+        )
+        self.conn.commit()
+        self.ask()
+        self.settle()
+        self.assertEqual(1, len(self.shown), "the owner's question raises its toast")
+        decided = self.agent(
+            "create_work_item_request",
+            id=self.ref,
+            kind="decision",
+            prompt="Which order?",
+            fields=self.DECISION,
+        )
+        assert isinstance(decided, dict)
+        self.assertEqual("answered", decided["status"])
+        self.settle()
+        self.assertEqual((1, []), (len(self.shown), self.removed))
+        # Positive control: a decision that waits for the owner is a toast of its own.
+        participation.write_set(
+            self.conn, read_model.space_identity(self.conn, "MAIN"), participation.DEFAULT
+        )
+        self.conn.commit()
+        self.agent(
+            "create_work_item_request",
+            id=self.ref,
+            kind="decision",
+            prompt="Which order?",
+            fields=self.DECISION,
+        )
+        self.settle()
+        self.assertEqual(2, len(self.shown))
 
 
 class WhoWroteTests(EmitHarness):

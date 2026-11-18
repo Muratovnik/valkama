@@ -21,7 +21,17 @@ import unittest
 
 from server import mcp_surface
 from server.hooks import notify
-from server.planning import api, calls, model, questions, requests, service, waiting
+from server.planning import (
+    api,
+    calls,
+    model,
+    participation,
+    questions,
+    read_model,
+    requests,
+    service,
+    waiting,
+)
 from tests.test_hooks_tree_notices import (
     A1,
     AS_A1,
@@ -253,6 +263,46 @@ class AgentAsksTests(Asked):
                 (asked["request_id"],),
             ).fetchone()[0]
         )
+
+
+class ConsentTests(Asked):
+    """An agent's cancel of work another session holds waits for that session, which
+    Valkama's call asks: the answer is the cancelling agent's, as if it had asked."""
+
+    def test_the_agent_whose_cancel_waits_hears_the_answer_valkama_asked_for_it(self) -> None:
+        participation.write_set(
+            self.conn, read_model.space_identity(self.conn, self.space), participation.MINIMAL
+        )
+        self.conn.commit()
+        self.agent(
+            "apply_work_item_changes",
+            AS_A1,
+            id=self.t1,
+            summary={"done": "Nothing: T3 covers it.", "next": "Nothing."},
+            transition={"state": "cancelled", "reason": "T3 covers it"},
+        )
+        [asked] = self.conn.execute(
+            "SELECT request_id, revision FROM work_item_requests"
+            " WHERE purpose = 'consent' AND addressee = ?",
+            (E,),
+        ).fetchall()
+        self.hook(E)
+        self.assertIsNone(self.hook(A), "A asked nothing of the owner, and hears nothing yet")
+        self.agent(
+            "answer_work_item_request",
+            AS_E1,
+            id=asked["request_id"],
+            answers={"answer": "object", "reason": "T1 is nearly done"},
+            expected_revision=asked["revision"],
+        )
+        status, text = self.watch(A)
+        self.assertEqual(notify.WAKE_STATUS, status, "the answer wakes the agent that asked")
+        self.assertRegex(
+            text,
+            rf"\n- your question answered at \S+ by agent {E1} of session {E}:"
+            r" answer=object, reason=T1 is nearly done\n",
+        )
+        self.assertIsNone(self.hook(A), "once")
 
 
 class ListTests(Asked):
