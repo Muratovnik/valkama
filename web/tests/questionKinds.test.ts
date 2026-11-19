@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { kindOf, kindRecord, ticksOf } from '@/features/input-requests/utils/questionKinds.ts'
 
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
+import { messages } from '@/shared/i18n/index.ts'
 
 import { requestEntry } from './support/inputRequests.ts'
 
@@ -56,7 +57,7 @@ const WORDS: Record<string, string> = {
   keep: 'Keep',
   cancel: 'Cancel',
   confirm: 'I confirm',
-  leave: 'Leave to the next session',
+  leave: 'Leave it open',
 }
 const word = (option: string) => WORDS[option] ?? `missing ${option}`
 
@@ -101,7 +102,7 @@ describe('the answers of a kind', () => {
       Object.fromEntries(ASKED.map(([purpose, fields]) => [purpose, labels(purpose, fields)])),
     ).toEqual({
       review: ['Accept', 'Return to work'],
-      confirm: ['I confirm', 'Leave to the next session'],
+      confirm: ['I confirm', 'Leave it open'],
       return: ['Do', 'Later…', 'Don’t do'],
       goal: ['Do', 'Later…', 'Don’t do'],
       task: ['Do', 'Later…', 'Move out of the goal', 'Don’t do'],
@@ -172,5 +173,16 @@ describe('the answers of a kind', () => {
     expect({ kind: odd.kind, answers: odd.answers }).toEqual({ kind: 'choice', answers: [] })
     const plain = kindRecord(asked(null, [choice('a', 'b')]), word)
     expect({ kind: plain.kind, answers: plain.answers }).toEqual({ kind: 'choice', answers: [] })
+  })
+})
+
+describe('the words of a confirmation', () => {
+  it('leave the goal open in both of the server’s cases, in both languages', () => {
+    // The server answers `leave` by handing the goal to the next session, or, with nothing under
+    // the goal, by not closing it: «Leave it open» is true of both.
+    expect([
+      messages.en.requests.kinds.answers.leave,
+      messages.ru.requests.kinds.answers.leave,
+    ]).toEqual(['Leave it open', 'Оставить открытой'])
   })
 })

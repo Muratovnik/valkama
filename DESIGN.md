@@ -2341,7 +2341,9 @@ stands under it, both answering Do, Later… or Don't do; a task in a goal shows
 and adds Move out of the goal; a condition shows what is removed and what each rewritten step was
 and becomes, with the reason, and answers Allow or Keep; a cancel shows what closes, who holds it
 and what the sessions at work answered, and answers Cancel or Keep; a confirmation answers I
-confirm or Leave to the next session; and a return answers as a goal does. A question of any
+confirm or Leave it open, which says both things the server does on that answer, handing the goal
+to the next session in its space or, with nothing under it, only not closing it; and a return
+answers as a goal does. A question of any
 other purpose, or without the field its kind answers in, stays a choice of options. What the
 question does not carry, as a card's outcome or description, is read from its card when the
 record first comes into view.
