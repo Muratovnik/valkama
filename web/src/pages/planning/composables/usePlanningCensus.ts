@@ -24,6 +24,8 @@ type CensusInput = () => {
 }
 
 const isOpen = (item: WorkItemBrief) => item.open
+/** A card of another space that names this space's project: the read holds it, the space does not. */
+const isElsewhere = (item: WorkItemBrief) => Boolean(item.other_space)
 
 /** Items the view on the stage leaves out of its own counts, and why. */
 export type CensusExclusion = { count: number; kind: 'lane-heads' }
@@ -65,21 +67,26 @@ export function usePlanningCensus(input: CensusInput) {
   )
 
   /**
-   * The numbers above the stage. Unfiltered they say how much of the work is
-   * open; filtered they answer the filter: how many open items it let through
-   * of the open ones, and how many closed ones came with them, since a view
-   * draws those too. The held count belongs to its preset.
+   * The numbers above the stage. Unfiltered they say how much of the space's own work is
+   * open; filtered they answer the filter: how many open items it let through of the open
+   * ones, and how many closed ones came with them, since a view draws those too. The held
+   * count belongs to its preset. Another space's cards that name this space's project are
+   * not this space's work: they are counted apart (`elsewhere`), what the filter let through
+   * of them, and the far ends of links never, since the population holds none.
    */
   const counts = computed(() => {
-    const items = counted.value
-    const shown = filtered.value ? matched.value : items
-    const shownOpen = shown.filter((item) => isOpen(item)).length
+    const all = counted.value
+    const items = all.filter((item) => !isElsewhere(item))
+    const shown = filtered.value ? matched.value : all
+    const own = shown.filter((item) => !isElsewhere(item))
+    const shownOpen = own.filter((item) => isOpen(item)).length
     return {
       total: items.length,
       open: items.filter((item) => isOpen(item)).length,
       held: items.filter((item) => item.claim_ref !== '' && isOpen(item)).length,
       matchedOpen: shownOpen,
-      matchedClosed: shown.length - shownOpen,
+      matchedClosed: own.length - shownOpen,
+      elsewhere: shown.length - own.length,
     }
   })
 

@@ -100,17 +100,15 @@ test('on a phone the finder takes the width too, and still stands just under the
 test('in a narrow window two fields side by side keep their inputs level, whatever their hints', async ({
   page,
 }) => {
-  // The narrowest window where Labels and Goal still share a row: on a phone they stand one
-  // above the other, so that a goal's title has the dialog's width.
+  // The project and the labels share a row at every width, each named above its input.
   await page.setViewportSize({ width: 560, height: 844 })
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await page.getByRole('button', { name: 'New work item' }).click()
   const dialog = page.getByRole('dialog', { name: 'New work' })
   await expect(dialog).toHaveCSS('transform', 'none')
-  // The labels have a hint under them and the goal none.
-  const labels = await dialog.getByRole('combobox', { name: 'Labels' }).boundingBox()
-  const goal = await dialog.getByRole('combobox', { name: 'Parent' }).boundingBox()
-  expect(labels?.x ?? 0).toBeLessThan(goal?.x ?? 0)
-  expect(Math.round(labels?.y ?? -1)).toBe(Math.round(goal?.y ?? -2))
+  const project = await dialog.getByRole('combobox', { name: 'Project' }).boundingBox()
+  const labels = await dialog.locator('.combo-box').first().boundingBox()
+  expect(project?.x ?? 0).toBeLessThan(labels?.x ?? 0)
+  expect(Math.round(project?.y ?? -1)).toBe(Math.round(labels?.y ?? -2))
 })

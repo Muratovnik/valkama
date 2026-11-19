@@ -289,10 +289,11 @@ async function fingerTap(page: Page, point: { x: number; y: number }) {
 test.describe('under a finger', () => {
   test.use({ hasTouch: true })
 
-  test('a tap on the ground opens the goal at a phone’s width, with a card in the finger’s reach', async ({
+  // A narrow window whose workspace is not a phone's: a phone-wide field never goes this far out.
+  test('a tap on the ground opens the goal at a narrow window’s width, with a card in the finger’s reach', async ({
     page,
   }) => {
-    await farField(page, 390)
+    await farField(page, 700)
     const { frame, id } = await groundInSight(openGround(page))
     const point = await clearGround(frame)
     expect(point).not.toBeNull()
@@ -303,7 +304,7 @@ test.describe('under a finger', () => {
   })
 
   test('a tap centred on a card on the ground opens that card', async ({ page }) => {
-    await farField(page, 390)
+    await farField(page, 700)
     const { frame } = await groundInSight(openGround(page))
     const spot = await frame.evaluate((element) => {
       const box = element.getBoundingClientRect()

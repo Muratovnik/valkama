@@ -10,6 +10,10 @@
  * the read could not read is not drawn, and the graph's key says the links with its space
  * were not read. The camera goes no further out than the whole field.
  *
+ * The counts line says another space's cards apart, «и 2 из других пространств»: they are not
+ * this space's work, and the far end of a link is not counted at all. «≠ Из другого
+ * пространства» takes their frames and the links to them away.
+ *
  * Served `served/graphSpaceFrames.ts`.
  */
 import { expect } from '@playwright/test'
@@ -32,13 +36,13 @@ import { test } from './test.ts'
 const ALPHA_FRAME = 'space:ALPHA'
 const BETA_FRAME = 'space:BETA'
 
-async function openField(page: Page, width: number) {
+async function openField(page: Page, width: number, state: Record<string, string> = {}) {
   await page.setViewportSize({ width, height: width > 600 ? 900 : 844 })
   await installBackend(page)
   await page.route('**/api/planning?*', (route) =>
     route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, spaceFramesRead())),
   )
-  await page.goto(graphRoute({}))
+  await page.goto(graphRoute(state))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
 }
 
@@ -96,6 +100,7 @@ for (const { width, locale, words } of [
       options: 'Параметры и легенда графа',
       fit: 'Весь граф',
       zoomOut: 'Отдалить',
+      elsewhere: 'и 2 из других пространств',
     },
   },
   {
@@ -110,6 +115,7 @@ for (const { width, locale, words } of [
       options: 'Параметры и легенда графа',
       fit: 'Весь граф',
       zoomOut: 'Отдалить',
+      elsewhere: 'и 2 из других пространств',
     },
   },
   {
@@ -124,6 +130,7 @@ for (const { width, locale, words } of [
       options: 'Graph options and key',
       fit: 'Fit whole graph',
       zoomOut: 'Zoom out',
+      elsewhere: 'and 2 from other spaces',
     },
   },
 ] as const) {
@@ -198,6 +205,29 @@ for (const { width, locale, words } of [
       const legend = await key(page, width, words.options)
       await expect(legend).toContainText(words.unread)
       await shoot(page, info, `graph-${width}-space-frame-${locale}`)
+    })
+
+    test('counts another space’s cards apart, never a link’s far end, and «≠» takes their frames away', async ({
+      page,
+    }, info) => {
+      await openField(page, width)
+      // ALPHA-41 and ALPHA-42 name this space's project; BETA-7 is only a link's far end.
+      const counts = page.locator('.workspace-fact')
+      await expect(counts).toHaveText(new RegExp(` ${words.elsewhere}$`, 'u'))
+      await shoot(page, info, `graph-${width}-counts-elsewhere-${locale}`)
+
+      // «≠ From another space», as its chip writes it into the route.
+      await openField(page, width, { elsewhere: '%-other' })
+      await expect(counts).not.toContainText(words.elsewhere)
+      const ids = await frameIds(page)
+      expect(ids).not.toContain(ALPHA_FRAME)
+      expect(ids).not.toContain(BETA_FRAME)
+      expect(ids).toContain('none')
+      for (const id of [identity(41), identity(42), END.work_item_id])
+        await expect(page.locator(card(id))).toHaveCount(0)
+      // The three links each reach another space's card, so none is left.
+      await expect(page.locator('.vue-flow__edges [data-id]')).toHaveCount(0)
+      await shoot(page, info, `graph-${width}-not-elsewhere-${locale}`)
     })
 
     test('goes no further out than the whole field', async ({ page }) => {

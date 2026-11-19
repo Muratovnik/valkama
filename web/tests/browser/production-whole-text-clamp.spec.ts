@@ -104,7 +104,7 @@ for (const zoom of [0.625, 0.75, 1, 1.296]) {
 
 /** Long enough that a frame's header cuts it at its third line. */
 const FRAME_LONGER =
-  ': a title that runs on past the three lines a frame gives it, and on past them again, and on once more'
+  ': a title that runs on past the three lines a frame gives it, and on past them again, and on once more, and on to a fourth line and a fifth'
 
 // At its own size, and at the reading zoom the field opens at.
 for (const zoom of [1, 0.75]) {

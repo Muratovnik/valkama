@@ -56,7 +56,15 @@ const props = defineProps<{
   categories: readonly NonNullable<WorkItemBrief['state']>['category'][]
   /** The chain the board or the list is narrowed to; the graph names its own. */
   chain: string | null
-  counts: { held: number; matchedClosed: number; matchedOpen: number; open: number; total: number }
+  /** The space's own work; `elsewhere`, the cards of other spaces that name its project. */
+  counts: {
+    elsewhere: number
+    held: number
+    matchedClosed: number
+    matchedOpen: number
+    open: number
+    total: number
+  }
   /** What the graph leaves out of its own counts. */
   exclusion: CensusExclusion | null
   /** The filter differs from the empty one. */
@@ -115,12 +123,16 @@ const countsBusy = computed(() => (props.busy || props.reading ? true : undefine
 /** The held condition's count, which a space still being read does not have. */
 const heldCount = computed(() => (props.reading ? null : props.counts.held))
 
-/** «319 открытых из 1267», or what the filter let through of the open work. */
+/**
+ * «319 открытых из 1267», or what the filter let through of the open work; and, named apart
+ * as not this space's work, «и 3 из других пространств».
+ */
 const countsText = computed(() => {
-  const { matchedOpen, open, total } = props.counts
-  return props.filtered
+  const { elsewhere, matchedOpen, open, total } = props.counts
+  const own = props.filtered
     ? t('workItem.filter.matched', { matched: matchedOpen, open }, open)
     : t('workItem.filter.open', { open, total }, open)
+  return elsewhere ? `${own} ${t('workItem.filter.elsewhere', { count: elsewhere })}` : own
 })
 /**
  * The closed items a filter let through, said only when it let through no open

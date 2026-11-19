@@ -8,10 +8,15 @@
  * цели» alone. A write the server did not answer keeps everything typed and says, below the
  * fields and in the window's own words, that the work was not created, never `HTTP 503`.
  *
- * Served `served/graphSpaceFrames.ts`.
+ * A goal chosen with a parent is named «Этап» and sent as a goal, which the server makes a
+ * stage. The project starts on the space's default and is sent only when another is chosen; a
+ * goal or stage names none, and the field says «Любой проект» and takes no choice. «В
+ * „Backlog“», the workflow's one triage state, leaves the new card there.
+ *
+ * Served `served/graphSpaceFrames.ts`, with a second project bound to the space.
  */
 import { expect } from '@playwright/test'
-import type { Page, TestInfo } from '@playwright/test'
+import type { Locator, Page, TestInfo } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -31,6 +36,12 @@ const WORDS = {
     open: 'Новая работа',
     dialog: 'Новая работа',
     title: 'Название',
+    kind: 'Тип',
+    goal: 'Цель',
+    stage: 'Этап',
+    project: 'Проект',
+    anyProject: 'Любой проект',
+    triage: 'В «Backlog»',
     parent: 'Родитель',
     noGoal: 'Без цели',
     noMatch: 'Такого родителя нет',
@@ -41,6 +52,12 @@ const WORDS = {
     open: 'New work item',
     dialog: 'New work',
     title: 'Title',
+    kind: 'Kind',
+    goal: 'Goal',
+    stage: 'Stage',
+    project: 'Project',
+    anyProject: 'Any project',
+    triage: 'Into “Backlog”',
     parent: 'Parent',
     noGoal: 'No goal',
     noMatch: 'No parent matches',
@@ -52,6 +69,15 @@ const WORDS = {
 
 type Locale = keyof typeof WORDS
 
+/** A second project bound to the space, after its default one. */
+const TOOLS = { project_id: 'tools', display_name: 'Tools', root: 'C:/tools', default: false }
+
+/** Choose `name` in the window's field `label` that offers a fixed list. */
+async function choose(page: Page, dialog: Locator, label: string, name: string) {
+  await dialog.getByRole('combobox', { name: label, exact: true }).click()
+  await page.getByRole('option', { name, exact: true }).click()
+}
+
 /** The board over `items`, its create answered by `answer`, and the window opened on it. */
 async function openWindow(
   page: Page,
@@ -62,7 +88,15 @@ async function openWindow(
   await page.setViewportSize({ width, height: width > 600 ? 900 : 844 })
   await installBackend(page)
   await page.route('**/api/planning?*', (route) =>
-    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, spaceFramesRead(items))),
+    route.fulfill(
+      spaceAnswer(new URL(route.request().url()).searchParams, (model) => ({
+        ...spaceFramesRead(items),
+        planning_space: {
+          ...model.planning_space,
+          projects: [...model.planning_space.projects, TOOLS],
+        },
+      })),
+    ),
   )
   const sent: Record<string, unknown>[] = []
   await page.route('**/api/planning/work-items', (route) => {
@@ -121,6 +155,62 @@ for (const { width, locale } of [
       expect(sent).toEqual([
         expect.objectContaining({ title: 'Rehearse the restore', parent: 'MAIN-1005' }),
       ])
+    })
+
+    test('names a goal with a parent «Этап», names no project for it, and leaves it unsorted', async ({
+      page,
+    }, info) => {
+      const { dialog, sent, words } = await openWindow(page, width, locale)
+      await dialog.getByRole('textbox', { name: words.title }).fill('Rehearse the restore')
+      const kind = dialog.getByRole('combobox', { name: words.kind, exact: true })
+      const project = dialog.getByRole('combobox', { name: words.project, exact: true })
+      await expect(project).toHaveText('Example Project')
+      await choose(page, dialog, words.kind, words.goal)
+      await expect(kind).toHaveText(words.goal)
+      await expect(project).toHaveText(words.anyProject)
+      await expect(project).toBeDisabled()
+      await expect(project).toHaveAccessibleDescription(/./u)
+      await shoot(page, info, `new-work-${width}-goal-${locale}`)
+
+      const parent = dialog.getByRole('combobox', { name: words.parent, exact: true })
+      await parent.click()
+      await page.keyboard.type('Stage 1005')
+      await page.keyboard.press('Enter')
+      await expect(kind).toHaveText(words.stage)
+      const unsorted = dialog.getByRole('switch', { name: words.triage })
+      await expect(unsorted).toHaveAttribute('aria-checked', 'false')
+      await unsorted.click()
+      await expect(unsorted).toHaveAttribute('aria-checked', 'true')
+      // Every field stands inside the window, side by side only where two fit.
+      const windowBox = await dialog.boundingBox()
+      for (const field of [kind, project, parent, unsorted]) {
+        const box = await field.boundingBox()
+        expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+          (windowBox?.x ?? 0) + (windowBox?.width ?? 0) + 0.5,
+        )
+      }
+      await shoot(page, info, `new-work-${width}-stage-${locale}`)
+
+      await dialog.getByRole('button', { name: words.open, exact: true }).click()
+      await expect(dialog).toHaveCount(0)
+      expect(sent).toHaveLength(1)
+      expect(sent[0]).toMatchObject({ kind: 'goal', parent: 'MAIN-1005', state: 'backlog' })
+      expect(sent[0]).not.toHaveProperty('projects')
+    })
+
+    test('sends a task’s project only where another than the default is chosen', async ({
+      page,
+    }, info) => {
+      const { dialog, sent, words } = await openWindow(page, width, locale)
+      await dialog.getByRole('textbox', { name: words.title }).fill('Rehearse the restore')
+      await dialog.getByRole('combobox', { name: words.project, exact: true }).click()
+      await expect(page.getByRole('option')).toHaveText(['Example Project', 'Tools'])
+      await shoot(page, info, `new-work-${width}-project-${locale}`)
+      await page.getByRole('option', { name: 'Tools', exact: true }).click()
+      await dialog.getByRole('button', { name: words.open, exact: true }).click()
+      await expect(dialog).toHaveCount(0)
+      expect(sent).toEqual([expect.objectContaining({ kind: 'task', projects: ['tools'] })])
+      expect(sent[0]).not.toHaveProperty('state')
     })
 
     test('offers «Без цели» alone where the space has no goal or stage', async ({ page }) => {

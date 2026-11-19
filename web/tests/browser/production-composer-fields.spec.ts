@@ -102,17 +102,18 @@ test('an item is created with a goal found by search, a label the space has and 
   })
 })
 
-// Side by side on a desktop; one above the other on a phone, where half the dialog left an
-// goal's title 172px in its field and in its list, six lines of it there.
+// The labels stand beside the project on a desktop and under it on a phone, where a chip and
+// the input took two lines in half the dialog; the parent has a row of its own, where half the
+// dialog left a goal's title 172px in its field and in its list, six lines of it.
 for (const { width, alone } of [
-  { width: 1280, alone: false },
-  { width: 390, alone: true },
-]) {
+  { width: 1280, alone: { Labels: false, Parent: true } },
+  { width: 390, alone: { Labels: true, Parent: true } },
+] as const) {
   test(`at ${width}px an open list stands under its field and inside the dialog`, async ({
     page,
   }) => {
     const { dialog } = await openComposer(page, width)
-    for (const name of ['Labels', 'Parent']) {
+    for (const name of ['Labels', 'Parent'] as const) {
       const field = dialog.getByRole('combobox', { name, exact: true })
       await field.click()
       const list = page.getByRole('listbox', { name })
@@ -125,7 +126,7 @@ for (const { width, alone } of [
       // Alone on its row, a field keeps the same inset from both edges of the dialog.
       const before = box.x - frame.x
       const after = frame.x + frame.width - box.x - box.width
-      expect(Math.abs(before - after) < 1).toBe(alone)
+      expect(Math.abs(before - after) < 1, name).toBe(alone[name])
       expect(shown.y).toBeGreaterThan(box.y + box.height)
       expect(shown.x + shown.width).toBeLessThanOrEqual(frame.x + frame.width)
       expect(shown.y + shown.height).toBeLessThanOrEqual(900)

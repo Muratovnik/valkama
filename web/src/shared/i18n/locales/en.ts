@@ -238,6 +238,8 @@ export const en = {
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     zoomReset: 'Fit whole graph',
+    zoomFloor:
+      'On a narrow screen the graph stops where its cards still read. Drag to see the rest.',
     options: 'Graph options and key',
     chainChip: 'Chain {reference} · {count}',
     chainExit: 'Leave chain {reference} and show the whole space',
