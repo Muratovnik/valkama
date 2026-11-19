@@ -1260,7 +1260,7 @@ def card(
         # The card reads the state the record published and keeps what a reader names.
         "state": None if state is None else {name: state[name] for name in CARD_STATE},
         "url": acknowledgements.work_item_url(str(record["reference"])),
-        "parent": _parent_reference(conn, row["parent_id"]),
+        "parent": parent_reference(conn, row["parent_id"]),
         "description": row["description"],
         "checklist": [card_step(step) for step in record["checklist"]],
         "summary": model.summary(row["summary"], required=False),
@@ -1305,7 +1305,13 @@ def card_step(step: Mapping[str, object]) -> dict:
     }
 
 
-def _parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None:
+def parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None:
+    """The reference of the item over this one, read from its own space; None for a root.
+
+    The agent's card and the interface's exact read of one item carry it beside `parent_id`,
+    which an exact read scoped to a space cannot read an item by.
+    """
+
     if not parent_id:
         return None
     found = conn.execute(
