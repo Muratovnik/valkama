@@ -118,7 +118,8 @@ for (const colorScheme of ['light', 'dark'] as const)
         .textContent()
 
       // The spend's heading names its period; what it is and leaves out is the panel's «ⓘ».
-      await expect(work.locator('h3')).toHaveText('Window breakdown: 11:30 – 14:30')
+      // The stretch it covers and what its lines add up to (DESIGN.md § Analytics).
+      await expect(work.locator('h3')).toHaveText('Window breakdown: 11:30 – 14:30 · ≈ $13.00')
       await expect(work).not.toContainText('quota points')
       await expect(work).toHaveAttribute('data-state', 'spent')
       // The first line of its chart, or of its table where the panel shows tables.

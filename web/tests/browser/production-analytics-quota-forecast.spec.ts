@@ -470,9 +470,9 @@ test('a window past its reset draws no tail, no corridor and no place past its r
     [`${SEATED_NAME} five_hour`, [], false],
   ])
   expect(lines.map(({ places }) => places)).toEqual([[], [], []])
-  // No forecast is said either, the reset in its place.
+  // No forecast is said either: each leads with its reset (DESIGN.md § Analytics).
   expect(windows.map(({ forecast }) => forecast)).toEqual(['', '', ''])
-  await expect(page.locator('[data-window] [data-fact="reset"]')).toHaveCount(3)
+  await expect(page.locator('[data-window] [data-lead="ended"]')).toHaveCount(3)
   // The line is the whole window alone, with nothing to switch to.
   const switches = page.locator(LINES).getByRole('radiogroup')
   await expect(switches).toHaveCount(0)
