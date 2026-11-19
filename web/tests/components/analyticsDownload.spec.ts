@@ -162,8 +162,8 @@ describe('the breakdown as a file', () => {
     expect(await files[0]?.text()).toBe(
       '\u{FEFF}breakdown,value_id,value_reference,value_name,value_kind,split,split_id,split_reference,split_name,split_kind,time_seconds,tokens,cost_usd,unpriced_tokens,before_time_seconds,before_tokens,before_cost_usd,before_unpriced_tokens,period_from,period_to,before_from,before_to,filters,input_tokens,cached_read_tokens,cache_write_5m_tokens,cache_write_1h_tokens,output_tokens,reasoning_tokens\r\n' +
         // A pair a row, the larger first, each stretch split by kind as the fixture splits it:
-        // the model the read names by its id alone, then the work no model is known for.
-        `${task},model,model-a,,,category,3600,1200,,0,0,0,0,0,${bounds},,600,12000,240,,360,120\r\n` +
+        // the model, named by its id as the page shows it, then the work no model is known for.
+        `${task},model,model-a,,model-a,category,3600,1200,,0,0,0,0,0,${bounds},,600,12000,240,,360,120\r\n` +
         `${task},model,,,Unknown,unknown,1800,400,,0,0,0,0,0,${bounds},,200,4000,80,,120,40\r\n`,
     )
   })
