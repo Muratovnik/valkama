@@ -109,12 +109,11 @@ describe('the quota panel’s times', () => {
     expect(said.reset).toBe('Resets 02:30, in 1 h 50 min')
     expect(said.forecast).toBe('Forecast · Limit runs out at 01:50')
     expect(said.latest).toMatch(/^No change since Nov 14, 23:10, /u)
-    // The line opens on the window's start, the day before, to now and a third of that past it:
-    // 21:30 to 00:40 is 3 h 10 min, so it runs on to 01:43.
-    expect(work.findAll('.step-axis span').map((one) => plain(one.text()))).toEqual([
-      'Nov 14, 21:30',
-      '01:43',
-    ])
+    // The line runs from the window's start, the day before and dated so, to its reset on the
+    // answer's day, undated.
+    expect(
+      work.findAll('[data-region="axis"] [data-moment]').map((one) => plain(one.text())),
+    ).toEqual(['start Nov 14, 21:30', 'resets 02:30'])
   })
 
   it('say a window with no reset yet has no pace, in its bar’s hint and in a table’s words', async () => {

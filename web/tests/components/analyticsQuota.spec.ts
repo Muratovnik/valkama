@@ -20,8 +20,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { messages } from '@/shared/i18n/index.ts'
-
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import {
@@ -39,7 +37,6 @@ import {
   accounts,
   headings,
   plain,
-  radioNamed,
   says,
   showTable,
   tile,
@@ -317,12 +314,15 @@ describe('the quota panel', () => {
     expect(work.get('.step-line').attributes('aria-label')).toMatch(
       /^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+\. Forecast · Limit runs out at \d{2}:\d{2}$/u,
     )
-    // The running window opens on its start to now and a third of that past it, said on the
-    // reader's clock: 11:30 to 14:30, and an hour of forecast to 15:30.
-    expect(work.findAll('.step-axis span').map((one) => one.text())).toEqual(['11:30', '15:30'])
-    // The whole window runs to its reset, two hours after 14:30.
-    await radioNamed(work, messages.en.analytics.quota.readings.whole).trigger('click')
-    expect(work.findAll('.step-axis span').map((one) => one.text())).toEqual(['11:30', '16:30'])
+    // The line shows the whole window, its axis naming its start and its reset two hours after
+    // 14:30, on the reader's clock: the right end is never a bare time that reads as now.
+    expect(
+      work.findAll('[data-region="axis"] [data-moment]').map((one) => plain(one.text())),
+    ).toEqual(['start 11:30', 'resets 16:30'])
+    // While the window runs, now is marked on its line, and nothing is muted.
+    expect(work.find('[data-mark="now"]').exists()).toBe(true)
+    expect(work.get('[data-key="now"]').text()).toBe('Now')
+    expect(work.find('[data-chart="steps"][data-muted]').exists()).toBe(false)
     // The panel's own switch, not a line's span, turns the readings into a table.
     await showTable(page)
     const readings = accountNamed(page, 'Work')
@@ -355,6 +355,16 @@ describe('the quota panel', () => {
       /^Five hours: reset at \d{2}:\d{2}, no new readings; 62% used before the reset\. No change since .+, 5 h 2 min ago, /u,
     )
     expect(window.get('.step-line').attributes('aria-label')).toEqual(reset)
+    // Its line shows the whole window, its right end the reset that has passed, drawn in the
+    // neutral ink as its bar is, with no now on it.
+    expect(
+      window.findAll('[data-region="axis"] [data-moment]').map((one) => plain(one.text())),
+    ).toEqual([
+      expect.stringMatching(/^start \d{2}:\d{2}$/u),
+      expect.stringMatching(/^reset at \d{2}:\d{2}$/u),
+    ])
+    expect(window.find('[data-chart="steps"][data-muted]').exists()).toBe(true)
+    expect(window.find('[data-mark="now"]').exists()).toBe(false)
   })
 
   it('says the quota could not be read, and that an organization with no source has nothing more', async () => {

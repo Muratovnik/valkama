@@ -31,10 +31,8 @@
  * tag, and shares that width among the segments by `--segmented-option-grow`.
  *
  * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
- * lays its bar out by the row's whole width, as the Analytics periods, reads that width. A row
- * that nothing scrolls and that must stand inside what holds it, as a chart's head in a phone's
- * column, says so (`fit`): its words wrap where they do not fit and the track grows taller.
- * Wrapped for every row, the card's sections stopped overrunning the phone they scroll across.
+ * lays its bar out by the row's whole width, as the Analytics periods, reads that width. Wrapped
+ * for every row, the card's sections stopped overrunning the phone they scroll across.
  *
  * A segment may say more than its label: the `option` slot draws what it holds, and `tile`
  * makes each a block of its own, its words at rest in the page's type, the row as many tiles
@@ -60,8 +58,6 @@ const props = withDefaults(
     }[]
     /** Whether the arrows show a tab's panel as they reach it, or Enter does. */
     activation?: 'automatic' | 'manual'
-    /** The row stands inside what holds it, its words wrapping where they do not fit. */
-    fit?: boolean
     /**
      * `inline` rides a row of icon buttons: an editor's toolbar, at their 28px. `tile` draws
      * each segment as a block of the `option` slot's content.
@@ -70,7 +66,7 @@ const props = withDefaults(
     /** The ids that make the row a tab list over the panel it shows. */
     tabs?: TabIds | null
   }>(),
-  { size: 'default', tabs: null, activation: 'automatic', fit: false },
+  { size: 'default', tabs: null, activation: 'automatic' },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
@@ -161,7 +157,7 @@ function move(event: KeyboardEvent) {
   <div
     class="segmented"
     :role="groupRole"
-    :class="[`size-${size}`, { fit }]"
+    :class="`size-${size}`"
     :aria-label="label"
   >
     <button
@@ -278,21 +274,6 @@ function move(event: KeyboardEvent) {
      nothing on one: a tile not pressed takes the hovered ground instead, and nothing moves. */
   .segmented-option:hover:not(:disabled, .active) {
     background: var(--color-surface-hover);
-  }
-}
-
-/* A row that must stand inside what holds it (`fit`) is never wider than that: its words wrap
-   where they do not fit on one line and the track grows taller. On one line, a quota window's
-   «To now and the forecast | Whole window» ran 35px past a phone's column and its last segment
-   was cut. */
-.segmented.fit {
-  max-inline-size: 100%;
-
-  .segmented-option {
-    min-width: 0;
-    padding-block: var(--space-half);
-    text-wrap: balance;
-    white-space: normal;
   }
 }
 

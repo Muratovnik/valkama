@@ -160,24 +160,32 @@ export interface StepAhead {
 }
 
 /**
- * The words around a step line: its top, the switch of the span it shows, its table's headings
- * and empty state.
+ * The words around a step line: its top, the ends of its axis, «now», what takes a frame back,
+ * its table's headings and empty state.
  */
 export interface StepWords {
-  /** The span from the window's start to now and the forecast past it: «To now and the forecast». */
-  ahead: string
   empty: string
   note: string
-  /** That the reset a corridor runs to stands past the plot's end. */
+  /** What marks now on the line of a running window: «Now». */
+  now: string
+  /** That the reset a corridor runs to stands past the end of a frame. */
   past: string
   time: string
   /** The value the top of the plot stands for, «100%». */
   top: string
   value: string
-  /** The switch between the two spans, as its name: «Span of the readings». */
-  views: string
-  /** The span of the whole window, up to its reset: «Whole window». */
+  /** What takes a line a frame narrowed back to its whole window: «Whole window». */
   whole: string
+  /**
+   * The right end of the whole window's axis where the window named its reset, «resets 16:30», or
+   * past it «reset at 16:30»; where unset, the moment alone.
+   */
+  reset?: string
+  /**
+   * The left end of the whole window's axis where the window named its start, «start 11:30»;
+   * where unset, the moment alone.
+   */
+  start?: string
 }
 
 /** The plot's box in its own units, which the drawing stretches to its host's width. */
@@ -196,24 +204,6 @@ export interface StepSpan {
   from: number
   to: number
 }
-
-/**
- * How much of the span a running window opens on lies past now, as a share of the time from its
- * start to now: a third, so now stands at three quarters of the plot and the readings before it
- * take that much of its width, the rest the forecast's.
- */
-const AHEAD = 1 / 3
-
-/**
- * The span a running window's step line opens on: from its start to now and as far past now as
- * a third of the time since its start, never past its reset. Drawn to the reset, a week begun
- * two days ago left its readings the first third of the plot. Once three quarters of the window
- * have passed it reaches the reset and is the whole window (`useStepSpan`).
- */
-export const aheadSpan = (from: number, to: number, now: number): StepSpan => ({
-  from,
-  to: Math.min(to, Math.max(now, from) + (Math.max(now, from) - from) * AHEAD),
-})
 
 /**
  * The readings a span shows: those inside it, and the one before it that holds at its start,

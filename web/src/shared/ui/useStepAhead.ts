@@ -7,8 +7,8 @@
  *
  * The pointer finds «now» at its ring, and without a corridor along the rest of the plot from the
  * line's end; the forecast at its mark and along the corridor. The forecast's mark stands at the
- * corridor's end, which is the plot's end, the reset or where the span shown ends before it; there
- * its hint says the reset stands past it (`words.past`). A place's box, which the keyboard's ring
+ * corridor's end, which is the plot's end, the reset or where a frame ends before it; there its
+ * hint says the reset stands past it (`words.past`). A place's box, which the keyboard's ring
  * is drawn on, starts at the place: «now»'s is the least width of a box (`--step-reach`) over a
  * corridor, and that width before the plot's end where «now» stands there; the forecast's starts
  * past «now»'s and runs to the plot's end.
@@ -94,7 +94,10 @@ export function useStepAhead(
     return `polygon(${[...edge, ...back].join(', ')})`
   })
 
-  /** Whether the line's end, now, stands in the span shown, with a line to end there. */
+  /**
+   * Whether the line's end, now, stands in the span shown, with a line to end there: a running
+   * window's, which marks it (`StepLine`).
+   */
   const nowShown = computed(() => {
     const { ahead, end, points } = line()
     return Boolean(ahead && points.length && end >= frame.value.from && end <= frame.value.to)
@@ -152,5 +155,5 @@ export function useStepAhead(
   /** Whether the span shown draws the corridor, so the legend names it. */
   const drawn = computed(() => corridor.value !== null)
 
-  return { clip, drawn, targets }
+  return { clip, drawn, nowShown, targets }
 }

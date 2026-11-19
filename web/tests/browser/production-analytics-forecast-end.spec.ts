@@ -34,12 +34,7 @@ async function openWindow(page: Page, by: string, account: string, kind: string)
   await openPanel(page, pageAt({ by }))
   const panel = page.locator('.quota-panel')
   await panel.getByRole('radio', { name: 'Chart' }).check()
-  const window = panel.locator(`[data-account="${account}"] [data-window="${kind}"]`)
-  await window
-    .locator('[data-chart="steps"] [data-region="head"]')
-    .getByRole('radio', { name: 'Whole window' })
-    .check()
-  return window
+  return panel.locator(`[data-account="${account}"] [data-window="${kind}"]`)
 }
 
 /** Where a share stands down the line's drawing, in pixels of the page. */

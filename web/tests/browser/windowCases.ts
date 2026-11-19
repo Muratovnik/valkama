@@ -116,15 +116,16 @@ export const stepPoints = readingsAt([
   [3, 58],
 ])
 export const stepWords: StepWords = {
-  ahead: 'To now and the forecast',
   whole: 'Whole window',
-  views: 'Span of the readings',
+  now: 'Now',
+  start: 'start 11:00',
+  reset: 'resets 16:00',
   top: '100%',
   time: 'Time',
   value: 'Used',
   note: 'Source',
   empty: 'No readings in this window',
-  past: 'The reset is past the right edge; Whole window shows it',
+  past: 'The reset is past the right edge of the framed span',
 }
 /**
  * Past the last reading, read at 14:30: «now» at 58 %, and a forecast that may run out, its

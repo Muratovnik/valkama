@@ -14,20 +14,29 @@
  * where it runs out. The band keeps half a ribbon's width outside each edge, so its start at now
  * and a range said alike are never a hairline.
  *
- * A running window opens on its start to now and the forecast past it (`aheadSpan`), now at three
- * quarters of the plot, with a switch to the whole window up to its reset, while that span ends
- * before the reset (`useStepSpan`); a window three quarters through is the whole window alone, as
- * one past its reset is, which draws nothing past its readings. A span that ends before the
- * reset shows the corridor as far as its end, where it runs on. A frame dragged along the plot
- * with a mouse or a pen (`useAxisFrame`), or stretched from the place the keyboard stands on with
- * Shift and an arrow, narrows this line alone to the moments it covers, and the switch takes it
- * back to either span. Nothing else on the page follows it.
+ * Every line shows its whole window, from its start to its reset (`from`, `to`), running or past
+ * its reset alike (`useStepSpan`), and the axis under it names its two ends for what they are —
+ * the window's start and its reset (`words.start`, `words.reset`), dated where they are not on the
+ * answer's day, the moment alone where the window did not name one — so its right end is never a
+ * bare time that reads as now. While the window runs, now is marked across the plot at the line's
+ * end (`end`), an upright hairline in the quiet ink that the legend names «Now» beside a hair of
+ * it, as it names every line the plot draws, with no word over the plot: a silent window's
+ * line stops well before it. A window past its reset (`ended`)
+ * draws nothing past its readings, and its readings, their marks and their key in the legend in
+ * the neutral ink of marks at rest, as its bar is drawn (`WindowBar`'s `muted`), so its last
+ * window's line is not read as the share spent now. A frame dragged along the plot with a mouse or
+ * a pen (`useAxisFrame`), or stretched from the place the keyboard stands on with Shift and an
+ * arrow, narrows this line alone to the moments it covers, the axis then naming its ends by their
+ * moments alone, a corridor that runs on past its end cut there; the button in the head takes it
+ * back to the whole window (`StepLineHead`). Nothing else on the page follows it.
  *
- * One axis, of percents from 0, its top written once over the plot: 100, or the highest reading
- * where one ran past it. What the plot draws is told apart by its drawing — the readings a heavier
- * line in the chart's hue, the pace a hairline in the quiet ink, the forecast a hatched band — and
- * a legend names each in the line's head with the switch (`StepLineHead`), the forecast while the
- * span shows it. The two ends of the span shown are named under the plot (`moment`).
+ * One axis, of percents from 0, its top written once beside the plot, centred on a hairline drawn
+ * at its level: 100, or the highest reading where one ran past it, so a line that reaches it meets
+ * the line its figure names; written over the plot with nothing at its level, a line at 100 % read
+ * as stopping under the mark. What the plot draws is told apart by its drawing — the readings a
+ * heavier line in the chart's hue, the pace a hairline in the quiet ink, the forecast a hatched
+ * band, now an upright hairline — and a legend names each in the line's head (`StepLineHead`), the
+ * forecast while the span shows it and now while it is marked.
  *
  * At rest no reading paints its mark: a mark at each reading made a busy window a chain of dots
  * that hid its own steps. The reading under the pointer paints its mark, and so does the one the
@@ -75,11 +84,12 @@
  * than SVG the stretch would distort. A forced palette draws the lines, the hatch and the marks in
  * its inks.
  *
- * What a reader of the page selects it by: the figure is `data-chart="steps"`; its regions are
- * `data-region` — `head` (`StepLineHead`), `plot`, the `scale`'s figure at its top, the `field`
- * the marks stand in, the `drawing` of its lines, the `hover` layer that takes the pointer, and
- * the `axis`, whose two ends are `data-moment` `from` and `to`; its marks are `data-mark` — the
- * readings' `line`, each `reading`'s dot inside its box (`data-reading`, its order), each
+ * What a reader of the page selects it by: the figure is `data-chart="steps"`, with
+ * `data-muted` past its reset; its regions are `data-region` — `head` (`StepLineHead`), `plot`,
+ * the `scale`'s figure at its top, the `field` the marks stand in, the `drawing` of its lines, the `hover`
+ * layer that takes the pointer, and the `axis`, whose two ends are `data-moment` `from` and `to`;
+ * its marks are `data-mark` — the `ceiling` at the top's level, `now` the hairline across the
+ * plot, the readings' `line`, each `reading`'s dot inside its box (`data-reading`, its order), each
  * `place`'s mark inside its box (`data-target`, `restart`, `now` or `reset`), its shape
  * `data-shape` — `ring`, or the forecast's `range` or `point` — and the forecast's `corridor`.
  * Each reading's and place's box is its stop (`data-stop`, its order), the element its hint and
@@ -125,7 +135,10 @@ const props = defineProps<{
   words: StepWords
   /** What the line draws past its last reading, the window now and its forecast; none past the reset. */
   ahead?: StepAhead | null
-  /** Whether the window has reset since it was read: the whole window is then its one span. */
+  /**
+   * Whether the window is past its reset: drawn in the neutral ink, as its bar is, with nothing
+   * past its readings.
+   */
   ended?: boolean
   /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
   even?: boolean
@@ -137,15 +150,12 @@ const props = defineProps<{
    * line holds.
    */
   silent?: boolean
-  /** A moment as the axis names an end of the span shown, «14:05». */
+  /** A moment as the axis names an end of a frame, or of a window whose words name none, «14:05». */
   moment: (at: number) => string
 }>()
 
-const span = useStepSpan(
-  () => props,
-  () => props.words,
-)
-const { shown, whole } = span
+const span = useStepSpan(() => props)
+const { framed, shown, whole } = span
 
 const frame = computed(() => ({ ...shown.value, top: stepTop(props.points) }))
 const readings = computed(() => readingsIn(shown.value, props.points))
@@ -175,7 +185,28 @@ function stepEnd(index: number) {
 }
 
 /** The corridor past the readings, whether the span shows it and the places past them. */
-const { clip: corridorClip, drawn: corridorShown, targets } = useStepAhead(() => props, frame)
+const {
+  clip: corridorClip,
+  drawn: corridorShown,
+  nowShown,
+  targets,
+} = useStepAhead(() => props, frame)
+/** How far along the plot now stands, from 0 to 1, where the line marks it; null where it does not. */
+const nowX = computed(() => (nowShown.value ? stepX(frame.value, props.end) : null))
+/** The words of now's key in the legend while the plot marks now. */
+const nowKey = computed(() => (nowX.value === null ? undefined : props.words.now))
+/** Whether a frame narrows the line, so its axis names the frame's moments and the head a way back. */
+const narrowed = computed(() => framed.value !== null)
+/** The figure's hook past its reset: present, or absent rather than false. */
+const mutedMark = computed(() => props.ended || undefined)
+/**
+ * The axis's two ends: the window's start and its reset, said as the window's words name them,
+ * or a frame's moments alone.
+ */
+const ends = computed(() => ({
+  from: (!narrowed.value && props.words.start) || props.moment(shown.value.from),
+  to: (!narrowed.value && props.words.reset) || props.moment(shown.value.to),
+}))
 /** Whether «now» stands where the last reading's step ends, and takes the pointer from there on. */
 const nowFollows = computed(() => targets.value.some(({ kind }) => kind === 'now'))
 
@@ -259,6 +290,13 @@ const hover = ref<HTMLElement | null>(null)
 const { pickAt, placeAt } = useStepAim({ field, hover }, frame, () => walk.aims.value)
 const { framing, keys } = useStepFrame(field, { coveredBy, frame, narrow: span.narrow })
 
+/** The line back on its whole window, the keyboard's place on it kept in the page's order. */
+async function takeBack() {
+  span.back()
+  await nextTick()
+  moveFocus(field.value?.querySelector<HTMLElement>(`[data-stop="${stop.value}"]`))
+}
+
 const MOVES: Record<string, (at: number, last: number) => number> = {
   ArrowLeft: (at) => Math.max(0, at - 1),
   ArrowRight: (at, last) => Math.min(last, at + 1),
@@ -295,18 +333,20 @@ function stand(index: number) {
   <figure
     class="step-line"
     data-chart="steps"
+    :class="{ 'step-muted': ended }"
+    :data-muted="mutedMark"
     :aria-label="label"
     data-hint-frame
   >
     <StepLineHead
-      :chosen="span.chosen.value"
-      :options="span.options.value"
-      :switched="span.switched.value"
-      :views="words.views"
+      :framed="narrowed"
+      :whole="words.whole"
       :legend="legend"
       :ahead="corridorShown"
       :even="even"
-      @choose="span.choose"
+      :muted="ended"
+      :now="nowKey"
+      @whole="takeBack"
     />
     <div
       class="step-plot"
@@ -343,6 +383,25 @@ function stand(index: number) {
             vector-effect="non-scaling-stroke"
             :y1="STEP_HEIGHT"
             :x2="STEP_WIDTH"
+            :y2="STEP_HEIGHT"
+          />
+          <line
+            class="step-ceiling"
+            data-mark="ceiling"
+            x1="0"
+            y1="0"
+            y2="0"
+            vector-effect="non-scaling-stroke"
+            :x2="STEP_WIDTH"
+          />
+          <line
+            v-if="nowX !== null"
+            class="step-now"
+            data-mark="now"
+            y1="0"
+            vector-effect="non-scaling-stroke"
+            :x1="nowX"
+            :x2="nowX"
             :y2="STEP_HEIGHT"
           />
           <line
@@ -440,14 +499,14 @@ function stand(index: number) {
           :style="{ insetInlineStart: framing.start, inlineSize: framing.size }"
         />
       </div>
-    </div>
-    <div
-      class="step-axis"
-      aria-hidden="true"
-      data-region="axis"
-    >
-      <span data-moment="from">{{ moment(shown.from) }}</span>
-      <span data-moment="to">{{ moment(shown.to) }}</span>
+      <div
+        class="step-axis"
+        aria-hidden="true"
+        data-region="axis"
+      >
+        <span data-moment="from">{{ ends.from }}</span>
+        <span data-moment="to">{{ ends.to }}</span>
+      </div>
     </div>
   </figure>
 </template>
@@ -458,6 +517,8 @@ function stand(index: number) {
 
 <style scoped src="@/shared/ui/stepMarks.css"></style>
 
+<style scoped src="@/shared/ui/stepPlot.css"></style>
+
 <style scoped>
 .step-line {
   display: grid;
@@ -466,101 +527,5 @@ function stand(index: number) {
   margin: 0;
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
-}
-
-/* The top's figure stands in a band of its own above the drawing, so a line at the top runs
-   under it rather than through it. */
-.step-plot {
-  position: relative;
-  padding-block-start: var(--space-4);
-}
-
-.step-top {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  color: var(--color-text-tertiary);
-}
-
-/* The plot a frame is dragged along: nothing in it is text a press would select. The drawing
-   stands inset in it by half a mark as it is drawn when pointed at, ring and all, so a mark at 0 %
-   and one at the top stand whole inside the plot, and in the step that takes the pointer for it:
-   drawn to the plot's edge, the mark of a reading at 0 % hung half under the floor, and there the
-   pointer found no reading. How near a mark the pointer finds it, half a mark as drawn when
-   pointed at; the least width of a place's box, which the keyboard's ring is drawn on; and half
-   the width of the forecast's ribbon, are the plot's own. */
-.step-field {
-  --step-inset: calc(var(--space-2) * 0.75 + var(--space-hair));
-  --step-hit: calc(var(--space-2) * 0.75);
-  --step-reach: 24px;
-  --step-ribbon: calc(var(--space-1) * 0.75);
-
-  position: relative;
-  block-size: var(--space-24);
-  user-select: none;
-}
-
-/* With no reading, the field says so where the line would run, over its floor. */
-.step-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.step-svg {
-  position: absolute;
-  inset: var(--step-inset) auto auto 0;
-  display: block;
-  inline-size: 100%;
-  block-size: calc(100% - 2 * var(--step-inset));
-  overflow: visible;
-  pointer-events: none;
-}
-
-.step-floor {
-  stroke: var(--color-rule-strong);
-  stroke-width: 1;
-
-  @media (forced-colors: active) {
-    stroke: GrayText;
-  }
-}
-
-.step-even {
-  stroke: var(--color-text-tertiary);
-  stroke-width: 1;
-
-  @media (forced-colors: active) {
-    stroke: GrayText;
-  }
-}
-
-.step-path {
-  fill: none;
-  stroke: var(--color-series-1);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-
-  @media (forced-colors: active) {
-    stroke: CanvasText;
-  }
-}
-
-/* A frame over the moments it covers (`axisFrame.css`), as tall as the plot. */
-.step-span {
-  position: absolute;
-  inset-block: 0;
-}
-
-.step-axis {
-  display: flex;
-  gap: var(--space-3);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
 }
 </style>

@@ -16,13 +16,13 @@ import StepLineTable from '@/shared/ui/StepLineTable.vue'
 
 import { declared } from '../support/stepDrawing.ts'
 import {
+  dragFrame,
   HIT,
   HOUR,
   openLine,
   point,
   pointAt,
   START,
-  stepLine,
   WORDS,
 } from '../support/stepLineMount.ts'
 
@@ -48,7 +48,7 @@ const RESTART = {
 
 describe('the step line where its count restarted', () => {
   it('marks the restart at its fall with its own hint, a ring painted only when pointed at', async () => {
-    const line = await stepLine(ZEROED)
+    const line = openLine(ZEROED)
     await line.setProps({ restarts: [RESTART] })
     const restart = line.get('[data-target="restart"]')
     expect(restart.attributes('data-stop')).toBe('2')
@@ -73,7 +73,7 @@ describe('the step line where its count restarted', () => {
   })
 
   it('walks the restart between the reading before it and the reading at its moment', async () => {
-    const line = await stepLine(ZEROED)
+    const line = openLine(ZEROED)
     await line.setProps({ restarts: [RESTART] })
     expect(line.get('[data-reading="3"]').attributes('tabindex')).toBe('0')
     const before = line.get('[data-reading="1"]')
@@ -88,11 +88,12 @@ describe('the step line where its count restarted', () => {
   })
 
   it('stands nowhere outside the span shown', async () => {
-    // Opened on its start to now, three hours in, the plot runs to four hours: the restart at two
-    // hours stands in it, one at four hours and a half past it.
+    // Narrowed by a frame over its first four hours: the restart at two hours stands in it, one at
+    // four hours and a half past it.
     const line = openLine([...ZEROED, point('15:30', 4.5, 1)])
     const later = { ...RESTART, key: 'restart-1', at: START + 4.5 * HOUR }
     await line.setProps({ restarts: [RESTART, later] })
+    await dragFrame(line, 0, 240)
     expect(
       line.findAll('[data-target="restart"]').map((one) => one.attributes('data-stop')),
     ).toEqual(['2'])

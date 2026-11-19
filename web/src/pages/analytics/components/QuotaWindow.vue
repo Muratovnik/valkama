@@ -27,13 +27,14 @@
  * (`forecastCourses`). A window too new for a forecast says so in the quiet ink and draws no
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
  * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
- * is a bar with no fill that says «0% used» and «up to date». While the window stands, its step line
- * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`). A
- * window past its reset by the panel's moment (`ended`) has neither and shows its whole window
- * alone, even where its answer was read before the reset; it leads with that it reset with no
- * reading since, its share before the reset a quieter line under that, over its bar drawn in the
- * neutral ink with no tick (`WindowBar`'s `muted`): led by its share in the series' hue, the last
- * window's figure read as the share spent now. Running or past its reset, a window silent by then
+ * is a bar with no fill that says «0% used» and «up to date». Its step line shows the whole window,
+ * from its start to its reset, which the axis names as such (`StepLine`). While the window stands,
+ * the line marks now, points at where it stands now and runs its forecast's corridor to the
+ * reset. A window past its reset by the panel's moment (`ended`) has neither, even where its
+ * answer was read before the reset; it leads with that it reset with no reading since, its share
+ * before the reset a quieter line under that, over its bar drawn in the neutral ink with no tick
+ * (`WindowBar`'s `muted`), and its line in the same ink: led by its share in the series' hue, the
+ * last window's figure read as the share spent now. Running or past its reset, a window silent by then
  * (`silent`) has its line stop at its last reading, since nothing was measured after it, while a
  * fresh one's holds to the answer's moment or the reset, a source writing a reading only when a
  * value changes. Where the window's count restarted inside it, the
@@ -181,10 +182,8 @@ const facts = computed(() => {
 })
 
 /**
- * The span the line runs over: the window's start to its reset. A window that has named neither
- * runs from its first reading to the answer's moment. The line opens on the window's start to now
- * and the forecast past it, and has a switch to the whole of this span while the first ends before
- * the reset (`useStepSpan`).
+ * The span the line runs over, the whole window: its start to its reset. A window that has named
+ * neither runs from its first reading to the answer's moment.
  */
 const span = computed(() => {
   const { window, today } = props
@@ -203,7 +202,9 @@ const stepMoment = (at: number) =>
   words.moment(momentAtOffset(at, offsetOf(props.today)), props.today)
 
 const stepWordsOf = useQuotaStepWords()
-const stepWords = computed(() => stepWordsOf(props.window, points.value))
+const stepWords = computed(() =>
+  stepWordsOf(props.window, points.value, { today: props.today, ended: ended.value }),
+)
 /** Whether a past window stands in this one's place (`QuotaPastWindow`). */
 const past = ref(false)
 const legend = computed(() => ({

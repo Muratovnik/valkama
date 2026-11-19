@@ -128,7 +128,9 @@ const restarts = computed(() =>
   pastShown.value ? words.restarts(pastShown.value, props.today) : [],
 )
 const stepWords = computed(() =>
-  pastShown.value ? stepWordsOf(pastShown.value, points.value) : null,
+  pastShown.value
+    ? stepWordsOf(pastShown.value, points.value, { today: props.today, ended: true })
+    : null,
 )
 const legend = computed(() => ({ line: t('analytics.quota.readings.line') }))
 const stepMoment = (at: number) =>

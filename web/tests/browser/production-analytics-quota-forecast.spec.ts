@@ -480,13 +480,14 @@ test('a window past its reset draws no tail, no corridor and no place past its r
   // No forecast is said either: each leads with its reset (DESIGN.md § Analytics).
   expect(windows.map(({ forecast }) => forecast)).toEqual(['', '', ''])
   await expect(page.locator('[data-window] [data-lead="ended"]')).toHaveCount(3)
-  // The line is the whole window alone, with nothing to switch to.
-  const switches = page.locator(LINES).getByRole('radiogroup')
-  await expect(switches).toHaveCount(0)
-  // The control: every week and model's week still stands, and each of their lines not yet three
-  // quarters through has its switch; the unnamed account's week, six days of seven in, has passed
-  // that, and shows the whole window alone (`useStepSpan`).
+  // Each line is drawn in the neutral ink, as its bar is, its right end the reset that has passed.
+  const ends = page.locator(`${LINES} [data-region="axis"] [data-moment="to"]`)
+  await expect(page.locator(`${LINES}[data-muted]`)).toHaveCount(3)
+  await expect(ends).toHaveText(Array.from({ length: 3 }, () => /^reset at \d{2}:\d{2}$/u))
+  // The control: every week and model's week still stands, drawn in its hue and named by the
+  // reset ahead.
   await openDrawn(page, 'quota_week', 4)
   await expect(page.locator(LINES)).toHaveCount(4)
-  await expect(switches).toHaveCount(3)
+  await expect(page.locator(`${LINES}[data-muted]`)).toHaveCount(0)
+  await expect(ends).toHaveText(Array.from({ length: 4 }, () => /^resets /u))
 })

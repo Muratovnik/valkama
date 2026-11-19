@@ -20,9 +20,10 @@ export const point = (key: string, hours: number, value: number): StepPoint => (
   noteText: 'the poll',
 })
 export const WORDS: StepWords = {
-  ahead: 'To now and the forecast',
   whole: 'Whole window',
-  views: 'Span of the readings',
+  now: 'Now',
+  start: 'start h0',
+  reset: 'resets h5',
   top: '100%',
   time: 'Time',
   value: 'Used',
@@ -31,10 +32,10 @@ export const WORDS: StepWords = {
   past: 'Past the right edge',
 }
 
-/** A moment as the axis names it: the hours since the window's start, «h3». */
+/** A moment as the axis names an end of a frame: the hours since the window's start, «h3». */
 const moment = (at: number) => `h${(at - START) / HOUR}`
 
-/** A window of five hours, read three hours in, as it opens: to now and the forecast. */
+/** A window of five hours, read three hours in, shown whole: from its start to its reset. */
 export function openLine(
   points: StepPoint[],
   end = START + 3 * HOUR,
@@ -75,9 +76,23 @@ export async function pointAt(line: ReturnType<typeof openLine>, x: number | nul
   await (x === null ? layer.trigger('pointerleave') : layer.trigger('pointermove', { clientX: x }))
 }
 
-/** The same window switched to the whole of it, which the geometry below is worked out over. */
-export async function stepLine(points: StepPoint[], end = START + 3 * HOUR) {
-  const line = openLine(points, end)
-  await line.get('[role="radio"]:nth-child(2)').trigger('click')
-  return line
+/** A mouse's pointer event at `clientX`, as the browser sends one. */
+const pointer = (type: string, clientX: number) =>
+  new PointerEvent(type, { bubbles: true, button: 0, clientX, pointerId: 1, pointerType: 'mouse' })
+
+/**
+ * Drags a frame along the field from `from` to `to` of a field the browser draws 300 px wide, as a
+ * mouse does: pressed, moved and let go. jsdom lays nothing out, so the field is given the box and
+ * the width a browser gives it.
+ */
+export async function dragFrame(line: ReturnType<typeof openLine>, from: number, to: number) {
+  // The field's listeners are bound once it is mounted, a tick after the line is.
+  await line.vm.$nextTick()
+  const field = line.get('[data-region="field"]')
+  field.element.getBoundingClientRect = () => new DOMRect(0, 0, 300, 100)
+  Object.defineProperty(field.element, 'clientWidth', { configurable: true, value: 300 })
+  field.element.dispatchEvent(pointer('pointerdown', from))
+  document.dispatchEvent(pointer('pointermove', to))
+  document.dispatchEvent(pointer('pointerup', to))
+  await line.vm.$nextTick()
 }

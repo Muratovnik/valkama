@@ -1236,17 +1236,28 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   while pointed at or focused as the others are: a ring around the fall, «Counter
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
   the readings cannot tell what zeroed it. The arrows walk the readings, each restart before the
-  reading at its moment, then «now», then the forecast. A step line opens on
-  «To now and the forecast», from the window's start to now and a third of that past it, with a
-  switch to the whole window up to its reset: drawn to the reset, a running week left its
-  readings the first third of the plot. Once three quarters of the window have passed, that span
-  reaches the reset and is the whole window, so the line shows the whole window and no switch
-  stands unless a frame narrowed the line, which the switch takes back. Where the span ends
-  before the reset the corridor runs to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
-  reset by the page's clock, even one read before it, draws neither the corridor nor the places
-  past its readings and shows its whole window alone, its line held to the moment it was read or
-  to its reset where it was fresh then, and ended at its last reading where it was silent by
-  then, its restarts still marked on it. A 0 % has no fill,
+  reading at its moment, then «now», then the forecast. A step line shows its whole window, from
+  its start to its reset, running or past its reset alike, and its axis names its two ends for
+  what they are: «start 11:30» and «resets 16:30», or «reset at 16:30» once that has passed, each
+  dated where it is not the page's day, and the moment alone where the window named none.
+  Opened on its start to now and a third past it, a running line ended on a bare time, and a
+  finished one on its reset said as bare, and either read as now. While the window runs, its
+  line marks now: a hairline up the plot in the quiet ink, upright where the pace runs across,
+  which the legend names «Now» beside a hair of it, and no word stands over the plot. The top of its scale, «100%» or the
+  highest reading past it, is written once beside the plot, centred on a hairline in the rule's
+  ink at its level, so a line at 100 % meets the line its figure names: written over the plot
+  with nothing at its level, a line at 100 % read as stopping under the mark. A frame dragged
+  along the plot, or stretched with Shift and an arrow, narrows that line alone to the moments
+  it covers, its axis then naming them alone, and «Whole window», a compact button at the head's
+  start while the frame holds, takes it back, the keyboard's place kept; where the frame ends
+  before the reset the corridor runs to the plot's edge, and the forecast's hint says the reset
+  stands past it. A window past its reset by the page's clock, even one read before it, draws
+  neither the corridor nor the places past its readings nor now, its line held to the moment it
+  was read or to its reset where it was fresh then, and ended at its last reading where it was
+  silent by then, its restarts still marked on it; its readings, their marks and their key in
+  the legend are drawn in the neutral ink of marks at rest, as its bar is, which a forced palette
+  draws in its inactive ink: in the series' hue beside a muted bar, the last window's line read as
+  the share spent now. A 0 % has no fill,
   and a window with no figure draws the track alone; the fill stands apart from the ground and
   the track by lightness, so both read in grayscale and under a forced palette in its inks,
   where the hatch and the marks take its ink too. Their table twins are `WindowBarTable` and
@@ -2885,8 +2896,8 @@ window started would be at 57% now», with how old the latest reading is and who
 words for a screen reader say too, with the forecast. As a table, where no hint shows, the account's table
 holds each window's forecast, the readings' table ends with it, and the window says its latest
 reading in words under its reset, and that it has no pace where it has none. A window's step
-line is on no period of the page, so its scale is its own: it opens on «To now and the forecast»
-with a switch to the whole window while that span ends before the reset (Charts), points at
+line is on no period of the page, so its scale is its own: it shows the whole window, its axis
+naming the window's start and its reset (Charts), marks now while the window runs, points at
 «now» and at its forecast by the reset past its readings, and a frame dragged along it narrows
 that line alone. An account no source read says so and draws no window; a silent window is as solid as a fresh one, says how long it
 has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an

@@ -40,7 +40,7 @@ export function accountNamed(page: VueWrapper, name: string) {
 }
 
 /** The one radio in `scope` a reader hears as `name`. */
-export function radioNamed(scope: Scope, name: string) {
+function radioNamed(scope: Scope, name: string) {
   const found = scope.findAll('[role="radio"]').filter((one) => one.text() === name)
   expect(found).toHaveLength(1)
   const [radio] = found

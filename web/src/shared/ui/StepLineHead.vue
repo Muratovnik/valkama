@@ -1,38 +1,39 @@
 <script setup lang="ts">
 /**
- * The head of a window's step line (`StepLine`): the switch of the span shown at its start, and
- * over its end the legend that names what the plot draws by how each is drawn — the readings a
- * heavier line in the chart's hue, the pace a hairline in the quiet ink, and, where the plot shows
- * one, the forecast's corridor by its hatch (`hatch.css`) — so none is told by a hue alone,
- * in grayscale too.
+ * The head of a window's step line (`StepLine`): the legend that names what the plot draws by how
+ * each is drawn — the readings a heavier line in the chart's hue, or the neutral ink of a window
+ * past its reset (`muted`), the pace a hairline in the quiet ink, and, where the plot shows one,
+ * the forecast's corridor by its hatch (`hatch.css`), and now, while the plot marks it (`now`), a
+ * hair upright as its line is drawn — so none is told by a hue alone, in
+ * grayscale too; and, while a frame narrows the line, the button that takes it back to its whole
+ * window, at the row's start, sent out as `whole`.
  *
- * One row as tall as the switch whether it stands there or not, so the plot never moves when it
- * comes or goes. The switch stands inside the row (`fit`): in a phone's column its words wrap
- * rather than run past the window's edge, and so do the legend's keys, each whole, rather than
- * run past the plot. A span chosen is sent out as `choose`; the line owns which span it shows
- * (`useStepSpan`). The row is the line's `data-region="head"`; the forecast's key is
- * `data-key="ahead"`, its swatch of the hatch `data-mark="hatch"`.
+ * One row as tall as a compact control whether the button stands there or not, so the plot never
+ * moves when it comes or goes. The legend's keys wrap, each whole, rather than run past the plot.
+ * The row is the line's `data-region="head"`; the button is `data-step="whole"`; the forecast's
+ * key is `data-key="ahead"`, its swatch of the hatch `data-mark="hatch"`; now's key is
+ * `data-key="now"`.
  */
-import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
-import type { StepScope } from '@/shared/ui/useStepSpan.ts'
+import VButton from '@/shared/ui/VButton.vue'
 
 defineProps<{
-  /** The span the switch says is shown: none while a frame narrows the line. */
-  chosen: StepScope | null
+  /** Whether a frame narrows the line, so the button that takes it back stands. */
+  framed: boolean
   /** The legend's names of the two lines and of the forecast's corridor. */
   legend: { line: string; ahead?: string; even?: string }
-  /** The spans the switch offers; no switch stands where `switched` is false. */
-  options: readonly { label: string; value: StepScope }[]
-  switched: boolean
-  /** The switch's name. */
-  views: string
+  /** The button's words: «Whole window». */
+  whole: string
   /** Whether the forecast's corridor is drawn in the span shown, and so named. */
   ahead?: boolean
   /** Whether the pace is drawn, and so named. */
   even?: boolean
+  /** Whether the readings are drawn in the neutral ink of a window past its reset. */
+  muted?: boolean
+  /** The words of now's key while the plot marks now: «Now»; none while it does not. */
+  now?: string
 }>()
 
-const emit = defineEmits<{ choose: [scope: StepScope] }>()
+const emit = defineEmits<{ whole: [] }>()
 </script>
 
 <template>
@@ -40,21 +41,24 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
     class="step-head"
     data-region="head"
   >
-    <SegmentedControl
-      v-if="switched"
-      class="step-views"
+    <VButton
+      v-if="framed"
       size="compact"
-      :label="views"
-      :model-value="chosen"
-      :options="options"
-      fit
-      @update:model-value="(scope: StepScope) => emit('choose', scope)"
-    />
+      data-step="whole"
+      @click="emit('whole')"
+    >
+      {{ whole }}
+    </VButton>
     <span
       class="step-legend"
       aria-hidden="true"
     >
-      <span class="step-key"><span class="step-swatch swatch-line" />{{ legend.line }}</span>
+      <span class="step-key"
+        ><span
+          class="step-swatch swatch-line"
+          :class="{ 'swatch-muted': muted }"
+        />{{ legend.line }}</span
+      >
       <span
         v-if="even && legend.even"
         class="step-key"
@@ -68,6 +72,12 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
           class="step-swatch swatch-ahead hatched"
           data-mark="hatch"
         />{{ legend.ahead }}</span
+      >
+      <span
+        v-if="now"
+        class="step-key"
+        data-key="now"
+        ><span class="step-swatch swatch-now" />{{ now }}</span
       >
     </span>
   </div>
@@ -101,8 +111,8 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
   white-space: nowrap;
 }
 
-/* Each key drawn as its mark is: the readings heavier in the hue, the pace a hairline, the
-   forecast a small block of its hatch. */
+/* Each key drawn as its mark is: the readings heavier in the hue, or in the neutral ink past the
+   reset, the pace a hairline, the forecast a small block of its hatch. */
 .step-swatch {
   display: inline-block;
   inline-size: var(--space-3);
@@ -113,9 +123,25 @@ const emit = defineEmits<{ choose: [scope: StepScope] }>()
     background: var(--color-series-1);
   }
 
+  &.swatch-muted {
+    background: var(--color-text-tertiary);
+
+    @media (forced-colors: active) {
+      background: GrayText;
+    }
+  }
+
   &.swatch-even {
     block-size: var(--space-hair);
     background: var(--color-text-tertiary);
+  }
+
+  /* Now as the plot marks it: a hair upright in the quiet ink, a moment and not a course. */
+  &.swatch-now {
+    inline-size: var(--space-hair);
+    block-size: var(--space-3);
+    background: var(--color-text-tertiary);
+    border-radius: 0;
   }
 
   &.swatch-ahead {

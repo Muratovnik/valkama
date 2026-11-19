@@ -242,12 +242,11 @@ for (const colorScheme of ['light', 'dark'] as const)
     await page.goto(HARNESS)
     const figure = page.locator(LINE)
     await figure.scrollIntoViewIfNeeded()
-    // The window is running, so it opens on its start to now and the forecast; the readings are
-    // placed here against the whole five hours.
-    await figure.getByRole('radio', { name: 'Whole window' }).click()
+    // Every line shows its whole window, which its axis names by its start and its reset; the
+    // readings are placed against the whole five hours.
     await expect(figure.locator('[data-region="axis"] [data-moment]')).toHaveText([
-      '11:00',
-      '16:00',
+      'start 11:00',
+      'resets 16:00',
     ])
     const before = await stepLine(page)
     await testInfo.attach(`step-line-${colorScheme}`, {
@@ -312,8 +311,6 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
   await page.goto(HARNESS)
   const figure = page.locator(LINE)
   await figure.scrollIntoViewIfNeeded()
-  const whole = figure.getByRole('radio', { name: 'Whole window' })
-  await whole.click()
   await page.mouse.move(1, 1)
   const reach = figure.locator('[data-reading]')
   await expect(figure.locator('[data-mark="reading"]')).toHaveCount(4)
@@ -324,10 +321,12 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
   expect(await paintedDots(page), 'the second pointed at').toEqual([1])
   await page.mouse.move(1, 1)
   expect(await paintedDots(page), 'the pointer gone').toEqual([])
-  // Tab from the switch lands on the latest reading and paints its dot; the pointer passing over
-  // another reading and away leaves it painted while it holds the focus.
-  await whole.focus()
-  await page.keyboard.press('Tab')
+  // The line's one Tab stop is the latest reading, which focused paints its dot; the pointer
+  // passing over another reading and away leaves it painted while it holds the focus.
+  const stop = figure.locator('[tabindex="0"]')
+  await expect(stop).toHaveCount(1)
+  await expect(stop).toHaveAttribute('data-reading', '3')
+  await stop.focus()
   await expect(reach.nth(3)).toBeFocused()
   expect(await paintedDots(page), 'the latest focused').toEqual([3])
   await pointOnStep(page, reach.nth(0))
@@ -378,7 +377,6 @@ test('a reading’s hint stands at the top right of its mark, and at its bottom 
   await page.goto(HARNESS)
   const figure = page.locator(LINE)
   await figure.scrollIntoViewIfNeeded()
-  await figure.getByRole('radio', { name: 'Whole window' }).click()
   const roomy = await firstReadingHint(page, 300)
   const cramped = await firstReadingHint(page, 12)
   await testInfo.attach('reading-hint-corners', {
@@ -438,9 +436,9 @@ test('in a forced palette a window bar and a step line keep their marks in the p
   // The reading a key stands on still shows: its dot painted in the palette's ink, and its step
   // ringed in the palette's own colour for the focus.
   const figure = page.locator(LINE)
-  await figure.getByRole('radio', { name: 'Whole window' }).focus()
-  await page.keyboard.press('Tab')
   const focused = figure.locator('[data-reading="3"]')
+  await expect(focused).toHaveAttribute('tabindex', '0')
+  await focused.focus()
   await expect(focused).toBeFocused()
   expect(await paintedDots(page), 'the focused reading').toEqual([3])
   const shown = await focused.evaluate((reach) => {
