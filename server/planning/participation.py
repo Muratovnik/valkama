@@ -361,9 +361,20 @@ def _rule(rule: Label) -> dict[str, object]:
     return {"ready": bool(rule.ready), "description": rule.description}
 
 
+def _own_fields(rule: Label | None) -> dict[str, bool]:
+    """Which fields of a label's rule the scope's own record sets: a field it leaves out
+    is taken from above, so a write of one field keeps the other inherited."""
+
+    return {
+        "ready": rule is not None and rule.ready is not None,
+        "description": rule is not None and rule.description is not None,
+    }
+
+
 def shown(conn: sqlite3.Connection, space: str | None) -> dict:
     """One scope as the owner reads it: its set, every value with whether the scope
-    sets it and what it would inherit, and the rules of every label it reads."""
+    sets it and what it would inherit, and the rules of every label it reads, each
+    with the fields the scope sets itself."""
 
     settings = load(conn)
     key = None
@@ -392,7 +403,7 @@ def shown(conn: sqlite3.Connection, space: str | None) -> dict:
             {
                 "label": label,
                 **_rule(settings.label(space, label)),
-                "own": label in settings.own_labels.get(space, {}),
+                "own": _own_fields(settings.own_labels.get(space, {}).get(label)),
                 "inherited": _rule(settings.label_inherited(space, label)),
             }
             for label in sorted(labels)

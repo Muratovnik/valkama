@@ -129,7 +129,10 @@ export function participationDouble(
       labels: [...named].sort().map((label) => ({
         label,
         ...ruleIn(scope, label),
-        own: labels[scope]?.[label] !== undefined,
+        own: {
+          ready: (labels[scope]?.[label]?.ready ?? null) !== null,
+          description: (labels[scope]?.[label]?.description ?? null) !== null,
+        },
         inherited: ruleAbove(scope, label),
       })),
     }

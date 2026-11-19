@@ -39,16 +39,17 @@ function withLabel(
   const removed = change.ready === null && change.description === null
   // In a space a label whose own rule goes still reads the shared one, when there is one.
   const shared = inherited.ready || inherited.description !== null
-  if (removed && !(record.scope !== null && shared)) return others
-  const rule = removed
-    ? { label: change.label, ...inherited, own: false, inherited }
-    : {
-        label: change.label,
-        ready: change.ready ?? inherited.ready,
-        description: change.description ?? inherited.description,
-        own: true,
-        inherited,
-      }
+  // A rule that leaves the list goes with the answer: until then its row stands as it was,
+  // so a refusal has the row to stand under and the focus is not dropped before it is known.
+  if (removed && !(record.scope !== null && shared)) return record.labels
+  // A field the change leaves null is the one above, and not the scope's own.
+  const rule = {
+    label: change.label,
+    ready: change.ready ?? inherited.ready,
+    description: change.description ?? inherited.description,
+    own: { ready: change.ready !== null, description: change.description !== null },
+    inherited,
+  }
   return [...others, rule].sort((left, right) => (left.label < right.label ? -1 : 1))
 }
 

@@ -2892,7 +2892,12 @@ choice starts from the shared value and its name carries a quiet «своё» (�
 off inherits again, and no separate reset exists. A set chosen in a space gives every row a value
 of the space's own. Labels lists only those with a rule or a description — whether their
 findings are ready at once, and a description field — and «Добавить правило метке» («Add a rule
-to a label») finds one among the labels the space's work carries or takes it typed whole. Every
+to a label») finds one among the labels the space's work carries or takes it typed whole. A
+rule's two fields inherit one by one: changing one in a space leaves the other as the space's own
+record has it, so a field the space never set keeps following the shared rule. In the shared
+scope a rule has «Убрать правило» («Remove rule»); its row leaves with the server's answer, the
+focus going to «Добавить правило метке», and a refused removal keeps the row with the reason
+under it. A space gives its rule back by switching «Своё значение» off. Every
 change is written at once and nothing is disabled while it is out; a number is written when its
 field is left or Enter is pressed. A newer change replaces only the waiting change of its own
 row, so changing a second row never drops the first. A save that does not hold puts back the

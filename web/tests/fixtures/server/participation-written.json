@@ -152,7 +152,10 @@
       "label": "flow",
       "ready": false,
       "description": "The main line",
-      "own": true,
+      "own": {
+        "ready": true,
+        "description": false
+      },
       "inherited": {
         "ready": true,
         "description": "The main line"
