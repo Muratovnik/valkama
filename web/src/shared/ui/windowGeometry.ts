@@ -26,8 +26,13 @@ export interface WindowRow {
   label: string
   /** Its state in words, «fresh», «silent 3 h». */
   noteText: string
-  /** The share spent, «62%». */
+  /** The share spent, «62%», or what a window past its reset leads with instead. */
   valueText: string
+  /**
+   * What the share's cell says under it in the quiet ink, where it has more to say: past the
+   * reset, the share before it, «before the reset: 62%».
+   */
+  valueDetail?: string
 }
 
 /** The headings and the empty words of `WindowBarTable`. */

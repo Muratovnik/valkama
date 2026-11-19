@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import { REMARK_JOINT } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 /**
  * `WindowBar` as a table: a row a window, its name heading the row, then the share spent, where
  * steady use would stand now, its state with how long it has been silent, and its forecast, each
  * in words. It is the bars' accessible equivalent and stands beside them or instead of them;
  * every figure a bar draws, its hatched forecast too, is a cell here. A row is one window of one
- * account, so no cell adds two of them. Each row is `data-key`, its window's key, and its
- * forecast's cell `data-cell="forecast"`.
+ * account, so no cell adds two of them. A share's cell may say more under the share, in the
+ * quiet ink (`valueDetail`). Each row is `data-key`, its window's key, its share's cell
+ * `data-cell="value"` and its forecast's cell `data-cell="forecast"`.
  */
 import type { WindowRow, WindowWords } from '@/shared/ui/windowGeometry.ts'
 
@@ -75,8 +77,13 @@ defineProps<{
         <td
           class="chart-cell"
           data-numeric="true"
+          data-cell="value"
         >
-          {{ row.valueText }}
+          <span>{{ row.valueText }}</span>
+          <template v-if="row.valueDetail">
+            <span class="visually-hidden">{{ REMARK_JOINT }}</span>
+            <span class="chart-detail">{{ row.valueDetail }}</span>
+          </template>
         </td>
         <td
           class="chart-cell"

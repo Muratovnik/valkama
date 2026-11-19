@@ -158,7 +158,8 @@ function spend() {
  * The facts said in words: the forecast, in the text's ink where there is one, and the reset; past
  * the reset none, since the lead says when it reset. A table leaves the forecast to its account's table and
  * adds what the bar's hint holds and that table does not: the latest reading, and that there is
- * no pace, where that table has only a dash for it.
+ * no pace, where that table has only a dash for it. Past the reset it says no reset either: the
+ * account's table says it where the share stood.
  */
 const facts = computed(() => {
   const { window, now, today, shown, freshFor } = props
@@ -173,7 +174,7 @@ const facts = computed(() => {
   }
   const latest = { key: 'latest', text: words.latest(window, now, today, freshFor), quiet: true }
   return [
-    reset,
+    ...(ended.value ? [] : [reset]),
     ...(paced.value ? [] : [{ key: 'even', text: words.even(window), quiet: true }]),
     latest,
   ]

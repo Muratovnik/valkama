@@ -335,7 +335,8 @@ describe('the quota panel', () => {
   })
 
   it('says a window reset since it was read where its forecast stood, and draws nothing ahead', async () => {
-    // Read five hours ago: the five hours ran out at a time since past, and reset since.
+    // Read five hours ago: the five hours ran out at a time since past, and reset since. Its row
+    // in the account's table is `quotaEndedRow.spec.ts`'s.
     stubAnalyticsReads(usage, () => quotaAnswer(quotaAt(NOW.getTime() - 5 * HOUR)))
     const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
     const reset = expect.stringMatching(/Window reset at \d{2}:\d{2}, no new readings$/u)
@@ -354,9 +355,6 @@ describe('the quota panel', () => {
       /^Five hours: reset at \d{2}:\d{2}, no new readings; 62% used before the reset\. No change since .+, 5 h 2 min ago, /u,
     )
     expect(window.get('.step-line').attributes('aria-label')).toEqual(reset)
-    // As a table, the account's table says the reset in the forecast's column.
-    await showTable(page)
-    expect(plain(accountNamed(page, 'Work').get('[data-cell="forecast"]').text())).toEqual(reset)
   })
 
   it('says the quota could not be read, and that an organization with no source has nothing more', async () => {

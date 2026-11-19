@@ -6,8 +6,9 @@
  * says), a copy's note after the menu, its plan, and each window of the section on show
  * (`QuotaWindow`), the week
  * before each model's week. As a table its windows are one table of their figures — the share,
- * the pace, the state with how long a silent one has been silent, and the forecast, or past the
- * reset that it has reset — each window's facts and readings after it.
+ * the pace, the state with how long a silent one has been silent, and the forecast; past the reset
+ * the share's cell says that it reset, the share before it under that — each window's facts and
+ * readings after it.
  *
  * An account nobody's source read says so and shows no window, and one with no window of the
  * section says that instead, so no source, a window never read and a fresh 0 % never read alike.
@@ -37,12 +38,7 @@ import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindow from '@/pages/analytics/components/QuotaWindow.vue'
 import { useAccountActions } from '@/pages/analytics/composables/useAccountActions.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
-import {
-  sectionWindows,
-  spendWindows,
-  stands,
-  windowKey,
-} from '@/pages/analytics/utils/quotaFigures.ts'
+import { sectionWindows, spendWindows, windowKey } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
 
@@ -108,17 +104,24 @@ const others = computed(() =>
   })),
 )
 
+/**
+ * The windows as the table's rows. A window past its reset with no reading since says so where
+ * its share stood, the share before the reset under it, as its chart leads (`ended`): its share
+ * alone read as the share spent now. It has no pace and no forecast left, a dash each.
+ */
 const rows = computed<WindowRow[]>(() =>
-  windows.value.map((window) => ({
-    key: windowKey(window),
-    label: words.windowName(window),
-    valueText: words.share(window.latest.used_percent),
-    evenText: window.even_percent === null ? '—' : words.share(window.even_percent),
-    noteText: words.stateWords(window, props.now, props.freshFor),
-    forecastText: stands(window, props.now)
-      ? words.forecast(window, props.today)
-      : words.reset(window, props.now, props.today),
-  })),
+  windows.value.map((window) => {
+    const ended = words.ended(window, props.now, props.today)
+    return {
+      key: windowKey(window),
+      label: words.windowName(window),
+      valueText: ended?.lead ?? words.share(window.latest.used_percent),
+      valueDetail: ended?.before,
+      evenText: ended || window.even_percent === null ? '—' : words.share(window.even_percent),
+      noteText: words.stateWords(window, props.now, props.freshFor),
+      forecastText: ended ? '—' : words.forecast(window, props.today),
+    }
+  }),
 )
 const tableWords = computed<WindowWords>(() => ({
   name: t('analytics.quota.table.name'),
