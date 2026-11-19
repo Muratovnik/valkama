@@ -28,6 +28,8 @@ import {
   labelChoices,
   parentChoices,
 } from '@/features/work-item-compose/composerChoices.ts'
+import { composerFailure } from '@/features/work-item-compose/composerFailure.ts'
+import type { ComposerFailure } from '@/features/work-item-compose/composerFailure.ts'
 
 import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
 import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
@@ -67,7 +69,7 @@ const priority = ref<string>('medium')
 const labels = ref<string[]>([])
 const parent = ref('')
 const busy = ref(false)
-const error = ref('')
+const failure = ref<ComposerFailure | null>(null)
 const previewing = ref(false)
 const suggest = mentionSuggest(() => props.space)
 // The preview's references are text: opening one from this modal dialog put the
@@ -84,7 +86,7 @@ watch(
     priority.value = 'medium'
     labels.value = []
     parent.value = ''
-    error.value = ''
+    failure.value = null
     previewing.value = false
   },
 )
@@ -95,19 +97,24 @@ const kindOptions = computed(() => facetChoices(KIND_CHOICES))
 const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
 const stateName = useStandingName()
-const parentOptions = computed(() => parentChoices(props.items, t('compose.noParent'), stateName))
+const parentOptions = computed(() => parentChoices(props.items, t('compose.noGoal'), stateName))
 const labelOptions = computed(() => labelChoices(props.items))
 /** The row a parent's title stands in, which needs more than a phone's half. */
 const holdsTitles = (row: readonly FacetId[]) => row.includes('parent')
 const addLabel = (label: string) => t('compose.addLabel', { label })
 const removeLabel = (label: string) => t('compose.removeLabel', { label })
 
+/** Why the last write failed, below the fields; everything typed stays in them. */
+const error = computed(() =>
+  failure.value ? t(failure.value.key, { reason: failure.value.reason ?? '' }) : '',
+)
+
 const submittable = computed(() => title.value.trim().length > 0 && !busy.value)
 
 async function submit() {
   if (!submittable.value) return
   busy.value = true
-  error.value = ''
+  failure.value = null
   try {
     const created = await createWorkItem({
       space: props.space,
@@ -120,7 +127,7 @@ async function submit() {
     })
     emit('created', created.reference)
   } catch (error_) {
-    error.value = error_ instanceof Error ? error_.message : String(error_)
+    failure.value = composerFailure(error_)
   } finally {
     busy.value = false
   }

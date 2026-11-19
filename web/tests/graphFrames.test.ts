@@ -120,7 +120,12 @@ describe('lines between what is drawn', () => {
       { showDone: true },
       [['b2', 'a1', 'discovered-from', 1]],
     ],
-    ['to another space draws nothing', [link('a1', 'elsewhere', 'blocks')], {}, []],
+    [
+      'to an end the read could not read draws nothing',
+      [link('a1', 'elsewhere', 'blocks')],
+      {},
+      [],
+    ],
     ['a parent edge is never a line', [link(ids.E2, 'b1', 'parent')], {}, []],
     [
       'into a folded frame lands on it, two links one solid line',

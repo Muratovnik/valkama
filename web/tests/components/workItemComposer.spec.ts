@@ -212,21 +212,23 @@ describe('WorkItemComposer goal and labels', () => {
     brief(3, { kind: 'goal', title: 'Old release', open: false, state: doneState }),
     brief(7, { kind: 'task', title: 'Holds two', labels: ['docs'] }),
     brief(12, { kind: 'goal', title: 'Parser', labels: ['platform'] }),
-    // Inside another item, so it cannot hold a new one: the hierarchy is one level deep.
+    // A stage inside a goal the board does not hold: it is offered all the same.
     brief(20, { kind: 'stage', title: 'Nested', parent_id: workItem.work_item_id }),
     brief(21, { kind: 'task', title: 'Plain', labels: ['platform', 'docs', 'platform-ui'] }),
     brief(22, { kind: 'bug', title: 'Another', labels: ['platform'] }),
   ]
 
-  // A goal holds others, one level deep, so the field offers the goals and says so; a task
-  // holds none, whatever was filed under it before.
+  // A goal or a stage holds others, at any depth, so the field offers them and says so; a
+  // task holds none, whatever was filed under it before.
+  // (`workItemComposerParent.spec.ts` reads the tree they are laid out in.)
   it('offers the parents and the labels the space has, in the order they are reached for', async () => {
     const wrapper = open()
     const [labels, goal] = wrapper.findAll('input[role="combobox"]')
     await goal?.trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
     expect(optionNames()).toEqual([
-      'No parent',
+      'No goal',
+      'MAIN-20 · NestedIn progress',
       'MAIN-12 · ParserIn progress',
       'MAIN-3 · Old releaseDone',
     ])

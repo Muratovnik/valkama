@@ -29,6 +29,8 @@ defineProps<{
   readyCount: number
   /** The sessions' signs the cards on the field draw. */
   signs: readonly LiveSign[]
+  /** The spaces whose links the read could not read, by key. */
+  unread?: readonly string[]
 }>()
 const emit = defineEmits<{ 'toggle-motion': [] }>()
 const { t } = useI18n()
@@ -44,6 +46,7 @@ const { t } = useI18n()
     :keep-done="keepDone"
     :moving="moving"
     :signs="signs"
+    :unread="unread"
   />
   <GraphMotionToggle
     :motion="motion"
