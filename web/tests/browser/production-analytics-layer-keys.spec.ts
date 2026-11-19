@@ -313,3 +313,25 @@ for (const width of [1440, 1024, 390])
       expect(on.filter(({ struck }) => struck.includes('line-through'))).toHaveLength(0)
     }
   })
+
+test('in a forced palette a layer turned off still says so by its strike and its faint swatch', async ({
+  page,
+}, info) => {
+  await page.emulateMedia({ forcedColors: 'active' })
+  await serve(page, LOWER)
+  const days = await openDays(page, 1440)
+  const keys = days.locator(`${LEGEND} [data-mark]`)
+  const on = await keyBoxes(keys)
+  await days.locator(OUTLINE_KEY).click()
+  // The pointer leaves the key, so no underline of a hover stands beside the strike.
+  await page.mouse.move(0, 0)
+  const off = await keyBoxes(keys)
+  await record(info, 'layer keys in a forced palette', { on, off })
+  const turned = off.find(({ text }) => text === 'period before')
+  expect(turned?.struck).toBe('line-through')
+  expect(turned?.faint).toBeLessThan(1)
+  expect(on.find(({ text }) => text === 'period before')).toMatchObject({
+    struck: 'none',
+    faint: 1,
+  })
+})
