@@ -17,8 +17,8 @@
  *
  * News the line may come to say — a refresh that failed — is held while it is fitted (`holding`):
  * drawn by nobody, it takes its room, so the line gives up for it what it would give up once it is
- * said. When it is said, it takes only the room the line left (the filters' chips), and nothing else
- * on the line moves.
+ * said. When it is said, it takes only the room the line left (the filter's field past its words),
+ * and nothing else on the line moves.
  */
 import type { Ref, WatchSource } from 'vue'
 import { computed, nextTick, ref, watch } from 'vue'

@@ -122,12 +122,13 @@ async function barOf(page: Page) {
         ? { hidden: words.classList.contains('visually-hidden'), ...box('.refresh-failed-words') }
         : null,
       rows,
-      // The room the line leaves goes to the filters' chips, none of which are set here.
-      spare:
-        Math.round(
-          (document.querySelector('.analytics-bar-chips')?.getBoundingClientRect().width ??
-            Number.NaN) * 10,
-        ) / 10,
+      // The room the line leaves goes to the filter's field, past the least its words need.
+      spare: (() => {
+        const field = document.querySelector('.analytics-filter-add')
+        if (!field) return Number.NaN
+        const least = Number.parseFloat(getComputedStyle(field).minInlineSize)
+        return Math.round((field.getBoundingClientRect().width - least) * 10) / 10
+      })(),
     }
   })
   return { ...parts, cut: await cutsOf(page) }

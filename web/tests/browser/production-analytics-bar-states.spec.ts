@@ -9,7 +9,8 @@
  * answering, the retry takes the failure away. A failed read leaves no live mark in the bar, neither
  * when the page has nothing to show nor beside the figures a failed refresh kept, and the mark is
  * back once a read answers. A failure said moves nothing: the bar keeps its height, the panel its
- * top, and every control of the bar its place. A span of days chosen keeps the bar's height and the
+ * top, and every control of the bar its place, the filter's field its start, as it takes the room
+ * the line leaves. A span of days chosen keeps the bar's height and the
  * panel's top wherever the bar is of one height for every period: on a phone, in the two rows of a
  * narrow bar, and on a line wide enough for the span; between 50rem and about 1360px the line
  * beside a span is two rows where a preset's is one, which `DESIGN.md` chose over one height. On a
@@ -149,17 +150,25 @@ function expectSaid(name: string, state: BarState) {
 
 /**
  * Every control of the bar stands where it stood, to the half pixel the bar counts as rounding
- * when it fits its line (`useBarRoom`).
+ * when it fits its line (`useBarRoom`). The filter's field takes the room the line leaves, so what
+ * takes that room ends it sooner: its start stays, and its end comes back, never past where it
+ * was (`DESIGN.md`).
  */
 function expectInPlace(name: string, after: BarState['controls'], before: BarState['controls']) {
   for (const [control, was] of Object.entries(before)) {
     const now = after[control as keyof BarState['controls']]
     expect.soft(now === null, `${name}: ${control} shown`).toBe(was === null)
     if (!was || !now) continue
-    for (const edge of ['left', 'top', 'right'] as const)
+    const edges =
+      control === 'add' ? (['left', 'top'] as const) : (['left', 'top', 'right'] as const)
+    for (const edge of edges)
       expect
         .soft(Math.abs(now[edge] - was[edge]), `${name}: ${control}'s ${edge} moved`)
         .toBeLessThanOrEqual(0.5)
+    if (control === 'add')
+      expect
+        .soft(now.right, `${name}: the field's end past where it was`)
+        .toBeLessThanOrEqual(was.right + 0.5)
   }
 }
 

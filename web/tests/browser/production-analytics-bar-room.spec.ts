@@ -161,7 +161,7 @@ const barParts = (page: Page) =>
     const parts = Object.fromEntries(
       [
         '.analytics-period',
-        '.analytics-bar-filters',
+        '.analytics-filter-add',
         '.analytics-bar-fresh',
         '.refresh-failed',
         '.refresh-failed-words',
@@ -333,7 +333,7 @@ const rowsOf = (page: Page) =>
       panel: document.querySelector('.analytics-panel')?.getBoundingClientRect().top ?? 0,
       line: box('.analytics-bar-line'),
       periods: box('.analytics-period'),
-      filters: box('.analytics-bar-filters'),
+      filters: box('.analytics-filter-add'),
       own: box('.analytics-bar-own'),
       refresh: box('.analytics-refresh'),
       days: [...document.querySelectorAll('.analytics-bar input[type="date"]')].map((field) => {

@@ -1392,10 +1392,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   what lies under it keep quiet. A chip is a press that takes its value out; once the chips
   without it are drawn, the focus goes to the chip before it, the next one when it was the
   first, and the field when none is left, so it never falls to the page. ← from the start
-  of the text reaches the last chip, and Backspace there takes it out. The Analytics page
-  once had a list of its own, a field for each dimension under a button: an unplaced
-  account's «<id> · аккаунт не определён» wrapped to two lines there, 52px beside rows of
-  40px.
+  of the text reaches the last chip, and Backspace there takes it out. Every bar composes
+  the two alike: the field stands in the bar's row and takes the room the row leaves, and
+  the chips stand in a line of their own under the row, the way to take every filter out
+  at that line's end, so the chips never compete with the field for one row's width. The
+  Analytics page once had a list of its own, a field for each dimension under a button: an
+  unplaced account's «<id> · аккаунт не определён» wrapped to two lines there, 52px beside
+  rows of 40px.
 - **Disclosure:** what shows more of something — the rest of a long text,
   earlier replies, a chain's or a lane's further rows, a folded thread — is the
   bare `text` weight, its words in line with what it opens. The ghost's fill is
@@ -2571,10 +2574,11 @@ retry, and never a failure's words or a day of the reader's own period, whose fi
 the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
 bar's end at 1200px. The last thing a line gives up is itself: one that still runs past its end
 becomes the two rows below, with its words back, and a bar with room for one line keeps one line.
-The line is fitted as if a refresh had failed, so a failure said takes only the room the
-filters' chips had, the way to add a filter standing before them: it moves neither the bar's
-height nor any of its controls. Fitted for the bar as it stood, a failure moved «Add filter»
-260px and the age as far, gave up the failure's own words beside a span of days at 1440px, and
+The line is fitted as if a refresh had failed, so a failure said takes only room the filter's
+field has past its words: the field's end comes back, and the failure moves neither the bar's
+height nor the place of any other control. Fitted for the bar as it stood, a failure moved
+«Add filter» 260px and the age as far, gave up the failure's own words beside a span of days
+at 1440px, and
 turned a line of 1280px into two rows that moved the panel. Beside a span of days, in Russian,
 the line needs a 1390px window, the filter's field taking 30px more than the button it replaced;
 at 1108px «Refresh» ran 188px past the bar's end, and pressing it
@@ -2601,8 +2605,11 @@ seconds and the minutes after the newest record are hatched, as every figure not
 and say «no data yet» in their hint rather than being drawn as a drop.
 
 The bar's filter is the shared facet filter (Shared component grammar), the one the Work views
-filter through. Its field, «Add a filter», stands first, then the chips it set. Its facets are
-the page's dimensions in the rail's order, the project left out inside a project, and a
+filter through, and placed as the Work bar places it. Its field, «Add a filter», stands on the
+bar's line after the period and takes the room the line leaves, as the Work filter takes what its
+row leaves; the chips it set stand in a row of their own under the line, with «Clear filters» at
+their end, as the Work bar ends the line under its row with the way out of its filter. Its facets
+are the page's dimensions in the rail's order, the project left out inside a project, and a
 dimension's values are its «none» as the read admits it — «No task» for work on no item, «The
 session itself» for a session's own run, «Unknown» for a value nobody can place, and none for a
 role, which every stretch has — then the values that spent anything in the period, each named as
@@ -2611,16 +2618,21 @@ under its id. A dimension's values are read when it is stepped into and again fo
 and a filter set has its dimension's read to name its chip; the page used to read all ten at
 once to open its list. Several values of one dimension admit any of them, and the dimensions'
 filters all apply. «Add to filter» in a value's panel adds to the same filter, and an old link
-reads as it did. A chip says its dimension and its value, «Model: model-a». The chips take the
-room the line leaves; those it has no room for are counted with the rest in «Filters: N»,
-which opens the list of every chip with «Clear filters», over the panel under the bar's line
-and as wide as it, so opening it moves nothing. The field is as wide as its words, 176px, and
-not as the room beside it, so a failure that takes the chips' room moves it not at all; the
-first thing it gives up, beside the count, on a short bar and on a phone, is its words for its
-short «Filter», 62px with less air at its ends. At 108px, as wide as the Work filter on a phone,
-a failure said on a phone's row pushed the periods and the refresh 26px aside at 360px, and a
-span of days needed a window 70px wider for one line. On a phone, with no filter set, the chips
-take no room and no gap of the row.
+reads as it did. A chip says its dimension and its value, «Model: model-a»; every chip set is
+shown, and more than one row holds wrap onto the next. The field is never narrower than its
+words need, 176px, or on a short bar and on a phone its short «Filter», 62px with less air at
+its ends: the line gives up its other parts only once the field has given up the room past
+that, so the line's give-ups and its two rows come where they came before. The row of chips
+comes with the first filter set and goes with the last, and it is the one thing the filters
+change in the bar's height: a row of 28px and the bar's 8px gap, 36px at 1440 and at 1024px,
+and on a phone, where a chip grows to a finger's reach, 52px for one row and 180px for five
+chips over three rows with «Clear filters» under them. On a phone the row stands right under
+the field's, and the room of the reader's own days, which every period keeps there, moves under
+it: under that room, the chips stood 44px away from the field with no span of days chosen.
+At 1440px the field is 487px wide beside a week and the Work field 673px beside its views. It
+used to be as wide as its words, 176px, with the chips beside it on the line in the room left
+and those without room counted in «Filters: N», whose list held every chip and «Clear filters»:
+the field stood narrow beside an empty line, and a filter set stood behind a press.
 
 An item's work has two times, and each has one name wherever it stands. «Work on the clock»
 («Работа по часам») is the time that passed while agents worked, which agents working side by

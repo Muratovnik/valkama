@@ -13,9 +13,10 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import AnalyticsChips from '@/pages/analytics/components/AnalyticsChips.vue'
+import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 
+import { DEFAULT_VIEW } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
@@ -64,12 +65,25 @@ function mountChips(
   filters: UsageFilters = {},
   locale: 'en' | 'ru' = 'en',
 ) {
-  return mount(AnalyticsChips, {
-    props: { dimensions: DIMENSIONS, filters, short: false, values },
+  return mount(AnalyticsBar, {
+    props: {
+      dimensions: DIMENSIONS,
+      filtersRefused: '',
+      lastEventAt: undefined,
+      live: false,
+      readFailed: false,
+      today: '2026-11-11',
+      values,
+      view: { ...DEFAULT_VIEW, filters },
+    },
     attachTo: document.body,
     global: { plugins: [analyticsI18n(locale)] },
   })
 }
+
+/** The page's filters set anew, as the bar's host hands them back. */
+const setFilters = (chips: ReturnType<typeof mountChips>, filters: UsageFilters) =>
+  chips.setProps({ view: { ...DEFAULT_VIEW, filters } })
 
 type Chips = ReturnType<typeof mountChips>
 
@@ -156,11 +170,11 @@ describe('the filter’s menu', () => {
     await openDimension(chips, 'Model')
     await pressRow(chips, 'model-a')
     expect(chips.emitted('filter')?.at(-1)).toEqual(['model', ['model-a']])
-    await chips.setProps({ filters: { model: ['model-a'] } })
+    await setFilters(chips, { model: ['model-a'] })
     expect(chosenRows(chips)).toEqual(['model-a'])
     await pressRow(chips, 'Unknown')
     expect(chips.emitted('filter')?.at(-1)).toEqual(['model', ['model-a', null]])
-    await chips.setProps({ filters: { model: ['model-a', null] } })
+    await setFilters(chips, { model: ['model-a', null] })
     await pressRow(chips, 'model-a')
     expect(chips.emitted('filter')?.at(-1)).toEqual(['model', [null]])
   })

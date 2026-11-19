@@ -2,17 +2,20 @@
 /**
  * The bar over every section of the Analytics page: the period, with the ends of the reader's own
  * beside it, its two days or the name of a span between two moments (`AnalyticsOwnPeriod`); the
- * filter's field, the way to add a filter, and each value set, a chip that takes it out
- * (`AnalyticsChips`); how fresh the figures are;
- * and a read of them again. It stays where it is while the rail and the panel under it scroll,
- * since it says what everything under it is of.
+ * filter's field, the way to add a filter (`AnalyticsFilterField`, `useAnalyticsFilter`); how
+ * fresh the figures are; and a read of them again. Each value a filter is set to is a chip that
+ * takes it out, in a row of its own under the line, with «Clear filters» at its end
+ * (`AnalyticsChipRow`), as the Work bar places its chips. The
+ * bar stays where it is while the rail and the panel under it scroll, since it says what
+ * everything under it is of.
  *
- * The bar is one line wherever it has room for the period, its days and the read again, so the
- * panel under it never moves with what the bar holds: the filters (`AnalyticsChips`) take the
- * room the rest leaves, counting those it has none for, and the filter's menu and the list of
- * chips the count opens lie over the panel. A bar with no room for that one line is two rows of one height whatever period
- * is chosen: the periods and the filters, then the ends of the reader's own period at the start of
- * the second and the freshness with the read again at its end.
+ * The line is one line wherever it has room for the period, its days and the read again: the
+ * filter's field takes the room the rest leaves, never less than its words need, and its menu
+ * lies over the panel. A bar with no room for that one line is two rows of one height whatever
+ * period is chosen: the periods and the field, then the ends of the reader's own period at the
+ * start of the second and the freshness with the read again at its end. The chips' row comes with
+ * the first filter set and goes with the last, so the panel moves down by that row then, and by
+ * nothing else the filters do.
  *
  * How fresh the figures are is one element of one width: a live period's mark and the age of the
  * newest record the store holds, of any session, counted on each second (`useFreshness`), «● 15 s
@@ -31,21 +34,23 @@
  * period: its fields are as wide as a date needs. A line that runs past its end with all of that given up gives up the one line last,
  * and is the two rows of a narrower bar, which take their words back: the reader's own days need
  * that up to a window of about 1390px. The line is fitted as if a failure were said, so one said
- * takes only the room the chips had and moves nothing: neither the bar's height nor its controls.
+ * takes only room of the field's past its words and moves the start of nothing: neither the bar's
+ * height nor its controls.
  *
  * On a phone the bar is three rows of one height whatever period is chosen: the periods in one row
  * that scrolls sideways, the chosen one scrolled into view, with the freshness at its end; under
  * it the filter, a failure and the read again, by its icon; and the room of the reader's own days.
+ * With a filter set, the chips' row stands right under the field's, before the room of the days.
  */
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useElementSize } from '@vueuse/core'
-
-import AnalyticsChips from '@/pages/analytics/components/AnalyticsChips.vue'
+import AnalyticsChipRow from '@/pages/analytics/components/AnalyticsChipRow.vue'
+import AnalyticsFilterField from '@/pages/analytics/components/AnalyticsFilterField.vue'
 import AnalyticsOwnPeriod from '@/pages/analytics/components/AnalyticsOwnPeriod.vue'
 import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
-import { useBarRoom } from '@/pages/analytics/composables/useBarRoom.ts'
+import { useAnalyticsFilter } from '@/pages/analytics/composables/useAnalyticsFilter.ts'
+import { useBarForm } from '@/pages/analytics/composables/useBarForm.ts'
 import { useFreshness } from '@/pages/analytics/composables/useFreshness.ts'
 import { LIVE_INTERVAL } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.ts'
@@ -111,68 +116,32 @@ function showChosen() {
 }
 onMounted(showChosen)
 
-/**
- * What the line gives up while it has no room for all it holds (`useBarRoom`): its buttons' words,
- * the room between its parts, the word around the age, a failure's retry's own word, and a span's
- * name.
- */
-const line = useTemplateRef<HTMLElement>('line')
-const refreshButton = useTemplateRef<{ $el: HTMLElement }>('refreshButton')
-const { failed } = usePageStanding()
-
-/** A width in the root's ems, as the bar's container queries count it. */
-function ems(width: number) {
-  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-  return width / rem
-}
-
-const room = useBarRoom({
-  line,
-  last: () => refreshButton.value?.$el,
-  // On a phone the failure's words wrap rather than run past the row's end, a last resort.
-  wrapped: () => {
-    const words = line.value?.querySelector<HTMLElement>('.refresh-failed-words')
-    if (!words) return false
-    const size = Number.parseFloat(getComputedStyle(words).fontSize)
-    return words.getBoundingClientRect().height > 1.9 * size
-  },
-  order: () => ['words', 'gaps', 'ago', 'retry', 'span'],
-  observed: [line],
-  // Wider than a phone and under 50rem the one line has no room whatever period is chosen.
-  narrow: () => {
-    const wide = ems(line.value?.getBoundingClientRect().width ?? 0)
-    return wide > 30 && wide < 50
-  },
-  holds: [
-    () => props.live,
-    () => [props.view.period, props.view.from, props.view.to],
-    () => props.view.filters,
-    locale,
-  ],
+/** The filter on the shared field and chips (`useAnalyticsFilter`), which the bar places. */
+const filter = useAnalyticsFilter({
+  clear: () => emit('amend', { filters: {} }),
+  dimensions: () => props.dimensions,
+  filter: (dimension, chosen) => emit('filter', dimension, chosen),
+  filters: () => props.view.filters,
+  need: (needed) => emit('need', needed),
+  values: () => props.values,
 })
+/** Whether a filter is set, its chips then taking a row of their own. */
+const filtered = computed(() => filter.chips.value.length > 0)
 
 /**
- * Whether the bar says its buttons by their icons: on a phone, or on a line that had to give their
- * words up.
+ * The bar's form for its room (`useBarForm`): a phone's rows, two rows or one line, and what the
+ * line gave up to fit.
  */
 const bar = useTemplateRef<HTMLElement>('bar')
-const { width: barWidth } = useElementSize(bar)
-const short = computed(() => {
-  const wide = ems(barWidth.value)
-  return (wide > 0 && wide <= 30) || room.gave('words')
+const line = useTemplateRef<HTMLElement>('line')
+const refreshButton = useTemplateRef<{ $el: HTMLElement }>('refreshButton')
+const { bare, brief, held, phone, short, spanCut, tight, twoRows } = useBarForm({
+  bar,
+  line,
+  last: () => refreshButton.value?.$el,
+  holds: [() => props.live, () => [props.view.period, props.view.from, props.view.to], locale],
 })
-/**
- * Whether the room between the parts narrowed, the age said by its span alone («15 s», its hint
- * and its hidden words saying «ago»), a failure whose words are its retry, and a span's name cut.
- */
-const tight = computed(() => room.gave('gaps'))
-const bare = computed(() => room.gave('ago'))
-const brief = computed(() => room.gave('retry'))
-const spanCut = computed(() => room.gave('span'))
-/** Whether the bar is two rows: too narrow for one line, or with no room for it after all. */
-const twoRows = room.rows
-/** Whether the line is being fitted, a failure holding its room unseen. */
-const held = room.holding
+const { failed } = usePageStanding()
 watch([() => props.view.period, held], showChosen, { flush: 'post' })
 
 /** Whether a read failed: a read again, its figures kept, or the view's, with none to show. */
@@ -206,6 +175,7 @@ const freshHint = computed(() =>
       'analytics-bar-short': short,
       'analytics-bar-tight': tight,
       'analytics-bar-rows': twoRows,
+      'analytics-bar-filtered': filtered,
     }"
   >
     <div
@@ -229,14 +199,10 @@ const freshHint = computed(() =>
         :view="view"
         @amend="(next) => emit('amend', next)"
       />
-      <AnalyticsChips
-        :dimensions="dimensions"
-        :filters="view.filters"
+      <AnalyticsFilterField
+        ref="filterField"
+        :filter="filter"
         :short="short"
-        :values="values"
-        @filter="(dimension, chosen) => emit('filter', dimension, chosen)"
-        @clear="emit('amend', { filters: {} })"
-        @need="(needed) => emit('need', needed)"
       />
       <div class="analytics-bar-read">
         <RefreshFailed
@@ -284,7 +250,20 @@ const freshHint = computed(() =>
           <span class="analytics-refresh-words">{{ t('analytics.frame.refresh') }}</span>
         </VButton>
       </div>
+      <!-- On a phone the chips stand among the line's rows, right under the field. -->
+      <AnalyticsChipRow
+        v-if="phone"
+        ref="filterChips"
+        class="analytics-bar-chips"
+        :filter="filter"
+      />
     </div>
+    <AnalyticsChipRow
+      v-if="!phone"
+      ref="filterChips"
+      class="analytics-bar-chips"
+      :filter="filter"
+    />
     <FieldError
       v-if="filtersRefused"
       role="alert"
@@ -295,19 +274,21 @@ const freshHint = computed(() =>
 </template>
 
 <style scoped>
-/* Over the panel, so the list of filters it opens stands over the panel's charts too. */
+/* Over the panel, so the filter's menu stands over the panel's charts too. The line, the chips'
+   row under it and a refused filter stand as far apart as the Work bar's row and its line. */
 .analytics-bar {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   container-type: inline-size;
 }
 
-/* The period, its days, the filters, the freshness and the read again on one line: the filters
-   take the room the rest leaves and give it up first, and then the line gives up its words and
-   the room between its parts (`useBarRoom`). A bar with no room for it is two rows (below). */
+/* The period, its days, the filter's field, the freshness and the read again on one line: the
+   field takes the room the rest leaves and gives it up first, down to what its words need, and
+   then the line gives up its words and the room between its parts (`useBarRoom`). A bar with no
+   room for it is two rows (below). */
 .analytics-bar-line {
   position: relative;
   display: flex;
@@ -457,6 +438,21 @@ const freshHint = computed(() =>
 
   .analytics-bar-own {
     grid-area: 3 / 1 / 4 / -1;
+  }
+
+  /* With a filter set its chips take a row of their own right under the field's, and the room of
+     the reader's own days moves under them: under that room they stood a row away from the
+     field whatever period was chosen. */
+  .analytics-bar-filtered .analytics-bar-line {
+    grid-template-rows: auto auto auto var(--size-control-height-compact);
+  }
+
+  .analytics-bar-chips {
+    grid-area: 3 / 1 / 4 / -1;
+  }
+
+  .analytics-bar-filtered .analytics-bar-own {
+    grid-area: 4 / 1 / 5 / -1;
   }
 }
 

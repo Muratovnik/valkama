@@ -3,12 +3,11 @@
  * the sentence and how often the period reads itself again in its hint, and the age counting up
  * from 5 s to 59 min moves and resizes nothing in the bar; a live period keeps the bar one row at
  * 1440px. An old record says its whole age there.
- * At 1440 and 1920 the bar keeps one height with none to four filters and with a span of days,
- * the filters it has no room for counted in «Filters: N»; the filter's menu opens over the
- * panel, moving nothing, and a chip taken out leaves the focus in the bar. On a phone the bar is
- * three rows, its periods one row that scrolls sideways, with the rail right under it. «Today»,
- * chosen in the bar, is the day's hours 0 to 23 with the one running hatched, compared with the
- * same hours of yesterday, and its address gives the view back.
+ * The filter's menu opens over the panel, moving nothing, and a chip taken out leaves the focus in
+ * the bar; where the field and the chips stand is `production-analytics-filter-row.spec.ts`'s. On
+ * a phone the bar is three rows, its periods one row that scrolls sideways, with the rail right
+ * under it. «Today», chosen in the bar, is the day's hours 0 to 23 with the one running hatched,
+ * compared with the same hours of yesterday, and its address gives the view back.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -39,7 +38,7 @@ const barParts = (page: Page) =>
     Object.fromEntries(
       [
         '.analytics-period',
-        '.analytics-bar-filters',
+        '.analytics-filter-add',
         '.analytics-bar-fresh',
         '.analytics-refresh',
         '.analytics-bar',
@@ -108,7 +107,7 @@ test('the age of the newest record counting up moves nothing in the bar, one row
   // One row: the periods, the filters, the freshness and the read again stand on one line.
   const [period, ...rest] = [
     '.analytics-period',
-    '.analytics-bar-filters',
+    '.analytics-filter-add',
     '.analytics-bar-fresh',
     '.analytics-refresh',
   ].map((selector) => start[selector])
@@ -296,28 +295,17 @@ const DAYS: TimedStretch[] = [
 /** A newest record hours old: 6 h 44 min before now. */
 const OLD = new Date(NOW.getTime() - (6 * 60 + 44) * 60_000)
 
-/** Filters of none to four values, each a chip. */
+/** Filters of none, one and three values, each a chip. */
 const CHIPS: Record<string, string[]>[] = [
   {},
   { model: ['model-a'] },
-  { model: ['model-a', 'model-b'] },
   { project: ['alpha'], model: ['model-a', 'model-b'] },
-  { project: ['alpha', 'beta'], model: ['model-a', 'model-b'] },
 ]
-const CUSTOM = { period: 'custom', from: '2026-11-09', to: '2026-11-11' }
 
-/** How many filters a set holds, and its address beside a period's. */
+/** How many filters a set holds, and its address. */
 const countOf = (filters: Record<string, string[]>) => Object.values(filters).flat().length
-const addressOf = (filters: Record<string, string[]>, period: Record<string, string> = {}) =>
-  countOf(filters) ? { ...period, filters: JSON.stringify(filters) } : period
-
-/** What the bar says of its filters: none when each is a chip, else all of them counted. */
-const FOLDED = { en: 'Filters', ru: 'Фильтры' }
-const foldedWords = (lang: 'en' | 'ru', chips: number, count: number) =>
-  chips < count ? `${FOLDED[lang]}: ${count}` : null
-
-/** How many of three short filters stand as chips at least: all three at 1920px. */
-const LEAST_OF_THREE: Record<number, number> = { 1440: 0, 1920: 3 }
+const addressOf = (filters: Record<string, string[]>): Record<string, string> =>
+  countOf(filters) ? { filters: JSON.stringify(filters) } : {}
 
 /** Takes a chip out by its button: a press, or Enter on the button focused. */
 async function takeOut(page: Page, key: 'click' | 'Enter', name: string) {
@@ -335,30 +323,11 @@ async function openBar(page: Page, state: Record<string, string>) {
   await page.goto(pageAt(state))
   await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
-  // The chips the bar has room for are counted once their names and the bar's room are known.
+  // The line is fitted once the bar's words and room are known.
   await page.evaluate(
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   )
 }
-
-/** The bar's height, where the panel under it starts, and what the bar shows of its filters. */
-const barState = (page: Page) =>
-  page.evaluate(() => {
-    const bar = document.querySelector('.analytics-bar')?.getBoundingClientRect()
-    const panel = document.querySelector('.analytics-panel')?.getBoundingClientRect()
-    const room = document.querySelector('.analytics-bar-filters')?.getBoundingClientRect()
-    const chips = [...document.querySelectorAll('.analytics-bar-chips [data-filter-chip]')].map(
-      (chip) => chip.getBoundingClientRect(),
-    )
-    return {
-      bar: Math.round(bar?.height ?? 0),
-      panel: Math.round(panel?.y ?? 0),
-      chips: chips.length,
-      // Every chip shown stands whole inside the filters' room, none cut at its edge.
-      whole: chips.every((chip) => chip.right <= (room?.right ?? 0) + 0.5),
-      folded: document.querySelector('.analytics-filter-folded')?.textContent?.trim(),
-    }
-  })
 
 for (const lang of ['en', 'ru'] as const)
   test.describe(`the bar, ${lang}`, () => {
@@ -370,7 +339,7 @@ for (const lang of ['en', 'ru'] as const)
       const double = await serveLive(page, DAYS)
       double.lastEventAt = OLD
       await page.setViewportSize({ width: 1440, height: 900 })
-      for (const filters of [CHIPS[0] ?? {}, CHIPS[1] ?? {}, CHIPS[3] ?? {}]) {
+      for (const filters of CHIPS) {
         const count = countOf(filters)
         await openBar(page, addressOf(filters))
         const time = page.locator('.analytics-bar-fresh time')
@@ -387,35 +356,6 @@ for (const lang of ['en', 'ru'] as const)
         expect(shown.cut, `the age is cut with ${count} filters`).toBe(false)
       }
     })
-
-    for (const width of [1440, 1920])
-      test(`the bar keeps its height with any filters and a span of days at ${width}px`, async ({
-        page,
-      }, info) => {
-        const double = await serveLive(page, DAYS)
-        double.lastEventAt = OLD
-        await page.setViewportSize({ width, height: 900 })
-        const seen: Record<string, Awaited<ReturnType<typeof barState>>> = {}
-        for (const period of [{} as Record<string, string>, CUSTOM])
-          for (const filters of CHIPS) {
-            const count = countOf(filters)
-            await openBar(page, addressOf(filters, period))
-            const now = await barState(page)
-            const name = `${period.period ?? 'week'} ${count}`
-            seen[name] = now
-            expect(now.whole, `a chip cut, ${name}`).toBe(true)
-            // Each filter is a chip, or counted with the rest in «Filters: N».
-            expect(now.folded ?? null, name).toBe(foldedWords(lang, now.chips, count))
-          }
-        await record(info, `bar-height ${lang} ${width}`, seen)
-        const first = seen['week 0']
-        for (const [name, state] of Object.entries(seen)) {
-          expect(state.bar, `the bar's height, ${name}`).toBe(first?.bar)
-          expect(state.panel, `the panel's top, ${name}`).toBe(first?.panel)
-        }
-        // At 1920 three filters stand as chips beside the period.
-        expect(seen['week 3']?.chips).toBeGreaterThanOrEqual(LEAST_OF_THREE[width] ?? 0)
-      })
   })
 
 test('the filter’s menu opens over the panel and moves nothing', async ({ page }, info) => {

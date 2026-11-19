@@ -7,8 +7,9 @@
  *
  * Each state the page has is opened and measured, and the run prints what it measured: the page
  * in Russian, waiting, failed and empty, fallen to zeros, beside a period before not read, with a
- * change of accounts past unrecorded work, a custom period with its two date fields, the filters
- * open with chips, a chart of one value and one with a large «other», each chart beside its table.
+ * change of accounts past unrecorded work, a custom period with its two date fields, the filters'
+ * chips in their row under the bar, a chart of one value and one with a large «other», each chart
+ * beside its table.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -344,40 +345,64 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
 })
 
 for (const width of [1440, 390])
-  test(`the filters open with chips stand whole at ${width}px`, async ({ page }, info) => {
+  test(`the filters' chips stand whole in their row under the bar at ${width}px`, async ({
+    page,
+  }, info) => {
     await serve(page)
     const filters = { model: ['model-a'], work_item: [task(1, '').id, task(2, '').id] }
     const analytics = await openReport(page, width, pageAt({ filters: JSON.stringify(filters) }))
-    // Three long chips have no room on the bar at either width: the first that fit stand there,
-    // and all three are counted on the button that opens the list.
-    const folded = analytics.locator('.analytics-filter-folded')
-    await expect(folded).toHaveText('Filters: 3')
-    await folded.click()
-    // Each value chosen is a chip in the list, and on the bar where it fits, with its dimension.
-    const named = filterParts(page).chips
-    const onBar = await named.allTextContents()
-    expect(onBar.length).toBeLessThan(3)
-    const all = [/^Task: MAIN-1 Rework /u, /^Task: MAIN-2 Rework /u, /^Model: model-a$/u]
-    for (const [index, words] of onBar.entries()) expect(words).toMatch(all[index] ?? /^$/u)
-    const chips = analytics.locator('.analytics-filter-body [data-filter-chip]')
-    await expect(chips).toHaveCount(3)
-    await expect(chips.filter({ hasText: 'MAIN-1' })).toHaveCount(1)
-    // Tab reaches every chip of the list and its «Clear filters».
+    // Each value chosen is a chip, with its dimension, in the row under the bar's line, all three
+    // at either width, with «Clear filters» at their end: no filter is counted rather than shown.
+    const { chips, field } = filterParts(page)
+    await expect(chips).toHaveText([
+      /^Task: MAIN-1 Rework /u,
+      /^Task: MAIN-2 Rework /u,
+      /^Model: model-a$/u,
+    ])
+    const clear = analytics.locator('.analytics-bar-chips').getByRole('button', {
+      name: 'Clear filters',
+    })
+    await expect(clear).toBeVisible()
+    // Tab reaches every chip and «Clear filters».
     const walked = await tabWalk(page)
     expect(walked.missed).toEqual([])
     const measured = {
-      list: await boxes(page, '.analytics-filter-body'),
-      chips: await boxes(page, '.analytics-filter-body [data-filter-chip]'),
-      named: await named.allTextContents(),
-      chipWords: await chips.allTextContents(),
-      clear: await boxes(page, '.analytics-filter-clear'),
+      line: await boxes(page, '.analytics-bar-line'),
+      field: await boxes(page, '.analytics-filter-add'),
+      chips: await boxes(page, '.analytics-bar-chips [data-filter-chip]'),
+      clear: await boxes(page, '.analytics-bar-chips > button'),
       pageScroll: await pageScroll(page),
     }
     await record(info, `analytics filters open ${width}`, measured)
     expect(measured.pageScroll).toBe(0)
-    for (const chip of measured.chips) expect(chip.x + chip.width).toBeLessThanOrEqual(width)
+    for (const chip of [...measured.chips, ...measured.clear]) {
+      expect(chip.x + chip.width).toBeLessThanOrEqual(width)
+      // Under the field, not beside it on the line.
+      expect(chip.y).toBeGreaterThanOrEqual((measured.field[0]?.y ?? 0) + 36)
+    }
+    // «Clear filters» after the last chip, as the Work bar's way out of its filter ends its line.
+    const last = measured.chips.at(-1)
+    const [after] = measured.clear
+    expect(
+      (after?.y ?? 0) > (last?.y ?? 0) + 0.5 ||
+        (after?.x ?? 0) >= (last?.x ?? 0) + (last?.width ?? 0),
+    ).toBe(true)
     await expectNoSilentClipping(page, `analytics filters at ${width}px`, '.analytics-page')
     await page.screenshot(shot(info, `analytics-filters-${width}.png`))
+    // Pressed, it takes every filter out, the row goes, and the caret is in the field.
+    await clear.click()
+    await expect(chips).toHaveCount(0)
+    await expect(analytics.locator('.analytics-bar-chips')).toBeHidden()
+    await expect(field).toBeFocused()
+    // The address keeps no filter either.
+    await expect
+      .poll(() => {
+        const state = new URL(page.url()).searchParams.get('state')
+        return state
+          ? Object.keys(JSON.parse(Buffer.from(state, 'base64url').toString('utf8')))
+          : []
+      })
+      .not.toContain('filters')
   })
 
 for (const width of [1440, 390]) {
