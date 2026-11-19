@@ -1801,7 +1801,11 @@ stages and tasks under it by depth, and rows that share a parent stand in the
 list's sort order. Grouped «By project», it is a tree of one level: a row per group, as
 the board's lanes by project are, its name and counts across the columns, and the cards
 under it in the list's order. A group's row opens nothing: Enter, a press on its arrow, ←
-and → fold and open it. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
+and → fold and open it. A card of another space, which has no parent here, stands by goal
+in a group of its space, «Space ALPHA · name», one a space, after this space's rows, as the
+board's lane and the graph's frame of that space do: a group's row, its cards under it as a
+list with no tree inside, so another space's goal opens nothing here. «From another space»
+negated keeps those cards out and their groups with them. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
 starts folded. A reader's choice against that rule is kept per space and is
 forgotten once it agrees with the rule. A filter lays out the whole scope and
 shows what it let through with the path to it: a path row is quiet, a reader is

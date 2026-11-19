@@ -111,3 +111,97 @@ describe('the tree under a filter', () => {
     ])
   })
 })
+
+/** Each row by what names it to the keys, its level, and what a reader hears it named. */
+const shown = () =>
+  [...document.querySelectorAll<HTMLElement>('tbody tr[data-id]')].map((row) => ({
+    id: row.dataset.reference,
+    level: row.getAttribute('aria-level'),
+    name: (row.getAttribute('aria-labelledby') ?? '')
+      .split(' ')
+      .map((id) => document.querySelector(`#${CSS.escape(id)}`)?.textContent?.trim())
+      .join(' '),
+  }))
+
+describe("another space's cards in the tree", () => {
+  // This space's goal with a task under it and a task under no goal; another space's
+  // goal and task under ALPHA, and a task under BETA, each naming this space's project.
+  const goal = boardItem(1, 'backlog', { kind: 'goal' })
+  const own = [goal, boardItem(2, 'backlog', { parent_id: goal.work_item_id }), boardItem(3)]
+  const alpha = { key: 'ALPHA', name: 'Alpha' }
+  const elsewhere = [
+    boardItem(50, 'backlog', { kind: 'goal', other_space: alpha }),
+    // Its parent is in its own space, which this read does not hold.
+    boardItem(51, 'done', { parent_id: boardItem(49).work_item_id, other_space: alpha }),
+    boardItem(60, 'backlog', { other_space: { key: 'BETA', name: 'Beta' } }),
+  ].map((item) => ({
+    ...item,
+    reference: item.reference.replace('MAIN', item.other_space?.key ?? 'MAIN'),
+  }))
+  const scope = [...elsewhere, ...own]
+
+  async function spaces(items: WorkItemBrief[], filtered: boolean) {
+    mount(WorkItemList, {
+      attachTo: document.body,
+      global: { plugins: [i18n()] },
+      props: { items, links: [], sort: BY_REFERENCE, tree: { filtered, scope, space: 'main' } },
+    })
+    await flushPromises()
+  }
+
+  it('stand in one group a space, after this space’s rows, as a list without a tree', async () => {
+    await spaces(scope, false)
+    expect(shown()).toEqual([
+      expect.objectContaining({ id: 'MAIN-1', level: '1' }),
+      expect.objectContaining({ id: 'MAIN-2', level: '2' }),
+      expect.objectContaining({ id: 'MAIN-3', level: '1' }),
+      { id: 'group:space:ALPHA', level: '1', name: 'Space ALPHA · Alpha' },
+      expect.objectContaining({ id: 'ALPHA-50', level: '2' }),
+      expect.objectContaining({ id: 'ALPHA-51', level: '2' }),
+      { id: 'group:space:BETA', level: '1', name: 'Space BETA · Beta' },
+      expect.objectContaining({ id: 'BETA-60', level: '2' }),
+    ])
+    // Another space's goal holds nothing here, so it has nothing to open.
+    const goalThere = document.querySelector('tbody tr[data-reference="ALPHA-50"]')
+    expect(goalThere?.hasAttribute('aria-expanded')).toBe(false)
+    const group = document.querySelector('tbody tr[data-reference="group:space:ALPHA"]')
+    expect(group?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('fold from their row, which opens no card', async () => {
+    const wrapper = mount(WorkItemList, {
+      attachTo: document.body,
+      global: { plugins: [i18n()] },
+      props: {
+        items: scope,
+        links: [],
+        sort: BY_REFERENCE,
+        tree: { filtered: false, scope, space: 'main' },
+      },
+    })
+    await flushPromises()
+    const group = () =>
+      document.querySelector<HTMLElement>('tbody tr[data-reference="group:space:ALPHA"]')
+    group()?.querySelector<HTMLElement>('td:last-child')?.click()
+    await flushPromises()
+    expect(group()?.getAttribute('aria-expanded')).toBe('false')
+    expect(shown().map((row) => row.id)).not.toContain('ALPHA-50')
+    expect(wrapper.emitted('open')).toBeUndefined()
+  })
+
+  it('go, every group with them, when the filter keeps another space’s cards out', async () => {
+    await spaces(own, true)
+    expect(shown().map((row) => row.id)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3'])
+  })
+
+  it('stand alone in their groups when the filter asks for them', async () => {
+    await spaces(elsewhere, true)
+    expect(shown().map((row) => row.id)).toEqual([
+      'group:space:ALPHA',
+      'ALPHA-50',
+      'ALPHA-51',
+      'group:space:BETA',
+      'BETA-60',
+    ])
+  })
+})
