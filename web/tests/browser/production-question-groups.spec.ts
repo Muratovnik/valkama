@@ -30,6 +30,14 @@ const REFUSED = {
         holder: ['codex (session 71aa0000)'],
       },
     ],
+    dependents: [] as object[],
+    list_token: 'refused-token',
+  },
+}
+/** The same refusal, with work outside the goal that waits on the work it would cancel. */
+const WAITING = {
+  error: {
+    ...REFUSED.error,
     dependents: [
       {
         reference: 'MAIN-315',
@@ -39,7 +47,6 @@ const REFUSED = {
         how: 'blocks',
       },
     ],
-    list_token: 'refused-token',
   },
 }
 
@@ -97,6 +104,31 @@ async function openGroups(page: Page, locale: 'en' | 'ru', width: number, prompt
     return { one, findings, answer }
   }
   return { ...opened, group }
+}
+
+/**
+ * The group's «Don't do» confirmed once, which the server refuses with this list; every later
+ * write goes to the questions' server.
+ */
+async function refuse(
+  page: Page,
+  { locale, width }: { locale: 'en' | 'ru'; width: number },
+  refusal: typeof REFUSED,
+) {
+  const words = WORDS[locale]
+  const { group, requests } = await openGroups(page, locale, width, ['The group'])
+  const refused: unknown[] = []
+  await page.route('**/api/modules/planning/request/answer', async (route) => {
+    if (refused.length) return route.fallback()
+    refused.push(route.request().postDataJSON())
+    return route.fulfill({ status: 409, json: refusal })
+  })
+  const { one, answer } = group('The group')
+  await one.scrollIntoViewIfNeeded()
+  await answer(words.drop).click()
+  await expect(one.getByRole('alert').filter({ hasText: words.asked })).toBeVisible()
+  await one.getByRole('button', { name: words.drop, exact: true }).last().click()
+  return { one, listed: one.locator('[data-cancel-list]'), refused, requests }
 }
 
 for (const { width, locale } of CASES) {
@@ -191,35 +223,12 @@ for (const { width, locale } of CASES) {
   test(`at ${width}px in ${locale} «Don't do» over work the group did not ask about confirms the refusal's list`, async ({
     page,
   }) => {
-    const { group, requests } = await openGroups(page, locale, width, ['The group'])
-    // The first drop is refused with the list; every later write goes to the questions' server.
-    const refused: unknown[] = []
-    await page.route('**/api/modules/planning/request/answer', async (route) => {
-      if (refused.length) return route.fallback()
-      refused.push(route.request().postDataJSON())
-      return route.fulfill({ status: 409, json: REFUSED })
-    })
-    const { one, answer } = group('The group')
-    await one.scrollIntoViewIfNeeded()
-    await answer(words.drop).click()
-    await expect(one.getByRole('alert').filter({ hasText: words.asked })).toBeVisible()
-    await one.getByRole('button', { name: words.drop, exact: true }).last().click()
+    const { one, listed, refused, requests } = await refuse(page, { locale, width }, REFUSED)
 
     // The refusal's list stands over the answers, focus on what it says, and the asking again.
-    const listed = one.locator('[data-cancel-list]')
     await expect(listed.locator('[data-cancel-part="closes"]')).toContainText(
       'MAIN-314 Accepted work under the goal · codex · 71aa0000',
     )
-    // What waits on that work says so on one line, its reference whole, within the list.
-    const waits = listed.locator('[data-cancel-waits]')
-    await expect(waits).toHaveText(words.waitsOn)
-    const lines = await waits.evaluate((element) => {
-      const rects = element.getClientRects()
-      const box = element.closest('[data-cancel-list]')?.getBoundingClientRect()
-      return { count: rects.length, past: (rects[0]?.right ?? 0) - (box?.right ?? 0) }
-    })
-    expect(lines.count).toBe(1)
-    expect(lines.past).toBeLessThanOrEqual(0.5)
     await expect(listed.getByRole('alert')).toBeFocused()
     await expect(one.getByRole('alert').filter({ hasText: words.asked })).toBeVisible()
     expect(refused).toEqual([
@@ -232,5 +241,20 @@ for (const { width, locale } of CASES) {
       .toEqual([{ answer: 'drop', items: EVERY, cancels: 'refused-token' }])
     await expect(one.locator('.request-state')).toContainText(words.answered)
     await expect(listed).toHaveCount(0)
+  })
+
+  test(`at ${width}px in ${locale} what waits on the work a refusal lists stands on one line, its reference whole`, async ({
+    page,
+  }) => {
+    const { listed } = await refuse(page, { locale, width }, WAITING)
+    const waits = listed.locator('[data-cancel-part="waiting"] [data-cancel-waits]')
+    await expect(waits).toHaveText(words.waitsOn)
+    const lines = await waits.evaluate((element) => {
+      const rects = element.getClientRects()
+      const box = element.closest('[data-cancel-list]')?.getBoundingClientRect()
+      return { count: rects.length, past: (rects[0]?.right ?? 0) - (box?.right ?? 0) }
+    })
+    expect(lines.count).toBe(1)
+    expect(lines.past).toBeLessThanOrEqual(0.5)
   })
 }
