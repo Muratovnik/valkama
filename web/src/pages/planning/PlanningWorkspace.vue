@@ -34,6 +34,7 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
+import { otherSpaceEndBriefs } from '@/entities/work-item/utils/otherSpaceEnds.ts'
 import { filterTokens } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -229,6 +230,14 @@ const graphFilter = computed(() =>
 /** The whole space, or exactly one chain with the links the chain endpoint named. */
 const graphScopeKind = computed(() => (props.chain ? 'chain' : 'all'))
 const graphEdges = computed(() => props.chain?.edges ?? props.model.links)
+/**
+ * The far ends of the links with other spaces, which the graph stands in their spaces'
+ * frames: narrowed by the same filter as the cards, and counted nowhere above the stage.
+ */
+const graphEnds = computed(() => {
+  const all = otherSpaceEndBriefs(props.model)
+  return { all, shown: filtered.value ? all.filter((end) => census.matches(end)) : all }
+})
 
 /** The chain the board or the list is narrowed to, for the bar's chip; the graph names its own. */
 const chipReference = computed(() =>
@@ -378,6 +387,7 @@ defineExpose({ toggleFilter })
           :live="model.live_work"
           :selected-id="selectedId"
           :edges="graphEdges"
+          :ends="graphEnds"
           :scope-root-id="chain?.root.work_item_id ?? null"
           :chain="graphChain"
           :filter="graphFilter"

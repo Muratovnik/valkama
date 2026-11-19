@@ -65,7 +65,7 @@ test('an item is created with a goal found by search, a label the space has and 
   await dialog.getByRole('textbox', { name: 'Title' }).fill('Ship the parser')
 
   const goal = dialog.getByRole('combobox', { name: 'Parent', exact: true })
-  await expect(goal).toHaveValue('No parent')
+  await expect(goal).toHaveValue('No goal')
   await goal.click()
   await page.keyboard.type('rework')
   const list = page.getByRole('listbox', { name: 'Parent' })
@@ -148,21 +148,21 @@ test('a pointer opens the goal list over an empty search, the chosen goal standi
 }) => {
   const { dialog } = await openComposer(page, 1280)
   const goal = dialog.getByRole('combobox', { name: 'Parent', exact: true })
-  await expect(goal).toHaveValue('No parent')
+  await expect(goal).toHaveValue('No goal')
   await goal.click()
   const list = page.getByRole('listbox', { name: 'Parent' })
   await expect(list).toBeVisible()
   // Nothing painted as selected: the whole value stood highlighted on every press. The words
   // stay in sight as the field's placeholder, and whatever is typed searches from nothing.
   await expect(goal).toHaveValue('')
-  await expect(goal).toHaveAttribute('placeholder', 'No parent')
+  await expect(goal).toHaveAttribute('placeholder', 'No goal')
   await page.keyboard.type('rew')
   await expect(goal).toHaveValue('rew')
   await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${GOAL_TITLE}In progress`])
   // Left without a choice, the field says what is still chosen.
   await dialog.getByRole('heading', { name: 'New work' }).click()
   await expect(list).toHaveCount(0)
-  await expect(goal).toHaveValue('No parent')
+  await expect(goal).toHaveValue('No goal')
   await expect(goal).not.toHaveAttribute('placeholder')
 })
 

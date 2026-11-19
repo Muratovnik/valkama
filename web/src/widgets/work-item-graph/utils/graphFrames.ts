@@ -4,7 +4,12 @@
  *
  * A goal or a stage is drawn as a frame round its
  * work rather than as a card, and the work under none has a frame of its own,
- * so every open item stands somewhere on the field. A frame folds to its header
+ * so every open item stands somewhere on the field. Another space's work the read
+ * holds — its cards that name this space's project, and the far ends of the links
+ * between the spaces — stands in a frame of that space, one a space, after this
+ * space's frames: it has a parent, only in its own space, so the work under none
+ * would say the wrong thing about it, and another space's goal is a card here.
+ * A frame folds to its header
  * alone. Whether it starts folded follows from its structure only — how much
  * open work it holds — never from who is working on it, or every turn an agent
  * took would lay the field out again. A frame with nothing the view can draw
@@ -16,14 +21,20 @@
  * says. Several links between one ordered pair of drawn ends are one line,
  * solid when any of them blocks. A link between a
  * card and its own frame is not drawn — the frame already says so — nor one
- * whose end is hidden finished work or lives in another space.
+ * whose end is hidden finished work or lies in a space the read could not read:
+ * such an end is neither among the space's items nor among the far ends the read
+ * holds, and the projection names that space, so the graph's key can say so.
  *
  * The counts of a frame describe its goal, not the view: every item under it,
  * open and closed, whatever is drawn or a filter lets through.
  */
 
-import { drawnEnds, NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import type { FrameProgress } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import {
+  drawnEnds,
+  NO_PARENT_FRAME,
+  spaceFrameId,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import type { FrameProgress, FrameSpace } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { RoutedEdge } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
@@ -33,7 +44,10 @@ import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { FOLD_ABOVE } from '@/shared/lib/treeRows.ts'
 
 export interface FrameProjectionInput {
-  /** The whole space: a frame counts its work whatever the field draws. */
+  /**
+   * The whole space: a frame counts its work whatever the field draws. Another space's
+   * items, and the far ends of the links with it, carry `other_space`.
+   */
   items: readonly WorkItemBrief[]
   links: readonly PlanningEdge[]
   /** Whether finished work is drawn as cards. */
@@ -60,6 +74,8 @@ interface ProjectedFrame {
   open: number
   parentId: string | null
   progress: FrameProgress
+  /** The other space whose work it holds; null for a frame of this space. */
+  space: FrameSpace | null
 }
 
 /** A line before it is routed. */
@@ -73,10 +89,18 @@ export interface FrameProjection {
   frames: ProjectedFrame[]
   /** What decides the geometry; equal keys lay out the same field. */
   key: string
+  /**
+   * The spaces a link ends in that the read could not read, by key, each once; `''` for
+   * an end whose space nothing names. Such a link is not drawn.
+   */
+  unread: string[]
 }
 
-/** An item drawn as a frame: a goal or a stage, as the tree of work reads one. */
-const isFrame = (item: WorkItemBrief) => WORK_ITEM_TREE.isContainer(item)
+/**
+ * An item drawn as a frame: a goal or a stage of this space, as the tree of work reads
+ * one. Another space's goal holds nothing here, so it is a card in its space's frame.
+ */
+const isFrame = (item: WorkItemBrief) => !item.other_space && WORK_ITEM_TREE.isContainer(item)
 
 const open = (item: WorkItemBrief) => WORK_ITEM_TREE.isOpen(item)
 
@@ -98,10 +122,16 @@ function frameTree(items: readonly WorkItemBrief[]) {
   const frames = new Map(
     items.filter((item) => isFrame(item)).map((item) => [item.work_item_id, item]),
   )
+  const spaces = new Map<string, FrameSpace>()
+  for (const item of items)
+    if (item.other_space) spaces.set(spaceFrameId(item.other_space.key), item.other_space)
   const parentOf = (item: WorkItemBrief) =>
-    item.parent_id !== null && frames.has(item.parent_id) ? item.parent_id : null
-  /** The frame an item stands in: its goal, or the work under none. */
-  const home = (item: WorkItemBrief) => parentOf(item) ?? NO_PARENT_FRAME
+    !item.other_space && item.parent_id !== null && frames.has(item.parent_id)
+      ? item.parent_id
+      : null
+  /** The frame an item stands in: its goal, the work under none, or its own space's. */
+  const home = (item: WorkItemBrief) =>
+    item.other_space ? spaceFrameId(item.other_space.key) : (parentOf(item) ?? NO_PARENT_FRAME)
   const lineage = (frameId: string): string[] => {
     const chain: string[] = []
     for (let at: string | null = frameId; at !== null && !chain.includes(at);) {
@@ -120,7 +150,7 @@ function frameTree(items: readonly WorkItemBrief[]) {
       else members.set(frameId, [item])
     }
   }
-  return { frames, home, lineage, members, parentOf }
+  return { frames, home, lineage, members, parentOf, spaces }
 }
 
 type FrameTree = ReturnType<typeof frameTree>
@@ -140,10 +170,12 @@ function frameCandidates(
   const ids = [
     ...tree.frames.keys(),
     ...(tree.members.has(NO_PARENT_FRAME) ? [NO_PARENT_FRAME] : []),
+    ...tree.spaces.keys(),
   ]
   const candidates = new Map<string, ProjectedFrame>()
   for (const id of ids) {
     const goal = tree.frames.get(id) ?? null
+    const space = tree.spaces.get(id) ?? null
     const members = tree.members.get(id) ?? []
     const visible = members.filter((item) => drawable(item))
     const openWork = visible.filter((item) => open(item)).length
@@ -156,12 +188,14 @@ function frameCandidates(
     // field opens on the links of the goals in between, and a large frame shows
     // its progress in its header instead. The work under none is no goal to
     // summarise, so in «All» it folds only past that many drawn cards, and a
-    // space with a few finished items draws them.
+    // space with a few finished items draws them. Another space's frame is no goal
+    // either, and folds by the same rule.
     const idle = goal !== null || visible.length === 0 || visible.length > FOLD_ABOVE
     const defaultFolded = openWork > FOLD_ABOVE || (openWork === 0 && idle)
     candidates.set(id, {
       id,
       goal,
+      space,
       parentId: goal ? tree.parentOf(goal) : null,
       defaultFolded,
       folded: input.choices?.[id] ?? defaultFolded,
@@ -248,9 +282,7 @@ export function frameProjection(input: FrameProjectionInput): FrameProjection {
       .slice(1)
       .every((at) => !candidates.get(at)?.folded)
 
-  const frames = [...candidates.values()]
-    .filter((frame) => drawnFrame(frame.id))
-    .sort((left, right) => frameRank(left) - frameRank(right))
+  const frames = [...candidates.values()].filter((frame) => drawnFrame(frame.id)).sort(frameOrder)
   const cards = frames.filter((frame) => !frame.folded).flatMap((frame) => frame.cards)
   const drawnCards = new Set(cards.map((item) => item.work_item_id))
   const drawnFrames = new Set(frames.map((frame) => frame.id))
@@ -271,12 +303,42 @@ export function frameProjection(input: FrameProjectionInput): FrameProjection {
   }
 
   const edges = drawnLines(input.links, endOf)
-  return { frames, cards, edges, key: structureKey(input.showDone, frames, edges) }
+  const unread = unreadSpaces(input.links, byId)
+  return { frames, cards, edges, key: structureKey(input.showDone, frames, edges), unread }
 }
 
-/** Goals in the order the space numbers them, the work under none last. */
-function frameRank(frame: ProjectedFrame): number {
-  return frame.goal?.number ?? Number.POSITIVE_INFINITY
+/**
+ * The spaces of the link ends the read holds no item for, each once, by key. A link
+ * names its source by reference, which carries the key; nothing names a target's.
+ */
+function unreadSpaces(
+  links: readonly PlanningEdge[],
+  byId: ReadonlyMap<string, WorkItemBrief>,
+): string[] {
+  const keys = new Set<string>()
+  for (const link of links) {
+    if (link.kind === 'parent') continue
+    if (!byId.has(link.from)) keys.add(spaceKeyOf(link.reference))
+    if (!byId.has(link.to)) keys.add('')
+  }
+  return [...keys].sort((left, right) => left.localeCompare(right))
+}
+
+/** The space key a reference such as `ALPHA-12` starts with; `''` for none. */
+const spaceKeyOf = (reference: string | undefined) =>
+  reference?.includes('-') ? reference.slice(0, reference.lastIndexOf('-')) : ''
+
+/** Goals in the order the space numbers them, then the work under none, then each other space by key. */
+function frameOrder(left: ProjectedFrame, right: ProjectedFrame): number {
+  const place = (frame: ProjectedFrame) => {
+    if (frame.goal) return 0
+    return frame.space ? 2 : 1
+  }
+  return (
+    place(left) - place(right) ||
+    (left.goal?.number ?? 0) - (right.goal?.number ?? 0) ||
+    (left.space?.key ?? '').localeCompare(right.space?.key ?? '')
+  )
 }
 
 function linkOrder(left: { from: string; to: string }, right: { from: string; to: string }) {

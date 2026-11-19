@@ -223,7 +223,7 @@ test('a header gives its title three lines of the card’s width and keeps the r
       width: html.offsetWidth,
     }
   })
-  // This title's eighty letters stand whole, where the row beside the reference
+  // This title's hundred letters stand whole, where the row beside the reference
   // and the state used to leave it 80px.
   expect(shape.lines).toBe(3)
   expect(shape.width).toBeGreaterThan(200)

@@ -59,6 +59,11 @@ type ProjectionInput = () => {
   scopeRootId: string | null
   space: string
   version: number
+  /**
+   * The far ends of the links with other spaces the read holds no item for, every one and
+   * those the filter let through. They stand in their space's frame and count nowhere else.
+   */
+  ends?: OtherSpaceEnds
   /** The server's `live_work`: the items an agent's session is working on now. */
   live?: Readonly<Record<string, LiveWork>>
   /** The chain's member ids, in chain scope. */
@@ -68,6 +73,12 @@ type ProjectionInput = () => {
    * its goal's work, not the filter's.
    */
   spaceItems?: GraphSource['nodes']
+}
+
+/** The far ends of the links with other spaces, as the host narrowed them. */
+export interface OtherSpaceEnds {
+  all: readonly WorkItemBrief[]
+  shown: readonly WorkItemBrief[]
 }
 
 /** The heights of a projection's headers as they are drawn, and the projection measured. */
@@ -109,6 +120,8 @@ export type GraphProjection = {
   projected: ComputedRef<FrameProjection | null>
   ready: ComputedRef<WorkItemBrief[]>
   showDone: Ref<boolean>
+  /** The spaces whose links the read could not read, by key; `''` for one nothing names. */
+  unread: ComputedRef<string[]>
   applyFocus: (event: GraphFocusEvent) => void
   /** Whether a drawn frame is folded now. */
   folded: (frameId: string) => boolean
@@ -197,20 +210,28 @@ export function useGraphProjection(
    * left out; one that left nothing out narrows nothing.
    */
   const shown = computed(() => {
-    const { nodes, spaceItems } = input()
-    return spaceItems && spaceItems.length !== nodes.length
-      ? new Set(nodes.map((node) => node.work_item_id))
+    const { ends, nodes, spaceItems } = input()
+    const narrowed =
+      (spaceItems && spaceItems.length !== nodes.length) ||
+      (ends && ends.all.length !== ends.shown.length)
+    return narrowed
+      ? new Set([...nodes, ...(ends?.shown ?? [])].map((node) => node.work_item_id))
       : null
   })
+  /** What a frame is made of: the whole space and the far ends of its links. */
+  const frameItems = computed(() => [
+    ...(input().spaceItems ?? input().nodes),
+    ...(input().ends?.all ?? []),
+  ])
   const itemsById = computed(
-    () => new Map((input().spaceItems ?? input().nodes).map((item) => [item.work_item_id, item])),
+    () => new Map(frameItems.value.map((item) => [item.work_item_id, item])),
   )
 
   /** The whole space as frames; none in a chain, which keeps its flat drawing. */
   const projection = computed<FrameProjection | null>(() => {
     if (!source.value || scope.value.kind !== 'all') return null
     return frameProjection({
-      items: input().spaceItems ?? source.value.nodes,
+      items: frameItems.value,
       links: source.value.edges,
       showDone: showDone.value,
       shown: shown.value,
@@ -401,6 +422,7 @@ export function useGraphProjection(
     ready,
     retry,
     showDone,
+    unread: computed(() => projection.value?.unread ?? []),
     toggle: (frameId) => {
       const frame = frameNow(frameId)
       if (frame?.foldable) frameChoices.toggle(frame, shown.value !== null)

@@ -444,6 +444,23 @@ and only fades the end of a strip that scrolls on past it.
   last: its rows come from `FACET_ORDER` (`COMPOSER_ROWS`), the order every surface
   reads an item's facets in, and the description follows the facts as it does on the
   card. It used to ask for the description between the two pairs.
+- **«Новая работа» chooses its parent from the tree.** The field offers «Без цели» first,
+  then every goal and stage of the space at any depth, laid out by the tree's model
+  (`treeRows`) as the list draws them: each under the one it stands in, open before
+  closed and the newest first among the ones beside it. An option's note is the path
+  above it, the references of the goals and stages it stands in, and its state, and
+  the search reads the note too, so a stage five levels down is found by its title or
+  by the number of any goal above it. Another space's goal is not offered: it holds
+  work only in its own space. A space with no goal or stage offers «Без цели» alone.
+  Only goals at the top level were offered, so a stage could not be chosen at all.
+- **A failed write keeps the dialog as it was typed.** The title, the kind, the
+  priority, the labels, the parent and the description all stay, and the reason
+  stands below them in the dialog's own words: «Работа не создана:» and the server's
+  reason where it refused, «сервер не ответил» with a request to try again where it
+  did not answer or failed itself, and «Работа не создана» alone for an answer the
+  client could not read. The dialog showed the error as the client caught it, the
+  server's sentence bare or `HTTP 503`, which named no work and said nothing of what
+  to do next.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.
@@ -2039,9 +2056,18 @@ the chain's history stand one action away, and the action's state comes back wit
 the card's other reading on Back. The scope rides the heading's row.
 
 Over the whole space the graph stands in frames. A goal or a stage is drawn as a
-frame round its work, and the work filed under no parent has
-a frame of its own, «Без родителя» (`none`), so every open item stands somewhere on
-the field. A frame is told by tone and draws no line: it is ground a step above the
+frame round its work, at any depth, a stage five levels down as a frame inside four, and the
+work filed under no goal has a frame of its own, «Без цели» (`none`), as the board's lane
+and the list's group of that work are named, so every open item stands somewhere on
+the field. Another space's work the read holds — its cards that name this space's project,
+and the far end of each link between the spaces — stands in a frame of that space, one a
+space, after this space's frames, the spaces by key, named as the list's group of that
+space is, «Пространство ALPHA · Alpha» (`space:<key>`). Such a card has a parent, only in
+its own space, so «Без цели» would say the wrong thing about it, and another space's goal
+is a card there rather than a frame, since it holds nothing in this space. That frame's
+header is the work under no goal's: a fold and the name, with nothing to open, and it folds
+by the same rule. The far end of a link is counted nowhere above the field: it is not this
+space's work. A frame is told by tone and draws no line: it is ground a step above the
 field and its cards a step above it, and a frame inside a frame is a well cut a
 step below the one it stands in. Without a filter the field draws every frame with
 open work and every open goal, and in «All» every goal; under a filter, as on the
@@ -2054,16 +2080,17 @@ lines, with the counts right under it, and the layout leaves it the room that sa
 header takes when drawn; the chevron leads its reference line, and everything in the
 header starts at one left edge, the one its cards start at. Zoomed out past reading, the header is the
 goal's reference grown with the field, as a zoomed-out card's is, with the count of
-work moving under it at the far end and a thicker edge beneath; the work under no parent
-keeps its name instead. The header is two buttons with one action each, as a card
+work moving under it at the far end and a thicker edge beneath; the work under no goal
+keeps its name instead, as another space's frame does. The header is two buttons with one action each, as a card
 is one: the chevron folds or opens the frame, and the rest opens the goal's card;
-over the work under no parent the rest is plain text, with no parent to open. At the scale
+over the work under no goal and another space's work the rest is plain text, with no goal
+to open. At the scale
 the field opens at, the chevron is a 28px target under a fine pointer and 44px under a
 finger or at a phone's width, reaching up and back into the header's padding and the air
 round the frame and never onto the goal's words, so the header is drawn no taller; each
 button's focus ring goes round its own drawing with air and no further, and the fold's face
 under the pointer covers its chevron alone, zoomed out too, where its target is the whole band
-of the work under no parent: never that band's words or its edge. Zoomed out, the chevron is as
+of the work under no goal: never that band's words or its edge. Zoomed out, the chevron is as
 tall as the band's first row and grows with it, and the ring round any of the band's buttons
 keeps the share of its words it has at reading size, so the focus reads as they do. The field
 opens with as much air above its first row as between two frames, so no edge cuts a fold's
@@ -2081,7 +2108,7 @@ A frame starts folded by its structure alone — how much open work it holds —
 never by who is working on it, or every agent's turn would lay the field out again.
 A frame holding more than 20 open items starts folded and shows its progress in its
 header instead, and so does a goal with nothing open; the frame of the work under
-no parent with nothing open folds only past 20 drawn cards, so «All» on a space with
+no goal with nothing open folds only past 20 drawn cards, so «All» on a space with
 a few finished items draws them. Every frame between those starts open, so the
 links of its work are seen at once. What the operator chooses for a frame, folded or
 open, outranks that default and is kept per space in this browser (`localStorage`,
@@ -2092,13 +2119,13 @@ field out again, and the camera follows across, at the operator's zoom, so the
 frame's header stays where it stood on the screen and what was pressed does not
 move from under the hand (`toggled`). The arrows reach a header's two buttons as
 they reach cards, the fold on its left (`frame:<id>:fold`) and the goal across the
-rest (`frame:<id>`); the work under no parent has only the first. Right from the fold
+rest (`frame:<id>`); the work under no goal has only the first. Right from the fold
 is the goal's button beside it and Left from that button is the fold, however wide
 the header, since measured from centres a wide header's second button stands further
 off than the first card under the fold. Once a fold hides
 the target the keyboard stood on, the field's Tab stop is the fold button of the
 innermost frame round it that is still drawn. Zoomed out past reading the fold is
-hidden and is no target, except over the work under no parent, whose header has no
+hidden and is no target, except over the work under no goal, whose header has no
 other button and keeps it (`foldIsTarget`): the arrows, the Tab stop and the way in read one
 list of the targets the field draws at its zoom, so Tab never rests on a button
 that takes no focus and the field stays one stop at any zoom. Focus on a fold the zoom
@@ -2130,7 +2157,10 @@ A header says how its work stands in words, a number beside each word and never
 rounded to «99+»: «8 из 21 выполнено», then how many are in review, in progress and
 blocked, each only when it is not zero, and how many are being worked on now. The
 goal's standing is said once its work has moved, and quietly on a closed goal that still
-holds open work. Only the title gives way when the row is short; the counts are
+holds open work. Its reference line is as wide as a folded frame lets it, and a folded frame
+is wide enough for the longest standing a goal or stage derives, «Ждёт подтверждения», to
+stand whole beside a reference with a five-digit number: a state waiting for its owner is
+read at once, not when a pointer finds its hint. Only the title gives way when the row is short; the counts are
 never cut, and take a row under the name before they would be. Under the row a 3px
 edge draws the same counts as a chain's lane is drawn: finished, review, under way,
 blocked, then what is ahead (ready, untriaged and deferred work, and a nested goal or
@@ -2148,7 +2178,12 @@ rather than being dropped, and a line to work folded away ends on the frame that
 holds it. Frames lie under the lines and cards over them, so a line runs across a
 frame and into the card it ends on. A link between an item and a frame it stands in
 is not drawn, since the frame already says it, nor one whose end is hidden finished
-work or lives in another space. A line runs the way the work went, and the layout
+work. A link with another space is drawn as any other, to the card in that space's frame or
+to the frame folded round it. A link whose far end the read holds neither as a card nor as
+an end lies in a space the read could not read: it is not drawn, and the key says so first,
+«Связи с GAMMA не прочитаны» by the key the link names its source with, or «Связи с другим
+пространством не прочитаны» where nothing names it. That line is a fact about the field, so
+a screen reader hears it, while the rest of the key stays a picture's key it does not read. A line runs the way the work went, and the layout
 ranks its start before its arrow, over the whole space as in a chain: a block from the
 blocker to the work it holds, and a discovery from the work it was found in to the work
 that grew out of it, so a chain's root stands before what was discovered from it and the
@@ -2261,7 +2296,7 @@ parent was once called by the one container word under its sign, a task holding 
 an item link, the same link a number in text is: a press opens the parent through the card's
 departure, its draft guard and Back, and resting on it shows its hover card; its number is
 trimmed to its letters as every value of the facts is, so it stands on its name's baseline.
-The new-task dialog's field is «Родитель» as well, offering «Без родителя» first. A ↳ and a
+The new-task dialog's field is «Родитель» as well, offering «Без цели» first. A ↳ and a
 bare number there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
 of its session with the whole value and its lease in a tooltip — on a holder that is a
 session's button, in what a screen reader hears after its name, since its hover says what a

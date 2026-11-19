@@ -329,6 +329,7 @@ export async function layoutFrames(
   const frames = projection.frames.map((frame): PlacedFrame => ({
     id: frame.id,
     goal: frame.goal,
+    space: frame.space,
     parentId: frame.parentId,
     folded: frame.folded,
     foldable: frame.foldable,
