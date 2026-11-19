@@ -1,8 +1,9 @@
 /**
  * What the closing specs open: the space in a workflow that can put work off and cancel it,
  * the card's task put off, an accepted goal at work, goals awaiting confirmation with their
- * conditions and without, a step its former holder marked, and the lists a goal's cancel is
- * refused with before and after the work under it changed.
+ * conditions and without, a step its former holder marked, the lists a goal's cancel is
+ * refused with before and after the work under it changed, and the refusal of a goal's close once
+ * work opened under it.
  */
 import { devState, identity, now } from '../planningFixtures.ts'
 import { backendRoutes } from '../servedRoutes.ts'
@@ -112,6 +113,16 @@ export const descriptionGoal = goalCard('awaiting_confirmation', {
   description: 'Every channel delivers the same alert once.',
   confirmation: { ...CONFIRMATION, steps: 0 },
 })
+
+/** The refusal of a goal's close once a task opened under it, as the server words it. */
+export const CHILDREN_OPEN = {
+  error: {
+    code: 'workflow_guard',
+    message:
+      'transition: [children] MAIN-264 has 1 open item(s) under it: MAIN-275; close, cancel or' +
+      ' move out what is open under it, and it awaits confirmation once nothing is',
+  },
+}
 
 /** The card's task with a step its former holder ticked, waiting to be confirmed. */
 export const markedCard = (read: Read) => ({ ...read, checklist: [CONDITIONS[2]] })

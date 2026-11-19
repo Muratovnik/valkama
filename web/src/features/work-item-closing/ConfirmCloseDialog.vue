@@ -9,12 +9,20 @@
  * all are, the reason under them. A condition a former holder marked is ticked again by the
  * confirmation, which is what confirms it. A goal with no summary gets the one the owner's own
  * confirmation writes. A refused write keeps the window and the boxes as they are, its reason
- * at the foot: a task filed under it meanwhile is refused as work still open.
+ * at the foot.
+ *
+ * Work that opened under it while the window was open puts it back at work, and the server
+ * refuses the close for that (`openedUnder`): the window then says so, naming the work where the
+ * refusal names it (each `data-opened`, whole on its line), and that there is nothing to confirm.
+ * Its one press closes the window, which then reads the goal again, as does any other way out of
+ * it. No press offers to take it back to work: its state is what the work under it derives, and
+ * no write does that.
  */
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { closingFailure } from '@/features/work-item-closing/closingFailure.ts'
+import { openedUnder } from '@/features/work-item-closing/openedUnder.ts'
 
 import StepMark from '@/entities/work-item/components/StepMark.vue'
 
@@ -42,6 +50,8 @@ const CONFIRMED = {
 const ticked = ref(new Set<string>())
 const busy = ref(false)
 const error = ref('')
+/** The work that opened under it, once the server refused the close for it; null before. */
+const reopened = ref<string[] | null>(null)
 const hintId = useId()
 const boxId = useId()
 
@@ -51,6 +61,7 @@ watch(
     if (!open) return
     ticked.value = new Set(props.item.checklist.filter((step) => step.done).map((step) => step.id))
     error.value = ''
+    reopened.value = null
   },
   { immediate: true },
 )
@@ -81,7 +92,38 @@ const closed = computed(() =>
   }),
 )
 
+/** Where the references stand in the sentence that names them. */
+const SLOT = '\u0000'
+/**
+ * What the window says once work opened under it, a goal's words or a stage's, cut around the
+ * references it names: each stands whole on its line, never broken at its hyphen.
+ */
+const reopenedText = computed(() => {
+  const opened = reopened.value ?? []
+  const whose = props.item.kind === 'stage' ? 'stage' : 'goal'
+  const said = opened.length
+    ? t(`workItem.closeActions.confirm.reopened.${whose}`, { references: SLOT })
+    : t(`workItem.closeActions.confirm.reopened.${whose}Unnamed`)
+  const [before, after = ''] = said.split(SLOT)
+  return {
+    before,
+    after,
+    references: opened.map((reference, index) => ({ reference, separator: index ? ', ' : '' })),
+  }
+})
+
+/** The frame's close says what it does: once the goal is at work again it only closes. */
+const closeLabel = computed(() =>
+  t(`workItem.closeActions.confirm.${reopened.value ? 'reopened.close' : 'keep'}`),
+)
+/** Any way out of the window once the goal is at work again lets the card read it again. */
+const leave = () => (reopened.value ? emit('done') : emit('close'))
+
 async function submit() {
+  if (reopened.value) {
+    emit('done')
+    return
+  }
   if (busy.value || unticked.value) return
   busy.value = true
   error.value = ''
@@ -96,7 +138,8 @@ async function submit() {
     })
     emit('done')
   } catch (error_) {
-    error.value = closingFailure(error_)
+    reopened.value = openedUnder(error_, props.item.reference)
+    if (!reopened.value) error.value = closingFailure(error_)
   } finally {
     busy.value = false
   }
@@ -108,14 +151,32 @@ async function submit() {
     :open="open"
     :title="t('workItem.closeActions.confirm.title')"
     :context="`${item.reference} · ${item.title}`"
-    :close-label="t('workItem.closeActions.confirm.keep')"
+    :close-label="closeLabel"
     :busy="busy"
     :error="error"
-    @close="emit('close')"
+    @close="leave"
     @submit="submit"
   >
+    <p
+      v-if="reopened"
+      class="confirm-reopened"
+      data-part="reopened"
+      role="status"
+    >
+      {{ reopenedText.before
+      }}<template
+        v-for="entry in reopenedText.references"
+        :key="entry.reference"
+        >{{ entry.separator
+        }}<span
+          class="confirm-opened"
+          :data-opened="entry.reference"
+          >{{ entry.reference }}</span
+        ></template
+      >{{ reopenedText.after }}
+    </p>
     <section
-      v-if="item.checklist.length"
+      v-else-if="item.checklist.length"
       class="confirm-part"
       data-part="conditions"
     >
@@ -167,7 +228,7 @@ async function submit() {
       />
     </section>
     <section
-      v-if="closed.length"
+      v-if="closed.length && !reopened"
       class="confirm-part"
       data-part="closed"
     >
@@ -187,7 +248,20 @@ async function submit() {
         </li>
       </ul>
     </section>
-    <template #footer>
+    <template
+      v-if="reopened"
+      #footer
+    >
+      <VButton
+        variant="primary"
+        type="submit"
+        >{{ t('workItem.closeActions.confirm.reopened.close') }}</VButton
+      >
+    </template>
+    <template
+      v-else
+      #footer
+    >
       <VButton @click="emit('close')">{{ t('workItem.closeActions.confirm.keep') }}</VButton>
       <VButton
         variant="primary"
@@ -214,6 +288,17 @@ async function submit() {
   margin: 0;
   color: var(--color-text);
   font: var(--font-section-title);
+}
+
+.confirm-reopened {
+  margin: 0;
+  color: var(--color-text);
+  font: var(--font-note);
+  overflow-wrap: anywhere;
+}
+
+.confirm-opened {
+  white-space: nowrap;
 }
 
 .confirm-count,

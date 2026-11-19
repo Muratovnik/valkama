@@ -2303,7 +2303,11 @@ its reason kept. «Подтвердить закрытие» shows the condition
 ticked, or «Условий нет: проверяется по описанию» and the description, then what was cancelled
 or moved out from under it with each reason; «Подтвердить» waits for every box, ticks the open
 ones and the marked ones as the reader's, writes the owner's summary where there is none, and
-completes it in one write.
+completes it in one write. Work that opened under it while the window was open makes the server
+refuse that write: the window then says «Цель снова в работе, под ней открыта работа: MAIN-12.
+Подтверждать нечего.», naming what the refusal names, with «Закрыть» alone, and closing it any way
+reads the card again. No press says «Вернуть в работу»: the state is what the work under it
+derives, and no write answers to such a press.
 Overview opens with the next step, when there is one: a quiet line, «Следующий шаг · 3 из
 9», whose number is the step's place in the list and not how many are done, then the step's
 words as a description reads, with no heading over one sentence. «Все шаги» at the end of

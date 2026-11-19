@@ -1,8 +1,9 @@
 /**
  * What a card says while it closes work or puts it off: the state menu's actions, the window
  * that puts work off, the reason asked in place before a task is cancelled, the window that
- * lists what a goal's cancel closes, the window that confirms a close, the step a former holder
- * marked, and the put-off work's own fact.
+ * lists what a goal's cancel closes, the window that confirms a close and what it says once work
+ * opened under the goal meanwhile, the step a former holder marked, and the put-off work's own
+ * fact.
  */
 export const workItemClosingMessages = {
   en: {
@@ -59,6 +60,16 @@ export const workItemClosingMessages = {
         unticked: 'Tick every condition to confirm.',
         submit: 'Confirm',
         keep: 'Cancel',
+        reopened: {
+          goal: 'The goal is at work again, work opened under it: {references}. There is nothing to confirm.',
+          goalUnnamed:
+            'The goal is at work again, work opened under it. There is nothing to confirm.',
+          stage:
+            'The stage is at work again, work opened under it: {references}. There is nothing to confirm.',
+          stageUnnamed:
+            'The stage is at work again, work opened under it. There is nothing to confirm.',
+          close: 'Close',
+        },
       },
       mark: {
         confirm: 'Confirm',
@@ -125,6 +136,13 @@ export const workItemClosingMessages = {
         unticked: 'Отметьте все условия, чтобы подтвердить.',
         submit: 'Подтвердить',
         keep: 'Отмена',
+        reopened: {
+          goal: 'Цель снова в работе, под ней открыта работа: {references}. Подтверждать нечего.',
+          goalUnnamed: 'Цель снова в работе, под ней открылась работа. Подтверждать нечего.',
+          stage: 'Этап снова в работе, под ним открыта работа: {references}. Подтверждать нечего.',
+          stageUnnamed: 'Этап снова в работе, под ним открылась работа. Подтверждать нечего.',
+          close: 'Закрыть',
+        },
       },
       mark: {
         confirm: 'Подтвердить',
