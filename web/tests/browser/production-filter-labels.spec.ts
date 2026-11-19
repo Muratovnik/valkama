@@ -224,7 +224,9 @@ test('the highlight stays on a value picked by its text as the list grows back',
 }) => {
   await openSpace(page, {})
   await field(page).fill('boa')
-  await page.keyboard.press('ArrowDown')
+  // The two goals whose titles hold the text come first; the labels stand last.
+  for (let step = 0; step < 3; step += 1) await page.keyboard.press('ArrowDown')
+  await expect(await active(page)).toHaveText('board')
   await page.keyboard.press('Enter')
   await expect(field(page)).toHaveValue('')
   const id = await field(page).getAttribute('aria-activedescendant')
