@@ -42,6 +42,7 @@ import type { AnsweredNames } from '@/shared/lib/accountLabel.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import { referencedTitleRuns } from '@/shared/lib/titleRuns.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
+import { REMARK_JOINT } from '@/shared/ui/chartGeometry.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
 import type { TextRun } from '@/shared/ui/textRuns.ts'
@@ -113,9 +114,6 @@ export interface FigureWords {
   remark: string
   text: string
 }
-
-/** What stands between a figure and its remark where they are said as one. */
-export const REMARK_JOINT = ', '
 
 /** A figure and its remark as one: «≈ 1 109,00 $, 40 тыс. токенов без цены». */
 const besides = ({ text, remark }: FigureWords) => [text, remark].filter(Boolean).join(REMARK_JOINT)

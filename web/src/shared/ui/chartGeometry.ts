@@ -9,6 +9,12 @@
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { TextRun } from '@/shared/ui/textRuns.ts'
 
+/**
+ * What stands between a table's figure and the remark under it, where they are said as one: for
+ * a screen reader in the cell, unseen, and in the words of a line or a hint.
+ */
+export const REMARK_JOINT = ', '
+
 function byCodePoint(left: string, right: string) {
   if (left === right) return 0
   return left < right ? -1 : 1

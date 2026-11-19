@@ -10,8 +10,9 @@
  * The table lays the cell out (`SpendingTable`): its width, its ink when it holds the chosen
  * measure, and its place in the total row that stays at the panel's edge.
  */
-import { REMARK_JOINT } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { TableCell } from '@/pages/analytics/composables/useTableModel.ts'
+
+import { REMARK_JOINT } from '@/shared/ui/chartGeometry.ts'
 
 defineProps<{ cell: TableCell }>()
 </script>
