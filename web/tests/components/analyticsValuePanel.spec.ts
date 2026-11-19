@@ -6,8 +6,8 @@
  * the page on its section and closes the panel, as a new place in the history, and a value the
  * filter holds already offers it disabled, «Already in filter». An opening or an adding the
  * address cannot hold
- * says why instead of happening. What qualifies the figures — the cost an estimate, what the tokens
- * count, a minute's figures shared out where the read is by the minute — the panel says once, in
+ * says why instead of happening. What qualifies the figures — the agent time of agents at once
+ * added up, the cost an estimate, what the tokens count, a minute's figures shared out where the read is by the minute — the panel says once, in
  * an «ⓘ» of its own named for the figures, never as a line: the section's «ⓘ» stands under it.
  */
 import { flushPromises } from '@vue/test-utils'
@@ -40,6 +40,7 @@ pressEachTest()
 const CAVEAT_WORDS = {
   en: {
     spending: [
+      'Agent time adds up agents working at once: two agents for an hour each make 2\u{A0}h.',
       'The cost is an estimate at API list prices, not a bill.',
       'Tokens count input, output and cache writes; cache reads stand apart, and reasoning is part of output.',
     ],
@@ -48,6 +49,7 @@ const CAVEAT_WORDS = {
   },
   ru: {
     spending: [
+      'Время агентов, работающих одновременно, складывается: два агента по часу — 2\u{A0}ч.',
       'Стоимость — оценка по прейскуранту API, а не счёт.',
       'Токены — это вход, выход и запись в кэш; чтение кэша стоит отдельно, а рассуждения входят в выход.',
     ],

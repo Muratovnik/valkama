@@ -44,6 +44,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.measures': 'label',
   'analytics.figures': 'value',
   'analytics.figures.costNote': 'caveat',
+  'analytics.figures.timeNote': 'caveat',
   'analytics.figures.perHour.costDetail': 'label',
   'analytics.figures.perHour.tokensDetail': 'label',
   'analytics.change': 'value',
@@ -122,6 +123,7 @@ export type CaveatSection = 'kinds' | 'quota' | 'spending'
  */
 export const CAVEATS: Record<string, { sections: readonly CaveatSection[]; minutes?: boolean }> = {
   'analytics.figures.costNote': { sections: ['spending'] },
+  'analytics.figures.timeNote': { sections: ['spending'] },
   'analytics.panel.table.kinds.note': { sections: ['spending', 'kinds'] },
   'analytics.time.estimate': { sections: ['spending', 'kinds'], minutes: true },
   'analytics.quota.panel.intro': { sections: ['quota'] },

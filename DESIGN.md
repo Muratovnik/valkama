@@ -2572,7 +2572,9 @@ and say «no data yet» in their hint rather than being drawn as a drop.
 
 Words are said once, where they belong. A value carries a short label, never a sentence. A
 caveat common to a section is said once, in an «ⓘ» at the section's heading, never per block:
-that a cost is an estimate at API prices and not a bill, that a minute's figures share each
+that the time of agents working at once adds up, two agents for an hour each making two hours,
+so a period's agent time may be longer than the period; that a cost is an estimate at API prices
+and not a bill, that a minute's figures share each
 stretch of work out by its time in each minute, that the quota is on no period. A block does
 not say again what the bar or its section says, and detail — an id, a source, how old a
 reading is, how a figure was reached — is in the hints of the marks and values it belongs to.
