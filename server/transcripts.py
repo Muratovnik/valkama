@@ -366,6 +366,27 @@ def pending(conn: sqlite3.Connection) -> list[Pending]:
     ]
 
 
+#: Every end `_PENDING_SQL` can take, without the searches that decide whether
+#: one is still owed: one row of it answers.
+_MAY_OWE_SQL = """
+SELECT 1 FROM execution_events
+WHERE session_id IS NOT NULL AND transcript_path IS NOT NULL
+  AND kind IN ('session_end', 'subagent_stop')
+LIMIT 1
+"""
+
+
+def may_owe(conn: sqlite3.Connection) -> bool:
+    """Whether any copy could be owed: False only when `pending` would find none.
+
+    `pending` searches the whole execution tree for later copies of each end,
+    which takes seconds on a large store; this reads one row. A start path asks
+    this, and leaves the search to the sweep it starts.
+    """
+
+    return conn.execute(_MAY_OWE_SQL).fetchone() is not None
+
+
 @dataclass(frozen=True)
 class Archive:
     """A copy the execution tree says is current: its newest row is `transcript_archived`."""
