@@ -9,6 +9,7 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
 import type { StandingItem } from '@/shared/lib/standing.ts'
+import { treeRows } from '@/shared/lib/treeRows.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 /** The facets a new item is given in the dialog; the state is the workflow's to choose. */
@@ -26,27 +27,43 @@ export const COMPOSER_ROWS: readonly (readonly FacetId[])[] = (() => {
   return [asked.slice(0, 2), asked.slice(2)]
 })()
 
+/** The order of the parents that share one: open work before closed, the newest first. */
+const parentOrder = (left: WorkItemBrief, right: WorkItemBrief) =>
+  Number(!left.open) - Number(!right.open) || right.number - left.number
+
 /**
- * The items a new one may stand under: a goal, that
- * is not inside one itself, since the hierarchy is one level deep. "No parent" leads, then
- * open work before closed and the newest first. An option is found by its number and its
- * title, and says its state as `stateName` names it.
+ * The items a new one may stand under: every goal and stage of this space, at any depth, laid
+ * out by the tree's model (`treeRows`) as the list draws them, each under the one it stands in.
+ * «No goal» leads. An option is found by its number, its title and its path, the references
+ * of the goals and stages above it, so typing a goal's number finds every stage inside it, and
+ * says its state as `stateName` names it. Another space's goal is not offered: it holds work
+ * only in its own space. Only goals were offered, at the top level, so a stage five levels
+ * down could not be chosen.
  */
 export function parentChoices(
   items: readonly WorkItemBrief[],
-  noParent: string,
+  noGoal: string,
   stateName: (item: StandingItem) => string,
 ): ChoiceOption[] {
-  const parents = items
-    .filter((item) => WORK_ITEM_TREE.isContainer(item) && item.parent_id === null)
-    .sort((left, right) => Number(!left.open) - Number(!right.open) || right.number - left.number)
+  const containers = items.filter((item) => !item.other_space && WORK_ITEM_TREE.isContainer(item))
+  const { rows } = treeRows(WORK_ITEM_TREE, {
+    items: containers,
+    matches: null,
+    folded: () => false,
+    order: parentOrder,
+  })
+  const pathOf = new Map<string, string[]>()
   return [
-    { value: '', label: noParent },
-    ...parents.map((item) => ({
-      value: item.reference,
-      label: `${item.reference} · ${item.title}`,
-      description: stateName(item),
-    })),
+    { value: '', label: noGoal },
+    ...rows.map(({ id, item, parentId }) => {
+      const above = parentId === null ? [] : (pathOf.get(parentId) ?? [])
+      pathOf.set(id, [...above, item.reference])
+      return {
+        value: item.reference,
+        label: `${item.reference} · ${item.title}`,
+        description: [above.join(' › '), stateName(item)].filter(Boolean).join(' · '),
+      }
+    }),
   ]
 }
 

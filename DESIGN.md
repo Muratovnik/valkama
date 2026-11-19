@@ -444,6 +444,23 @@ and only fades the end of a strip that scrolls on past it.
   last: its rows come from `FACET_ORDER` (`COMPOSER_ROWS`), the order every surface
   reads an item's facets in, and the description follows the facts as it does on the
   card. It used to ask for the description between the two pairs.
+- **«Новая работа» chooses its parent from the tree.** The field offers «Без цели» first,
+  then every goal and stage of the space at any depth, laid out by the tree's model
+  (`treeRows`) as the list draws them: each under the one it stands in, open before
+  closed and the newest first among the ones beside it. An option's note is the path
+  above it, the references of the goals and stages it stands in, and its state, and
+  the search reads the note too, so a stage five levels down is found by its title or
+  by the number of any goal above it. Another space's goal is not offered: it holds
+  work only in its own space. A space with no goal or stage offers «Без цели» alone.
+  Only goals at the top level were offered, so a stage could not be chosen at all.
+- **A failed write keeps the dialog as it was typed.** The title, the kind, the
+  priority, the labels, the parent and the description all stay, and the reason
+  stands below them in the dialog's own words: «Работа не создана:» and the server's
+  reason where it refused, «сервер не ответил» with a request to try again where it
+  did not answer or failed itself, and «Работа не создана» alone for an answer the
+  client could not read. The dialog showed the error as the client caught it, the
+  server's sentence bare or `HTTP 503`, which named no work and said nothing of what
+  to do next.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.
