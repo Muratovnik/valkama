@@ -420,6 +420,11 @@ test('in a forced palette a window bar and a step line keep their marks in the p
       tail: found('[data-case="spent"] [data-mark="ahead"]').backgroundColor,
       ring: found('[data-harness="step"] [data-target="now"] [data-mark="place"]').boxShadow,
       corridor: found('[data-harness="step"] [data-mark="corridor"]').backgroundColor,
+      grayText: system('GrayText'),
+      now: found('[data-harness="step"] [data-mark="now"]').stroke,
+      nowKey: found('[data-harness="step"] [data-key="now"] > :first-child').backgroundColor,
+      even: found('[data-harness="step"] [data-mark="even"]').stroke,
+      evenKey: found('[data-harness="step"] [data-key="even"] > :first-child').backgroundColor,
     }
     probe.remove()
     return result
@@ -433,6 +438,10 @@ test('in a forced palette a window bar and a step line keep their marks in the p
   expect(paints.tail).toBe(paints.canvasText)
   expect(paints.corridor).toBe(paints.canvasText)
   expect(paints.ring).toContain(paints.canvasText)
+  // The pace and now are drawn in the palette's inactive ink, and their keys say that ink: kept
+  // in their own colours, the keys showed a grey the palette does not have.
+  expect([paints.now, paints.even]).toEqual([paints.grayText, paints.grayText])
+  expect([paints.nowKey, paints.evenKey]).toEqual([paints.grayText, paints.grayText])
   // The reading a key stands on still shows: its dot painted in the palette's ink, and its step
   // ringed in the palette's own colour for the focus.
   const figure = page.locator(LINE)

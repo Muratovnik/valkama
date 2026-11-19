@@ -11,8 +11,8 @@
  * One row as tall as a compact control whether the button stands there or not, so the plot never
  * moves when it comes or goes. The legend's keys wrap, each whole, rather than run past the plot.
  * The row is the line's `data-region="head"`; the button is `data-step="whole"`; the forecast's
- * key is `data-key="ahead"`, its swatch of the hatch `data-mark="hatch"`; now's key is
- * `data-key="now"`.
+ * key is `data-key="ahead"`, its swatch of the hatch `data-mark="hatch"`; the pace's key is
+ * `data-key="even"` and now's `data-key="now"`, each swatch the key's first child.
  */
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -62,6 +62,7 @@ const emit = defineEmits<{ whole: [] }>()
       <span
         v-if="even && legend.even"
         class="step-key"
+        data-key="even"
         ><span class="step-swatch swatch-even" />{{ legend.even }}</span
       >
       <span
@@ -131,9 +132,15 @@ const emit = defineEmits<{ whole: [] }>()
     }
   }
 
+  /* The pace's key, and now's below, in a forced palette's inactive ink, as the plot draws their
+     lines: the swatch keeps its own colours there, so each says its ink. */
   &.swatch-even {
     block-size: var(--space-hair);
     background: var(--color-text-tertiary);
+
+    @media (forced-colors: active) {
+      background: GrayText;
+    }
   }
 
   /* Now as the plot marks it: a hair upright in the quiet ink, a moment and not a course. */
@@ -142,6 +149,10 @@ const emit = defineEmits<{ whole: [] }>()
     block-size: var(--space-3);
     background: var(--color-text-tertiary);
     border-radius: 0;
+
+    @media (forced-colors: active) {
+      background: GrayText;
+    }
   }
 
   &.swatch-ahead {

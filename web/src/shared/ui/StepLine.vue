@@ -86,11 +86,12 @@
  *
  * What a reader of the page selects it by: the figure is `data-chart="steps"`, with
  * `data-muted` past its reset; its regions are `data-region` — `head` (`StepLineHead`), `plot`,
- * the `scale`'s figure at its top, the `field` the marks stand in, the `drawing` of its lines, the `hover`
- * layer that takes the pointer, and the `axis`, whose two ends are `data-moment` `from` and `to`;
- * its marks are `data-mark` — the `ceiling` at the top's level, `now` the hairline across the
- * plot, the readings' `line`, each `reading`'s dot inside its box (`data-reading`, its order), each
- * `place`'s mark inside its box (`data-target`, `restart`, `now` or `reset`), its shape
+ * the `scale`'s figure at its top, the `field` the marks stand in, the `drawing` of its lines,
+ * the `hover` layer that takes the pointer, and the `axis`, whose two ends are `data-moment`
+ * `from` and `to`; its marks are `data-mark` — the `ceiling` at the top's level, `now` the
+ * hairline up the plot, the pace's `even`, the readings' `line`, each `reading`'s dot inside its
+ * box (`data-reading`, its order), each `place`'s mark inside its box (`data-target`, `restart`,
+ * `now` or `reset`), its shape
  * `data-shape` — `ring`, or the forecast's `range` or `point` — and the forecast's `corridor`.
  * Each reading's and place's box is its stop (`data-stop`, its order), the element its hint and
  * the keyboard's focus belong to.
@@ -407,6 +408,7 @@ function stand(index: number) {
           <line
             v-if="even"
             class="step-even"
+            data-mark="even"
             x1="0"
             vector-effect="non-scaling-stroke"
             :y1="evenLine.y1"
