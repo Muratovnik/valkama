@@ -35,6 +35,7 @@ import {
   validateOpenPlaces,
   validateOpenPlan,
 } from '@/shared/api/openPlanModel.ts'
+import { validateParticipation, validateSpaceRecord } from '@/shared/api/participationApi.ts'
 import { validateWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { validateGlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
 import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
@@ -98,6 +99,9 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'open-plan-silent-desktop.json': validateOpenPlan,
   'open-plan-silent.json': validateOpenPlan,
   'open-plan-session.json': validateOpenPlan,
+  'participation-shared.json': validateParticipation,
+  'participation-space.json': validateParticipation,
+  'participation-written.json': validateParticipation,
   'planning-chain-tree.json': (value) => validateWorkItemChain(value),
   'planning-portfolio.json': (value) => validatePlatformPlanningPayload(value),
   'planning-read-model.json': (value) => validateReadModel(value),
@@ -108,6 +112,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'request-session-gone.json': validateInputRequestDetail,
   'request-triage-group.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
+  'space-settings.json': validateSpaceRecord,
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
   'volumes-filtered.json': validateVolumesAnswer,

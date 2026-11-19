@@ -12,7 +12,7 @@ import { test } from './test.ts'
 /** What a part of the page says, its words run together. */
 const words = (part: Locator) => part.evaluate((node) => node.textContent?.trim() ?? '')
 
-async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') {
+async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General' | 'Participation') {
   await page.getByRole('tablist', { name: 'Settings section' }).getByRole('tab', { name }).click()
 }
 
@@ -52,7 +52,7 @@ test('Settings sections share one measure and one compact control lane', async (
 
   for (const width of [1024, 816, 360]) {
     await page.setViewportSize({ width, height: 900 })
-    for (const section of ['General', 'Diagnostics'] as const) {
+    for (const section of ['General', 'Participation', 'Diagnostics'] as const) {
       await openSettingsSection(page, section)
       await expectNoSilentClipping(page, `English Settings ${section} at ${width}px`)
       const stage = await page.locator('.module-stage').boundingBox()
@@ -76,8 +76,8 @@ test('Settings has nothing to switch modules with and nothing the registry used 
 
   // The module list is the build's, so there is no section that changes it.
   const sections = page.getByRole('tablist', { name: 'Settings section' }).getByRole('tab')
-  await expect(sections).toHaveText(['General', 'Diagnostics'])
-  for (const section of ['General', 'Diagnostics'] as const) {
+  await expect(sections).toHaveText(['General', 'Participation', 'Diagnostics'])
+  for (const section of ['General', 'Participation', 'Diagnostics'] as const) {
     await openSettingsSection(page, section)
     for (const heading of ['Modules', 'Integrations', 'Project assignments'])
       await expect(page.getByRole('heading', { name: heading, exact: true })).toHaveCount(0)
@@ -98,14 +98,18 @@ test('the sections are tabs that open on Enter, since Diagnostics runs the check
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   const strip = page.getByRole('tablist', { name: 'Settings section' })
-  const [general, diagnostics] = [
+  const [general, participation, diagnostics] = [
     strip.getByRole('tab', { name: 'General' }),
+    strip.getByRole('tab', { name: 'Participation' }),
     strip.getByRole('tab', { name: 'Diagnostics' }),
   ]
   const panel = page.getByRole('tabpanel')
   await expect(panel).toHaveAttribute('aria-labelledby', (await general.getAttribute('id')) ?? '')
   await general.focus()
   // The arrows walk the tabs and open nothing: opening Diagnostics reads the installation.
+  await page.keyboard.press('ArrowRight')
+  await expect(participation).toBeFocused()
+  await expect(participation).toHaveAttribute('aria-selected', 'false')
   await page.keyboard.press('ArrowRight')
   await expect(diagnostics).toBeFocused()
   await expect(diagnostics).toHaveAttribute('aria-selected', 'false')

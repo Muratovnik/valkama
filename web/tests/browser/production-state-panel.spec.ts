@@ -169,7 +169,10 @@ const ON_THE_WORKSPACE: { name: string; open: (page: Page) => Promise<Locator> }
     open: async (page) => {
       await page.route('**/api/doctor', (route) => route.fulfill(BUSY))
       await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
-      await page.locator('.settings-page-sections').getByRole('tab').nth(1).click()
+      await page
+        .locator('.settings-page-sections')
+        .getByRole('tab', { name: 'Diagnostics' })
+        .click()
       return page.locator('.installation-health .platform-state-panel')
     },
   },

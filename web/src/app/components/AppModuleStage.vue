@@ -53,6 +53,8 @@ function stateValue(key: string, fallback = '') {
 const scopeProject = computed(() =>
   props.scope.kind === 'space' ? (props.scope.project_ref?.project_id ?? null) : null,
 )
+/** The space a scope names, which Settings shows its own values of; null at the top. */
+const scopeSpace = computed(() => (props.scope.kind === 'space' ? props.scope.space_ref : null))
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(
   () => planningSurface.value?.selectedId ?? cardOverlay.value?.selectedId ?? null,
@@ -101,6 +103,7 @@ defineExpose({ openCardId, refresh })
     <SettingsView
       :locale="locale"
       :section="stateValue('section', 'general')"
+      :space="scopeSpace"
       @locale="(value) => emit('locale', value)"
       @state="(state) => emit('state', state)"
     />
