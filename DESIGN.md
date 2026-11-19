@@ -2191,7 +2191,18 @@ press does — and a warning dot once nobody is behind it; a plate there read as
 sessions that follow the item, each as its claim's holder would print, a name moving to
 the next line whole and one wider than the line wrapping between its own words, read whole
 with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody
-following there is no such row. A label chip only filters, its words in its middle with
+following there is no such row. A goal or a stage is held by nobody, its work being its tasks: its
+state row says the state it derives from them, «Не начато», «В работе» or «Ждёт
+подтверждения», with no menu to move it, and where the read of the item names sessions
+working under it the holder's row is «Работают: N», those sessions printed as the followers
+are, each with the tasks it holds in its tooltip, and no «Взять». A task waiting to be taken
+in «Не разобрано», «Отложено» or «Готово к работе» that was taken before says «начата»
+beside its state, quieter than it; a goal never does, its start being its first task's.
+Accepted work ends the rows with «Принято»: who decided it is to be done, «владелец», «по
+поручению», «как часть цели», «по правилу метки», «решение агента» or «принято до 3.0», and
+when; work nobody accepted has no such row. On Overview a step its former holder marked says
+«отмечено прежним исполнителем» after the one who marked it: that holder's lease lapsed, and
+the mark waits for a fresh one before review or a close. A label chip only filters, its words in its middle with
 the same room at either end, at rest and under the pointer alike. The labels are changed
 in one place, the picker the new-task dialog asks with: the «+» that ends the row, or a
 press on the row beside the chips, opens it in the row's place over the space's labels,

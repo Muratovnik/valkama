@@ -208,12 +208,16 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole agent id, of which the row prints the start',
   ],
   [
-    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="holderHint"',
+    'widgets/work-item-inspector/components/InspectorHolderRows.vue <span> v-tooltip.detail="holderHint"',
     "the holder's whole session id, where the card prints its start, and the lease behind the claim; the name only while it is cut",
   ],
   [
-    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="nameHint(follower.label)"',
+    'widgets/work-item-inspector/components/InspectorHolderRows.vue <span> v-tooltip.detail="nameHint(follower.label)"',
     "the follower's whole session id, where the card prints its start; never the name the card prints",
+  ],
+  [
+    'widgets/work-item-inspector/components/InspectorHolderRows.vue <span> v-tooltip.detail="participant.hint"',
+    "a goal's participant's whole session id, where the card prints its start, and the tasks it holds",
   ],
   [
     'widgets/work-item-inspector/components/UsageAccounts.vue <span> v-tooltip.detail="row.full"',

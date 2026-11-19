@@ -15,37 +15,35 @@
  * does on a tile. The parent is its own kind's sign — the goal's for a goal, the generic
  * parent's for a plain task — and its reference as an item link, the same link a number in
  * text is: a press opens it through the card's own departure (its draft guard, its Back), and
- * resting on it shows its hover card. Any item may hold others, so the row is «Parent». The holder's words are bare, a way to the session where there is one: a plate
- * of the same weight as the chips above it made the row one more chip. The lease is a tooltip
- * and, when nobody is behind it any more, a warning dot: a detail of the holder, not a fact of
- * its own. The other sessions that follow the item are a row under it, each printed as its
- * claim's holder would be and kept whole on its line.
+ * resting on it shows its hover card. Any item may hold others, so the row is «Parent». Who is
+ * on the item, and who else follows it, are the holder's rows (`InspectorHolderRows`).
+ *
+ * Two facts stand only where the record says them. A task waiting to be taken that was taken
+ * before says «начата» beside its state; a goal or a stage says no such thing, its start being
+ * its first task's. Accepted work says why and when it was accepted, «Принято», under the rows.
  *
  * Every row stands at the height of the state's own chip, so the head reads the same whichever
  * facts are present and however they wrap, and a label stands on the line of its fact's words.
  * The labels' column is as wide as its longest label, which stays one line: the facts start at
- * one edge down the block. The action ends the holder's row where the drawer is wide and stands
- * at full width under everything else where it is not, within reach of a thumb. The host shows
- * it again in the bar once this one has scrolled away. Under the rows stands how much work the
- * item took, a quiet line of its own and only where there is some.
+ * one edge down the block. Under the rows stands how much work the item took, a quiet line of
+ * its own and only where there is some.
  *
  * A card its address opens stands before its space is read, and two of these come from the
  * space: the states the item may move to and its parent's reference. Until then the state is
  * the menu it will be, naming only where the item is, and the parent's row stands with its
  * label and no value, so neither moves anything when the space answers.
  *
- * Each row says which fact it is in `data-fact`: the facet's id, or `subscribers` for the
- * sessions that follow the item. A reader of the rows finds them by what they are, not by
+ * Each row says which fact it is in `data-fact`: the facet's id, `subscribers` for the
+ * sessions that follow the item, `participants` for those working on a goal, or `acceptance`. A reader of the rows finds them by what they are, not by
  * how they are drawn.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorHolderRows from '@/widgets/work-item-inspector/components/InspectorHolderRows.vue'
 import InspectorUsageLine from '@/widgets/work-item-inspector/components/InspectorUsageLine.vue'
-import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import type { FactChange } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
-import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 import MissingPlaces from '@/features/session-open/MissingPlaces.vue'
 import WorkItemLabels from '@/features/work-item-labels/WorkItemLabels.vue'
 
@@ -53,13 +51,12 @@ import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
 import { PRIORITY_CHOICES } from '@/entities/work-item/utils/facetChoices.ts'
-import { FACET_ORDER, holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
+import { FACET_ORDER, printsFacet } from '@/entities/work-item/utils/facets.ts'
 import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
-import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { actorSession, holderName, sessionStart } from '@/shared/lib/actor.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { standingOf } from '@/shared/lib/standing.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
@@ -122,8 +119,31 @@ const standingName = useStandingName()
  */
 const here = computed(() => standingName(props.item))
 const standing = computed(() => standingOf(props.item))
-/** The action's place on the card, which the bar takes over from once it has scrolled away. */
-const actionCell = ref<HTMLElement | null>(null)
+/** The holder's rows, which hold the action's place the bar takes over once it scrolls away. */
+const holderRows = ref<InstanceType<typeof InspectorHolderRows> | null>(null)
+const keepHolderRows = (rows: unknown) => {
+  holderRows.value = rows as InstanceType<typeof InspectorHolderRows> | null
+}
+const actionCell = computed(() => holderRows.value?.actionCell ?? null)
+
+/** A task waiting to be taken that was started before says so; a goal starts with its tasks. */
+const WAITING = new Set(['triage', 'deferred', 'ready'])
+const started = computed(
+  () =>
+    props.item.started_at !== null &&
+    !WORK_ITEM_TREE.isContainer(props.item) &&
+    WAITING.has(props.item.state?.category ?? ''),
+)
+/** Who decided the work is to be done, and when; null while nobody has. */
+const accepted = computed(() => {
+  const given = props.item.acceptance
+  return given
+    ? t('workItem.facts.acceptedOn', {
+        basis: t(`workItem.facts.basis.${given.basis}`),
+        date: when(given.at),
+      })
+    : null
+})
 
 const facetChoices = useFacetChoices()
 const stateChoice = (state: Pick<NonNullable<WorkItem['state']>, 'key' | 'name' | 'category'>) =>
@@ -214,70 +234,6 @@ provideReferenceLinks((reference, parent) => {
     : link
 })
 
-/**
- * Whether anyone is still behind another holder's claim, and until when.
- * Not on a finished item, whose holder is history, nor on this client's own
- * claim, which no session ever stands behind.
- */
-const lease = computed(() => {
-  const claim = props.item.claim
-  return !props.item.open || !claim || isWebAuthor(claim.holder) ? null : claim
-})
-const leaseText = computed(() => {
-  const claim = lease.value
-  if (!claim) return ''
-  let detail = t('workItem.lease.unconfirmedDetail')
-  // A live lease with no date is one an open question to the owner holds: it names none.
-  if (claim.state === 'live')
-    detail = claim.expires_at
-      ? t('workItem.lease.liveDetail', { date: when(claim.expires_at) })
-      : ''
-  else if (claim.state === 'stale') detail = t('workItem.lease.staleDetail')
-  const state = t(`workItem.lease.${claim.state}`)
-  const said = `${t('workItem.lease.label')}: ${state}`
-  return detail ? `${said} — ${detail}` : said
-})
-const holder = computed(() => holderRef(props.item))
-/** What the row calls its holder: who is on it, or on finished work who was. */
-const holderLabel = computed(() =>
-  props.item.open ? t('workItem.head.holder') : t('workItem.previousOwner'),
-)
-/**
- * A name's hint says what the line does not: the whole session id where the line prints its
- * start, never the name again. The name itself is said only while the line cuts it.
- */
-function nameHint(raw: string, ...more: string[]) {
-  const session = actorSession(raw)
-  const whole = session === sessionStart(session) ? '' : session
-  return { text: [whole, ...more].filter(Boolean).join('\n'), words: holderName(raw) }
-}
-/** The holder's hint: its whole session and the lease behind the claim. */
-const holderHint = computed(() => nameHint(holder.value ?? '', leaseText.value))
-
-/** The session behind the holder: its claim's, or on finished work its last claim's. */
-const holderExecutor = computed(() =>
-  props.item.open ? props.item.claim?.executor : props.item.last_claim_executor,
-)
-
-/**
- * The sessions that follow the item, each by the label the server gives it, which is what a
- * claim of it records, printed as the holder is, a comma after all but the last; the holder's
- * row names its own. A name is cut into its words, the dot kept with the word before it, so a
- * name wider than the line breaks only between them.
- */
-const followers = computed(() => {
-  const labels = (props.item.subscribers ?? [])
-    .map(({ label }) => label)
-    .filter((label) => label !== holder.value)
-  return labels.map((label, index) => {
-    const comma = index < labels.length - 1 ? ',' : ''
-    const words = `${holderName(label)}${comma}`
-      .split(/ (?!·)/)
-      .map((text, at) => ({ before: at ? ' ' : '', text }))
-    return { label, words }
-  })
-})
-
 function when(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
@@ -333,6 +289,12 @@ defineExpose({ actionCell })
               :label="here"
             />
           </span>
+          <span
+            v-if="started"
+            class="card-started"
+            data-mark="started"
+            >{{ t('workItem.facts.started') }}</span
+          >
           <!-- A verb, not a state: the state's dot already says an agent waits, and this goes
                to the question on Overview. -->
           <VButton
@@ -410,83 +372,16 @@ defineExpose({ actionCell })
           />
         </div>
       </div>
-      <template v-else-if="facet === 'holder'">
-        <div
-          class="card-row card-holder"
-          data-fact="holder"
-        >
-          <span class="card-row-label card-holder-label">{{ holderLabel }}</span>
-          <div class="card-row-value card-holder-value">
-            <!-- A session's link says the holder in its own hint; a bare name carries it here. -->
-            <ExecutorLink
-              v-if="holderExecutor?.session"
-              class="card-holder-link"
-              :holder="holder"
-              :executor="holderExecutor"
-              :detail="leaseText"
-            />
-            <span
-              v-else-if="holder"
-              v-tooltip.detail="holderHint"
-              class="card-holder-name one-line"
-              >{{ holderName(holder) }}</span
-            >
-            <FacetMarks
-              v-else
-              surface="card"
-              :item="item"
-              :facets="['holder']"
-            />
-            <SemanticState
-              v-if="lease?.state === 'stale'"
-              class="card-holder-stale"
-              dimension="claim-lease"
-              state="stale"
-              variant="dot"
-              :label="t('workItem.lease.mark')"
-            />
-            <span
-              v-if="leaseText"
-              class="visually-hidden"
-              >{{ leaseText }}</span
-            >
-          </div>
-          <div
-            v-if="writable"
-            ref="actionCell"
-            class="card-action"
-          >
-            <InspectorWriteActions
-              :item="item"
-              :busy="busy"
-              @claim="emit('claim')"
-              @release="emit('release')"
-              @take-over="emit('take-over')"
-            />
-          </div>
-        </div>
-        <div
-          v-if="followers.length"
-          class="card-row card-subscribers"
-          data-fact="subscribers"
-        >
-          <span class="card-row-label">{{ t('workItem.head.subscribers') }}</span>
-          <p class="card-row-value card-subscriber-list">
-            <span
-              v-for="follower in followers"
-              :key="follower.label"
-              v-tooltip.detail="nameHint(follower.label)"
-              class="card-subscriber"
-              ><template
-                v-for="(word, at) in follower.words"
-                :key="at"
-                >{{ word.before
-                }}<span class="card-subscriber-word">{{ word.text }}</span></template
-              ></span
-            >
-          </p>
-        </div>
-      </template>
+      <InspectorHolderRows
+        v-else-if="facet === 'holder'"
+        :ref="keepHolderRows"
+        :item="item"
+        :busy="busy"
+        :writable="writable"
+        @claim="emit('claim')"
+        @release="emit('release')"
+        @take-over="emit('take-over')"
+      />
       <div
         v-else-if="facet === 'parent' && parentRow"
         class="card-row"
@@ -513,11 +408,21 @@ defineExpose({ actionCell })
         </div>
       </div>
     </template>
+    <div
+      v-if="accepted"
+      class="card-row"
+      data-fact="acceptance"
+    >
+      <span class="card-row-label">{{ t('workItem.facts.accepted') }}</span>
+      <p class="card-row-value card-accepted">{{ accepted }}</p>
+    </div>
     <MissingPlaces class="card-missing" />
     <div class="card-usage">
       <InspectorUsageLine @details="emit('usage')" />
     </div>
   </div>
 </template>
+
+<style scoped src="./InspectorFactRows.css"></style>
 
 <style scoped src="./InspectorFacts.css"></style>

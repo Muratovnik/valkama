@@ -306,7 +306,18 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
             ><ExecutorLink
               :holder="stepHolder(step)"
               :executor="step.executor"
-          /></span>
+            /><template v-if="step.by_previous_holder"
+              ><span
+                class="step-holder-dot"
+                aria-hidden="true"
+                >·</span
+              ><span
+                class="step-previous"
+                data-mark="by-previous-holder"
+                >{{ t('workItem.facts.byPreviousHolder') }}</span
+              ></template
+            ></span
+          >
         </li>
       </ul>
     </section>

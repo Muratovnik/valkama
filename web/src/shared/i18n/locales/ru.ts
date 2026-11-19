@@ -34,6 +34,7 @@ import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemChainMessages } from '@/shared/i18n/workItemChainMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
+import { workItemFactMessages } from '@/shared/i18n/workItemFactMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 import { workItemNextStepMessages } from '@/shared/i18n/workItemNextStepMessages.ts'
@@ -761,6 +762,7 @@ export const ru = {
     },
     ...workItemFacetMessages.ru,
     ...workItemHeadMessages.ru,
+    ...workItemFactMessages.ru,
     ...workItemNextStepMessages.ru,
     filter: workFilterMessages.ru.filter,
     ...viewMenuMessages.ru,
