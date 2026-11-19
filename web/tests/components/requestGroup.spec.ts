@@ -1,8 +1,9 @@
 /**
  * A group of findings in the list of everything waiting, on the question the server asks it
  * with: its findings stand ticked, an unticked one leaves the group's answer and Do says how many
- * go, and Don't do over open work the question did not ask about confirms the list the server's
- * refusal hands back, by that refusal's token and never by the one the question was asked with.
+ * go, with none ticked Do and Later… are unavailable with the reason under them, and Don't do over
+ * open work the question did not ask about confirms the list the server's refusal hands back, by
+ * that refusal's token and never by the one the question was asked with.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -103,6 +104,19 @@ async function press(wrapper: Wrapper, name: string) {
   await flushPromises()
 }
 const sent = () => vi.mocked(answerInputRequest).mock.calls.map(([, values]) => values)
+/** The foot's button that says this now. */
+const button = (wrapper: Wrapper, name: string) =>
+  present(
+    wrapper
+      .get('.request-foot')
+      .findAll('button')
+      .find((one) => one.text() === name),
+    `button ${name}`,
+  )
+async function untickAll(wrapper: Wrapper) {
+  for (const box of boxes(wrapper)) await box.setValue(false)
+}
+const UNTICKED = 'Tick a finding first, or answer «Don’t do».'
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -136,6 +150,50 @@ describe('a group of findings', () => {
 
     await press(wrapper, 'Do: 1')
     expect(sent()).toEqual([{ answer: 'do', items: ['main-28'] }])
+  })
+
+  it('with no finding ticked offers Do and Later… unavailable, the reason under them', async () => {
+    const wrapper = list(group())
+    await untickAll(wrapper)
+    const reason = wrapper.get('.request-blocked')
+    expect(reason.text()).toBe(UNTICKED)
+    for (const name of ['Do: 0', 'Later…']) {
+      expect(button(wrapper, name).attributes()).toHaveProperty('disabled')
+      expect(button(wrapper, name).attributes('aria-describedby')).toBe(reason.attributes('id'))
+    }
+    expect(button(wrapper, 'Don’t do').attributes()).not.toHaveProperty('disabled')
+    expect(answerInputRequest).not.toHaveBeenCalled()
+
+    // One ticked again gives both back, and the reason goes.
+    await present(boxes(wrapper)[0], 'the first finding').setValue(true)
+    expect(wrapper.find('.request-blocked').exists()).toBe(false)
+    expect(button(wrapper, 'Do: 1').attributes()).not.toHaveProperty('disabled')
+    expect(button(wrapper, 'Later…').attributes()).not.toHaveProperty('disabled')
+  })
+
+  it('keeps Put off unavailable for the same reason once nothing is ticked', async () => {
+    const wrapper = list(group())
+    await press(wrapper, 'Later…')
+    await wrapper.get('input[type="date"]').setValue('2099-03-01')
+    expect(button(wrapper, 'Put off').attributes()).not.toHaveProperty('disabled')
+    await untickAll(wrapper)
+    expect(button(wrapper, 'Put off').attributes()).toHaveProperty('disabled')
+    expect(wrapper.get('.request-later-reason').text()).toBe(UNTICKED)
+    expect(answerInputRequest).not.toHaveBeenCalled()
+  })
+
+  it('drops the whole group with nothing ticked, its asking confirmed in the box beside it', async () => {
+    const entry = group()
+    vi.mocked(answerInputRequest).mockResolvedValue(answered(entry, { answer: 'drop' }))
+    const wrapper = list(entry)
+    await untickAll(wrapper)
+    await press(wrapper, 'Don’t do')
+    expect(answerInputRequest).not.toHaveBeenCalled()
+    // Later… is blocked, but the box it lends to the asking says Don't do and takes the press.
+    expect(button(wrapper, 'Don’t do').attributes()).not.toHaveProperty('disabled')
+    await press(wrapper, 'Don’t do')
+    // Nothing ticked goes as no ticks at all, which the server reads as none kept.
+    expect(sent()).toEqual([{ answer: 'drop' }])
   })
 
   it('takes nothing ticked where the question cannot be written', () => {

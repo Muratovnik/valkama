@@ -35,6 +35,8 @@ interface Writes {
  * question off opens the choice of a day or of a card whose close brings it back, which is part of
  * what the form holds, and opens again on a form that holds either.
  *
+ * An answer blocked for now (`blocked`), as a group's Do with nothing ticked, sends nothing.
+ *
  * An answer that cancels work the question did not ask about is refused with the list of that
  * work (`writes.listed`): its asking stands again over that list, and its confirmed retry sends
  * the list's token, the refusal's and never the one the question was asked with, which listed
@@ -106,7 +108,8 @@ export function useKindAnswers(host: {
   }
   async function press(index: number, confirmed: boolean) {
     const answer = host.answers()[index]
-    if (!answer || writes.busy.value) return
+    // An answer blocked for now sends nothing: the server would refuse it.
+    if (!answer || answer.blocked || writes.busy.value) return
     if (answer.later) {
       laterOpen.value = !laterOpen.value
       if (!laterOpen.value) return
@@ -123,7 +126,9 @@ export function useKindAnswers(host: {
     const outcome = await writeAnswer(index)
     if (outcome === 'failed' && writes.listed.value) asked.value = index
   }
-  const putOff = () => void writeAnswer(laterAnswer.value)
+  const putOff = () => {
+    if (!host.answers()[laterAnswer.value]?.blocked) void writeAnswer(laterAnswer.value)
+  }
   /** The answers the foot offers: a kind's while it waits for them, none otherwise. */
   const offered = computed(() => (byAnswers.value ? host.answers() : []))
   return {

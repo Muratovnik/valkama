@@ -7,7 +7,8 @@
  *
  * Its first line says what happened and is where focus lands after the refusal (`focus`); the
  * root carries `data-cancel-list`, and each of its lists its part (`data-cancel-part`, `closes` and
- * `waiting`), the hooks a check selects them by.
+ * `waiting`), the hooks a check selects them by. What a row waits on stands on one line, its
+ * reference never split at its hyphen (`data-cancel-waits`): on a phone «ждёт MAIN-» stood over «314».
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,11 +21,14 @@ import { moveFocus } from '@/shared/lib/moveFocus.ts'
 const props = defineProps<{ list: CancelList }>()
 const { t } = useI18n()
 const lead = ref<HTMLElement | null>(null)
+/** A row: its item's reference, the rest of its words, and what it waits on where it does. */
+type Row = [reference: string, rest: string, waits?: string]
 /** What closes, and under its own heading what waits on it, where anything does. */
-const groups = computed(() => {
-  const waiting = props.list.dependents.map((one): [string, string] => [
+const groups = computed((): { heading: string; name: string; rows: Row[] }[] => {
+  const waiting = props.list.dependents.map((one): Row => [
     one.reference,
-    `${one.title} · ${t('requests.kinds.waitsOn', { reference: one.waits_on })}`,
+    `${one.title} ·`,
+    t('requests.kinds.waitsOn', { reference: one.waits_on }),
   ])
   return [
     {
@@ -66,10 +70,16 @@ defineExpose({ focus: () => moveFocus(lead.value) })
         :data-cancel-part="group.name"
       >
         <li
-          v-for="([reference, rest], index) in group.rows"
+          v-for="([reference, rest, waits], index) in group.rows"
           :key="index"
         >
           <span class="request-cancel-ref">{{ reference }}</span> {{ rest }}
+          <span
+            v-if="waits"
+            class="request-cancel-waits"
+            data-cancel-waits
+            >{{ waits }}</span
+          >
         </li>
       </ul>
     </template>
@@ -103,6 +113,10 @@ defineExpose({ focus: () => moveFocus(lead.value) })
   gap: var(--space-1);
   padding-inline-start: var(--space-5);
   margin: 0;
+}
+
+.request-cancel-waits {
+  white-space: nowrap;
 }
 
 .request-cancel-ref {

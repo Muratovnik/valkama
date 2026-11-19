@@ -46,6 +46,11 @@ export interface KindAnswer {
   answer: InputAnswers
   label: string
   /**
+   * Why it cannot be sent now, which stands under the answers; absent while it can. It is set over
+   * what the form holds (`answersOver`).
+   */
+  blocked?: string
+  /**
    * It cancels work the server may list first: once a refusal has handed it the list of what the
    * cancel closes, its confirmed retry sends that list's token as the value of this field.
    */
@@ -57,6 +62,8 @@ export interface KindAnswer {
    * the day goes as the value of this text field of the question.
    */
   later?: { field: string }
+  /** The server refuses it with nothing ticked in its field of ticks, so it waits for a tick. */
+  needsTicked?: true
   /** It sends what is ticked in this field of ticks (`ticked`). */
   ticks?: Ticks
   /** Its first press writes nothing and asks in place, as Don't answer does. */
@@ -115,19 +122,22 @@ export function kindAnswerDraft(
 
 /**
  * The answers as their buttons say them over what the form holds: one that counts its ticks says
- * how many go once fewer than all of them are ticked, in the words `counted` gives.
+ * how many go once fewer than all of them are ticked, in the words `counted` gives, and one that
+ * needs a tick is blocked while none is, for the reason `unticked` gives, so no press sends what
+ * the server refuses.
  */
 export function answersOver(
   answers: readonly KindAnswer[],
   draft: RequestDraft,
   counted: (label: string, count: number) => string,
+  unticked: string,
 ): readonly KindAnswer[] {
   return answers.map((answer) => {
-    if (!answer.counts || !answer.ticks) return answer
+    if (!answer.ticks) return answer
     const { length } = ticked(answer.ticks, draft)
-    return length < answer.ticks.total
-      ? { ...answer, label: counted(answer.label, length) }
-      : answer
+    const label =
+      answer.counts && length < answer.ticks.total ? counted(answer.label, length) : answer.label
+    return { ...answer, label, ...(answer.needsTicked && !length ? { blocked: unticked } : {}) }
   })
 }
 
