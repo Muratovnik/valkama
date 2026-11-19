@@ -5,8 +5,14 @@
  *
  * The grouping is a choice here and no button of its own in the bar: «By goal»
  * stood among the filter's presets and read as a filter, when it narrows nothing.
- * The menu offers only what applies to the view on the stage: the board groups by
- * parent, the list by goal, as a tree, and the graph has no grouping in it.
+ * The menu offers only what applies to the view on the stage (`VIEW_GROUPINGS`): the
+ * board by goal, by stage or by project, the list by goal, as a tree, or by project,
+ * and the graph has no grouping in it.
+ *
+ * The order follows: the queue's, the last change, the filing or the priority, and
+ * under it which way round, in words that say what comes first. A column of the
+ * list sorted from its header is offered too, while it is the order, so the menu
+ * always shows the order in force. The graph has none.
  *
  * A saved view is the address state under a name (`useSavedViews`): choosing one
  * writes its state back, as any change of the view, the grouping or the filter
@@ -22,6 +28,10 @@ import { useI18n } from 'vue-i18n'
 
 import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { readsSavedView } from '@/pages/planning/utils/savedViewReads.ts'
+
+import { LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { firstDirection } from '@/widgets/work-item-views/utils/workOrder.ts'
+import type { ViewSort, ViewSortKey } from '@/widgets/work-item-views/utils/workOrder.ts'
 
 import SaveViewDialog from '@/features/saved-views/SaveViewDialog.vue'
 import { useSavedViews } from '@/features/saved-views/useSavedViews.ts'
@@ -40,12 +50,15 @@ const props = withDefaults(
     state: ViewState | undefined
     /** The groupings the view on the stage offers: the board's unless it says. */
     groupings?: readonly ViewGrouping[]
+    /** The order of the view on the stage; null for a view with none. */
+    sort?: ViewSort | null
   }>(),
-  { groupings: () => ['none', 'goal'] },
+  { groupings: () => ['none', 'goal'], sort: null },
 )
 
 const emit = defineEmits<{
   group: [grouping: ViewGrouping]
+  sort: [sort: ViewSort]
   /** A saved view chosen: the address state to write. */
   state: [state: ViewState]
 }>()
@@ -62,6 +75,57 @@ const naming = ref(false)
 const GROUPING_WORDS: Record<ViewGrouping, string> = {
   goal: 'workItem.viewMenu.groupGoal',
   none: 'workItem.viewMenu.groupNone',
+  project: 'workItem.viewMenu.groupProject',
+  stage: 'workItem.viewMenu.groupStage',
+}
+
+/** The orders the menu offers, each from the end its key reads first (`firstDirection`). */
+const SORTS: readonly ViewSortKey[] = ['queue', 'updated', 'created', 'priority']
+const MENU_SORTS: ReadonlySet<string> = new Set(SORTS)
+
+/** A key's own word: the menu's four, or the list column a header sorted by. */
+function sortWord(key: ViewSortKey): string {
+  if (MENU_SORTS.has(key)) return t(`workItem.viewMenu.sortBy.${key}`)
+  const column = LIST_COLUMNS.find((entry) => entry.key === key)
+  return column ? t(column.label) : key
+}
+
+/** What comes first, which is what a direction says: «Newest first». */
+function directionWord(key: ViewSortKey, descending: boolean): string {
+  const which = MENU_SORTS.has(key) ? key : 'other'
+  return t(`workItem.viewMenu.${descending ? 'descending' : 'ascending'}.${which}`)
+}
+
+/** The order and its direction, as two choices; none for a view with no order. */
+function sortEntries(sort: ViewSort | null): MenuEntry[] {
+  if (sort === null) return []
+  const keys = MENU_SORTS.has(sort.key) ? SORTS : [...SORTS, sort.key]
+  const first = firstDirection(sort.key)
+  return [
+    {
+      kind: 'choice',
+      key: 'sort',
+      label: t('workItem.viewMenu.sorting'),
+      value: sort.key,
+      options: keys.map((key) => ({ value: key, label: sortWord(key) })),
+      select: (value: string) => {
+        const key = keys.find((option) => option === value) ?? 'queue'
+        emit('sort', { key, descending: key === sort.key ? sort.descending : firstDirection(key) })
+      },
+    },
+    {
+      kind: 'choice',
+      key: 'direction',
+      label: t('workItem.viewMenu.direction'),
+      value: String(sort.descending),
+      // The end the key reads first leads.
+      options: [first, !first].map((descending) => ({
+        value: String(descending),
+        label: directionWord(sort.key, descending),
+      })),
+      select: (value: string) => emit('sort', { key: sort.key, descending: value === 'true' }),
+    },
+  ]
 }
 
 function apply(name: string) {
@@ -110,6 +174,7 @@ const entries = computed<MenuEntry[]>(() => {
               emit('group', props.groupings.find((option) => option === value) ?? 'none'),
           },
         ]),
+    ...sortEntries(props.sort),
     ...(names.length
       ? [
           {

@@ -170,3 +170,76 @@ describe('the view menu and a saved view this build does not read', () => {
     expect(stored()).toEqual(views)
   })
 })
+
+/** The menu of a board offering every grouping, in the order given. */
+function ordered(sort: { descending: boolean; key: 'created' | 'queue' | 'title' }) {
+  setActivePinia(createPinia())
+  return mount(PlanningViewMenu, {
+    props: {
+      grouping: 'stage',
+      groupings: ['none', 'goal', 'stage', 'project'],
+      place: PLACE,
+      sort,
+      state: { view: 'kanban' },
+    },
+    global: {
+      plugins: [createI18n({ legacy: false, locale: 'en', messages, pluralRules })],
+      stubs: { VMenu: MenuStub, SaveViewDialog: true },
+    },
+  })
+}
+const choice = (wrapper: ReturnType<typeof ordered>, key: string) => {
+  const found = entriesOf(wrapper).find((entry) => entry.key === key)
+  if (found?.kind !== 'choice') throw new Error(`no choice ${key}`)
+  return found
+}
+const labels = (wrapper: ReturnType<typeof ordered>, key: string) =>
+  choice(wrapper, key).options.map((option) => option.label)
+
+describe('the view menu’s grouping and order', () => {
+  it('offers every grouping the view has, and the one in force chosen', () => {
+    const wrapper = ordered({ key: 'queue', descending: false })
+    expect(labels(wrapper, 'grouping')).toEqual([
+      'No grouping',
+      'By goal',
+      'By stage',
+      'By project',
+    ])
+    expect(choice(wrapper, 'grouping').value).toBe('stage')
+    choice(wrapper, 'grouping').select('project')
+    expect(wrapper.emitted('group')).toEqual([['project']])
+  })
+
+  it('offers the four orders and a direction that says what comes first', () => {
+    const wrapper = ordered({ key: 'created', descending: true })
+    expect(choice(wrapper, 'sort').options.map((option) => option.value)).toEqual([
+      'queue',
+      'updated',
+      'created',
+      'priority',
+    ])
+    expect(choice(wrapper, 'sort').value).toBe('created')
+    // The end a key reads first leads: the newest filed for the filing time.
+    expect(choice(wrapper, 'direction').options.map((option) => option.value)).toEqual([
+      'true',
+      'false',
+    ])
+    expect(choice(wrapper, 'direction').value).toBe('true')
+  })
+
+  it('asks for an order from the end it reads first, and keeps the key when turned over', () => {
+    const wrapper = ordered({ key: 'queue', descending: false })
+    choice(wrapper, 'sort').select('priority')
+    choice(wrapper, 'direction').select('true')
+    expect(wrapper.emitted('sort')).toEqual([
+      [{ key: 'priority', descending: true }],
+      [{ key: 'queue', descending: true }],
+    ])
+  })
+
+  it('names a list column’s order a header chose among the four', () => {
+    const wrapper = ordered({ key: 'title', descending: false })
+    expect(choice(wrapper, 'sort').options.map((option) => option.value)).toContain('title')
+    expect(choice(wrapper, 'sort').value).toBe('title')
+  })
+})

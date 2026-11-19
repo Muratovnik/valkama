@@ -7,7 +7,9 @@
  * not a plain task, the reference, a priority glyph when the priority is not the
  * ordinary medium — the order every surface reads an item in (`drawHead`) — and
  * on the right only an open blocker, «⛔ MAIN-12». It never wraps; a mark short of
- * room keeps its glyph. Below it the title, at most three lines, with no hint beside
+ * room keeps its glyph. On a board by goal, a tile of work under a stage names that
+ * stage on its second line, one line in the reference's tone, since the lane names
+ * only the goal. Below it the title, at most three lines, with no hint beside
  * it: one hung over the whole sheet and stood over the tile's top edge, saying again
  * the words the sheet shows. While the clamp cuts it, its whole words are laid over
  * those lines instead, while the pointer rests on those lines, never on the rest of the
@@ -74,6 +76,8 @@ const props = withDefaults(
     hintId?: string
     /** What an agent's session is doing on the item now, or nothing. */
     live?: LiveWork | null
+    /** The stage it stands under, which its second line names; nothing where the lane says it. */
+    stage?: WorkItemBrief | null
     /** The open target is its stack's Tab stop (0), or reached by the arrows (-1). */
     tabStop?: 0 | -1
     /** The reference of an open item this one waits on, or nothing. */
@@ -83,6 +87,7 @@ const props = withDefaults(
     filter: () => EMPTY_WORK_FILTER,
     hintId: undefined,
     live: null,
+    stage: null,
     tabStop: 0,
     waitingOn: null,
   },
@@ -97,7 +102,7 @@ const emit = defineEmits<{
 }>()
 const open = () => emit('open', props.item.reference)
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const id = useId()
 
 /** The runs of the tile, in reading order; the registry decides each mark. */
@@ -147,6 +152,12 @@ const exceptions = computed(() => exceptionRun.value.length > 0)
 /** The head names its marks to the open target only when it has any beside the reference. */
 const leadId = computed(() => (leadRun.value.length ? `${id}-lead` : undefined))
 const exceptionsId = `${id}-exceptions`
+const stageId = `${id}-stage`
+const stageWords = computed(() =>
+  props.stage
+    ? t('workItem.grouped.stage', { reference: props.stage.reference, title: props.stage.title })
+    : '',
+)
 const factsId = `${id}-facts`
 /**
  * The title is the target's name; the priority and the kind, what stops the
@@ -156,6 +167,7 @@ const factsId = `${id}-facts`
 const describedBy = computed(() => {
   const ids = [
     leadId.value ?? '',
+    props.stage ? stageId : '',
     exceptions.value ? exceptionsId : '',
     factRun.value.length ? factsId : '',
     props.hintId ?? '',
@@ -186,6 +198,12 @@ const describedBy = computed(() => {
         @click="open"
       />
     </span>
+    <span
+      v-if="props.stage"
+      :id="stageId"
+      class="tile-stage one-line"
+      >{{ stageWords }}</span
+    >
     <!-- The open target's whole sheet is its pointer box, so it carries the title's whole
          words, and the title marks where they rise: on the title alone the pointer never
          reached them, and over the whole sheet they rose wherever it rested on the tile. -->
@@ -290,6 +308,13 @@ const describedBy = computed(() => {
   gap: var(--space-1);
   align-items: center;
   min-width: 0;
+  color: var(--color-text-tertiary);
+  font: var(--font-detail);
+}
+
+/* The stage, in the reference's tone and size: it says where the work stands, as the
+   reference says which it is, and gives way to the title. */
+.tile-stage {
   color: var(--color-text-tertiary);
   font: var(--font-detail);
 }

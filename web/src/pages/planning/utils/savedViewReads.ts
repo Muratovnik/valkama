@@ -2,7 +2,7 @@
  * Whether this build reads a Work address state, or a saved view of one, as it was written.
  *
  * A view is the address state under a name, and each key of it has one reader: the view,
- * the grouping, the chain's scope and the filter. Each reads a value it does not know as
+ * the grouping, the order, the chain's scope and the filter. Each reads a value it does not know as
  * its default, so such a state would open as another view under the old name — a board
  * grouped by something gone opening ungrouped, a chain scope gone opening as a wrong link,
  * a filter by a kind gone narrowing nothing. A saved view one of them would read so is not
@@ -17,6 +17,9 @@ import {
   withChain,
   withGrouping,
 } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import { readsSort, withSort } from '@/pages/planning/utils/viewSortRoute.ts'
+
+import { QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
 
 import {
   readsEveryFilterValue,
@@ -40,6 +43,7 @@ export function withoutUnreadValues(state: ViewState | undefined): ViewState | n
     read = withGrouping(read, 'none')
   if (state.chain_scope !== undefined && chainTarget(state).status === 'invalid')
     read = withChain(read, null)
+  if (!readsSort(state)) read = withSort(read, QUEUE_ORDER)
   if (!readsEveryFilterValue(state))
     read = writeWorkFilter(read, readWorkFilter(state), Number.POSITIVE_INFINITY).state
   return read === state ? null : read

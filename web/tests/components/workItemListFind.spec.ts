@@ -22,6 +22,7 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import { claimOverlayOwnership, releaseOverlayOwnership } from '@/shared/ui/overlayStack.ts'
 
 import { boardItem } from '../fixtures/board.ts'
+import { keptOrder } from '../support/listOrder.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
 vi.mock('@/widgets/work-item-views/utils/listRowWords.ts', async (original) => {
@@ -65,11 +66,14 @@ const items = titles.map((title, index) =>
 async function list(locale: 'en' | 'ru' = 'en', shown: WorkItemBrief[] = items) {
   const plugin = i18n()
   plugin.global.locale.value = locale
-  const wrapper = mount(WorkItemList, {
-    attachTo: document.body,
-    global: { plugins: [plugin] },
-    props: { items: shown, links: [] },
-  })
+  const host = keptOrder()
+  const wrapper = host.hold(
+    mount(WorkItemList, {
+      attachTo: document.body,
+      global: { plugins: [plugin] },
+      props: { items: shown, links: [], ...host.props },
+    }),
+  )
   await flushPromises()
   return wrapper
 }

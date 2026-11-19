@@ -142,8 +142,13 @@ describe('changing the filter', () => {
     ])
   })
 
-  test('the two conditions no facet says go in and out as any value does', () => {
-    assert.deepEqual(WORK_FILTER_CONDITIONS, [{ facet: 'ready' }, { facet: 'held' }])
+  test('the conditions no facet says go in and out as any value does', () => {
+    assert.deepEqual(WORK_FILTER_CONDITIONS, [
+      { facet: 'ready' },
+      { facet: 'held' },
+      { facet: 'asked' },
+      { facet: 'elsewhere', value: 'other' },
+    ])
     const [ready, held] = WORK_FILTER_CONDITIONS
     const on = toggleToken(toggleToken({ text: '' }, ready), held)
     assert.deepEqual(on, { text: '', ready: true, held: true })
@@ -375,6 +380,10 @@ describe('the route state', () => {
       priority: ['high'],
       labels: ['ui'],
       holder: ['claude'],
+      asked: true,
+      elsewhere: ['other'],
+      project: ['alpha'],
+      goal: ['MAIN-1'],
     }
     const { state } = writeWorkFilter({ view: 'list' }, filter, manifest.state_schema.max_bytes)
     assert.deepEqual(

@@ -185,9 +185,13 @@ test('a phone-width list offers the folded orders as one choice that turns them 
   await openList(page)
   const head = page.locator('.work-item-list thead')
   const choice = head.getByRole('combobox', { name: 'Sort by' })
-  // The list opens sorted by Updated, newest first, which is folded here.
-  await expect(choice).toHaveText('Updated')
+  // The list opens in the queue's order, which no column names; Updated is folded here and
+  // reads newest first when chosen.
+  await expect(choice).toHaveText('Order')
   const option = (name: string) => page.getByRole('option', { name, exact: true })
+  await choice.click()
+  await option('Updated').click()
+  await expect(choice).toHaveText('Updated')
   await choice.click()
   await option('Sort ascending').click()
   await expect(choice).toHaveText('Updated')

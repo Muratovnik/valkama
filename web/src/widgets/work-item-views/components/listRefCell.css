@@ -53,3 +53,24 @@
 .list-after {
   margin-inline-start: var(--space-1);
 }
+
+/* A group's row (`listGroupCell`): its name is a heading of the cards under it, in
+   a row title's type, and its counts are quieter, as a lane's heading has them. */
+.list-group-cell {
+  vertical-align: baseline;
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+
+.list-group-name {
+  margin-inline-end: var(--space-2);
+  color: var(--color-text);
+  font: var(--font-row-title);
+}
+
+.list-group-counts {
+  margin-inline-end: var(--space-2);
+  color: var(--color-text-tertiary);
+  font: var(--font-count);
+  font-variant-numeric: tabular-nums;
+}

@@ -15,15 +15,18 @@ import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import { boardItem } from '../fixtures/board.ts'
 
 function head(state: 'backlog' | 'todo' | 'dev' | 'done') {
+  const goal = boardItem(1, state, { kind: 'goal', title: 'A goal' })
   return mount(WorkItemLaneHead, {
     props: {
       bodyId: 'lane-body',
       lane: {
         closed: 12,
-        goal: boardItem(1, state, { kind: 'goal', title: 'A goal' }),
+        goal,
+        head: { kind: 'container', item: goal, path: [] },
         id: 'lane',
         items: [],
         open: 1,
+        stages: new Map(),
       },
       left: '',
       open: true,

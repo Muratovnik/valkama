@@ -18,6 +18,14 @@ describe('a Work state read as this build reads it', () => {
     })
   })
 
+  it('leaves out an order it does not know, with its direction, and keeps one it does', () => {
+    expect(withoutUnreadValues({ view: 'list', sort: 'former', desc: true })).toEqual({
+      view: 'list',
+    })
+    expect(withoutUnreadValues({ view: 'list', sort: 'created', desc: true })).toBeNull()
+    expect(readsSavedView({ group: 'project', sort: 'priority' })).toBe(true)
+  })
+
   it('leaves out a view it reads as the board', () => {
     expect(withoutUnreadValues({ view: 'table', group: 'goal' })).toEqual({ group: 'goal' })
   })

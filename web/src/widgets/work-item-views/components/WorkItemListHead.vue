@@ -16,22 +16,33 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { nextSort } from '@/widgets/work-item-views/utils/workOrder.ts'
+import type { ViewSort, ViewSortKey } from '@/widgets/work-item-views/utils/workOrder.ts'
 
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   columns: readonly ListColumn[]
-  descending: boolean
   folded: readonly ListColumn[]
   /** The folded sorts as one choice rather than a run of buttons. */
   narrow: boolean
-  sortKey: SortKey
-  sortState: (key: SortKey) => 'ascending' | 'descending' | 'none'
+  /** The order in force: by a column's key, or by one no column shows, such as the queue's. */
+  sort: ViewSort
 }>()
 
-const emit = defineEmits<{ sort: [key: SortKey] }>()
+/** The order a sort asks for, which the list's host keeps. */
+const emit = defineEmits<{ sort: [sort: ViewSort] }>()
 const { t } = useI18n()
+
+const sortKey = computed(() => props.sort.key)
+const descending = computed(() => props.sort.descending)
+const sortState = (key: SortKey) => {
+  if (props.sort.key !== key) return 'none'
+  return props.sort.descending ? 'descending' : 'ascending'
+}
+/** One press sorts by a column from the end it reads first; a second turns it over. */
+const sortBy = (key: ViewSortKey) => emit('sort', nextSort(props.sort, key))
 
 /**
  * A column that sorts numerically must carry the mark and every other column must
@@ -62,22 +73,22 @@ function sortClass(sort: ListColumn, column: ListColumn) {
 const TURN = 'turn'
 
 const chosen = computed(() =>
-  props.folded.some((column) => column.key === props.sortKey) ? props.sortKey : '',
+  props.folded.some((column) => column.key === sortKey.value) ? sortKey.value : '',
 )
 const choices = computed(() => {
   const columns = props.folded.map((column) => ({ label: t(column.label), value: column.key }))
   if (!chosen.value) return columns
-  const turn = props.descending ? 'workItem.list.sortAscending' : 'workItem.list.sortDescending'
+  const turn = descending.value ? 'workItem.list.sortAscending' : 'workItem.list.sortDescending'
   return [...columns, { label: t(turn), value: TURN }]
 })
 
 function choose(value: string) {
   if (value === TURN) {
-    emit('sort', props.sortKey)
+    sortBy(sortKey.value)
     return
   }
   const column = props.folded.find((each) => each.key === value)
-  if (column) emit('sort', column.key)
+  if (column) sortBy(column.key)
 }
 </script>
 
@@ -98,16 +109,16 @@ function choose(value: string) {
       >
         <span class="list-sorts">
           <button
-            v-for="sort in sortsIn(column)"
-            :key="sort.key"
+            v-for="offered in sortsIn(column)"
+            :key="offered.key"
             type="button"
             class="list-sort"
-            :class="sortClass(sort, column)"
-            @click="emit('sort', sort.key)"
+            :class="sortClass(offered, column)"
+            @click="sortBy(offered.key)"
           >
-            {{ t(sort.label) }}
+            {{ t(offered.label) }}
             <VIcon
-              v-if="sortKey === sort.key"
+              v-if="sortKey === offered.key"
               name="chevron-down"
               class="list-sort-mark"
               :class="{ ascending: !descending }"

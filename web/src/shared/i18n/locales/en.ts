@@ -803,7 +803,6 @@ export const en = {
     },
     columnEmpty: 'Nothing here',
     lanes: {
-      noParent: 'No parent',
       counts: '{open} open · {closed} closed',
       fold: 'Fold {lane}',
       unfold: 'Unfold {lane}',
