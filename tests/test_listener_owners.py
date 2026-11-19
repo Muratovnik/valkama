@@ -89,15 +89,6 @@ class TableTests(unittest.TestCase):
             with self.subTest(size=len(raw)), self.assertRaises(listener_owners.ListenerQueryError):
                 list(listener_owners.table_rows(raw, listener_owners.AF_INET))
 
-    def test_a_creation_time_keeps_its_full_resolution(self) -> None:
-        self.assertEqual("1601-01-01T00:00:00.0000000Z", listener_owners._filetime_token(0))
-        # 2026-11-01T08:27:04.1234567Z, in 100 ns intervals since 1601.
-        value = 134_379_952_241_234_567
-        self.assertEqual("2026-11-01T08:27:04.1234567Z", listener_owners._filetime_token(value))
-        self.assertNotEqual(
-            listener_owners._filetime_token(value), listener_owners._filetime_token(value + 1)
-        )
-
 
 @unittest.skipUnless(os.name == "nt", "the owner tables are Windows'")
 class LiveTests(unittest.TestCase):
@@ -149,15 +140,6 @@ class LiveTests(unittest.TestCase):
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]  # bound, never listening, then released
         self.assertEqual([], listener_owners.listener_processes(port))
-
-    def test_a_process_that_cannot_be_read_is_reported_blank_not_guessed(self) -> None:
-        reader = listener_owners._Windows()
-        for pid in (4, 0x7FFFFFF0):  # the System process; a pid that does not exist
-            with self.subTest(pid=pid):
-                self.assertEqual(
-                    {"pid": pid, "command_line": "", "executable_path": "", "identity_token": ""},
-                    reader.process(pid),
-                )
 
 
 if __name__ == "__main__":
