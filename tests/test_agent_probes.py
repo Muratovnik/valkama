@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import stat
 import sys
 import tempfile
@@ -610,6 +611,59 @@ class ProgramTests(unittest.TestCase):
         self.assertEqual([sys.executable, str(FAKE)], programs["claude"])
         with self.assertRaisesRegex(agent_probes.ProbeError, "CLIENT=PATH"):
             agent_probes._programs(["claude"], ["claude"], "")
+
+
+class StoreCopyRegistryTests(unittest.TestCase):
+    """The registry a store copy migrates with is the caller's, not the suite's.
+
+    Run as a script, the runner imports the `tests` package after `main` has started,
+    and that import moves `LOCALAPPDATA` into the suite's directory. The copy then
+    found no registry, skipped its upgrade, and the migration refused the owner's
+    store with «Valkama project registry is absent».
+    """
+
+    def test_the_migration_takes_the_registry_main_found_before_the_package_moved_it(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            base = Path(name)
+            caller, moved, work = base / "caller", base / "moved", base / "work"
+            files = {"projects.json": b'{"projects": []}', "project-registry.toml": b"# list"}
+            (caller / "Valkama").mkdir(parents=True)
+            for file, content in files.items():
+                (caller / "Valkama" / file).write_bytes(content)
+            moved.mkdir()
+            source = base / "source.sqlite3"
+            with contextlib.closing(sqlite3.connect(source)) as conn:
+                conn.execute("CREATE TABLE kept (value)")
+            calls: list[tuple[str, ...]] = []
+            prepared: dict[str, Any] = {}
+
+            def valkama(_environment: object, *arguments: str, **_options: object) -> str:
+                calls.append(arguments)
+                return '"status": "migrated"'
+
+            def run(_options: object, store: Path, registry: Path) -> int:
+                # What importing the `tests` package does to a script's environment.
+                os.environ["LOCALAPPDATA"] = str(moved)
+                prepared.update(agent_probes.prepare_store(store, work, registry)[1])
+                return 0
+
+            argv = ["run", "--cases", "c", "--sections", "s", "--claude-md", "m"]
+            argv += ["--claude-coordinator", "k", "--codex-agents", "a", "--client", "both"]
+            argv += ["--client-home", "h", "--out", "o", "--store-copy", str(source)]
+            with (
+                mock.patch.dict(os.environ, {"LOCALAPPDATA": str(caller)}),
+                mock.patch.object(agent_probes, "_valkama", valkama),
+                mock.patch.object(agent_probes, "run", run),
+            ):
+                self.assertEqual(0, agent_probes.main(argv))
+
+            copied = work / "migration" / "AppData" / "Local" / "Valkama"
+            for file, content in files.items():
+                self.assertEqual(content, (copied / file).read_bytes(), file)
+            self.assertIn(("projects", "upgrade"), calls)
+            self.assertEqual("migrated", prepared["migration"])
 
 
 class SectionTests(unittest.TestCase):

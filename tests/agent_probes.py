@@ -66,6 +66,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from server import processes, store
+from server.projects import project_registry
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -907,12 +908,15 @@ def write_client_configs(
 # --- the store ------------------------------------------------------------------------
 
 
-def prepare_store(source: Path | None, work: Path) -> tuple[Path, dict[str, Any]]:
+def prepare_store(
+    source: Path | None, work: Path, registry: Path | None = None
+) -> tuple[Path, dict[str, Any]]:
     """A store for the run in `work`: a fresh one, or `source` copied and migrated.
 
     `source` is read through a connection that cannot write. The migration runs
     on the copy with a copy of the user's project registry beside it, which is
     what gives the copy's work items their projects; the registry is only read.
+    `registry` is the directory it was in when `main` asked, beside the store.
     """
 
     isolated = _isolated()
@@ -929,10 +933,10 @@ def prepare_store(source: Path | None, work: Path) -> tuple[Path, dict[str, Any]
             raise ProbeError(f"could not create a store: {output.strip()[-800:]}")
         return base, {"source": None}
     isolated.copy_store(source, base)
-    isolated.copy_registry(migration)
-    registry = migration / "AppData" / "Local" / "Valkama"
+    isolated.copy_registry(migration, registry)
+    carried = migration / "AppData" / "Local" / "Valkama"
     arguments = ["migrate", "work-model"]
-    if (registry / "projects.json").is_file():
+    if (carried / "projects.json").is_file():
         # A registry 2.9 left is of the formats before; one already carried says so.
         _valkama(environment, "projects", "upgrade")
         items = work / "item-projects.json"
@@ -1661,7 +1665,7 @@ def _programs(chosen: Sequence[str], given: Sequence[str], path: str) -> dict[st
     return programs
 
 
-def run(options: argparse.Namespace, source: Path | None) -> int:
+def run(options: argparse.Namespace, source: Path | None, registry: Path | None = None) -> int:
     """Every chosen scenario on every chosen client; 0 when no session met a failure."""
 
     chosen = list(CLIENTS) if options.client == "both" else [options.client]
@@ -1675,7 +1679,7 @@ def run(options: argparse.Namespace, source: Path | None) -> int:
     home, out = options.client_home.resolve(), options.out.resolve()
     profile = build_profile(home, inputs)
     programs = _programs(chosen, options.client_program or (), profile.environment["PATH"])
-    base, prepared = prepare_store(source, profile.work)
+    base, prepared = prepare_store(source, profile.work, registry)
     versions = {
         client: _run_command([*programs[client], "--version"], profile.environment)[1].strip()
         for client in chosen
@@ -1750,10 +1754,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         reconfigure(encoding="utf-8")
     options = _parser().parse_args(argv)
     copy = options.store_copy
-    # Asked before anything imports the `tests` package, which redirects the store.
+    # Asked before anything imports the `tests` package, which redirects the store
+    # and moves `LOCALAPPDATA`, where the registry the copy migrates with is.
     source = None if copy is None else Path(copy or store.db_path())
+    registry = Path(project_registry.registry_path()).parent
     try:
-        return run(options, source)
+        return run(options, source, registry)
     except ProbeError as error:
         _say(f"refused: {error}")
         return 2

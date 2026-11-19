@@ -680,20 +680,27 @@ def _stop_tree(process: object, port: int | None) -> list[str]:
     return []
 
 
-def copy_registry(home: Path) -> None:
+def copy_registry(home: Path, source: Path | None = None) -> None:
     """Bring the caller's project registry along with a store copy.
 
     Every page of the app is reached through a project bound to a space. A copy
     without the registry said the project list could not be read and answered 503
     on `/open/<number>`, so nothing in it could be looked at. The files are read
     here, in the caller's own environment, and nothing is written back.
+
+    `source` is the directory the registry was in when the caller asked, for a
+    process whose environment has moved since: importing the `tests` package moves
+    `LOCALAPPDATA` into the suite's directory, where no registry is.
     """
 
     target = home / "AppData" / "Local" / "Valkama"
     target.mkdir(parents=True, exist_ok=True)
-    for found in (Path(project_registry.registry_path()), registry_owner.inventory_path()):
-        if found.is_file():
-            shutil.copy2(found, target / found.name)
+    found = [Path(project_registry.registry_path()), registry_owner.inventory_path()]
+    if source is not None:
+        found = [source / path.name for path in found]
+    for path in found:
+        if path.is_file():
+            shutil.copy2(path, target / path.name)
 
 
 def supervise(out: Path, source: Path | None, command: Sequence[str] | None = None) -> None:
