@@ -1,9 +1,9 @@
 /**
  * Which projects the Analytics page's figures are of, as the page's scope says. The oracle is the
- * requirement: beside the period the bar says «project <name>» on a page scoped to one project
- * and «all projects» on the global page, in the words of the shell's name for the project (its id
- * where it has none); the overview's «ⓘ» says the same as a sentence; and the quota's «ⓘ» says that
- * the quota is the whole account's, whatever project is chosen.
+ * requirement: the overview's «ⓘ» says, as a sentence, that the figures are of the one project the
+ * page is scoped to, by the shell's name for it (its id where it has none), or of all projects on
+ * the global page; and the quota's «ⓘ» says that the quota is the whole account's, whatever
+ * project is chosen.
  */
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
@@ -42,9 +42,6 @@ afterEach(() => {
 
 const words = (text: string) => text.replaceAll(/\s+/gu, ' ').trim()
 
-/** What the bar says of the projects, by the part it documents. */
-const barScope = (page: VueWrapper) => words(page.get('.analytics-bar-scope').text())
-
 /** What the «ⓘ» of the section on show says, a line each, once pressed. */
 async function aboutOf(page: VueWrapper) {
   const presses = page.findAll('.analytics-panel .level-about-press')
@@ -57,19 +54,17 @@ async function aboutOf(page: VueWrapper) {
 }
 
 describe('which projects the figures are of', () => {
-  it('says all projects in the bar and in the overview’s «ⓘ» on the global page', async () => {
+  it('says all projects in the overview’s «ⓘ» on the global page', async () => {
     const page = await mountAnalytics({ routeState: {} })
-    expect(barScope(page)).toBe('all projects')
     expect(await aboutOf(page)).toContain('The figures are of all projects.')
   })
 
-  it('names the project the page is scoped to, in the bar and in the overview’s «ⓘ»', async () => {
+  it('names the project the page is scoped to in the overview’s «ⓘ»', async () => {
     const page = await mountAnalytics({
       routeState: {},
       projectId: 'billing-service',
       projectTitle: 'Billing',
     })
-    expect(barScope(page)).toBe('project Billing')
     const about = await aboutOf(page)
     expect(about).toContain('The figures are of the project Billing alone.')
     expect(about).not.toContain('The figures are of all projects.')
@@ -77,20 +72,10 @@ describe('which projects the figures are of', () => {
 
   it('names the project by its id where the shell has no name for it, in Russian', async () => {
     const page = await mountAnalytics({ routeState: {}, projectId: 'billing-service' }, 'ru')
-    expect(barScope(page)).toBe('проект billing-service')
     expect(await aboutOf(page)).toContain('Цифры — только по проекту billing-service.')
     page.unmount()
     const global = await mountAnalytics({ routeState: {} }, 'ru')
-    expect(barScope(global)).toBe('все проекты')
-  })
-
-  it('keeps the projects in the bar on every section', async () => {
-    const page = await mountAnalytics({
-      routeState: { by: 'model' },
-      projectId: 'billing-service',
-      projectTitle: 'Billing',
-    })
-    expect(barScope(page)).toBe('project Billing')
+    expect(await aboutOf(global)).toContain('Цифры — по всем проектам.')
   })
 })
 

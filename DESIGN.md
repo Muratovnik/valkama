@@ -2522,14 +2522,13 @@ keeps its scrollbar's room too, out of its end inset, so what it holds ends on t
 whether it scrolls or not; with the room taken only while it scrolled, a section ended 10px
 short of the bar.
 
-The bar holds what every part reads by: the period, which projects the figures are of, the
-filters, how fresh the data is and the refresh. Under the period, at the bar's start, stand the
-page's projects in the quiet ink, «project Billing» on a page scoped to one, by the name the
-context bar gives it, or «all projects», and the overview's «ⓘ» says the same as a sentence: a
-project's week beside the global one, with the project named only in the context bar, read as
-two answers for one week. They are outside the bar's line and take none of its room: beside the
-period, the line had none to spare, and they took it to two rows beside a span of days at 1440px
-in Russian, cut a span's name at 1200px and moved the refresh when a failure was said.
+The bar holds what every part reads by: the period, the filters, how fresh the data is and the
+refresh. Which projects the figures are of, one project's by the name the context bar gives it or
+all of them, the overview's «ⓘ» says as a sentence: a project's week beside the global one, with
+the project named only in the context bar, read as two answers for one week. The bar has no room
+for those words: beside the period they took its line to two rows beside a span of days at
+1440px in Russian, cut a span's name at 1200px and moved the refresh when a failure was said,
+and under it they pushed the table of tasks past a 1280×800 window.
 A period is «Now», «Today», this week, the past four weeks or a span of the reader's
 own: days chosen in the bar, or the moments a frame on a time axis bounds (Charts). «Now» is
 the last hour by the minute and «Today» the day so far by the hour, against the same hours of
