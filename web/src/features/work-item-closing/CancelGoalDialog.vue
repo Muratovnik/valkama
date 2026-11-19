@@ -22,7 +22,8 @@ import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { cancelSummary } from '@/features/work-item-closing/cancelSummary.ts'
-import { closingFailure } from '@/features/work-item-closing/closingFailure.ts'
+
+import { writeFailure } from '@/entities/work-item/utils/writeFailure.ts'
 
 import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import { CancelListError } from '@/shared/api/planningApi.ts'
@@ -88,8 +89,8 @@ async function send(cancels?: string) {
         before.value = new Map(list.value.cancels.map((row) => [row.reference, said(row)]))
       list.value = error_.list
       readFailed.value = ''
-    } else if (cancels === undefined) readFailed.value = closingFailure(error_)
-    else failure.value = closingFailure(error_)
+    } else if (cancels === undefined) readFailed.value = writeFailure(error_)
+    else failure.value = writeFailure(error_)
   } finally {
     busy.value = false
   }

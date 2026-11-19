@@ -8,8 +8,12 @@
  * pressed in the bar, which has no room for it. The cancel stands here because it is asked
  * where the state is changed, under the bar the card scrolls under.
  *
- * The host owns every answer; this only words and places them. The cancel's strip is the
- * card's closing writes' (`provideInspectorClosing`), which own whether it is asked.
+ * The questions before converting work or moving it out of its goal stand here for the same
+ * reason: they are chosen in the bar's «…» menu.
+ *
+ * The host owns every answer; this only words and places them. The cancel's strip and the
+ * dividing ones are the card's closing writes' (`provideInspectorClosing`), which own whether
+ * one is asked.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,6 +23,7 @@ import { injectInspectorClosing } from '@/widgets/work-item-inspector/utils/useI
 import type { RefusalNotice } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
 import CancelReasonStrip from '@/features/work-item-closing/CancelReasonStrip.vue'
+import DividingStrip from '@/features/work-item-dividing/DividingStrip.vue'
 
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 
@@ -52,8 +57,21 @@ const cancelling = computed(() => {
   const state = closing?.asking.value
   return item && state ? { item, state } : null
 })
+/** The question before a dividing write the «…» menu chose; the split's is a window. */
+const dividing = computed(() => {
+  const item = closing?.host.item.value
+  const action = closing?.dividing.value
+  return item && action && action !== 'split' ? { item, action } : null
+})
+/** Where a move out lands: the triage state the item stands in, or its workflow's first. */
+const triage = computed(() => {
+  const item = closing?.host.item.value
+  return item?.state?.category === 'triage'
+    ? item.state
+    : (closing?.host.workflow()?.states.find((state) => state.category === 'triage') ?? null)
+})
 const keepWork = () => closing?.dismiss()
-const cancelled = () => closing?.done()
+const done = () => closing?.done()
 const showList = (reason: string) => closing?.list(reason)
 
 const discardQuestion = computed(() =>
@@ -104,8 +122,17 @@ const discardQuestion = computed(() =>
       :item="cancelling.item"
       :state="cancelling.state"
       @close="keepWork"
-      @done="cancelled"
+      @done="done"
       @list="showList"
+    />
+    <DividingStrip
+      v-if="dividing"
+      :key="dividing.action"
+      :action="dividing.action"
+      :item="dividing.item"
+      :triage="triage"
+      @close="keepWork"
+      @done="done"
     />
   </div>
 </template>

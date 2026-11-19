@@ -34,10 +34,10 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorActionDialogs from '@/widgets/work-item-inspector/components/InspectorActionDialogs.vue'
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
-import InspectorClosingDialogs from '@/widgets/work-item-inspector/components/InspectorClosingDialogs.vue'
 import InspectorControls from '@/widgets/work-item-inspector/components/InspectorControls.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
@@ -45,6 +45,7 @@ import InspectorIdentity from '@/widgets/work-item-inspector/components/Inspecto
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorNotices from '@/widgets/work-item-inspector/components/InspectorNotices.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
+import InspectorReadRecovery from '@/widgets/work-item-inspector/components/InspectorReadRecovery.vue'
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
@@ -80,7 +81,6 @@ import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import TabPanel from '@/shared/ui/TabPanel.vue'
 import TabStrip from '@/shared/ui/TabStrip.vue'
-import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   /** True while a related item was opened from inside this drawer. */
@@ -196,6 +196,7 @@ const {
 } = useInspectorWrites({
   busy,
   item,
+  chain: chain.chain,
   changed: reloaded,
   failureText: (error) => failureText(typedFailure(error, 'mutation_failed')),
   load,
@@ -249,7 +250,7 @@ const takeover = useTakeoverQuestion(() => item.value?.claim_ref ?? '', takeOver
 
 /** The band under the bar holds what has to be answered or read, and only while it does. */
 const notices = computed(() =>
-  [notice, writeError, takeover.question, asking, closing.asking].some((part) => part.value),
+  [notice, writeError, takeover.question, asking, closing.inPlace].some((part) => part.value),
 )
 
 /** The next step a guard asks for, taken where the inspector can take it. */
@@ -405,17 +406,10 @@ defineExpose({ close, openFrom })
         @retry="retryRead"
       >
         <template #default="{ payload }">
-          <div
+          <InspectorReadRecovery
             v-if="state.status === 'degraded' && state.reason && readRetryable"
-            class="inspector-read-recovery"
-          >
-            <VButton
-              variant="ghost"
-              @click="retryRead"
-            >
-              {{ t('platform.actions.retry') }}
-            </VButton>
-          </div>
+            @retry="retryRead"
+          />
           <TabPanel
             class="inspector-panel"
             :tabs="tabs"
@@ -503,7 +497,7 @@ defineExpose({ close, openFrom })
     @close="running.launchOpen.value = false"
     @submit="submitLaunch"
   />
-  <InspectorClosingDialogs :target="target" />
+  <InspectorActionDialogs :target="target" />
 </template>
 
 <style scoped src="./WorkItemInspector.css"></style>

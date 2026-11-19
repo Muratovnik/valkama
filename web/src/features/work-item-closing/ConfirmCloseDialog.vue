@@ -21,10 +21,10 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { closingFailure } from '@/features/work-item-closing/closingFailure.ts'
 import { openedUnder } from '@/features/work-item-closing/openedUnder.ts'
 
-import StepMark from '@/entities/work-item/components/StepMark.vue'
+import StepChoices from '@/entities/work-item/components/StepChoices.vue'
+import { writeFailure } from '@/entities/work-item/utils/writeFailure.ts'
 
 import { confirmWorkItemClose } from '@/shared/api/planningClosingApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
@@ -47,13 +47,12 @@ const CONFIRMED = {
   next: 'Nothing: the work under it is closed.',
 }
 
-const ticked = ref(new Set<string>())
+const ticked = ref<ReadonlySet<string>>(new Set())
 const busy = ref(false)
 const error = ref('')
 /** The work that opened under it, once the server refused the close for it; null before. */
 const reopened = ref<string[] | null>(null)
 const hintId = useId()
-const boxId = useId()
 
 watch(
   () => props.open,
@@ -66,15 +65,9 @@ watch(
   { immediate: true },
 )
 
-function toggle(id: string) {
-  const next = new Set(ticked.value)
-  if (!next.delete(id)) next.add(id)
-  ticked.value = next
-}
 const unticked = computed(() => props.item.checklist.some((step) => !ticked.value.has(step.id)))
 /** The press names the hint that says why it is unavailable, and nothing while it is not. */
 const describedBy = computed(() => (unticked.value ? hintId : undefined))
-const ticks = (id: string) => ticked.value.has(id)
 
 /** What closed under it without being done, each said with how it went and its reason. */
 const closed = computed(() =>
@@ -139,7 +132,7 @@ async function submit() {
     emit('done')
   } catch (error_) {
     reopened.value = openedUnder(error_, props.item.reference)
-    if (!reopened.value) error.value = closingFailure(error_)
+    if (!reopened.value) error.value = writeFailure(error_)
   } finally {
     busy.value = false
   }
@@ -181,32 +174,11 @@ async function submit() {
       data-part="conditions"
     >
       <h3 class="confirm-heading">{{ t('workItem.closeActions.confirm.conditions') }}</h3>
-      <ul class="confirm-steps">
-        <li
-          v-for="step in item.checklist"
-          :key="step.id"
-          class="confirm-step"
-        >
-          <button
-            :id="`${boxId}-${step.id}`"
-            class="confirm-box"
-            type="button"
-            role="checkbox"
-            :aria-checked="ticks(step.id)"
-            :disabled="busy"
-            @click="toggle(step.id)"
-          >
-            <StepMark :done="ticks(step.id)" />
-          </button>
-          <label
-            class="confirm-step-text"
-            :for="`${boxId}-${step.id}`"
-            ><RichText
-              :source="step.text"
-              inline
-          /></label>
-        </li>
-      </ul>
+      <StepChoices
+        v-model="ticked"
+        :steps="item.checklist"
+        :disabled="busy"
+      />
       <p
         v-if="unticked"
         :id="hintId"
@@ -311,44 +283,12 @@ async function submit() {
   margin: 0;
 }
 
-.confirm-steps,
 .confirm-closed {
   display: grid;
   gap: var(--space-1);
   padding: 0;
   margin: 0;
   list-style: none;
-}
-
-.confirm-step {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: start;
-  font: var(--font-line);
-}
-
-/* The press around the card's own box (`StepMark`), at the box's size. */
-.confirm-box {
-  display: inline-grid;
-  place-items: center;
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &:focus-visible {
-    outline: var(--size-focus-ring) solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-}
-
-.confirm-step-text {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  cursor: pointer;
 }
 
 .confirm-closed-row {
