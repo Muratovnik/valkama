@@ -22,7 +22,12 @@ import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type {
+  Change,
+  LineChange,
+  SpendingLine,
+  Spent,
+} from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
@@ -275,12 +280,13 @@ export function useSpendingWords() {
 
   /**
    * How a measure moved, as a table says it under a heading that names the period it is
-   * compared with: the arrow and the share, or which period has no figure.
+   * compared with: the arrow and the share, which period has no figure, or, for an account, that
+   * its figure before is not known (`LineChange`).
    */
-  function changeCell(name: Measure, moved: Change) {
+  function changeCell(name: Measure, moved: LineChange) {
     if (moved.direction === 'absent')
       return t(`analytics.table.moved.absent.${name}.${moved.missing}`)
-    if (moved.direction === 'none' || moved.direction === 'same')
+    if (moved.direction === 'none' || moved.direction === 'same' || moved.direction === 'unplaced')
       return t(`analytics.table.moved.${moved.direction}`)
     return t(`analytics.table.moved.${moved.direction}`, { change: percent(moved.ratio) })
   }
@@ -409,15 +415,22 @@ export function useSpendingWords() {
    * `lineFigureWords` says them for one figure, so a change of incomplete costs never reads as
    * whole.
    */
-  function lineChangeWords(name: Measure, moved: Change, now: Spent, before: Spent): FigureWords {
+  function lineChangeWords(
+    name: Measure,
+    moved: LineChange,
+    now: Spent,
+    before: Spent,
+  ): FigureWords {
     const said = changeCell(name, moved)
-    return moved.direction === 'absent' || moved.direction === 'none'
+    return moved.direction === 'absent' ||
+      moved.direction === 'none' ||
+      moved.direction === 'unplaced'
       ? { text: said, remark: '' }
       : leavingOut(name, said, now.unpriced + before.unpriced)
   }
 
   /** How a line's measure moved with its remark beside it (`lineChangeWords`), as one line. */
-  const lineChange = (name: Measure, moved: Change, now: Spent, before: Spent) =>
+  const lineChange = (name: Measure, moved: LineChange, now: Spent, before: Spent) =>
     besides(lineChangeWords(name, moved, now, before))
 
   /**

@@ -34,8 +34,8 @@ const MOST_MOVED = 3
  * The values that moved most from the period before, by the amount in the measure's own units
  * and not by share, so a large task that grew a little outranks a small one that doubled: up to
  * three that rose, the largest rise first, and up to three that fell, the largest fall first. A
- * value with no figure on either side, or one that stayed the same by the tiles' own rule, moved
- * by nothing anybody can say. None moves when the period before was not read.
+ * value with no figure on either side, one that stayed the same by the tiles' own rule, or an
+ * account whose figure before is not known (`unplaced`), moved by nothing anybody can say. None moves when the period before was not read.
  */
 export function mostMoved(
   lines: readonly ComparedLine[],
@@ -44,7 +44,7 @@ export function mostMoved(
   const moved = lines.flatMap((line): MovedLine[] => {
     if (!line.before || !line.change) return []
     const { direction } = line.change
-    if (direction === 'absent' || direction === 'same') return []
+    if (direction === 'absent' || direction === 'same' || direction === 'unplaced') return []
     const at = figureOf(measure, line.now) ?? 0
     const was = figureOf(measure, line.before) ?? 0
     return at === was ? [] : [{ line, by: at - was }]

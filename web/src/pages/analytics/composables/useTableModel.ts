@@ -25,7 +25,7 @@ import {
   spentAnything,
   spentOf,
 } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { LineChange, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -124,11 +124,14 @@ export interface TableSource {
 /** A kind the read does not report is absent, not zero. */
 const ABSENT = '—'
 
-/** How a change sorts: by its share; from nothing as the largest rise; with no figure, never. */
-function changeRank(change: Change | null): number | null {
+/**
+ * How a change sorts: by its share; from nothing as the largest rise; with no figure, or none
+ * known, never.
+ */
+function changeRank(change: LineChange | null): number | null {
   if (!change) return null
   if (change.direction === 'none') return Number.POSITIVE_INFINITY
-  return change.direction === 'absent' ? null : change.ratio
+  return change.direction === 'absent' || change.direction === 'unplaced' ? null : change.ratio
 }
 
 export function useTableModel(source: () => TableSource) {
@@ -209,8 +212,13 @@ export function useTableModel(source: () => TableSource) {
         : []),
       ...kindColumns(),
     ]
-    const cellsOf = (now: Spent, before: Spent | null, tokens: UsageTokens): TableCell[] => {
-      const change = before ? changeOf(measure, now, before) : null
+    // A value's change is its line's (`comparedLines`); the total's, the tiles' own rule.
+    const cellsOf = (
+      now: Spent,
+      before: Spent | null,
+      tokens: UsageTokens,
+      change: LineChange | null = before ? changeOf(measure, now, before) : null,
+    ): TableCell[] => {
       return [
         ...MEASURES.map((key) => figureCell(key, key, now, key === measure)),
         ...(before && change
@@ -236,7 +244,7 @@ export function useTableModel(source: () => TableSource) {
       across,
     }).map((line) =>
       lineOf(line, [
-        cellsOf(line.now, line.before, kindsOf(kinds, line.key)),
+        cellsOf(line.now, line.before, kindsOf(kinds, line.key), line.change),
         whenOf(measure, line.now, line.before),
       ]),
     )

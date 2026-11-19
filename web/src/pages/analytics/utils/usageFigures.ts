@@ -12,6 +12,7 @@ import { LEAST_COST, tokensAnew } from '@/widgets/work-item-inspector/utils/useU
  * dwarf the rest, and reasoning is already part of output. A cost the read has no price for is
  * no data and never a zero; its tokens are counted apart, as `unpriced`.
  */
+import { readAccountId, unplacedId } from '@/shared/api/accountIds.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type {
   UsageDimension,
@@ -122,6 +123,25 @@ export function changeOf(measure: Measure, now: Spent, before: Spent): Change {
   const ratio = (at - was) / was
   if (Math.abs(ratio) < STILL) return { direction: 'same', ratio: 0 }
   return { direction: ratio > 0 ? 'up' : 'down', ratio }
+}
+
+/**
+ * How a value of a breakdown moved (`Change`), or, for an account that spent now, that its
+ * figure before is mostly unknown (`unplaced`): its organization's work no reading placed on an
+ * account came to more in the period before than the account's own did. Which account that work
+ * ran under is not known, so a share against the account's own figure would read where the
+ * readings placed the work as growth. An account that spent nothing now fell by its whole figure,
+ * whatever placed it.
+ */
+export type LineChange = Change | { direction: 'unplaced' }
+
+/** The change of a line (`LineChange`), given its organization's unplaced work before, if any. */
+function lineChangeOf(measure: Measure, now: Spent, before: Spent, unplaced?: Spent): LineChange {
+  const loose = unplaced ? figureOf(measure, unplaced) : null
+  const at = figureOf(measure, now) ?? 0
+  const was = figureOf(measure, before)
+  const unknown = loose !== null && was !== null && at > 0 && loose > was
+  return unknown ? { direction: 'unplaced' } : changeOf(measure, now, before)
 }
 
 /** How many categories a breakdown names before it folds the rest into «other». */
@@ -259,12 +279,32 @@ export function rankedLines(
   return [...lines.slice(0, keep), ...other]
 }
 
+/**
+ * The key of the line of an account's organization's work no reading placed on an account, in
+ * the breakdown the account's line is of: the same line with that work in the account's place.
+ * Null for a line that holds no account.
+ */
+function unplacedKeyOf(
+  breakdown: Breakdown,
+  line: { value: UsageGroupValue; second?: SpendingLine['second'] },
+): string | null {
+  const [by, across] = typeof breakdown === 'string' ? [breakdown, null] : breakdown
+  let seat: UsageGroupValue | undefined
+  if (by === 'seat') seat = line.value
+  else if (across === 'seat') seat = line.second?.value
+  const read = seat?.id ? readAccountId(seat.id) : null
+  if (!read || read.kind === 'unplaced') return null
+  const loose: UsageGroupValue = { id: unplacedId(read.organization), unknown: false }
+  if (typeof breakdown === 'string') return valueKey(loose)
+  return by === 'seat' ? pairKey(loose, line.second?.value ?? UNPLACED) : pairKey(line.value, loose)
+}
+
 /** A value of a breakdown, or a pair, in this period beside the period it is compared with. */
 export interface ComparedLine {
   /** What the value spent in the period before; null when that period was not read. */
   before: Spent | null
   /** How the chosen measure moved; null when the period before was not read. */
-  change: Change | null
+  change: LineChange | null
   key: string
   kind: ValueKind
   now: Spent
@@ -276,7 +316,8 @@ export interface ComparedLine {
 /**
  * Every value of `dimension`, or every pair with `across`, that this period or the period before
  * holds, none folded, with what it spent in each and how `measure` moved, by the tiles' own rule
- * (`changeOf`). A value that worked in one period alone spent nothing in the other. `before` is
+ * (`changeOf`), save an account whose figure before its organization's unplaced work outweighed
+ * (`LineChange`). A value that worked in one period alone spent nothing in the other. `before` is
  * null for a period before that was not read, and then no line has a figure or a change there.
  *
  * Largest first in `measure` this period, a value with no figure there after every figure, and
@@ -306,6 +347,8 @@ export function comparedLines(options: {
     const value = line?.value ?? UNPLACED
     const spent = now.get(key)?.spent ?? NOTHING
     const spentBefore = before ? (was.get(key)?.spent ?? NOTHING) : null
+    const unplaced = unplacedKeyOf(breakdown, { value, second: line?.second })
+    const loose = unplaced === null ? undefined : was.get(unplaced)?.spent
     return {
       key,
       kind: line && line.kind !== 'other' ? line.kind : valueKind(value),
@@ -313,7 +356,7 @@ export function comparedLines(options: {
       ...(line?.second ? { second: line.second } : {}),
       now: spent,
       before: spentBefore,
-      change: spentBefore ? changeOf(measure, spent, spentBefore) : null,
+      change: spentBefore ? lineChangeOf(measure, spent, spentBefore, loose) : null,
     }
   })
   const rank = (line: ComparedLine) => figureOf(measure, line.now) ?? -1

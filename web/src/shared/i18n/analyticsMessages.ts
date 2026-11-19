@@ -130,6 +130,7 @@ export const analyticsMessages = {
           down: '↓ {change}',
           same: 'The same',
           none: 'Nothing before',
+          unplaced: 'Account not known before',
           absent: {
             tokens: {
               before: 'No tokens before',
@@ -317,6 +318,7 @@ export const analyticsMessages = {
           down: '↓ {change}',
           same: 'Столько же',
           none: 'Раньше ничего',
+          unplaced: 'Раньше не определён',
           absent: {
             tokens: {
               before: 'Раньше токены не учтены',

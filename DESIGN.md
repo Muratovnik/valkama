@@ -2653,7 +2653,12 @@ pixels. And tasks are as many as the work done, hundreds a week, which a ring of
 parts folds into one rest no reader can take apart. Which dimensions are free text is one set
 in code, `FREE_TEXT_DIMENSIONS`. The small charts
 draw each leading value's days on one scale; the table lists every value with the figures
-of the period and of the period before. Work with no value in the dimension, or of a value
+of the period and of the period before. An account that spent in the period, whose
+organization's work no reading placed on an account («account not known») came to more in the
+period before than the account's own figure there, has «not known before» as its change and no
+percent: which account that work ran under is not known, so a percent read the readings
+starting to place the work as growth, a rise of thousands of percent on an account that had
+worked all along. Work with no value in the dimension, or of a value
 nobody can place — an unknown model — is ranked where its figure puts it, in the neutral colour;
 a list of free text sets it apart after its values instead, with its bar on their scale. A value
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
