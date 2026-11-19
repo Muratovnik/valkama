@@ -23,6 +23,8 @@ import { executorOf, executorWords, holderGlyph } from '@/entities/work-item/uti
 import type { Executor, SessionDoing } from '@/entities/work-item/utils/facetExecutor.ts'
 import { stateMark } from '@/entities/work-item/utils/standingMark.ts'
 import type { StateSubject } from '@/entities/work-item/utils/standingMark.ts'
+import { withheldMark, withheldReason } from '@/entities/work-item/utils/withheld.ts'
+import type { HeldBackSubject } from '@/entities/work-item/utils/withheld.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
@@ -64,6 +66,7 @@ export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> &
       | 'last_claim_ref'
       | 'parent_id'
       | 'workable'
+      | 'withheld'
     >
   >
 
@@ -206,9 +209,10 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     // and its own reference, so it folded to the bare glyph and the reference
     // was hover-only. The glyph already says "waiting"; the reference is what
     // the line has to show.
-    tile: { form: 'glyph-word', only: ['waiting'], terse: true },
+    // A ready tile the queue would not give says why in a word (`withheld`), muted.
+    tile: { form: 'glyph-word', only: ['waiting', 'withheld'], terse: true },
     list: { form: 'glyph-word', only: ['waiting'] },
-    graph: { form: 'glyph-word', replacesState: true },
+    graph: { form: 'glyph-word', only: ['ready', 'waiting'], replacesState: true },
     card: { form: 'action' },
     // A chain member reads as the norm of its group: workable prints nothing.
     chain: { form: 'glyph-word', only: ['waiting'] },
@@ -339,17 +343,21 @@ const PRIORITY_GLYPHS: Record<WorkItemBrief['priority'], IconName | null> = {
 }
 
 /**
- * What readiness reads of an item: its state and whether it is workable. A
- * chain member carries exactly these, so it needs no kind or priority to be
- * given a readiness mark.
+ * What readiness reads of an item: its state and whether it is workable, and why the
+ * queue holds it back where the surface carries that. A chain member carries the first
+ * two, so it needs no kind or priority to be given a readiness mark.
  */
-export type ReadinessSubject = Pick<FacetSubject, 'open' | 'workable'>
+export type ReadinessSubject = Pick<FacetSubject, 'open' | 'workable'> & HeldBackSubject
 
-/** Readiness as a facet value: startable, waiting on an open blocker, or neither. */
+/**
+ * Readiness as a facet value: startable, waiting on an open blocker, ready yet held back
+ * by the queue for a reason its column does not say (`withheld`), or none of these.
+ */
 export function readinessOf(item: ReadinessSubject, context: FacetContext = {}): string | null {
   if (!item.open) return null
   if (context.waitingOn) return 'waiting'
-  return item.workable ? 'ready' : null
+  if (item.workable) return 'ready'
+  return withheldReason(item) === null ? null : 'withheld'
 }
 
 /**
@@ -366,7 +374,9 @@ export function readinessMarks(
   if (!rule || rule.form === 'action') return []
   const value = readinessOf(item, context)
   const printed = value !== null && (!rule.only || rule.only.includes(value))
-  return printed ? [readinessMark(value, rule, context)] : []
+  if (!printed) return []
+  const reason = value === 'withheld' ? withheldReason(item) : null
+  return [reason ? withheldMark(reason, rule.form) : readinessMark(value, rule, context)]
 }
 
 function steps(item: FacetSubject) {

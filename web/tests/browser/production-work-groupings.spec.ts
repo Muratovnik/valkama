@@ -189,7 +189,8 @@ for (const width of [1280, 390]) {
     await page.getByRole('button', { name: 'Reset', exact: true }).first().click()
 
     await filterBy(page, 'MAIN-440 · A stage of the goal', 'Goal or stage')
-    expect(await drawn(page)).toEqual(['MAIN-440', 'MAIN-441'])
+    // The stage is under way, so it is no tile: the work under it is.
+    expect(await drawn(page)).toEqual(['MAIN-441'])
     await page.screenshot(shot(info, `filter-goal-${width}.png`))
     await page.getByRole('button', { name: 'Reset', exact: true }).first().click()
 

@@ -1593,7 +1593,8 @@ whose question to the owner keeps the queue from giving it, and «From another s
 card another space holds; that one is a value, so its chip's «≠» keeps every such card
 out instead. «Workable» is the list read's own answer for each card, the one the queue
 gives by, so the filter lets through what claim-ready hands out and follows a rule the
-server adds without a copy of it here. A usable filter is as wide as a
+server adds without a copy of it here: where the owner hands out work by hand, the queue gives
+nothing and no card there reads workable. A usable filter is as wide as a
 phone's, 108px with the longest words; where the view's segments and the action
 cannot stand beside that, the bar takes its phone form, where the menu is its sign
 alone. The filter's
@@ -1655,7 +1656,15 @@ when the item is not a plain task, the reference, a priority glyph when the
 priority is not medium, and at its end only what stops the work — the open
 blocker it waits on, drawn as its glyph and its reference («⛔ MAIN-12», named
 «Ждёт MAIN-12»); the line never wraps, and an exception short of room keeps
-its glyph and says its words on hover. The title follows, at most three lines,
+its glyph and says its words on hover. A tile that stands ready and that the take-next
+queue would still not give is muted: its title takes the finished tile's muted ink, and
+its first line ends with the blocker, or, with none open, a sign and a word for the queue's
+first reason — «ждёт ответа», «вручную», «отложено выше», «другое пространство» — whose
+whole sentence, «Очередь её не выдаёт: она ждёт ответа владельца», is its name and its
+hover text. Tone alone means nothing and a hint is not seen, so the word is on the tile; a
+line short of room keeps the sign. Elsewhere the column says why: work in triage, put off or
+at work is not ready, and a ready tile the queue gives is the norm and says nothing.
+The title follows, at most three lines,
 its whole words laid over them while they cut it (Hints), while the pointer rests
 on its lines rather than anywhere on the sheet, and on the focus a key brings it,
 then the labels on one line — as many whole ones as it holds, up to three, then
@@ -1697,6 +1706,9 @@ them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
 key is three letters; a longer key folds as any exception short of room does.
+A goal or a stage stands as a tile only while it is not accepted, in «Triage» or «Deferred»;
+accepted or closed, it stands in no column: an accepted one derives its state from the work under
+it, and the board shows it as a lane where it groups by goal or stage.
 The board grouped by goal gives a lane to each goal, the root of a line of work, and
 one to the work under none, «No goal» («Без цели»). A goal's lane holds all the work
 under it, through its stages at any depth; a stage heads no lane and is work of its
@@ -1704,7 +1716,10 @@ goal's lane, a tile there while it stands in a column, so no item is drawn twice
 filed under a stage names that stage on its second line, «Stage MAIN-12 · title», in the
 quiet tone, since the lane names only the goal. The lanes name the goal, as the card
 does. Grouped by stage, every goal and stage heads a lane named by its path, «Goal ›
-Stage», stands as no tile, and work stands in the lane of its nearest container. A card
+Stage», stands as no tile, and work stands in the lane of its nearest container. Each part
+of the path is a press that opens that part's card, and the chevron alone folds the lane.
+A lane's counts are «closed N of M» («закрыто N из M»): its work closed out of all of it,
+one population, as the list's group rows count. A card
 of another space, which has no parent here, stands by goal and by stage in a lane of
 its space, «Space ALPHA · name», after this space's lanes. Grouped by project, a lane is
 each project of the space, in the space's order and kept while empty, then «Several
@@ -1752,6 +1767,14 @@ ring's reach above its arrow, and the board keeps it at its edges. A tile the bo
 view under the row's heading, by the keyboard or by opening it, stands below
 the heading at the gap the lane keeps under it, however many lines the heading
 takes.
+The «Deferred» column («Отложено») starts folded to a strip as narrow as a control, its name
+running down it over its count, so work put off holds no column's width; a press on the strip
+opens it, the same press on its open head folds it, and a reader's choice against that rule is
+kept per space and forgotten once it agrees with it. Under a filter a column nobody folded opens
+when it holds a match, so a search never hides what it found; folded, its count still says it.
+Grouped, the row of state names holds the strip as its chevron and count, the name its hover
+text, and every lane keeps the narrow track empty until it opens. Focus follows the press to
+the control that undoes it.
 The Done column, and a lane's Done cell, stand newest closed first, by the time
 of the item's latest transition; nothing there is planned, so the order of work
 the other columns stand in does not apply. No tile is placed by hand in any

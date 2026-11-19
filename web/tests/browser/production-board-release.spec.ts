@@ -261,9 +261,10 @@ test('a Done tile carried away and back asks for nothing and keeps its place', a
   const where = page.locator('.work-item-board')
   const tile = (reference: string) => where.locator(`li[data-reference="${reference}"]`)
   const done = await tiles(cell(where, 'done'))
-  expect(done[2]).toBe('MAIN-420')
+  // The closed goal MAIN-420 is no tile, so the last of Done is MAIN-421.
+  expect(done[2]).toBe('MAIN-421')
 
-  await pickUp(page, tile('MAIN-420'))
+  await pickUp(page, tile('MAIN-421'))
   await pass(page, cell(where, 'dev'))
   // The first place of Done is not this tile's, and Done has no order to change.
   await letGo(page, tile('MAIN-422'), 'upper')

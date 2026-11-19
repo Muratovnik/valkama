@@ -83,8 +83,8 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
       tree ? Math.min(tree.depthOf(item), levels.value - 1) * step.value : 0,
     /** What a group's row counts, as a lane's heading does. */
     groupCounts(item: WorkItemBrief): string {
-      const counted = groups.value?.counts.get(item.work_item_id) ?? { open: 0, closed: 0 }
-      return t('workItem.lanes.counts', counted)
+      const { open, closed } = groups.value?.counts.get(item.work_item_id) ?? { open: 0, closed: 0 }
+      return t('workItem.lanes.counts', { closed, total: open + closed })
     },
     /** A group's row, which no card is: it folds and opens nothing (`listGroups`). */
     isGroup: isGroupRow,

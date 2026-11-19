@@ -18,9 +18,9 @@ import { enumField, ISO } from '@/shared/api/platformApiGuards.ts'
  * Why the take-next queue does not give an item, in the order a record names them:
  * a goal or stage, not in a ready state, held, waiting on a blocker, an open question
  * to the owner, no way into work from its state, a goal or stage over it in
- * triage, deferred, waiting to be cancelled, waiting or closed, a space whose owner hands out
- * work by hand, and, in a read of one
- * space, an item of another space that the read holds for a project it names.
+ * triage, deferred, waiting to be cancelled, waiting or closed, a space whose owner hands
+ * out work by hand, and, in a read of one space, an item of another space that the read
+ * holds for a project it names.
  */
 const WITHHELD_CODES = [
   'goal_or_stage',
@@ -37,6 +37,9 @@ const WITHHELD_CODES = [
   'queue_off',
   'outside_space',
 ] as const
+
+/** One reason the queue does not give an item. */
+export type WithheldCode = (typeof WITHHELD_CODES)[number]
 
 /** Why the queue does not give it, each reason once, in the server's one order. */
 export const withheldField = () => uniqueList(enumField(WITHHELD_CODES), WITHHELD_CODES.length)

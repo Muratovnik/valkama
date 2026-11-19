@@ -57,3 +57,56 @@ describe('a goal’s row', () => {
     expect(names).toEqual(['Open MAIN-1', 'Show the chain of MAIN-1 on the board'])
   })
 })
+
+/** A stage’s heading by stage: its path is the goal over it. */
+function stageHead() {
+  const goal = boardItem(1, 'dev', { kind: 'goal', title: 'A goal' })
+  const stage = boardItem(2, 'dev', {
+    kind: 'stage',
+    title: 'A stage',
+    parent_id: goal.work_item_id,
+  })
+  return mount(WorkItemLaneHead, {
+    props: {
+      bodyId: 'lane-body',
+      lane: {
+        closed: 1,
+        goal: stage,
+        head: { kind: 'container', item: stage, path: [goal] },
+        id: 'lane',
+        items: [],
+        open: 3,
+        stages: new Map(),
+      },
+      left: '',
+      open: true,
+      right: '',
+    },
+    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages, pluralRules })] },
+  })
+}
+
+describe('a stage’s row, by stage', () => {
+  it('opens each part of its path, and folds by the chevron alone', async () => {
+    const row = stageHead()
+    const parts = row.findAll('.lane-part')
+    expect(parts.map((part) => part.attributes('aria-label'))).toEqual([
+      'Open MAIN-1 · A goal',
+      'Open MAIN-2 · A stage',
+    ])
+    expect(row.get('.lane-title').text()).toBe('A goal › A stage')
+    await parts[0]?.trigger('click')
+    await parts[1]?.trigger('click')
+    expect(row.emitted('open')).toEqual([['MAIN-1'], ['MAIN-2']])
+    expect(row.emitted('toggle')).toBeUndefined()
+    const fold = row.get('.lane-fold')
+    expect(fold.attributes('aria-expanded')).toBe('true')
+    expect(fold.attributes('aria-label')).toBe('Fold A goal › A stage')
+    await fold.trigger('click')
+    expect(row.emitted('toggle')).toHaveLength(1)
+  })
+
+  it('counts its work as closed of all', () => {
+    expect(stageHead().get('.lane-counts').text()).toBe('1 of 4 closed')
+  })
+})
