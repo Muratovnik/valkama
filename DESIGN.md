@@ -2731,7 +2731,10 @@ draw each leading value's days on one scale; the table lists every value with th
 of the period and of the period before. An account that spent in the period, whose
 organization's work no reading placed on an account («account not known») came to more in the
 period before than the account's own figure there, has «not known before» as its change and no
-percent: which account that work ran under is not known, so a percent read the readings
+percent, and with the page narrowed to accounts so has any figure of theirs beside the same work of
+their organizations the filter leaves out — the overview's tiles and the rail's tile of the
+overview, the table's lines and its total, the tokens by kind — none of them ever among what
+changed most: which account that work ran under is not known, so a percent read the readings
 starting to place the work as growth, a rise of thousands of percent on an account that had
 worked all along. Work with no value in the dimension, or of a value
 nobody can place — an unknown model — is ranked where its figure puts it, in the neutral colour;
