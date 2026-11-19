@@ -38,6 +38,8 @@ export const analyticsMessages = {
         choose: 'Choose the days of the period',
       },
       scope: {
+        project: 'project {name}',
+        all: 'all projects',
         aboutProject: 'The figures are of the project {name} alone.',
         aboutAll: 'The figures are of all projects.',
       },
@@ -230,6 +232,8 @@ export const analyticsMessages = {
         choose: 'Выберите дни периода',
       },
       scope: {
+        project: 'проект {name}',
+        all: 'все проекты',
         aboutProject: 'Цифры — только по проекту {name}.',
         aboutAll: 'Цифры — по всем проектам.',
       },

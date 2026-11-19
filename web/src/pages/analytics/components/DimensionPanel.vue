@@ -37,6 +37,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingMultiples from '@/pages/analytics/components/SpendingMultiples.vue'
@@ -191,6 +192,9 @@ const showTable = () => table.value?.reveal()
       :title="title"
       :about="about"
     >
+      <template #beside>
+        <SectionScope />
+      </template>
       <template #actions="{ size }">
         <span
           class="dimension-split-label"

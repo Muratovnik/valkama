@@ -27,6 +27,7 @@ import { useResizeObserver } from '@vueuse/core'
 import OverviewChanges from '@/pages/analytics/components/OverviewChanges.vue'
 import OverviewTop from '@/pages/analytics/components/OverviewTop.vue'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
@@ -174,6 +175,9 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
       :title="t('analytics.frame.overview')"
       :about="about"
     >
+      <template #beside>
+        <SectionScope />
+      </template>
       <SpendingTiles
         v-model:measure="measure"
         :usage="usage"

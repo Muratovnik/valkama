@@ -27,6 +27,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.period.reversed': 'value',
   'analytics.period.incomplete': 'instruction',
   'analytics.period.choose': 'instruction',
+  'analytics.scope': 'label',
   'analytics.scope.aboutProject': 'value',
   'analytics.scope.aboutAll': 'value',
   'analytics.dimensions': 'label',

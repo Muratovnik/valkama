@@ -26,6 +26,7 @@ import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import TokenKindsTable from '@/pages/analytics/components/TokenKindsTable.vue'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
@@ -146,6 +147,9 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
       :title="t('analytics.kinds.section')"
       :about="about"
     >
+      <template #beside>
+        <SectionScope />
+      </template>
       <SpendingUnread
         v-if="!usage.comparison"
         @retry="emit('retry')"

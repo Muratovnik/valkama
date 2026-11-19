@@ -2523,12 +2523,15 @@ whether it scrolls or not; with the room taken only while it scrolled, a section
 short of the bar.
 
 The bar holds what every part reads by: the period, the filters, how fresh the data is and the
-refresh. Which projects the figures are of, one project's by the name the context bar gives it or
-all of them, the overview's «ⓘ» says as a sentence: a project's week beside the global one, with
-the project named only in the context bar, read as two answers for one week. The bar has no room
-for those words: beside the period they took its line to two rows beside a span of days at
-1440px in Russian, cut a span's name at 1200px and moved the refresh when a failure was said,
-and under it they pushed the table of tasks past a 1280×800 window.
+refresh. Which projects the figures are of stands beside the heading of every section the
+period's figures fill, after its «ⓘ», in the quiet ink: «Overview · project Billing» on a page
+scoped to one, by the name the context bar gives it, or «all projects»; the overview's «ⓘ» says
+the same as a sentence. A project's week beside the global one, with the project named only in
+the context bar, read as two answers for one week. The quota's sections say none: the quota is
+an account's, of no project, and their «ⓘ» says the chosen project does not change it. The bar
+has no room for those words: beside the period they took its line to two rows beside a span of
+days at 1440px in Russian, cut a span's name at 1200px and moved the refresh when a failure was
+said, and under it they pushed the table of tasks past a 1280×800 window.
 A period is «Now», «Today», this week, the past four weeks or a span of the reader's
 own: days chosen in the bar, or the moments a frame on a time axis bounds (Charts). «Now» is
 the last hour by the minute and «Today» the day so far by the hour, against the same hours of

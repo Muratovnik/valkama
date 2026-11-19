@@ -1,9 +1,11 @@
 /**
  * Which projects the Analytics page's figures are of, as the page's scope says. The oracle is the
- * requirement: the overview's «ⓘ» says, as a sentence, that the figures are of the one project the
- * page is scoped to, by the shell's name for it (its id where it has none), or of all projects on
- * the global page; and the quota's «ⓘ» says that the quota is the whole account's, whatever
- * project is chosen.
+ * requirement: beside the heading of every section the period's figures fill, a few quiet words
+ * name them, «project Billing» or «all projects», and the quota's sections, which are of no
+ * project, have none; the overview's «ⓘ» says the same as a sentence, of the one project the page
+ * is scoped to, by the shell's name for it (its id where it has none), or of all projects on the
+ * global page; and the quota's «ⓘ» says that the quota is the whole account's, whatever project
+ * is chosen.
  */
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
@@ -76,6 +78,49 @@ describe('which projects the figures are of', () => {
     page.unmount()
     const global = await mountAnalytics({ routeState: {} }, 'ru')
     expect(await aboutOf(global)).toContain('Цифры — по всем проектам.')
+  })
+})
+
+/** The words beside the heading of the section on show, or null where it has none. */
+const besideOf = (page: VueWrapper) => {
+  const head = page.get('.analytics-panel .level-section > .level-head')
+  const scope = head.find('[data-part="scope"]')
+  return scope.exists() ? words(scope.text()) : null
+}
+
+/** Every section the period's figures fill: the overview, a dimension's and the tokens'. */
+const SPENDING = [{}, { by: 'model' }, { by: 'token_kind' }]
+
+describe('the projects beside a section’s heading', () => {
+  it.each(SPENDING)('names the project the page is scoped to beside %o', async (routeState) => {
+    const page = await mountAnalytics({
+      routeState,
+      projectId: 'billing-service',
+      projectTitle: 'Billing',
+    })
+    expect(besideOf(page)).toBe('project Billing')
+  })
+
+  it.each(SPENDING)(
+    'says all projects beside %o on the global page, in Russian',
+    async (routeState) => {
+      const page = await mountAnalytics({ routeState }, 'ru')
+      expect(besideOf(page)).toBe('все проекты')
+    },
+  )
+
+  it('names the project by its id where the shell has no name for it', async () => {
+    const page = await mountAnalytics({ routeState: { by: 'model' }, projectId: 'billing-service' })
+    expect(besideOf(page)).toBe('project billing-service')
+  })
+
+  it.each(['quota_five_hour', 'quota_week'])('says none beside the quota’s %s', async (by) => {
+    const page = await mountAnalytics({
+      routeState: { by },
+      projectId: 'billing-service',
+      projectTitle: 'Billing',
+    })
+    expect(besideOf(page)).toBeNull()
   })
 })
 

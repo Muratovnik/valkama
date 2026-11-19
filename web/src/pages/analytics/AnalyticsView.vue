@@ -63,7 +63,7 @@ import { useQuota } from '@/pages/analytics/composables/useQuota.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { provideReadWaits } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useRefusal } from '@/pages/analytics/composables/useRefusal.ts'
-import { useScopeWords } from '@/pages/analytics/composables/useScopeWords.ts'
+import { provideScopeWords } from '@/pages/analytics/composables/useScopeWords.ts'
 import { useSectionFocus } from '@/pages/analytics/composables/useSectionFocus.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -163,8 +163,8 @@ const read = useUsageRead({
 
 const today = computed(() => localDay(read.askedAt.value))
 
-/** Which projects the figures are of, as the overview's «ⓘ» says it. */
-const scope = useScopeWords({ id: () => props.projectId, title: () => props.projectTitle })
+/** Which projects the figures are of, beside each section's heading and in the overview's «ⓘ». */
+const scope = provideScopeWords({ id: () => props.projectId, title: () => props.projectTitle })
 /** Whether the view's read failed with nothing to show, which the panel says. */
 const readFailed = computed(() => read.state.value.status === 'error')
 
@@ -388,7 +388,7 @@ const emptyDescription = computed(() => {
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
-              :scope="scope"
+              :scope="scope.about"
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
               @inspect="detail.inspect"
