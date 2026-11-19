@@ -42,9 +42,9 @@ const lines = (page: Page) =>
     const rail = document.querySelector<HTMLElement>('.analytics-page-rail')
     const railBox = rail && shown(rail)
     const bar = document.querySelector<HTMLElement>('.analytics-page-bar')
-    const period = document.querySelector('.analytics-period')
+    const period = document.querySelector('.period-bar-periods')
     // The bar's parts in their order, the filters' among them, which lay theirs out in the line.
-    const parts = [...(document.querySelector('.analytics-bar-line')?.children ?? [])].flatMap(
+    const parts = [...(document.querySelector('.period-bar-line')?.children ?? [])].flatMap(
       (part) => (getComputedStyle(part).display === 'contents' ? [...part.children] : [part]),
     )
     const second = parts

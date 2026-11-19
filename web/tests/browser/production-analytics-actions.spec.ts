@@ -416,7 +416,7 @@ test('a section opened from a card or the rail, and its split, are places Back r
 
   // The period and the measure change the view in place.
   await analytics
-    .locator('.analytics-period .segmented-option', { hasText: 'Past 4 weeks' })
+    .locator('.period-bar-periods .segmented-option', { hasText: 'Past 4 weeks' })
     .click()
   const weeks = pageAt({ period: 'weeks4' })
   await expect.poll(() => path(page)).toBe(weeks)

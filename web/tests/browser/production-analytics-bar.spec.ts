@@ -30,7 +30,7 @@ const barParts = (page: Page) =>
   page.evaluate(() =>
     Object.fromEntries(
       [
-        '.analytics-period',
+        '.period-bar-periods',
         '.analytics-bar-filters',
         '.analytics-bar-fresh',
         '.analytics-refresh',
@@ -99,7 +99,7 @@ test('the age of the newest record counting up moves nothing in the bar, one row
   }
   // One row: the periods, the filters, the freshness and the read again stand on one line.
   const [period, ...rest] = [
-    '.analytics-period',
+    '.period-bar-periods',
     '.analytics-bar-filters',
     '.analytics-bar-fresh',
     '.analytics-refresh',
@@ -119,7 +119,7 @@ test('on a phone the bar is three rows, its periods one row, and the rail right 
   const measured = await page.evaluate(() => {
     const bar = document.querySelector('.analytics-bar')?.getBoundingClientRect()
     const rail = document.querySelector('.analytics-rail')?.getBoundingClientRect()
-    const options = [...document.querySelectorAll('.analytics-period .segmented-option')].map(
+    const options = [...document.querySelectorAll('.period-bar-periods .segmented-option')].map(
       (option) => option.getBoundingClientRect().y,
     )
     return { bar: bar?.height ?? 0, gap: (rail?.y ?? 0) - (bar?.bottom ?? 0), options }
@@ -144,7 +144,7 @@ test('on a phone the bar is three rows, its periods one row, and the rail right 
     return {
       bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
       rows: [
-        box('.analytics-period'),
+        box('.period-bar-periods'),
         box('.analytics-refresh'),
         box('.analytics-bar input[type="date"]'),
       ],
@@ -199,7 +199,7 @@ test('«Today» is its hours 0 to 23, the running one hatched, against the same 
   await page.clock.install({ time: NOW })
   const double = await serveLive(page, TODAY)
   await openReport(page, 1440, pageAt())
-  const periods = page.locator('.analytics-period')
+  const periods = page.locator('.period-bar-periods')
   await expect(periods.getByRole('radio')).toHaveText([
     'Now',
     'Today',

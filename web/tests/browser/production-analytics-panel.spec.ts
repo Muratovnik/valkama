@@ -68,7 +68,7 @@ async function pointAt(page: Page, selector: string, down?: number) {
 async function scrolled(page: Page) {
   return page.evaluate(() => {
     const panel = document.querySelector('.analytics-panel')
-    const frame = document.querySelector('.spending-table-frame')
+    const frame = document.querySelector('.section-table-frame')
     const charts = document.querySelector('.dimension-charts')
     return {
       document: document.scrollingElement?.scrollTop ?? 0,
@@ -92,7 +92,7 @@ async function scrolled(page: Page) {
  */
 async function fixedParts(page: Page, row: 'first' | 'last') {
   return page.evaluate((which) => {
-    const frame = document.querySelector('.spending-table-frame')
+    const frame = document.querySelector('.section-table-frame')
     if (!frame) throw new Error('the table drew no frame')
     const rows = [...frame.querySelectorAll('tbody tr')]
     const named = (which === 'first' ? rows[0] : rows.at(-1))?.querySelector('th')
@@ -136,7 +136,7 @@ for (const [width, height] of [
     await serve(page)
     await page.setViewportSize({ width, height })
     await page.goto(TASK_REPORT)
-    const frame = page.locator('.spending-table-frame')
+    const frame = page.locator('.section-table-frame')
     await expect(frame.locator('tbody tr').first()).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
 
@@ -151,7 +151,7 @@ for (const [width, height] of [
     await frame.evaluate((one) => {
       one.scrollIntoView({ block: 'start' })
     })
-    await pointAt(page, '.spending-table-frame', 100)
+    await pointAt(page, '.section-table-frame', 100)
     await page.mouse.wheel(0, 20_000)
     await expect
       .poll(async () => {
@@ -208,9 +208,9 @@ test('on a phone the names stay in view while the table scrolls sideways', async
 }, info) => {
   await serve(page)
   const analytics = await openReport(page, 390)
-  const frame = analytics.locator('.spending-table-frame')
+  const frame = analytics.locator('.section-table-frame')
   await frame.scrollIntoViewIfNeeded()
-  await pointAt(page, '.spending-table-frame', 40)
+  await pointAt(page, '.section-table-frame', 40)
   await page.mouse.wheel(2000, 0)
   await expect
     .poll(async () => {
@@ -227,7 +227,7 @@ test('on a phone the names stay in view while the table scrolls sideways', async
 /** Each heading of the table: its words, whether it is marked sorted, its ink and its rule. */
 const sortMarks = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('.spending-table-frame thead th')].map((one) => {
+    [...document.querySelectorAll<HTMLElement>('.section-table-frame thead th')].map((one) => {
       const style = getComputedStyle(one)
       return {
         text: one.textContent.trim(),
@@ -245,10 +245,10 @@ test('the column the table is sorted by is marked on its heading, and the mark f
   await serve(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(TASK_REPORT)
-  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  await expect(page.locator('.section-table-frame tbody tr').first()).toBeVisible()
   const first = await sortMarks(page)
   const body = await page
-    .locator('.spending-table-frame tbody td[data-chosen="true"]')
+    .locator('.section-table-frame tbody td[data-chosen="true"]')
     .first()
     .evaluate((one) => getComputedStyle(one).color)
   await record(info, 'analytics table sort marks', { first, body })
@@ -261,7 +261,7 @@ test('the column the table is sorted by is marked on its heading, and the mark f
   expect(mark?.ink).not.toBe(tokens?.ink)
   expect(mark?.rule).not.toBe(tokens?.rule)
 
-  await page.locator('.spending-table-frame thead').getByRole('button', { name: 'Tokens' }).click()
+  await page.locator('.section-table-frame thead').getByRole('button', { name: 'Tokens' }).click()
   const next = await sortMarks(page)
   expect(next.filter((one) => one.sorted).map((one) => one.text)).toEqual(['Tokens'])
   expect(next.find((one) => one.text === 'Tokens')?.rule).toBe(mark?.rule)

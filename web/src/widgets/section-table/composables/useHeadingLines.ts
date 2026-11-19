@@ -1,10 +1,10 @@
 /**
- * How many lines the headings over a table's figures take (`SpendingTable`): one while the table,
- * every such heading on one line, stands in its frame, and two once one line would make it wider
- * than its frame. Which is so depends on the headings' words as much as on the frame — «Ранее,
- * 10 нояб., 00:00–14:30» over «Today» is longer than the week's — so it is measured, never guessed
- * from the frame's width alone: a width the week's table fitted left «Today»'s change past the
- * frame's edge.
+ * How many lines the headings over a section table's figures take (`SectionTable`): one while
+ * the table, every such heading on one line, stands in its frame, and two once one line would make
+ * it wider than its frame. Which is so depends on the headings' words as much as on the frame — in
+ * Analytics «Ранее, 10 нояб., 00:00–14:30» over «Today» is longer than the week's — so it is
+ * measured, never guessed from the frame's width alone: a width the week's table fitted left
+ * «Today»'s change past the frame's edge.
  *
  * The table is laid out with one line and measured, and the answer is set before the browser
  * paints, so no frame shows the table wider than its frame. That happens once what the table holds

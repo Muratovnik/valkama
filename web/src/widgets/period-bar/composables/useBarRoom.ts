@@ -1,5 +1,5 @@
 /**
- * What the Analytics bar's line gives up, in turn, while it has no room for all it holds: each
+ * What a period bar's line gives up, in turn, while it has no room for all it holds: each
  * part is given up only once the line, with every part before it given up, still runs past its
  * end. The line is laid out with nothing given up first and given up part by part until it fits,
  * whenever its room or what it holds changes, so a part comes back as soon as there is room for it.
@@ -25,14 +25,6 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 import { useResizeObserver } from '@vueuse/core'
 
-/**
- * A part the bar's line can give up: the words a short bar drops from its buttons, the room
- * between its parts down to a narrow gap, the word around the age («ago»), each of which a screen
- * reader still hears, a failure's own retry's word, its words then the retry, or
- * the whole of a span's name, cut at its end with its hint saying it whole.
- */
-export type BarPart = 'ago' | 'gaps' | 'retry' | 'span' | 'words'
-
 export function useBarRoom(options: {
   /** What else changes what the line holds, read again once it has been drawn. */
   holds: WatchSource[]
@@ -44,8 +36,12 @@ export function useBarRoom(options: {
   last: () => HTMLElement | null | undefined
   /** Whether the bar is two rows whatever it holds, read as the line is fitted. */
   narrow: () => boolean
-  /** The order the parts give way in. */
-  order: () => readonly BarPart[]
+  /**
+   * The order the parts give way in, by the names their host gives them: a period bar gives up
+   * the words a short bar drops from its buttons (`words`), the room between its parts down to a
+   * narrow gap (`gaps`) and the whole of a span's name (`span`), and its page names its own.
+   */
+  order: () => readonly string[]
   /** Whether words that may wrap on the line, short of room, took a second line to stand in. */
   wrapped?: () => boolean
 }) {
@@ -96,7 +92,7 @@ export function useBarRoom(options: {
 
   return {
     /** Whether the line has given up `part`. */
-    gave: (part: BarPart) => yielded.value.has(part),
+    gave: (part: string) => yielded.value.has(part),
     /** Whether the bar is two rows: a narrow one, or a line that gave itself up, its last part. */
     rows: computed(() => rows.value),
     /** Whether the line is being fitted: the news it may come to say takes its room, unseen. */

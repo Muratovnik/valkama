@@ -308,7 +308,7 @@ for (const width of [1440, 390])
       await page.screenshot(shot(info, `analytics-${name}-${width}.png`))
     })
 
-/** The width a day's field keeps: its 8.25rem at the root's 16px (`AnalyticsOwnPeriod`). */
+/** The width a day's field keeps: its 8.25rem at the root's 16px (`PeriodOwnDays`). */
 const DAY_FIELD = 8.25 * 16
 
 test('a custom period shows its two date fields whole at 390px', async ({ page }, info) => {
@@ -318,7 +318,7 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
   await expect(fields).toHaveCount(2)
   await expect(fields.first()).toHaveValue('2026-11-02')
   const measured = {
-    controls: await boxes(page, '.analytics-bar-line > *'),
+    controls: await boxes(page, '.period-bar-line > *'),
     dateInputs: await boxes(page, '.analytics-bar input[type="date"]'),
     pageScroll: await pageScroll(page),
     days: await page.locator('.spending-days tbody tr').count(),
@@ -329,7 +329,7 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
     expect(field.x).toBeGreaterThanOrEqual(0)
     expect(field.x + field.width).toBeLessThanOrEqual(390)
     // A date field leaves its date and its picker room, and a day is never cut: it is as wide
-    // as «28.08.2026», of the widest figures, needs beside the picker (`AnalyticsOwnPeriod`).
+    // as «28.08.2026», of the widest figures, needs beside the picker (`PeriodOwnDays`).
     // At 124px that date ran under the picker's icon.
     expect(field.width).toBeGreaterThanOrEqual(DAY_FIELD)
   }
