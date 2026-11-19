@@ -30,16 +30,26 @@
  * Where the list is told to (`recommendAll`), it offers to accept what is recommended in all its
  * blocks that wait (`RequestRecommendedAll`), and each of them is filled and written by its own
  * record, under no right to move focus: the reader stays on that action.
+ *
+ * Each question is the record of its kind (`kindRecord`): a choice of options, answered by its
+ * form, or a kind its server purpose names, which shows its own content (`RequestKindSubject`)
+ * and is answered by its kind's buttons. Where the list holds questions of more than one kind,
+ * tabs over it (`useKindTabs`) show all of them or one kind's; the list holds only the questions
+ * of the tab shown, so the way through the list in the dialog's head counts that tab's, and focus
+ * moves on within it.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import RequestKindSubject from '@/features/input-requests/components/RequestKindSubject.vue'
+import RequestListNotes from '@/features/input-requests/components/RequestListNotes.vue'
 import RequestRecommendedAll from '@/features/input-requests/components/RequestRecommendedAll.vue'
+import { useKindTabs } from '@/features/input-requests/composables/useKindTabs.ts'
 import type { Outcome } from '@/features/input-requests/composables/useRequestWrites.ts'
 import { useUnderReader } from '@/features/input-requests/composables/useUnderReader.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
-import { choiceRecord } from '@/features/input-requests/utils/questionRecord.ts'
+import { kindRecord } from '@/features/input-requests/utils/questionKinds.ts'
 import type {
   QuestionRecord,
   RecommendedAnswer,
@@ -49,14 +59,15 @@ import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
-import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { grantFocus, NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
-import { spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
+import { useTabIds } from '@/shared/ui/tabIds.ts'
+import TabPanel from '@/shared/ui/TabPanel.vue'
+import TabStrip from '@/shared/ui/TabStrip.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
@@ -129,23 +140,32 @@ const statusText = computed(() => {
   if (all.value.length) return t('requests.noneWaiting')
   return ''
 })
-const spaces = useSpaceNames()
-/** The sources not read, each with the reason the finder names it by. */
-const skipped = computed(() =>
-  (props.result?.coverage ?? [])
-    .filter((source) => source.status === 'unavailable')
-    .map((source) => {
-      const reason = skippedSourceReason(source.reason)
-      return {
-        key: JSON.stringify(source.space_ref),
-        text: t('requests.sourceUnavailable', {
-          space: spaceName(spaces.value, source.space_ref),
-          reason: t(
-            reason === 'requests_unavailable' ? 'requests.unreadable' : `finder.reasons.${reason}`,
-          ),
-        }),
-      }
-    }),
+/** Each question as the record of its kind, its answers in the person's words. */
+const records = computed(
+  () =>
+    new Map(
+      all.value.map((entry) => [
+        requestIdentity(entry),
+        kindRecord(entry, (option) => t(`requests.kinds.answers.${option}`)),
+      ]),
+    ),
+)
+const recordOf = (entry: InputRequestEntry) =>
+  records.value.get(requestIdentity(entry)) ?? kindRecord(entry, String)
+const tabIds = useTabIds()
+const kinds = useKindTabs(
+  () => props.entries.map((entry) => recordOf(entry)),
+  () => props.waiting,
+)
+/** The panel is named by its tab only while tabs stand over it. */
+const panelTabs = computed(() => (kinds.offered.value ? tabIds : null))
+const inTab = (entry: InputRequestEntry) => kinds.shows(recordOf(entry).kind)
+/** What stands in the tab shown, and what was put aside of it, and how many that is. */
+const shown = computed(() => props.entries.filter((entry) => inTab(entry)))
+const shownAnswered = computed(() => props.answered.filter((entry) => inTab(entry)))
+const shownAll = computed(() => [...shown.value, ...shownAnswered.value])
+const answeredLabel = computed(() =>
+  t('requests.hub.answered', { count: shownAnswered.value.length }),
 )
 type CardHandle = {
   $el: Element | null
@@ -176,10 +196,10 @@ watch(
   },
 )
 async function dismiss(entry: InputRequestEntry) {
-  const at = all.value.findIndex(
+  const at = shownAll.value.findIndex(
     (candidate) => requestIdentity(candidate) === requestIdentity(entry),
   )
-  const neighbour = all.value[at + 1] ?? all.value[at - 1]
+  const neighbour = shownAll.value[at + 1] ?? shownAll.value[at - 1]
   emit('dismiss', entry)
   await nextTick()
   if (neighbour) cards[requestIdentity(neighbour)]?.focus()
@@ -200,11 +220,11 @@ const answeredOpen = ref(false)
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
 }
-/** The blocks that wait, as the records of a choice: every question is one today. */
+/** The blocks that wait in the tab shown, as the records of their kinds. */
 const waitingRecords = computed(() =>
-  props.entries
+  shown.value
     .filter((entry) => props.waiting.has(requestIdentity(entry)))
-    .map((entry) => choiceRecord(entry)),
+    .map((entry) => recordOf(entry)),
 )
 const recordDraft = (record: QuestionRecord) => draftFor(record.entry)
 /**
@@ -236,9 +256,10 @@ async function updated(entry: InputRequestEntry, right: FocusRight) {
     right.take(() => cards[key]?.focusOutcome())
     return
   }
-  const at = props.entries.findIndex((candidate) => requestIdentity(candidate) === key)
-  const next = [...props.entries.slice(at + 1), ...props.entries.slice(0, Math.max(at, 0))].find(
-    (candidate) => props.waiting.has(requestIdentity(candidate)),
+  const list = shown.value
+  const at = list.findIndex((candidate) => requestIdentity(candidate) === key)
+  const next = [...list.slice(at + 1), ...list.slice(0, Math.max(at, 0))].find((candidate) =>
+    props.waiting.has(requestIdentity(candidate)),
   )
   right.take(() => {
     if (next) cards[requestIdentity(next)]?.focus()
@@ -290,27 +311,10 @@ defineExpose({ holdsFocus, holdsReader })
     </div>
     <!-- What the first read found is held back while its wait is shown. -->
     <template v-if="!firstHeld">
-      <p
-        v-if="partial"
-        class="request-note"
-        role="status"
-      >
-        {{ t('requests.partial') }}
-      </p>
-      <p
-        v-if="result?.has_more"
-        class="request-note"
-        role="status"
-      >
-        {{ t('requests.truncated') }}
-      </p>
-      <p
-        v-for="source in skipped"
-        :key="source.key"
-        class="request-note"
-      >
-        {{ source.text }}
-      </p>
+      <RequestListNotes
+        :partial="partial"
+        :result="result"
+      />
       <DataEmptyState
         v-if="empty"
         :title="emptyLabel"
@@ -324,45 +328,68 @@ defineExpose({ holdsFocus, holdsReader })
           >
         </template>
       </DataEmptyState>
-      <RequestRecommendedAll
-        v-if="recommendAll"
-        :draft-of="recordDraft"
-        :records="waitingRecords"
-        :send="sendFilled"
+      <TabStrip
+        v-if="kinds.offered.value"
+        :model-value="kinds.tab.value"
+        :label="t('requests.kinds.label')"
+        :sections="kinds.options.value"
+        :tabs="tabIds"
+        @update:model-value="(tab) => (kinds.chosen.value = tab)"
       />
-      <RequestCard
-        v-for="entry in entries"
-        :key="requestIdentity(entry)"
-        :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
-        :entry="entry"
-        :draft="draftFor(entry)"
-        :data-request-waiting="waitingMark(entry)"
-        standalone
-        @update:draft="emit('draft', requestIdentity(entry), $event)"
-        @updated="updated"
-        @dismiss="dismiss"
-        @select="emit('select', $event)"
-      />
-      <VDisclosure
-        v-if="answered.length"
-        v-model:open="answeredOpen"
+      <TabPanel
+        class="request-panel"
+        :tabs="panelTabs"
+        :value="kinds.tab.value"
       >
-        <template #summary>{{ t('requests.hub.answered', { count: answered.length }) }}</template>
-        <div class="request-answered">
-          <RequestCard
-            v-for="entry in answered"
-            :key="requestIdentity(entry)"
-            :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
-            :entry="entry"
-            :draft="draftFor(entry)"
-            standalone
-            @update:draft="emit('draft', requestIdentity(entry), $event)"
-            @updated="updated"
-            @dismiss="dismiss"
-            @select="emit('select', $event)"
-          />
-        </div>
-      </VDisclosure>
+        <RequestRecommendedAll
+          v-if="recommendAll"
+          :draft-of="recordDraft"
+          :records="waitingRecords"
+          :send="sendFilled"
+        />
+        <RequestCard
+          v-for="entry in shown"
+          :key="requestIdentity(entry)"
+          :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
+          :entry="entry"
+          :draft="draftFor(entry)"
+          :kind="recordOf(entry).kind"
+          :answers="recordOf(entry).answers"
+          :data-request-waiting="waitingMark(entry)"
+          standalone
+          @update:draft="emit('draft', requestIdentity(entry), $event)"
+          @updated="updated"
+          @dismiss="dismiss"
+          @select="emit('select', $event)"
+        >
+          <template #subject>
+            <RequestKindSubject
+              :entry="entry"
+              :kind="recordOf(entry).kind"
+            />
+          </template>
+        </RequestCard>
+        <VDisclosure
+          v-if="shownAnswered.length"
+          v-model:open="answeredOpen"
+        >
+          <template #summary>{{ answeredLabel }}</template>
+          <div class="request-answered">
+            <RequestCard
+              v-for="entry in shownAnswered"
+              :key="requestIdentity(entry)"
+              :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
+              :entry="entry"
+              :draft="draftFor(entry)"
+              standalone
+              @update:draft="emit('draft', requestIdentity(entry), $event)"
+              @updated="updated"
+              @dismiss="dismiss"
+              @select="emit('select', $event)"
+            />
+          </div>
+        </VDisclosure>
+      </TabPanel>
     </template>
   </div>
 </template>
@@ -376,7 +403,8 @@ defineExpose({ holdsFocus, holdsReader })
   min-width: 0;
 }
 
-/* What was put aside stands at the list's own step. */
+/* The questions of the tab shown, and what was put aside, stand at the list's own step. */
+.request-panel,
 .request-answered {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -405,12 +433,5 @@ defineExpose({ holdsFocus, holdsReader })
 .request-error {
   flex: 1 1 auto;
   color: var(--color-danger);
-}
-
-.request-note {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-note);
-  overflow-wrap: anywhere;
 }
 </style>

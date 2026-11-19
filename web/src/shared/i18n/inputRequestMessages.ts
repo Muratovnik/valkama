@@ -1,5 +1,6 @@
 import { commentListMessages } from '@/shared/i18n/commentListMessages.ts'
 import { inputRequestReviewMessages } from '@/shared/i18n/inputRequestReviewMessages.ts'
+import { questionKindMessages } from '@/shared/i18n/questionKindMessages.ts'
 import { questionRecordMessages } from '@/shared/i18n/questionRecordMessages.ts'
 import { requestHubMessages } from '@/shared/i18n/requestHubMessages.ts'
 
@@ -101,6 +102,7 @@ export const inputRequestMessages = {
       review: inputRequestReviewMessages.en.review,
       list: commentListMessages.en.list,
       record: questionRecordMessages.en.record,
+      kinds: questionKindMessages.en.kinds,
     },
   },
   ru: {
@@ -198,6 +200,7 @@ export const inputRequestMessages = {
       review: inputRequestReviewMessages.ru.review,
       list: commentListMessages.ru.list,
       record: questionRecordMessages.ru.record,
+      kinds: questionKindMessages.ru.kinds,
     },
   },
 }

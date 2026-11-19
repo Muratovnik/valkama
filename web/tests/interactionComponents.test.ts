@@ -88,7 +88,7 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   assert.match(cardPanel, renders('PlanningCardDrawer'))
   assert.match(cardDrawer, renders('ResizableInspector'))
   assert.match(drawer, renders('DrawerFrame'))
-  assert.match(drawer, renders('InspectorTabs'))
+  assert.match(drawer, renders('TabStrip'))
   assert.match(drawer, renders('InspectorOverview'))
   assert.doesNotMatch(drawer, /<InspectorDrawer|<InspectorHead/)
   // No write while one is in flight: components/inspectorFacts.spec.ts. A refresh of the

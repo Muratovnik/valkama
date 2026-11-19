@@ -8,6 +8,8 @@ import type { QuestionRecord } from '@/features/input-requests/utils/questionRec
 import { editField } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
+
 /** What of one question's writes its kind's answers press on. */
 interface Writes {
   busy: Readonly<Ref<boolean>>
@@ -27,8 +29,8 @@ interface Writes {
  * what the form holds (`kindAnswerDraft`). The first press of one that cannot be taken back writes
  * nothing and asks; its asking stands only while the question can be written, and ends as the
  * step of declining does (`useStepAttention`), which is one step with it. The answer that puts the
- * question off opens the choice of a day, which is part of what the form holds, and opens again on
- * a form that holds a day.
+ * question off opens the choice of a day or of a card whose close brings it back, which is part of
+ * what the form holds, and opens again on a form that holds either.
  */
 export function useKindAnswers(host: {
   /** The id of the choice of a day, which the answer that opens it controls. */
@@ -38,6 +40,8 @@ export function useKindAnswers(host: {
   writes: Writes
   answers: () => QuestionRecord['answers']
   draft: () => RequestDraft
+  /** The question, whose space the cards a put-off can wait on are searched in. */
+  entry: () => InputRequestEntry
   /** Focus goes to the day once its choice opens. */
   focusDay: () => void
   kind: () => QuestionRecord['kind']
@@ -75,7 +79,12 @@ export function useKindAnswers(host: {
   /** The choice of a day: its id, whether it stands open, and the day it holds. */
   const laterControl = computed(() =>
     byAnswers.value && laterAnswer.value >= 0
-      ? { controls: host.laterId, open: laterOpen.value, value: laterDay.value }
+      ? {
+          controls: host.laterId,
+          entry: host.entry(),
+          open: laterOpen.value,
+          value: laterDay.value,
+        }
       : null,
   )
   function chooseDay(day: string) {

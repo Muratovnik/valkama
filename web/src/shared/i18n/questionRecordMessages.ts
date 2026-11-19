@@ -1,6 +1,6 @@
 /**
  * The words of a question's record that do not depend on its kind: the step an answer that cannot
- * be taken back asks with, the choice of a day to put a question off to, a question its task's
+ * be taken back asks with, putting a question off, a question its task's
  * closing took away, and accepting what is recommended in several blocks at once.
  */
 export const questionRecordMessages = {
@@ -8,9 +8,7 @@ export const questionRecordMessages = {
     record: {
       asked: '«{answer}» — are you sure?',
       laterName: 'When to come back to the question',
-      until: 'Until',
       putOff: 'Put off',
-      untilMissing: 'Choose the day to come back to it.',
       untilPast: 'Choose today or a later day.',
       withdrawn: 'Question withdrawn: {reference} was closed',
       acceptAll: 'Accept recommended in all',
@@ -24,9 +22,7 @@ export const questionRecordMessages = {
     record: {
       asked: '«{answer}» — точно?',
       laterName: 'Когда вернуться к вопросу',
-      until: 'До даты',
       putOff: 'Отложить',
-      untilMissing: 'Выберите день, когда вернуться к вопросу.',
       untilPast: 'Выберите сегодняшний или более поздний день.',
       withdrawn: 'Вопрос снят: {reference} закрыта',
       acceptAll: 'Принять рекомендованное во всех',
