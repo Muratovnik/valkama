@@ -85,15 +85,21 @@ describe('a quota window’s state by the panel’s clock', () => {
   })
 
   it('names on the tile the fresh window of two at the same share, by the clock', async () => {
-    // Both five hours at 62 %: «Work»'s read two minutes before the answer, the other's one.
+    // Both five hours at 62 % and lasting to their reset, so neither runs out first nor ends
+    // higher: «Work»'s read two minutes before the answer, the other's one.
     const offset = -NOW.getTimezoneOffset()
     stubAnalyticsReads(usage, () =>
       answered(([work, night]) => {
         if (!work || !night) throw new Error('the four accounts start with «Work»')
         const [five, ...windows] = night.windows as [QuotaShareWindow, ...QuotaShareWindow[]]
+        const [workFive, ...workWindows] = work.windows as [QuotaShareWindow, ...QuotaShareWindow[]]
         const at = momentAt(NOW.getTime() - MINUTE, offset)
         const latest = { ...five.latest, at, used_percent: 62 }
-        return [work, { ...night, windows: [{ ...five, latest, readings: [latest] }, ...windows] }]
+        const lasting = { ...workFive, forecast: five.forecast }
+        return [
+          { ...work, windows: [lasting, ...workWindows] },
+          { ...night, windows: [{ ...five, latest, readings: [latest] }, ...windows] },
+        ]
       }),
     )
     const page = await mountAnalytics()

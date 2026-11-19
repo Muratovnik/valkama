@@ -1,8 +1,10 @@
 /**
  * The subscription quota on the Analytics page, against stand-ins for its usage and quota reads.
  * The oracle is the requirement: two tiles, «Five hours» and «Week», stand after the token kinds
- * and before the dimensions; each names the tightest account's window — the most spent of those
- * still standing, never simply the first — with its share and its state in words. Choosing one
+ * and before the dimensions; each names the tightest account's window — of those still standing,
+ * the one whose forecast runs out first, else ends highest, never simply the first or the most
+ * spent — with its share and, where it runs out before its reset, when, else its state in words.
+ * Choosing one
  * opens its panel as a new place in the address. The panel has a row per account, by the name the
  * page gives an account, and for each window its bar, its share, its reset, its forecast — a
  * point for the five hours, a range for a week — and how old its reading is and who read it. No
@@ -12,8 +14,9 @@
  * tail, which the words name «Forecast ·» on the tile and in the panel, and the readings' table
  * ends with it.
  *
- * The figures come from `quotaAt`: the tightest five hours is the fourth account's 74 %, the
- * tightest week the second account's 88 %, and the first account is neither.
+ * The figures come from `quotaAt`: the tightest five hours is the fourth account's 74 %, which runs
+ * out first, the tightest week the second account's 88 %, whose forecast ends highest, and the
+ * first account is neither.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -84,13 +87,14 @@ describe('the quota tiles', () => {
     expect(reads.quotaAsked[0]?.get('utc_offset')).toBe(String(-NOW.getTimezoneOffset()))
   })
 
-  it('name the tightest account’s window with its share and its state in words, never the first account', async () => {
+  it('name the tightest account’s window with its share and its run-out or state in words, never the first account', async () => {
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const page = await mountAnalytics()
+    // The five hours run out forty minutes on, so the tile says when in place of its state.
     expect(says(page, 'quota_five_hour')).toEqual({
       lead: SEATED_NAME,
       aside: '74%',
-      count: 'up to date',
+      count: 'runs out at 15:10',
     })
     expect(says(page, 'quota_week')).toEqual({
       lead: '7e6d5c4b',

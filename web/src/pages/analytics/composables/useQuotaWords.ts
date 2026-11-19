@@ -98,15 +98,17 @@ export function useQuotaWords() {
    * the clock time, as every moment of the answer, «at 14:05»; a week by its day and the part of
    * the day it falls in (`PARTS`), «by the evening of Nov 24», never to the minute: a week's
    * forecast moves by hours from one reading to the next, and a minute claimed what it cannot know.
-   * Every run-out the quota says — the window's forecast, its bar's and its line's words, the
-   * tile's state — is said here.
+   * `short`, where a tile has no room for the part of the day, a week says its day alone, «~Nov
+   * 24», and its hint the rest. Every run-out the quota says — the window's forecast, its bar's and
+   * its line's words, the tile's state — is said here.
    */
-  function runOutWords(window: QuotaShareWindow, at: number, today: string) {
+  function runOutWords(window: QuotaShareWindow, at: number, today: string, short = false) {
     const local = momentAtOffset(at, offsetOf(today))
     if (window.kind === 'five_hour')
       return t('analytics.quota.runOut.at', { at: moment(local, today) })
-    const part = PARTS[Math.floor(named(local).getUTCHours() / 6)] ?? 'evening'
     const day = words.stepName(local, 'day').dated.label
+    if (short) return t('analytics.quota.runOut.about', { day })
+    const part = PARTS[Math.floor(named(local).getUTCHours() / 6)] ?? 'evening'
     return t(`analytics.quota.runOut.by.${part}`, { day })
   }
 

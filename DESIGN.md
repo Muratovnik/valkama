@@ -2696,9 +2696,16 @@ reasoning is part of output.
 The quota's two sections read where each account's quota stands now, which no period or
 filter changes, and read it again on the live interval whatever the period; that the period and
 the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says once.
-Each tile names the tightest window of its kind across accounts — the most spent of those whose
-reset is still ahead, a fresh one before a silent one at the same share — by its account's
-name, with its share, its state in words beside the section's name and a thin `WindowBar` with
+Each tile names the tightest window of its kind across accounts — of those whose reset is still
+ahead, the one nearest its limit by its forecast: first one that runs out before its reset, the
+earliest run-out first; then the one whose forecast ends highest at the reset; then the one most
+spent, and a window with no forecast by its share after those with one; at the same share a fresh
+one before a silent one. The share alone once chose, and named an account at 72% whose week
+would end at 81% over one at 6% that ran out before its reset. The tile names it by its account's
+name, with its share, beside the section's name when it runs out where it does — a week by its
+day alone, «runs out ~Nov 24», since the rail is as wide as its entries need and the part of the
+day widened it by a fifth, which the bar's words add — and its state in words where it does not,
+and a thin `WindowBar` with
 its forecast's tail, which the bar's words and hint name «Forecast ·», since a tile has no room
 for a key. A tile with no window to name says why: no source read the work, the windows reset
 since they were read, or no reading. The panel has a group per account on a surface of its

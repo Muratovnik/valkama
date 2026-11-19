@@ -4,10 +4,13 @@
  *
  * A section of the quota is its five hours, or its week with each model's week beside it. A
  * window counts toward the tightest only while it stands: its reset is still ahead, or it has
- * named none. Of those the tightest is the one most spent, a fresh one before a silent one at the
- * same share, each judged at the panel's moment (`stateAt`), then the first in the answer's
- * order. Its figure is one account's share of one window, said as it is: nothing here adds two
- * windows or two accounts.
+ * named none. Of those the tightest is the one nearest its limit by its forecast (`tightest`):
+ * one that runs out before its reset first, the earliest run-out first (`runOut`); then the one
+ * whose forecast ends highest at the reset; then the one most spent, and a window with no forecast
+ * ranks by its share after those with one. At the same share a fresh one stands before a silent
+ * one, judged at the panel's moment (`stateAt`), then the first in the answer's order. Its figure
+ * is one account's share of one window, said as it is: nothing here adds two windows or two
+ * accounts.
  *
  * A forecast is drawn from one mapping (`forecastCourses`), so the bar's tail, the tile's, the
  * step line's corridor and their words never disagree: two edges from the share spent at the
@@ -152,20 +155,76 @@ export interface QuotaPick {
   window: QuotaShareWindow
 }
 
-/** The window of a section most spent across accounts at `now`, or null where none stands. */
+/**
+ * When a window's forecast says it runs out before its reset, in ms, from the answer's moment
+ * `at`, as its words say it (`useQuotaWords`): five hours at their `runs_out_at`; a week whose
+ * range's low end reaches 100 % when its slower pace spends it (`runsOutAt`), or at its reset where
+ * that pace names no time; a window spent already, or read at 100 % or past it, at `at`. Null where
+ * the forecast says it lasts to the reset, and where there is no forecast.
+ */
+export function runOut(window: QuotaShareWindow, at: number): number | null {
+  const found = window.forecast
+  if (!found) return null
+  if (window.latest.used_percent >= 100) return at
+  if ('low_percent' in found) {
+    if (found.low_percent < 100) return null
+    const reset =
+      window.resets_at === null ? Number.POSITIVE_INFINITY : Date.parse(window.resets_at)
+    return runsOutAt(window, found.low_percent, at) ?? reset
+  }
+  if (found.outcome === 'spent') return at
+  return found.runs_out_at === null ? null : Date.parse(found.runs_out_at)
+}
+
+/** Where a window's forecast leaves it at the reset: a week's high end, five hours that last. */
+function forecastTop(window: QuotaShareWindow): number {
+  const found = window.forecast
+  const used = window.latest.used_percent
+  if (!found) return used
+  if ('low_percent' in found) return Math.max(used, found.high_percent)
+  return found.outcome === 'lasts' ? lastingEnd(window) : 100
+}
+
+/**
+ * Whether window `one` stands nearer its limit than `other`, its forecast taken at the answer's
+ * moment `at`: one with a forecast before one with none; of those with one, one that runs out
+ * before its reset before one that lasts, the earlier run-out first, then the higher end at the
+ * reset; then the higher share, and at the same share a fresh one (`fresh`) before a silent one.
+ * Neither, where they are alike.
+ */
+function nearer(
+  one: QuotaShareWindow,
+  other: QuotaShareWindow,
+  at: number,
+  fresh: (window: QuotaWindow) => boolean,
+): boolean {
+  const forecast = one.forecast !== null
+  if (forecast !== (other.forecast !== null)) return forecast
+  if (forecast) {
+    const [oneOut, otherOut] = [runOut(one, at), runOut(other, at)]
+    if ((oneOut === null) !== (otherOut === null)) return oneOut !== null
+    if (oneOut !== null && otherOut !== null && oneOut !== otherOut) return oneOut < otherOut
+    const [oneTop, otherTop] = [forecastTop(one), forecastTop(other)]
+    if (oneTop !== otherTop) return oneTop > otherTop
+  }
+  const [oneUsed, otherUsed] = [one.latest.used_percent, other.latest.used_percent]
+  if (oneUsed !== otherUsed) return oneUsed > otherUsed
+  return fresh(one) && !fresh(other)
+}
+
+/**
+ * The window of a section nearest its limit across accounts (`nearer`), its forecast taken at the
+ * answer's moment, and whether it stands and is fresh at the panel's `now` (ms); null where none
+ * stands.
+ */
 export function tightest(quota: Quota, section: QuotaSection, now: number): QuotaPick | null {
   const fresh = (one: QuotaWindow) => stateAt(one, now, quota.fresh_for_seconds) === 'fresh'
+  const answered = Date.parse(quota.now)
   let found: QuotaPick | null = null
   for (const account of quota.accounts)
     for (const window of sectionWindows(account, section)) {
       if (!stands(window, now)) continue
-      const used = window.latest.used_percent
-      const best = found?.window
-      const tighter =
-        !best ||
-        used > best.latest.used_percent ||
-        (used === best.latest.used_percent && fresh(window) && !fresh(best))
-      if (tighter) found = { account, window }
+      if (!found || nearer(window, found.window, answered, fresh)) found = { account, window }
     }
   return found
 }

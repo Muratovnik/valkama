@@ -145,13 +145,19 @@ describe('a restart of a window’s count', () => {
   })
 })
 
-/** When a window of `kind` runs out at `moment`, said against the answer's moment. */
-const runOut = (locale: 'en' | 'ru', kind: QuotaShareWindow['kind'], moment: string) =>
+/** When a window of `kind` runs out at `moment`, said against the answer's moment; `short` for a tile. */
+const runOut = (
+  locale: 'en' | 'ru',
+  kind: QuotaShareWindow['kind'],
+  moment: string,
+  short = false,
+) =>
   plain(
     wordsIn(locale).runOutWords(
       { ...week(50, 48 * HOUR, 120, 130), kind },
       Date.parse(moment),
       TODAY,
+      short,
     ),
   )
 
@@ -177,6 +183,13 @@ describe('when a window runs out', () => {
   it('takes the part of the day at the answer’s offset, not at the moment’s own', () => {
     // 15:30 UTC is 18:30 at the answer's +03:00: its evening, though UTC's afternoon.
     expect(runOut('en', 'week', '2026-11-24T15:30:00.000Z')).toBe('by the evening of Nov 24')
+  })
+
+  it('says a week by its day alone where a tile has no room for the part of the day', () => {
+    expect(runOut('en', 'week', '2026-11-24T23:59:00.000+03:00', true)).toBe('~Nov 24')
+    expect(runOut('ru', 'week_model', '2026-11-24T00:00:00.000+03:00', true)).toBe('~24 нояб.')
+    // Five hours keep their clock time, which is short already.
+    expect(runOut('en', 'five_hour', '2026-11-11T14:05:00.000+03:00', true)).toBe('at 14:05')
   })
 
   it('keeps the clock time of five hours, with the date on another day than the answer’s', () => {

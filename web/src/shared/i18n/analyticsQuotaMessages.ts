@@ -52,6 +52,7 @@ export const analyticsQuotaMessages = {
       noWindow: 'No reading',
       reset: 'Reset since read',
       detail: '{window} of {account}',
+      runsOut: 'runs out {at}',
     },
     lead: '{share} used · {state}',
     silentFor: 'no data for {for}',
@@ -67,6 +68,7 @@ export const analyticsQuotaMessages = {
     noReset: 'Reset time unknown',
     runOut: {
       at: 'at {at}',
+      about: '~{day}',
       by: {
         night: 'by the night before {day}',
         morning: 'by the morning of {day}',
@@ -193,6 +195,7 @@ export const analyticsQuotaMessages = {
       noWindow: 'Нет показаний',
       reset: 'Сброшено после чтения',
       detail: '{window}, {account}',
+      runsOut: 'закончится {at}',
     },
     lead: '{share} израсходовано · {state}',
     silentFor: 'нет данных {for}',
@@ -208,6 +211,7 @@ export const analyticsQuotaMessages = {
     noReset: 'Время сброса неизвестно',
     runOut: {
       at: 'в {at}',
+      about: '~{day}',
       by: {
         night: 'к ночи на {day}',
         morning: 'к утру {day}',
