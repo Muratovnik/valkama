@@ -613,6 +613,44 @@ class ProgramTests(unittest.TestCase):
             agent_probes._programs(["claude"], ["claude"], "")
 
 
+class HeadlessHookTests(unittest.TestCase):
+    """A probe session runs without the hook that waits to wake an idle session.
+
+    Claude Code under `-p` waited for the `asyncRewake` watcher on `UserPromptSubmit`
+    before the turn started, and the first turn of a real probe stood until its limit.
+    """
+
+    def test_the_watcher_is_left_out_and_counted_and_the_prompt_hook_stays(self) -> None:
+        def valkama(event: str, **extra: object) -> dict[str, Any]:
+            words = ["-I", "-S", "valkama-launcher.py", "hook", "claude", event]
+            return {"type": "command", "command": "python", "args": words, **extra}
+
+        live = {
+            "hooks": {
+                "UserPromptSubmit": [
+                    {"matcher": "*", "hooks": [valkama("user-prompt-submit", timeout=5)]},
+                    {"matcher": "*", "hooks": [valkama("watch", asyncRewake=True)]},
+                ],
+                "Stop": [{"matcher": "*", "hooks": [valkama("watch", asyncRewake=True)]}],
+            }
+        }
+
+        plan = agent_probes.profile_hooks(
+            "claude", live, python=sys.executable, coordinator=None, port=None
+        )
+
+        kept = [
+            hook["args"][-1]
+            for groups in plan.hooks.values()
+            for group in groups
+            for hook in group["hooks"]
+            if "args" in hook
+        ]
+        self.assertIn("user-prompt-submit", kept)
+        self.assertNotIn("watch", kept)
+        self.assertEqual({"UserPromptSubmit": 1, "Stop": 1}, plan.dropped)
+
+
 class StoreCopyRegistryTests(unittest.TestCase):
     """The registry a store copy migrates with is the caller's, not the suite's.
 

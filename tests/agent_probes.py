@@ -444,6 +444,14 @@ def _remapped(hook: Mapping[str, Any], live: Path, copy: Path) -> dict[str, Any]
     return changed if changed != dict(hook) else None
 
 
+#: Valkama hooks a probe session runs without. `watch` waits for news while a session
+#: idles and wakes it, registered with `asyncRewake` on `UserPromptSubmit`; Claude
+#: Code 2.1.328 under `-p` waits for it before the turn starts, so the first turn of a
+#: probe stood until the turn's limit. A `-p` session ends after its turn and has no
+#: idle to wake, so no probe needs it; the record counts it among the dropped hooks.
+HEADLESS_LEFT_OUT = frozenset({"watch"})
+
+
 @dataclasses.dataclass
 class HookPlan:
     """A client's registration as the profile writes it, and what was left out of it."""
@@ -471,6 +479,9 @@ def profile_hooks(
     dropped: dict[str, int] = {}
     for event, group, hook in hook_groups(live):
         found = valkama_hook(hook)
+        if found is not None and found[1] in HEADLESS_LEFT_OUT:
+            dropped[event] = dropped.get(event, 0) + 1
+            continue
         if found is not None:
             kept: dict[str, Any] | None = {
                 **{key: value for key, value in hook.items() if key not in ("args",)},
