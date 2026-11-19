@@ -53,6 +53,7 @@ export const analyticsQuotaMessages = {
       reset: 'Reset since read',
       detail: '{window} of {account}',
       runsOut: 'runs out {at}',
+      noFiveHours: 'no window',
     },
     lead: '{share} used · {state}',
     silentFor: 'no data for {for}',
@@ -104,6 +105,8 @@ export const analyticsQuotaMessages = {
         quota_week: 'No weekly reading in the past 7 days.',
       },
       shared: 'May be two accounts: their readings run under one weekly reset',
+      noFiveHours:
+        'The current account, {account}, has no five-hour window: this week it sends week readings only.',
       plan: 'Plan: {plan}',
       none: 'No account data in the past 7 days.',
       failed: 'The quota could not be loaded.',
@@ -200,6 +203,7 @@ export const analyticsQuotaMessages = {
       reset: 'Сброшено после чтения',
       detail: '{window}, {account}',
       runsOut: 'закончится {at}',
+      noFiveHours: 'нет окна',
     },
     lead: '{share} израсходовано · {state}',
     silentFor: 'нет данных {for}',
@@ -250,6 +254,8 @@ export const analyticsQuotaMessages = {
         quota_week: 'Нет недельных показаний за 7 дней.',
       },
       shared: 'Возможно, два аккаунта: их показания идут под одним недельным сбросом',
+      noFiveHours:
+        'У текущего аккаунта, {account}, нет пятичасового окна: на этой неделе от него приходят только недельные показания.',
       plan: 'План: {plan}',
       none: 'Нет данных ни по одному аккаунту за 7 дней.',
       failed: 'Не удалось загрузить квоту.',

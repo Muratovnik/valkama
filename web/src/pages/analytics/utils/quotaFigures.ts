@@ -228,6 +228,39 @@ export function tightest(quota: Quota, section: QuotaSection, now: number): Quot
   return found
 }
 
+/**
+ * The account in use where it reports no five-hour window: no account's five hours stand at `now`
+ * (ms), and the account of the answer's newest reading, of any window, has a week standing whose
+ * latest reading is inside it and no five-hour reading since that week started. A source sends a
+ * five-hour window only for a plan that has one, so the five hours of the other accounts reset and
+ * read as a failure of the read. Null otherwise, and where the newest account's own five hours
+ * reset inside its week: that window says it reset.
+ */
+export function withoutFiveHours(quota: Quota, now: number): QuotaAccount | null {
+  const standing = quota.accounts.some((account) =>
+    sectionWindows(account, 'quota_five_hour').some((window) => stands(window, now)),
+  )
+  if (standing) return null
+  let newest: { account: QuotaAccount; at: number } | null = null
+  for (const account of quota.accounts)
+    for (const window of account.windows) {
+      const at = Date.parse(window.latest.at)
+      if (!newest || at > newest.at) newest = { account, at }
+    }
+  if (!newest) return null
+  const { account } = newest
+  const week = account.windows
+    .filter(isShareWindow)
+    .find((window) => window.kind === 'week' && stands(window, now))
+  if (!week) return null
+  const start = week.started_at === null ? Number.NEGATIVE_INFINITY : Date.parse(week.started_at)
+  if (Date.parse(week.latest.at) < start) return null
+  const fiveHours = sectionWindows(account, 'quota_five_hour').some(
+    (window) => Date.parse(window.latest.at) >= start,
+  )
+  return fiveHours ? null : account
+}
+
 /** A window's key among an account's: its kind, and a model's week by its model. */
 export const windowKey = (window: QuotaWindow) =>
   window.model === null ? window.kind : `${window.kind}:${window.model}`

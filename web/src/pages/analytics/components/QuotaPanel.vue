@@ -14,6 +14,10 @@
  * keeps it as it stood, and the bar says the read failed, as it does for every read of the page
  * (`useQuota`): a line here moved the heading and every account under it.
  *
+ * Where the account in use reports no five-hour window, the five hours' section says so first, by
+ * the account's name, over the accounts (`withoutFiveHours`), as its tile does: their windows have
+ * reset, which alone read as a failure of the read; its line is `data-note="no-five-hours"`.
+ *
  * What used each window opens from the window's block in the side panel over the page
  * (`WindowDetail`), which reads it to the answer's moment.
  */
@@ -26,7 +30,7 @@ import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.t
 import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
-import { accountKey, answerMoment } from '@/pages/analytics/utils/quotaFigures.ts'
+import { accountKey, answerMoment, withoutFiveHours } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
@@ -56,6 +60,15 @@ const state = computed<PlatformUiState<Quota>>(() => {
 })
 
 const title = computed(() => words.sectionName(props.section))
+/** That the account in use reports no five-hour window, in the five hours' section; none else. */
+const noFiveHours = computed(() => {
+  const { read, section, now } = props
+  if (read.status !== 'ready' || section !== 'quota_five_hour') return ''
+  const current = withoutFiveHours(read.quota, now)
+  return current
+    ? t('analytics.quota.panel.noFiveHours', { account: words.accountName(current) })
+    : ''
+})
 /** What does not reach the quota and what used each window, which the heading's «ⓘ» says. */
 const caveats = useSectionCaveats()
 const about = computed(() => caveats.quota())
@@ -82,6 +95,13 @@ const narrow = useNarrowCharts(root)
           :list-label="t('analytics.quota.panel.heading')"
         >
           <template #chart>
+            <p
+              v-if="noFiveHours"
+              class="quota-panel-note"
+              data-note="no-five-hours"
+            >
+              {{ noFiveHours }}
+            </p>
             <QuotaAccount
               v-for="account in payload.accounts"
               :key="accountKey(account)"
@@ -95,6 +115,13 @@ const narrow = useNarrowCharts(root)
             />
           </template>
           <template #table>
+            <p
+              v-if="noFiveHours"
+              class="quota-panel-note"
+              data-note="no-five-hours"
+            >
+              {{ noFiveHours }}
+            </p>
             <QuotaAccount
               v-for="account in payload.accounts"
               :key="accountKey(account)"
@@ -117,5 +144,12 @@ const narrow = useNarrowCharts(root)
 .quota-panel {
   min-width: 0;
   container-type: inline-size;
+}
+
+/* What the section says before its accounts, in the text's ink: why no five hours stand. */
+.quota-panel-note {
+  margin: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
 }
 </style>

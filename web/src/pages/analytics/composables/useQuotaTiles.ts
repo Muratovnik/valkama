@@ -10,8 +10,8 @@
  * the bar's hint and its words name the hatch, «Forecast · …», since a tile has no room for a key.
  *
  * A tile says one account's one window and never a sum. Where it has no window to name it says
- * why in words of its own, so no source, a window that reset since it was read and a fresh 0 %
- * never read alike: an organization nobody's source read is «No source», a fresh 0 % is the
+ * why in words of its own, so no source, a window that reset since it was read, an account in use
+ * that reports no five-hour window (`withoutFiveHours`) and a fresh 0 % never read alike: an organization nobody's source read is «No source», a fresh 0 % is the
  * account with «0%» and «up to date», a silent window says «no data» and for how long, its share as
  * solid as a fresh one's. Before its first answer the tile waits as the others do (`RailTile`),
  * and a read that failed says so.
@@ -30,6 +30,7 @@ import {
   runOut,
   sectionWindows,
   tightest,
+  withoutFiveHours,
 } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import { QUOTA_SECTIONS } from '@/shared/api/analyticsAddress.ts'
@@ -44,9 +45,24 @@ export function useQuotaTiles(options: {
   const { t } = useI18n()
   const words = useQuotaWords()
 
-  /** Why a section has no window to name: no account, no source, a reset since, no reading. */
-  function nothing(quota: Quota, section: QuotaSection): RailTileModel {
+  /**
+   * Why a section has no window to name: no account, an account in use with no five-hour window,
+   * no source, a reset since, no reading.
+   */
+  function nothing(quota: Quota, section: QuotaSection, now: number): RailTileModel {
     if (!quota.accounts.length) return standing('empty', t('analytics.quota.tile.noAccount'))
+    const current = section === 'quota_five_hour' ? withoutFiveHours(quota, now) : null
+    if (current) {
+      // The account by its name, «no window» beside the section's, and the whole of it in the hint:
+      // said in one line, it was cut by a third at 1440 pixels.
+      const account = words.accountName(current)
+      return {
+        ...standing('empty', account),
+        quiet: false,
+        count: t('analytics.quota.tile.noFiveHours'),
+        leadDetail: t('analytics.quota.panel.noFiveHours', { account }),
+      }
+    }
     const windows = quota.accounts.flatMap((account) => sectionWindows(account, section))
     if (windows.length) return standing('empty', t('analytics.quota.tile.reset'))
     if (quota.accounts.some((account) => account.no_source))
@@ -61,7 +77,7 @@ export function useQuotaTiles(options: {
     const { quota } = read
     const now = options.now()
     const found = tightest(quota, section, now)
-    if (!found) return { ...nothing(quota, section), busy: read.refreshing }
+    if (!found) return { ...nothing(quota, section, now), busy: read.refreshing }
     const { account, window } = found
     const name = words.accountName(account)
     const today = answerMoment(quota)

@@ -2707,8 +2707,15 @@ day alone, «runs out ~Nov 24», since the rail is as wide as its entries need a
 day widened it by a fifth, which the bar's words add — and its state in words where it does not,
 and a thin `WindowBar` with
 its forecast's tail, which the bar's words and hint name «Forecast ·», since a tile has no room
-for a key. A tile with no window to name says why: no source read the work, the windows reset
-since they were read, or no reading. The panel has a group per account on a surface of its
+for a key. A tile with no window to name says why: no source read the work, the account in use
+has no five-hour window, the windows reset since they were read, or no reading. A source sends a
+five-hour window only for a plan that has one, so where no account's five hours stand and the
+account of the newest reading, of any window, has week readings in its current week and no
+five-hour reading since that week began, the five hours' tile names that account with «no
+window» beside the section's name, its hint saying the current account has no five-hour window,
+and the five hours' section says that over its accounts; «Reset since read» there read as a
+failure of the read, and the whole sentence on the tile's line was cut by a third. Where that account's own
+five hours reset inside its week, the tile says they reset and the window says it in its words. The panel has a group per account on a surface of its
 own, named as the page names an account, a menu beside the name, the facts beside them where
 there are any — its plan, and «May be two accounts: their readings run under one weekly
 reset» where they may — and its
