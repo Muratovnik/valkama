@@ -57,7 +57,12 @@ function countReads(page: Page) {
   return asked
 }
 
+/**
+ * Every tile drawn and none still loading. The tiles are waited for first: before the page draws
+ * them there are no leads and nothing busy, which would pass the two checks below at once.
+ */
 const settled = async (page: Page) => {
+  await expect(page.locator('.analytics-rail-entry').first()).toBeVisible()
   await expect
     .poll(async () => {
       const words = await leads(page)
