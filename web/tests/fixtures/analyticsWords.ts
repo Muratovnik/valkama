@@ -58,6 +58,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.detail': 'label',
   'analytics.detail.full': 'value',
   'analytics.detail.failed': 'value',
+  'analytics.detail.allTimeFailed': 'value',
   'analytics.detail.empty': 'value',
   'analytics.detail.shareOf': 'value',
   'analytics.detail.window.missing': 'value',
