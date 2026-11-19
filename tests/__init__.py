@@ -18,6 +18,7 @@ import atexit
 import os
 import shutil
 import tempfile
+import unittest
 
 #: The suite's own directory, removed when the interpreter exits. One per run,
 #: so a leftover file from a previous run cannot be read as state.
@@ -73,3 +74,35 @@ class RunKeyDouble:
 from server import launcher
 
 launcher.AUTOSTART_STORE = RunKeyDouble()
+
+#: The patterns that select every test module: unittest's own default and the one the
+#: gates and CI name. A narrower one makes a targeted run.
+_WHOLE_SUITE_PATTERNS = (None, "test*.py", "test_*.py")
+
+
+def load_tests(
+    loader: unittest.TestLoader, standard_tests: unittest.TestSuite, pattern: str | None
+) -> unittest.TestSuite:
+    """A run of the whole suite holds the machine's heavy-test lock until it ends.
+
+    unittest calls this for each run that reaches the package itself, such as
+    `discover -s . -p "test_*.py"` as the gates and CI spell it, `discover -s tests -t .`
+    and `-m unittest tests`, and never for a module or a subpackage named on its own,
+    so those targeted runs take no lock; nor does one narrowed by `-p` or `-k`. The
+    lock is taken while the suite loads, so a run that waited starts its clock once it
+    is in. `tests/machine_lock.py` says why the lock exists and why a run under a
+    holder goes in at once.
+
+    Discovery does not walk a package that has this hook, so the hook walks it, from
+    the directory that holds the package, so that its modules keep their `tests.` names.
+    """
+
+    from tests import machine_lock
+
+    if pattern in _WHOLE_SUITE_PATTERNS and not loader.testNamePatterns:
+        machine_lock.hold_until_exit("the whole unittest suite")
+    here = os.path.dirname(os.path.abspath(__file__))
+    standard_tests.addTests(
+        loader.discover(here, pattern or "test_*.py", top_level_dir=os.path.dirname(here))
+    )
+    return standard_tests

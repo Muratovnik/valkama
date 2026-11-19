@@ -86,8 +86,8 @@ split with it:
 - The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
-  The runner and the `unittest` step of `tests/isolated.py gates` enforce it with
-  one lock for every checkout on the machine: a second run waits, and says whose
+  The runner, `npm test` and the whole `unittest` suite enforce it with one lock
+  for every checkout on the machine: a second run waits, and says whose
   run it waits for, when it starts and every minute until it gets the lock.
   A defect that depends on a neighbouring worktree shows up only at this run.
 

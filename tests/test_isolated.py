@@ -481,6 +481,91 @@ class HeavyLockTests(Workspace):
         with machine_lock.held("after", path=self.lock, say=self.fail):
             pass
 
+    def taking_the_lock(self, name: str, *, exclusive: bool = False) -> isolated.Run:
+        """A step that takes the lock itself, as the suite in the unittest step and `npm test` do."""
+
+        return isolated.Run(
+            name,
+            [
+                *(sys.executable, str(ROOT / "tests" / "machine_lock.py"), "run"),
+                *(f"--run=the {name} step's own run", f"--path={self.lock}"),
+                *("--", sys.executable, "-c", "print('in')"),
+            ],
+            ROOT,
+            exclusive=exclusive,
+        )
+
+    def gates_in_a_thread(
+        self, runs: list[isolated.Run], environment: dict[str, str]
+    ) -> tuple[threading.Thread, list[tuple[int, str]]]:
+        result: list[tuple[int, str]] = []
+        thread = threading.Thread(
+            target=lambda: result.append(
+                quietly(lambda: isolated.run_gates(runs, self.out, environment, lock=self.lock))
+            ),
+            daemon=True,
+        )
+        thread.start()
+        return thread, result
+
+    def unmarked(self) -> dict[str, str]:
+        """This environment without a mark, as the gates build each step's."""
+
+        return {
+            name: value
+            for name, value in os.environ.items()
+            if name != machine_lock.HELD_BY_ANCESTOR
+        }
+
+    def test_the_suite_inside_the_exclusive_step_does_not_wait_for_its_own_step(self) -> None:
+        thread, result = self.gates_in_a_thread(
+            [self.taking_the_lock("unittest", exclusive=True)], self.unmarked()
+        )
+        thread.join(DEADLINE_SECONDS)
+
+        self.assertFalse(thread.is_alive(), "the step waited for the lock its own step holds")
+        self.assertEqual(0, result[0][0])
+        self.assertNotIn(
+            "waiting", (self.out / isolated.LOGS / "unittest.log").read_text(encoding="utf-8")
+        )
+
+    def test_a_light_step_that_takes_the_lock_itself_waits_for_another_holder(self) -> None:
+        log = self.out / isolated.LOGS / "web-test.log"
+        with held_elsewhere(self.lock, "another checkout's browser run") as release:
+            thread, result = self.gates_in_a_thread(
+                [self.taking_the_lock("web-test")], self.unmarked()
+            )
+            self.assertTrue(
+                wait_until(
+                    lambda: log.exists() and b"it is held by" in log.read_bytes(),
+                    seconds=DEADLINE_SECONDS,
+                ),
+                "the step never said it was waiting",
+            )
+            self.assertNotIn("in", log.read_text(encoding="utf-8").splitlines())
+            release.set()
+            thread.join(DEADLINE_SECONDS)
+
+        self.assertEqual(0, result[0][0])
+        said = log.read_text(encoding="utf-8")
+        self.assertIn("it is held by another checkout's browser run", said)
+        self.assertIn("took the heavy-test lock after", said)
+
+    def test_a_gates_run_under_a_holder_passes_the_hold_on_to_every_step(self) -> None:
+        with held_elsewhere(self.lock, "the run that started the gates"):
+            with mock.patch.dict(os.environ, machine_lock.marker(self.lock)):
+                thread, result = self.gates_in_a_thread(
+                    [
+                        self.taking_the_lock("web-test"),
+                        self.taking_the_lock("unittest", exclusive=True),
+                    ],
+                    self.unmarked(),
+                )
+                thread.join(DEADLINE_SECONDS)
+
+        self.assertFalse(thread.is_alive(), "a step waited for the run that started the gates")
+        self.assertEqual(0, result[0][0])
+
 
 def locked_entry(name: str, version: str, **flags: object) -> dict:
     """An entry as `package-lock.json` holds one, with npm's bookkeeping beside the pins."""

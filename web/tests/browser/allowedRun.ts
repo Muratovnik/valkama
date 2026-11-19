@@ -1,11 +1,10 @@
-import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { lockedCommand, spawnInherited } from '../heavyLock.ts'
 import { harnessPort } from './browserRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
-import { python } from './serverStore.ts'
 
 /**
  * `npm run test:browser:allowed`: every browser spec but the ones that write the system
@@ -147,31 +146,6 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
   )
 }
 
-const lockScript = fileURLToPath(new URL('../../../tests/machine_lock.py', import.meta.url))
-
-/**
- * `command` as run holding the heavy-test lock for `run`: the Python side owns the lock and the
- * one protocol, waits, says for whom, runs the command and gives the lock back when it ends.
- * `lockFile` stands in for the machine's lock, for a test.
- */
-export function lockedCommand(
-  run: string,
-  command: readonly string[],
-  lockFile?: string,
-): string[] {
-  const path = lockFile === undefined ? [] : [`--path=${lockFile}`]
-  return [
-    python,
-    lockScript,
-    'run',
-    `--run=${run}`,
-    `--pid=${process.pid}`,
-    ...path,
-    '--',
-    ...command,
-  ]
-}
-
 /**
  * The environment Playwright runs in: this one, with `clipboardOptIn` set to `1` when the run
  * may select a clipboard spec and removed when it may not, whatever the caller's shell held.
@@ -190,19 +164,13 @@ const suiteDirectory = join(web, 'tests/browser')
 
 /** The real file system and Playwright, run from `web/` with this process's Node. */
 export const realIo: RunnerIo = {
-  playwright: (args, clipboard, lock) =>
-    new Promise((resolve, reject) => {
-      const command = [process.execPath, join(web, 'node_modules/@playwright/test/cli.js'), ...args]
-      const [program = '', ...rest] = lock === null ? command : lockedCommand(lock, command)
-      const child = spawn(program, rest, {
-        cwd: web,
-        env: playwrightEnvironment(process.env, clipboard),
-        stdio: 'inherit',
-      })
-      child.on('error', reject)
-      // A code is null only when a signal ended the process, which is a failed run.
-      child.on('exit', (code, signal) => resolve(signal ? 1 : Number(code)))
-    }),
+  playwright: (args, clipboard, lock) => {
+    const command = [process.execPath, join(web, 'node_modules/@playwright/test/cli.js'), ...args]
+    return spawnInherited(lock === null ? command : lockedCommand(lock, command), {
+      cwd: web,
+      env: playwrightEnvironment(process.env, clipboard),
+    })
+  },
   readList: (file) => (existsSync(file) ? readFileSync(file, 'utf8') : null),
   say: (line) => process.stdout.write(`${line}\n`),
   suiteSpecs: () => readdirSync(suiteDirectory).filter((name) => name.endsWith('.spec.ts')),

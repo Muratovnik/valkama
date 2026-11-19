@@ -81,16 +81,18 @@ with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
 
 Two heavy runs on one machine fail tests that pass alone: a timing budget of the
 suite was missed by half while another checkout's full suite ran beside it. So
-the `unittest` step of `gates` and every run of `npm run test:browser:allowed`
-but `--list` hold one lock, `tests/machine_lock.py`: a file in the system's
-temporary directory, never in the TEMP a run was given, where every checkout and
-worktree of the machine meets it.
-The step holds it for its own duration and the runner for Playwright's; the other
-steps, a `--only` that leaves `unittest` out, a spec run with
-`npx playwright test <file>`, and a bare `coverage run` take none. It is the
-operating system's lock on the file, so it goes with a holder that dies. A run
-that finds it held waits with no time limit and says for whom, when it starts and
-again every minute, then says when it got the lock and goes on:
+each heavy run takes one lock itself, `tests/machine_lock.py`, a file in the
+system's temporary directory that no TEMP or profile a run was given moves: the
+whole unittest suite, from its package's `load_tests` to the end of the process;
+`npm run test:unit` in `npm test`; `npm run test:browser:allowed` but `--list`.
+Targeted runs take none — a unittest module, subpackage, `-p` or `-k`, Vitest
+given files or `-t`, `npx playwright test <file>` — nor do the light gate steps,
+and `npm test` with no Python says so and runs unlocked. What a holder starts goes
+in at once: `gates` holds the lock for `unittest`, so that wait is in its summary,
+and that of `npm test` in `logs/web-test.log`. It is the operating system's
+lock on the file, so it goes with a holder that dies. A run that finds it held
+waits with no time limit and says for whom, when it starts and again every
+minute, then says when it got the lock and goes on:
 
 ```text
 waiting for the heavy-test lock <file>: it is held by <run> in <checkout>, process <pid>, since <date> <time> (<n> min <n> s ago)
@@ -166,7 +168,4 @@ machine where `requirements-dev.txt` was never installed.
 
 Discovery starts at the repository root because that is the import root: it is
 not itself a package, so unittest puts it on `sys.path`, which is what makes
-`server` and `tests` importable. It used to start one level down, inside a
-directory that held the whole product while the repository around it held only
-that product's configuration. Flattening removed the level; discovery still
-starts here, and every test lives under `tests/`.
+`server` and `tests` importable. Every test lives under `tests/`.
