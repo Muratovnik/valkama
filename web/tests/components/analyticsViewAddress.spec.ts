@@ -9,10 +9,9 @@ import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
-
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { chosenRows, openDimension, pressRow } from '../support/analyticsFilter.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
@@ -28,23 +27,26 @@ const WORLD: TimedStretch[] = TASKS.map((one, index) => ({
 
 const ids = (count: number) => TASKS.slice(0, count).map((one) => one.id ?? '')
 
-/** The field of one dimension's filter. */
-const field = (page: VueWrapper, dimension: string) => {
-  const found = page
-    .findAllComponents(SearchCombobox)
-    .find((one) => one.attributes('data-dimension') === dimension)
-  if (!found) throw new Error(`no ${dimension} filter`)
-  return found
-}
-
-/** Chooses `keys` in a dimension's filter, as its field hands them over, in their order. */
-async function choose(page: VueWrapper, dimension: string, keys: string[]) {
-  field(page, dimension).vm.$emit('update:modelValue', keys)
-  await flushPromises()
-}
+/** How the filter's menu names the task of a place in `TASKS`. */
+const taskRow = (place: number) => `MAIN-${place + 1} Task ${place + 1}`
 
 const written = (page: VueWrapper) =>
   page.emitted<[Record<string, string>]>('state')?.map(([state]) => state) ?? []
+
+/**
+ * Presses the rows of `values` in the menu on show, in their order, and opens the page at each
+ * address a press writes, as the route does.
+ */
+async function press(page: VueWrapper, values: string[]) {
+  for (const words of values) {
+    const before = written(page).length
+    await pressRow(page, words)
+    if (written(page).length > before) {
+      await page.setProps({ routeState: written(page).at(-1) })
+      await flushPromises()
+    }
+  }
+}
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: NOW })
@@ -63,11 +65,12 @@ describe('the address of a view', () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const addresses: (string | undefined)[] = []
     for (const order of [
-      ['v:model-c', 'none', 'v:model-a'],
-      ['v:model-a', 'v:model-c', 'none'],
+      ['model-c', 'Unknown', 'model-a'],
+      ['model-a', 'model-c', 'Unknown'],
     ]) {
       const page = await mountAnalytics()
-      await choose(page, 'model', order)
+      await openDimension(page, 'Model')
+      await press(page, order)
       addresses.push(written(page).at(-1)?.filters)
       page.unmount()
     }
@@ -78,47 +81,31 @@ describe('the address of a view', () => {
   it('refuses a task that would not fit in the address, says why, and keeps the view', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics()
+    await openDimension(page, 'Task')
     // Tasks added one at a time, each written and read back, as a person adds them.
     for (let count = 1; count <= 5; count += 1) {
-      await choose(
-        page,
-        'work_item',
-        ids(count).map((id) => `v:${id}`),
-      )
-      const state = written(page).at(-1)
-      expect(JSON.parse(state?.filters ?? '{}')).toEqual({ work_item: ids(count) })
-      await page.setProps({ routeState: state })
-      await flushPromises()
+      await press(page, [taskRow(count - 1)])
+      expect(JSON.parse(written(page).at(-1)?.filters ?? '{}')).toEqual({ work_item: ids(count) })
     }
     expect(page.find('[role="alert"]').exists()).toBe(false)
     const addressed = written(page).length
     const asked = reads.asked.length
 
     // The sixth task would make the filter longer than its address holds.
-    await choose(
-      page,
-      'work_item',
-      ids(6).map((id) => `v:${id}`),
-    )
+    await press(page, [taskRow(5)])
     expect(written(page)).toHaveLength(addressed)
     expect(reads.asked).toHaveLength(asked)
     expect(page.get('[role="alert"]').text()).toBe(
       'The link to this view cannot hold more values of the Task filter, so this one was not added.',
     )
-    // The five chosen before still apply: in the field, in the last read and on the tiles.
-    expect((field(page, 'work_item').props() as { modelValue: string[] }).modelValue).toEqual(
-      ids(5).map((id) => `v:${id}`),
-    )
+    // The five chosen before still apply: in the menu, in the last read and on the tiles.
+    expect(chosenRows(page)).toEqual([0, 1, 2, 3, 4].map((place) => taskRow(place)))
     expect(reads.grouped('work_item').at(-1)?.get('work_item')).toBe(ids(5).join(','))
     expect(page.get('.tile-figure[data-measure="time"]').text()).toMatch(/^5\sh$/u)
 
     // Taking a value out is a change the address holds: the words go with it.
-    await choose(
-      page,
-      'work_item',
-      ids(4).map((id) => `v:${id}`),
-    )
-    await page.setProps({ routeState: written(page).at(-1) })
+    await press(page, [taskRow(4)])
+    expect(JSON.parse(written(page).at(-1)?.filters ?? '{}')).toEqual({ work_item: ids(4) })
     expect(page.find('[role="alert"]').exists()).toBe(false)
   })
 
@@ -128,11 +115,8 @@ describe('the address of a view', () => {
       { routeState: { filters: JSON.stringify({ work_item: ids(5) }) } },
       'ru',
     )
-    await choose(
-      page,
-      'work_item',
-      ids(6).map((id) => `v:${id}`),
-    )
+    await openDimension(page, 'Задача')
+    await press(page, [taskRow(5)])
     expect(written(page)).toEqual([])
     expect(page.get('[role="alert"]').text()).toBe(
       'Ссылка на этот вид не вмещает больше значений фильтра «Задача», поэтому это значение не добавлено.',

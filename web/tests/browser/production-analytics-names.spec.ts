@@ -20,6 +20,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { seatValue, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAt, withReset } from '../fixtures/quota.ts'
+import { openDimension } from './analyticsFilter.ts'
 import { openPanel, pageAt, record, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { drawLined } from './drawnViews.ts'
@@ -252,13 +253,11 @@ for (const width of [1440, 1024])
 
     // The filter's choices: the unnamed account by the start of its UUID and when its week
     // resets, the named one by its name alone.
-    await page.getByRole('button', { name: 'Add a filter' }).click()
-    const field = page.locator('[data-dimension="seat"]').getByRole('combobox')
-    await field.click()
-    const options = page.getByRole('listbox').getByRole('option')
+    const menu = await openDimension(page, 'Account')
+    const options = menu.locator('[role="option"]:has(.option-check)')
     await expect(options.filter({ hasText: reset })).toHaveCount(1)
     await expect(options.filter({ hasText: /^Side desk$/u })).toHaveCount(1)
-    const choices = await linesOf(page.getByRole('listbox'), '[role="option"]')
+    const choices = await linesOf(menu, '[role="option"] .option-text')
     await record(info, `account choices at ${width}`, choices)
     expect(choices.length).toBeGreaterThanOrEqual(2)
     for (const lines of choices) expect(lines, 'a choice on one line').toBe(1)

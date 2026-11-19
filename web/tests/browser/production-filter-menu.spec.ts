@@ -342,10 +342,12 @@ test('opening the menu changes nothing on the board', async ({ page }) => {
   await board(page)
   const boxes = () =>
     page.evaluate(() =>
-      ['.workspace-head', '.workspace-stage', '.work-item-tile', '.workspace-filter'].map((selector) => {
-        const box = document.querySelector(selector)?.getBoundingClientRect()
-        return box ? [box.x, box.y, box.width, box.height] : null
-      }),
+      ['.workspace-head', '.workspace-stage', '.work-item-tile', '.workspace-filter'].map(
+        (selector) => {
+          const box = document.querySelector(selector)?.getBoundingClientRect()
+          return box ? [box.x, box.y, box.width, box.height] : null
+        },
+      ),
     )
   const before = await boxes()
   await page.locator('.workspace-stage').evaluate((stage) => {

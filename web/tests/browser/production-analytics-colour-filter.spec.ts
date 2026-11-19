@@ -16,6 +16,7 @@ import { pairKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { openDimension } from './analyticsFilter.ts'
 import { hues } from './analyticsHues.ts'
 import { LEGEND_SERIES, openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
@@ -55,15 +56,15 @@ const WORLD: TimedStretch[] = [
 const modelKey = (model: string) => `v:${model}`
 const pair = (model: string, effort: string) => pairKey(value(model), value(effort))
 
-/** Chooses medium effort in the bar's filter of effort, as a reader does, and closes the list. */
-async function filterMedium(page: Page) {
-  await page.locator('.analytics-filter-add').click()
-  const list = page.locator('.analytics-filter-body')
-  await list.locator('[data-dimension="effort"] input').click()
-  await page.getByRole('option', { name: 'medium', exact: true }).click()
+/** The effort's dimension as the filter's menu names it. */
+const EFFORT = { en: 'Effort', ru: 'Усилие' } as const
+
+/** Chooses medium effort in the bar's filter, as a reader does, and closes its menu. */
+async function filterMedium(page: Page, effort: string) {
+  const menu = await openDimension(page, effort)
+  await menu.getByRole('option', { name: 'medium', exact: true }).click()
   await page.keyboard.press('Escape')
-  await page.keyboard.press('Escape')
-  await expect(list).toBeHidden()
+  await expect(menu).toBeHidden()
 }
 
 /** The three channels of a computed colour. */
@@ -98,7 +99,7 @@ for (const locale of ['en', 'ru'] as const) {
       await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(OPUS)
       const before = await hues(page, 'model')
 
-      await filterMedium(page)
+      await filterMedium(page, EFFORT[locale])
       await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(SONNET)
       for (const gone of [
         tile.and(page.locator(`[data-key="${modelKey(OPUS)}"]`)),
@@ -130,7 +131,7 @@ for (const locale of ['en', 'ru'] as const) {
       await expect(page.locator(`.spending-days ${LEGEND_SERIES}`)).not.toHaveCount(0)
       const before = await hues(page, 'model')
 
-      await filterMedium(page)
+      await filterMedium(page, EFFORT[locale])
       await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(
         `${SONNET} · medium`,
       )

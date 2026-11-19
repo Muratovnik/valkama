@@ -4,7 +4,7 @@
  * from 5 s to 59 min moves and resizes nothing in the bar; a live period keeps the bar one row at
  * 1440px. An old record says its whole age there.
  * At 1440 and 1920 the bar keeps one height with none to four filters and with a span of days,
- * the filters it has no room for counted in «Filters: N»; the list of filters opens over the
+ * the filters it has no room for counted in «Filters: N»; the filter's menu opens over the
  * panel, moving nothing, and a chip taken out leaves the focus in the bar. On a phone the bar is
  * three rows, its periods one row that scrolls sideways, with the rail right under it. «Today»,
  * chosen in the bar, is the day's hours 0 to 23 with the one running hatched, compared with the
@@ -15,6 +15,7 @@ import type { Page } from '@playwright/test'
 
 import { task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { filterParts, openDimension } from './analyticsFilter.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { at, NOW, serveLive, settled, watchPage } from './liveDouble.ts'
@@ -346,8 +347,8 @@ const barState = (page: Page) =>
     const bar = document.querySelector('.analytics-bar')?.getBoundingClientRect()
     const panel = document.querySelector('.analytics-panel')?.getBoundingClientRect()
     const room = document.querySelector('.analytics-bar-filters')?.getBoundingClientRect()
-    const chips = [...document.querySelectorAll('.analytics-bar-filters .combo-chip')].map((chip) =>
-      chip.getBoundingClientRect(),
+    const chips = [...document.querySelectorAll('.analytics-bar-chips [data-filter-chip]')].map(
+      (chip) => chip.getBoundingClientRect(),
     )
     return {
       bar: Math.round(bar?.height ?? 0),
@@ -417,45 +418,42 @@ for (const lang of ['en', 'ru'] as const)
       })
   })
 
-test('the list of filters opens over the panel and moves nothing', async ({ page }, info) => {
+test('the filter’s menu opens over the panel and moves nothing', async ({ page }, info) => {
   await serveLive(page, DAYS)
   await page.setViewportSize({ width: 1440, height: 900 })
   await openBar(page, { filters: JSON.stringify({ model: ['model-a'] }) })
   const panel = page.locator('.analytics-panel')
   const before = await panel.boundingBox()
-  const add = page.locator('.analytics-filter-add')
-  await add.click()
-  const list = page.locator('.analytics-filter-body')
-  await expect(list).toBeVisible()
-  await expect(list.locator('[data-dimension]')).toHaveCount(10)
+  const { chips, field, menu } = filterParts(page)
+  await field.click()
+  await expect(menu).toBeVisible()
+  // Every dimension the page offers, each a row that steps into its values.
+  await expect(menu.getByRole('option')).toHaveCount(10)
   const after = await panel.boundingBox()
-  const over = await list.boundingBox()
-  await record(info, 'bar-filter-list', { before, after, over })
+  const over = await menu.boundingBox()
+  await record(info, 'bar-filter-menu', { before, after, over })
   expect(after).toEqual(before)
-  // Over the panel, and what is drawn there is the list, not the panel through it.
+  // Over the panel, and what is drawn there is the menu, not the panel through it.
   const bottom = (over?.y ?? 0) + (over?.height ?? 0)
   expect(bottom).toBeGreaterThan((before?.y ?? 0) + 40)
   const onTop = await page.evaluate(
-    ({ x, y }) => document.elementFromPoint(x, y)?.closest('.analytics-filter-body') != null,
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest('.filter-menu') != null,
     { x: (over?.x ?? 0) + 24, y: bottom - 8 },
   )
-  expect(onTop, 'the list is under the panel').toBe(true)
-  // A value chosen in a field leaves the list open; Escape closes it and gives the focus back.
-  await list.locator('[data-dimension="project"] input').click()
-  await page.getByRole('option', { name: 'alpha' }).click()
-  await expect(
-    page.locator('.analytics-bar-filters .combo-chip', { hasText: 'alpha' }),
-  ).toHaveCount(1)
-  await expect(list).toBeVisible()
+  expect(onTop, 'the menu is under the panel').toBe(true)
+  // A value chosen leaves the menu open on its dimension; Escape closes it and keeps the focus.
+  await openDimension(page, 'Project')
+  await menu.getByRole('option', { name: 'alpha', exact: true }).click()
+  await expect(chips.filter({ hasText: 'alpha' })).toHaveCount(1)
+  await expect(menu).toBeVisible()
   await page.keyboard.press('Escape')
-  await page.keyboard.press('Escape')
-  await expect(list).toBeHidden()
-  await expect(add).toBeFocused()
-  // A press outside closes it too, and leaves the focus where it was pressed.
-  await add.click()
-  await expect(list).toBeVisible()
+  await expect(menu).toBeHidden()
+  await expect(field).toBeFocused()
+  // A press outside closes it too.
+  await field.click()
+  await expect(menu).toBeVisible()
   await page.locator('.analytics-bar-fresh').click()
-  await expect(list).toBeHidden()
+  await expect(menu).toBeHidden()
 })
 
 for (const key of ['click', 'Enter'] as const)
@@ -473,13 +471,14 @@ for (const key of ['click', 'Enter'] as const)
       }))
     // The first chip out: the focus moves to the chip that took its place.
     await takeOut(page, key, 'Remove Model: model-a')
-    await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveCount(1)
+    const { chips } = filterParts(page)
+    await expect(chips).toHaveCount(1)
     const neighbour = await focused()
-    // The last chip out: the focus moves to «Add a filter».
+    // The last chip out: the focus moves to the filter's field, «Add a filter».
     await takeOut(page, key, 'Remove Model: model-b')
-    await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveCount(0)
+    await expect(chips).toHaveCount(0)
     const last = await focused()
     await record(info, `bar-chip-focus ${key}`, { neighbour, last })
     expect(neighbour).toEqual({ inBar: true, tag: 'BUTTON', name: 'Remove Model: model-b' })
-    expect(last).toEqual({ inBar: true, tag: 'BUTTON', name: 'Add a filter' })
+    expect(last).toEqual({ inBar: true, tag: 'INPUT', name: 'Filter the usage' })
   })

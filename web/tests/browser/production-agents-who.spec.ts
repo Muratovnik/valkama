@@ -140,7 +140,9 @@ test('the tab opens Analytics filtered to the item, over the days of its work', 
   await expect(analytics.locator('.analytics-rail [aria-current="page"]')).toHaveText(/^Task/u)
   // The bar says one filter is set: its chip where the bar has room beside the days, or its count.
   await expect(
-    analytics.locator('.analytics-bar-filters :is(.combo-chip, .analytics-filter-folded)'),
+    analytics.locator(
+      '.analytics-bar-filters :is(.analytics-bar-chips [data-filter-chip], .analytics-filter-folded)',
+    ),
   ).toHaveText([/^(Task: .+|Filters: 1)$/u])
   // The page's own read, the period beside the one before, asks for the item's work alone.
   const own = () => asked.filter((query) => query.get('compare') === 'true')

@@ -17,7 +17,7 @@
  * menu open. Each chip's item carries `data-filter-chip`, the hook a host
  * measures the chips by and a test selects them by.
  */
-import { computed, nextTick, useId, useTemplateRef } from 'vue'
+import { computed, useId, useTemplateRef, watch } from 'vue'
 
 import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import type { TextRun } from '@/shared/ui/textRuns.ts'
@@ -87,13 +87,31 @@ function focusLast(): boolean {
   return focusAt(props.chips.length - 1)
 }
 
+/**
+ * The place of the chip last taken out, until the chips without it are drawn:
+ * a host may take it out later than the press, as one whose filter rides the
+ * address does once the route has moved.
+ */
+let removed: number | null = null
+
+// The chip before takes focus, the next one when the first went, and the
+// text when none is left.
+watch(
+  () => props.chips,
+  () => {
+    if (removed === null) return
+    const index = removed
+    removed = null
+    if (!focusAt(Math.max(0, index - 1))) emit('leave')
+  },
+  { flush: 'post' },
+)
+
 function remove(index: number) {
   const chip = chips.value[index]
   if (!chip) return
+  removed = index
   emit('remove', chip.key)
-  // The chip before takes focus, the next one when the first went, and the
-  // text when none is left.
-  void nextTick(() => focusAt(Math.max(0, index - 1)) || emit('leave'))
 }
 
 function keydown(event: KeyboardEvent, index: number) {

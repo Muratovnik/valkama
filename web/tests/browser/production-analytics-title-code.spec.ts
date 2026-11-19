@@ -104,6 +104,19 @@ async function expectCodeDrawn(where: Locator, at: string) {
  * them in an ellipsis on one line with its overflow hidden, and how far it stands past the box it
  * is laid in (`within`).
  */
+/**
+ * The filter's chips where they stand: on the bar where it has room for them, and where it has not
+ * in the list the count opens, once the side panel over the bar is closed.
+ */
+async function filterChips(page: Page) {
+  const folded = page.locator('.analytics-filter-folded')
+  if (!(await folded.isVisible())) return page.locator('.analytics-bar-chips [data-filter-chip]')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await folded.click()
+  return page.locator('.analytics-filter-body [data-filter-chip]')
+}
+
 const oneLine = (name: Locator, within: string) =>
   name.evaluate((element, container) => {
     let line: Element = element
@@ -301,7 +314,7 @@ for (const width of [1440, 1024]) {
       for (const one of await breaksOf(heading.locator('[data-text-runs]')))
         expect([' ', '/', '-'], one.near).toContain(one.before)
 
-      const chips = page.locator('.analytics-bar-filters .combo-chip')
+      const chips = await filterChips(page)
       await expect(chips).toHaveCount(1)
       await expect(chips).toHaveText(`Task: ${named(0).replaceAll('`', '')}`)
       await expectCodeDrawn(chips, 'a filter’s chip')

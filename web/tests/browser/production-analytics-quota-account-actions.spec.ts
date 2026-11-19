@@ -123,7 +123,7 @@ test('«Add to filter» adds the account as a chip and keeps the section; then i
   const { analytics } = await openQuota(page)
   const section = analytics.locator('.analytics-rail [aria-current="page"]')
   const before = await section.textContent()
-  const chips = analytics.locator('.analytics-bar-filters .combo-chip')
+  const chips = analytics.locator('.analytics-bar-chips [data-filter-chip]')
   await expect(chips).toHaveCount(0)
 
   const { menu } = await openMenu(page, 'Work')

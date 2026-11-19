@@ -2,14 +2,15 @@
 /**
  * The bar over every section of the Analytics page: the period, with the ends of the reader's own
  * beside it, its two days or the name of a span between two moments (`AnalyticsOwnPeriod`); the
- * filters set, each a chip that takes it out, and the way to add one; how fresh the figures are;
+ * filter's field, the way to add a filter, and each value set, a chip that takes it out
+ * (`AnalyticsChips`); how fresh the figures are;
  * and a read of them again. It stays where it is while the rail and the panel under it scroll,
  * since it says what everything under it is of.
  *
  * The bar is one line wherever it has room for the period, its days and the read again, so the
  * panel under it never moves with what the bar holds: the filters (`AnalyticsChips`) take the
- * room the rest leaves, counting those it has none for, and the list of filters they open lies
- * over the panel. A bar with no room for that one line is two rows of one height whatever period
+ * room the rest leaves, counting those it has none for, and the filter's menu and the list of
+ * chips the count opens lie over the panel. A bar with no room for that one line is two rows of one height whatever period
  * is chosen: the periods and the filters, then the ends of the reader's own period at the start of
  * the second and the freshness with the read again at its end.
  *
@@ -29,7 +30,7 @@
  * hint saying it whole. The age's span is never given up, nor a failure's words, nor a day of the
  * period: its fields are as wide as a date needs. A line that runs past its end with all of that given up gives up the one line last,
  * and is the two rows of a narrower bar, which take their words back: the reader's own days need
- * that up to a window of about 1360px. The line is fitted as if a failure were said, so one said
+ * that up to a window of about 1390px. The line is fitted as if a failure were said, so one said
  * takes only the room the chips had and moves nothing: neither the bar's height nor its controls.
  *
  * On a phone the bar is three rows of one height whatever period is chosen: the periods in one row
@@ -77,14 +78,16 @@ const props = defineProps<{
   values: Partial<Record<UsageDimension, FilterValues>>
   view: AnalyticsView
 }>()
-/** A change of the view, a filter set anew, or the figures read again. */
+/**
+ * A change of the view, a filter set anew, the dimensions whose values the filter's menu shows,
+ * or the figures read again.
+ */
 const emit = defineEmits<{
   amend: [next: Partial<AnalyticsView>]
   filter: [dimension: UsageDimension, values: (string | null)[]]
+  need: [dimensions: UsageDimension[]]
   refresh: []
 }>()
-/** Whether the list of filters is open over the panel. */
-const adding = defineModel<boolean>('adding', { required: true })
 
 const { locale, t } = useI18n()
 
@@ -227,13 +230,13 @@ const freshHint = computed(() =>
         @amend="(next) => emit('amend', next)"
       />
       <AnalyticsChips
-        v-model:adding="adding"
         :dimensions="dimensions"
         :filters="view.filters"
         :short="short"
         :values="values"
         @filter="(dimension, chosen) => emit('filter', dimension, chosen)"
         @clear="emit('amend', { filters: {} })"
+        @need="(needed) => emit('need', needed)"
       />
       <div class="analytics-bar-read">
         <RefreshFailed

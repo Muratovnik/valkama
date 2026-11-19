@@ -459,7 +459,7 @@ test('in Russian, work with no task opens a panel with no card, and «Добав
     .poll(() => path(page))
     .toBe(pageAt({ by: 'work_item', filters: '{"work_item":[null]}' }))
   await expect(panel).toBeHidden()
-  await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveText([
+  await expect(page.locator('.analytics-bar-chips [data-filter-chip]')).toHaveText([
     'Задача: Без задачи',
   ])
 })

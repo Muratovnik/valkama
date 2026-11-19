@@ -15,6 +15,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { task } from '../fixtures/analytics.ts'
 import { nightName, workName } from '../fixtures/quota.ts'
+import { filterParts } from './analyticsFilter.ts'
 import {
   bars,
   boxes,
@@ -100,16 +101,17 @@ for (const width of [1440, 1024, 390]) {
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-bars-${width}.png`))
     await analytics.locator('.spending-days').screenshot(shot(info, `analytics-days-${width}.png`))
 
-    // Every control, the filters' own once «add a filter» has opened them.
+    // Every control; the filter's menu opens from its field by the keys, its first row taken.
     const closed = await tabWalk(page)
     expect(closed.missed).toEqual([])
-    await analytics.locator('.analytics-filter-add').focus()
-    await page.keyboard.press('Enter')
-    await expect(analytics.locator('[data-dimension]').first()).toBeVisible()
-    const open = await tabWalk(page)
-    expect(open.controls).toBeGreaterThan(closed.controls)
-    expect(open.missed).toEqual([])
-    console.log(`analytics keyboard ${width}: ${JSON.stringify({ closed, open })}`)
+    const filter = filterParts(page)
+    await filter.field.focus()
+    await page.keyboard.press('ArrowDown')
+    await expect(filter.menu).toBeVisible()
+    await expect(filter.menu.locator('[role="option"][data-highlighted]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(filter.menu).toBeHidden()
+    console.log(`analytics keyboard ${width}: ${JSON.stringify({ closed })}`)
 
     // The arrows move inside a group of radios: the tiles choose the measure from the keys.
     await analytics.locator('.spending-tiles .segmented-option.active').focus()
@@ -351,18 +353,21 @@ for (const width of [1440, 390])
     const folded = analytics.locator('.analytics-filter-folded')
     await expect(folded).toHaveText('Filters: 3')
     await folded.click()
-    // Each value chosen is a chip in its field, and on the bar with its dimension where it fits.
-    const named = analytics.locator('.analytics-bar-filters .combo-chip')
+    // Each value chosen is a chip in the list, and on the bar where it fits, with its dimension.
+    const named = filterParts(page).chips
     const onBar = await named.allTextContents()
     expect(onBar.length).toBeLessThan(3)
     const all = [/^Task: MAIN-1 Rework /u, /^Task: MAIN-2 Rework /u, /^Model: model-a$/u]
     for (const [index, words] of onBar.entries()) expect(words).toMatch(all[index] ?? /^$/u)
-    const chips = analytics.locator('.analytics-filter-body .combo-chip')
+    const chips = analytics.locator('.analytics-filter-body [data-filter-chip]')
     await expect(chips).toHaveCount(3)
     await expect(chips.filter({ hasText: 'MAIN-1' })).toHaveCount(1)
+    // Tab reaches every chip of the list and its «Clear filters».
+    const walked = await tabWalk(page)
+    expect(walked.missed).toEqual([])
     const measured = {
-      fields: await boxes(page, '[data-dimension]'),
-      chips: await boxes(page, '.combo-chip'),
+      list: await boxes(page, '.analytics-filter-body'),
+      chips: await boxes(page, '.analytics-filter-body [data-filter-chip]'),
       named: await named.allTextContents(),
       chipWords: await chips.allTextContents(),
       clear: await boxes(page, '.analytics-filter-clear'),

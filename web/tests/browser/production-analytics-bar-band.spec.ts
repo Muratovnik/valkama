@@ -4,7 +4,7 @@
  * without a refresh that failed. The oracle is the requirement: the bar is one line wherever that
  * line fits once it has given up all it can, a failure said included, and two rows, its last
  * give-up, wherever it does not. The line is fitted holding a failure's room, so it is one line or
- * two rows alike whether a refresh failed or not: about 1320px in English, 1360px in Russian.
+ * two rows alike whether a refresh failed or not: about 1350px in English, 1390px in Russian.
  *
  * At every width the read again stands inside the bar, no text the bar draws is cut by a box or
  * drawn past the bar's end, and pressing the read again scrolls nothing sideways. A failure is said

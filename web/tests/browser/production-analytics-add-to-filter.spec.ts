@@ -50,7 +50,7 @@ test('«Add to filter» adds the value beside the filter’s values, keeps the s
   const bars = page.locator('.spending-bars')
   await drawLined(bars)
   const section = page.locator('.analytics-rail [aria-current="page"]')
-  const chips = page.locator('.analytics-bar-filters .combo-chip')
+  const chips = page.locator('.analytics-bar-chips [data-filter-chip]')
   await expect(chips).toHaveCount(0)
 
   await bars.getByRole('button', { name: 'Details of model-b' }).click()

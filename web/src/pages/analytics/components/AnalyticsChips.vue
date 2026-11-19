@@ -1,197 +1,319 @@
 <script setup lang="ts">
 /**
- * The filters on the Analytics bar: each value set, a chip that takes it out; the way to add a
- * filter; and the list of every filter it opens.
+ * The filters on the Analytics bar: the filter's field (`FacetFilter`), the one the Work views
+ * filter through, and each value set as a chip that takes it out (`FacetFilterChips`).
  *
- * The way to add a filter stands first, then the count, then the chips, which take the room the
- * bar's line leaves them (`useChipRoom`): whatever takes that room — a failure the bar says —
- * moves none of the buttons. The chips it has no room for are counted with the rest in
- * «Filters: N», which opens the same list, where each stands. Beside the count the way to add a
- * filter is its icon, and on a short bar (`short`), which already shows it so, the count stands
- * for it. A chip names its value as its field does, from one list.
+ * The field is the way to add a filter, its words «Add a filter»: its menu opens on the
+ * dimensions the page offers, and a dimension's row steps into its values (`useFilterOptions`):
+ * «none» as the read admits it — work on no task, a session's own run, a value nobody can place —
+ * except for the role, which every stretch has; the values that spent anything in the period;
+ * and a value chosen that the period did not spend, as one a pasted link names, under its id.
+ * Choosing several of a dimension admits any of them; the filters of different dimensions all
+ * apply. A dimension's values are read only when the menu shows them (`need`): the one stepped
+ * into, or every one while typed text searches them all. Their wait is shown in the menu once it
+ * has lasted, and said once for the page (`useReadWaitReport`); a read that failed says so there.
  *
- * A chip taken out hands the focus to the chip that takes its place, the one before it when it
- * was the last, the count, or the way to add a filter when none is left: the focus does not fall
- * to the page with the button it was on.
+ * The field stands first, then the count, then the chips, which take the room the bar's line
+ * leaves them (`useChipRoom`): whatever takes that room — a failure the bar says — moves neither
+ * the field nor the buttons, so the field is as wide as the line decides, not as the room left.
+ * The chips it has no room for are counted with the rest in «Filters: N», which opens the list of
+ * every chip with the way to take them all out; beside the count the field gives up its words
+ * for its short ones, as it does on a short bar (`short`). A chip names its value as the menu
+ * names it, from one list.
  *
  * The list lies over the panel under the bar's line, as wide as it — the line is what it is
- * placed against — so opening it moves nothing. Escape or a press outside it closes it; closed,
- * its fields stay in the document.
+ * placed against — so opening it moves nothing. Escape or a press outside it closes it.
  *
  * The root is no box of its own: its parts are the line's, as they were before they were a
  * component.
  */
-import { computed, useId, useTemplateRef, watch } from 'vue'
+import { computed, ref, useId, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { onClickOutside, useEventListener } from '@vueuse/core'
 
-import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
-import { columnGap, useChipRoom } from '@/pages/analytics/composables/useChipRoom.ts'
+import { useChipRoom } from '@/pages/analytics/composables/useChipRoom.ts'
 import { useFilterOptions } from '@/pages/analytics/composables/useFilterOptions.ts'
+import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
-import { filterKey } from '@/pages/analytics/utils/usageValues.ts'
+import { filterKey, filterValue } from '@/pages/analytics/utils/usageValues.ts'
 
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
-import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
-import { runsWithin } from '@/shared/ui/textRuns.ts'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import type { OptionRow } from '@/shared/ui/choiceControls.ts'
+import FacetFilter from '@/shared/ui/FacetFilter.vue'
+import FacetFilterChips from '@/shared/ui/FacetFilterChips.vue'
+import type { FacetChip } from '@/shared/ui/FacetFilterChips.vue'
+import type { FacetSource } from '@/shared/ui/facetMenu.ts'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
+import { runsWithin, vTextRuns } from '@/shared/ui/textRuns.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import VButton from '@/shared/ui/VButton.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   /** The dimensions a filter may be set on. */
   dimensions: readonly UsageDimension[]
   filters: UsageFilters
-  /** The bar is short of room for words, and says the way to add a filter by its icon. */
+  /** The bar is short of room for words: the field says its short ones. */
   short: boolean
   /** What each filter offers, as the read gave it. */
   values: Partial<Record<UsageDimension, FilterValues>>
 }>()
-/** A filter set anew, or every filter taken out. */
+/** A filter set anew, every filter taken out, or the dimensions whose values the menu shows. */
 const emit = defineEmits<{
   clear: []
   filter: [dimension: UsageDimension, values: (string | null)[]]
+  need: [dimensions: UsageDimension[]]
 }>()
-/** Whether the list of filters is open over the panel. */
-const adding = defineModel<boolean>('adding', { required: true })
 
 const { t } = useI18n()
 const words = useSpendingWords()
 const { options } = useFilterOptions()
-const fieldsId = useId()
+const listId = useId()
+
+/** What the menu's text holds: a search of the menu alone, which filters nothing. */
+const text = ref('')
+
+/** The keys of the values a dimension's filter holds. */
+const chosen = (dimension: UsageDimension) =>
+  (props.filters[dimension] ?? []).map((value) => filterKey(value))
+
+/** A row of the menu and a chip name a value by its dimension and its key, as one text. */
+const rowKey = (dimension: UsageDimension, key: string) => `${dimension}:${key}`
+
+// ---------------------------------------------------------------------------
+// The menu: the dimensions, and the values of the one stepped into.
+// ---------------------------------------------------------------------------
+
+/** The dimensions whose values the menu shows, which are read for it. */
+const needed = ref<UsageDimension[]>([])
+
+/** A dimension's values are waited for while they are read. */
+const waiting = (dimension: UsageDimension) => props.values[dimension] === 'loading'
+
+/**
+ * Each dimension's wait, shown in the menu once it has lasted (`useLoadingPresence`). Made for
+ * every dimension at once, because the menu may show any of them.
+ */
+const waits = Object.fromEntries(
+  USAGE_DIMENSIONS.map((dimension) => [dimension, useLoadingPresence(() => waiting(dimension))]),
+) as Record<UsageDimension, ReturnType<typeof useLoadingPresence>>
+
+/** Whether the menu shows a wait: the page says the word once for all of them. */
+useReadWaitReport(computed(() => needed.value.some((dimension) => waits[dimension].shown.value)))
+
+/** What the menu says under a dimension's values: that they are read, or could not be. */
+function noteOf(dimension: UsageDimension): string | null {
+  if (waits[dimension].shown.value) return t('platform.states.loading')
+  return props.values[dimension] === 'failed' ? t('analytics.filters.failed') : null
+}
+
+/** A value's row: its name, drawn in its runs where it holds a title, and what it leaves out. */
+type ValueRow = OptionRow & { runs?: readonly TextRun[] }
+
+const source: FacetSource<ValueRow> = {
+  facets: () => props.dimensions.map((id) => ({ id, name: words.dimension(id) })),
+  values(facet) {
+    const dimension = facet as UsageDimension
+    const keys = chosen(dimension)
+    const note = noteOf(dimension)
+    return {
+      rows: options(dimension, props.values[dimension], keys).map((option) => ({
+        key: rowKey(dimension, option.value),
+        text: option.label,
+        ...(option.runs ? { runs: option.runs } : {}),
+        ...(option.description ? { detail: option.description } : {}),
+        selected: keys.includes(option.value),
+      })),
+      ...(note ? { note } : {}),
+    }
+  },
+}
+
+const menuWords = computed(() => ({
+  facets: t('analytics.filters.dimensions'),
+  back: (dimension: string) => t('analytics.filters.back', { dimension }),
+  noMatch: t('analytics.filters.noMatches'),
+}))
+
+function need(dimensions: readonly string[]) {
+  needed.value = dimensions as UsageDimension[]
+  emit('need', needed.value)
+}
+
+/** A value goes into its dimension's filter, or out if it was in. */
+function pick(key: string, facet: string | null, left: string) {
+  text.value = left
+  if (facet === null) return
+  const dimension = facet as UsageDimension
+  const value = key.slice(facet.length + 1)
+  const keys = chosen(dimension)
+  const next = keys.includes(value) ? keys.filter((one) => one !== value) : [...keys, value]
+  emit(
+    'filter',
+    dimension,
+    next.map((one) => filterValue(one)),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The chips.
+// ---------------------------------------------------------------------------
 
 /** What holds the value's place in a chip's sentence while its runs are laid in it. */
 const VALUE_MARK = '\u{E000}'
 
-/** Each value a filter is set to, named as its field names it, in the dimensions' order. */
-const chips = computed(() =>
+/** Each value a filter is set to, named as the menu names it, in the dimensions' order. */
+const chips = computed<FacetChip[]>(() =>
   props.dimensions.flatMap((dimension) => {
-    const values = props.filters[dimension] ?? []
-    const keys = values.map((value) => filterKey(value))
+    const keys = chosen(dimension)
     const named = options(dimension, props.values[dimension], keys)
-    return values.map((value, index) => {
-      const option = named.find((one) => one.value === keys[index])
+    return keys.map((key) => {
+      const option = named.find((one) => one.value === key)
       const said = (name: string | null) =>
         t('analytics.frame.filter', { dimension: words.dimension(dimension), value: name })
+      const name = said(option?.label ?? filterValue(key))
       return {
-        dimension,
-        value,
-        key: `${dimension}:${keys[index]}`,
-        label: said(option?.label ?? value),
-        runs: option?.runs && runsWithin(said(VALUE_MARK), VALUE_MARK, option.runs),
+        key: rowKey(dimension, key),
+        name,
+        removeName: t('analytics.filters.remove', { label: name }),
+        ...(option?.runs ? { runs: runsWithin(said(VALUE_MARK), VALUE_MARK, option.runs) } : {}),
       }
     })
   }),
 )
 
-const chipNames = computed(() =>
-  chips.value.map(({ key, label, runs }) => ({ value: key, label, runs })),
-)
-
 const chipRoom = useTemplateRef<HTMLElement>('chipRoom')
 const chipMeasure = useTemplateRef<HTMLElement>('chipMeasure')
-/** The words of «Add a filter» in the copy that is measured, beside the copy of the count. */
-const addWords = useTemplateRef<HTMLElement>('addWords')
+/** The field's width, in rem, with its whole words and with its short ones. */
+const FIELD_WHOLE = 11
+const FIELD_SHORT = 3.88
+
 const { folded, shown } = useChipRoom({
-  chips: chipNames,
-  // What «Add a filter» gives up while the count shows: its words, or on a short bar the button.
-  freed() {
-    const copy = addWords.value?.parentElement
-    const row = chipRoom.value?.parentElement
-    if (!copy || !row) return 0
-    const given = props.short ? copy : addWords.value
-    return (given?.getBoundingClientRect().width ?? 0) + columnGap(props.short ? row : copy)
-  },
+  chips,
   measure: chipMeasure,
   room: chipRoom,
+  // What the field gives up while the count shows: its whole words' room, unless a short bar
+  // already took it.
+  freed: () =>
+    props.short
+      ? 0
+      : (FIELD_WHOLE - FIELD_SHORT) *
+        Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
 })
-
-const add = useTemplateRef<InstanceType<typeof VButton>>('add')
-const count = useTemplateRef<InstanceType<typeof VButton>>('count')
-
-/** The chip taken out, while the view has not dropped it yet, to hand the focus on from. */
-let leaving: { count: number; index: number } | null = null
-
-function takeOut(index: number) {
-  const chip = chips.value[index]
-  if (!chip) return
-  const kept = (props.filters[chip.dimension] ?? []).filter((value) => value !== chip.value)
-  leaving = { index, count: chips.value.length }
-  emit('filter', chip.dimension, kept)
-}
-
-watch(
-  chips,
-  (now) => {
-    const left = leaving
-    if (!left || now.length >= left.count) return
-    leaving = null
-    const removers = chipRoom.value?.querySelectorAll('button') ?? []
-    const next =
-      removers[Math.min(left.index, removers.length - 1)] ??
-      ((folded.value ? count.value : add.value)?.$el as HTMLElement | undefined)
-    next?.focus()
-  },
-  { flush: 'post' },
-)
 
 /**
- * A press outside the list closes it. A press on a field's list of values, which stands outside
- * it in the page, keeps the focus in the field, and that is how it is told from a press on the
- * page; the buttons that open the list toggle it themselves.
+ * As wide as its words, whatever the room beside it. On a short bar and beside the count it says
+ * its short word, with less air at its ends: 108px, as wide as a phone's Work filter, set a span
+ * of days on two rows 70px wider than the old button's icon had, and on a phone's row a failure
+ * took a third line.
  */
-const fields = useTemplateRef<HTMLElement>('fields')
-onClickOutside(
-  fields,
-  () => {
-    if (!fields.value?.contains(document.activeElement)) adding.value = false
-  },
-  { ignore: [add, count] },
+const fieldShort = computed(() => props.short || folded.value)
+const fieldStyle = computed(() =>
+  fieldShort.value
+    ? { 'inlineSize': `${FIELD_SHORT}rem`, '--space-text-input-inline': 'var(--space-1)' }
+    : { inlineSize: `${FIELD_WHOLE}rem` },
 )
 
-useEventListener(fields, 'keydown', (event: KeyboardEvent) => {
-  // A field's open list hears Escape first, and closes alone.
-  if (event.key !== 'Escape' || event.defaultPrevented) return
-  adding.value = false
-  ;(add.value?.$el as HTMLElement | undefined)?.focus()
+/** A chip taken out: its value leaves its dimension's filter. */
+function takeOut(key: string) {
+  const [dimension] = key.split(':', 1) as [UsageDimension]
+  const value = key.slice(dimension.length + 1)
+  emit(
+    'filter',
+    dimension,
+    chosen(dimension)
+      .filter((one) => one !== value)
+      .map((one) => filterValue(one)),
+  )
+}
+
+/** Backspace from the start of the field's text: the last chip goes. */
+function takeOutLast() {
+  const last = chips.value.at(-1)
+  if (last) takeOut(last.key)
+}
+
+const field = useTemplateRef<{ focus: () => void }>('field')
+const barChips = useTemplateRef<{ focusLast: () => boolean }>('barChips')
+const count = useTemplateRef<InstanceType<typeof VButton>>('count')
+
+const focusField = () => field.value?.focus()
+const focusCount = () => (count.value?.$el as HTMLElement | undefined)?.focus()
+
+/** ← from the start of the text: the last chip on the bar, or the count when none stands there. */
+function focusChips() {
+  if (!barChips.value?.focusLast()) focusCount()
+}
+
+// ---------------------------------------------------------------------------
+// The list of every chip, which the count opens.
+// ---------------------------------------------------------------------------
+
+const listing = ref(false)
+watch(folded, (now) => {
+  if (!now) listing.value = false
 })
 
-const removeLabel = (label: string) => t('analytics.filters.remove', { label })
+/** A press outside the list closes it; the count that opens it toggles it itself. */
+const list = useTemplateRef<HTMLElement>('list')
+onClickOutside(
+  list,
+  () => {
+    listing.value = false
+  },
+  { ignore: [count] },
+)
+
+useEventListener(list, 'keydown', (event: KeyboardEvent) => {
+  if (event.key !== 'Escape' || event.defaultPrevented) return
+  listing.value = false
+  focusCount()
+})
 </script>
 
 <template>
   <div
     class="analytics-chips"
-    :class="{ 'analytics-chips-short': short, 'analytics-chips-folded': folded }"
+    :class="{ 'analytics-chips-folded': folded, 'analytics-chips-none': !chips.length }"
   >
     <div class="analytics-bar-filters">
-      <VButton
-        ref="add"
-        v-tooltip.clipped="t('analytics.frame.addFilter')"
+      <FacetFilter
+        ref="field"
+        v-model:text="text"
         class="analytics-filter-add"
-        variant="ghost"
-        size="compact"
-        :aria-expanded="adding"
-        :aria-controls="fieldsId"
-        @click="adding = !adding"
+        :style="fieldStyle"
+        :chips="chips.length"
+        :clear-label="t('analytics.filters.clearText')"
+        :label="t('analytics.filters.label')"
+        :menu-label="t('analytics.filters.menu')"
+        :placeholder="t('analytics.frame.addFilter')"
+        :short-placeholder="t('analytics.filters.short')"
+        :source="source"
+        :words="menuWords"
+        @chips="focusChips"
+        @need="need"
+        @pick="pick"
+        @remove-last="takeOutLast"
       >
-        <VIcon
-          name="plus"
-          :size="16"
-        />
-        <span class="analytics-filter-add-words">{{ t('analytics.frame.addFilter') }}</span>
-      </VButton>
+        <template #value="{ option }">
+          <span
+            v-if="option.runs"
+            v-text-runs="option.runs"
+          />
+          <template v-else>{{ option.text }}</template>
+        </template>
+      </FacetFilter>
       <VButton
         v-if="folded"
         ref="count"
         class="analytics-filter-folded"
         variant="ghost"
         size="compact"
-        :aria-expanded="adding"
-        :aria-controls="fieldsId"
-        @click="adding = !adding"
+        :aria-expanded="listing"
+        :aria-controls="listId"
+        @click="listing = !listing"
       >
         {{ t('analytics.frame.filtersFolded', { count: chips.length }) }}
       </VButton>
@@ -199,28 +321,28 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
         ref="chipRoom"
         class="analytics-bar-chips"
       >
-        <SearchComboboxChips
+        <FacetFilterChips
+          ref="barChips"
           :chips="shown"
-          :disabled="false"
-          :remove-label="removeLabel"
+          :label="t('analytics.filters.chips')"
+          @leave="focusField"
           @remove="takeOut"
         />
       </div>
     </div>
     <div
-      v-show="adding"
-      :id="fieldsId"
-      ref="fields"
+      v-show="listing"
+      :id="listId"
+      ref="list"
       class="analytics-filter-body"
     >
-      <AnalyticsFilters
-        :dimensions="dimensions"
-        :filters="filters"
-        :values="values"
-        @filter="(dimension, chosen) => emit('filter', dimension, chosen)"
+      <FacetFilterChips
+        :chips="chips"
+        :label="t('analytics.filters.chips')"
+        @leave="focusCount"
+        @remove="takeOut"
       />
       <VButton
-        v-if="chips.length"
         class="analytics-filter-clear"
         variant="text"
         size="compact"
@@ -234,26 +356,16 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
       class="analytics-chips-measure"
       inert
     >
-      <SearchComboboxChips
-        :chips="chipNames"
-        :disabled="true"
-        :remove-label="removeLabel"
+      <FacetFilterChips
+        label=""
+        :chips="chips"
       />
       <VButton
         variant="ghost"
         size="compact"
+        data-filter-count
       >
         {{ t('analytics.frame.filtersFolded', { count: chips.length }) }}
-      </VButton>
-      <VButton
-        variant="ghost"
-        size="compact"
-      >
-        <VIcon
-          name="plus"
-          :size="16"
-        />
-        <span ref="addWords">{{ t('analytics.frame.addFilter') }}</span>
       </VButton>
     </div>
   </div>
@@ -264,12 +376,30 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
   display: contents;
 }
 
-/* Room for the count and the way to add a filter, whatever the room for chips. */
+/* Room for the field and the count, whatever the room for chips. */
 .analytics-bar-filters {
   display: flex;
   flex: 1 1 0;
   gap: var(--space-2);
   align-items: center;
+}
+
+/* The field is as wide as its words (`fieldStyle`), whatever the room beside it, so a failure
+   that takes the chips' room moves it not at all. Its menu is as wide as a value's name needs,
+   not the field's width. */
+.analytics-bar-filters .analytics-filter-add {
+  --size-facet-filter-menu-width: 24rem;
+
+  flex: none;
+}
+
+/* On a phone the filter's row also holds a failure and the read again: with no filter set the
+   chips' room takes no gap of it, which a live period's failure needed at 360px not to take a
+   third line. */
+@container (width <= 30rem) {
+  .analytics-chips-none .analytics-bar-chips {
+    display: none;
+  }
 }
 
 /* No room of its own: what the line leaves, which `useChipRoom` fills with the chips that fit. */
@@ -293,21 +423,6 @@ const removeLabel = (label: string) => t('analytics.filters.remove', { label })
   inline-size: max-content;
   pointer-events: none;
   visibility: hidden;
-}
-
-.analytics-chips-short.analytics-chips-folded .analytics-filter-add {
-  display: none;
-}
-
-/* The words stay in the button for assistive technology, hidden from sight, and its hint names
-   it. */
-:is(.analytics-chips-short, .analytics-chips-folded) .analytics-filter-add-words {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 
 /* Over the panel under the bar's line, as wide as the line, scrolling inside itself where the

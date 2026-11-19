@@ -36,7 +36,9 @@
  * The menu is drawn in place rather than portalled, under the nearest
  * positioned ancestor: this root where there is room, the bar on a phone. It is
  * as wide as the field up to 24rem, unless the host sets
- * `--size-facet-filter-menu-width` on this root.
+ * `--size-facet-filter-menu-width` on this root, and never past the window's
+ * end. While it shows it is the page's open popup (`data-popup-surface`): the
+ * hints of what lies under it keep quiet, and its own rows' hints speak.
  */
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 
@@ -159,6 +161,16 @@ const menuRoom = useMenuRoom(
   () => shown.value,
   () => props.chips,
 )
+/**
+ * The menu marks itself the page's open popup only while it shows: drawn and hidden, the mark
+ * would keep every hint on the page quiet, so a closed menu has no mark at all, not a false one.
+ */
+const popupMark = computed(() => (shown.value ? '' : undefined))
+/** The room the window leaves the menu, down to its foot and across to its end. */
+const menuStyle = computed(() => ({
+  '--size-option-groups-max-height': menuRoom.room.value,
+  'maxWidth': menuRoom.across.value,
+}))
 const activeOption = computed(() =>
   shown.value && highlight.value >= 0 ? optionGroupItemId(menuId, highlight.value) : undefined,
 )
@@ -442,7 +454,8 @@ defineExpose({ focus: focusText })
       :id="menuId"
       v-model:highlight="highlight"
       class="filter-menu"
-      :style="{ '--size-option-groups-max-height': menuRoom }"
+      :data-popup-surface="popupMark"
+      :style="menuStyle"
       :groups="groups.groups"
       :label="menuLabel"
       @choose="choose"

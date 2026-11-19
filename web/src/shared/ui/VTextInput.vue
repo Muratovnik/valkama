@@ -248,7 +248,7 @@ defineExpose({
 .control {
   width: 100%;
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-text-input-inline);
   border: 1px solid var(--color-rule-strong);
   color: var(--color-text);
   font: var(--font-control);

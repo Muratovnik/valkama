@@ -51,6 +51,10 @@
      field's, where the menu reads it; a host whose field is narrower than its values says a
      width of its own on the field. */
   --size-facet-filter-menu-width: min(24rem, 100%);
+
+  /* The air at a text field's ends (`VTextInput`); a host whose field holds one short word in a
+     row with no room to spare narrows it. */
+  --space-text-input-inline: var(--space-3);
   --space-label-value: var(--space-2);
   --space-heading-content: var(--space-3);
 

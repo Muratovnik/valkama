@@ -16,18 +16,16 @@ import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthori
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 
 import { DEFAULT_VIEW, writeAddress } from '@/shared/api/analyticsAddress.ts'
-import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
-import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
-import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
 import { seatValue, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { chosenRows, menuRows, openDimension, openFilter } from '../support/analyticsFilter.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
 // What the panel asks is counted and ordered here; the rail's own reads are held elsewhere.
@@ -85,15 +83,6 @@ const WORLD: TimedStretch[] = [
   { at: on(10, 6), group: { ...sample, work_item: ITEM }, spend: { seconds: 5400 } },
   { at: on(9, 20), group: { ...sample, work_item: ITEM }, spend: { seconds: 3600 } },
 ]
-
-/** The words of the values a filter offers, in its order. */
-const offered = (page: VueWrapper, dimension: string) =>
-  (
-    page
-      .findAllComponents(SearchCombobox)
-      .find((field) => field.attributes('data-dimension') === dimension)
-      ?.props() as { options: ChoiceOption[] } | undefined
-  )?.options.map((option) => option.label)
 
 const radio = (wrapper: Pick<VueWrapper, 'findAll'>, name: string) =>
   wrapper.findAll('[role="radio"]').find((one) => one.text() === name)
@@ -231,12 +220,12 @@ describe('the Analytics page', () => {
     // Only the task's own hour: the other project's two hours are not admitted.
     expect(time(page)).toBe('1 h')
     // The chosen task is named, from the values its filter offers: on the bar as a chip with
-    // its dimension, and in its field.
-    expect(page.findAll('.analytics-bar-filters .combo-chip').map((chip) => chip.text())).toEqual([
-      'Task: MAIN-12 Answer a review in one form',
-    ])
-    const field = page.get('[data-dimension="work_item"]')
-    expect(field.text()).toContain('MAIN-12 Answer a review in one form')
+    // its dimension, and chosen among the task's values in the filter's menu.
+    expect(
+      page.findAll('.analytics-bar-chips [data-filter-chip]').map((chip) => chip.text()),
+    ).toEqual(['Task: MAIN-12 Answer a review in one form'])
+    await openDimension(page, 'Task')
+    expect(chosenRows(page)).toEqual(['MAIN-12 Answer a review in one form'])
   })
 
   it('writes a change of the period into its address and reads it again from there', async () => {
@@ -257,20 +246,22 @@ describe('the Analytics page', () => {
     const page = await mountAnalytics({ projectId: 'sample' })
     expect(reads.asked.every((query) => query.get('project') === 'sample')).toBe(true)
     expect(time(page)).toBe('1 h')
-    expect(page.find('[data-dimension="project"]').exists()).toBe(false)
-    expect(page.find('[data-dimension="work_item"]').exists()).toBe(true)
+    await openFilter(page)
+    expect(menuRows(page)).not.toContain('Project')
+    // Its control: the other dimensions are offered.
+    expect(menuRows(page)).toContain('Task')
   })
 
   it("offers each filter's values from the scope's project alone", async () => {
     const reads = serve()
     // The task section, whose reads are by task alone: the overview's cards read by model too.
     const page = await mountAnalytics({ projectId: 'sample', routeState: { by: 'work_item' } })
-    await page.get('.analytics-filter-add').trigger('click')
-    await flushPromises()
+    expect(reads.grouped('model')).toHaveLength(0)
+    await openDimension(page, 'Model')
     const offers = reads.grouped('model')
     expect(offers).toHaveLength(1)
     expect(offers[0]?.get('project')).toBe('sample')
-    expect(offered(page, 'model')).toEqual(['Unknown', 'model-a'])
+    expect(menuRows(page)).toEqual(['Unknown', 'model-a'])
   })
 
   it('draws the account marks read with the answer shown, never the last answer’s', async () => {
@@ -333,13 +324,13 @@ describe('the Analytics page', () => {
     expect(page.findAll('.period-mark')).toHaveLength(1)
   })
 
-  it('asks only what a view change changes, with the filters open', async () => {
+  it('asks only what a view change changes, with a dimension’s values open', async () => {
     const reads = serve()
     const page = await mountAnalytics({ routeState: { period: 'weeks4', by: 'work_item' } })
     const asks = async (routeState?: Record<string, string>) => {
       const before = reads.asked.length
       if (routeState) await page.setProps({ routeState })
-      else await page.get('.analytics-filter-add').trigger('click')
+      else await openDimension(page, 'Role')
       await flushPromises()
       return reads.asked.length - before
     }
@@ -357,20 +348,19 @@ describe('the Analytics page', () => {
       week: await asks({ by: 'model', measure: 'cost' }),
     }
     // A view: its answer and its accounts, and for this week the same days of the week before;
-    // the values offered only when the period changes; nothing for the measure alone. A read the
-    // view already asked is not asked again: the values offered for accounts are the page's own
-    // read of them, which another section takes as well, and with no filter set this week's read
-    // by model and by account are the values offered for those two. The values offered are one
-    // read for each dimension the answers are split by.
-    const offered = USAGE_DIMENSIONS.length
+    // nothing for the measure alone. The menu's values are read for the dimension stepped into
+    // alone, and again only when the period changes; a filter set has its dimension's values read
+    // to name its chip. The role's values, read when stepped into, are read once more for the
+    // new week.
     expect(counts).toEqual({
       opened: 2,
-      filtersOpened: offered - 1,
+      filtersOpened: 1,
       by: 1,
       measure: 0,
-      filter: 2,
-      week: 3 + offered - 2,
+      filter: 3,
+      week: 4,
     })
+    expect(reads.grouped('role')).toHaveLength(2)
   })
 
   it('waits for the read through the shared state panel', async () => {

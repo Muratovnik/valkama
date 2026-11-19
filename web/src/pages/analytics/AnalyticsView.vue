@@ -225,12 +225,15 @@ const { openFromCard } = useSectionFocus({
   panel: panelBox,
 })
 
-/** Whether the field of each dimension is open under the bar, which asks what each offers. */
-const adding = ref(false)
+/**
+ * The dimensions whose values the filter's menu shows, which are read for it as it shows them and
+ * again for a new period: none while the menu is closed.
+ */
+const offered = ref<readonly UsageDimension[]>([])
 watch(
-  [adding, () => read.bounds.value],
-  ([open]) => {
-    if (open) void read.offer(filterDimensions.value)
+  [offered, () => read.bounds.value],
+  ([dimensions]) => {
+    if (dimensions.length) void read.offer(dimensions)
   },
   { immediate: true },
 )
@@ -311,7 +314,6 @@ const emptyDescription = computed(() => {
       :shown="readWaitShown"
     />
     <AnalyticsBar
-      v-model:adding="adding"
       class="analytics-page-bar"
       :dimensions="filterDimensions"
       :filters-refused="filtersRefused"
@@ -323,6 +325,7 @@ const emptyDescription = computed(() => {
       :view="view"
       @amend="(next) => change(next, 'replace')"
       @filter="pageFilter.set"
+      @need="(dimensions) => (offered = dimensions)"
       @refresh="refresh"
     />
 
