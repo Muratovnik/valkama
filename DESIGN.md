@@ -1216,10 +1216,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
   the readings cannot tell what zeroed it. The arrows walk the readings, each restart before the
   reading at its moment, then «now», then the forecast. A step line opens on
-  «To now and the forecast», from the window's start to now and the forecast past it, with a
+  «To now and the forecast», from the window's start to now and a third of that past it, with a
   switch to the whole window up to its reset: drawn to the reset, a running week left its
-  readings the first third of the plot. Where the span ends before the reset the corridor runs
-  to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
+  readings the first third of the plot. Once three quarters of the window have passed, that span
+  reaches the reset and is the whole window, so the line shows the whole window and no switch
+  stands unless a frame narrowed the line, which the switch takes back. Where the span ends
+  before the reset the corridor runs to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
   reset by the page's clock, even one read before it, draws neither the corridor nor the places
   past its readings and shows its whole window alone, its line held to the moment it was read or
   to its reset where it was fresh then, and ended at its last reading where it was silent by
@@ -2725,8 +2727,8 @@ screen reader say too, with the forecast. As a table, where no hint shows, the a
 holds each window's forecast, the readings' table ends with it, and the window says its latest
 reading in words under its reset, and that it has no pace where it has none. A window's step
 line is on no period of the page, so its scale is its own: it opens on «To now and the forecast»
-with a switch to the whole window (Charts), points at «now» and at its forecast by the reset
-past its readings, and a frame dragged along it narrows that line alone. An account no source
+with a switch to the whole window while that span ends before the reset (Charts), points at
+«now» and at its forecast by the reset past its readings, and a frame dragged along it narrows that line alone. An account no source
 read says so and draws no window; a silent window is as solid as a fresh one, says how long it
 has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
 empty track and says «0% used · up to date». A window of money past a limit is a line of its name and

@@ -202,7 +202,8 @@ const AHEAD = 1 / 3
 /**
  * The span a running window's step line opens on: from its start to now and as far past now as
  * a third of the time since its start, never past its reset. Drawn to the reset, a week begun
- * two days ago left its readings the first third of the plot.
+ * two days ago left its readings the first third of the plot. Once three quarters of the window
+ * have passed it reaches the reset and is the whole window (`useStepSpan`).
  */
 export const aheadSpan = (from: number, to: number, now: number): StepSpan => ({
   from,

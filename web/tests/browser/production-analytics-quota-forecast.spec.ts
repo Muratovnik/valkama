@@ -482,9 +482,10 @@ test('a window past its reset draws no tail, no corridor and no place past its r
   // The line is the whole window alone, with nothing to switch to.
   const switches = page.locator(LINES).getByRole('radiogroup')
   await expect(switches).toHaveCount(0)
-  // The control: every week still stands, and each of its lines has its switch.
+  // The control: every week and model's week still stands, and each of their lines not yet three
+  // quarters through has its switch; the unnamed account's week, six days of seven in, has passed
+  // that, and shows the whole window alone (`useStepSpan`).
   await openDrawn(page, 'quota_week', 4)
-  const weeks = await page.locator(LINES).count()
-  expect(weeks, 'the weeks drawn').toBeGreaterThan(0)
-  await expect(switches).toHaveCount(weeks)
+  await expect(page.locator(LINES)).toHaveCount(4)
+  await expect(switches).toHaveCount(3)
 })

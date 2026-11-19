@@ -15,8 +15,9 @@
  * and a range said alike are never a hairline.
  *
  * A running window opens on its start to now and the forecast past it (`aheadSpan`), now at three
- * quarters of the plot, with a switch to the whole window up to its reset; a window past its reset
- * is the whole window alone and draws nothing past its readings. A span that ends before the
+ * quarters of the plot, with a switch to the whole window up to its reset, while that span ends
+ * before the reset (`useStepSpan`); a window three quarters through is the whole window alone, as
+ * one past its reset is, which draws nothing past its readings. A span that ends before the
  * reset shows the corridor as far as its end, where it runs on. A frame dragged along the plot
  * with a mouse or a pen (`useAxisFrame`), or stretched from the place the keyboard stands on with
  * Shift and an arrow, narrows this line alone to the moments it covers, and the switch takes it
@@ -123,13 +124,13 @@ const props = defineProps<{
   ahead?: StepAhead | null
   /** Whether the window has reset since it was read: the whole window is then its one span. */
   ended?: boolean
-  /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
   /**
    * Whether nothing was measured past the last reading, so the line ends there rather than
    * holding to `end`. A source writes a reading only when a value changes, so a fresh window's
    * line holds.
    */
   silent?: boolean
+  /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
   even?: boolean
   /** Where the window's count restarted inside it, each at the moment of one of `points`. */
   restarts?: readonly StepRestart[]

@@ -165,7 +165,8 @@ const facts = computed(() => {
 /**
  * The span the line runs over: the window's start to its reset. A window that has named neither
  * runs from its first reading to the answer's moment. The line opens on the window's start to now
- * and the forecast past it, and has a switch to the whole of this span (`StepLine`).
+ * and the forecast past it, and has a switch to the whole of this span while the first ends before
+ * the reset (`useStepSpan`).
  */
 const span = computed(() => {
   const { window, today } = props
@@ -282,8 +283,8 @@ const readingsCaption = computed(() =>
         :legend="legend"
         :ahead="ahead"
         :ended="ended"
-        :restarts="restarts"
         :silent="silent"
+        :restarts="restarts"
       />
       <StepLineTable
         v-else
