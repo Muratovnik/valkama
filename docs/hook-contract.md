@@ -769,6 +769,16 @@ hook at all. `valkama hook claude watch`, registered with `asyncRewake` on
   other ways and the `timeout` end it), when `CLAUDE_CODE_SESSION_ID` names another
   session than its input, when it was started inside a subagent, and when
   notices are switched off.
+- **Never under a one-turn client.** `claude -p` with its prompt as text waits
+  for an `asyncRewake` hook before the turn starts and again before it ends,
+  though Claude Code describes such a hook as one it does not wait for; a
+  watcher there held each turn until its `timeout`. So the watcher reads the
+  arguments of the process `CLAUDE_PID` names and exits 0 at once when they hold
+  `-p` or `--print` with an input format other than `stream-json`. With
+  `--input-format stream-json`, as the Agent SDK and the editor extensions start
+  Claude Code, the turn does not wait and the session outlives it, so the
+  watcher stays. Neither the hook's environment nor its input tells the two
+  apart. Where the arguments cannot be read, it stays as well.
 - **Lives for its `timeout`.** Claude Code ends it then, with no wake. Each
   prompt and each turn end starts it again, so a session at work is always
   watched; one idle for longer than the `timeout` is not, until its next prompt.
@@ -1479,6 +1489,7 @@ empty conversation.
 | The mod API, which Claude Code calls early access: the events `session.start`, `session.measure` and `turn.complete`, `$.session.usage().rateLimits`, `$.fs.read` and `$.process.run` | [the mod](#the-mod) | the mod hands nothing over, and `doctor` calls the `mod` source silent; `claude plugin test server/mod/valkama-quota` shows which call moved |
 | `<config>/sessions/<pid>.json` of Claude Code, its `sessionId` and `pid` only | the desktop app, at a click, to see whether the process runs | the session's row decides whether it runs |
 | `CLAUDE_PID` and `CLAUDE_CODE_SESSION_ID` | [the watcher](#the-watcher) | a watcher whose client is gone, or that runs for another session, is ended by the session's end or its `timeout` alone |
+| That `claude -p` with a text prompt waits for an `asyncRewake` hook, and `--input-format stream-json` does not, read from the client's arguments | [the watcher](#the-watcher) | where a one-turn client stops waiting, nothing is lost; where another client starts to wait, its turns wait for the watcher's `timeout` again |
 | `claude://code/continue?session=<id>`, `claude-cli://open?cwd=<folder>&q=/resume <id>`, `vscode://openai.chatgpt/local/<id>` and the extension's "still open somewhere else" notice holding its input | the open plan, only once each has been watched working and named in `url_schemes.SEEN_LIVE`, which no build names yet | nothing: until then the plan takes the way round described in [What a click opens](connection-contract.md#what-a-click-opens) |
 
 As far as reading the clients' documentation could settle, the four variables,

@@ -1554,8 +1554,9 @@ def watch(payload: dict, environ: Mapping[str, str] | None = None) -> int:
     One per session: a second start finds the lock held and leaves at once. It
     leaves without waking when the session ends or is cleared, when the client
     process is gone, when it was started for another session than the client's
-    own, and when notices are switched off; and the client ends it at its
-    `timeout`, which `UserPromptSubmit` and `Stop` re-arm.
+    own, when that client prints one turn and exits, and when notices are
+    switched off; and the client ends it at its `timeout`, which
+    `UserPromptSubmit` and `Stop` re-arm.
     """
 
     source = os.environ if environ is None else environ
@@ -1564,6 +1565,8 @@ def watch(payload: dict, environ: Mapping[str, str] | None = None) -> int:
         return 0
     named = source.get("CLAUDE_CODE_SESSION_ID")
     if named and named != session_id:
+        return 0
+    if _prints_one_turn(source.get("CLAUDE_PID")):
         return 0
     store, enabled = settings(source)
     state = state_directory(store, create=True) if store and enabled else None
@@ -1577,6 +1580,50 @@ def watch(payload: dict, environ: Mapping[str, str] | None = None) -> int:
         return _watch(source, state, str(store), session_id, key)
     finally:
         lock.close()
+
+
+def _prints_one_turn(pid: str | None) -> bool:
+    """Whether the client process `pid` names was started to print one turn and exit.
+
+    Such a client, `claude -p` with its prompt as text, waits for this hook before
+    the turn starts and again before it ends, against its own description of
+    `asyncRewake`: a watcher there held each turn until its `timeout`. With its
+    input a stream of messages, as the Agent SDK and the editor extensions run it,
+    the client does not wait, and the session outlives the turn, so the watcher
+    stays. Read only from the client's own arguments: neither its environment nor
+    the hook's input tells the two apart. Unread arguments keep the watcher.
+    """
+
+    if not pid or not pid.isdigit():
+        return False
+    from .. import process_reads
+
+    words = process_reads.arguments(int(pid))
+    return words is not None and one_turn(words[1:])
+
+
+def one_turn(options: list[str]) -> bool:
+    """Whether Claude Code's command-line `options` print one turn from a text prompt.
+
+    `-p` or `--print`, alone or among other one-letter flags (`-cp`), with an input
+    format other than `stream-json`. Words after `--` are the prompt's, not options.
+    """
+
+    prints = False
+    stream = False
+    for index, word in enumerate(options):
+        if word == "--":
+            break
+        if word == "--print" or word.startswith("--print="):
+            prints = True
+        elif word.startswith("-") and not word.startswith("--") and "p" in word[1:]:
+            prints = prints or word[1:].isalpha()
+        elif word == "--input-format":
+            following = options[index + 1] if index + 1 < len(options) else ""
+            stream = following == "stream-json"
+        elif word.startswith("--input-format="):
+            stream = word.partition("=")[2] == "stream-json"
+    return prints and not stream
 
 
 def _watch(environ: Mapping[str, str], state: str, store: str, session_id: str, key: str) -> int:

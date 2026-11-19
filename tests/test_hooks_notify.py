@@ -996,6 +996,40 @@ class WatcherTests(Harness):
         self.later(0.3, lambda _conn: child.kill())
         self.assertEqual((0, b""), self.watch({"CLAUDE_PID": str(child.pid)}))
 
+    def client(self, *options: str) -> subprocess.Popen:
+        """A stand-in client whose command line carries `options`, as `claude` would."""
+
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", *options])
+        self.addCleanup(child.wait, 30)
+        self.addCleanup(child.kill)
+        return child
+
+    def test_a_client_that_prints_one_turn_gets_no_watcher(self) -> None:
+        # `claude -p "<prompt>"` waits for this hook before its turn starts: the
+        # watcher must leave before its first poll, not when the client is gone.
+        self.claim_with_a_step_for_the_subagent()
+        child = self.client("-p", "Reply with one word")
+        started = time.monotonic()
+        with mock.patch.object(notify.time, "sleep", side_effect=AssertionError("it watched")):
+            status = notify.watch(
+                {"session_id": SESSION}, {**self.environ, "CLAUDE_PID": str(child.pid)}
+            )
+        self.assertEqual(0, status)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertFalse(os.path.exists(os.path.join(self.state(), SESSION + ".watch")))
+
+    def test_a_client_whose_input_is_a_stream_keeps_its_watcher(self) -> None:
+        for options in (
+            ("-p", "--input-format", "stream-json"),
+            ("-p", "--input-format=stream-json"),
+        ):
+            with self.subTest(options=options):
+                child = self.client(*options)
+                self.later(0.3, lambda _conn, child=child: child.kill())
+                started = time.monotonic()
+                self.assertEqual((0, b""), self.watch({"CLAUDE_PID": str(child.pid)}))
+                self.assertGreaterEqual(time.monotonic() - started, 0.3, "it left at once")
+
     def test_one_per_session_and_never_for_another_session_or_a_subagent(self) -> None:
         self.assertEqual((0, b""), self.watch({"CLAUDE_CODE_SESSION_ID": "someone-else"}))
         self.assertEqual((0, b""), self.watch(agent_id=CHILD))
@@ -1041,6 +1075,40 @@ class WatcherTests(Harness):
         status, text = self.watch()
         self.assertEqual(notify.WAKE_STATUS, status)
         self.assertIn(f"of agent {notify.label_id(CHILD)}: «Marker W-8»", text.decode("utf-8"))
+
+
+class OneTurnTests(unittest.TestCase):
+    """Which command lines of Claude Code print one turn and exit, and so get no watcher."""
+
+    def test_print_with_a_text_prompt_is_one_turn(self) -> None:
+        for options in (
+            ["-p", "Reply ok"],
+            ["--print", "Reply ok"],
+            ["Reply ok", "--print=true"],
+            ["-cp", "Reply ok"],
+            ["--model", "haiku", "-p", "--output-format", "stream-json", "--verbose"],
+            ["-p", "--input-format", "text", "Reply ok"],
+            ["-p", "--input-format=text"],
+            ["-p", "--input-format"],
+        ):
+            with self.subTest(options=options):
+                self.assertTrue(notify.one_turn(options))
+
+    def test_a_stream_of_messages_or_no_print_flag_is_not(self) -> None:
+        for options in (
+            [],
+            ["--resume", "abc"],
+            ["-c"],
+            ["-p", "--input-format", "stream-json"],
+            ["--input-format=stream-json", "--print"],
+            # The editor extension's own command line: a stream, no `-p`.
+            ["--output-format", "stream-json", "--input-format", "stream-json", "--resume=abc"],
+            ["-p1"],
+            ["--", "-p"],
+            ["--append", "a -p inside a word"],
+        ):
+            with self.subTest(options=options):
+                self.assertFalse(notify.one_turn(options))
 
 
 class StatementsTests(Harness):
