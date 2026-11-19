@@ -165,6 +165,8 @@ describe('accepting what is recommended in all the blocks', () => {
       ['Second question', { route: 'merge' }],
     ])
     expect(cardOf(wrapper, 'First question').get('.request-state').text()).toContain('You answered')
+    // What went folds: no form is left in it.
+    expect(cardOf(wrapper, 'First question').findAll('input[type="radio"]')).toHaveLength(0)
     const failed = cardOf(wrapper, 'Second question')
     expect(failed.get('.request-foot [role="alert"]').text()).toBe(
       'This request changed or closed. Check its status; your draft is kept.',

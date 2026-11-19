@@ -2310,13 +2310,17 @@ no focus, and neither the pointer nor focus stands in it or after it in the list
 would move from under them. Selecting does nothing but select, and nothing is chosen for
 the person but at their own press: Send is what sends. Accepting what the agent recommends is
 that press, in one block of a review or in all the blocks of a choice that wait, and it fills
-only what the person has not chosen and sends nothing by itself. Across blocks, «Accept
-recommended in all» is offered only where the list's host turns it on, which «Needs my answer»
-does not yet; where it is offered, it opens in place the list of what would go, a line per block with its task's
-number, its title and what would be chosen in it, says how many blocks it leaves out because
-their recommendation does not answer them, and sends only on «Accept N»; each block is filled
-and written by its own question, so one that went folds and one that did not keeps what was
-filled, with the reason in its foot. Every choice is a full-width row
+only what the person has not chosen and sends nothing by itself. Across blocks, «Needs my answer»
+offers «Accept recommended in all» over the blocks of a choice that wait in the tab shown, the
+one press that chooses for the person in several blocks, and still only on that press: it opens
+in place the list of what would go, a line per block with its task's number, its title and what
+would be chosen in it, says how many blocks it leaves out because their recommendation does not
+answer them, and sends only on «Accept N» at the list's foot. Each block is filled and written
+by its own question, one write each, so a block refused does not hold the others back: one that
+went folds, and one that did not keeps what was filled, with the reason in its foot, and the
+line beside the press says how many went of how many. A read of the list that crosses an answer
+leaves every block once: one read while its answer is out keeps what was filled, and a read begun
+before an answer landed says nothing over it. Every choice is a full-width row
 whatever their number: its label, a quiet word on the recommended one, and as much of
 its description as leaves the labels scannable, so that the first screen still says what
 is asked and what the choices are. A description of one line stands whole under its
