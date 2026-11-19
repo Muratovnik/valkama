@@ -1135,11 +1135,43 @@ def client_argv(
         str(workspace),
         "-s",
         "workspace-write",
+        # The elevated sandbox keeps its setup in the Codex home, which every run
+        # clears, and makes it again only with an administrator's consent: each run
+        # asked for it, and a run nobody watched had no shell. The unelevated one
+        # needs no setup; what a probe judges does not depend on which one isolates.
         "-c",
-        'windows.sandbox="elevated"',
+        'windows.sandbox="unelevated"',
         "--dangerously-bypass-hook-trust",
     ]
     return argv + (["resume", session, prompt] if session else [prompt])
+
+
+#: Codex's words when its sandbox could not start a command at all, whatever the command.
+_SANDBOX_REFUSED = "Failed to create unified exec process"
+
+
+def sandbox_refusal(client: str, output: Path) -> str | None:
+    """What the client's sandbox said when it refused to start a command, if it did.
+
+    The agent then works without a shell, which no probe is about, so the
+    session is the environment's failure rather than the agent's result.
+    """
+
+    if client != "codex":
+        return None
+    with contextlib.suppress(OSError):
+        for line in output.read_bytes().splitlines():
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            item = record.get("item") if isinstance(record, dict) else None
+            if not isinstance(item, dict) or item.get("type") != "command_execution":
+                continue
+            said = item.get("aggregated_output")
+            if isinstance(said, str) and said.startswith(_SANDBOX_REFUSED):
+                return said
+    return None
 
 
 def session_id(client: str, output: Path) -> str | None:
@@ -1485,6 +1517,10 @@ class SessionRunner:
         if code != 0:
             tail = errors.read_bytes()[-800:].decode("utf-8", errors="replace")
             self.record.fail(f"turn {index}", f"the client exited with {code}: {tail.strip()}")
+            return False
+        refused = sandbox_refusal(self.client, output)
+        if refused is not None:
+            self.record.fail(f"turn {index}", f"the sandbox started no command: {refused}")
             return False
         if self.record.session_id is None:
             self.record.session_id = session_id(self.client, output)

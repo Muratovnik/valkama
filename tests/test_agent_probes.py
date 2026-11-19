@@ -651,6 +651,56 @@ class HeadlessHookTests(unittest.TestCase):
         self.assertEqual({"UserPromptSubmit": 1, "Stop": 1}, plan.dropped)
 
 
+class SandboxRefusalTests(unittest.TestCase):
+    """A Codex turn whose sandbox started no command is the environment's failure.
+
+    The elevated sandbox asked an administrator to set itself up in every cleared
+    profile; unwatched, every command failed and the agent worked on without a shell.
+    """
+
+    REFUSED = (
+        "Failed to create unified exec process: orchestrator_helper_launch_canceled:"
+        " ShellExecuteExW failed to launch setup helper: 1223"
+    )
+
+    def output(self, *items: dict[str, Any]) -> Path:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "turn-1.jsonl"
+        lines = [json.dumps({"type": "thread.started", "thread_id": "T"}), "not json"]
+        lines += [json.dumps({"type": "item.completed", "item": item}) for item in items]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return path
+
+    def command(self, said: str, code: int) -> dict[str, Any]:
+        return {
+            "type": "command_execution",
+            "command": "pwsh -Command Get-Content README.md",
+            "aggregated_output": said,
+            "exit_code": code,
+            "status": "failed",
+        }
+
+    def test_a_command_the_sandbox_did_not_start_names_the_refusal(self) -> None:
+        output = self.output(self.command("ok", 0), self.command(self.REFUSED, -1))
+
+        self.assertEqual(self.REFUSED, agent_probes.sandbox_refusal("codex", output))
+
+    def test_a_command_that_ran_and_failed_is_the_agents_own(self) -> None:
+        output = self.output(
+            self.command("Get-Content: Cannot find path 'README.md'", 1),
+            {"type": "agent_message", "text": self.REFUSED},
+        )
+
+        self.assertIsNone(agent_probes.sandbox_refusal("codex", output))
+        self.assertIsNone(agent_probes.sandbox_refusal("claude", output))
+
+    def test_codex_turns_ask_for_the_sandbox_that_needs_no_setup(self) -> None:
+        argv = agent_probes.client_argv("codex", ["codex"], "go", Path("W"), None)
+
+        self.assertIn('windows.sandbox="unelevated"', argv)
+
+
 class StoreCopyRegistryTests(unittest.TestCase):
     """The registry a store copy migrates with is the caller's, not the suite's.
 
