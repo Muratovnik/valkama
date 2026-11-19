@@ -29,11 +29,14 @@ describe('the Vitest run of npm test', () => {
     expect(note).toBeNull()
   })
 
-  it('keeps an option of the whole suite on the command it holds the lock for', () => {
-    const { command } = unitRun(['--reporter=dot'], () => true)
-    expect(command.slice(0, 2)).toEqual([python, lockTool])
-    expect(command.at(-1)).toBe('--reporter=dot')
-  })
+  it.each([[['--reporter=dot']], [['--reporter', 'dot']]])(
+    'keeps the option %j of the whole suite on the command it holds the lock for',
+    (args) => {
+      const { command } = unitRun(args, () => true)
+      expect(command.slice(0, 2)).toEqual([python, lockTool])
+      expect(command.slice(-args.length)).toEqual(args)
+    },
+  )
 
   it('runs the suite unlocked, and says so, where no Python can take the lock', () => {
     const { command, note } = unitRun([], () => false)
@@ -41,14 +44,16 @@ describe('the Vitest run of npm test', () => {
     expect(note).toContain('without the heavy-test lock')
   })
 
-  it.each([[['tests/allowedRun.test.ts']], [['-t', 'refuses']], [['--testNamePattern=refuses']]])(
-    'runs a targeted run %j without the lock, and does not look for one',
-    (args) => {
-      const canLock = vi.fn(() => true)
-      const { command, note } = unitRun(args, canLock)
-      expect(command).toEqual([...vitest, ...args])
-      expect(note).toBeNull()
-      expect(canLock).not.toHaveBeenCalled()
-    },
-  )
+  it.each([
+    [['tests/allowedRun.test.ts']],
+    [['--reporter=dot', 'tests/allowedRun.test.ts']],
+    [['-t', 'refuses']],
+    [['--testNamePattern=refuses']],
+  ])('runs a targeted run %j without the lock, and does not look for one', (args) => {
+    const canLock = vi.fn(() => true)
+    const { command, note } = unitRun(args, canLock)
+    expect(command).toEqual([...vitest, ...args])
+    expect(note).toBeNull()
+    expect(canLock).not.toHaveBeenCalled()
+  })
 })

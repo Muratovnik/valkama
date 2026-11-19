@@ -1,5 +1,5 @@
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { lockAvailable, lockedCommand, spawnInherited } from './heavyLock.ts'
 
@@ -11,7 +11,8 @@ import { lockAvailable, lockedCommand, spawnInherited } from './heavyLock.ts'
  * for it, and it waits for one, saying whose run it waits for.
  *
  * A targeted run takes no lock: one that names test files, or test names with `-t` or
- * `--testNamePattern`; an option's value goes after `=` (`--reporter=dot`), or it reads as a file.
+ * `--testNamePattern`. A word right after an option reads as that option's value, so
+ * `--reporter dot` is still the whole suite, and a file named after a flag runs under the lock.
  * Nor does a run where the lock cannot be taken, with no Python to run the lock tool; that one
  * says so and runs all the same rather than failing.
  *
@@ -29,10 +30,12 @@ const web = fileURLToPath(new URL('..', import.meta.url))
 
 /** Whether these Vitest arguments narrow the run to some files or some test names. */
 function targeted(args: readonly string[]): boolean {
-  return args.some(
-    (argument) =>
-      !argument.startsWith('-') || argument === '-t' || argument.startsWith('--testNamePattern'),
-  )
+  return args.some((argument, index) => {
+    if (argument === '-t' || argument.startsWith('--testNamePattern')) return true
+    const previous = args[index - 1]
+    const optionValue = previous?.startsWith('-') === true && !previous.includes('=')
+    return !argument.startsWith('-') && !optionValue
+  })
 }
 
 /** What `npm run test:unit -- <args>` runs; `canLock` is asked only when the lock would be taken. */
@@ -54,7 +57,8 @@ export function unitRun(args: readonly string[], canLock: () => boolean): UnitRu
   return { command: lockedCommand('npm test: the Vitest suite', vitest), note: null }
 }
 
-if (import.meta.main) {
+const entry = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : ''
+if (entry === import.meta.url) {
   const { command, note } = unitRun(process.argv.slice(2), lockAvailable)
   if (note !== null) process.stdout.write(`${note}\n`)
   process.exitCode = await spawnInherited(command, { cwd: web, env: process.env })
