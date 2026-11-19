@@ -2016,7 +2016,19 @@ the size the field has now: past it a header is a pixel or two and the map a smu
 The button, the wheel and a pinch stop there and the button says so, and a narrowing,
 a fold or a resize that leaves the camera further out brings it up to that zoom; a
 refresh still moves nothing. The fit is worked out from the drawing and the field and
-never reads that limit, or a field that grew could not be fitted. The
+never reads that limit, or a field that grew could not be fitted. In a phone-wide
+workspace the camera also goes no further out than the zoom at which a card's smallest
+text stands at the ramp's floor: 12px over that text's 13, both read from the tokens
+(`graphZoomFloor.ts`). At 390px the whole space fitted only where a card's words were specks.
+The floor is not the 13px reading floor, the card's own size: a card and the air the keyboard
+keeps clear round it would then be wider than a 390px window's field, and every step into the
+field would move the camera the operator had placed. There «Fit whole graph» shows the
+drawing from its beginning at that zoom, as it is read, and the rest is a pan away;
+«Zoom out», the wheel and a pinch stop there, the button
+turning off as at any limit; and «Fit whole graph», which stays pressable, says why in its
+hint, which is also its accessible description, since a button turned off takes neither the
+pointer nor the focus. A drawing that fits at that zoom is fitted whole, as anywhere, and a
+wider workspace keeps the rule above unchanged. The
 2.1.0 rule that framed the field afresh on every new queue or search was
 withdrawn by the owner after use: each narrowing cost the operator their place
 and their zoom. The keys to the chain list its

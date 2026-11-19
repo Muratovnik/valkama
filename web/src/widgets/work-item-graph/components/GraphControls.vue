@@ -10,6 +10,11 @@
  * zoom does, as the panel's would. «Fit whole graph» says only that it was pressed:
  * the field's camera knows the whole view, which is also that limit.
  *
+ * On a phone-wide field that view goes no further out than the cards read: where that
+ * floor is the limit (`floored`), the fit shows the drawing's beginning, «Zoom out» turns off there as at any limit, and
+ * «Fit whole graph», which stays pressable, says why in its hint, which is also its
+ * accessible description, since a turned-off button takes neither the pointer nor focus.
+ *
  * The zoom glyphs carry accessible names; camera destinations have visible labels.
  */
 import { computed } from 'vue'
@@ -19,12 +24,30 @@ import { ControlButton } from '@vue-flow/controls'
 import { useVueFlow } from '@vue-flow/core'
 
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { fieldZoomFloor } from '@/widgets/work-item-graph/utils/graphZoomFloor.ts'
+
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const emit = defineEmits<{ fit: [] }>()
 const { t } = useI18n()
-const { maxZoom, minZoom, viewport, zoomIn, zoomOut } = useVueFlow({ id: GRAPH_FLOW_ID })
+const { dimensions, maxZoom, minZoom, viewport, vueFlowRef, zoomIn, zoomOut } = useVueFlow({
+  id: GRAPH_FLOW_ID,
+})
 const atMax = computed(() => viewport.value.zoom >= maxZoom.value)
 const atMin = computed(() => viewport.value.zoom <= minZoom.value)
+/**
+ * The field's limit is its floor: the whole drawing would fit only further out than its cards
+ * read. Read again whenever the limit or the field's width moves, the width being what decides
+ * whether the field is a phone's.
+ */
+const floored = computed(() => {
+  if (!dimensions.value.width) return false
+  const floor = fieldZoomFloor(vueFlowRef.value)
+  return floor > GRAPH_ZOOM_MIN && minZoom.value <= floor
+})
+/** Why the fit stops short and «Zoom out» is off, where the floor is the limit. */
+const fitHint = computed(() => (floored.value ? t('graph.zoomFloor') : ''))
 </script>
 
 <template>
@@ -54,6 +77,7 @@ const atMin = computed(() => viewport.value.zoom <= minZoom.value)
       <span class="visually-hidden">{{ t('graph.zoomOut') }}</span>
     </ControlButton>
     <ControlButton
+      v-tooltip.detail="fitHint"
       class="control-button control-action"
       @click="emit('fit')"
     >

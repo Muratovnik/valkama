@@ -69,7 +69,9 @@ async function zoomOutPastReading(page: Page, how: Zoom) {
   return settledCamera(page)
 }
 
-for (const width of [1500, 390])
+// The narrow case is a window whose workspace is not a phone's: on a phone-wide field the
+// camera goes no further out than its cards read, so it never reaches the overview there.
+for (const width of [1500, 700])
   for (const how of ['wheel', 'button'] as const)
     test(`focus on a header's fold moves to its goal's button when a ${how} zoom hides the fold at ${width}px`, async ({
       page,

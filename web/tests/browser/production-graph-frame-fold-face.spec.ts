@@ -203,7 +203,9 @@ async function expectBand(page: Page, where: string) {
   await expectEveryFace(page, head, where, middle)
 }
 
-for (const width of [390, 1280]) {
+// The narrow case is a window whose workspace is not a phone's: on a phone-wide field the
+// camera goes no further out than its cards read, so it never reaches the overview there.
+for (const width of [700, 1280]) {
   test(`at ${width}px a fold's face at the opening scale lies on no words and no edge`, async ({
     page,
   }) => {

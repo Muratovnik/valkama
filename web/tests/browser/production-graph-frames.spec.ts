@@ -14,7 +14,7 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
-import { broadRead, looseSpace } from './served/graphs.ts'
+import { broadRead } from './served/graphs.ts'
 import { spaceAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
@@ -229,8 +229,9 @@ async function tabIntoField(page: Page) {
 /** Drag the field by `dx`, `dy` from near its bottom-right corner, where it is empty. */
 async function dragField(page: Page, dx: number, dy: number) {
   const flow = await page.locator('.graph-flow').boundingBox()
+  // On the ground at the field's right edge, past a card: a press on a card is no pan.
   const from = {
-    x: (flow?.x ?? 0) + (flow?.width ?? 0) - 20,
+    x: (flow?.x ?? 0) + (flow?.width ?? 0) - 6,
     y: (flow?.y ?? 0) + (flow?.height ?? 0) - 120,
   }
   await page.mouse.move(from.x, from.y)
@@ -246,8 +247,10 @@ test('Tab from the row above the field enters where the operator moved the field
   await serveBroadSpace(page)
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
-  // The operator drags the field to the left, past its first target.
-  await dragField(page, -320, -40)
+  // The operator drags the field up, past its first target. A phone-wide field stands at the
+  // zoom its cards read at, where it holds one column of them: a drag along the column leaves
+  // whole cards in sight, as a drag to the side would not.
+  await dragField(page, 0, -360)
   const [first] = await walkTargets(page, false)
   await expect.poll(() => walkTargets(page, true)).not.toContain(first)
   const pane = page.locator('.vue-flow__transformationpane')
@@ -260,7 +263,9 @@ test('Tab from the row above the field enters where the operator moved the field
   await expect(pane).toHaveAttribute('style', camera ?? '')
 })
 
-for (const width of [1500, 390]) {
+// The narrow case is a window whose workspace is not a phone's: on a phone-wide field the
+// camera goes no further out than its cards read, so it never reaches the overview there.
+for (const width of [1500, 700]) {
   test(`zoomed out to the overview, Tab from the row above the field enters it on a target it draws at ${width}px`, async ({
     page,
   }) => {
@@ -283,45 +288,6 @@ for (const width of [1500, 390]) {
     expect(await walkTargets(page, true)).toContain(at?.target)
   })
 }
-
-/** The suite's space holding only open work under no goal, too much of it to start open. */
-async function serveLooseSpace(page: Page) {
-  await installBackend(page)
-  await page.route('**/api/planning?*', (route) =>
-    route.fulfill(spaceAnswer(new URL(route.request().url()).searchParams, looseSpace())),
-  )
-}
-
-/** Press «Zoom out» until the field draws its overview. */
-async function zoomOutToOverview(page: Page) {
-  const zoomOut = page.getByRole('button', { name: 'Zoom out', exact: true })
-  for (let step = 0; step < 16; step += 1) {
-    if ((await page.locator('.graph-frame.overview').count()) > 0) return
-    await zoomOut.click()
-  }
-}
-
-test('a field of the work under none alone, folded, still takes Tab in the overview', async ({
-  page,
-}) => {
-  // One folded frame fits past reading only in a window this narrow.
-  await page.setViewportSize({ width: 240, height: 900 })
-  await serveLooseSpace(page)
-  await page.goto(graphRoute({}))
-  await expect(page.locator('.graph-canvas.settled')).toBeVisible()
-  await expect(page.locator('.graph-flow .graph-frame')).toHaveCount(1)
-  await expect(page.locator('.graph-flow .graph-frame.folded')).toHaveCount(1)
-  await zoomOutToOverview(page)
-  await expect(page.locator('.graph-frame.overview')).toHaveCount(1)
-  await page.locator('.graph [role="radio"][aria-checked="true"]').focus()
-  const at = await tabIntoField(page)
-  expect(at?.target).toBe('frame:none:fold')
-  const shown = await page.evaluate(() => {
-    const element = document.activeElement
-    return element instanceof HTMLElement ? getComputedStyle(element).visibility : ''
-  })
-  expect(shown).toBe('visible')
-})
 
 test('the open-or-all switch counts the items the counts line counts', async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 900 })
