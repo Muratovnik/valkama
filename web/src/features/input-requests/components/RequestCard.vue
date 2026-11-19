@@ -176,6 +176,7 @@ const waiting = computed(() => request.value.status === 'pending')
 const inForm = computed(() => waiting.value || changing.value)
 const kind = useKindAnswers({
   answers: () => props.answers,
+  entry: () => props.entry,
   draft: () => props.draft,
   focusDay: () => foot.value?.focusDay(),
   kind: () => props.kind,

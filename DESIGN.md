@@ -2327,11 +2327,28 @@ kind's answers where Don't answer and Send do: a row of buttons, each writing at
 says, through the same write as Send. Nobody declines such a question. An answer that cannot be
 taken back asks first, as Don't answer does: its own box says Back, the box beside it says the
 answer in the danger's ink, the asking stands where Don't answer's does, and every box holds room
-for each word it can come to say. «Later…» opens in place the day to come back to the question and
-«Put off», unavailable with the reason under it until a day from today on is chosen; the day is
-part of the draft. Where the listing names the question's space and project, the head's first line
-says them around the task's number, the space before it and the project after. A question its
-task's closing withdrew folds on «Question withdrawn: MAIN-12 was closed».
+for each word it can come to say; «Cancel» and «Don't do» are such answers. «Later…» opens in
+place «Until a day» and «Until a card closes», a search over the open cards of the question's own
+space, and «Put off», unavailable with the reason under it until a day from today on or a card is
+chosen; the one chosen last is what the question waits for, and it is part of the draft. Where the
+listing names the question's space and project, the head's first line says them around the task's
+number, the space before it and the project after. A question its task's closing withdrew folds on
+«Question withdrawn: MAIN-12 was closed».
+The kind follows the question's purpose: a review shows the task's outcome under what to check
+and answers Accept or Return to work; a group of findings shows the goal it proposes, its findings
+and why, and a goal its description, conditions and how much open work stands under it, both
+answering Do, Later… or Don't do; a task in a goal shows its description and adds Move out of the
+goal; a condition shows what is removed and what each rewritten step was and becomes, with the
+reason, and answers Allow or Keep; a cancel shows what closes, who holds it and what the sessions
+at work answered, and answers Cancel or Keep; a confirmation answers I confirm or Leave to the next
+session; and a return answers as a goal does. A question of any other purpose, or without the
+field its kind answers in, stays a choice of options. What the question does not carry, as a
+card's outcome or description, is read from its card when the record first comes into view.
+Where the list holds more than one kind, tabs over it offer All and each kind it holds, each with
+how many of it wait; a kind it holds none of has no tab, and All alone would only repeat the one
+kind, so a list of one kind has none. A tab shows only its kind's questions, the answered ones
+put aside among them, and «Question N of M» counts what it shows. When the kind shown empties, as
+its last question is answered elsewhere, the tab goes and the list falls back to All.
 A review's point is one row: a chevron and the point's label, which are one press that opens the
 point, the three words of the verdict at the row's end and the comment's glyph after them; under
 the label, from its edge to the row's end, one quiet line of what the point comes to. Accepted

@@ -46,7 +46,6 @@ import InspectorNotices from '@/widgets/work-item-inspector/components/Inspector
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
-import InspectorTabs from '@/widgets/work-item-inspector/components/InspectorTabs.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import { agentCount } from '@/widgets/work-item-inspector/utils/agentUsage.ts'
 import { followGuard } from '@/widgets/work-item-inspector/utils/guardStep.ts'
@@ -79,6 +78,7 @@ import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import TabPanel from '@/shared/ui/TabPanel.vue'
+import TabStrip from '@/shared/ui/TabStrip.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -173,11 +173,9 @@ async function load() {
   await loadResource()
 }
 
-const holdFocus = () => frame.value?.holdFocus()
-
 /** The Retry pressed goes with the failure it answers, and focus must not go with it. */
 function retryRead() {
-  holdFocus()
+  frame.value?.holdFocus()
   void load()
 }
 
@@ -386,8 +384,9 @@ defineExpose({ close, openFrom })
       v-if="!missing && !pending"
       #tabs
     >
-      <InspectorTabs
+      <TabStrip
         v-model="shownSection"
+        class="inspector-tabs"
         :label="t('workItem.sections')"
         :sections="sections"
         :tabs="tabs"
@@ -436,7 +435,7 @@ defineExpose({ close, openFrom })
               :target="target"
               :writable="writable && !busy"
               @changed="reloaded"
-              @hold-focus="holdFocus"
+              @hold-focus="frame?.holdFocus"
               @refresh="load"
               @resume="(state) => changeFacts({ state })"
               @tick="tick"

@@ -20,9 +20,13 @@ import type { InputAnswers, InputRequestEntry } from '@/shared/api/inputRequestM
  * in the record's `subject` and is answered by a row of buttons (`answers`), each of which writes
  * through the same answer every question is written with. The record owns that write, its
  * history, a change of answer and what was left unsent; a kind repeats none of them.
+ *
+ * A kind other than a choice is the server's purpose of the question (`questionKinds.ts`): a
+ * review of finished work, a group of findings, a goal or a task in an accepted goal an agent
+ * files, a condition it changes, a cancel it asks for, a confirmation and work that came back.
  */
-type QuestionKind =
-  'acceptance' | 'cancel' | 'choice' | 'condition' | 'confirm' | 'goal' | 'return' | 'triage'
+export type QuestionKind =
+  'cancel' | 'choice' | 'condition' | 'confirm' | 'goal' | 'return' | 'review' | 'task' | 'triage'
 
 export interface QuestionRecord {
   /** Empty for a choice of options, which its form answers. */

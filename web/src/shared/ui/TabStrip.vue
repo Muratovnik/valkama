@@ -1,16 +1,18 @@
 <script setup lang="ts">
 /**
- * The card's sections, as the strip that sticks to the top of its scroller.
+ * A row of tabs that holds to one line: a card's sections, in the strip that sticks to the top
+ * of its scroller, and the kinds of question over «Needs my answer».
  *
- * It stays pinned at every position, so it holds to one row: two rows of sections were
- * a third of what a phone kept pinned. Where one row cannot hold them it scrolls inside
+ * A card's strip stays pinned at every position, so it holds to one row: two rows of sections
+ * were a third of what a phone kept pinned. Where one row cannot hold them it scrolls inside
  * itself, over the thin bar every scroller here has, because a cut that fell between
  * two sections read as the whole strip. The one shown is brought into the row whenever
  * it changes, and so is each one the keyboard reaches, which the browser leaves where
  * it is while a sliver of it shows, and the one a press focused once the press is over.
  *
- * They are tabs over the card's body, and every section shows the moment it is chosen —
- * what one reads is read with the card — so the arrows show a section as they reach it.
+ * They are tabs over a panel, and every one shows the moment it is chosen — what a card's
+ * section reads is read with the card, and a kind's questions are already in the list — so the
+ * arrows show a tab's panel as they reach it.
  *
  * A strip cut by its width fades out at each end where a section is cut, and at no other.
  * The bar alone did not say so: an overlay scrollbar shows only while the strip moves, and
@@ -148,7 +150,7 @@ function focused(event: FocusEvent) {
 <template>
   <div
     ref="strip"
-    class="inspector-tabs"
+    class="tab-strip"
     :class="{ 'more-before': more.before, 'more-after': more.after }"
     @focusin="focused"
     @scroll="measure"
@@ -164,7 +166,7 @@ function focused(event: FocusEvent) {
 </template>
 
 <style scoped>
-.inspector-tabs {
+.tab-strip {
   --size-tabs-fade: var(--space-8);
 
   width: 100%;

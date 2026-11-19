@@ -11,7 +11,7 @@
  *
  * A question of a kind other than a choice is answered by its kind's own row (`answers`), in the
  * place of the two answers. The answer that puts the question off opens over that row the choice
- * of a day (`RequestLater`), where the press that opened it is.
+ * of a day or a card (`RequestLater`), where the press that opened it is.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,6 +21,7 @@ import RequestLater from '@/features/input-requests/components/RequestLater.vue'
 import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import type { KindAnswer } from '@/features/input-requests/utils/questionRecord.ts'
 
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 
@@ -51,8 +52,11 @@ const props = withDefaults(
     declinable?: boolean
     /** What the strip's way on says, where it discards something other than an answer. */
     discardWord?: string
-    /** The choice of a day the answer that puts off opens: its id, if it is open, its day. */
-    later?: { controls: string; open: boolean; value: string } | null
+    /**
+     * The choice the answer that puts off opens: its id, its question, whether it is open, and the
+     * day or card it holds.
+     */
+    later?: { controls: string; entry: InputRequestEntry; open: boolean; value: string } | null
     /** The comment on the list can be opened from here, how it stands, and what it is on. */
     note?: { disabled: boolean; open: boolean; title: string; written: boolean } | null
     /** What Send says, where it sends something other than an answer. */
@@ -123,6 +127,7 @@ defineExpose({
       class="request-later-place"
       :busy="busy"
       :disabled="disabled"
+      :entry="later.entry"
       :panel-id="later.controls"
       :value="later.value"
       @put-off="emit('put-off')"
