@@ -31,6 +31,7 @@ import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
+import { workItemChainMessages } from '@/shared/i18n/workItemChainMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
@@ -712,78 +713,7 @@ export const en = {
       outgoing: 'From this task',
       incoming: 'To this task',
     },
-    chain: {
-      title: 'Chain',
-      scopeLabel: 'What the chain covers',
-      scopeTree: 'Contents',
-      scopeChain: 'Chain',
-      showOnGraph: 'Show on graph',
-      onGraph: 'On graph',
-      details: 'Chart and pace',
-      loadFailed: 'The chain could not be loaded.',
-      primaryOnly: 'The chain is available only for work items of the primary store.',
-      refreshFailed: 'The chain could not be refreshed; this is the last answer.',
-      stat: {
-        total: 'Under the root',
-        open: 'Open',
-        noneOpen: 'Nothing open',
-        workable: 'Workable',
-        workableNote: 'untriaged work included',
-      },
-      part: '{group} {count}',
-      group: {
-        active: 'In progress',
-        review: 'Review',
-        ready: 'Ready',
-        triage: 'Triage',
-        deferred: 'Deferred',
-        blocked: 'Blocked',
-        containers: 'Goals and stages',
-        done: 'Done',
-      },
-      groupCount: '{group} · {count}',
-      showAll: 'Show all · {count}',
-      showFewer: 'Show fewer',
-      forecast: {
-        window: 'Last {days}\u{A0}days',
-        first: 'First day | First {count}\u{A0}days',
-        facts: '{period}: {created} added, {closed} done',
-        quiet: 'Nothing added or done in the last {days}\u{A0}days',
-        line: '{facts}. {verdict}',
-        young: 'A forecast needs {days}\u{A0}days of history',
-        growing:
-          'New work arrives faster than it closes: to converge, more than {rate}\u{A0}a day must close',
-        steady:
-          'The open part is not shrinking: to converge, more than {rate}\u{A0}a day must close',
-        about: 'At this pace the open work closes in about {span}',
-        aboutBy: 'At this pace the open work closes in about {span} (by\u{A0}{date})',
-        range: 'At this pace the open work closes in {span}',
-        rangeOn: 'At this pace the open work closes in {span} ({date})',
-        earliest: 'At this pace the open work closes in {span} at the earliest: the pace is uneven',
-        year: 'At this pace the open work takes more than a year to close',
-        day: '{count}\u{A0}day | {count}\u{A0}days',
-        week: '{count}\u{A0}week | {count}\u{A0}weeks',
-        month: '{count}\u{A0}month | {count}\u{A0}months',
-      },
-      noParent: 'no parent',
-      map: {
-        summary: 'Branch map: {lanes} lanes, {total} items; {parts}.',
-        lane: 'Lane {name}: {total} items; {parts}',
-        hint: 'Left and Right move between tasks, Page Up and Page Down jump between stretches of one state, Home and End go to the ends, Enter opens the task.',
-        task: '{reference} · {title} · {state}',
-        position: '{position} of {total}',
-        filterLane: 'Show only lane {name}',
-        filter: 'Lane {name}',
-        clearFilter: 'Lane {name}: show every lane',
-        openParent: 'Open {reference}',
-        countDone: '{done} of {total} done',
-      },
-      seriesTotal: 'Scope {count}',
-      seriesClosed: 'Done {count}',
-      seriesOpen: 'Open {count}',
-      chartSummary:
-        'Scope from {from} to {to}: {start} at the start, {total} now; {closed} done and {open} open on {day}.',
-    },
+    chain: workItemChainMessages.en.chain,
     inspector: 'Work item',
     resize: 'Resize the work item',
     sections: 'Work item sections',

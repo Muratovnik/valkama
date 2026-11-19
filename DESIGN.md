@@ -1861,12 +1861,28 @@ a card on the tab whose next read finds no chain steps back to «Обзор». T
 under every link of a goal; the map and its hundreds of rows had held Overview's first
 screen between the next step and the description before that. The tab names it, so it has
 no heading of its own: it opens on its «Состав | Цепочка» switch and «На графе», and Back from
-the graph opens the card on this tab. The switch stands only where the two answer
-differently, by the counts the chain read gives for both scopes: where the work grew nothing
-past the root's children the two are one list, and a root with no children has no contents
-to read. An item of an attached store has the tab only where it has children, and there it
-says that its chain is read in the primary store.
-The section leads with a branch map: one lane per origin of work,
+the graph opens the card on this tab. A goal or a stage opens on «Состав», what it holds,
+and a task on «Цепочка», what grew from it: a task holds no work. The switch stands only
+where the two answer differently, by the counts the chain read gives for both scopes: where
+the work grew nothing past the root's children the two are one list, and a task with no
+children has no contents to read. A goal or a stage with no children keeps it, since it
+opens on its empty contents and the switch is its one way to its chain. The reader's choice
+holds while the card is open and comes back with it by Back. An item of an attached store
+has the tab only where it has children, and there it says that its chain is read in the
+primary store.
+«Состав» says first how much of the work under the root stands in each state, the chain
+read's counts in scope `tree` and none counted by the interface: tasks by their state's
+category, then, on a line of their own, the goals and stages under it by the state they
+derive, since «В работе» is said by both. Under the counts the work is the list's tree of
+rows: the root's stages and tasks at the top, each stage opening down to its tasks, in the
+order the read gives. A row says its reference, its title on one line, its state and who
+holds it while it is open; at a phone's width the holder gives way. A stage with open work
+opens and one with none starts folded, as in the list, and a fold the reader chose is kept
+with the list's, so a stage folded in one is folded in the other. One Tab stop, ↑ ↓, → and ←
+walk the rows as in the list, and Enter or a press opens a row's card. A root with nothing
+under it says «Внутри пока нет задач.» and draws no tree. «Состав» draws no branch map and
+no groups: its rows are the root's own work, and the map's lanes are origins of a chain.
+In «Цепочка» the section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the
 board's hues — finished green, in progress blue, review amber, ahead grey,

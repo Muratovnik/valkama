@@ -147,6 +147,7 @@ const surfaces: Surface[] = [
           loading: true,
           readable: true,
           scope: 'chain',
+          space: '',
         },
         global: { plugins: [i18n()] },
       }),

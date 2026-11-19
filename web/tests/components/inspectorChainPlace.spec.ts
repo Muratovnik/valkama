@@ -27,9 +27,9 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
 
 const ROOT = { ...workItemFixture('Planning rethink', 1), kind: 'goal' as const }
 
-function serveChain(totals: { chain: number; tree: number }) {
+function serveChain(totals: { chain: number; tree: number }, kind: 'goal' | 'task' = 'goal') {
   const chain = largeGoalChain()
-  serve(json(chainResponse({ ...chain, root: { ...chain.root, totals } })))
+  serve(json(chainResponse({ ...chain, root: { ...chain.root, kind, totals } })))
 }
 
 /** Answer every chain read with the next answer, the last one again once they run out. */
@@ -120,12 +120,14 @@ describe('a card’s chain', () => {
       { totals: { chain: 616, tree: 273 }, offered: true },
       // The work grew nothing past the children: both scopes are one list.
       { totals: { chain: 616, tree: 616 }, offered: false },
-      // No children: Goal would be an empty list.
-      { totals: { chain: 616, tree: 0 }, offered: false },
+      // No children: a goal opens on its contents all the same, so the toggle stands to reach
+      // the chain; a task opens on its chain, and Contents would be an empty list.
+      { totals: { chain: 616, tree: 0 }, offered: true },
+      { totals: { chain: 616, tree: 0 }, offered: false, kind: 'task' as const },
     ]
-    for (const { totals, offered } of cases) {
-      serveChain(totals)
-      const wrapper = mountInspector(ROOT)
+    for (const { totals, offered, kind = 'goal' as const } of cases) {
+      serveChain(totals, kind)
+      const wrapper = mountInspector({ ...ROOT, kind })
       await flushPromises()
       await showChain(wrapper)
       expect(wrapper.find('section.chain .chain-summary-line').exists()).toBe(true)
