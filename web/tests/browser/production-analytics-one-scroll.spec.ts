@@ -43,7 +43,7 @@ const ownScrolls = (page: Page) =>
           ['auto', 'scroll'].includes(getComputedStyle(one).overflowY) &&
           one.scrollHeight > one.clientHeight,
       )
-      .map((one) => (one.matches('.spending-table-frame') ? 'spending-table-frame' : one.className))
+      .map((one) => (one.matches('.section-table-frame') ? 'section-table-frame' : one.className))
     return { inner, panel: panel.scrollHeight - panel.clientHeight }
   })
 
@@ -70,7 +70,7 @@ async function toTable(page: Page) {
 function scrollSamples(page: Page) {
   return page.evaluate(async () => {
     const panel = document.querySelector<HTMLElement>('.analytics-panel')
-    const frame = document.querySelector<HTMLElement>('.spending-table-frame')
+    const frame = document.querySelector<HTMLElement>('.section-table-frame')
     if (!panel || !frame) throw new Error('no table')
     const head = frame.querySelector('thead th:nth-child(2)')
     const total = frame.querySelector('tfoot th')
@@ -201,7 +201,7 @@ for (const [width, height] of SIZES)
         const scrolls = await ownScrolls(page)
         seen[section.name] = scrolls
         expect(scrolls.inner, `${section.name}: parts that scroll on their own`).toEqual(
-          section.name === 'task' ? ['spending-table-frame'] : [],
+          section.name === 'task' ? ['section-table-frame'] : [],
         )
       }
       await record(info, `scrolls ${width}x${height}`, seen)
@@ -219,7 +219,7 @@ for (const [width, height] of SIZES)
       const placed = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>('.analytics-panel')
         const table = document.querySelector('.spending-table')
-        const frame = document.querySelector<HTMLElement>('.spending-table-frame')
+        const frame = document.querySelector<HTMLElement>('.section-table-frame')
         if (!panel || !table || !frame) throw new Error('no table')
         const shown = panel.getBoundingClientRect()
         const box = table.getBoundingClientRect()
@@ -245,7 +245,7 @@ for (const [width, height] of SIZES)
       await record(info, `table edges ${width}x${height}`, await expectEdges(page, 'opened'))
 
       // A row's name focused under the total is brought up clear of it, and of the heading row.
-      await page.locator('.spending-table-frame').evaluate((frame) => {
+      await page.locator('.section-table-frame').evaluate((frame) => {
         frame.scrollTop = 0
       })
       const name = page.locator('.spending-table tbody tr').nth(30).locator('.chart-press')

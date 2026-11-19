@@ -15,3 +15,6 @@ export const DECISION_POINTS = [
   'goal_defer',
   'assignment',
 ] as const
+
+/** One of those points, whose words are `decisionPoints.<point>` wherever it is said. */
+export type DecisionPoint = (typeof DECISION_POINTS)[number]

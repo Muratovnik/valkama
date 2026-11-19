@@ -217,7 +217,7 @@ for (const locale of ['en', 'ru'] as const)
         const double = await serveLive(page, WORK)
         double.lastEventAt = LAST_EVENT
         const analytics = await openReport(page, width, pageAt({ ...panel.state, period: 'now' }))
-        const period = analytics.locator('.analytics-period')
+        const period = analytics.locator('.period-bar-periods')
         const choose = async (name: string) => {
           await period.getByRole('radio', { name, exact: true }).click()
         }

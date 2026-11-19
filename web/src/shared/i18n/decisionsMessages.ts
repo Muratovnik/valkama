@@ -1,0 +1,73 @@
+/*
+ * The words of the Agent decisions page: what agents decided on their own in a period, by the
+ * point of participation it was decided at. The points' own words are `decisionPoints`.
+ */
+
+export const decisionsMessages = {
+  en: {
+    title: 'Agent decisions',
+    period: {
+      label: 'Period',
+      today: 'Today',
+      week: 'This week',
+      weeks4: 'Past 4 weeks',
+      custom: 'Custom',
+      from: 'From',
+      to: 'To',
+      reversed: 'The last day comes before the first.',
+    },
+    point: { label: 'Participation point', all: 'All points' },
+    refresh: 'Refresh',
+    refreshFailed: 'Could not refresh.',
+    failed: 'Could not read the decisions.',
+    empty: 'The agents decided nothing on their own in this period',
+    emptyDescription: 'Choose a longer period or another point.',
+    incomplete: 'Choose the first and the last day of the period.',
+    table: {
+      label: 'Decisions of the period',
+      when: 'When',
+      point: 'Point',
+      item: 'Card',
+      session: 'Session',
+      what: 'What was decided',
+      sortBy: 'Sort by {column}',
+      count: '{count} decision | {count} decisions',
+      reading: 'Read {count} of {total}…',
+      most: 'The newest {count} of {total} are shown.',
+      open: 'Open {reference} on its System events',
+    },
+  },
+  ru: {
+    title: 'Решения агентов',
+    period: {
+      label: 'Период',
+      today: 'Сегодня',
+      week: 'Эта неделя',
+      weeks4: '4 недели',
+      custom: 'Свой',
+      from: 'С',
+      to: 'По',
+      reversed: 'Последний день стоит раньше первого.',
+    },
+    point: { label: 'Точка участия', all: 'Все точки' },
+    refresh: 'Обновить',
+    refreshFailed: 'Не удалось обновить.',
+    failed: 'Не удалось прочитать решения.',
+    empty: 'За период агенты ничего не решали сами',
+    emptyDescription: 'Выберите период длиннее или другую точку.',
+    incomplete: 'Выберите первый и последний день периода.',
+    table: {
+      label: 'Решения за период',
+      when: 'Когда',
+      point: 'Точка',
+      item: 'Карточка',
+      session: 'Сессия',
+      what: 'Что решено',
+      sortBy: 'Сортировать по столбцу «{column}»',
+      count: '{count} решение | {count} решения | {count} решений',
+      reading: 'Прочитано {count} из {total}…',
+      most: 'Показаны {count} новейших из {total}.',
+      open: 'Открыть {reference} на «Системных событиях»',
+    },
+  },
+}

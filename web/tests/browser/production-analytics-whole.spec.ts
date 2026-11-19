@@ -122,7 +122,7 @@ const TOKEN_WIDTHS = [
 const sortMark = (page: Page) =>
   page.evaluate(() => {
     const icon = document.querySelector('.table-head .table-sort-icon')
-    const frame = document.querySelector('.spending-table-frame')
+    const frame = document.querySelector('.section-table-frame')
     if (!icon || !frame) return null
     const mark = icon.getBoundingClientRect()
     const room = frame.getBoundingClientRect()
@@ -194,7 +194,7 @@ for (const locale of ['ru-RU', 'en-US'] as const) {
 /** The table's frame as it opens: its visible box, and where each heading stands in it. */
 async function tableFrame(page: Page) {
   return page.evaluate(() => {
-    const frame = document.querySelector<HTMLElement>('.spending-table-frame')
+    const frame = document.querySelector<HTMLElement>('.section-table-frame')
     if (!frame) throw new Error('no table frame')
     const headings = () => [...frame.querySelectorAll('thead th')]
     frame.scrollLeft = 0

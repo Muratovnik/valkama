@@ -3121,6 +3121,53 @@ anew and never summed into them. In a table, the tokens a cost leaves without a 
 quieter second line under its amount, which keeps to the row's line, and a window too narrow for
 them may scroll the table sideways with its names kept in place.
 
+### Agent decisions
+
+Agent decisions is where a person reads what agents decided on their own: each decision a
+participation point let an agent take without asking, and the work it took up by assignment.
+It stands in the rail's Understand group beside Analytics and, like it, fills the window: a bar
+over one table.
+
+Its scope is the context bar's, as on every page that reads a space: a space, a project of it
+or every space at the top. The page has no choice of space or project of its own, so the scope
+is chosen once and a page never disagrees with the bar over it.
+
+Its own filters are the period and the point. The bar is the period strip Analytics stands on:
+today, this week, the past four weeks or days of the reader's own, chosen in the bar with the
+same fields and the same refusal of a last day before the first. Beside it «Participation
+point» narrows the table to one point, «All points» until one is chosen, and the refresh reads
+the view again as of now. The period, the point and the days are the page's address, so a
+reload or a link reads the same view; a choice rewrites the address in place, so Back leaves
+the page instead of stepping through its choices.
+
+The table is the section table Analytics stands on: it takes the rest of the window under the
+bar, wherever the bar's rows end, and scrolls inside its own frame under a heading row that
+stays, while the bar stays above it and the module's frame has nothing to scroll; a window too
+short for its least scrolls the page under the bar instead. Its columns are when, the point, the card — its reference over its
+title — the session that decided and what was decided, newest first; each heading sorts by its
+column, the moment newest first and words A to Z first. Over the table a line counts the view's
+decisions. The page reads them page by page of 200, the first page drawn as soon as it lands
+with «Read 200 of 1000…» over it, so a long period of a thousand decisions shows its newest at
+once and ends as one table; past 5000 it shows the newest and says how many there are in all.
+
+Its states are the shared panel's. The first read waits in it and, failing, is its error with
+«Retry»; a period with no decision says «The agents decided nothing on their own in this
+period» and offers a longer period or another point, the bar above it being how it is left. A
+choice of another view dims the last one until its first page lands, so the last view is never
+shown as the current one; a refresh replaces the rows only once it has read them whole, and a
+refresh that fails keeps them and says so over them.
+
+A row's card is a link: a plain press opens the card over the page on its System events, as the
+address names it, so Back closes it and gives the page back as it was left; a press with a
+modifier or the middle button opens it in a new tab. A card opened from that card opens on its
+own first section, and a card Back returns to opens where it was left.
+
+In a card's System events, an event an agent's own decision recorded carries a mark under its
+title, the agent's sign and «Agent's own decision · Goal closed»: the point's kind, in the words
+of the page's point filter and its table, so a decision read on the card is found on the page by
+the same name, and the history's search finds the event by them. An event no decision marked
+carries nothing, and the mark is the record's own: the event's point as the full record has it.
+
 ### Settings
 
 Settings uses one section anatomy and one type scale, and its groups read as

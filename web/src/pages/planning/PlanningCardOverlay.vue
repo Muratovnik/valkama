@@ -14,6 +14,9 @@
  * stays: it reads and writes its own record without the space, so a field such as the priority
  * keeps working, and the state, whose moves only the space knows, is shown and not offered.
  *
+ * A page may name the section its cards open on, such as the System events of a page of events;
+ * the card it opened shows that section first, and a card opened from that card its own first.
+ *
  * What only the board has stays there. A chain shown on the graph goes to the board's graph, and
  * a label pressed on the card, which narrows the board, narrows nothing here.
  */
@@ -28,6 +31,7 @@ import PlanningCardPanel from '@/pages/planning/PlanningCardPanel.vue'
 import type { PlanningCardProps } from '@/pages/planning/PlanningCardPanel.vue'
 
 import { provideDefaultProject } from '@/widgets/work-item-inspector/utils/memorySource.ts'
+import type { InspectorSection } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 
 import { CutoverPendingError, fetchPlanning } from '@/shared/api/planningApi.ts'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -49,6 +53,8 @@ const props = defineProps<{
   entity: EntityRef | undefined
   primaryWriteScopeId: string | null
   scope: OperatingScope
+  /** The section a card the page opened shows first; null for the card's own first. */
+  opensOn?: InspectorSection | null
   /** An address asked the open card to go to its waiting question. */
   questionAsked?: boolean
 }>()
@@ -198,6 +204,7 @@ const shownCard = computed((): PlanningCardProps | null =>
         parent: parent.value,
         kind: openRecord.value?.kind,
         questionAsked: props.questionAsked,
+        opensOn: trail.canGoBack.value ? null : props.opensOn,
         onChanged: readSpace,
         onChain: showChain,
         onQuestionTaken: () => emit('question-taken'),
