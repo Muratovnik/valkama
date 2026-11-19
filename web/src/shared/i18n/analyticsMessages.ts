@@ -4,6 +4,7 @@
  */
 import { analyticsDetailMessages } from '@/shared/i18n/analyticsDetailMessages.ts'
 import { analyticsFigureMessages } from '@/shared/i18n/analyticsFigureMessages.ts'
+import { analyticsFilterMessages } from '@/shared/i18n/analyticsFilterMessages.ts'
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsQuotaMessages } from '@/shared/i18n/analyticsQuotaMessages.ts'
@@ -159,22 +160,7 @@ export const analyticsMessages = {
         dayName: '{weekdayLong}, {date}',
         full: 'The link to this view cannot hold one more filter, so the tasks of {value} are not shown. Clear a filter to make room.',
       },
-      filters: {
-        label: 'Filter the usage',
-        short: 'Filter',
-        menu: 'Dimensions to filter by',
-        dimensions: 'Filter by',
-        back: '{dimension}: back to the dimensions',
-        clearText: 'Clear the text',
-        chips: 'Filters set',
-        clear: 'Clear filters',
-        remove: 'Remove {label}',
-        failed: 'The values could not be loaded.',
-        noMatches: 'No matches',
-        full: 'The link to this view cannot hold more values of the {dimension} filter, so this one was not added.',
-        add: 'Add to filter',
-        held: 'Already in filter',
-      },
+      filters: analyticsFilterMessages.en,
       frame: {
         sections: 'Sections of the usage',
         overview: 'Overview',
@@ -360,22 +346,7 @@ export const analyticsMessages = {
         dayName: '{date}, {weekday}',
         full: 'Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «{value}» не показаны. Снимите фильтр, чтобы освободить место.',
       },
-      filters: {
-        label: 'Фильтр расхода',
-        short: 'Фильтр',
-        menu: 'Измерения для фильтра',
-        dimensions: 'Фильтровать по',
-        back: '{dimension}: назад к измерениям',
-        clearText: 'Очистить текст',
-        chips: 'Заданные фильтры',
-        clear: 'Снять фильтры',
-        remove: 'Убрать {label}',
-        failed: 'Не удалось загрузить значения.',
-        noMatches: 'Ничего не найдено',
-        full: 'Ссылка на этот вид не вмещает больше значений фильтра «{dimension}», поэтому это значение не добавлено.',
-        add: 'Добавить в фильтр',
-        held: 'Уже в фильтре',
-      },
+      filters: analyticsFilterMessages.ru,
       frame: {
         sections: 'Разделы расхода',
         overview: 'Обзор',
