@@ -208,8 +208,7 @@ function nearer(
     if (oneTop !== otherTop) return oneTop > otherTop
   }
   const [oneUsed, otherUsed] = [one.latest.used_percent, other.latest.used_percent]
-  if (oneUsed !== otherUsed) return oneUsed > otherUsed
-  return fresh(one) && !fresh(other)
+  return oneUsed === otherUsed ? fresh(one) && !fresh(other) : oneUsed > otherUsed
 }
 
 /**
