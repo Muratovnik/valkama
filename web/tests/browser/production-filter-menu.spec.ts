@@ -24,6 +24,14 @@ import { sixtyLabelSpace } from './served/filter.ts'
 import { test } from './test.ts'
 
 const everywhere = (text: string) => `Search for “${text}” in all projects`
+/**
+ * The goals whose titles hold «boa» and «board», as «Goal or stage» offers them: typed text
+ * finds a value of any facet, and the labels stand last.
+ */
+const BOARD_GOALS = [
+  'MAIN-401 · Board lanes: read the space by chain, with each lane’s open and closed work counted where its lane begins',
+  'MAIN-420 · The first board',
+]
 const expanded = (page: Page, value: 'false' | 'true') =>
   expect(field(page)).toHaveAttribute('aria-expanded', value)
 
@@ -163,7 +171,7 @@ test('text narrows the menu and the work; a number leaves the search over every 
   await board(page)
   await field(page).click()
   await page.keyboard.type('boa')
-  await expect(page.getByRole('option')).toHaveText(['board', everywhere('boa')])
+  await expect(page.getByRole('option')).toHaveText([...BOARD_GOALS, 'board', everywhere('boa')])
 
   await field(page).fill('MAIN-402')
   await expect.poll(() => shownTiles(page)).toEqual(['MAIN-402'])
@@ -192,7 +200,7 @@ test('text narrows the menu and the work; a number leaves the search over every 
 
   // Letters typed away bring the list back with them.
   await field(page).fill('board')
-  await expect(page.getByRole('option')).toHaveText(['board', everywhere('board')])
+  await expect(page.getByRole('option')).toHaveText([...BOARD_GOALS, 'board', everywhere('board')])
 })
 
 test('the menu’s last row opens the search over every project on the text', async ({ page }) => {
@@ -215,9 +223,9 @@ test('the keyboard steps into a facet and back out of it', async ({ page }) => {
   await board(page)
   await field(page).focus()
   await page.keyboard.press('ArrowDown')
-  // The last facet: no holder works here, so the walk is the two presets and four facets.
-  await expect(menu(page).getByRole('option')).toHaveCount(6)
-  for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown')
+  // The last facet: no holder works here, so the walk is the four conditions and six facets.
+  await expect(menu(page).getByRole('option')).toHaveCount(10)
+  for (let step = 0; step < 9; step += 1) await page.keyboard.press('ArrowDown')
   // The row the field names as active, the one a screen reader is told of.
   const isActive = async (name: string) =>
     expect(field(page)).toHaveAttribute(
