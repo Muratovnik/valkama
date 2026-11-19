@@ -39,7 +39,6 @@ import {
 const AHEAD: StepAhead = {
   value: 50,
   now: { name: 'Now', figure: '50%', notes: ['Last reading at h1.5'] },
-  silent: false,
   forecast: {
     name: 'Forecast by the reset',
     figure: '70%–100%',
@@ -330,12 +329,24 @@ describe('the step line past its readings', () => {
     // Over five hours: the last reading, half past twelve, at 90 of 300; now, three hours in, at 180.
     await line.setProps({ ahead: AHEAD })
     expect(path().at(-1)).toEqual([180, 50])
-    await line.setProps({ ahead: { ...AHEAD, silent: true } })
+    await line.setProps({ silent: true })
     expect(path().at(-1)).toEqual([90, 50])
     // No stroke past the last reading toward now.
     expect(path().filter(([x]) => x > 90)).toEqual([])
     // «Now» keeps its place and its hint.
     expect(targets(line)[0]).toMatchObject({ kind: 'now', hint: 'Now: 50%\nLast reading at h1.5' })
+    line.unmount()
+  })
+
+  it('ends the line of a window silent by its reset at its last reading, as a running one’s', async () => {
+    // Read at the reset, five hours in; fresh by then, the line holds to the reset, 300 of 300.
+    const line = openLine(READ, START + 5 * HOUR, null, true)
+    const path = () => corners(line.get('.step-path').attributes('d'))
+    expect(path().at(-1)).toEqual([300, 50])
+    // Silent by then, it ends at the last reading, half past twelve, 90 of 300.
+    await line.setProps({ silent: true })
+    expect(path().at(-1)).toEqual([90, 50])
+    expect(path().filter(([x]) => x > 90)).toEqual([])
     line.unmount()
   })
 

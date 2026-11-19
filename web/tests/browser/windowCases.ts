@@ -133,7 +133,6 @@ export const stepWords: StepWords = {
 export const stepAhead: StepAhead = {
   value: 58,
   now: { name: 'Now', figure: '58%', notes: ['Last reading at 14:00, 30 min ago, from the poll'] },
-  silent: false,
   forecast: {
     name: 'Forecast by the reset',
     figure: '84%–100%',
@@ -182,6 +181,5 @@ export const stepCloseProps = {
     value: 45,
     now: { name: 'Now', figure: '45%', notes: ['Last reading at 14:00, 2 h ago, from the poll'] },
     forecast: null,
-    silent: false,
   },
 }

@@ -26,11 +26,12 @@
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
  * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
  * is a bar with no fill that says «0% used» and «up to date». While the window stands, its step line
- * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
- * silent window's line stops at its last reading, since nothing was measured after it, while a
- * fresh one's holds to now, a source writing a reading only when a value changes. A window past
- * its reset by the panel's moment has neither and shows its whole window alone, even
- * where its answer was read before the reset. Where the window's count restarted inside it, the
+ * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`). A
+ * window past its reset by the panel's moment has neither and shows its whole window alone, even
+ * where its answer was read before the reset. Running or past its reset, a window silent by then
+ * (`silent`) has its line stop at its last reading, since nothing was measured after it, while a
+ * fresh one's holds to the answer's moment or the reset, a source writing a reading only when a
+ * value changes. Where the window's count restarted inside it, the
  * line marks each restart at its fall and the table lists it among the readings
  * (`restarts`): the line would otherwise fall to nothing with no word of why.
  *
@@ -91,6 +92,15 @@ const name = computed(() => words.windowName(props.window))
 const ended = computed(() => !stands(props.window, props.now))
 /** The window's state at the panel's moment, though its answer may have called it fresh. */
 const state = computed(() => stateAt(props.window, props.now, props.freshFor))
+/**
+ * Whether the window was silent by the moment it stands to: the panel's, or its reset where it has
+ * passed. Nothing was measured after its last reading, so its line ends there.
+ */
+const silent = computed(() => {
+  const { window, now, freshFor } = props
+  const reset = window.resets_at === null ? now : Date.parse(window.resets_at)
+  return stateAt(window, Math.min(now, reset), freshFor) === 'silent'
+})
 /**
  * The window's forecast as its drawings take it, from the answer's moment to the reset, while the
  * window stands at the panel's moment: a window past its reset forecasts nothing more.
@@ -202,7 +212,6 @@ const ahead = computed<StepAhead | null>(() => {
   return {
     value: window.latest.used_percent,
     now: words.nowTarget(window, now, today, freshFor),
-    silent: state.value === 'silent',
     forecast:
       found && ends ? { ...words.forecastTarget(window, ends, now, today), ...found } : null,
   }
@@ -274,6 +283,7 @@ const readingsCaption = computed(() =>
         :ahead="ahead"
         :ended="ended"
         :restarts="restarts"
+        :silent="silent"
       />
       <StepLineTable
         v-else

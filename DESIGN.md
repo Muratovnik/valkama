@@ -1196,9 +1196,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   end; from the track's start at 0 %; and no tail where the forecast names no share past the
   share spent — a pace that spends nothing more, a window too new for a forecast, one spent or
   read past 100 %, whose fill stops at the track's end. A reading draws no dot at rest, the line alone, and no
-  end marker either: the line holds to now past its last reading, so a dot there stood hours
-  before now on a silent window. The reading pointed at or focused draws its dot and says its
-  moment, its share and its source in its hint, as every mark does; the one a key stands on
+  end marker either: a fresh window's line holds to now past its last reading, a source writing
+  one only when a value changes, so a dot there stood hours before the line's end. A window silent
+  by now, or by its reset where that has passed, measured nothing after its last reading, and its
+  line ends there, so the line's visible end is a reading, which the pointer finds at its end.
+  The reading pointed at or focused draws its dot and says its moment, its share and its source in its hint, as every mark does; the one a key stands on
   keeps its dot whatever the pointer does, and Tab lands on the latest. Past the readings the
   line has two places of its own, each with its hint and painted only while pointed at or
   focused, a ring rather than a reading's dot: «now» where the line ends, its share, when the
@@ -1219,8 +1221,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   readings the first third of the plot. Where the span ends before the reset the corridor runs
   to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
   reset by the page's clock, even one read before it, draws neither the corridor nor the places
-  past its readings and shows its whole window alone, its line held to the moment it was read,
-  its restarts still marked on it. A 0 % has no fill,
+  past its readings and shows its whole window alone, its line held to the moment it was read or
+  to its reset where it was fresh then, and ended at its last reading where it was silent by
+  then, its restarts still marked on it. A 0 % has no fill,
   and a window with no figure draws the track alone; the fill stands apart from the ground and
   the track by lightness, so both read in grayscale and under a forced palette in its inks,
   where the hatch and the rings take its ink too. Their table twins are `WindowBarTable` and

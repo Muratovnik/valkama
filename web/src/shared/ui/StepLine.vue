@@ -3,15 +3,16 @@
  * A window's readings over its span: the share spent as steps, flat from one reading to the next
  * and up or down at it, never a slope between them, since a source writes a reading only when a
  * value changed (`windowGeometry`). The last reading holds to `end`, the moment the answer was
- * read; but in a silent window (`ahead.silent`) nothing was measured past the last reading, and
- * the line ends there, its round cap on it, with nothing drawn from it to «now». Beside the steps, where steady use from the window's start would stand at each moment
- * (`even`): a thin line from nothing at the start to the whole at the reset. Past `end`, while the
- * window still runs (`ahead`), the corridor of its forecast: from the share it stands at now to
- * where its slower and its faster pace leave it at the reset, a band in the readings' hue under
- * the one hatch of a figure not final yet (`hatch.css`); a forecast of one value is a
- * ribbon of the same hatch, flat along the top from where it runs out. The band keeps half a
- * ribbon's width outside each edge, so its start at now and a range said alike are never a
- * hairline.
+ * read; but in a silent window (`silent`) nothing was measured past the last reading, and the line
+ * ends there, its round cap on it, with nothing drawn from it to «now» or to the reset, so the
+ * line's visible end is a reading, found at its own mark. Beside the steps, where steady use from
+ * the window's start would stand at each moment (`even`): a thin line from nothing at the start to
+ * the whole at the reset. Past `end`, while the window still runs (`ahead`), the corridor of its
+ * forecast: from the share it stands at now to where its slower and its faster pace leave it at
+ * the reset, a band in the readings' hue under the one hatch of a figure not final yet
+ * (`hatch.css`); a forecast of one value is a ribbon of the same hatch, flat along the top from
+ * where it runs out. The band keeps half a ribbon's width outside each edge, so its start at now
+ * and a range said alike are never a hairline.
  *
  * A running window opens on its start to now and the forecast past it (`aheadSpan`), now at three
  * quarters of the plot, with a switch to the whole window up to its reset; a window past its reset
@@ -123,6 +124,12 @@ const props = defineProps<{
   /** Whether the window has reset since it was read: the whole window is then its one span. */
   ended?: boolean
   /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
+  /**
+   * Whether nothing was measured past the last reading, so the line ends there rather than
+   * holding to `end`. A source writes a reading only when a value changes, so a fresh window's
+   * line holds.
+   */
+  silent?: boolean
   even?: boolean
   /** Where the window's count restarted inside it, each at the moment of one of `points`. */
   restarts?: readonly StepRestart[]
@@ -140,7 +147,7 @@ const frame = computed(() => ({ ...shown.value, top: stepTop(props.points) }))
 const readings = computed(() => readingsIn(shown.value, props.points))
 /** Where the readings' line ends: at `end`, or at the last reading of a silent window. */
 const lineEnd = computed(() =>
-  props.ahead?.silent ? (props.points.at(-1)?.at ?? props.end) : props.end,
+  props.silent ? (props.points.at(-1)?.at ?? props.end) : props.end,
 )
 const path = computed(() => stepPath(frame.value, readings.value.held, lineEnd.value))
 /** The pace across the span shown: where steady use stands at its start and at its end. */

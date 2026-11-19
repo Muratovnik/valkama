@@ -40,7 +40,7 @@ type Reading = [ago: number, percent: number]
  * A window that is a share of a limit: its readings so many ms before `now`, the last of them
  * the latest, its reset `left` ms after `now`, and its state by the age of the latest.
  */
-function share(
+export function share(
   now: number,
   offset: number,
   window: {

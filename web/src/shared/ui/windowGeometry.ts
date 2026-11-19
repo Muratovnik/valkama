@@ -150,12 +150,6 @@ export type StepCourse = readonly StepTurn[]
 export interface StepAhead {
   forecast: (StepTarget & { high: StepCourse; low: StepCourse }) | null
   now: StepTarget
-  /**
-   * Whether the window is silent: nothing was measured past its last reading, so the readings'
-   * line ends there rather than holding to now. A fresh window's source writes a reading only
-   * when a value changes, so its line holds to now.
-   */
-  silent: boolean
   /** The share the window stands at now, the line's end. */
   value: number
 }
