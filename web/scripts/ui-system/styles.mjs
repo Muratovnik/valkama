@@ -64,10 +64,16 @@ const selectionOwners = new Set([
  * Files allowed to author `aria-pressed` or a `radio` role. `ToggleChip` is one
  * toggle on its own — a preset that is on or off beside others that are too —
  * rather than one of a row of exclusive choices, which stays the segmented
- * control's: a radio group, each segment a `radio`. A native radio input is a
+ * control's: a radio group, each segment a `radio`. `LayerKey` is a legend's key
+ * of a layer a chart draws beside its data, turned off and on on its own as a
+ * line of the legend, not a chip standing in it. A native radio input is a
  * form's own control and is not counted.
  */
-const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue', 'shared/ui/ToggleChip.vue'])
+const segmentedOwners = new Set([
+  'shared/ui/LayerKey.vue',
+  'shared/ui/SegmentedControl.vue',
+  'shared/ui/ToggleChip.vue',
+])
 /**
  * Files allowed to author a tab role. A row that switches panels is the same segmented row
  * with tab semantics, and its panel has to name the tab that shows it: two halves of one

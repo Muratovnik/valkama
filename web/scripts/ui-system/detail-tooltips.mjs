@@ -107,7 +107,7 @@ export const DETAIL_TOOLTIPS = new Map([
     'a legend entry prints its series’ name; its figure over the span and its share are on no mark',
   ],
   [
-    `shared/ui/ChartLegend.vue <span> v-tooltip.detail="hintOf('outline')"`,
+    `shared/ui/ChartLegend.vue <LayerKey> v-tooltip.detail="hintOf('outline')"`,
     'the entry names the mark of the period compared with; that period’s sum is on no mark',
   ],
   [

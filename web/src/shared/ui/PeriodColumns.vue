@@ -14,8 +14,12 @@
  * period's hint says its figure. The tick reaches 4px past each side of its column, where no
  * border between two segments ever reaches, so it is never read as a gap in a grey stack; where a
  * period's room leaves less, it reaches what it can and stays a hair inside that room
- * (`periodPlot.css`). A series with no figure in a period (`absent`, such as work with no price)
- * draws nothing there, and the hint and the period's name say so rather than a zero. A period whose
+ * (`periodPlot.css`). The tick and the line of a change are layers beside the data, which their
+ * keys in the legend turn off and on for every chart at once (`chartLayersStore`): a layer turned
+ * off is not drawn, and no hint, name or step of the scale counts it, so a period before that was
+ * taller no longer holds the scale up; its key stays, and nothing else says it is off. The
+ * columns are the data and always show. A series with no figure in a period (`absent`, such as
+ * work with no price) draws nothing there, and the hint and the period's name say so rather than a zero. A period whose
  * figures are not in yet (`pending`) stands as a hatched ground the plot's height, never a column
  * of zero, and its hint and name say it has no data yet. `PeriodColumnsTable` is the same periods
  * as a table.
@@ -96,6 +100,7 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { FRAME_KEYS } from '@/shared/ui/useAxisFrame.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
 import { usePeriodFrame } from '@/shared/ui/usePeriodFrame.ts'
+import { usePeriodLayers } from '@/shared/ui/usePeriodLayers.ts'
 import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
 const props = withDefaults(
@@ -122,18 +127,14 @@ const emit = defineEmits<{
 }>()
 
 const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
-const chart = computed(() => stackColumns(props.columns, props.series, props.marks, axis.value))
-/** The name of the mark of a period compared with, where the chart draws one. */
-const outline = computed(() =>
-  props.columns.some((column) => column.before) ? props.words.before : undefined,
+/** The layers beside the data, as the plot draws them and as the legend names them. */
+const { change, columns: drawnColumns, marks: drawnMarks, outline } = usePeriodLayers(() => props)
+const chart = computed(() =>
+  stackColumns(drawnColumns.value, props.series, drawnMarks.value, axis.value),
 )
 /** The name of the hatch while a period still running is on the plot, which is hatched. */
 const hatch = computed(() =>
   props.columns.some((column) => column.incomplete) ? props.words.hatch : undefined,
-)
-/** The name of the line of a change at a period's start while the plot marks one. */
-const change = computed(() =>
-  chart.value.columns.some((one) => one.marks.length) ? props.words.change : undefined,
 )
 const empty = computed(() => !props.columns.length || !props.series.length)
 

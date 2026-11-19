@@ -36,7 +36,12 @@
  * as stopping under the mark. What the plot draws is told apart by its drawing — the readings a
  * heavier line in the chart's hue, the pace a hairline in the quiet ink, the forecast a hatched
  * band, now an upright hairline — and a legend names each in the line's head (`StepLineHead`), the
- * forecast while the span shows it and now while it is marked.
+ * forecast while the span shows it and now while it is marked. The pace and the forecast are
+ * layers beside the readings, which their keys in the legend turn off and on for every chart at
+ * once (`chartLayersStore`): one turned off is not drawn, and no hint or place counts it — the
+ * forecast's place goes with its corridor, and «now» then takes the pointer on to the plot's end —
+ * while its key stays. The readings are the data and always show; now and the top's level orient
+ * the plot and are no layer.
  *
  * At rest no reading paints its mark: a mark at each reading made a busy window a chain of dots
  * that hid its own steps. The reading under the pointer paints its mark, and so does the one the
@@ -99,6 +104,7 @@
 import { computed, nextTick, ref } from 'vue'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { useChartLayersStore } from '@/shared/stores/chartLayersStore.ts'
 import { readingHint } from '@/shared/ui/markHints.ts'
 import StepLineHead from '@/shared/ui/StepLineHead.vue'
 import { vHintPick, vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -163,6 +169,9 @@ const readings = computed(() => readingsIn(shown.value, props.points))
 /** Where the readings' line ends: at `end`, or at the last reading of a silent window. */
 const lineEnd = computed(() => (props.silent ? (props.points.at(-1)?.at ?? props.end) : props.end))
 const path = computed(() => stepPath(frame.value, readings.value.held, lineEnd.value))
+const layers = useChartLayersStore()
+/** Whether the pace is drawn: the window has one, and its layer is on. */
+const evenDrawn = computed(() => Boolean(props.even) && layers.shown('even'))
 /** The pace across the span shown: where steady use stands at its start and at its end. */
 const evenLine = computed(() => ({
   y1: stepY(frame.value, evenAt(whole.value, shown.value.from)),
@@ -185,13 +194,20 @@ function stepEnd(index: number) {
   return next ? next.at : Math.max(props.end, point.at)
 }
 
-/** The corridor past the readings, whether the span shows it and the places past them. */
+/**
+ * The corridor past the readings, whether the span has one for the legend to name, and the places
+ * past them; neither the corridor nor the forecast's place while its layer is off.
+ */
 const {
   clip: corridorClip,
-  drawn: corridorShown,
+  named: corridorNamed,
   nowShown,
   targets,
-} = useStepAhead(() => props, frame)
+} = useStepAhead(
+  () => props,
+  frame,
+  () => layers.shown('ahead'),
+)
 /** How far along the plot now stands, from 0 to 1, where the line marks it; null where it does not. */
 const nowX = computed(() => (nowShown.value ? stepX(frame.value, props.end) : null))
 /** The words of now's key in the legend while the plot marks now. */
@@ -343,7 +359,7 @@ function stand(index: number) {
       :framed="narrowed"
       :whole="words.whole"
       :legend="legend"
-      :ahead="corridorShown"
+      :ahead="corridorNamed"
       :even="even"
       :muted="ended"
       :now="nowKey"
@@ -406,7 +422,7 @@ function stand(index: number) {
             :y2="STEP_HEIGHT"
           />
           <line
-            v-if="even"
+            v-if="evenDrawn"
             class="step-even"
             data-mark="even"
             x1="0"

@@ -1080,9 +1080,26 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   A hue
   never speaks alone: a chart of two series or more carries a legend, and every hint and every
   accessible name say each series by name. The legend's lines step 24px with no gap between
-  them, every line one height, and every key fills its line: one that acts, a link or a button
-  alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next line, and one that
-  only shows takes no focus, no pointer's hand and no press. A legend's name takes one line, as
+  them, every line one height, and every key fills its line: one that acts, a link, a button
+  or a layer's toggle alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next
+  line, and one that only shows takes no focus, no pointer's hand and no press. A series' key
+  acts where its series does; a mark's key acts only where the mark is a layer. The marks a chart
+  draws beside its data are its layers — the tick of the period compared with, the line of an
+  account change, and on a step line the pace and the forecast — and a layer's key is a toggle:
+  a press, by the pointer or by Enter or Space, turns that layer off on every chart that draws
+  it, and the next turns it on again, one choice per layer kept on this computer, which a
+  reload keeps until it is turned on again (`chartLayersStore`). A layer turned off is not
+  drawn, and no hint, name, place or step of the scale counts it, so a period before that was
+  taller no longer holds the scale up. Its key stays, pressed while its layer shows
+  (`aria-pressed`) and, while it is off, its swatch faint and its name in the tertiary ink struck
+  through, a state said by more than a tone, and there to turn it back on; nothing else on the
+  chart says a layer is off, no banner and no note. A chart's table keeps every figure. The
+  owner asked for «previous period» and the other added marks to be switches that turn their
+  display off and on, and drew the line: the data itself — the stacked series, a step line's
+  readings — always shows, so a column's sum never disagrees with the figures beside it; the
+  hatch of a period still running is how unfinished data is drawn, and a step line's now and
+  the level of its top orient the plot, so none of them is a layer and their keys do not act.
+  A legend's name takes one line, as
   wide as the legend at most, and ends in an ellipsis from its end, so a task's reference stays,
   and a pair's first part gives way before its end, the model, does; the entry's hint says it
   whole. Broken wherever a letter fell, a task's name took two lines an

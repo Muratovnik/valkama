@@ -60,7 +60,10 @@ const linesOf = (page: Page) =>
       const fill = window.querySelector('[data-mark="fill"]')
       return {
         key: `${window.closest<HTMLElement>('[data-account]')?.dataset.account} ${(window as HTMLElement).dataset.window}`,
-        choices: line?.querySelectorAll('[role="radio"], [role="radiogroup"], button').length ?? -1,
+        // A choice of span; a layer's key in the legend turns a layer off and on, and is none.
+        choices:
+          line?.querySelectorAll('[role="radio"], [role="radiogroup"], button:not([aria-pressed])')
+            .length ?? -1,
         from: line?.querySelector('[data-region="axis"] [data-moment="from"]')?.textContent ?? '',
         to: line?.querySelector('[data-region="axis"] [data-moment="to"]')?.textContent ?? '',
         muted: line?.dataset.muted !== undefined,

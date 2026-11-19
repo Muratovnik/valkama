@@ -8,12 +8,24 @@
  * grayscale too; and, while a frame narrows the line, the button that takes it back to its whole
  * window, at the row's start, sent out as `whole`.
  *
+ * The pace and the forecast are layers beside the readings, and their keys are toggles: a press,
+ * by the pointer or by Enter or Space, turns that layer off on every chart that draws it and the
+ * next turns it on again, a choice kept on this computer (`LayerKey`, `chartLayersStore`). The
+ * key stays, pressed while its layer shows (`aria-pressed`), and off, its swatch faint and its
+ * name in the tertiary ink struck through, so its state is more than a tone and it is there to
+ * turn the layer back on. The readings' key and now's do not act: the readings are the data,
+ * which always shows, and now orients the plot. Those two are left to the line's name, which says
+ * what they do (`aria-hidden`), while a toggle is a button of its own; each key is 24 pixels
+ * tall, the target WCAG 2.5.8 asks, and the wrapped lines of keys stand on that step with no gap
+ * between them.
+ *
  * One row as tall as a compact control whether the button stands there or not, so the plot never
  * moves when it comes or goes. The legend's keys wrap, each whole, rather than run past the plot.
  * The row is the line's `data-region="head"`; the button is `data-step="whole"`; the forecast's
  * key is `data-key="ahead"`, its swatch of the hatch `data-mark="hatch"`; the pace's key is
  * `data-key="even"` and now's `data-key="now"`, each swatch the key's first child.
  */
+import LayerKey from '@/shared/ui/LayerKey.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 defineProps<{
@@ -23,9 +35,9 @@ defineProps<{
   legend: { line: string; ahead?: string; even?: string }
   /** The button's words: «Whole window». */
   whole: string
-  /** Whether the forecast's corridor is drawn in the span shown, and so named. */
+  /** Whether the span shown has the forecast's corridor, drawn or turned off, and so names it. */
   ahead?: boolean
-  /** Whether the pace is drawn, and so named. */
+  /** Whether the window has a pace, drawn or turned off, and so names it. */
   even?: boolean
   /** Whether the readings are drawn in the neutral ink of a window past its reset. */
   muted?: boolean
@@ -49,34 +61,42 @@ const emit = defineEmits<{ whole: [] }>()
     >
       {{ whole }}
     </VButton>
-    <span
-      class="step-legend"
-      aria-hidden="true"
-    >
-      <span class="step-key"
+    <span class="step-legend">
+      <span
+        class="step-key"
+        aria-hidden="true"
         ><span
           class="step-swatch swatch-line"
           :class="{ 'swatch-muted': muted }"
         />{{ legend.line }}</span
       >
-      <span
+      <LayerKey
         v-if="even && legend.even"
         class="step-key"
+        layer="even"
         data-key="even"
-        ><span class="step-swatch swatch-even" />{{ legend.even }}</span
       >
-      <span
+        <span
+          class="step-swatch swatch-even"
+          aria-hidden="true"
+        />{{ legend.even }}
+      </LayerKey>
+      <LayerKey
         v-if="ahead && legend.ahead"
         class="step-key"
+        layer="ahead"
         data-key="ahead"
-        ><span
-          class="step-swatch swatch-ahead hatched"
-          data-mark="hatch"
-        />{{ legend.ahead }}</span
       >
+        <span
+          class="step-swatch swatch-ahead hatched"
+          aria-hidden="true"
+          data-mark="hatch"
+        />{{ legend.ahead }}
+      </LayerKey>
       <span
         v-if="now"
         class="step-key"
+        aria-hidden="true"
         data-key="now"
         ><span class="step-swatch swatch-now" />{{ now }}</span
       >
@@ -100,7 +120,7 @@ const emit = defineEmits<{ whole: [] }>()
 .step-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
+  gap: 0 var(--space-3);
   justify-content: flex-end;
   margin-inline-start: auto;
 }
@@ -109,6 +129,7 @@ const emit = defineEmits<{ whole: [] }>()
   display: inline-flex;
   gap: var(--space-1);
   align-items: center;
+  min-block-size: var(--space-6);
   white-space: nowrap;
 }
 
@@ -118,6 +139,7 @@ const emit = defineEmits<{ whole: [] }>()
   display: inline-block;
   inline-size: var(--space-3);
   border-radius: 999px;
+  opacity: var(--layer-key-swatch-opacity, 1);
 
   &.swatch-line {
     block-size: var(--space-half);

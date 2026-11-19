@@ -9,11 +9,20 @@
  * compared with names that mark after them (`outline`), beside a short line in the ink the plot
  * draws it in at the height that period reached; a chart that marks a change at a period's start
  * names that line last (`change`), beside a short upright line in the ink the plot draws it in,
- * so the line up the plot is read without a hint. No such key acts, and none is a series: each is
- * a key of a mark (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever
- * reads the series reads them alone and no series' key can meet a mark's. The hatch's key and the
- * change's, with nothing to add, say their name whole while it is cut, as an entry with no hint of
- * its own does.
+ * so the line up the plot is read without a hint. None is a series: each is a key of a mark
+ * (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever reads the series
+ * reads them alone and no series' key can meet a mark's. The hatch's key and the change's, with
+ * nothing to add, say their name whole while it is cut, as an entry with no hint of its own does.
+ *
+ * The outline and the change are layers a chart draws beside its data, and their keys are
+ * toggles: a press, by the pointer or by Enter or Space, turns that layer off on every chart that
+ * draws it, and the next turns it on again, a choice kept on this computer (`LayerKey`,
+ * `chartLayersStore`). The key stays in the legend either way, pressed while its layer shows
+ * (`aria-pressed`), and off, its swatch faint and its name in the tertiary ink struck through, so
+ * it says its state by more than a tone and is there to turn the layer back on; the chart says
+ * nothing else of it. The hatch's key does not act: the hatch is no layer but how a period still
+ * running is drawn, and the series are the data itself, which always shows, so a column's sum
+ * never disagrees with the figures beside it.
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
@@ -37,21 +46,22 @@
  * under the whole legend at the entry's start, clear of every entry a reader reads it against,
  * letting the pointer through to the plot (`hintPlacement.ts`). A series that acts (`MarkAction`) is
  * pressed here as on its segments: a link sent out as `follow` with the press, a button as
- * `select` with its key. The rest only show. An entry named by what it does is described by its
- * whole name where that names a part of it, as a pair's names its first value. The pointer
+ * `select` with its key. The other series only show. An entry named by what it does is described
+ * by its whole name where that names a part of it, as a pair's names its first value. The pointer
  * or the keyboard standing on an entry is sent out as `point` with its key, and leaving it as
  * `point` with none, so the chart can lift the entry's marks.
  *
  * What a reader of the page selects it by: the list declares itself (`data-hint-list="legend"`),
  * and each line is an item of it. A series' key carries the series' key (`data-series`), its
  * swatch the slot of its hue (`data-slot`); a mark's key carries its mark (`data-mark`, `hatch`,
- * `outline` or `change`). In either, the name is `data-part="name"`, and the figure at a line's end
- * `data-part="figure"`.
+ * `outline` or `change`), and a layer's key, a button, whether its layer shows (`aria-pressed`).
+ * In either, the name is `data-part="name"`, and the figure at a line's end `data-part="figure"`.
  */
 import { computed, useId } from 'vue'
 
 import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 import { markPartId, markTag, markType } from '@/shared/ui/chartGeometry.ts'
+import LayerKey from '@/shared/ui/LayerKey.vue'
 import PairName from '@/shared/ui/PairName.vue'
 import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -196,9 +206,10 @@ const figureOf = (key: string) => props.figures?.get(key)
       v-if="outline"
       class="chart-entry chart-entry-mark"
     >
-      <span
+      <LayerKey
         v-tooltip.detail="hintOf('outline')"
         class="chart-mark"
+        layer="outline"
         data-mark="outline"
       >
         <span
@@ -210,15 +221,16 @@ const figureOf = (key: string) => props.figures?.get(key)
           data-part="name"
           >{{ outline }}</span
         >
-      </span>
+      </LayerKey>
     </li>
     <li
       v-if="change"
       class="chart-entry chart-entry-mark"
     >
-      <span
+      <LayerKey
         v-tooltip.clipped="change"
         class="chart-mark"
+        layer="change"
         data-mark="change"
       >
         <span
@@ -230,7 +242,7 @@ const figureOf = (key: string) => props.figures?.get(key)
           data-part="name"
           >{{ change }}</span
         >
-      </span>
+      </LayerKey>
     </li>
   </ul>
 </template>
@@ -327,6 +339,7 @@ const figureOf = (key: string) => props.figures?.get(key)
   inline-size: var(--space-3);
   border-block-start: var(--space-half) solid currentcolor;
   color: var(--color-text);
+  opacity: var(--layer-key-swatch-opacity, 1);
 }
 
 /* The line of a change at a period's start, as the plot draws it (`periodPlot.css`): a hair
@@ -336,6 +349,7 @@ const figureOf = (key: string) => props.figures?.get(key)
   inline-size: var(--space-hair);
   block-size: var(--space-3);
   background: var(--color-text-tertiary);
+  opacity: var(--layer-key-swatch-opacity, 1);
 
   @media (forced-colors: active) {
     background: CanvasText;

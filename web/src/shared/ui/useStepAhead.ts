@@ -12,6 +12,11 @@
  * is drawn on, starts at the place: «now»'s is the least width of a box (`--step-reach`) over a
  * corridor, and that width before the plot's end where «now» stands there; the forecast's starts
  * past «now»'s and runs to the plot's end.
+ *
+ * The forecast is a layer beside the readings, which its key in the legend turns off and on for
+ * every chart (`shows`, `chartLayersStore`): turned off, neither its corridor nor its place is
+ * there, and «now» takes the pointer on to the plot's end as it does where no corridor follows;
+ * the legend still names it, so it can be turned on again (`named`).
  */
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
@@ -74,13 +79,17 @@ export function useStepAhead(
     ahead?: StepAhead | null
   },
   frame: ComputedRef<StepFrame>,
+  /** Whether the forecast's layer is on, so its corridor and its place are drawn. */
+  shows: () => boolean,
 ) {
   /** The forecast's corridor in the span shown, in the plot's units; none where it shows none. */
-  const corridor = computed(() => {
+  const inSpan = computed(() => {
     const { ahead, points } = line()
     const forecast = ahead?.forecast
     return forecast && points.length ? corridorIn(frame.value, forecast.high, forecast.low) : null
   })
+  /** The corridor as the plot draws it: none while the forecast's layer is off. */
+  const corridor = computed(() => (shows() ? inSpan.value : null))
 
   /**
    * The corridor as the outline of its hatch over the field: its faster edge half a ribbon
@@ -152,8 +161,8 @@ export function useStepAhead(
     return [...(nowShown.value ? [nowTarget(ahead)] : []), ...(reset ? [reset] : [])]
   })
 
-  /** Whether the span shown draws the corridor, so the legend names it. */
-  const drawn = computed(() => corridor.value !== null)
+  /** Whether the span shown has a corridor, drawn or turned off, so the legend names it. */
+  const named = computed(() => inSpan.value !== null)
 
-  return { clip, drawn, nowShown, targets }
+  return { clip, named, nowShown, targets }
 }

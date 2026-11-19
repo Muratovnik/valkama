@@ -6,7 +6,8 @@
  *
  * Three legends hold every kind of key there is: the task section's, whose tasks are links and
  * whose «No task» is a button; the model section's, whose models are buttons; and the overview's,
- * with the folded «Other» and the period before, which only show. «Unknown» only shows too. A
+ * with the folded «Other», which only shows, and the period before, a layer's key and so a toggle
+ * (`production-analytics-layer-keys`). «Unknown» only shows too. A
  * button took a control's 40 pixels, so the line holding «No task» stood 40 pixels among lines
  * of 17, while a link was a 17-pixel target 4 pixels from the next line's. In each legend:
  * - every key that acts can be pressed across at least 24 pixels, up and down and across;
