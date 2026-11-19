@@ -297,6 +297,8 @@ export type CreateWorkItem = {
   labels?: string[]
   parent?: string
   priority?: string
+  /** The projects a task changes; none reads the space's default. A goal or stage names none. */
+  projects?: string[]
   source?: string
   state?: string
 }

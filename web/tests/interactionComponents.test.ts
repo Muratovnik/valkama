@@ -64,7 +64,7 @@ test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-
   )
   // The camera controls are Vue Flow's, and find the field's camera by the id the field has.
   assert.match(graphControls, renders('ControlButton'))
-  const flowId = /useVueFlow\(\s*\{\s*id:\s*([\w.]+)\s*\}/.exec(graphControls)?.[1]
+  const flowId = /useVueFlow\(\s*\{\s*id:\s*([\w.]+),?\s*\}/.exec(graphControls)?.[1]
   assert.ok(flowId, 'the controls name no flow')
   assert.match(graphField, sets('id', flowId))
   assert.match(graphField, renders('Background'))

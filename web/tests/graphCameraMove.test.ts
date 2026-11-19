@@ -9,7 +9,8 @@ import {
   graphWholeView,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { GRAPH_ZOOM_MIN, layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { readingZoom } from '@/widgets/work-item-graph/utils/graphZoomFloor.ts'
 
 import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge } from '@/shared/api/planningModel.ts'
@@ -185,4 +186,55 @@ test('a refresh never moves the camera, even one left past the whole view', asyn
   assert.ok(whole)
   const past = { x: 40, y: 40, zoom: whole.zoom / 2 }
   assert.equal(graphCameraMove('refresh', placed, { camera: past, dimensions }), null)
+})
+
+/**
+ * A phone-wide field goes no further out than its cards read. The floor is the reading floor
+ * over a card's smallest text: text drawn at `size` stands at `size × zoom` on the screen.
+ */
+test('the floor is the zoom at which the smallest text stands at the reading floor', () => {
+  for (const [size, floor] of [
+    [13, 13],
+    [14, 13],
+    [12, 13],
+  ] as const)
+    assert.equal(size * readingZoom(size, floor), floor)
+  assert.equal(readingZoom(0, 13), GRAPH_ZOOM_MIN, 'a size not read sets no floor')
+  assert.equal(readingZoom(13, Number.NaN), GRAPH_ZOOM_MIN, 'a floor not read sets none')
+})
+
+const phone = { width: 300, height: 700, floor: 12 / 13 }
+
+test('on a phone-wide field the whole view stops at the floor, from the drawing’s beginning', async () => {
+  const placed = await chain(40)
+  assert.ok(fillingZoom(placed, phone) < phone.floor, 'the drawing fits only further out')
+  const whole = graphWholeView(placed, phone)
+  assert.ok(whole)
+  assert.equal(whole.zoom, phone.floor)
+  // Its first node as it is read stands at the top-left, inside the air a framing leaves.
+  const first = [...placed.nodes].sort((left, right) => left.y - right.y || left.x - right.x)[0]
+  assert.ok(first)
+  assert.equal(first.x * whole.zoom + whole.x, 32)
+  assert.equal(first.y * whole.zoom + whole.y, 36)
+  // A camera further out comes up to it, as one past any whole view does.
+  const past = { x: 0, y: 0, zoom: 0.4 }
+  assert.deepEqual(graphCameraMove('resized', placed, { camera: past, dimensions: phone }), whole)
+  // The field opens no further out either, on its beginning and on a chosen card.
+  assert.ok((graphCameraView(placed, phone)?.zoom ?? 0) >= phone.floor)
+  const selectedId = placed.nodes[20]?.work_item_id
+  assert.ok((graphCameraView(placed, phone, { selectedId })?.zoom ?? 0) >= phone.floor)
+})
+
+test('a drawing that fits at the floor, and any wide field, keep the whole fit', async () => {
+  // One card and the air round it at the floor: 264 × 12/13 + 64 pixels.
+  const room = { ...phone, width: 340 }
+  const small = await chain(1)
+  assert.ok(fillingZoom(small, room) >= room.floor, 'it fits at the floor')
+  const wide = { width: room.width, height: room.height }
+  assert.deepEqual(graphWholeView(small, room), graphWholeView(small, wide))
+  const large = await chain(40)
+  assert.ok(
+    Math.abs((graphWholeView(large, dimensions)?.zoom ?? 0) - fillingZoom(large, dimensions)) <
+      1e-9,
+  )
 })

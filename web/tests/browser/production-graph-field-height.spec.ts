@@ -41,7 +41,8 @@ const measure = (page: Page) =>
       const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2)
       return {
         name: button.textContent?.trim() ?? '',
-        taken: hit !== null && button.contains(hit),
+        // A button turned off at the camera's limit takes no press, and says so by being off.
+        taken: (hit !== null && button.contains(hit)) || (button as HTMLButtonElement).disabled,
         hit: hit?.className.toString() ?? 'none',
         inSight: top >= view.top && bottom <= Math.min(view.bottom, window.innerHeight),
       }

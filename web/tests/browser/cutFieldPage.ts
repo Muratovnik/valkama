@@ -41,9 +41,10 @@ export async function openRead(
 export async function openCutField(page: Page, width: number, longer = LONGER) {
   await openRead(page, width, graphRoute({}), (body) => {
     body.workflow = broadModel.workflow
+    // The read refuses a title past 200 characters, so the longest is cut there.
     body.work_items = broadModel.work_items.map((item) => ({
       ...item,
-      title: `${item.title}${longer}`,
+      title: `${item.title}${longer}`.slice(0, 200),
     }))
     body.links = broadModel.links
   })

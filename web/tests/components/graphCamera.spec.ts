@@ -23,7 +23,7 @@ const zoomLimits = { minZoom: ref(0.01), maxZoom: ref(1.45) }
 
 vi.mock('@vue-flow/core', async (original) => ({
   ...(await original<typeof import('@vue-flow/core')>()),
-  useVueFlow: () => ({ ...camera, ...zoomLimits, dimensions, viewport }),
+  useVueFlow: () => ({ ...camera, ...zoomLimits, dimensions, viewport, vueFlowRef: ref(null) }),
 }))
 
 import { stateOf } from '../fixtures/workItem.ts'

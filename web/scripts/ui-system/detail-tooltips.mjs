@@ -171,6 +171,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'that a press copies the path; while its own words are cut, they come first, whole',
   ],
   [
+    `widgets/work-item-graph/components/GraphControls.vue <ControlButton> v-tooltip.detail="fitHint"`,
+    'why the fit shows only the beginning on a narrow screen and «Zoom out» is off: the cards would not read further out',
+  ],
+  [
     `widgets/work-item-graph/components/GraphNodeCard.vue <span> v-tooltip.detail="{ text: t('workItem.parent'), words: parentReference }"`,
     'what the reference beside the number is: the item’s epic; while its own words are cut, they come first, whole',
   ],

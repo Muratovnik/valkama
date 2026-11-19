@@ -61,6 +61,7 @@ export const workFilterMessages = {
       open: '{open} open of {total}',
       matched: '{matched} of {open} open',
       closedToo: '{closed} closed match | {closed} closed matches',
+      elsewhere: 'and {count} from other spaces',
       reset: 'Reset',
       incomplete: 'The filter is too long for the address: a reload keeps only part of it.',
       empty: 'No work matches this filter.',
@@ -117,6 +118,7 @@ export const workFilterMessages = {
         '{matched} из {open}\u{A0}открытой | {matched} из {open}\u{A0}открытых | {matched} из {open}\u{A0}открытых',
       closedToo:
         'есть {closed}\u{A0}закрытая | есть {closed}\u{A0}закрытые | есть {closed}\u{A0}закрытых',
+      elsewhere: 'и {count} из других пространств',
       reset: 'Сбросить',
       incomplete:
         'Фильтр не поместился в адрес целиком: после перезагрузки сохранится только часть.',

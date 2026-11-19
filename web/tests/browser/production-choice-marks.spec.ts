@@ -42,6 +42,8 @@ const KINDS = [
   { word: 'Stage', glyph: true },
   { word: 'Task', glyph: false },
 ]
+/** No stage of its own: a goal chosen with a parent is the stage, and the dialog names it so. */
+const NEW_KINDS = KINDS.filter((kind) => kind.word !== 'Stage')
 
 interface Drawn {
   /** The state's dot, by the tone it is drawn in. */
@@ -122,7 +124,7 @@ test('the new task’s kind and priority draw their values as the card does', as
   const [kind, priority] = await dialog.locator('.choice-trigger').all()
 
   await kind.click()
-  expectGlyphs(await drawn(page.getByRole('option')), KINDS)
+  expectGlyphs(await drawn(page.getByRole('option')), NEW_KINDS)
   await page.getByRole('option', { name: /^Bug/u }).click()
   const [bug] = await drawn(kind)
   expect(bug.word).toBe('Bug')
