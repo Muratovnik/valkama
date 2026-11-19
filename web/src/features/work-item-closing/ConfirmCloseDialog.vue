@@ -249,7 +249,6 @@ async function submit() {
   place-items: center;
   min-block-size: 0;
   padding: 0;
-  margin-block-start: var(--space-half);
   border: 0;
   background: none;
   border-radius: var(--radius-status);

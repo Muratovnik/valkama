@@ -278,6 +278,18 @@ for (const width of [1280, 620, 390]) {
     await dialog.getByRole('checkbox', { name: CONDITIONS[1].text }).click()
     await expect(press).toBeEnabled()
     await fitsWindow(page, dialog)
+    // Each box stands on its condition's first line, as the card's checklist box does.
+    const offsets = await dialog.locator('.confirm-step').evaluateAll((rows) =>
+      rows.map((row) => {
+        const box = row.querySelector('.step-mark')?.getBoundingClientRect()
+        const text = row.querySelector('.confirm-step-text')
+        if (!box || !text) return Number.POSITIVE_INFINITY
+        const line = Number.parseFloat(getComputedStyle(text).lineHeight)
+        return Math.abs(box.top + box.height / 2 - (text.getBoundingClientRect().top + line / 2))
+      }),
+    )
+    expect(offsets).toHaveLength(CONDITIONS.length)
+    for (const offset of offsets) expect(offset).toBeLessThanOrEqual(1)
     await page.screenshot(shot(info.outputPath(`dialogs-${width}-confirm-close-conditions.png`)))
     await press.click()
     await expect(dialog).toBeHidden()
