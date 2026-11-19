@@ -86,6 +86,12 @@ export const LINE_BUDGET = new Map([
   // GraphView keeps the pan viewport frame, the floating flow controls and a
   // legend glyph whose border is the drawing itself.
   ['features/input-requests/components/RequestFold.vue', 1], // A reply's rule, as a quote's.
+  // The row dividers of what a close lists: the work a goal's cancel closes, and what closed
+  // under a goal without being done, rows of a reference and its words that air alone ran together.
+  ['features/work-item-closing/CancelGoalDialog.vue', 1],
+  ['features/work-item-closing/ConfirmCloseDialog.vue', 1],
+  // A checklist step's box, on the card and in the window that confirms a close against it.
+  ['entities/work-item/components/StepMark.vue', 1],
   ['features/input-requests/components/RequestFieldAnswer.vue', 1], // A comment's rule, as a quote's.
   ['features/input-requests/components/RequestHistory.vue', 1], // A replaced answer's, the same.
   // The divider between a review's points, and the thread's rule their fields hang behind.
@@ -110,7 +116,6 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-inspector/components/InspectorMentionLine.vue', 1], // The quote of another item's words.
   ['widgets/work-item-inspector/components/InspectorThreadReplies.vue', 1], // What ties replies to their root.
   ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
-  ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],
   // The block a link in a document landed on, marked by the selected tone and this edge.
   ['widgets/document-viewer/components/DocumentText.vue', 1],

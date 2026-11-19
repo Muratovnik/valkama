@@ -2,18 +2,23 @@
 /**
  * What the card asks or reports before the reader goes on: a refused write in the
  * server's words, a write that failed for another reason, and the questions before a
- * takeover or a lost draft. Each stands under the bar at full width and stays in view
+ * takeover or a lost draft, and the reason a cancel asks in place. Each stands under the bar at full width and stays in view
  * while the card scrolls, because a refusal of a tick far down the card has to be seen
  * however far down it was made, and the action a question is about may have been
- * pressed in the bar, which has no room for it.
+ * pressed in the bar, which has no room for it. The cancel stands here because it is asked
+ * where the state is changed, under the bar the card scrolls under.
  *
- * The host owns every answer; this only words and places them.
+ * The host owns every answer; this only words and places them. The cancel's strip is the
+ * card's closing writes' (`provideInspectorClosing`), which own whether it is asked.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorRefusal from '@/widgets/work-item-inspector/components/InspectorRefusal.vue'
+import { injectInspectorClosing } from '@/widgets/work-item-inspector/utils/useInspectorClosing.ts'
 import type { RefusalNotice } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
+
+import CancelReasonStrip from '@/features/work-item-closing/CancelReasonStrip.vue'
 
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 
@@ -41,6 +46,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const closing = injectInspectorClosing()
+const cancelling = computed(() => {
+  const item = closing?.host.item.value
+  const state = closing?.asking.value
+  return item && state ? { item, state } : null
+})
+const keepWork = () => closing?.dismiss()
+const cancelled = () => closing?.done()
+const showList = (reason: string) => closing?.list(reason)
 
 const discardQuestion = computed(() =>
   t('workItem.discard.question', {
@@ -84,6 +98,14 @@ const discardQuestion = computed(() =>
       :cancel-label="t('workItem.discard.keep')"
       @confirm="emit('discard')"
       @cancel="emit('keep')"
+    />
+    <CancelReasonStrip
+      v-if="cancelling"
+      :item="cancelling.item"
+      :state="cancelling.state"
+      @close="keepWork"
+      @done="cancelled"
+      @list="showList"
     />
   </div>
 </template>

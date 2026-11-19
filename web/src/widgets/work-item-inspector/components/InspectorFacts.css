@@ -11,7 +11,6 @@
 }
 
 /* A chip is as wide as what it names, not the row. */
-.card-state,
 .card-priority {
   flex: 0 0 auto;
   max-width: 100%;
@@ -25,22 +24,10 @@
   min-height: 24px;
 }
 
-.card-fact {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-
 /* The parent's sign stands a glyph's gap before its link, as a kind's sign stands before the
    number on a tile; the link takes the ink of a value, against the label's quiet one. */
 .card-parent {
   gap: var(--space-1);
-}
-
-/* «Answer» speaks in the state chip's word beside it, trimmed to its letters as that word is,
-   so the two stand on one baseline with the row's name. */
-.card-question-word {
-  font: var(--font-field-label);
 }
 
 /* The trim clips sideways at the box, and a link's underline ends a fraction past its last
@@ -67,12 +54,6 @@
   &:empty {
     display: none;
   }
-}
-
-/* The started mark is a word of the state's, quieter than the state. */
-.card-started {
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 
 .card-accepted {

@@ -149,7 +149,7 @@ describe('a step its former holder marked', () => {
         stubs: { InspectorDescription: true, InspectorDiscussion: true, InspectorSummary: true },
       },
     })
-    const marks = wrapper.findAll('.step-holder')
+    const marks = wrapper.findAll('.step-row')
     expect(marks).toHaveLength(2)
     expect(marks[0].get('[data-mark="by-previous-holder"]').text()).toBe(
       'marked by the former holder',

@@ -37,6 +37,7 @@ import { useI18n } from 'vue-i18n'
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
+import InspectorClosingDialogs from '@/widgets/work-item-inspector/components/InspectorClosingDialogs.vue'
 import InspectorControls from '@/widgets/work-item-inspector/components/InspectorControls.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
@@ -183,6 +184,7 @@ const reloaded = () => load().then(() => emit('changed'))
 const {
   attachMemory,
   claim,
+  closing,
   dismiss: dismissNotice,
   error: writeError,
   force,
@@ -223,12 +225,6 @@ watch(
   { immediate: true },
 )
 
-// Not `load`: news of an agent is no reason to take a refused write's reason away.
-watch(
-  () => props.agentsToken,
-  () => void loadResource(),
-)
-
 /** The item and its chain have both answered, so the body is as tall as it will be. */
 const settled = () => item.value !== null && chain.answered.value
 
@@ -252,8 +248,8 @@ const target = computed(() => inspectorTarget(props))
 const takeover = useTakeoverQuestion(() => item.value?.claim_ref ?? '', takeOver)
 
 /** The band under the bar holds what has to be answered or read, and only while it does. */
-const notices = computed(
-  () => Boolean(notice.value || writeError.value || takeover.question.value) || asking.value,
+const notices = computed(() =>
+  [notice, writeError, takeover.question, asking, closing.asking].some((part) => part.value),
 )
 
 /** The next step a guard asks for, taken where the inspector can take it. */
@@ -507,6 +503,7 @@ defineExpose({ close, openFrom })
     @close="running.launchOpen.value = false"
     @submit="submitLaunch"
   />
+  <InspectorClosingDialogs :target="target" />
 </template>
 
 <style scoped src="./WorkItemInspector.css"></style>

@@ -21,7 +21,13 @@ import {
   SelectViewport,
 } from 'reka-ui'
 
-import { choiceValueCodec, decodeChoiceValue, encodeChoiceValue } from '@/shared/ui/choiceControls'
+import {
+  choicesMatching,
+  choiceValueCodec,
+  decodeChoiceValue,
+  encodeChoiceValue,
+  keepMovedFocus,
+} from '@/shared/ui/choiceControls'
 import type { ChoiceOption } from '@/shared/ui/choiceControls'
 import ControlIcon from '@/shared/ui/ControlIcon.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -73,14 +79,7 @@ const selected = computed(() => props.options.find((option) => option.value === 
 // (a state move the server refused) left the item selected inside the list, and
 // choosing it again changed nothing and sent nothing.
 const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? null)
-const filtered = computed(() => {
-  const needle = query.value.trim().toLocaleLowerCase()
-  return needle
-    ? props.options.filter((option) =>
-        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
-      )
-    : [...props.options]
-})
+const filtered = computed(() => choicesMatching(props.options, query.value))
 
 function updateValue(value: unknown) {
   if (typeof value !== 'string') return
@@ -177,6 +176,7 @@ defineExpose({ show: () => updateOpen(true) })
           :avoid-collisions="true"
           :hide-when-detached="true"
           :body-lock="false"
+          @close-auto-focus="keepMovedFocus"
         >
           <label
             v-if="searchable"
