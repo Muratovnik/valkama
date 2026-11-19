@@ -91,10 +91,11 @@ export const LINE_BUDGET = new Map([
   // The divider between a review's points, and the thread's rule their fields hang behind.
   ['features/input-requests/components/RequestVerdictRow.vue', 2],
   // Settings General uses one earned divider between its preference groups
-  // and one row family, and its sheet's edge in a forced palette (below).
+  // and one row family; a tab's sheet keeps its edge in a forced palette.
   // Diagnostics uses section and row dividers, plus status edges for
   // initial-load and refresh failures.
-  ['pages/settings/components/SettingsGeneral.vue', 2],
+  ['pages/settings/components/SettingsGeneral.vue', 1],
+  ['pages/settings/components/SettingsSheet.vue', 1],
   ['pages/settings/components/SettingsRow.vue', 1],
   ['pages/settings/components/installation-health.css', 5],
   // The status edge of the note that the period before could not be read, as the degraded banner's.

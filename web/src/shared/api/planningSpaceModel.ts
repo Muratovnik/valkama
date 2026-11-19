@@ -24,7 +24,7 @@ const spaceProjectSchema = strictObject({
   default: z.boolean(),
 })
 
-const spaceIdentityShape = {
+export const spaceIdentityShape = {
   planning_space_id: boundedText(UUID, 36),
   name: boundedText(TITLE, 200),
   key: boundedText(SPACE_KEY, 8),

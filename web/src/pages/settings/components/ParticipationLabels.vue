@@ -1,0 +1,180 @@
+<script setup lang="ts">
+/**
+ * The labels group of the Participation tab: a row for each label that has a rule or a
+ * description in the scope on show, and a field that adds a rule to another one.
+ *
+ * Only labels with a rule are listed: a space may carry any number of labels, and few of them
+ * have one. A new rule is found among the labels the space's work carries, or typed whole. A
+ * label's rule is written as a whole — whether its findings are ready at once, and what it
+ * means — so each write carries both, as the row shows them. In a space a label inherits the
+ * shared rule until «Own value» is switched on, as every scoped row does.
+ *
+ * Each row carries `data-participation-label` with its label, the hook a check selects it by.
+ */
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
+import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
+import SettingsScopedRow from '@/pages/settings/components/SettingsScopedRow.vue'
+
+import type { ParticipationEdit, ParticipationLabel } from '@/shared/api/participationApi.ts'
+import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
+import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
+import VTextInput from '@/shared/ui/VTextInput.vue'
+
+const props = defineProps<{
+  /** The labels the space's work carries, the most used first. */
+  known: readonly string[]
+  rules: readonly ParticipationLabel[]
+  scope: 'global' | 'space'
+  failureOf: (label: string) => string
+}>()
+
+const emit = defineEmits<{ edit: [edit: ParticipationEdit] }>()
+
+const { t } = useI18n()
+
+/** What is typed into a description until it is left, by label. */
+const drafts = ref<Record<string, string>>({})
+const picked = ref<string[]>([])
+
+const options = computed(() => {
+  const ruled = new Set(props.rules.map((rule) => rule.label))
+  return props.known.filter((label) => !ruled.has(label)).map((label) => ({ value: label, label }))
+})
+
+function hintOf(rule: ParticipationLabel): string {
+  if (rule.description) return rule.description
+  return t(
+    rule.ready ? 'settings.participation.labels.ready' : 'settings.participation.labels.waits',
+  )
+}
+
+function readyWords(ready: boolean): string {
+  return t(
+    ready ? 'settings.participation.labels.readyOn' : 'settings.participation.labels.readyOff',
+  )
+}
+
+/** In the shared scope the rule is always its own; in a space only while it is owned. */
+function ownOf(rule: ParticipationLabel): boolean | null {
+  return props.scope === 'global' || rule.own ? rule.ready : null
+}
+
+/** The shared rule's answer, which a space inherits; nothing in the shared scope. */
+function inheritedOf(rule: ParticipationLabel): boolean | undefined {
+  return props.scope === 'space' ? rule.inherited.ready : undefined
+}
+
+function isReady(value: boolean | null): boolean {
+  return value === true
+}
+
+function write(label: string, ready: boolean | null, description: string | null) {
+  emit('edit', { label, ready, description })
+}
+
+/** «Own value» on takes the shared rule as the space's own; off lets the label inherit. */
+function setOwn(rule: ParticipationLabel, ready: boolean | null) {
+  if (ready === null) write(rule.label, null, null)
+  else if (!rule.own && props.scope === 'space')
+    write(rule.label, ready, rule.inherited.description)
+  else write(rule.label, ready, rule.description)
+}
+
+function commitDescription(rule: ParticipationLabel) {
+  const typed = drafts.value[rule.label]
+  if (typed === undefined) return
+  drafts.value = Object.fromEntries(
+    Object.entries(drafts.value).filter(([label]) => label !== rule.label),
+  )
+  const said = typed.trim() || null
+  if (said !== rule.description) write(rule.label, rule.ready, said)
+}
+
+function press(event: KeyboardEvent, rule: ParticipationLabel) {
+  if (event.key === 'Enter') commitDescription(rule)
+}
+
+/** A label chosen or typed gets a rule that its findings are ready at once. */
+function add(values: string[]) {
+  const label = values.at(-1)?.trim()
+  picked.value = []
+  if (label) write(label, true, null)
+}
+</script>
+
+<template>
+  <SettingsGroup :title="t('settings.participation.labels.title')">
+    <SettingsScopedRow
+      v-for="rule in rules"
+      :key="rule.label"
+      :data-participation-label="rule.label"
+      :label="rule.label"
+      :hint="hintOf(rule)"
+      :scope="scope"
+      :own="ownOf(rule)"
+      :inherited="inheritedOf(rule)"
+      :failure="failureOf(rule.label)"
+      :words-of="readyWords"
+      @update:own="(ready) => setOwn(rule, ready)"
+    >
+      <template #default="{ names, value, update }">
+        <ToggleSwitch
+          :aria-describedby="names['aria-describedby']"
+          :aria-labelledby="names['aria-labelledby']"
+          :label="t('settings.participation.labels.readyName', { label: rule.label })"
+          :model-value="isReady(value)"
+          :on-label="t('settings.participation.labels.readyOn')"
+          :off-label="t('settings.participation.labels.readyOff')"
+          @update:model-value="update"
+        />
+        <VTextInput
+          class="participation-description"
+          :label="t('settings.participation.labels.description', { label: rule.label })"
+          :placeholder="t('settings.participation.labels.describe')"
+          :maxlength="20000"
+          :model-value="drafts[rule.label] ?? rule.description ?? ''"
+          hide-label
+          @update:model-value="(typed) => (drafts = { ...drafts, [rule.label]: typed })"
+          @focusout="commitDescription(rule)"
+          @keydown="press($event, rule)"
+        />
+      </template>
+    </SettingsScopedRow>
+    <p
+      v-if="rules.length === 0"
+      class="participation-labels-empty"
+    >
+      {{ t('settings.participation.labels.empty') }}
+    </p>
+    <SettingsRow :label="t('settings.participation.labels.add')">
+      <SearchCombobox
+        :model-value="picked"
+        :label="t('settings.participation.labels.add')"
+        :placeholder="t('settings.participation.labels.find')"
+        :options="options"
+        :empty-label="t('settings.participation.labels.none')"
+        :create-label="(label) => t('settings.participation.labels.create', { label })"
+        :max="1"
+        :maxlength="64"
+        hide-label
+        @update:model-value="add"
+      />
+    </SettingsRow>
+  </SettingsGroup>
+</template>
+
+<style scoped>
+.participation-description {
+  width: 100%;
+}
+
+.participation-labels-empty {
+  padding: var(--space-3) var(--space-4);
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+</style>

@@ -4,23 +4,27 @@ import { useI18n } from 'vue-i18n'
 
 import InstallationHealth from '@/pages/settings/components/InstallationHealth.vue'
 import SettingsGeneral from '@/pages/settings/components/SettingsGeneral.vue'
+import SettingsParticipation from '@/pages/settings/components/SettingsParticipation.vue'
 
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { useTabIds } from '@/shared/ui/tabIds.ts'
 import TabPanel from '@/shared/ui/TabPanel.vue'
 
-type SettingsSection = 'general' | 'diagnostics'
+type SettingsSection = 'general' | 'participation' | 'diagnostics'
 
 const props = defineProps<{
   locale: string
   section: string
+  /** The space chosen in the context bar, whose own values Participation shows; null for all. */
+  space: PlanningSpaceRef | null
 }>()
 const emit = defineEmits<{
   locale: [locale: 'en' | 'ru']
   state: [state: Record<string, string | number | boolean>]
 }>()
 const { t } = useI18n()
-const sectionIds: readonly SettingsSection[] = ['general', 'diagnostics']
+const sectionIds: readonly SettingsSection[] = ['general', 'participation', 'diagnostics']
 const activeSection = computed<SettingsSection>(() =>
   sectionIds.includes(props.section as SettingsSection)
     ? (props.section as SettingsSection)
@@ -67,6 +71,10 @@ function selectSection(section: SettingsSection) {
         v-if="activeSection === 'general'"
         :locale="locale"
         @locale="(value) => emit('locale', value)"
+      />
+      <SettingsParticipation
+        v-else-if="activeSection === 'participation'"
+        :space="space"
       />
       <InstallationHealth v-else />
     </TabPanel>

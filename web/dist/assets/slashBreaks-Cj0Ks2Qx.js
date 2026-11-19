@@ -1,1 +1,0 @@
-var e=`slash-break`,t=e=>e.split(/(?<=\/)/u);function n(t){let n=document.createElement(`span`);return n.className=e,n.textContent=t,n}function r(e,r){let i=t(r);e.replaceChildren(...i.map((e,t)=>t<i.length-1?n(e):e))}var i={beforeMount:(e,{value:t})=>r(e,t),updated:(e,{value:t,oldValue:n})=>{t!==n&&r(e,t)}};export{t as n,i as r,e as t};
