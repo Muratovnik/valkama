@@ -13,7 +13,7 @@
 
 import { accountIdIssue, WEEKLY_RESET } from '@/shared/api/accountIds.ts'
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
-import { TITLE, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { TITLE, WORK_ITEM_KINDS, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { tokensSchema } from '@/shared/api/planningUsageApi.ts'
 import { enumField, invalid } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
@@ -88,6 +88,8 @@ const groupValueSchema = strictObject({
   unknown: z.boolean(),
   reference: boundedText(WORK_ITEM_REFERENCE, 20).nullable().optional(),
   title: boundedText(TITLE, 200).nullable().optional(),
+  /** A work item's kind, which says whether its card reads it as an epic. */
+  kind: enumField(WORK_ITEM_KINDS).nullable().optional(),
   name: boundedText(VALUE, 512).nullable().optional(),
   family: onTheSide().optional(),
   opened_in: onTheSide().optional(),

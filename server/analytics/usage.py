@@ -542,7 +542,7 @@ def _role(row: Sequence) -> Value:
 
 #: What a value of each labelled dimension carries beside its id when nothing names it.
 _UNNAMED: dict[str, dict] = {
-    WORK_ITEM: {"reference": None, "title": None},
+    WORK_ITEM: {"reference": None, "title": None, "kind": None},
     PROJECT: {"name": None},
     EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "title": None},
     SEAT: {"organization": None, "account_uuid": None, "weekly_reset": None, "shared": False},

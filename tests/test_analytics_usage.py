@@ -240,11 +240,24 @@ class GroupTests(UsageStore):
         read = self.read(**{"from": day(0), "to": day(1), "group_by": "work_item"})
         self.assertEqual(
             [
-                {"id": item, "unknown": False, "reference": reference, "title": "Build the read"},
-                {"id": None, "unknown": False, "reference": None, "title": None},
+                {
+                    "id": item,
+                    "unknown": False,
+                    "reference": reference,
+                    "title": "Build the read",
+                    "kind": "task",
+                },
+                {"id": None, "unknown": False, "reference": None, "title": None, "kind": None},
             ],
             [row["group"]["work_item"] for row in read["rows"]],
         )
+
+    def test_an_item_value_says_its_kind_so_an_epic_is_read_as_its_card_reads_it(self) -> None:
+        _, epic = self.item("Plan the release", kind="epic")
+        self.session("s-1")
+        self.segment("s-1", 0, 60, item=epic)
+        read = self.read(**{"from": day(0), "to": day(1), "group_by": "work_item"})
+        self.assertEqual(["epic"], [row["group"]["work_item"]["kind"] for row in read["rows"]])
 
     def test_with_no_readable_registry_a_folder_reads_as_no_known_project(self) -> None:
         _, item = self.item()

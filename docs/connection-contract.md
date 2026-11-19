@@ -1053,10 +1053,12 @@ with.
              "unpriced_models": ["claude-unknown-9"]},
    "rows": [{"group": {"work_item": {"id": "6f1c2a8e-0000-4000-8000-000000000010",
                                      "unknown": false, "reference": "MAIN-12",
-                                     "title": "Answer a review in one form"}},
+                                     "title": "Answer a review in one form",
+                                     "kind": "task"}},
              "agent_seconds": 3600.0, "…": "the measures"},
             {"group": {"work_item": {"id": null, "unknown": false,
-                                     "reference": null, "title": null}},
+                                     "reference": null, "title": null,
+                                     "kind": null}},
              "agent_seconds": 1800.0, "…": "the measures"}],
    "series": [{"start": "2030-03-04T00:00:00+03:00", "end": "2030-03-05T00:00:00+03:00",
                "agent_seconds": 0.0, "…": "the measures", "groups": []},
@@ -1116,7 +1118,7 @@ item, and for `launch_class` a session's own run, are groups of their own too, w
 | --- | --- | --- |
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
 | `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
-| `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
+| `work_item` | the item the work is counted to | `reference`, `title` and `kind`, `null` for an item since deleted |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them, and `title`, the name its client gave the session, as the live work beside the board names it, or `null` when there is none to read. Not its live `state`, which changes while the period's figures do not |
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
 | `launch_class` | how a subagent's run was launched, as the usage rows hold it. A session's own run is launched by no one, so it has none (`unknown` `false`); a subagent's run that does not say is unknown | — |

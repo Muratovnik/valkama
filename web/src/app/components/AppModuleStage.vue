@@ -7,10 +7,12 @@ import PlanningCardOverlay from '@/pages/planning/PlanningCardOverlay.vue'
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
 import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
+import { provideUsageReach } from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
 
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
+import { inPrimaryStore } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { projectTitle } from '@/shared/lib/projectTitles.ts'
 
@@ -39,6 +41,13 @@ const emit = defineEmits<{
   'question-taken': []
   'state': [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
 }>()
+/**
+ * Analytics reads the primary store, so each task it names is that store's: its usage is read
+ * where its card's would be, by the card's own test of a store.
+ */
+provideUsageReach(() =>
+  inPrimaryStore(props.primaryWriteScopeId, props.context?.primary.data_scope_id),
+)
 const SettingsView = settingsView.component
 const AnalyticsView = analyticsView.component
 const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)

@@ -2,16 +2,19 @@
  * What a value's side panel says its figures are of. The oracle is the requirement: the heading of
  * the figures names the period they cover, in the words the page names a period by — its first
  * and last day, «Nov 9 – 11» — and follows the page's period when it changes; a task has its
- * figures of all time under them, «All time», read as its card reads them (the item's own work, by
- * its reference): the agents' time, by the name and in the words the card's line gives the
- * agents' time («Agent time», never its time on the clock), and the cost as the line says it. A
- * value that is no task has none, and a read that failed says so in their place.
+ * figures of all time under them, «All time», read as its card reads them (a task's own work, an
+ * epic's whole scope, by its reference): the agents' time, by the name and in the words the
+ * card's line gives the agents' time («Agent time», never its time on the clock), and the cost as
+ * the line says it. A value that is no task has none, a task whose card asks nothing — the read
+ * does not reach its store — has none and asks nothing either, and a read that failed says so in
+ * their place.
  */
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import { serveUsage, task } from '../fixtures/analytics.ts'
+import type { TimedStretch } from '../fixtures/analytics.ts'
 import { richUsage, usageAnswer } from '../fixtures/usage.ts'
 import { stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { detailOf, mountPage, panelOf, pressEachTest, WORLD } from '../support/valuePresses.ts'
@@ -27,8 +30,8 @@ const TASK = detailOf('work_item', task(1, '').id)
  * The page's reads as `stubAnalyticsReads` answers them, and the card's read of an item's usage
  * answered with `item`, or refused; every query of that read is kept.
  */
-function serveWith(item: ReturnType<typeof richUsage> | 'refused') {
-  stubAnalyticsReads((query) => serveUsage(WORLD, query))
+function serveWith(item: ReturnType<typeof richUsage> | 'refused', world = WORLD) {
+  stubAnalyticsReads((query) => serveUsage(world, query))
   const page = globalThis.fetch
   const asked: URLSearchParams[] = []
   vi.stubGlobal(
@@ -49,6 +52,17 @@ function serveWith(item: ReturnType<typeof richUsage> | 'refused') {
 }
 
 const words = (text: string) => text.replaceAll(/\s+/gu, ' ').trim()
+
+/** The same week, where the first task is an epic, as the page's answer says its kind. */
+const EPIC_WORLD: TimedStretch[] = WORLD.map((stretch) =>
+  stretch.group.work_item?.reference === 'MAIN-1'
+    ? { ...stretch, group: { ...stretch.group, work_item: { ...task(1, 'Task 1'), kind: 'epic' } } }
+    : stretch,
+)
+
+/** The heading of a part of the panel, as it reads. */
+const titleOf = (host: VueWrapper, part: string) =>
+  words(panelOf(host).get(`[data-part="${part}"]`).findAll('h2, h3, h4, h5')[0]?.text() ?? '')
 
 /** The heading of the panel's figures, as it reads. */
 const heading = (host: VueWrapper) =>
@@ -101,9 +115,7 @@ describe('a task’s figures of all time', () => {
     expect(asked.map((query) => Object.fromEntries(query))).toEqual([
       { id: 'MAIN-1', scope: 'item' },
     ])
-    expect(
-      words(panelOf(host).get('[data-part="all-time"]').findAll('h2, h3, h4, h5')[0]?.text() ?? ''),
-    ).toBe('All time')
+    expect(titleOf(host, 'all-time')).toBe('All time')
     expect(figures(host)).toEqual({
       agents: ['Agent time', '11 h 14 min'],
       cost: ['Cost', '≈ $1,234.50'],
@@ -132,6 +144,33 @@ describe('a task’s figures of all time', () => {
       agents: ['Время агентов', '11 ч 14 мин'],
       cost: ['Стоимость', '≈ 9,50 $+'],
     })
+  })
+
+  it('reads an epic with its whole scope, as its card does, and says so as the card does', async () => {
+    const usage = richUsage({ reference: 'MAIN-1', scope: 'epic', quality: 'observed' })
+    const asked = serveWith(usage, EPIC_WORLD)
+    const host = await mountPage({ by: 'work_item', detail: TASK }, 'ru')
+    expect(asked.map((query) => Object.fromEntries(query))).toEqual([
+      { id: 'MAIN-1', scope: 'epic' },
+    ])
+    const line = mountSummary(usage, 'line', 'ru')
+    // The card's line says its figures are the epic's, and so does the panel's heading.
+    expect(words(line.get('[data-fact="time"] .usage-fact-label').text())).toBe(
+      'Работа по эпику, по часам',
+    )
+    expect(titleOf(host, 'all-time')).toBe('За всё время, по эпику')
+    const agents = line.get('[data-fact="agents"]')
+    const label = words(agents.get('.usage-fact-label').text())
+    expect(figures(host).agents).toEqual([label, words(agents.text()).slice(label.length).trim()])
+    expect(figures(host).cost?.[1]).toBe(words(line.get('[data-fact="cost"]').text()))
+  })
+
+  it('has none, and asks nothing, for a task whose store the read does not reach', async () => {
+    const asked = serveWith(richUsage())
+    const host = await mountPage({ by: 'work_item', detail: TASK }, 'en', undefined, false)
+    expect(Object.keys(figures(host, 'figures'))).toEqual(['time', 'tokens', 'cost', 'share'])
+    expect(panelOf(host).find('[data-part="all-time"]').exists()).toBe(false)
+    expect(asked).toEqual([])
   })
 
   it('says a read that failed in their place', async () => {

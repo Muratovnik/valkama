@@ -2879,8 +2879,10 @@ page as any reference to the task does. Its figures are the time, the tokens, th
 value's share of the whole in the page's measure, under a heading that names their period as the
 page names one, «Figures · Nov 9 – 11»; under them a task has its figures of all time, «All
 time», its agent time and its cost, «Agent time 11 h 14 min» and «Cost ≈ $120.00», read and said
-as its card's line reads and says them and by its names, of the item's own work. Without either, a
-week's cost in the panel beside the card's larger one read as two answers to one question. What
+as its card's line reads and says them and by its names: a task's own work, an epic's whole scope
+under «All time, on the epic», as its card says «on the epic». Where its card reads nothing, an
+attached store's item, the panel reads nothing and has no such block. Without either, a week's
+cost in the panel beside the card's larger one read as two answers to one question. What
 qualifies them — that the cost is an
 estimate at API prices, what the tokens count and, read by the minute, that a minute's figures
 are shared out — the section's «ⓘ» says under the panel, so the «ⓘ» «About these figures» that

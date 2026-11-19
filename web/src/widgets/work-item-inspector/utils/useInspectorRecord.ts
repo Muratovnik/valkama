@@ -2,7 +2,10 @@ import { computed, inject, provide, ref } from 'vue'
 import type { ComputedRef, InjectionKey } from 'vue'
 
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
-import { useWorkItemUsage } from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
+import {
+  usageTarget,
+  useWorkItemUsage,
+} from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
 
 import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
@@ -60,7 +63,7 @@ export function useInspectorRecord(
   const news = () => `${props.refreshToken}:${props.agentsToken}`
 
   const read = useWorkItemUsage(
-    () => (props.writable ? { id: props.reference, scope: isEpic.value ? 'epic' : 'item' } : null),
+    () => usageTarget({ reference: props.reference, epic: isEpic.value, readable: props.writable }),
     news,
   )
   const runs = useWorkItemUsage(

@@ -1,4 +1,5 @@
-import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { inject, onBeforeUnmount, provide, ref, shallowRef, watch } from 'vue'
+import type { InjectionKey } from 'vue'
 
 import { fetchItemUsage } from '@/shared/api/planningUsageApi.ts'
 import type { ItemUsage, UsageScope } from '@/shared/api/planningUsageApi.ts'
@@ -11,6 +12,34 @@ const HEAD_WAIT_MS = 800
 export interface UsageTarget {
   id: string
   scope: UsageScope
+}
+
+/**
+ * The read a card makes of an item: an epic's with its whole scope, any other item's alone, and
+ * none where the read does not reach the item, an attached store's. What says an item's figures
+ * beside its card reads them by this, so the two never answer one question two ways.
+ */
+export function usageTarget(item: {
+  epic: boolean
+  readable: boolean
+  reference: string
+}): UsageTarget | null {
+  return item.readable ? { id: item.reference, scope: item.epic ? 'epic' : 'item' } : null
+}
+
+const REACH: InjectionKey<() => boolean> = Symbol('usage-reach')
+
+/**
+ * Whether the read reaches the items a page names without opening their cards: the app says so
+ * for its pages, by the card's own test of a store (`inPrimaryStore`).
+ */
+export function provideUsageReach(reaches: () => boolean) {
+  provide(REACH, reaches)
+}
+
+/** Whether the read reaches the items this page names; with nothing to say so, it does not. */
+export function injectUsageReach(): () => boolean {
+  return inject(REACH, () => false)
 }
 
 /**

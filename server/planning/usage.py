@@ -386,15 +386,16 @@ def _roles(rows: Sequence[sqlite3.Row], whole: _Tally) -> list[dict]:
 
 
 def item_names(conn: sqlite3.Connection, items: Iterable[str]) -> dict[str, dict]:
-    """The number and title of items that still exist."""
+    """The number, title and kind of items that still exist."""
 
     return {
         str(row["work_item_id"]): {
             "reference": model.human_id(str(row["key"]), int(row["number"])),
             "title": row["title"],
+            "kind": row["kind"],
         }
         for row in conn.execute(
-            "SELECT i.work_item_id, i.number, i.title, p.key FROM work_items i"
+            "SELECT i.work_item_id, i.number, i.title, i.kind, p.key FROM work_items i"
             " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
             " WHERE i.work_item_id IN (SELECT value FROM json_each(?))",
             (json.dumps(sorted(items)),),

@@ -15,9 +15,9 @@
  *   (`useSectionCaveats`, of the value's own read) — said once in the «ⓘ» that ends their
  *   heading's line, «About these figures», never as a line of the panel: the section's «ⓘ» that
  *   says them on the page stands under the panel;
- * - for a task, its figures of all time, the agents' time and the cost, as its card says them and
- *   by the card's names for them (`useTaskAllTime`): the agents' time is the card's «Agent time»,
- *   never its «Work on the clock»;
+ * - for a task, its figures of all time, the agents' time and the cost, as its card reads and
+ *   says them and by the card's names for them (`useTaskAllTime`): an epic's of its whole scope,
+ *   the agents' time the card's «Agent time», never its «Work on the clock»;
  * - its period step by step, with the period before marked (`ValueDays`);
  * - the models and the accounts it ran on, ranked in the page's measure, each in its hue of the
  *   page with its share of the value's own figure after its amount (`RankedBars`, dense); a value
@@ -171,7 +171,10 @@ const shows = computed(() => {
 
 /** A task's figures of all time, as its card says them (`useTaskAllTime`). */
 const allTime = useTaskAllTime({
-  reference: () => (card.value ? (named.value.reference ?? null) : null),
+  item: () => {
+    const reference = card.value ? named.value.reference : null
+    return reference ? { reference, epic: named.value.kind === 'epic' } : null
+  },
   readAt: () => props.readAt,
 })
 
@@ -379,9 +382,9 @@ const narrow = useNarrowCharts(body)
           v-if="allTime"
           level="block"
           data-part="all-time"
-          :title="t('analytics.detail.allTime')"
+          :title="allTime.title"
         >
-          <ValueFigures :figures="allTime" />
+          <ValueFigures :figures="allTime.figures" />
         </PanelLevel>
         <ValueDays
           v-if="steps"
