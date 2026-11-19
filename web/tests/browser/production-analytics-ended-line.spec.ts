@@ -33,7 +33,8 @@ const NEAR = 1
 function ended(): Quota {
   const quota = quotaAt(NOW)
   const moment = NOW.getTime()
-  const [work, , , seated] = quota.accounts
+  const work = quota.accounts[0]
+  const seated = quota.accounts[3]
   if (!work || !seated) throw new Error('«Work» first, the seated account fourth')
   const window = (shape: Parameters<typeof share>[2]) => share(moment, quota.utc_offset, shape)
   work.windows[0] = window({

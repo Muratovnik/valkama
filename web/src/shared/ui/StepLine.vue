@@ -124,16 +124,16 @@ const props = defineProps<{
   ahead?: StepAhead | null
   /** Whether the window has reset since it was read: the whole window is then its one span. */
   ended?: boolean
+  /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
+  even?: boolean
+  /** Where the window's count restarted inside it, each at the moment of one of `points`. */
+  restarts?: readonly StepRestart[]
   /**
    * Whether nothing was measured past the last reading, so the line ends there rather than
    * holding to `end`. A source writes a reading only when a value changes, so a fresh window's
    * line holds.
    */
   silent?: boolean
-  /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
-  even?: boolean
-  /** Where the window's count restarted inside it, each at the moment of one of `points`. */
-  restarts?: readonly StepRestart[]
   /** A moment as the axis names an end of the span shown, «14:05». */
   moment: (at: number) => string
 }>()
