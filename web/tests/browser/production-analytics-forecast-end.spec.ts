@@ -17,6 +17,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { NIGHT_NAME } from '../fixtures/quota.ts'
 import { present } from '../support/present.ts'
 import { openPanel, pageAt, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
@@ -135,7 +136,7 @@ for (const forcedColors of ['none', 'active'] as const)
 test('five hours forecast one value, and its end is a dash at that value, no ring', async ({
   page,
 }, info) => {
-  const window = await openWindow(page, 'quota_five_hour', '7e6d5c4b', 'five_hour')
+  const window = await openWindow(page, 'quota_five_hour', NIGHT_NAME, 'five_hour')
   const { mark, hint } = await pointAtForecast(page, window)
   const drawn = await drawnMark(mark)
   const value = await shareAt(window, 35)
@@ -201,7 +202,7 @@ test('a week’s bar draws one tail from the fill to the high end; five hours as
   const share = ({ left, width }: { left: number; width: number }, x: number) =>
     Math.round(((x - left) / width) * 100)
   const work = await bar(panel.locator('[data-account="Work"] [data-window="five_hour"]'))
-  const night = await bar(panel.locator('[data-account="7e6d5c4b"] [data-window="five_hour"]'))
+  const night = await bar(panel.locator(`[data-account="${NIGHT_NAME}"] [data-window="five_hour"]`))
   await record(info, 'five-hours-bars', { work, night })
   expect(work.tails.map(({ right }) => share(work, right))).toEqual([100])
   expect(

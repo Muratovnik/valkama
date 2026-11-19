@@ -16,7 +16,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import type { Quota } from '@/shared/api/analyticsApi.ts'
 
-import { quotaAt, SEATED_NAME, share } from '../fixtures/quota.ts'
+import { NIGHT_NAME, quotaAt, SEATED_NAME, share } from '../fixtures/quota.ts'
 import { NOW, openPanel, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { test } from './test.ts'
 
@@ -107,7 +107,7 @@ for (const width of [1440, 1024])
     // Each kind with the account whose window of it stands and draws a fill: the control.
     for (const [by, kind, before, control] of [
       ['quota_five_hour', 'five_hour', 'before the reset: 45%', SEATED_NAME],
-      ['quota_week', 'week', 'before the reset: 9%', '7e6d5c4b'],
+      ['quota_week', 'week', 'before the reset: 9%', NIGHT_NAME],
     ] as const) {
       const panel = await open(page, by, width)
       const window = panel.locator(`[data-account="Work"] [data-window="${kind}"]`)
