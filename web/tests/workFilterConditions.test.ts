@@ -57,6 +57,24 @@ describe('the new conditions', () => {
     expect(kept(filterOf({ facet: 'asked' }))).toEqual(['MAIN-4'])
   })
 
+  it('keeps a goal or stage whose question waits for the answer, as the server says it', () => {
+    const waiting = ['goal_or_stage', 'question'] as const
+    const askedGoal = boardGoal(7, 'dev', { withheld: [...waiting] })
+    const askedStage = boardGoal(8, 'dev', {
+      kind: 'stage',
+      parent_id: askedGoal.work_item_id,
+      withheld: [...waiting],
+    })
+    const items = [goal, stage, askedGoal, askedStage, asked]
+    const filter = filterOf({ facet: 'asked' })
+    const lines = lineageIn(items)
+    expect(references(items.filter((item) => matchesWorkFilter(item, filter, lines)))).toEqual([
+      'MAIN-7',
+      'MAIN-8',
+      'MAIN-4',
+    ])
+  })
+
   it('keeps another space’s cards, and with «≠» every card but those', () => {
     const only = filterOf({ facet: 'elsewhere', value: 'other' })
     expect(kept(only)).toEqual(['MAIN-5'])

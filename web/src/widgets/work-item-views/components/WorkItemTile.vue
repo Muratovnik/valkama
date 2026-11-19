@@ -6,8 +6,9 @@
  * The first line is the item's head and what stops it: a kind glyph when it is
  * not a plain task, the reference, a priority glyph when the priority is not the
  * ordinary medium — the order every surface reads an item in (`drawHead`) — and
- * on the right only an open blocker, «⛔ MAIN-12». It never wraps; a mark short of
- * room keeps its glyph. On a board by goal, a tile of work under a stage names that
+ * on the right only an open blocker, «⛔ MAIN-12», or, on a tile that stands ready and
+ * that the queue would still not give, a sign and a word for why, «✋ ждёт ответа», the
+ * whole sentence its name (`withheld`). It never wraps; a mark short of room keeps its glyph. On a board by goal, a tile of work under a stage names that
  * stage on its second line, one line in the reference's tone, since the lane names
  * only the goal. Below it the title, at most three lines, with no hint beside
  * it: one hung over the whole sheet and stood over the tile's top edge, saying again
@@ -31,7 +32,8 @@
  * full ink at the row-title weight; the holder and what stops the work in the
  * muted ink; the reference and the labels in the tertiary one. A finished tile's
  * title takes the muted ink too, so a column of a thousand closed items does not
- * stand level with the work still open.
+ * stand level with the work still open, and so does a ready tile the queue holds back:
+ * the norm of a ready column is work the queue gives.
  *
  * The tile used to print every facet as a word, defaults included: «Средний»
  * on most tiles, the kind word beside it, and «можно брать» on nearly every
@@ -59,6 +61,7 @@ import { useLabelFit } from '@/entities/work-item/composables/useLabelRoom.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetId } from '@/entities/work-item/utils/facets.ts'
+import { heldBack } from '@/entities/work-item/utils/withheld.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
@@ -179,7 +182,7 @@ const describedBy = computed(() => {
 <template>
   <div
     class="work-item-tile"
-    :class="{ finished: !props.item.open }"
+    :class="{ finished: !props.item.open, withheld: heldBack(props.item) }"
   >
     <span class="tile-line">
       <component
@@ -294,7 +297,7 @@ const describedBy = computed(() => {
     }
   }
 
-  &.finished .tile-open {
+  &:is(.finished, .withheld) .tile-open {
     color: var(--color-text-muted);
   }
 }

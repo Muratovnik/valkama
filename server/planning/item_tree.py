@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from . import model, questions, states
 
@@ -404,7 +404,8 @@ def of_item(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> Tree:
     """One item and what is under it, or over it: all a record of that item derives from.
 
     `category` is the item's own state's. A container's record derives from what is
-    under it, and the queue gives no container whatever is over it. A task has
+    under it, and the queue gives no container whatever is over it; it asks only
+    whether a question to the owner on it is open, which an open one can have. A task has
     nothing under it to read, so its facts come from its row; the queue asks about
     the items over it, what blocks it and them, and its questions to the owner. Its
     own row says whether the store records a start, so that costs no statement, and
@@ -414,7 +415,11 @@ def of_item(conn: sqlite3.Connection, row: sqlite3.Row, category: str) -> Tree:
 
     identity = str(row["work_item_id"])
     if str(row["kind"]) == model.CONTAINER_KIND:
-        return below(conn, [identity])
+        loaded = below(conn, [identity])
+        closed = category in model.TERMINAL_CATEGORIES
+        return replace(
+            loaded, asked=frozenset() if closed else questions.asked(conn, items=[identity])
+        )
     columns = row.keys()  # `in row` would search a Row's values, not its names
     recorded = "started_at" in columns
     started = row["started_at"] if recorded else None

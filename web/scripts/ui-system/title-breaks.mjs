@@ -116,8 +116,12 @@ export const UNBROKEN_TITLES = new Map([
     "a refusal's heading",
   ],
   [
-    'widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }} in span.lane-title.one-line',
+    'widgets/work-item-views/components/WorkItemLaneToggle.vue {{ props.title }} in span.lane-title.one-line',
     `the epic's title over its lane is ${ONE_LINE}`,
+  ],
+  [
+    'widgets/work-item-views/components/WorkItemLaneToggle.vue {{ part.title }} in button.lane-part.one-line',
+    `a part of the path over a stage's lane is ${ONE_LINE}`,
   ],
 ])
 

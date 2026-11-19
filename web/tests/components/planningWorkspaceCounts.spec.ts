@@ -122,12 +122,17 @@ afterEach(() => {
 })
 
 describe('one population above the stage', () => {
-  it('gives the chain chip the number the counts line and the board count', () => {
+  it('gives the chain chip the number the counts line says, the board drawing its members', () => {
     const wrapper = workspace({ chain: chain() })
-    const tiles = wrapper.findAll('[data-reference]').length
-    expect(tiles).toBe(3)
-    expect(wrapper.get('.workspace-chip').text()).toBe(`Chain MAIN-1 · ${tiles}`)
-    expect(countsLine(wrapper)).toBe(`3 open of ${tiles}`)
+    expect(wrapper.get('.workspace-chip').text()).toBe('Chain MAIN-1 · 3')
+    expect(countsLine(wrapper)).toBe('3 open of 3')
+    // The board draws the members: the root goal is under way, and a goal under way is no
+    // tile (`standsAsTile`).
+    const tiles = wrapper
+      .findAll('[data-reference]')
+      .map((tile) => tile.attributes('data-reference'))
+    expect(tiles).not.toContain('MAIN-1')
+    expect(tiles).toHaveLength(2)
   })
 
   it('counts the chain, not the space, while the graph draws the chain', () => {

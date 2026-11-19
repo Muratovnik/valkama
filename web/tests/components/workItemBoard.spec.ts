@@ -79,9 +79,9 @@ describe('the board grouped by goal', () => {
       'No goal',
     ])
     expect(lanes[0].get('.lane-reference').text()).toBe('MAIN-1')
-    expect(lanes[0].get('.lane-counts').text()).toBe('3 open · 0 closed')
+    expect(lanes[0].get('.lane-counts').text()).toBe('0 of 3 closed')
     expect(lanes[0].get('.lane-state').text()).toBe('In progress')
-    expect(lanes[1].get('.lane-counts').text()).toBe('0 open · 1 closed')
+    expect(lanes[1].get('.lane-counts').text()).toBe('1 of 1 closed')
     // The goal is the lane, never a tile in it.
     expect(wrapper.find('[data-reference="MAIN-1"]').exists()).toBe(false)
     expect(lanes[0].findAll('[data-reference]').map((item) => item.text())).toEqual([
@@ -289,12 +289,12 @@ describe('a tile on the board', () => {
 describe('walking the board from the keyboard', () => {
   it('makes each column one Tab stop that follows the tile focused in it', async () => {
     const wrapper = board()
-    expect(stops(wrapper)).toEqual(['MAIN-10', 'MAIN-13', 'MAIN-1', 'MAIN-20'])
+    expect(stops(wrapper)).toEqual(['MAIN-10', 'MAIN-13', 'MAIN-20'])
     tile(wrapper, 'MAIN-10').element.focus()
     await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown' })
     expect(focused()).toBe('MAIN-11')
     await wrapper.vm.$nextTick()
-    expect(stops(wrapper)).toEqual(['MAIN-11', 'MAIN-13', 'MAIN-1', 'MAIN-20'])
+    expect(stops(wrapper)).toEqual(['MAIN-11', 'MAIN-13', 'MAIN-20'])
     await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'End' })
     expect(focused()).toBe('MAIN-12')
     await tile(wrapper, 'MAIN-12').trigger('keydown', { key: 'Home' })
@@ -313,14 +313,13 @@ describe('walking the board from the keyboard', () => {
     tile(wrapper, 'MAIN-11').element.focus()
     await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowRight' })
     expect(focused()).toBe('MAIN-13')
+    // Dev holds only the goal, which is no tile: the walk goes on to Done.
     await tile(wrapper, 'MAIN-13').trigger('keydown', { key: 'ArrowRight' })
-    expect(focused()).toBe('MAIN-1')
-    await tile(wrapper, 'MAIN-1').trigger('keydown', { key: 'ArrowRight' })
     expect(focused()).toBe('MAIN-20')
     await tile(wrapper, 'MAIN-20').trigger('keydown', { key: 'ArrowRight' })
     expect(focused()).toBe('MAIN-20')
     await tile(wrapper, 'MAIN-20').trigger('keydown', { key: 'ArrowLeft' })
-    expect(focused()).toBe('MAIN-1')
+    expect(focused()).toBe('MAIN-13')
   })
 
   it('crosses only between the cells of one lane, past the empty ones', async () => {
@@ -400,7 +399,9 @@ describe('a chain narrows the board and the list', () => {
           .map((row) => row.text().match(/MAIN-\d+/u)?.[0]),
       )
       shown.delete(undefined)
-      expect(shown).toEqual(new Set(['MAIN-1', 'MAIN-10', 'MAIN-13']))
+      // The board draws the root as no tile: a goal is a lane once accepted, here as its chip.
+      const root = view === 'list' ? ['MAIN-1'] : []
+      expect(shown).toEqual(new Set([...root, 'MAIN-10', 'MAIN-13']))
       const chip = wrapper.get('.workspace-chip')
       expect(chip.text()).toBe('Chain MAIN-1 · 3')
       expect(chip.attributes('aria-label')).toBe('Leave chain MAIN-1 and show the whole space')

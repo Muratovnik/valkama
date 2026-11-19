@@ -9,7 +9,7 @@ import type { LaneHead } from '@/widgets/work-item-views/utils/boardLanes.ts'
 type Translate = (key: string, params?: Record<string, unknown>) => string
 
 /** Between the containers of a path, as the lane's heading draws it. */
-const PATH_STEP = ' › '
+export const PATH_STEP = ' › '
 
 export function laneTitle(head: LaneHead, t: Translate): string {
   switch (head.kind) {

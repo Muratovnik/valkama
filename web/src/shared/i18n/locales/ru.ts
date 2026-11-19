@@ -3,6 +3,7 @@
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { analyticsMessages } from '@/shared/i18n/analyticsMessages.ts'
+import { boardMessages } from '@/shared/i18n/boardMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
@@ -733,24 +734,7 @@ export const ru = {
       laneHeads:
         '{goals}\u{A0}родитель строкой | {goals}\u{A0}родителя строками | {goals}\u{A0}родителей строками',
     },
-    columnEmpty: 'Пусто',
-    lanes: {
-      counts: 'открыто {open} · закрыто {closed}',
-      fold: 'Свернуть «{lane}»',
-      unfold: 'Развернуть «{lane}»',
-      openGoal: 'Открыть {reference}',
-      showChain: 'Показать цепочку {reference} на доске',
-      empty: 'Внутри пока нет задач.',
-      showAll: 'Показать все · {count}',
-      showFewer: 'Свернуть',
-      inState: '{count} в «{state}»',
-      offLeft: 'Левее:',
-      offRight: 'Правее:',
-    },
-    order: {
-      hint: 'Стрелки переводят фокус между задачами.',
-      moved: '{reference}: {position} из {total} в «{state}»',
-    },
+    ...boardMessages.ru,
     listEmpty: 'В этом пространстве ещё нет работы.',
     noSpace: 'У этого проекта пока нет пространства планирования.',
     cutoverPending: 'Выполните `valkama migrate work-model` один раз, остановив все сессии.',

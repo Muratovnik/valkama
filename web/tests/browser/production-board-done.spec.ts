@@ -29,8 +29,9 @@ for (const width of [1440, 390] as const) {
     await serve(page)
     await openBoard(page, {})
     const done = cell(page.locator('.work-item-board'), 'done')
-    // Listed oldest place first (406, 420, 421, 422); closed on the 21st, 5th, 3rd and 25th.
-    await expect.poll(() => tiles(done)).toEqual(['MAIN-422', 'MAIN-406', 'MAIN-420', 'MAIN-421'])
+    // Listed oldest place first (406, 421, 422); closed on the 21st, 3rd and 25th. The closed
+    // goal MAIN-420 is no tile: it stays in its lane's count.
+    await expect.poll(() => tiles(done)).toEqual(['MAIN-422', 'MAIN-406', 'MAIN-421'])
     await done.scrollIntoViewIfNeeded()
     await page.screenshot(shot(info, `w-board-done-${width}.png`))
   })
@@ -46,7 +47,7 @@ test('a drag inside Done moves nothing; a drop on it from another column closes 
   const board = page.locator('.work-item-board')
   const done = cell(board, 'done')
   const tile = (reference: string) => board.locator(`li[data-reference="${reference}"]`)
-  const before = ['MAIN-422', 'MAIN-406', 'MAIN-420', 'MAIN-421']
+  const before = ['MAIN-422', 'MAIN-406', 'MAIN-421']
   await expect.poll(() => tiles(done)).toEqual(before)
   expect(await tile('MAIN-421').locator('.tile-open').getAttribute('aria-keyshortcuts')).toBeNull()
 
@@ -67,7 +68,7 @@ test('a drag inside Done moves nothing; a drop on it from another column closes 
   await expect.poll(() => tiles(done)).toEqual(before)
 
   // From the backlog onto the middle of Done: a plain transition, no place.
-  await drag(page, { from: tile('MAIN-402'), to: tile('MAIN-420'), where: 'top' })
+  await drag(page, { from: tile('MAIN-402'), to: tile('MAIN-406'), where: 'top' })
   await expect.poll(() => writes.length).toBe(1)
   expect(writes[0].path).toBe('/api/planning/work-item/transition')
   expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'done' }))
