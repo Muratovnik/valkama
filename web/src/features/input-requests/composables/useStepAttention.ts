@@ -3,7 +3,12 @@ import type { Ref } from 'vue'
 
 import { useEventListener, useRafFn } from '@vueuse/core'
 
+import { scrollerOf } from '@/features/input-requests/composables/useUncoveredFocus.ts'
+
 import { strayThisPress } from '@/shared/ui/strayPress.ts'
+
+/** The air kept between what sticks over the top of the panel and what stands under it. */
+const CLEARANCE = 8
 
 /**
  * How long the step of declining stands.
@@ -31,6 +36,12 @@ import { strayThisPress } from '@/shared/ui/strayPress.ts'
  * them past the fold, so the press that scrolled to them ended the step it was meant to confirm.
  * So the step brings its buttons into view, by no more than it takes, before it takes their
  * place; a scroll the reader makes after that still moves them, and ends it.
+ *
+ * What came over the buttons may be taller than the panel, and then bringing them into view took
+ * its first line, where focus is, past the top. So first what stands over them and scrolls inside
+ * itself (`data-step-room`) is held to the room the panel leaves above them, under what sticks to
+ * its top (`data-stuck-edge="start"`): its height is the panel's room (`--step-room`), and both its
+ * first line and the buttons stand in view. Scrolling inside it moves no button.
  */
 export function useStepAttention(
   question: Readonly<Ref<HTMLElement | null>>,
@@ -47,6 +58,18 @@ export function useStepAttention(
   )
   const actions = () => question.value?.querySelector('.request-actions')
   const place = () => actions()?.getBoundingClientRect()
+  function fitRoom() {
+    const room = question.value?.querySelector<HTMLElement>('[data-step-room]')
+    const buttons = actions()
+    const scroller = room ? scrollerOf(room) : null
+    if (!room || !buttons || !scroller) return
+    const stuck = [...(question.value?.querySelectorAll('[data-stuck-edge="start"]') ?? [])]
+      .filter((edge) => !edge.contains(room))
+      .reduce((sum, edge) => sum + edge.getBoundingClientRect().height, 0)
+    const below = buttons.getBoundingClientRect().bottom - room.getBoundingClientRect().bottom
+    const free = scroller.clientHeight - stuck - below - CLEARANCE
+    room.style.setProperty('--step-room', `${Math.max(0, Math.floor(free))}px`)
+  }
   let left = place()
   const moved = () => {
     const now = place()
@@ -72,6 +95,7 @@ export function useStepAttention(
     standing,
     (up) => {
       if (up) {
+        fitRoom()
         actions()?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'instant' })
         left = place()
         resume()

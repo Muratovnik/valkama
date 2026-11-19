@@ -39,6 +39,10 @@
  * tabs over it (`useKindTabs`) show all of them or one kind's; the list holds only the questions
  * of the tab shown, so the way through the list in the dialog's head counts that tab's, and focus
  * moves on within it.
+ *
+ * Over the questions of «All» and of the triage tab stands the line of each space whose stack
+ * waits for a triage review past its thresholds (`RequestTriageDue`), as the read carries it. It is
+ * a line of the window and no question: nothing answers it, and focus never moves on to it.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -47,6 +51,7 @@ import RequestCard from '@/features/input-requests/components/RequestCard.vue'
 import RequestKindSubject from '@/features/input-requests/components/RequestKindSubject.vue'
 import RequestListNotes from '@/features/input-requests/components/RequestListNotes.vue'
 import RequestRecommendedAll from '@/features/input-requests/components/RequestRecommendedAll.vue'
+import RequestTriageDue from '@/features/input-requests/components/RequestTriageDue.vue'
 import { useKindTabs } from '@/features/input-requests/composables/useKindTabs.ts'
 import type { Outcome } from '@/features/input-requests/composables/useRequestWrites.ts'
 import { useUnderReader } from '@/features/input-requests/composables/useUnderReader.ts'
@@ -167,6 +172,8 @@ const inTab = (entry: InputRequestEntry) => kinds.shows(recordOf(entry).kind)
 const shown = computed(() => props.entries.filter((entry) => inTab(entry)))
 const shownAnswered = computed(() => props.answered.filter((entry) => inTab(entry)))
 const shownAll = computed(() => [...shown.value, ...shownAnswered.value])
+/** The spaces whose triage is due, over «All» and the triage tab only. */
+const dueLines = computed(() => (kinds.shows('triage') ? (props.result?.triage_due ?? []) : []))
 const answeredLabel = computed(() =>
   t('requests.hub.answered', { count: shownAnswered.value.length }),
 )
@@ -352,6 +359,10 @@ defineExpose({ holdsFocus, holdsReader })
         :tabs="panelTabs"
         :value="kinds.tab.value"
       >
+        <RequestTriageDue
+          v-if="dueLines.length"
+          :lines="dueLines"
+        />
         <RequestRecommendedAll
           v-if="recommendAll"
           :draft-of="recordDraft"

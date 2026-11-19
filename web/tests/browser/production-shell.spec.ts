@@ -245,8 +245,12 @@ for (const width of [1440, 390]) {
     )
     await expect(back).toHaveAccessibleName('Back')
 
-    // Keyboard order in the head is Back, then Close.
+    // Keyboard order in the head is the order DESIGN.md gives its right end: Back, «…», then
+    // Close. «…» stands on this card because it is writable and its menu has entries.
+    const more = drawer.getByRole('button', { name: 'More', exact: true })
     await back.focus()
+    await page.keyboard.press('Tab')
+    await expect(more).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(close).toBeFocused()
   })

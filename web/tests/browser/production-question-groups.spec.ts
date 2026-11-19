@@ -7,7 +7,9 @@
  * shows the list the server's refusal names, what waits on that work on one line, and confirms
  * that list's token, not the one the question was asked with. The list pushes the answers down,
  * past a phone's fold, and the record brings them back into view before the asking starts to
- * watch them move; a scroll the reader makes after that still ends the asking.
+ * watch them move; a scroll the reader makes after that still ends the asking. A list taller than
+ * a phone's screen is held to the room over the answers and scrolls inside itself, from the keys
+ * too, with its focused first line and the answers both in view.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -286,3 +288,59 @@ for (const locale of ['en', 'ru'] as const) {
     expect(requests.writes).toHaveLength(0)
   })
 }
+
+/** The refusal with more open work under the goal than a phone's screen holds. */
+const LONG = {
+  error: {
+    ...REFUSED.error,
+    cancels: Array.from({ length: 30 }, (_, index) => ({
+      ...REFUSED.error.cancels[0],
+      reference: `MAIN-${400 + index}`,
+      title: `Accepted work under the goal, part ${index + 1}`,
+    })),
+  },
+}
+
+test('on a phone a refusal list taller than the screen keeps its first line and the answers in view, and scrolls inside itself', async ({
+  page,
+}, testInfo) => {
+  const words = WORDS.en
+  const { one, listed, requests } = await refuse(page, { locale: 'en', width: 390 }, LONG)
+  const lead = listed.getByRole('alert')
+  const asked = one.getByRole('alert').filter({ hasText: words.asked })
+  const confirm = one.getByRole('button', { name: words.drop, exact: true }).last()
+  await expect(listed.locator('[data-cancel-part="closes"]').getByRole('listitem')).toHaveCount(30)
+  await expect(lead).toBeFocused()
+  await expect(asked).toBeVisible()
+
+  // The record brought the answers into view, and the focused first line stands in view too:
+  // under the record's head that sticks over the panel's top, and the answers over its foot.
+  const scroller = page.getByRole('dialog').locator('.dialog-frame-body')
+  const [panel, head, first, answer] = await Promise.all(
+    [scroller, one.locator('[data-stuck-edge="start"]').first(), lead, confirm].map((found) =>
+      box(found),
+    ),
+  )
+  expect(first.y).toBeGreaterThanOrEqual(head.y + head.height - 0.5)
+  expect(answer.y + answer.height).toBeLessThanOrEqual(panel.y + panel.height + 0.5)
+  expect(await listed.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('long-refusal-390.png') })
+
+  // The keys scroll the list from its first line, and it moves no answer: the asking stands.
+  await page.keyboard.press('PageDown')
+  await expect.poll(() => listed.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  expect(await box(confirm)).toEqual(answer)
+  // The list is a stop of its own on the way back from the answers, and Home takes it up again.
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Shift+Tab')
+  await expect(listed).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect.poll(() => listed.evaluate((element) => element.scrollTop)).toBe(0)
+  await expect(asked).toBeVisible()
+
+  // A scroll the reader makes over the panel still moves the answers, and ends the asking.
+  await page.mouse.move(answer.x + answer.width / 2, answer.y + answer.height / 2)
+  await page.mouse.wheel(0, -60)
+  await expect(asked).toHaveCount(0)
+  expect(requests.writes).toHaveLength(0)
+})
