@@ -180,7 +180,7 @@ describe('work discovery', () => {
       'MAIN-265',
     ])
     expect(wrapper.get('tbody').text()).toContain(item.claim_ref)
-    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(7)
+    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(8)
     expect(wrapper.get('tbody tr td:last-child').text()).not.toBe('')
     await wrapper.get('tbody tr').get('.list-open').trigger('click')
     expect(wrapper.emitted('open')).toEqual([['MAIN-264']])

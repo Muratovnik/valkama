@@ -896,6 +896,7 @@ export const en = {
       caption: 'Work items in this space, sortable by every column.',
       reference: 'Ref',
       title: 'Title',
+      goal: 'Goal and stage',
       state: 'State',
       priority: 'Priority',
       claim: 'Assignee',

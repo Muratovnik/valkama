@@ -107,7 +107,7 @@ const standingName = useStandingName()
  */
 const ordered = computed(() => {
   const tiles = props.items.filter(standsAsTile)
-  const sorted = orderedWork(tiles, props.sort, standingName, props.scopeItems)
+  const sorted = orderedWork(tiles, props.sort, standingName, { scope: props.scopeItems })
   return props.sort.key === 'queue' && !props.sort.descending ? newestClosedFirst(sorted) : sorted
 })
 const columns = computed(() => terminalLast(byState(props.workflow, ordered.value)))

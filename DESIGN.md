@@ -1796,6 +1796,17 @@ page wherever the list scrolls; the table tells a reader how many rows it has
 and each row where it stands; a printed list prints every row; and Ctrl+F finds
 in every row, as the next rule says. The cost, for now: on a list that long, a
 screen reader's browse mode reaches only the rows in the page.
+After its title a list row's «Goal and stage» («Цель и этап») names the goal and the
+stages it stands under, goal first, «Launch › Beta», read from the whole space, so a
+filter that leaves the goal out of the rows still names it. Work under no goal says a
+dash; a card of another space says nothing there, since this space's read does not name
+that card's goal. The column sorts by the path. It stands from 1100px of list and gives
+way first: beside every other column a list of 900px left the title 20 characters and
+pushed the table past its edge. Folded, the path leads what the row prints under its
+title: a line of its own above an open blocker and the labels down to 900px, and the
+first fact of the line of facts below that, where it folds with the state, the priority
+and the holder. The list by goal draws no such column, since a row's place there is its
+goal; the list by project does.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
 list's sort order. Grouped «By project», it is a tree of one level: a row per group, as

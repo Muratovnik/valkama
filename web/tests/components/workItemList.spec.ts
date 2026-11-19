@@ -172,11 +172,11 @@ describe('the list rows', () => {
     })
     await flushPromises()
     const [recent, older] = wrapper.findAll('tbody tr').map((row) => row.findAll('td'))
-    expect(recent[5].text()).toBe('1/2')
-    expect(recent[6].text()).toContain('Mar')
-    expect(recent[6].text()).not.toContain(String(year))
-    expect(older[5].text()).toBe('—')
-    expect(older[6].text()).toContain(String(year - 1))
+    expect(recent[6].text()).toBe('1/2')
+    expect(recent[7].text()).toContain('Mar')
+    expect(recent[7].text()).not.toContain(String(year))
+    expect(older[6].text()).toBe('—')
+    expect(older[7].text()).toContain(String(year - 1))
   })
 })
 
@@ -197,7 +197,7 @@ const cells = (wrapper: Awaited<ReturnType<typeof rows>>, index: number) =>
 describe('the facets a list row prints', () => {
   it('says nobody holds an unheld item with a dash, never that it is workable', async () => {
     const wrapper = await rows([boardItem(1, 'backlog', { workable: true })])
-    const holder = cells(wrapper, 0)[4]
+    const holder = cells(wrapper, 0)[5]
     expect(holder.text()).toBe('—')
     expect(wrapper.get('tbody').text()).not.toContain('Workable')
   })
@@ -207,8 +207,8 @@ describe('the facets a list row prints', () => {
       boardItem(1, 'done', { last_claim_ref: 'claude (session 5937aa01-1234-4c00)' }),
       boardItem(2, 'done', { last_claim_ref: null }),
     ])
-    expect(cells(wrapper, 0)[4].text()).toBe('Previously responsible: claude · 5937aa01-1234')
-    expect(cells(wrapper, 1)[4].text()).toBe('—')
+    expect(cells(wrapper, 0)[5].text()).toBe('Previously responsible: claude · 5937aa01-1234')
+    expect(cells(wrapper, 1)[5].text()).toBe('—')
   })
 
   it('leads every reference with one kind slot, filled or not, and drops the kind word', async () => {
@@ -235,14 +235,14 @@ describe('the facets a list row prints', () => {
       boardItem(2, 'backlog', { priority: 'high' }),
       boardItem(3, 'backlog', { priority: 'low' }),
     ])
-    const medium = cells(wrapper, 0)[3].get('.facet-mark')
+    const medium = cells(wrapper, 0)[4].get('.facet-mark')
     expect(medium.text()).toBe('Medium')
     expect(medium.classes()).toContain('quiet')
     for (const [index, word, tone] of [
       [1, 'High', 'warning'],
       [2, 'Low', 'neutral'],
     ] as const) {
-      const column = cells(wrapper, index)[3].get('.facet-mark')
+      const column = cells(wrapper, index)[4].get('.facet-mark')
       expect(column.text()).toBe(word)
       // The word alone, in the tone its glyph has where the column folds away.
       expect(column.classes()).toContain('facet-word-alone')
@@ -253,12 +253,12 @@ describe('the facets a list row prints', () => {
       expect(glyphs).toHaveLength(0)
     }
     for (const index of [0, 1, 2])
-      expect(cells(wrapper, index)[3].find('.facet-glyph').exists()).toBe(false)
+      expect(cells(wrapper, index)[4].find('.facet-glyph').exists()).toBe(false)
   })
 
   it('where the priority column folds away, its glyph follows the reference, after the kind', async () => {
     const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-    // A list of 700px folds the state, the priority and the holder columns.
+    // A list of 700px folds the goal and stage, the state, the priority and the holder columns.
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
       configurable: true,
       get: () => 700,
