@@ -11,9 +11,12 @@
  * so the 36px between two sections has no place on it yet.
  *
  * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact) and the
- * controls that act on the whole level, each at the one size a heading's control takes. A caveat
- * that qualifies the whole level — that a cost is an estimate, what the tokens count, that the
- * period does not reach the quota — is said once, in the «ⓘ» that ends the heading's line
+ * controls that act on the whole level, each at the one size a heading's control takes, at the
+ * row's end. A row that wraps puts a control under a long heading; a row of one line (`oneLine`)
+ * cuts the heading short with an ellipsis instead, its whole words in a hint while they are cut,
+ * so its controls stay on its line, as a window of the quota keeps its name and «Breakdown»
+ * there. A caveat that qualifies the whole level — that a cost is an estimate, what the tokens
+ * count, that the period does not reach the quota — is said once, in the «ⓘ» that ends the heading's line
  * (`about`), never as a line of the page; it opens on a press, so a finger reaches it too
  * (`InfoTip`). It is named «About this section», and a level that is no section names it for what
  * it qualifies (`aboutLabel`), as the figures of a value's side panel do. The quota once opened on
@@ -28,6 +31,9 @@
  * row is as wide and as tall as the widest and the controls beside it wrap alike whichever stands.
  * The switch over the tasks' chart once took a line of its own under the agents' time and none
  * under the tokens, and choosing a measure moved the table under it.
+ *
+ * What a reader of the page selects it by: the level is `data-level`, its kind; its heading row is
+ * `data-level-head`.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -37,6 +43,7 @@ import { useLevelHeading } from '@/pages/analytics/composables/usePanelOutline.t
 import InfoTip from '@/shared/ui/InfoTip.vue'
 import LineEnd from '@/shared/ui/LineEnd.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -60,6 +67,8 @@ const props = withDefaults(
     /** The narrowest a part stands in `fit` columns. */
     columnMin?: string
     columns?: 'one' | 'pair' | 'fit'
+    /** The heading row keeps one line: the heading is cut short before its controls wrap. */
+    oneLine?: boolean
     /** Whether the level stands on a surface of its own. */
     surface?: boolean
     /** The heading's words; a heading with more than words takes the `heading` slot. */
@@ -74,6 +83,7 @@ const props = withDefaults(
     bodyAs: 'div',
     columns: 'one',
     columnMin: '20rem',
+    oneLine: false,
     surface: false,
     bodyLabel: undefined,
     about: () => [],
@@ -100,6 +110,8 @@ const headingAs = useLevelHeading(() => headed.value)
 /** The «ⓘ» stands at a heading: a level with no heading has no line for it to end. */
 const caveats = computed(() => (headed.value ? props.about : []))
 const aboutName = computed(() => props.aboutLabel ?? t('analytics.about.label'))
+/** The heading's whole words for its hint while a row of one line cuts them short; none else. */
+const cutTitle = computed(() => (props.oneLine ? props.title : ''))
 /** The other headings the level takes in turn, each held unseen in the heading's place. */
 const rivals = computed(() =>
   props.title ? [...new Set(props.titles)].filter((other) => other !== props.title) : [],
@@ -121,6 +133,8 @@ const rivals = computed(() =>
     <div
       v-if="headed || $slots.beside || $slots.actions"
       class="level-head"
+      :class="{ 'level-head-line': oneLine }"
+      data-level-head
     >
       <component
         :is="headingAs"
@@ -153,8 +167,9 @@ const rivals = computed(() =>
         :is="headingAs"
         v-else-if="title"
         v-slash-breaks="title"
+        v-tooltip.clipped="cutTitle"
         class="level-heading"
-        :class="`heading-${level}`"
+        :class="[`heading-${level}`, { 'one-line': oneLine }]"
       />
       <LineEnd
         v-if="caveats.length"
@@ -266,6 +281,16 @@ const rivals = computed(() =>
 
 .level-about-caveat {
   margin: 0;
+}
+
+/* A row of one line: the heading takes what its controls leave it and is cut short there, by the
+   shared rule of a line that ends in an ellipsis (`.one-line`). */
+.level-head-line {
+  flex-wrap: nowrap;
+
+  > .level-heading {
+    flex: 0 1 auto;
+  }
 }
 
 /* The controls stand at the row's end, centred on its first line. */

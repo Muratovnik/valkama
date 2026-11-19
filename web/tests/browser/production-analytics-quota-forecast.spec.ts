@@ -193,9 +193,13 @@ const hintOf = (page: Page, at: number, kind: string) =>
       const painted = drawn?.checkVisibility({ opacityProperty: true }) ?? false
       const box = drawn?.getBoundingClientRect()
       if (!hint || !head || !box) return { painted, near: false, clear: false }
+      // Level with the mark's top, or, where the line could not be scrolled to the window's
+      // middle, as the last line of the page cannot, moved up to keep 8px inside the window, still
+      // beside the mark's height.
+      const kept = hint.bottom >= innerHeight - 9 && hint.top <= box.top && box.top <= hint.bottom
       const beside =
         Math.min(Math.abs(hint.left - box.right), Math.abs(box.left - hint.right)) < 12 &&
-        Math.abs(hint.top - box.top) < 12
+        (Math.abs(hint.top - box.top) < 12 || kept)
       const centred =
         Math.abs((hint.left + hint.right) / 2 - (box.left + box.right) / 2) < 2 &&
         Math.min(Math.abs(box.top - hint.bottom), Math.abs(hint.top - box.bottom)) < 12

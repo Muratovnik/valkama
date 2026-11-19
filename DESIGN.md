@@ -2701,8 +2701,9 @@ reset» where they may — and its
 windows side by side where the width allows, 32px apart with a hairline in the rule's ink midway
 between two neighbours: 16px apart with nothing between, the moment ending one window's axis and
 the one starting the next stood a few pixels apart and read as one axis. Every window, the five hours, the week and a
-model's week, has the same three parts 12px apart: what stands now, the `StepLine` of its
-readings and «Breakdown», which opens what used it in the side panel.
+model's week, has its name on one line with «Breakdown», a compact button at the row's end that
+opens what used it in the side panel, the name cut short before the button wraps under it; then
+the same two parts 12px apart: what stands now and the `StepLine` of its readings.
 The menu beside an account's name, named «Account actions: Work», holds three entries and no
 more. «Rename» puts a field in the name's place that saves through the same names and rules as
 Settings, by the account's key, and on the group of an organization no source read by the
@@ -2735,16 +2736,16 @@ holds each window's forecast, the readings' table ends with it, and the window s
 reading in words under its reset, and that it has no pace where it has none. A window's step
 line is on no period of the page, so its scale is its own: it opens on «To now and the forecast»
 with a switch to the whole window while that span ends before the reset (Charts), points at
-«now» and at its forecast by the reset past its readings, and a frame dragged along it narrows that line alone. An account no source
-read says so and draws no window; a silent window is as solid as a fresh one, says how long it
+«now» and at its forecast by the reset past its readings, and a frame dragged along it narrows
+that line alone. An account no source read says so and draws no window; a silent window is as solid as a fresh one, says how long it
 has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
 empty track and says «0% used · up to date». A window of money past a limit is a line of its name and
 its state, its age and its source in the line's hint as a window of a share keeps them in its
 bar's and in words as a table, with no figure. No share is added to another, of two windows or
 two accounts, and no dollar stands beside one.
 
-Under each window that names its start stands «Breakdown», a button that opens the
-side panel on that window of that account, titled «Five hours · Work»: the work Valkama
+In the heading row of each window that names its start stands «Breakdown», a button that opens
+the side panel on that window of that account, titled «Five hours · Work»: the work Valkama
 recorded on the account from the window's start to the answer's moment, held to the last five
 minutes, as ranked bars — the first five items by the API price estimate, each with its share
 of the account's estimate, and one line for the rest — or as a ring of every item that folds its

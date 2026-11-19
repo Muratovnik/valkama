@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
- * One window of one account in the quota panel, in three parts 12px apart: what stands now, the
- * step line of its readings (`StepLine`) and «Breakdown», which opens what used the
- * window in the side panel over the page (`WindowDetail`).
+ * One window of one account in the quota panel: its name and «Breakdown» on one line, a compact
+ * button at the line's end that opens what used the window in the side panel over the page
+ * (`WindowDetail`), the name cut short before the button wraps under it; then, 12px apart, what
+ * stands now and the step line of its readings (`StepLine`). Under the line the button once
+ * stood alone, far from the name of what it breaks down.
  *
  * What stands now leads with one line, the share spent as the window's figure and its state in
  * words beside it, «75% used · no data for 3 d», over the bar with its pace tick (`WindowBar`), then
@@ -235,7 +237,20 @@ const readingsCaption = computed(() =>
     :title="name"
     :data-window="window.kind"
     :data-state="state"
+    one-line
   >
+    <template
+      v-if="spends && openSpend"
+      #actions="{ size }"
+    >
+      <VButton
+        :size="size"
+        data-spend
+        @click="spend"
+      >
+        {{ t('analytics.detail.window.open') }}
+      </VButton>
+    </template>
     <div class="quota-window-parts">
       <div class="quota-window-summary">
         <template v-if="shown === 'chart'">
@@ -295,25 +310,15 @@ const readingsCaption = computed(() =>
         :forecast="ahead?.forecast ?? null"
         :restarts="restarts"
       />
-      <VButton
-        v-if="spends && openSpend"
-        class="quota-window-uses"
-        size="compact"
-        data-spend
-        @click="spend"
-      >
-        {{ t('analytics.detail.window.open') }}
-      </VButton>
     </div>
   </PanelLevel>
 </template>
 
 <style scoped>
-/* The window's three parts — what stands now, its readings and what used it — stand as far apart
-   as a heading from what it heads, each with its own lines closer inside it, and closer than two
-   windows stand (16px), so one stacked under another never reads as a part of it. At the block's
-   8px for all, the facts ran into the readings' switch and the axis's moments into the heading
-   of what used the window. */
+/* The window's two parts — what stands now and its readings — stand as far apart as a heading
+   from what it heads, each with its own lines closer inside it, and closer than two windows stand
+   (16px), so one stacked under another never reads as a part of it. At the block's 8px, the facts
+   ran into the readings' switch. */
 .quota-window-parts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -354,10 +359,5 @@ const readingsCaption = computed(() =>
 
 .quota-window-quiet {
   color: var(--color-text-muted);
-}
-
-/* «Breakdown» is a control of the window, at its start rather than across it. */
-.quota-window-uses {
-  justify-self: start;
 }
 </style>
