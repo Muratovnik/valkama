@@ -40,6 +40,8 @@ export const analyticsQuotaMessages = {
     actions: {
       menu: 'Account actions: {account}',
       rename: 'Rename',
+      nameIt: 'Name',
+      nameItLabel: 'Name account {account}',
       name: 'Account name',
       renameFailed: 'Name not saved: {reason}',
       copy: 'Copy ID',
@@ -190,6 +192,8 @@ export const analyticsQuotaMessages = {
     actions: {
       menu: 'Действия с аккаунтом: {account}',
       rename: 'Переименовать',
+      nameIt: 'Назвать',
+      nameItLabel: 'Назвать аккаунт {account}',
       name: 'Имя аккаунта',
       renameFailed: 'Имя не сохранено: {reason}',
       copy: 'Скопировать идентификатор',

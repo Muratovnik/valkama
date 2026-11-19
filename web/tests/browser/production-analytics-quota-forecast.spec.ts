@@ -27,7 +27,14 @@ import type { Locator, Page } from '@playwright/test'
 
 import { messages } from '@/shared/i18n/index.ts'
 
-import { quotaAt, quotaOfEdges, SEATED_NAME, seatedName } from '../fixtures/quota.ts'
+import {
+  NIGHT_NAME,
+  nightName,
+  quotaAt,
+  quotaOfEdges,
+  SEATED_NAME,
+  seatedName,
+} from '../fixtures/quota.ts'
 import { NOW, openPanel, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
 import { forecastLines } from './quotaForecastLine.ts'
@@ -62,7 +69,7 @@ const FIVE_HOURS: Record<string, Drawn> = {
   },
   // A fresh 0 % that lasts to the reset: the tail from the track's start to the 35 % its answer
   // says it spends by then (DESIGN.md, `WindowBar`).
-  '7e6d5c4b five_hour': {
+  [`${NIGHT_NAME} five_hour`]: {
     fill: null,
     tail: [[0, 35]],
     corridor: true,
@@ -92,7 +99,7 @@ const WEEKS: Record<string, Drawn> = {
   },
   'Work week_model': { fill: 12.5, tail: [], corridor: false, places: ['now'] },
   // Silent, its share as solid as a fresh one's, and a range that may run out, cut at the end.
-  '7e6d5c4b week': {
+  [`${NIGHT_NAME} week`]: {
     fill: 88,
     tail: [[88, 100]],
     corridor: true,
@@ -286,11 +293,11 @@ async function pointAtLatest(page: Page, lines: LineAhead[]) {
   return strays
 }
 
-/** The cases as a language says them: the account known by its weekly reset names it in it. */
+/** The cases as a language says them: each account whose weekly reset is known names it in it. */
 const casesIn = (cases: Record<string, Drawn>, lang: 'en' | 'ru') =>
   Object.fromEntries(
     Object.entries(cases).map(([key, drawn]) => [
-      key.replace(SEATED_NAME, seatedName(lang)),
+      key.replace(SEATED_NAME, seatedName(lang)).replace(NIGHT_NAME, nightName(lang)),
       drawn,
     ]),
   )
@@ -466,7 +473,7 @@ test('a window past its reset draws no tail, no corridor and no place past its r
   const lines = await page.evaluate(aheadOfLines, LINES)
   expect(windows.map(({ key, tail, corridor }) => [key, tail, corridor])).toEqual([
     ['Work five_hour', [], false],
-    ['7e6d5c4b five_hour', [], false],
+    [`${NIGHT_NAME} five_hour`, [], false],
     [`${SEATED_NAME} five_hour`, [], false],
   ])
   expect(lines.map(({ places }) => places)).toEqual([[], [], []])

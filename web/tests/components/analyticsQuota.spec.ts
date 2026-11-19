@@ -25,7 +25,15 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { NIGHT, quotaAnswer, quotaAt, SEATED_NAME, UNREAD, UNREAD_NAME } from '../fixtures/quota.ts'
+import {
+  NIGHT,
+  NIGHT_NAME,
+  quotaAnswer,
+  quotaAt,
+  SEATED_NAME,
+  UNREAD,
+  UNREAD_NAME,
+} from '../fixtures/quota.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import {
   accountNamed,
@@ -97,7 +105,7 @@ describe('the quota tiles', () => {
       count: 'runs out at 15:10',
     })
     expect(says(page, 'quota_week')).toEqual({
-      lead: '7e6d5c4b',
+      lead: NIGHT_NAME,
       aside: '88%',
       count: 'no data for 3\u{A0}h',
     })
@@ -128,7 +136,7 @@ describe('the quota tiles', () => {
     })
     const zero = await mountAnalytics()
     expect(says(zero, 'quota_five_hour')).toEqual({
-      lead: '7e6d5c4b',
+      lead: NIGHT_NAME,
       aside: '0%',
       count: 'up to date',
     })
@@ -140,7 +148,7 @@ describe('the quota tiles', () => {
     stubAnalyticsReads(usage, () => quotaAnswer(quotaAt(NOW.getTime() - 5 * HOUR)))
     const reset = await mountAnalytics()
     expect(says(reset, 'quota_five_hour').lead).toBe('Reset since read')
-    expect(says(reset, 'quota_week').lead).toBe('7e6d5c4b')
+    expect(says(reset, 'quota_week').lead).toBe(NIGHT_NAME)
   })
 
   it('say that the quota could not be read, while the other tiles show their figures', async () => {
@@ -165,12 +173,31 @@ describe('the quota tiles', () => {
 })
 
 describe('the quota panel', () => {
+  it('offers «Name» at an account with no name of its own, which opens the field that renames it', async () => {
+    stubAnalyticsReads(usage, quotaOf([0, 1]))
+    const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
+    const nameIt = (account: ReturnType<typeof accountNamed>) =>
+      account.find('[data-account-head="name-it"]')
+    // «Work» has a name of its own, so only the menu renames it.
+    expect(nameIt(accountNamed(page, 'Work')).exists()).toBe(false)
+    const night = accountNamed(page, NIGHT_NAME)
+    expect(nameIt(night).text()).toBe('Name')
+    expect(nameIt(night).attributes('aria-label')).toBe(`Name account ${NIGHT_NAME}`)
+    expect(night.find('[data-account-head="field"]').exists()).toBe(false)
+    await nameIt(night).trigger('click')
+    const field = night.get('[data-account-head="field"] input')
+    expect(field.attributes('aria-label')).toBe('Account name')
+    expect((field.element as HTMLInputElement).value).toBe('')
+    // While the field stands in the name's place, «Name» has nothing more to open.
+    expect(nameIt(night).exists()).toBe(false)
+  })
+
   it('has a row per account by its name or what tells it apart, with its windows of the section', async () => {
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
     expect(accounts(page).map((one) => one.get('.quota-account-name').text())).toEqual([
       'Work',
-      '7e6d5c4b',
+      NIGHT_NAME,
       UNREAD_NAME,
       SEATED_NAME,
     ])
@@ -247,7 +274,7 @@ describe('the quota panel', () => {
 
     stubAnalyticsReads(usage, quotaOf([0, 1, 2, 3]))
     const five = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
-    const zero = windowOf(accountNamed(five, '7e6d5c4b'), 'five_hour')
+    const zero = windowOf(accountNamed(five, NIGHT_NAME), 'five_hour')
     // Lasting to the reset at 35 %: a tail from the track's start.
     expect(zero).toMatchObject({ lead: '0% used · up to date', filled: false, tail: 1 })
     expect(zero.latest).toBe('Read 3 min ago from the status line')
@@ -267,11 +294,12 @@ describe('the quota panel', () => {
     )
     // No money stands beside a share, and no share is a total: what used a window is a block of
     // its own under the readings (`analyticsQuotaSpent.spec.ts`). Each account's head is its name
-    // and its menu, and its facts beside them where it has a plan or may be two accounts: «Work»
-    // and the account known by its weekly reset.
+    // and its menu, «Name» after the menu where it has no name of its own — every account but
+    // «Work» — and its facts beside them where it has a plan or may be two accounts: «Work» and
+    // the account known by its weekly reset.
     const heads = five.findAll('[data-account-head]')
     expect(heads.map((one) => one.attributes('data-account-head')).join(' ')).toBe(
-      'name menu facts name menu name menu name menu facts',
+      'name menu facts name menu name-it name menu name-it name menu name-it facts',
     )
     // Each of the three windows of five hours has its bar, its facts and its line; «Work» alone
     // has a window of money, its credits.

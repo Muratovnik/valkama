@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Quota, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 
 import { momentAt, serveUsage } from '../fixtures/analytics.ts'
-import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
+import { NIGHT_NAME, quotaAnswer, quotaAt } from '../fixtures/quota.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { accountNamed, says, windowOf } from '../support/quotaPanel.ts'
 
@@ -113,7 +113,7 @@ describe('a quota window’s state by the panel’s clock', () => {
     // «Work»'s reading is past ten minutes and the other's is not: the fresh one is the tightest.
     await wait(8 * MINUTE + 5 * SECOND)
     expect(says(page, 'quota_five_hour')).toEqual({
-      lead: '7e6d5c4b',
+      lead: NIGHT_NAME,
       aside: '62%',
       count: 'up to date',
     })

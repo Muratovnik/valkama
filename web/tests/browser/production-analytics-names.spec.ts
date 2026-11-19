@@ -7,7 +7,10 @@
  * with none is said by its organization's name and the start of its UUID. The name is the one the
  * owner types in Settings → General → Accounts, kept in Valkama, which this follows from the field
  * through the server to the page; and the names a device kept before, by organization, move there
- * once, never over a name Valkama has, and leave the device.
+ * once, never over a name Valkama has, and leave the device. An account with no name of its own
+ * whose weekly reset is known is told apart by it, «a1a1a1a1 · resets Thu 12:00», in the filter's
+ * choices and the accounts' section, on one line at 1440 and 1024 pixels; an account named keeps
+ * its name alone.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -16,10 +19,11 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { seatValue, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { quotaAt } from '../fixtures/quota.ts'
-import { pageAt, serveQuota } from './analyticsPage.ts'
+import { quotaAt, withReset } from '../fixtures/quota.ts'
+import { openPanel, pageAt, record, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { drawLined } from './drawnViews.ts'
+import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -62,7 +66,7 @@ const WORLD: TimedStretch[] = [
 /** A label that is only hex characters: the start of an id, said for a value with no name. */
 const HEX_ONLY = /^[\da-f]{6,}$/u
 
-async function serve(page: Page, names: Record<string, string> = {}) {
+async function serve(page: Page, names: Record<string, string> = {}, world = WORLD) {
   await page.clock.setSystemTime(NOW)
   const backend = await installBackend(page, { accountNames: names })
   await serveQuota(page, quotaAt(NOW))
@@ -70,7 +74,7 @@ async function serve(page: Page, names: Record<string, string> = {}) {
     const query = new URL(route.request().url()).searchParams
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify(serveUsage(WORLD, query)),
+      body: JSON.stringify(serveUsage(world, query)),
     })
   })
   return backend
@@ -213,3 +217,79 @@ test('names a device kept move to Valkama once, never over a name it has, and le
   await expect(again.locator('.ranked-label')).toHaveText(['Given since', 'Side'])
   expect(backend.accountNameWrites).toHaveLength(1)
 })
+
+/** The same work, the main account's week known to reset on Thursday at 09:00 UTC. */
+const RESET_WORLD: TimedStretch[] = WORLD.map((stretch) =>
+  stretch.group.seat?.id === MAIN_ACCOUNT
+    ? {
+        ...stretch,
+        group: { ...stretch.group, seat: seatValue(MAIN_ACCOUNT, { weeklyReset: '4T09:00Z' }) },
+      }
+    : stretch,
+)
+
+/** How many lines each element `selector` finds holds its text on, by the rects of its text. */
+const linesOf = (scope: Locator, selector: string) =>
+  scope.locator(selector).evaluateAll((elements) =>
+    elements.map((element) => {
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
+    }),
+  )
+
+for (const width of [1440, 1024])
+  test(`an account with no name of its own is told by when its week resets at ${width}px`, async ({
+    page,
+  }, info) => {
+    await serve(page, { [SIDE_ACCOUNT]: 'Side desk' }, RESET_WORLD)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(pageAt())
+    const analytics = page.locator('.analytics-page')
+    const reset = withReset('a1a1a1a1', [4, 9, 0], 'en')
+    // The rail's tile leads with it too; at 1024 the page opens on the rail alone.
+    await expect(lead(analytics, 'seat')).toHaveText(reset)
+
+    // The filter's choices: the unnamed account by the start of its UUID and when its week
+    // resets, the named one by its name alone.
+    await page.getByRole('button', { name: 'Add a filter' }).click()
+    const field = page.locator('[data-dimension="seat"]').getByRole('combobox')
+    await field.click()
+    const options = page.getByRole('listbox').getByRole('option')
+    await expect(options.filter({ hasText: reset })).toHaveCount(1)
+    await expect(options.filter({ hasText: /^Side desk$/u })).toHaveCount(1)
+    const choices = await linesOf(page.getByRole('listbox'), '[role="option"]')
+    await record(info, `account choices at ${width}`, choices)
+    expect(choices.length).toBeGreaterThanOrEqual(2)
+    for (const lines of choices) expect(lines, 'a choice on one line').toBe(1)
+    await page.keyboard.press('Escape')
+
+    // The accounts' section says them alike: whole in the legend of its chart per day, and in its
+    // ranked bars on one line, ending in an ellipsis where the name's column cuts it and said
+    // whole in the row's hint then (RankedBars), never cut silently.
+    const accounts = await openPanel(page, pageAt({ by: 'seat' }))
+    await drawLined(accounts.locator('.spending-bars'))
+    await expect(accounts.locator('[data-hint-list="legend"]').first()).toBeVisible()
+    const keys = accounts.locator('[data-hint-list="legend"] .chart-key-name')
+    expect(await texts(keys)).toEqual([reset, 'Side desk'])
+    const keyCut = await keys.evaluateAll((names) =>
+      names.map((name) => name.scrollWidth - name.clientWidth),
+    )
+    expect(await texts(accounts.locator('.ranked-label'))).toEqual([reset, 'Side desk'])
+    const rows = await accounts.locator('.ranked-line').evaluateAll((lines: HTMLElement[]) =>
+      lines.map((line) => {
+        const label = line.querySelector('.ranked-label')
+        return {
+          cut: label ? label.scrollWidth - label.clientWidth : -1,
+          hint: line.dataset.tooltip ?? '',
+        }
+      }),
+    )
+    await record(info, `account names at ${width}`, { keyCut, rows })
+    expect(keyCut).toHaveLength(2)
+    for (const by of keyCut) expect(by, 'a legend name cut').toBeLessThanOrEqual(0)
+    expect(rows).toHaveLength(2)
+    for (const { cut, hint } of rows.filter((row) => row.cut > 0))
+      expect(hint, `a ranked name cut by ${cut}px is said whole in its hint`).toContain(reset)
+    await expectNoSilentClipping(page, `accounts at ${width}px`, '.analytics-page')
+  })

@@ -77,19 +77,22 @@ const quota = () => quotaAnswer({ ...quotaAt(TODAY), accounts: [entry(B), entry(
 
 const placeholder = (input: DOMWrapper<Element>) => input.attributes('placeholder')
 
-/**
- * When the side's account's week resets, Thursday 09:00 UTC, in the reader's own time: «Thu 12:00»
- * at +03:00.
- */
-const SIDE_RESET = (() => {
-  // 4 January 2024 was a Thursday.
-  const reset = new Date(Date.UTC(2024, 0, 4, 9))
+/** When a week resets on the ISO weekday `isoDay` at `hours` UTC, in the reader's own time. */
+function resetAt(isoDay: number, hours: number) {
+  // 1 January 2024 was a Monday, so 1–7 January are the ISO weekdays in order.
+  const reset = new Date(Date.UTC(2024, 0, isoDay, hours))
   const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][reset.getDay()]
   const time = [reset.getHours(), reset.getMinutes()]
     .map((part) => String(part).padStart(2, '0'))
     .join(':')
   return `${day} ${time}`
-})()
+}
+
+/** When the side's account's week resets, Thursday 09:00 UTC: «Thu 12:00» at +03:00. */
+const SIDE_RESET = resetAt(4, 9)
+/** When A's week resets, Monday 09:00 UTC, and B's, as the quota reads it, Tuesday 15:00 UTC. */
+const A_RESET = resetAt(1, 9)
+const B_RESET = resetAt(2, 15)
 
 async function mountAccounts(locale: 'en' | 'ru' = 'en') {
   const wrapper = mount(SettingsAccounts, {
@@ -198,7 +201,9 @@ describe('the accounts in Settings', () => {
       for (const part of words) expect(rows[index]?.text).toContain(part)
     // Unnamed, a field says what Analytics shows for it instead.
     expect(placeholder(organizationField(wrapper, MAIN))).toBe('No name: Analytics shows f0f0f0f0')
-    expect(placeholder(accountField(wrapper, A))).toBe('No name: Analytics shows a1a1a1a1')
+    expect(placeholder(accountField(wrapper, A))).toBe(
+      `No name: Analytics shows a1a1a1a1 · resets ${A_RESET}`,
+    )
     expect(placeholder(accountField(wrapper, WEEKLY))).toBe(
       `No name: Analytics shows 9c0de5b1 · resets ${SIDE_RESET}`,
     )
@@ -215,7 +220,7 @@ describe('the accounts in Settings', () => {
     // A takes the name its weekly reset was given; B its organization's and the start of its UUID.
     expect(accountField(wrapper, A).attributes('placeholder')).toBe('No name: Analytics shows Desk')
     expect(accountField(wrapper, B).attributes('placeholder')).toBe(
-      'No name: Analytics shows Main · b2b2b2b2',
+      `No name: Analytics shows Main · b2b2b2b2 · resets ${B_RESET}`,
     )
     // The weekly reset's name has its row under the organization, which the year did not see.
     expect(valueOf(accountField(wrapper, DESK))).toBe('Desk')
@@ -242,7 +247,7 @@ describe('the accounts in Settings', () => {
     expect(names.writes).toEqual([{ names: { [A]: 'Main account' }, replace: true }])
     expect(names.stored).toEqual({ [A]: 'Main account' })
     expect(valueOf(accountField(wrapper, A))).toBe('Main account')
-    expect(statusOf(wrapper).text()).toBe('Saved the name of account a1a1a1a1.')
+    expect(statusOf(wrapper).text()).toBe(`Saved the name of account a1a1a1a1 · resets ${A_RESET}.`)
     expect(clearOf(wrapper, A).attributes('disabled')).toBeUndefined()
     // Left again unchanged, nothing more is written.
     await input.trigger('focusout')
@@ -294,7 +299,9 @@ describe('the accounts in Settings', () => {
     expect(names.stored).toEqual({ [SIDE]: 'Side' })
     expect(valueOf(accountField(wrapper, A))).toBe('')
     expect(document.activeElement).toBe(accountField(wrapper, A).element)
-    expect(statusOf(wrapper).text()).toBe('Cleared the name of account a1a1a1a1.')
+    expect(statusOf(wrapper).text()).toBe(
+      `Cleared the name of account a1a1a1a1 · resets ${A_RESET}.`,
+    )
     expect(clearOf(wrapper, A).attributes('disabled')).toBeDefined()
   })
 

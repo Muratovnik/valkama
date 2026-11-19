@@ -2578,7 +2578,11 @@ organization it was billed to; an old link's `account` filter still filters by o
 An account is said by the name the owner gave it, and one known by its UUID by the name its
 weekly reset was given before; else by its organization's name, or the start of its id, with
 what tells it apart: the start of its UUID, or when its week resets in the reader's time for
-one known by that alone, «Lab · resets Thu 12:00». An organization's work no reading places
+one known by that alone, «Lab · resets Thu 12:00». Where the reset of an account known by its
+UUID is known too, it follows the start of the UUID, «1a2b3c4d · resets Thu 12:00», in the
+filter's choices, the section, the quota and wherever else the account is named: the provider
+names no account, and eight hex digits alone were no account its owner recognized.
+An organization's work no reading places
 on an account is «Lab · account not known», and an account two accounts' readings may run
 under says «may be two accounts» after its name. A tile is a summary of its own — the leading value, its share, how many values
 have a figure in the chosen measure and one bar of the split — so every breakdown is in view
@@ -2735,6 +2739,9 @@ there, as the
 value panel's button does, and the section stays where it is; once the filter holds it, the entry
 is disabled and reads «Already in filter», and where no filter can take it the entry is absent.
 «Copy ID» copies the account's whole id with the copy's usual note. No hint says that id.
+An account with no name of its own has «Name» beside the menu, a button that opens the same
+field as «Rename» and is gone once the account has a name: found only inside the menu, the
+rename went unseen while every account stood as the start of its id.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · up to date», «13% used · no data for 5 h», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the

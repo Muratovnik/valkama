@@ -5,14 +5,16 @@
  * Valkama keeps, the name Settings then shows, on Enter, leaves the name on Escape, and gives the
  * focus back to the menu's button either way; «Add to filter» adds the account to the page's filter, a chip in the bar, and the
  * page stays on its section, after which the entry is disabled, «Already in filter»; «Copy ID»
- * puts the account's whole id on the clipboard and says so. No hint says that id.
+ * puts the account's whole id on the clipboard and says so. No hint says that id. An account with
+ * no name of its own has «Name» beside the menu, which opens the same field and is gone once the
+ * account has a name.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { NIGHT } from '../fixtures/quota.ts'
+import { NIGHT, NIGHT_NAME } from '../fixtures/quota.ts'
 import { openPanel, pageAt, serve, WORLD } from './analyticsPage.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -47,9 +49,9 @@ test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, an
 }) => {
   const { analytics, backend } = await openQuota(page)
   const name = await analytics
-    .locator('[data-account="7e6d5c4b"] .quota-account-name')
+    .locator(`[data-account="${NIGHT_NAME}"] .quota-account-name`)
     .boundingBox()
-  const { menu } = await openMenu(page, '7e6d5c4b')
+  const { menu } = await openMenu(page, NIGHT_NAME)
   await expect(menu.getByRole('menuitem')).toHaveText(['Rename', 'Add to filter', 'Copy ID'])
   await menu.getByRole('menuitem', { name: 'Rename' }).click()
   const field = analytics.getByRole('textbox', { name: 'Account name' })
@@ -89,6 +91,30 @@ test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, an
   await expect(page.getByRole('textbox', { name: `Name of account ${NIGHT_ID}` })).toHaveValue(
     'Night shift',
   )
+})
+
+test('«Name» stands at an account with no name of its own, opens the rename field and is gone once named', async ({
+  page,
+}) => {
+  const { analytics, backend } = await openQuota(page)
+  const nameIt = (name: string) =>
+    analytics.locator(`[data-account="${name}"] [data-account-head="name-it"]`)
+  // «Work» has its name, so only the menu renames it; the night account, known by the start of
+  // its UUID and when its week resets, is offered a name in sight.
+  await expect(nameIt('Work')).toHaveCount(0)
+  const offer = page.getByRole('button', { name: `Name account ${NIGHT_NAME}` })
+  await expect(offer).toBeVisible()
+  await expect(offer).toHaveText('Name')
+  await offer.click()
+  const field = analytics.getByRole('textbox', { name: 'Account name' })
+  await expect(field).toBeFocused()
+  await expect(field).toHaveValue('')
+  await expect(nameIt(NIGHT_NAME)).toHaveCount(0)
+  await field.fill('Night shift')
+  await field.press('Enter')
+  await expect.poll(() => backend.accountNames[NIGHT_ID]).toBe('Night shift')
+  await expect(analytics.locator('[data-account="Night shift"] .quota-account-name')).toBeVisible()
+  await expect(nameIt('Night shift')).toHaveCount(0)
 })
 
 test('«Add to filter» adds the account as a chip and keeps the section; then it is held', async ({

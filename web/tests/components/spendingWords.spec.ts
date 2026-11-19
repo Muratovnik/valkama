@@ -233,22 +233,44 @@ describe('the name of an executor and an account', () => {
 
   it('names an account by its own name, else its weekly reset’s, else its organization and its UUID’s start', () => {
     const words = wordsIn('en')
-    const known = seat(UUID, '4T09:00Z')
+    const known = seat(UUID, null)
     expect(words.valueLabel('seat', known)).toBe('a1a1a1a1')
     useAccountNamesStore().names = { [account.id]: 'Lab' }
     expect(words.valueLabel('seat', known)).toBe('Lab · a1a1a1a1')
     // The name its weekly reset was given before its UUID was known carries over to it.
+    const reset = seat(UUID, '4T09:00Z')
     useAccountNamesStore().names = {
       [account.id]: 'Lab',
       [`${account.id}/weekly:4T09:00Z`]: 'Desk',
     }
-    expect(words.valueLabel('seat', known)).toBe('Desk')
+    expect(words.valueLabel('seat', reset)).toBe('Desk')
     useAccountNamesStore().names = {
       [`${account.id}/weekly:4T09:00Z`]: 'Desk',
       [known.id]: 'Own',
     }
-    expect(words.valueLabel('seat', known)).toBe('Own')
-    expect(words.valueDetail('seat', known)).toBeUndefined()
+    expect(words.valueLabel('seat', reset)).toBe('Own')
+    expect(words.valueDetail('seat', reset)).toBeUndefined()
+  })
+
+  it('tells an account with no name of its own apart by when its week resets, after its UUID’s start', () => {
+    vi.stubEnv('TZ', 'Europe/Berlin')
+    try {
+      // Thursday 09:00 UTC is 10:00 in Berlin in winter.
+      const known = seat(UUID, '4T09:00Z')
+      expect(wordsIn('en').valueLabel('seat', known)).toBe('a1a1a1a1 · resets Thu 10:00')
+      expect(wordsIn('ru').valueLabel('seat', known)).toBe('a1a1a1a1 · сброс чт 10:00')
+      useAccountNamesStore().names = { [account.id]: 'Lab' }
+      expect(wordsIn('en').valueLabel('seat', known)).toBe('Lab · a1a1a1a1 · resets Thu 10:00')
+      // A name of its own is the whole label: the reset tells apart only what has none.
+      useAccountNamesStore().names = { [known.id]: 'Own' }
+      expect(wordsIn('en').valueLabel('seat', known)).toBe('Own')
+      useAccountNamesStore().names = {}
+      expect(
+        wordsIn('en').seatLabel(known.id, '4T09:00Z', { name: 'Answered', organization: null }),
+      ).toBe('Answered')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('names an account known by its weekly reset by its organization and when its week resets, in local time', () => {
@@ -283,7 +305,7 @@ describe('the name of an executor and an account', () => {
     const words = wordsIn('ru')
     useAccountNamesStore().names = { [`${account.id}/${UUID}`]: 'Основной' }
     const known = seat(UUID, '4T09:00Z')
-    const other = seat('b7b7b7b7-0000-4000-8000-000000000000', '1T09:00Z')
+    const other = seat('b7b7b7b7-0000-4000-8000-000000000000', null)
     expect(words.accounts([known], [known, other])).toBe(
       'Смена аккаунта: Основной → Основной, b7b7b7b7',
     )

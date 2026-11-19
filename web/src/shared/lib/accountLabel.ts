@@ -4,7 +4,10 @@
  * known by its UUID the name its weekly reset was given before the UUID was known; else its
  * organization's name, or the start of the organization's id, with what tells the account apart:
  * the start of its UUID, when its week resets in the reader's own time, or that the account is not
- * known. Work of no organization is no account, and an id that is no account's is said by its start.
+ * known. An account with no name of its own is told apart by when its week resets wherever that is
+ * known, after the start of its UUID too, «1a2b3c4d · resets Thu 12:00»: eight hex digits alone
+ * name no account a person recognizes. Work of no organization is no account, and an id that is no
+ * account's is said by its start.
  */
 import { readAccountId, weeklyId } from '@/shared/api/accountIds.ts'
 import { aliasOf } from '@/shared/lib/accountAliases.ts'
@@ -22,7 +25,10 @@ export interface AccountWords {
   locale: string
   /** An organization's work no reading places on an account: «Lab · account not known». */
   unplaced: (organization: string) => string
-  /** An account known by its weekly reset: «Lab · resets Thu 12:00». */
+  /**
+   * An account by what names it and when its week resets: «Lab · resets Thu 12:00» for one known
+   * by its weekly reset alone, «1a2b3c4d · resets Thu 12:00» after the start of its UUID.
+   */
   weekly: (organization: string, reset: string) => string
 }
 
@@ -78,5 +84,6 @@ export function accountLabel(
   if (own) return own
   if (read.kind === 'weekly')
     return words.weekly(organization, resetWords(read.weeklyReset, words.locale))
-  return named ? `${named} · ${idStart(read.uuid)}` : idStart(read.uuid)
+  const uuid = named ? `${named} · ${idStart(read.uuid)}` : idStart(read.uuid)
+  return weeklyReset ? words.weekly(uuid, resetWords(weeklyReset, words.locale)) : uuid
 }

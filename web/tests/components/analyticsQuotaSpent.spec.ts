@@ -29,7 +29,7 @@ import WindowDetail from '@/pages/analytics/components/WindowDetail.vue'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { momentAt, serveUsage } from '../fixtures/analytics.ts'
-import { quotaAnswer, quotaAt, SEATED_NAME, UNREAD_NAME } from '../fixtures/quota.ts'
+import { NIGHT_NAME, quotaAnswer, quotaAt, SEATED_NAME, UNREAD_NAME } from '../fixtures/quota.ts'
 import {
   isSpendRead as isSpend,
   NIGHT,
@@ -238,7 +238,7 @@ describe('where a window went', () => {
       ['m-b', '≈ $3.00 · 23%'],
     ])
     // Another account's block still breaks down by task.
-    expect(radio(await openSpend(page, '7e6d5c4b'), 'Tasks').attributes('aria-checked')).toBe(
+    expect(radio(await openSpend(page, NIGHT_NAME), 'Tasks').attributes('aria-checked')).toBe(
       'true',
     )
     // Opened again, the window keeps its breakdown and its drawing.
@@ -318,7 +318,7 @@ describe('the states of what used a window', () => {
     stubAnalyticsReads(usage, quota)
     const page = await openFiveHours()
     // The other account's work on MAIN-1 was before its five hours began.
-    const none = await openSpend(page, '7e6d5c4b')
+    const none = await openSpend(page, NIGHT_NAME)
     expect(none.attributes('data-state')).toBe('none')
     expect(none.get('.window-spend-body').text()).toBe(
       'No work was recorded on this account in this window.',

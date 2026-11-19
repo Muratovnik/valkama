@@ -14,6 +14,9 @@
  * - «Copy ID» puts the account's whole id on the clipboard — its UUID, or its organization's id
  *   where no UUID is known — and says it was copied, or refused, for a few seconds (`useCopyNote`).
  *   That is where the whole id is reached: no hint says it.
+ *
+ * An account with no name of its own (`unnamed`) is offered the same field outside the menu too,
+ * by «Name» at its heading (`rename`).
  */
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, ref } from 'vue'
@@ -159,6 +162,9 @@ export function useAccountActions(options: {
     ]
   })
 
+  /** Whether the account has no name of its own yet, which the group offers to give it. */
+  const unnamed = computed(() => kept() === '')
+
   return {
     draft,
     entries,
@@ -166,7 +172,9 @@ export function useAccountActions(options: {
     note: copyNote.note,
     noteFailed: copyNote.failed,
     press,
+    rename,
     save,
     type,
+    unnamed,
   }
 }

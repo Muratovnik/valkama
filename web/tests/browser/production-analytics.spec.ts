@@ -14,6 +14,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { task } from '../fixtures/analytics.ts'
+import { nightName, workName } from '../fixtures/quota.ts'
 import {
   bars,
   boxes,
@@ -89,9 +90,8 @@ for (const width of [1440, 1024, 390]) {
       await expect(drawn).toContainText(/\d/u)
       await expect(drawn).not.toContainText('running')
     }
-    await expect
-      .poll(() => daysSaying(analytics, 'Account change: 0b7d4e19 → 0b7d4e19, 7e6d5c4b'))
-      .toBe(1)
+    const change = `Account change: ${workName()} → ${workName()}, ${nightName()}`
+    await expect.poll(() => daysSaying(analytics, change)).toBe(1)
 
     const measured = await measure(page)
     await record(info, `analytics layout ${width}`, measured)
@@ -207,7 +207,8 @@ const READ_STATES: {
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
       // Said where the day is read, once: its day's hint on the chart, or its row of the table.
-      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 0b7d4e19 → 7e6d5c4b`
+      const lang = ru ? 'ru' : 'en'
+      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: ${workName(lang)} → ${nightName(lang)}`
       await expect.poll(() => daysSaying(analytics, said), 'days that say it').toBe(1)
     },
   },

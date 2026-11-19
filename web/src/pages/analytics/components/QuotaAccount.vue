@@ -24,7 +24,11 @@
  * What a reader of the page selects it by: the account is `data-account`, its name; the parts of
  * its head are `data-account-head`, `name` for its name, `field` for the field that renames it,
  * which stands in the name's place while the name is kept for the outline unseen, `menu` for its
- * menu and `facts` for what stands beside it.
+ * menu, `name-it` for «Name» and `facts` for what stands beside it.
+ *
+ * An account with no name of its own — the start of an id, a time its week resets — is no account
+ * a person recognizes, so beside its menu stands «Name», which opens the same field as «Rename»
+ * and is gone once the account has a name.
  */
 import { computed, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -46,6 +50,7 @@ import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { QuotaAccount } from '@/shared/api/analyticsApi.ts'
 import { MAX_ACCOUNT_ALIAS_LENGTH } from '@/shared/lib/accountAliases.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import VButton from '@/shared/ui/VButton.vue'
 import VMenu from '@/shared/ui/VMenu.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 import WindowBarTable from '@/shared/ui/WindowBarTable.vue'
@@ -82,10 +87,13 @@ const actions = useAccountActions({
   focusMenu: () => menuBox.value?.querySelector<HTMLElement>('button')?.focus(),
   renamed: () => emit('renamed'),
 })
-const { draft, entries, failure, note, noteFailed } = actions
+const { draft, entries, failure, note, noteFailed, unnamed } = actions
 /** Whether the field stands in the name's place, the name kept unseen for the outline. */
 const renaming = computed(() => draft.value !== null)
 const menuLabel = computed(() => t('analytics.quota.actions.menu', { account: name.value }))
+const nameItLabel = computed(() =>
+  t('analytics.quota.actions.nameItLabel', { account: name.value }),
+)
 const windows = computed(() => sectionWindows(props.account, props.section))
 /**
  * The windows of money, as the windows of a share say themselves: its name and state on the line
@@ -174,6 +182,15 @@ const tableWords = computed<WindowWords>(() => ({
           :text="note"
         />
       </span>
+      <VButton
+        v-if="unnamed && !renaming"
+        size="compact"
+        data-account-head="name-it"
+        :aria-label="nameItLabel"
+        @click="actions.rename"
+      >
+        {{ t('analytics.quota.actions.nameIt') }}
+      </VButton>
       <p
         v-if="account.plan || account.shared"
         class="quota-account-facts"

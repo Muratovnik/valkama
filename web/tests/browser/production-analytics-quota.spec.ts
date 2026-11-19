@@ -14,6 +14,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { NIGHT_NAME } from '../fixtures/quota.ts'
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { routeState, shot } from './boardPage.ts'
 import { drawLined } from './drawnViews.ts'
@@ -101,7 +102,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       await serve(page)
       await page.setViewportSize({ width, height: 1000 })
       await page.goto(pageAt())
-      await expect(entry(page, 'quota_week').locator('.rail-tile-lead')).toHaveText('7e6d5c4b')
+      await expect(entry(page, 'quota_week').locator('.rail-tile-lead')).toHaveText(NIGHT_NAME)
 
       // The quota's tiles after the token kinds, before the dimensions.
       const sections = await page
