@@ -31,6 +31,17 @@ export const WORK_ITEM_TREE = {
 } satisfies TreeSource<WorkItemBrief>
 
 /**
+ * The goal and stages an item stands under, the goal first, by title: the containers
+ * over it as `byId` holds them, «Goal › Stage». Empty for work under none.
+ */
+export function goalPath(item: WorkItemBrief, byId: ReadonlyMap<string, WorkItemBrief>): string[] {
+  return ancestorsOf(item, byId)
+    .filter((parent) => holdsWork(parent))
+    .reverse()
+    .map((parent) => parent.title)
+}
+
+/**
  * The work over an item, nearest first, as `byId` holds it: a parent the map does not
  * hold ends the walk, and so does a loop, which a store edited by hand can carry.
  */

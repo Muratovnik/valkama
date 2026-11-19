@@ -11,6 +11,9 @@
  * its own cost the width the order's name needed, and the name came out cut.
  * Every order the wide list offers stays one choice away. A name never ends in an
  * ellipsis while a line of its own would hold it whole.
+ *
+ * The head's controls are out of the Tab order: the rows are the list's one Tab
+ * stop, and the keys reach the head from them (`useListKeys.ts`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -113,6 +116,7 @@ function choose(value: string) {
             :key="offered.key"
             type="button"
             class="list-sort"
+            tabindex="-1"
             :class="sortClass(offered, column)"
             @click="sortBy(offered.key)"
           >
@@ -133,6 +137,7 @@ function choose(value: string) {
             :placeholder="t('workItem.list.sortOther')"
             :model-value="chosen"
             :options="choices"
+            keyed
             @update:model-value="choose"
           />
         </span>

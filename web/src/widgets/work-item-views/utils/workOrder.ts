@@ -39,6 +39,7 @@ export const VIEW_SORT_KEYS: readonly ViewSortKey[] = [
   'priority',
   'reference',
   'title',
+  'goal',
   'state',
   'claim',
   'checklist',
@@ -117,19 +118,23 @@ function byCreated(left: WorkItemBrief, right: WorkItemBrief): number {
   return left.number - right.number
 }
 
-/**
- * The items in the order `sort` says. `scope` is what a container's place in the queue
- * is read over, the items themselves when absent; `stateName` is how the state column
- * reads a state.
- */
+/** What the items are ordered within: the work beyond them a sort reads. */
+interface OrderedWithin {
+  /** What a container's place in the queue is read over; the items themselves when absent. */
+  scope?: readonly WorkItemBrief[]
+  /** Where an item's goal and stages are found; the scope when absent. */
+  space?: readonly WorkItemBrief[]
+}
+
+/** The items in the order `sort` says; `stateName` is how the state column reads a state. */
 export function orderedWork(
   items: readonly WorkItemBrief[],
   sort: ViewSort,
   stateName: (item: StandingItem) => string,
-  scope: readonly WorkItemBrief[] = items,
+  { scope = items, space = scope }: OrderedWithin = {},
 ): WorkItemBrief[] {
   if (sort.key === 'queue') return byQueue(items, scope, sort.descending)
-  if (sort.key !== 'created') return sortedRows(items, sort.key, sort.descending, stateName)
+  if (sort.key !== 'created') return sortedRows(items, { ...sort, key: sort.key }, stateName, space)
   const direction = sort.descending ? -1 : 1
   return [...items].sort((left, right) => byCreated(left, right) * direction)
 }

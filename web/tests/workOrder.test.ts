@@ -40,7 +40,7 @@ describe('the queue order', () => {
 
   it('reads a container’s place over the whole scope, its task filtered away included', () => {
     const shown = items.filter((item) => item.reference !== 'MAIN-4')
-    const order = orderedWork(shown, QUEUE_ORDER, stateName, items)
+    const order = orderedWork(shown, QUEUE_ORDER, stateName, { scope: items })
     expect(references(order).slice(0, 2)).toEqual(['MAIN-5', 'MAIN-1'])
   })
 

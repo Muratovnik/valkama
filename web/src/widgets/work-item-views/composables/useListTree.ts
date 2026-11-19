@@ -52,8 +52,9 @@ export function useListTree({ items, matches, ordered, space, source }: ListTree
       },
       items: items(),
       matches: matches(),
+      // A group's row has no place in the list's order and stands after the rows that do.
       order: (left, right) =>
-        (rank.get(left.work_item_id) ?? 0) - (rank.get(right.work_item_id) ?? 0),
+        (rank.get(left.work_item_id) ?? rank.size) - (rank.get(right.work_item_id) ?? rank.size),
     })
     return { facts: seen, tree }
   })
