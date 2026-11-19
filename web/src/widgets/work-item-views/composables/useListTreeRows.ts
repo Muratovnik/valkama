@@ -14,16 +14,23 @@ import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useListTree } from '@/widgets/work-item-views/composables/useListTree.ts'
+import type { SpaceProject } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import { isGroupRow, listProjectGroups } from '@/widgets/work-item-views/utils/listGroups.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import type { TreeRow } from '@/shared/lib/treeRows.ts'
 import type { ListFocus } from '@/shared/ui/useListKeys.ts'
 
-/** A tree's whole scope before the filter, whether one is in force, and its space. */
-interface TreeScope {
+/**
+ * A tree's whole scope before the filter, whether one is in force, and its space;
+ * grouped by project, the space's projects its groups are.
+ */
+export interface ListTreeScope {
   filtered: boolean
   scope: WorkItemBrief[]
   space: string
+  grouping?: 'goal' | 'project'
+  projects?: readonly SpaceProject[] | null
 }
 
 interface ListTreeRows {
@@ -33,7 +40,7 @@ interface ListTreeRows {
   /** The rows' items in the list's order. */
   ordered: () => readonly WorkItemBrief[]
   /** The tree, or null for a flat list; which of the two is read once, as the list is made. */
-  tree: () => TreeScope | null
+  tree: () => ListTreeScope | null
 }
 
 export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTreeRows) {
@@ -41,12 +48,17 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
   const matched = computed(() =>
     live()?.filtered ? new Set(items().map((item) => item.work_item_id)) : null,
   )
+  const groups = computed(() => {
+    const scope = live()
+    return scope?.grouping === 'project' ? listProjectGroups(scope.scope, scope.projects, t) : null
+  })
   const tree = live()
     ? useListTree({
-        items: () => live()?.scope ?? [],
+        items: () => groups.value?.items ?? live()?.scope ?? [],
         matches: () => matched.value,
         ordered,
         space: () => live()?.space ?? '',
+        source: () => groups.value?.source,
       })
     : null
 
@@ -61,8 +73,6 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
   return {
     /** A tree's cells take focus from the keys, out of the Tab order. */
     cellTab: tree ? -1 : undefined,
-    /** What a path row is, for a reader: the tone that says it is not read. */
-    describedBy: (row: TreeRow<WorkItemBrief>) => (row.context ? t('tree.path') : undefined),
     focus: (tree
       ? {
           kind: 'row',
@@ -71,9 +81,21 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
       : { kind: 'opener' }) satisfies ListFocus as ListFocus,
     indentOf: (item: WorkItemBrief) =>
       tree ? Math.min(tree.depthOf(item), levels.value - 1) * step.value : 0,
+    /** What a group's row counts, as a lane's heading does. */
+    groupCounts(item: WorkItemBrief): string {
+      const counted = groups.value?.counts.get(item.work_item_id) ?? { open: 0, closed: 0 }
+      return t('workItem.lanes.counts', counted)
+    },
+    /** A group's row, which no card is: it folds and opens nothing (`listGroups`). */
+    isGroup: isGroupRow,
     isPath: (item: WorkItemBrief) => treeOf(item)?.context === true,
     isTree: tree !== null,
-    labelledBy: (item: WorkItemBrief) => `${refId(item)} ${nameId(item)}`,
+    /** What names a row to the keys and a press: a card's reference, a group's own id. */
+    referenceOf: (item: WorkItemBrief) => (isGroupRow(item) ? item.work_item_id : item.reference),
+    /** What a path row is, for a reader: the tone that says it is not read. */
+    describedBy: (row: TreeRow<WorkItemBrief>) => (row.context ? t('tree.path') : undefined),
+    labelledBy: (item: WorkItemBrief) =>
+      isGroupRow(item) ? nameId(item) : `${refId(item)} ${nameId(item)}`,
     /** «3 match» on a row a filter found something under. */
     matchingOf(item: WorkItemBrief): string {
       const inside = live()?.filtered ? (treeOf(item)?.matchesInside ?? 0) : 0
@@ -105,6 +127,8 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
       return parent ? t('tree.under', { reference: parent.reference }) : ''
     },
     /** What the window reads of a tree: how many rows it could show, and every one of them. */
-    window: tree ? { everyRow: () => live()?.scope ?? [], population: tree.population } : {},
+    window: tree
+      ? { everyRow: () => groups.value?.items ?? live()?.scope ?? [], population: tree.population }
+      : {},
   }
 }

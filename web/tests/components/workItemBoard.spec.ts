@@ -76,7 +76,7 @@ describe('the board grouped by goal', () => {
     expect(lanes.map((lane) => lane.attributes('aria-label'))).toEqual([
       'Item 1',
       'Item 2',
-      'No parent',
+      'No goal',
     ])
     expect(lanes[0].get('.lane-reference').text()).toBe('MAIN-1')
     expect(lanes[0].get('.lane-counts').text()).toBe('3 open · 0 closed')
@@ -416,7 +416,12 @@ describe('a chain narrows the board and the list', () => {
     const grouping = entries.find((entry) => entry.key === 'grouping')
     if (grouping?.kind !== 'choice') throw new Error('the grouping is a choice of the view’s menu')
     expect(grouping.value).toBe('none')
-    expect(grouping.options.map((option) => option.label)).toEqual(['No grouping', 'By goal'])
+    expect(grouping.options.map((option) => option.label)).toEqual([
+      'No grouping',
+      'By goal',
+      'By stage',
+      'By project',
+    ])
     grouping.select('goal')
     expect(wrapper.emitted('group')).toEqual([['goal']])
   })

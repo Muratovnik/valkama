@@ -23,7 +23,8 @@ export async function openTree(page: Page, rows: object[]) {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await serveSpace(page, rows)
-  await page.goto(boardRoute({ view: 'list', group: 'goal' }))
+  // Newest first: the served trees place their goals by when they were updated.
+  await page.goto(boardRoute({ view: 'list', group: 'goal', sort: 'updated', desc: true }))
   await expect(page.locator('.work-item-list tbody tr.list-row').first()).toBeVisible()
   await stillFrames(page)
 }

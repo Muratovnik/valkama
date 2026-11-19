@@ -29,3 +29,22 @@ export const WORK_ITEM_TREE = {
   isOpen: isOpenWork,
   parentId: (item: Pick<WorkItemBrief, 'parent_id'>) => item.parent_id,
 } satisfies TreeSource<WorkItemBrief>
+
+/**
+ * The work over an item, nearest first, as `byId` holds it: a parent the map does not
+ * hold ends the walk, and so does a loop, which a store edited by hand can carry.
+ */
+export function ancestorsOf(
+  item: WorkItemBrief,
+  byId: ReadonlyMap<string, WorkItemBrief>,
+): WorkItemBrief[] {
+  const found: WorkItemBrief[] = []
+  const seen = new Set([item.work_item_id])
+  let parent = item.parent_id === null ? undefined : byId.get(item.parent_id)
+  while (parent !== undefined && !seen.has(parent.work_item_id)) {
+    found.push(parent)
+    seen.add(parent.work_item_id)
+    parent = parent.parent_id === null ? undefined : byId.get(parent.parent_id)
+  }
+  return found
+}

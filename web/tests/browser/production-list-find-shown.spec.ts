@@ -69,7 +69,8 @@ async function openShort(page: Page, locale: string, width: number, items = shor
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page)
   await serveSpace(page, items, shortLinks(), { states: SHORT_STATES })
-  await openList(page)
+  // Newest first, so a press on Updated turns the order over and a second turns it back.
+  await openList(page, { sort: 'updated', desc: true })
   await stillFrames(page)
   await page.locator('.work-item-list tbody .list-open').first().focus()
   await page.keyboard.press('Control+f')

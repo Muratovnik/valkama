@@ -8,6 +8,8 @@
  * say "this label" or "this kind" at all.
  */
 
+import { ancestorsOf } from '@/entities/work-item/utils/workTree.ts'
+
 import { PRIORITIES, STATE_CATEGORIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
@@ -15,11 +17,20 @@ import { actorName } from '@/shared/lib/actor.ts'
 type StateCategory = (typeof STATE_CATEGORIES)[number]
 type WorkItemKind = (typeof WORK_ITEM_KINDS)[number]
 type WorkItemPriority = (typeof PRIORITIES)[number]
+/** The one value of «From another space»: a card another space holds. */
+type Elsewhere = 'other'
+
+/** The project value of work that names no project, which no project's id can be. */
+export const NO_PROJECT = '-'
 
 /** The values a facet is narrowed to, facet by facet. */
 interface FacetValues {
   /** State categories. */
   category?: StateCategory[]
+  /** A card another space holds: the condition's one value, which «≠» turns into «none of them». */
+  elsewhere?: Elsewhere[]
+  /** Goals or stages by reference: work in the subtree of any of them, the container included. */
+  goal?: string[]
   /** Holders, named as `actorName` names them. */
   holder?: string[]
   /** Kinds. */
@@ -28,6 +39,8 @@ interface FacetValues {
   labels?: string[]
   /** Priorities. */
   priority?: WorkItemPriority[]
+  /** Projects by id, `NO_PROJECT` for work that names none. */
+  project?: string[]
 }
 
 /**
@@ -38,6 +51,8 @@ interface FacetValues {
 export interface WorkFilter extends FacetValues {
   /** A substring of the reference or the title; blank for none. */
   text: string
+  /** A task whose question waits for the owner's answer, which keeps the queue from giving it. */
+  asked?: true
   /** Held by somebody and not yet finished. */
   held?: true
   /** One of the labels will do. Absent, every one of them has to be on the item. */
@@ -58,11 +73,15 @@ export interface WorkFilter extends FacetValues {
 export type WorkFilterToken =
   | { facet: 'ready' }
   | { facet: 'held' }
+  | { facet: 'asked' }
+  | { facet: 'elsewhere'; value: Elsewhere; not?: true }
   | { facet: 'category'; value: StateCategory; not?: true }
   | { facet: 'kind'; value: WorkItemKind; not?: true }
   | { facet: 'priority'; value: WorkItemPriority; not?: true }
   | { facet: 'labels'; value: string; not?: true }
   | { facet: 'holder'; value: string; not?: true }
+  | { facet: 'project'; value: string; not?: true }
+  | { facet: 'goal'; value: string; not?: true }
 
 /** A token of a facet's value, the kind that can be negated. */
 export type ValueToken = Extract<WorkFilterToken, { value: string }>
@@ -70,10 +89,39 @@ export type ValueToken = Extract<WorkFilterToken, { value: string }>
 /** How the labels picked combine, as a reader chooses it. */
 export type LabelsMatch = 'all' | 'any'
 
-type ListFacet = 'category' | 'kind' | 'priority' | 'labels' | 'holder'
-type FlagFacet = 'ready' | 'held'
+type ListFacet = Extract<WorkFilterToken, { value: string }>['facet']
+type FlagFacet = Exclude<WorkFilterToken['facet'], ListFacet>
 
-const LIST_FACETS: readonly ListFacet[] = ['category', 'kind', 'priority', 'labels', 'holder']
+/** «From another space» first, as the conditions it stands among come first. */
+const LIST_FACETS: readonly ListFacet[] = [
+  'elsewhere',
+  'category',
+  'kind',
+  'priority',
+  'labels',
+  'holder',
+  'project',
+  'goal',
+]
+const FLAG_FACETS: readonly string[] = ['ready', 'held', 'asked'] satisfies FlagFacet[]
+
+/** A condition that is on or off, with no value: startable, held, asked. */
+export const isFlag = (
+  token: WorkFilterToken,
+): token is Extract<WorkFilterToken, { facet: FlagFacet }> => FLAG_FACETS.includes(token.facet)
+
+/**
+ * The references of an item and of every goal or stage over it, which «Goal or stage»
+ * matches against; the item's own alone where nothing reads the tree.
+ */
+export type Lineage = (item: WorkItemBrief) => readonly string[]
+const ownReference: Lineage = (item) => [item.reference]
+
+/** The lineage of every item of a space, read over the whole of it. */
+export function lineageIn(space: readonly WorkItemBrief[]): Lineage {
+  const byId = new Map(space.map((item) => [item.work_item_id, item]))
+  return (item) => [item.reference, ...ancestorsOf(item, byId).map((parent) => parent.reference)]
+}
 
 export const EMPTY_WORK_FILTER: WorkFilter = Object.freeze({ text: '' })
 
@@ -91,6 +139,20 @@ function labelsHold(item: WorkItemBrief, filter: WorkFilter): boolean {
     : labels.every((label) => item.labels.includes(label))
 }
 
+/** Whether an item names any of these projects, or none where `NO_PROJECT` is one of them. */
+const inProject = (item: WorkItemBrief, projects: readonly string[] | undefined) =>
+  Boolean(
+    projects?.some((project) =>
+      project === NO_PROJECT
+        ? item.projects.length === 0
+        : item.projects.some((named) => named.project_id === project),
+    ),
+  )
+
+/** Whether an item stands in the subtree of any of these goals or stages. */
+const underGoal = (item: WorkItemBrief, goals: readonly string[] | undefined, lineage: Lineage) =>
+  Boolean(goals?.length) && lineage(item).some((reference) => goals?.includes(reference))
+
 /** An accepted open goal or stage stands in no category, so no category takes it in. */
 const inCategory = (item: WorkItemBrief, categories: readonly string[] | undefined) =>
   item.state !== null && Boolean(categories?.includes(item.state.category))
@@ -99,8 +161,11 @@ const inCategory = (item: WorkItemBrief, categories: readonly string[] | undefin
  * Whether an item is any of the values the filter says it must not be. Work
  * nobody holds is not held by the holder named, so it passes «holder is not».
  */
-function excluded(item: WorkItemBrief, not: FacetValues | undefined): boolean {
+function excluded(item: WorkItemBrief, not: FacetValues | undefined, lineage: Lineage): boolean {
   return (
+    (Boolean(not?.elsewhere?.length) && Boolean(item.other_space)) ||
+    inProject(item, not?.project) ||
+    underGoal(item, not?.goal, lineage) ||
     inCategory(item, not?.category) ||
     Boolean(not?.kind?.includes(item.kind)) ||
     Boolean(not?.priority?.includes(item.priority)) ||
@@ -116,16 +181,15 @@ function excluded(item: WorkItemBrief, not: FacetValues | undefined): boolean {
  * is read as "and this one too", until the reader says any one will do. A
  * value negated keeps out every item that carries it, whatever else holds.
  */
-export function matchesWorkFilter(item: WorkItemBrief, filter: WorkFilter): boolean {
-  const text = filter.text.trim().toLocaleLowerCase()
-  if (
-    text &&
-    !item.reference.toLocaleLowerCase().includes(text) &&
-    !item.title.toLocaleLowerCase().includes(text)
-  )
-    return false
-  if (filter.ready && !item.workable) return false
-  if (filter.held && (item.claim_ref === '' || !item.open)) return false
+export function matchesWorkFilter(
+  item: WorkItemBrief,
+  filter: WorkFilter,
+  lineage: Lineage = ownReference,
+): boolean {
+  if (!textHolds(item, filter.text)) return false
+  if (!conditionsHold(item, filter)) return false
+  if (filter.project?.length && !inProject(item, filter.project)) return false
+  if (filter.goal?.length && !underGoal(item, filter.goal, lineage)) return false
   if (filter.category?.length && !inCategory(item, filter.category)) return false
   if (filter.kind?.length && !filter.kind.includes(item.kind)) return false
   if (filter.priority?.length && !filter.priority.includes(item.priority)) return false
@@ -135,7 +199,29 @@ export function matchesWorkFilter(item: WorkItemBrief, filter: WorkFilter): bool
     (item.claim_ref === '' || !filter.holder.includes(actorName(item.claim_ref)))
   )
     return false
-  return !excluded(item, filter.not)
+  return !excluded(item, filter.not, lineage)
+}
+
+/** Whether the reference or the title holds the text typed, any case; blank holds for all. */
+function textHolds(item: WorkItemBrief, typed: string): boolean {
+  const text = typed.trim().toLocaleLowerCase()
+  return (
+    !text ||
+    item.reference.toLocaleLowerCase().includes(text) ||
+    item.title.toLocaleLowerCase().includes(text)
+  )
+}
+
+/**
+ * The conditions: startable now, as the server answers it; held and not finished; a
+ * question waiting for the owner's answer, the reason the queue gives the server; and a
+ * card of another space.
+ */
+function conditionsHold(item: WorkItemBrief, filter: WorkFilter): boolean {
+  if (filter.ready && !item.workable) return false
+  if (filter.held && (item.claim_ref === '' || !item.open)) return false
+  if (filter.asked && !item.withheld.includes('question')) return false
+  return !filter.elsewhere?.length || Boolean(item.other_space)
 }
 
 /** The filter's facet tokens in a stable order: flags, then each list facet, its values before those negated. */
@@ -143,6 +229,7 @@ export function filterTokens(filter: WorkFilter): WorkFilterToken[] {
   const tokens: WorkFilterToken[] = []
   if (filter.ready) tokens.push({ facet: 'ready' })
   if (filter.held) tokens.push({ facet: 'held' })
+  if (filter.asked) tokens.push({ facet: 'asked' })
   for (const facet of LIST_FACETS) {
     for (const value of filter[facet] ?? []) tokens.push({ facet, value } as WorkFilterToken)
     for (const value of filter.not?.[facet] ?? [])
@@ -156,9 +243,7 @@ const listOf = (filter: WorkFilter, token: ValueToken): readonly string[] =>
   (token.not ? filter.not?.[token.facet] : filter[token.facet]) ?? []
 
 export function hasToken(filter: WorkFilter, token: WorkFilterToken): boolean {
-  return token.facet === 'ready' || token.facet === 'held'
-    ? filter[token.facet] === true
-    : listOf(filter, token).includes(token.value)
+  return isFlag(token) ? filter[token.facet] === true : listOf(filter, token).includes(token.value)
 }
 
 /** Whether the token's value is in the filter either way, as it is or negated. */
@@ -187,7 +272,7 @@ function withList(filter: WorkFilter, token: ValueToken, values: string[]): Work
  */
 export function addToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter {
   if (hasToken(filter, token)) return filter
-  if (token.facet === 'ready' || token.facet === 'held') return { ...filter, [token.facet]: true }
+  if (isFlag(token)) return { ...filter, [token.facet]: true }
   const other = { ...token, not: token.not ? undefined : true } as ValueToken
   const rest = removeToken(filter, other)
   return withList(rest, token, [...listOf(rest, token), token.value])
@@ -195,9 +280,9 @@ export function addToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter
 
 /** A new filter without the token; an emptied facet is dropped, not left as []. */
 export function removeToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter {
-  if (token.facet === 'ready' || token.facet === 'held') {
+  if (isFlag(token)) {
     const next: WorkFilter = { ...filter }
-    delete next[token.facet as FlagFacet]
+    delete next[token.facet]
     return next
   }
   return listOf(filter, token).includes(token.value)
@@ -214,7 +299,7 @@ export function removeToken(filter: WorkFilter, token: WorkFilterToken): WorkFil
  * out again, whichever way it was in, negated included.
  */
 export function toggleToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter {
-  if (token.facet === 'ready' || token.facet === 'held')
+  if (isFlag(token))
     return hasToken(filter, token) ? removeToken(filter, token) : addToken(filter, token)
   if (!hasValue(filter, token)) return addToken(filter, token)
   return removeToken(removeToken(filter, { ...token, not: undefined } as ValueToken), {
@@ -237,13 +322,17 @@ export function setLabelsMatch(filter: WorkFilter, match: LabelsMatch): WorkFilt
 }
 
 /**
- * The two conditions no facet's values say: startable right now, and held by
- * somebody and not yet finished. The filter's menu offers them first, as values
- * of their own, and a chip says each; nothing beside the field stands for them.
+ * The conditions no facet's values say: startable right now, held by somebody and
+ * not yet finished, a question waiting for the owner's answer, and a card another
+ * space holds. The filter's menu offers them first, as values of their own, and a
+ * chip says each; nothing beside the field stands for them. The last is a value, so
+ * its chip turns it over: «≠» keeps every card of another space out.
  */
 export const WORK_FILTER_CONDITIONS: readonly WorkFilterToken[] = [
   { facet: 'ready' },
   { facet: 'held' },
+  { facet: 'asked' },
+  { facet: 'elsewhere', value: 'other' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -260,11 +349,15 @@ export const WORK_FILTER_STATE_KEYS = {
   text: 'query',
   ready: 'ready',
   held: 'held',
+  asked: 'asked',
+  elsewhere: 'elsewhere',
   category: 'cat',
   kind: 'kind',
   priority: 'pri',
   labels: 'labels',
   holder: 'holder',
+  project: 'proj',
+  goal: 'goal',
 } as const
 
 /** The longest string a route state value may hold (`platformRoute.ts`). */
@@ -303,6 +396,9 @@ const VALID_VALUES: Record<ListFacet, ((value: string) => boolean) | null> = {
   priority: (value) => (PRIORITIES as readonly string[]).includes(value),
   labels: null,
   holder: null,
+  elsewhere: (value) => value === 'other',
+  project: null,
+  goal: null,
 }
 
 /**
@@ -317,6 +413,7 @@ export function readWorkFilter(state: RouteState | undefined): WorkFilter {
   if (typeof text === 'string') filter.text = text
   if (state[WORK_FILTER_STATE_KEYS.ready] === true) filter.ready = true
   if (state[WORK_FILTER_STATE_KEYS.held] === true) filter.held = true
+  if (state[WORK_FILTER_STATE_KEYS.asked] === true) filter.asked = true
   for (const facet of LIST_FACETS) {
     let raw = state[WORK_FILTER_STATE_KEYS[facet]]
     if (typeof raw !== 'string') continue
@@ -413,6 +510,7 @@ function encodeFilter(filter: WorkFilter): { complete: boolean; entries: RouteSt
   if (text.trim()) entries[WORK_FILTER_STATE_KEYS.text] = text
   if (filter.ready) entries[WORK_FILTER_STATE_KEYS.ready] = true
   if (filter.held) entries[WORK_FILTER_STATE_KEYS.held] = true
+  if (filter.asked) entries[WORK_FILTER_STATE_KEYS.asked] = true
   for (const facet of LIST_FACETS) {
     const values = facetParts(filter, facet)
     const mark = facet === 'labels' && filter.labelsMatch === 'any' ? `${LABELS_ANY},` : ''

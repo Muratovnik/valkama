@@ -69,3 +69,41 @@ export function listRefCell({ after, glyph, keys, tree }: RefCellList) {
     ])
   }
 }
+
+interface GroupCellList {
+  keys: Pick<ReturnType<typeof useListKeys>, 'toggle'>
+  tree: Pick<
+    ReturnType<typeof useListTreeRows>,
+    'cellTab' | 'groupCounts' | 'matchingOf' | 'nameId' | 'treeLead'
+  >
+  /** How many columns the list shows, which the group's one cell spans. */
+  columns: () => number
+}
+
+/**
+ * A group's row as one cell across the columns (`listGroups.ts`): its arrow, its
+ * name and what it counts, as a lane's heading says them. It has no reference, so the
+ * kind's slot stays empty and the name starts where a card's reference does.
+ */
+export function listGroupCell({ columns, keys, tree }: GroupCellList) {
+  return (item: WorkItemBrief): VNode => {
+    const lead = tree.treeLead(item)
+    const id = item.work_item_id
+    const matching = tree.matchingOf(item)
+    return h('td', { class: 'list-group-cell', colspan: columns(), tabindex: tree.cellTab }, [
+      h('span', { class: 'list-slot' }),
+      lead &&
+        h(TreeRowLead, {
+          class: 'list-lead',
+          depth: lead.depth,
+          expanded: lead.expanded,
+          levels: lead.levels,
+          name: item.title,
+          onToggle: () => keys.toggle(id),
+        }),
+      h('span', { id: tree.nameId(item), class: 'list-group-name' }, item.title),
+      h('span', { class: 'list-group-counts' }, tree.groupCounts(item)),
+      matching ? h('span', { class: 'list-group-counts' }, matching) : null,
+    ])
+  }
+}

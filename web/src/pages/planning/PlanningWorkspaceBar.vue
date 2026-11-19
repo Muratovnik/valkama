@@ -4,7 +4,7 @@
  *
  * The row is the view and its menu, then the filter, with the one primary action
  * at its end, where every module puts it. The menu stands by the view because what
- * it holds arranges what is drawn — the view's grouping — or brings a whole view
+ * it holds arranges what is drawn — the view's grouping and order — or brings a whole view
  * back, a saved one (`PlanningViewMenu`); everything to the right of it narrows
  * what is drawn, so the two are not read as one set of filters. The filter is one
  * field — text and facet chips — and the menu it opens, because the five queue
@@ -27,6 +27,9 @@ import PlanningViewMenu from '@/pages/planning/PlanningViewMenu.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
+import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
+
+import { filterWords } from '@/features/work-filter/filterOptions.ts'
 import WorkFilterChips from '@/features/work-filter/WorkFilterChips.vue'
 import WorkFilterField from '@/features/work-filter/WorkFilterField.vue'
 
@@ -74,6 +77,8 @@ const props = defineProps<{
   groupings?: readonly ViewGrouping[]
   /** The space is being read, so the bar has nothing to count yet and says no number. */
   reading?: boolean
+  /** The order the view on the stage draws in; null for a view with none. */
+  sort?: ViewSort | null
 }>()
 
 const emit = defineEmits<{
@@ -82,6 +87,7 @@ const emit = defineEmits<{
   /** Search every project for the filter's text, from the last row of its menu. */
   'find': [text: string]
   'group': [grouping: ViewGrouping]
+  'sort': [sort: ViewSort]
   /** A saved view chosen: the address state it keeps. */
   'state': [state: Record<string, string | number | boolean>]
   'view': [mode: PlanningViewMode]
@@ -133,13 +139,17 @@ const closedText = computed(() => {
  */
 const rowsText = computed(() => {
   const left = props.exclusion
-  return props.grouping === 'goal' && left?.kind === 'lane-heads'
+  // Only a board in lanes by goal or by stage draws its containers as rows.
+  const lanes = props.grouping === 'goal' || props.grouping === 'stage'
+  return lanes && left?.kind === 'lane-heads'
     ? t('workItem.countsExclude.laneHeads', { goals: left.count }, left.count)
     : ''
 })
 
 const tokens = computed(() => filterTokens(filter.value))
 const labelsAny = computed(() => filter.value.labelsMatch === 'any')
+/** A project's name and a goal's title for its chip, from the work the bar counts. */
+const tokenWords = computed(() => filterWords(props.items))
 /** Where focus goes when the last chip on the narrow line is taken out. */
 const field = useTemplateRef<{ focus: () => void }>('field')
 function focusField() {
@@ -187,8 +197,10 @@ function removeChip(token: WorkFilterToken) {
         :grouping="grouping"
         :groupings="groupings"
         :place="viewPlace"
+        :sort="sort ?? null"
         :state="routeState"
         @group="(value) => emit('group', value)"
+        @sort="(value) => emit('sort', value)"
         @state="(state) => emit('state', state)"
       />
       <WorkFilterField
@@ -226,6 +238,7 @@ function removeChip(token: WorkFilterToken) {
           ref="chips"
           :labels-any="labelsAny"
           :tokens="tokens"
+          :words="tokenWords"
           @leave="focusField"
           @negate="(token) => (filter = negateToken(filter, token))"
           @remove="removeChip"

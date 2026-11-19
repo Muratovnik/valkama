@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The same work as rows, sortable by the columns that decide what to pick up.
+ * The same work as rows, in the queue's order unless the view says another, and
+ * sortable by the columns that decide what to pick up.
  *
  * A table rather than a wall, because a list answers a different question:
  * across every state at once, what is urgent, what is unheld, what moved last.
@@ -46,17 +47,19 @@ import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
 
-import { listRefCell } from '@/widgets/work-item-views/components/listRefCell.ts'
+import { listGroupCell, listRefCell } from '@/widgets/work-item-views/components/listRefCell.ts'
 import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListFind.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import WorkItemListTreeWords from '@/widgets/work-item-views/components/WorkItemListTreeWords.vue'
 import { useListRuns } from '@/widgets/work-item-views/composables/useListRuns.ts'
-import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListTreeRows } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
+import type { ListTreeScope } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 import { factsOf, ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
+import { orderedWork, QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
+import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
 import { holderRef, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
@@ -64,6 +67,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { treeGridAttrs, treeRowAttrs } from '@/shared/lib/treeRows.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -77,23 +81,27 @@ const props = withDefaults(
     links: PlanningEdge[]
     /** The filter in force, so a mark already in it offers to come out. */
     filter?: WorkFilter
+    /** The order the rows stand in, which the host keeps; in a tree, inside each container. */
+    sort?: ViewSort
     /**
-     * The list grouped by goal: the whole scope before the filter, whether a
-     * filter is in force, which makes `items` what it let through, and the space
-     * whose fold choices it keeps. Null for the flat list.
+     * The list grouped by goal or by project: the whole scope before the filter,
+     * whether a filter is in force, which makes `items` what it let through, and the
+     * space whose fold choices it keeps. Null for the flat list.
      */
-    tree?: { filtered: boolean; scope: WorkItemBrief[]; space: string } | null
+    tree?: ListTreeScope | null
   }>(),
-  { filter: () => EMPTY_WORK_FILTER, tree: null },
+  { filter: () => EMPTY_WORK_FILTER, tree: null, sort: () => QUEUE_ORDER },
 )
 
-const emit = defineEmits<{ filter: [token: WorkFilterToken]; open: [reference: string] }>()
+/** A mark asks for a filter; a row opens a card by its reference; a column header asks for an order. */
+const emit = defineEmits<{ filter: [WorkFilterToken]; open: [string]; sort: [ViewSort] }>()
 
 const { t, locale } = useI18n()
 
 /** The items a row can stand for: in a tree, the path to a match as well. */
 const source = computed(() => props.tree?.scope ?? props.items)
-const { ariaSort, descending, rows: sorted, sortBy, sortKey } = useListSort(() => source.value)
+const stateName = useStandingName()
+const sorted = computed(() => orderedWork(source.value, props.sort, stateName))
 
 const root = ref<HTMLElement | null>(null)
 const width = ref(0)
@@ -116,19 +124,17 @@ const tree = useListTreeRows({
   ordered: () => sorted.value,
   tree: () => props.tree,
 })
-const { cellTab, isPath, matchingOf, nameId } = tree
+const { cellTab, isGroup, isPath, matchingOf, nameId } = tree
 const { rows, treeOf, underOf } = tree
 
 const { holderOf, updatedOf, widths } = useListWords(() => source.value, tree.indentOf)
 
 // One listener each for the whole list rather than three on every row: a
 // space of a thousand rows paid for three thousand of them on every opening.
-const keys = useListKeys(
-  root,
-  () => list,
-  (reference) => emit('open', reference),
-  tree.focus,
-)
+// A group's row is named by its id where a card's is by its reference: it folds instead.
+const openRow = (reference: string) =>
+  tree.isGroup({ work_item_id: reference }) ? keys.toggle(reference) : emit('open', reference)
+const keys = useListKeys(root, () => list, openRow, tree.focus)
 const tabStop = (item: WorkItemBrief) => keys.tabStop(item.work_item_id)
 const list = useWindowRows<WorkItemBrief>({
   columns: widths,
@@ -162,6 +168,7 @@ const folded = (key: SortKey) => isFolded(fit.value, key)
 /** A row's first cell, drawn with the row rather than as a component of its own. */
 const refCell = listRefCell({ after: () => folded('priority'), glyph: lead, keys, tree })
 const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
+const groupCell = listGroupCell({ columns: () => shownColumns.value.length, keys, tree })
 const foldedColumns = computed(() => LIST_COLUMNS.filter((column) => folded(column.key)))
 const factFacets = computed(() => factsOf(fit.value))
 
@@ -203,7 +210,7 @@ function rowAttrs(entry: ListEntry<WorkItemBrief>) {
     'aria-description': tree.describedBy(row),
     'aria-labelledby': tree.labelledBy(entry.row),
     'data-id': row.id,
-    'data-reference': entry.row.reference,
+    'data-reference': tree.referenceOf(entry.row),
     'tabindex': tabStop(entry.row),
   }
 }
@@ -215,13 +222,15 @@ const tableAttrs = computed(() =>
 
 /** A row's words for the list's find, as the template below draws them. */
 const said = (item: WorkItemBrief) =>
-  rowWords(item, {
-    context: context(item),
-    fit: fit.value,
-    tree: [matchingOf(item), underOf(item)].filter(Boolean),
-    updated: updatedOf(item),
-    words: runs.words,
-  })
+  tree.isGroup(item)
+    ? [item.title, tree.matchingOf(item)].filter(Boolean)
+    : rowWords(item, {
+        context: context(item),
+        fit: fit.value,
+        tree: [matchingOf(item), underOf(item)].filter(Boolean),
+        updated: updatedOf(item),
+        words: runs.words,
+      })
 </script>
 
 <template>
@@ -247,13 +256,11 @@ const said = (item: WorkItemBrief) =>
           }}
         </caption>
         <WorkItemListHead
-          :sort-state="ariaSort"
           :columns="shownColumns"
-          :descending="descending"
           :folded="foldedColumns"
           :narrow="narrow"
-          :sort-key="sortKey"
-          @sort="sortBy"
+          :sort="props.sort"
+          @sort="emit('sort', $event)"
         />
         <tbody>
           <tr
@@ -269,6 +276,10 @@ const said = (item: WorkItemBrief) =>
               v-if="entry.kind === 'gap'"
               class="list-gap-cell"
               :style="{ height: gapOf(entry) }"
+            />
+            <component
+              :is="groupCell(entry.row)"
+              v-else-if="isGroup(entry.row)"
             />
             <template v-else>
               <component
