@@ -14,7 +14,8 @@
  * in that panel, apart from the window's readings: no dollar meets the window's bar or its step
  * line, and no share here is a share of the quota.
  *
- * Its heading names the stretch it covers. That it is an estimate at API prices, not quota points,
+ * Its heading names the stretch it covers and, where it has lines, their sum, said as each line's
+ * estimate is: the lines add up, and a reader added them by hand. That it is an estimate at API prices, not quota points,
  * and that work in claude.ai and the desktop app, which the window's share counts, is not in it,
  * the section's «ⓘ» says once for every window (`useSectionCaveats`), and the side panel under its
  * names. No work on the account,
@@ -32,7 +33,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { useWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
-import { belowUnit, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { addSpent, belowUnit, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { shareOf, SPEND_BREAKDOWNS } from '@/pages/analytics/utils/windowSpend.ts'
 import type { SpendBy } from '@/pages/analytics/utils/windowSpend.ts'
@@ -119,18 +120,33 @@ const state = computed(() => {
   return read.value.status === 'failed' && !waiting.value ? 'failed' : 'loading'
 })
 
-/** The heading, with the stretch the figures cover: the window's start to the moment read to. */
+const cost = (spent: Parameters<typeof words.lineFigure>[1]) => words.lineFigure('cost', spent)
+
+/** The sum of the lines the block shows, said as a line's estimate is; none with no lines. */
+const total = computed(() => {
+  const [first, ...rest] = (answer.value?.spent.lines ?? []).map((line) => line.spent)
+  if (!first) return null
+  let sum = first
+  for (const spent of rest) sum = addSpent(sum, spent)
+  return cost(sum)
+})
+
+/**
+ * The heading, with the stretch the figures cover — the window's start to the moment read to —
+ * and the sum of its lines where it has any.
+ */
 const heading = computed(() => {
   const period = answer.value?.period
   const from = period?.from ?? props.window.started_at ?? props.today
   const to = period?.to ?? props.today
-  return t('analytics.quota.spent.title', {
+  const stretch = {
     from: quotaWords.moment(from, props.today),
     to: quotaWords.moment(to, props.today),
-  })
+  }
+  return total.value === null
+    ? t('analytics.quota.spent.title', stretch)
+    : t('analytics.quota.spent.titleTotal', { ...stretch, total: total.value })
 })
-
-const cost = (spent: Parameters<typeof words.lineFigure>[1]) => words.lineFigure('cost', spent)
 
 /** A line as a row of either drawing: its name, what it leaves out and its estimate. */
 function rowOf(held: NonNullable<typeof answer.value>, line: SpendingLine) {

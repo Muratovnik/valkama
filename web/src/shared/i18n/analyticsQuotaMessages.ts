@@ -119,6 +119,7 @@ export const analyticsQuotaMessages = {
     },
     spent: {
       title: 'Window breakdown: {from} – {to}',
+      titleTotal: 'Window breakdown: {from} – {to} · {total}',
       by: 'Breakdown of {window}',
       breakdowns: {
         work_item: 'Tasks',
@@ -264,6 +265,7 @@ export const analyticsQuotaMessages = {
     },
     spent: {
       title: 'Детализация окна: {from} – {to}',
+      titleTotal: 'Детализация окна: {from} – {to} · {total}',
       by: 'Разбивка окна «{window}»',
       breakdowns: {
         work_item: 'Задачи',

@@ -2781,7 +2781,10 @@ choice of breakdown holds for that window when the panel turns to its table or o
 project or model it opens on the ring, as every split named by identifiers does, and a person's
 choice of drawing holds until the page is left; by task it is the list of free text alone, with
 no switch, the rest and the work on no task apart after the five under their rule. Its heading
-names the stretch it covers. That it is the API price estimate and not quota points, and that
+names the stretch it covers and what its lines add up to, said as a line's estimate is, «Window
+breakdown: 05:00 – 13:20 · ≈ $151.90»: the lines added up and nothing said their sum. With no
+lines it names no sum, and work its organization recorded with no account known, said apart, is
+not in it. That it is the API price estimate and not quota points, and that
 work in claude.ai and the desktop app, which the window's share counts, is not in it, the
 section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
 says for this one, never as a line of the panel. It is read by account, the account's and its

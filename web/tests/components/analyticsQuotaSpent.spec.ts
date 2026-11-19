@@ -7,7 +7,8 @@
  * the panel's own switch, read as its table; the first
  * five items and one line for the rest, or by project or model a ring of every item, which it
  * opens on, while the tasks, named by free text, are a list only, the rest and work on no task
- * apart after the five; a heading that names the period it covers, and the
+ * apart after the five; a heading that names the period it covers and what its lines add up to,
+ * and none where it has no lines; and the
  * section's «ⓘ» that says once it is the API price estimate and not quota points, and that
  * claude.ai and the desktop app are not in it. Another
  * account's work is never in it, and its organization's work with no account known is said apart
@@ -162,9 +163,18 @@ describe('where a window went', () => {
     // Under the panel's name, one rank under it: the section's «ⓘ» is under the panel, so the
     // panel's own «ⓘ» says what the figures are and are not, and neither the panel nor the block
     // says it as a line.
-    expect(block.get('h3').text()).toBe('Window breakdown: 11:30 – 14:30')
+    // Its lines add up to the account's 13 dollars: 6, 3, 0.5, 0.5, 2 for the rest and 1 on no task.
+    expect(plain(block.get('h3').text())).toBe('Window breakdown: 11:30 – 14:30 · ≈ $13.00')
+    expect(lines(block).map(([, value]) => value)).toEqual([
+      '≈ $6.00 · 46%',
+      '≈ $3.00 · 23%',
+      '≈ $0.50 · 4%',
+      '≈ $0.50 · 4%',
+      '≈ $2.00 · 15%',
+      '≈ $1.00 · 8%',
+    ])
     const frame = document.querySelector('[data-detail="window"]')?.closest('.drawer-frame')
-    expect(frame?.textContent).toContain('Window breakdown: 11:30 – 14:30')
+    expect(plain(frame?.textContent ?? '')).toContain('Window breakdown: 11:30 – 14:30 · ≈ $13.00')
     expect(frame?.textContent).not.toContain('quota points')
     const about = [...(frame?.querySelectorAll('button') ?? [])].filter(
       (button) => button.getAttribute('aria-label') === 'About these figures',
@@ -298,6 +308,8 @@ describe('where a window went', () => {
     const week = await openSpend(page, 'Work', 'week')
     expect(week.get('h3').text()).toContain(': Nov 7, 14:30 – 14:30')
     expect(lines(week)[0]).toEqual(['MAIN-9 Earlier', '≈ $50.00 · 79%'])
+    // The week's lines: the five hours' 13 dollars and the 50 before them.
+    expect(plain(week.get('h3').text())).toMatch(/ · ≈ \$63\.00$/u)
   })
 })
 
@@ -311,12 +323,16 @@ describe('the states of what used a window', () => {
     expect(none.get('.window-spend-body').text()).toBe(
       'No work was recorded on this account in this window.',
     )
+    // With no lines its heading names the stretch alone, no sum.
+    expect(none.get('h3').text()).toMatch(/^Window breakdown: \d{2}:\d{2} – \d{2}:\d{2}$/u)
     const unplaced = await openSpend(page, SEATED_NAME)
     expect(unplaced.attributes('data-state')).toBe('unplaced')
     expect(plain(unplaced.get('.window-spend-body').text())).toBe(
       'No work was recorded on this account in this window. Not counted here: ≈ $4.00 of work in its organization with the account unknown.',
     )
     expect(unplaced.find('.ranked-bars').exists()).toBe(false)
+    // The organization's work apart is no line of it, so it is no sum in its heading either.
+    expect(unplaced.get('h3').text()).not.toContain('$')
     // An organization no source read has no window, and so nothing to open; Work has.
     expect(accountNamed(page, UNREAD_NAME).find('[data-spend]').exists()).toBe(false)
     expect(accountNamed(page, 'Work').find('[data-spend]').exists()).toBe(true)
