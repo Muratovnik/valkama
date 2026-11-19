@@ -3,7 +3,8 @@
 A task is given when it is in a ready state, nobody holds it or any step of it,
 nothing unfinished blocks it, no question to the owner waits on it, its workflow
 leads from where it stands into work, and no goal or stage over it is in triage
-or deferred, waiting to be cancelled, closed, or waiting on a blocker. `withheld` says which of those fail,
+or deferred, waiting to be cancelled, closed, or waiting on a blocker, and the owner of its space has
+not switched the queue off to hand out work by hand. `withheld` says which of those fail,
 as codes in one fixed order, and an item is `workable` exactly when it names none.
 A read of one space that holds another space's item, for a project of the space
 read it names, adds `outside_space`: the queue of the space read never gives it.
@@ -29,7 +30,7 @@ import json
 import sqlite3
 from collections.abc import Iterable, Sequence
 
-from . import item_tree, model, states
+from . import item_tree, model, participation, states
 
 #: Where each priority stands, highest first; urgent is also the key's first part.
 _PRIORITY_ORDER = {"urgent": 0, "high": 1, "medium": 2, "low": 3}
@@ -69,6 +70,9 @@ CODES = (
     "ancestor_waits",
     #: A goal or stage over it is closed while it is open.
     "ancestor_closed",
+    #: The owner hands out work in its space by hand (`participation`, the switch `queue`
+    #: off): the queue there gives nothing, and `claim_ready_work_item` says `queue_off`.
+    "queue_off",
     #: A read of another space holds it, for a project of that space it names: the
     #: queue of the space read never gives it, whatever its own space's queue does.
     "outside_space",
@@ -80,6 +84,7 @@ def withheld(
     row: sqlite3.Row,
     tree: item_tree.Tree,
     *,
+    settings: participation.Settings | None,
     read_space: str | None = None,
 ) -> list[str]:
     """Why the queue of its space does not give this item; empty when it does.
@@ -91,6 +96,11 @@ def withheld(
     already says it is not given, and coming back to work from review or
     blocked is not starting it. That fact is the one that may cost a query,
     for one task's record, which loads no workflow (`states.start_state`).
+
+    `settings` is the participation setting a read loaded once, or None for a record
+    read alone, which loads it here for a task: where its switch `queue` is off in the
+    item's own space, every task there says `queue_off`, as `claim_ready_work_item`
+    refuses that space's queue before it looks at any task.
 
     `read_space` is the space a read of one space is of, by id: an item of
     another space it holds is asked of that space's queue, and adds
@@ -127,6 +137,9 @@ def withheld(
         found.append("ancestor_waits")
     if not node.closed and any(ancestor.closed for ancestor in over):
         found.append("ancestor_closed")
+    switches = participation.load(conn) if settings is None else settings
+    if not switches.on(str(row["planning_space_id"]), "queue"):
+        found.append("queue_off")
     if read_space is not None and str(row["planning_space_id"]) != read_space:
         found.append("outside_space")
     return found
@@ -194,12 +207,13 @@ def of_spaces(
     named = sorted(set(space_ids))
     if not named:
         return []
+    settings = participation.load(conn)
     rows = conn.execute(
         _CANDIDATES,
         (json.dumps(named), json.dumps(model.WORKABLE_CATEGORIES), model.CONTAINER_KIND),
     ).fetchall()
     return sorted(
-        (row for row in rows if not withheld(conn, row, tree)),
+        (row for row in rows if not withheld(conn, row, tree, settings=settings)),
         key=lambda row: (work_key(row, tree), str(row["space_key"]), int(row["number"])),
     )
 

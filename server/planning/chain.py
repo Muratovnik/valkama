@@ -148,7 +148,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 else None,
                 "created_at": row["created_at"],
                 "closed_at": closed_by_event.get(identity, row["updated_at"]) if terminal else None,
-                "workable": not queue.withheld(conn, row, tree),
+                "workable": not queue.withheld(conn, row, tree, settings=settings),
                 "queue_order": places.get(identity),
                 "_parent_id": parent,
             }
