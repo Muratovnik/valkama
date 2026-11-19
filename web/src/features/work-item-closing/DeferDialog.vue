@@ -10,10 +10,9 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { closingFailure } from '@/features/work-item-closing/closingFailure.ts'
-
 import UntilChoice, { untilProblem } from '@/entities/work-item/components/UntilChoice.vue'
 import type { CardSearchScope } from '@/entities/work-item/composables/useCardSearch.ts'
+import { writeFailure } from '@/entities/work-item/utils/writeFailure.ts'
 
 import { localDay } from '@/shared/api/analyticsAddress.ts'
 import { deferWorkItem } from '@/shared/api/planningClosingApi.ts'
@@ -72,7 +71,7 @@ async function submit() {
     })
     emit('done')
   } catch (error_) {
-    error.value = closingFailure(error_)
+    error.value = writeFailure(error_)
   } finally {
     busy.value = false
   }

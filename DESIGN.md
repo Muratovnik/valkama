@@ -2219,8 +2219,10 @@ in one tertiary line — the kind (glyph and word, in its own colour), the refer
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references, both opening the
 document at the anchor — and on its right
-Back, «…» and Close. «…» holds what a person does with the item that is no fact of it: the
-pin that keeps it in the side panel's «Работа», a setting checked while it is on. The pin
+Back, «…» and Close. «…» holds what a person does with the item that is no fact of it: first
+what changes what the item is part of, only where its place allows it (see «Dividing work from
+its card»), then the pin that keeps it in the side panel's «Работа», a setting checked while it
+is on. The pin
 stood in the identity line between the link and the date, read as one more fact there. The
 link to copy stays beside the reference: it is the reference's twin, in the head as on the
 hover card, and what it did is said at the end of that line. The scroller holds the rest and moves it 1:1: the title, the facts, the
@@ -2327,7 +2329,27 @@ its reason kept. «Подтвердить закрытие» shows the condition
 ticked, or «Условий нет: проверяется по описанию» and the description, then what was cancelled
 or moved out from under it with each reason; «Подтвердить» waits for every box, ticks the open
 ones and the marked ones as the reader's, writes the owner's summary where there is none, and
-completes it in one write.
+completes it in one write. Work that opened under it while the window was open makes the server
+refuse that write: the window then says «Цель снова в работе, под ней открыта работа: MAIN-12.
+Подтверждать нечего.», naming what the refusal names, with «Закрыть» alone, and closing it any way
+reads the card again. No press says «Вернуть в работу»: the state is what the work under it
+derives, and no write answers to such a press.
+**Dividing work from its card.** «…» offers a task outside review «Отделить часть…» while a
+condition is still open and «Превратить в этап» under a goal or a stage or «Превратить в цель» at
+the top level, the word its place gives; a goal or a stage «Вернуть в задачу» once the card's read
+finds nothing under it, closed work included; and work under a goal or a stage «Вынести из
+цели…». Nothing is offered that the server refuses for what the card already knows, and closed
+work is offered none. «Отделить часть» is a window: the new card's title, empty, and the task's
+open conditions as boxes, none ticked; «Создать» is unavailable, the reason under the fields,
+until the part is named and takes one. The part stands under the same parent, accepted as the
+task is, so the window asks neither; a done condition stays with the task. The other three ask
+in the band under the bar, as a task's cancel does: «Превратить MAIN-12 в этап?» says what stays,
+and that a held task's claims end and their work becomes a task inside it, or that a task nobody
+holds drops its projects; «Вернуть этап MAIN-12 в задачу?» says nothing is inside it; «Вынести
+MAIN-12 из MAIN-3?» names the triage state it lands in at the top level and asks its reason in a
+field first, the caret in it, since the goal keeps that reason. After each the card reads its item
+again. A task that conditions left says where they went in «Связи», under «Условия ушли в»: each
+card that took some, by its number, with how many, a press opening it.
 Overview opens with the next step, when there is one: a quiet line, «Следующий шаг · 3 из
 9», whose number is the step's place in the list and not how many are done, then the step's
 words as a description reads, with no heading over one sentence. «Все шаги» at the end of

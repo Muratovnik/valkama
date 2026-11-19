@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * A card's own controls in its bar, before Close: Back, where this card was opened from
- * another, and «…», where the item is one a person can pin (`InspectorMenu`).
+ * another, and «…», where the item is read and in the primary store: what else can be done to it,
+ * pin it or change what it is part of (`InspectorMenu`).
  */
 import InspectorBack from '@/widgets/work-item-inspector/components/InspectorBack.vue'
 import InspectorMenu from '@/widgets/work-item-inspector/components/InspectorMenu.vue'

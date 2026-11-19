@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorEvidence from '@/widgets/work-item-inspector/components/InspectorEvidence.vue'
+import InspectorMovedConditions from '@/widgets/work-item-inspector/components/InspectorMovedConditions.vue'
 import RelatedWorkPicker from '@/widgets/work-item-inspector/components/RelatedWorkPicker.vue'
 
 import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
@@ -234,6 +235,11 @@ async function remove(link: Link) {
         @open="emit('open', $event)"
       />
     </section>
+
+    <InspectorMovedConditions
+      :item="item"
+      @open="(reference) => emit('open', reference)"
+    />
 
     <InspectorEvidence :item="item" />
   </div>

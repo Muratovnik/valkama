@@ -6,7 +6,8 @@
  * and a goal's cancel lists what closes with it first. That list is the server's: when the work
  * under the goal changed between reading it and pressing, the server refuses again with the new
  * list, and the window shows it, marked, and asks again. A goal awaiting confirmation is
- * confirmed against its conditions or its description, and a step a former holder marked is
+ * confirmed against its conditions or its description; one whose work opened again while it was
+ * confirmed says it is at work again and has nothing to confirm. A step a former holder marked is
  * confirmed beside its mark.
  */
 import { expect } from '@playwright/test'
@@ -20,6 +21,7 @@ import type { BackendOptions } from './backend.ts'
 import { spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import {
   CHANGED_LIST,
+  CHILDREN_OPEN,
   closingSpace,
   CONDITIONS,
   conditionsGoal,
@@ -29,6 +31,7 @@ import {
   goalCard,
   markedCard,
 } from './served/closing.ts'
+import { stepBoxOffsets } from './stepBoxes.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -279,15 +282,7 @@ for (const width of [1280, 620, 390]) {
     await expect(press).toBeEnabled()
     await fitsWindow(page, dialog)
     // Each box stands on its condition's first line, as the card's checklist box does.
-    const offsets = await dialog.locator('.confirm-step').evaluateAll((rows) =>
-      rows.map((row) => {
-        const box = row.querySelector('.step-mark')?.getBoundingClientRect()
-        const text = row.querySelector('.confirm-step-text')
-        if (!box || !text) return Number.POSITIVE_INFINITY
-        const line = Number.parseFloat(getComputedStyle(text).lineHeight)
-        return Math.abs(box.top + box.height / 2 - (text.getBoundingClientRect().top + line / 2))
-      }),
-    )
+    const offsets = await stepBoxOffsets(dialog)
     expect(offsets).toHaveLength(CONDITIONS.length)
     for (const offset of offsets) expect(offset).toBeLessThanOrEqual(1)
     await page.screenshot(shot(info.outputPath(`dialogs-${width}-confirm-close-conditions.png`)))
@@ -308,6 +303,44 @@ for (const width of [1280, 620, 390]) {
         transition: { state: 'done' },
       },
     ])
+  })
+}
+
+for (const width of [1280, 620, 390]) {
+  test(`a goal whose work reopened while it was confirmed says so and reads again at ${width}px`, async ({
+    page,
+  }, info) => {
+    // The server's refusal once a task opened under the goal: it is at work again.
+    const reads = [descriptionGoal, goalCard('in_progress')]
+    const card = (read: Record<string, unknown>) => reads[0](read)
+    const drawer = await openCard(page, width, { space: closingSpace, card })
+    const sent = await writes(page, '/api/planning/work-item/apply', () => {
+      reads.splice(0, 1)
+      return { status: 409, json: CHILDREN_OPEN }
+    })
+    await drawer.locator('[data-closing="confirm"]').click()
+    const dialog = page.getByRole('dialog', { name: 'Confirm close' })
+    await dialog.locator('button[type="submit"]').click()
+    await expect(dialog.locator('[data-part="reopened"]')).toHaveText(
+      'The goal is at work again, work opened under it: MAIN-275. There is nothing to confirm.',
+    )
+    await expect(dialog.locator('[data-part="description"]')).toHaveCount(0)
+    // A reference is never broken at its hyphen, whatever the width: it stands on one line.
+    const opened = dialog.locator('[data-opened="MAIN-275"]')
+    await expect(opened).toHaveCount(1)
+    expect(await opened.evaluate((span) => span.getClientRects().length)).toBe(1)
+    // No press offers a write: the frame's own close and the one press both only close it.
+    const presses = dialog.getByRole('button')
+    await expect(presses).toHaveCount(2)
+    for (const press of await presses.all()) await expect(press).toHaveAccessibleName('Close')
+    await fitsWindow(page, dialog)
+    await page.screenshot(shot(info.outputPath(`dialogs-${width}-confirm-close-reopened.png`)))
+    await dialog.locator('button[type="submit"]').click()
+    await expect(dialog).toBeHidden()
+    // The card reads the goal again and says what it derives now, with nothing to confirm.
+    await expect(drawer.locator('.card-facts .card-state').first()).toHaveText('In progress')
+    await expect(drawer.locator('[data-closing="confirm"]')).toHaveCount(0)
+    expect(sent).toHaveLength(1)
   })
 }
 
