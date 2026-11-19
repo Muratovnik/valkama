@@ -10,7 +10,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 export { serve } from './boardBackend.ts'
 import { spaceScope } from './planningFixtures.ts'
 
-export function boardRoute(state: Record<string, string> = {}) {
+export function boardRoute(state: Record<string, unknown> = {}) {
   return serializePlatformRoute({
     module_id: 'planning',
     scope: spaceScope,
@@ -52,8 +52,9 @@ export async function centre(what: Locator) {
 }
 
 /** The same space as a list, once its rows are drawn. */
-export async function openList(page: Page) {
-  await page.goto(boardRoute({ view: 'list' }))
+/** The list, in the order `state` names; the queue's where it names none. */
+export async function openList(page: Page, state: Record<string, unknown> = {}) {
+  await page.goto(boardRoute({ view: 'list', ...state }))
   await expect(page.locator('.work-item-list tbody tr').first()).toBeVisible()
 }
 

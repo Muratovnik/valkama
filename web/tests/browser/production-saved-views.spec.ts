@@ -207,7 +207,9 @@ async function reachByKeys(page: Page, role: 'menuitem' | 'menuitemradio', name:
   const entry = page.getByRole('menu').getByRole(role, { name })
   // A menu opened from the keyboard has its first entry focused; the arrows move on from there.
   await expect(page.getByRole('menu').locator('[role^="menuitem"]:focus')).toHaveCount(1)
-  for (let step = 0; step < 8; step += 1) {
+  // At most once round the menu, however many choices its views offer.
+  const entries = await page.getByRole('menu').locator('[role^="menuitem"]').count()
+  for (let step = 0; step < entries; step += 1) {
     if (await entry.evaluate((node) => node === document.activeElement)) break
     await page.keyboard.press('ArrowDown')
   }

@@ -1572,15 +1572,28 @@ The bar above the views is two rows and no more: the view and its menu, then the
 filter, then the one primary action, every control of the row at one compact
 height, and under them what is drawn and how much of it. The view's menu, «View»
 by the view because it arranges what is drawn, holds how the view is arranged and
-the views kept: the grouping is a choice in it, offered only where the view has one
-(the board's «No grouping» or «By goal»); «Save view…» keeps the address's state —
-the view, its grouping and the filter — under a name, per space, in the interface's
+the views kept. The grouping is a choice in it, offered by view: the board's «No
+grouping», «By goal», «By stage» and «By project»; the list's «No grouping», a flat list
+of the whole scope in one order, «By goal», its tree, and «By project»; the graph has
+none, its frames are its grouping. The order follows as two choices: «Sort» — «Queue
+order», the default and the order the take-next queue gives work in, «Updated»,
+«Created», «Priority» — and «Direction», whose words say what comes first («Newest
+first», «First in the queue first») rather than an arrow's. A list header sorts into the
+same order, and the menu names a column's order a header chose among the four. The
+address keeps the order as `sort` and `desc`, the queue's from the start writing
+neither. «Save view…» keeps the address's state —
+the view, its grouping, its order and the filter — under a name, per space, in the interface's
 own settings, and a kept view is a choice the menu marks while the address holds it
 exactly; choosing it puts its state back, and the marked one can be deleted. A
 space never lists another space's views. Nothing in the row is a pressed filter of
 its own any more: everything to the right of the field narrows it, and the two
 conditions that once stood beside it as presets, «Workable» and «Has an
-assignee», are the first group of the filter's menu. A usable filter is as wide as a
+assignee», are the first group of the filter's menu, with «Waiting for my answer», a task
+whose question to the owner keeps the queue from giving it, and «From another space», a
+card another space holds; that one is a value, so its chip's «≠» keeps every such card
+out instead. «Workable» is the list read's own answer for each card, the one the queue
+gives by, so the filter lets through what claim-ready hands out and follows a rule the
+server adds without a copy of it here. A usable filter is as wide as a
 phone's, 108px with the longest words; where the view's segments and the action
 cannot stand beside that, the bar takes its phone form, where the menu is its sign
 alone. The filter's
@@ -1590,8 +1603,12 @@ and short where it would be cut. The field is the way into the filter's menu, wi
 press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
 itself does not, since Tab passes through to what the menu would cover. The menu takes
 two steps, as Linear's does: it opens on the facets — state, kind, priority, holder,
-label — under the two conditions, and a facet's row, marked with a chevron, steps into
-that facet's values. Every value of every facet at once was a list a real space's
+project, goal or stage, label — under the conditions, and a facet's row, marked with a
+chevron, steps into
+that facet's values. «Project» offers the projects the work names, by name, and «No
+project»; «Goal or stage» offers each container as «MAIN-12 · title» with its path of
+references after it, «MAIN-1 › MAIN-12», and keeps the container's whole subtree, the
+container included. Every value of every facet at once was a list a real space's
 labels made thousands of rows long. The values' step heads its list with the facet's
 name as the way back; ← or Backspace from the start of the text goes back too, and
 the highlight lands on the facet it left. Typing in the facets' step still finds a
@@ -1681,12 +1698,19 @@ column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
 key is three letters; a longer key folds as any exception short of room does.
 The board grouped by goal gives a lane to each goal, the root of a line of work, and
-one to the work under none, «No parent» («Без
-родителя»). A goal's lane holds all the work under it, through its stages at any
-depth; a stage heads no lane and is work of its goal's lane, a tile there while it
-stands in a column, so no item is drawn twice. The lanes name the goal, as the card
-does; the branch map's lane under none and the graph's frame under none are named
-the same way.
+one to the work under none, «No goal» («Без цели»). A goal's lane holds all the work
+under it, through its stages at any depth; a stage heads no lane and is work of its
+goal's lane, a tile there while it stands in a column, so no item is drawn twice. A tile
+filed under a stage names that stage on its second line, «Stage MAIN-12 · title», in the
+quiet tone, since the lane names only the goal. The lanes name the goal, as the card
+does. Grouped by stage, every goal and stage heads a lane named by its path, «Goal ›
+Stage», stands as no tile, and work stands in the lane of its nearest container. A card
+of another space, which has no parent here, stands by goal and by stage in a lane of
+its space, «Space ALPHA · name», after this space's lanes. Grouped by project, a lane is
+each project of the space, in the space's order and kept while empty, then «Several
+projects» for a card naming more than one, drawn once there so its drag, its focus and
+the counts stay whole, then «No project»; an accepted open goal or stage stands in no
+column and so in no lane.
 On the board grouped by goal a cell with no tile drawn takes no ground until a
 tile of its lane is dragged and could land there, and a finished cell's offer of
 its tiles is a line of text. A goal's row is one line: its reference, its title
@@ -1751,7 +1775,10 @@ in every row, as the next rule says. The cost, for now: on a list that long, a
 screen reader's browse mode reaches only the rows in the page.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
-list's sort order. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
+list's sort order. Grouped «By project», it is a tree of one level: a row per group, as
+the board's lanes by project are, its name and counts across the columns, and the cards
+under it in the list's order. A group's row opens nothing: Enter, a press on its arrow, ←
+and → fold and open it. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
 starts folded. A reader's choice against that rule is kept per space and is
 forgotten once it agrees with the rule. A filter lays out the whole scope and
 shows what it let through with the path to it: a path row is quiet, a reader is
