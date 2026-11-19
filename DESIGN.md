@@ -1809,10 +1809,10 @@ dash; a card of another space says nothing there, since this space's read does n
 that card's goal. The column sorts by the path. It stands from 1100px of list and gives
 way first: beside every other column a list of 900px left the title 20 characters and
 pushed the table past its edge. Folded, the path leads what the row prints under its
-title: a line of its own above an open blocker and the labels down to 900px, and the
-first fact of the line of facts below that, where it folds with the state, the priority
-and the holder. The list by goal draws no such column, since a row's place there is its
-goal; the list by project does.
+title, on one line cut at the row's edge and whole on hover: a line of its own above an
+open blocker and the labels down to 900px, and the first fact of the line of facts below
+that, where it folds with the state, the priority and the holder. The list by goal draws
+no such column, since a row's place there is its goal; the list by project does.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
 list's sort order. Grouped «By project», it is a tree of one level: a row per group, as

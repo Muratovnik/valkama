@@ -11,7 +11,7 @@
  * cell is (`listRefCell.ts`), not as a component, which would be another
  * instance in every row; its look stays the list's.
  */
-import { Fragment, h } from 'vue'
+import { Fragment, h, withDirectives } from 'vue'
 import type { VNode } from 'vue'
 
 import type { useListRuns } from '@/widgets/work-item-views/composables/useListRuns.ts'
@@ -22,8 +22,14 @@ import { factsOf, ROW_FACETS } from '@/widgets/work-item-views/utils/listRowWord
 import { holderRef, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const fact = (words: string) => h('span', { class: 'list-fact' }, words)
+/** The path on one line, cut at the row's edge and whole on hover while it is cut. */
+const pathFact = (path: string) =>
+  withDirectives(h('span', { class: 'list-fact one-line' }, path), [
+    [vTooltip, path, undefined, { clipped: true }],
+  ])
 
 interface UnderTitleList {
   runs: Pick<ReturnType<typeof useListRuns>, 'context' | 'facts' | 'filtering'>
@@ -42,7 +48,7 @@ export function listUnderTitle({ fit, folded, goal, runs, updated }: UnderTitleL
 
   function facts(item: WorkItemBrief, path: string): VNode {
     return h('span', { class: 'list-facts' }, [
-      path ? fact(path) : null,
+      path ? pathFact(path) : null,
       runs.facts(item, factsOf(fit()), runs.context(item)),
       // A dash says "nobody" under a heading; on a line of facts it says nothing.
       holderRef(item) ? runs.facts(item, HOLDER) : null,
@@ -56,7 +62,7 @@ export function listUnderTitle({ fit, folded, goal, runs, updated }: UnderTitleL
     if (!labelsUnder(fit())) return facts(item, path)
     const under = runs.filtering(surfaceMarks('list', item, runs.context(item), UNDER))
     return h(Fragment, [
-      path ? h('span', { class: 'list-facts' }, [fact(path)]) : null,
+      path ? h('span', { class: 'list-facts' }, [pathFact(path)]) : null,
       h('span', { class: 'list-under' }, [under]),
     ])
   }

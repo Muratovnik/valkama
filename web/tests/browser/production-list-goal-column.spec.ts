@@ -28,12 +28,16 @@ const WIDTHS = [
 ] as const
 type Size = (typeof WIDTHS)[number]
 
+const LONG_GOAL = 'A goal whose title runs on past what any title column of the list holds'
+
 function goalSpace() {
   return [
     brief(1, stateOf(1), { kind: 'goal', title: 'Launch' }),
     brief(2, stateOf(1), { kind: 'stage', title: 'Beta', parent_id: identity(1) }),
     brief(3, stateOf(1), { title: 'Write the notes', parent_id: identity(2) }),
     brief(4, stateOf(1), { title: 'Tidy up' }),
+    brief(5, stateOf(1), { kind: 'goal', title: LONG_GOAL }),
+    brief(6, stateOf(1), { title: 'Ship it', parent_id: identity(5) }),
   ]
 }
 
@@ -87,6 +91,14 @@ for (const size of WIDTHS.slice(1)) {
     await expect(listOf(page).locator('.list-goal')).toHaveCount(0)
     // The path comes first there, whatever follows it.
     await expect(pathLine(page, 'MAIN-3')).toHaveText(/^\s*Launch › Beta/u)
+    // A long path stays one line, cut at the row's edge.
+    const long = pathLine(page, 'MAIN-6').locator('.list-fact').first()
+    await expect(long).toHaveText(LONG_GOAL)
+    const lines = await long.evaluate(
+      (fact) =>
+        fact.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(fact).lineHeight),
+    )
+    expect(lines, 'the path is one line').toBeLessThan(1.5)
     // Work under no goal says nothing there: the dash is the column's word.
     await expect(rowOf(page, 'MAIN-4').locator('.list-title')).not.toContainText('—')
     const overflow = await listOf(page).evaluate((list) => list.scrollWidth - list.clientWidth)
@@ -106,8 +118,10 @@ for (const size of WIDTHS) {
 test('a press on the heading sorts the flat list by goal and stage', async ({ page }) => {
   await open(page, WIDTHS[0], {})
   await goalHead(page).getByRole('button').click()
-  // Under no goal first, by number; then «Launch» before «Launch › Beta».
-  await expect.poll(() => order(page)).toEqual(['MAIN-1', 'MAIN-4', 'MAIN-2', 'MAIN-3'])
+  // Under no goal first, by number; then by the path, «Launch» before «Launch › Beta».
+  await expect
+    .poll(() => order(page))
+    .toEqual(['MAIN-1', 'MAIN-4', 'MAIN-5', 'MAIN-6', 'MAIN-2', 'MAIN-3'])
   expect(routeState(page)).toMatchObject({ sort: 'goal' })
   await expect(goalHead(page)).toHaveAttribute('aria-sort', 'ascending')
 })
