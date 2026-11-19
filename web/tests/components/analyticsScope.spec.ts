@@ -89,7 +89,7 @@ const besideOf = (page: VueWrapper) => {
 }
 
 /** Every section the period's figures fill: the overview, a dimension's and the tokens'. */
-const SPENDING = [{}, { by: 'model' }, { by: 'token_kind' }]
+const SPENDING: Record<string, string>[] = [{}, { by: 'model' }, { by: 'token_kind' }]
 
 describe('the projects beside a section’s heading', () => {
   it.each(SPENDING)('names the project the page is scoped to beside %o', async (routeState) => {
