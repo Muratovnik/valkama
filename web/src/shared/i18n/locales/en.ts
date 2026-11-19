@@ -7,6 +7,8 @@ import { boardMessages } from '@/shared/i18n/boardMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
+import { decisionPointMessages } from '@/shared/i18n/decisionPointMessages.ts'
+import { decisionsMessages } from '@/shared/i18n/decisionsMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorCommitMessages } from '@/shared/i18n/doctorCommitMessages.ts'
 import { doctorDesktopMessages } from '@/shared/i18n/doctorDesktopMessages.ts'
@@ -67,6 +69,8 @@ export const en = {
   liveWork: liveWorkMessages.en.liveWork,
   commits: workItemFactMessages.en.commits,
   analytics: analyticsMessages.en.analytics,
+  decisions: decisionsMessages.en,
+  decisionPoints: decisionPointMessages.en,
   app: {
     title: 'Valkama',
   },

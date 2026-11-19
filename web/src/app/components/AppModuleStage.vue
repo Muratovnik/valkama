@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { analyticsView, settingsView } from '@/app/moduleViews.ts'
+import { analyticsView, decisionsView, settingsView } from '@/app/moduleViews.ts'
 
 import PlanningCardOverlay from '@/pages/planning/PlanningCardOverlay.vue'
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
@@ -41,6 +41,7 @@ const emit = defineEmits<{
 }>()
 const SettingsView = settingsView.component
 const AnalyticsView = analyticsView.component
+const DecisionsView = decisionsView.component
 const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)
 const cardOverlay = ref<InstanceType<typeof PlanningCardOverlay> | null>(null)
 async function refresh() {
@@ -55,12 +56,16 @@ const scopeProject = computed(() =>
 )
 /** The space a scope names, which Settings shows its own values of; null at the top. */
 const scopeSpace = computed(() => (props.scope.kind === 'space' ? props.scope.space_ref : null))
+/** The key of that space, which Agent decisions reads by; null at the top. */
+const scopeSpaceKey = computed(() => scopeSpace.value?.space_key ?? null)
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(
   () => planningSurface.value?.selectedId ?? cardOverlay.value?.selectedId ?? null,
 )
 /** Whether a card stands over the module, which a side panel of the module waits under. */
 const cardOver = computed(() => props.route.entity?.kind === 'work-item')
+/** Agent decisions are recorded as events, so a card it opens shows its System events first. */
+const cardOpensOn = computed(() => (props.activeModule === 'decisions' ? 'activity' : null))
 defineExpose({ openCardId, refresh })
 </script>
 <template>
@@ -96,6 +101,19 @@ defineExpose({ openCardId, refresh })
   </ModuleFrame>
 
   <ModuleFrame
+    v-else-if="activeModule === 'decisions'"
+    module="decisions"
+    :label="moduleTitle"
+  >
+    <DecisionsView
+      :route-state="route.state"
+      :space="scopeSpaceKey"
+      :project-id="scopeProject"
+      @state="(state) => emit('state', state)"
+    />
+  </ModuleFrame>
+
+  <ModuleFrame
     v-else-if="activeModule === 'settings'"
     module="settings"
     :label="moduleTitle"
@@ -115,6 +133,7 @@ defineExpose({ openCardId, refresh })
     ref="cardOverlay"
     :context="context"
     :entity="route.entity"
+    :opens-on="cardOpensOn"
     :primary-write-scope-id="primaryWriteScopeId"
     :question-asked="questionAsked"
     :scope="scope"

@@ -5,6 +5,7 @@ const MODULE_FRAME_MODULES = [
   'sessions',
   'improvements',
   'analytics',
+  'decisions',
   'settings',
   'skills',
   'memory',
