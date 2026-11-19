@@ -2310,13 +2310,17 @@ no focus, and neither the pointer nor focus stands in it or after it in the list
 would move from under them. Selecting does nothing but select, and nothing is chosen for
 the person but at their own press: Send is what sends. Accepting what the agent recommends is
 that press, in one block of a review or in all the blocks of a choice that wait, and it fills
-only what the person has not chosen and sends nothing by itself. Across blocks, «Accept
-recommended in all» is offered only where the list's host turns it on, which «Needs my answer»
-does not yet; where it is offered, it opens in place the list of what would go, a line per block with its task's
-number, its title and what would be chosen in it, says how many blocks it leaves out because
-their recommendation does not answer them, and sends only on «Accept N»; each block is filled
-and written by its own question, so one that went folds and one that did not keeps what was
-filled, with the reason in its foot. Every choice is a full-width row
+only what the person has not chosen and sends nothing by itself. Across blocks, «Needs my answer»
+offers «Accept recommended in all» over the blocks of a choice that wait in the tab shown, the
+one press that chooses for the person in several blocks, and still only on that press: it opens
+in place the list of what would go, a line per block with its task's number, its title and what
+would be chosen in it, says how many blocks it leaves out because their recommendation does not
+answer them, and sends only on «Accept N» at the list's foot. Each block is filled and written
+by its own question, one write each, so a block refused does not hold the others back: one that
+went folds, and one that did not keeps what was filled, with the reason in its foot, and the
+line beside the press says how many went of how many. A read of the list that crosses an answer
+leaves every block once: one read while its answer is out keeps what was filled, and a read begun
+before an answer landed says nothing over it. Every choice is a full-width row
 whatever their number: its label, a quiet word on the recommended one, and as much of
 its description as leaves the labels scannable, so that the first screen still says what
 is asked and what the choices are. A description of one line stands whole under its
@@ -2390,7 +2394,8 @@ asks first, as every answer that cancels does. Where open work stands under the 
 question did not ask about, the server refuses it with the list of that work; the list stands
 over the answers, what closes with who holds it and what waits on it, the reference it waits on
 never split at its hyphen, focus goes to its first
-line, which says the answer cancels that work too, and the asking stands again. Confirming it
+line, which says the answer cancels that work too, and the asking stands again, its buttons
+brought back into view. Confirming it
 sends that list's token, never the one the question was asked with, which listed the findings the
 answer cancels first; a list that changed meanwhile is refused and shown again the same way.
 Where the list holds more than one kind, tabs over it offer All and each kind it holds, each with
@@ -2430,7 +2435,12 @@ same without closing the card or the list. Choosing or writing anything takes th
 so that Send is Send again by the time it is pressed. The step lasts only while attention is on
 its question: a press or focus landing outside it ends it, so a page holds one step at most, and
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
-person pressed no longer stands where they left it. What is asked lies on nothing, so that a
+person pressed no longer stands where they left it. What moved them before the step began is the
+screen's, not the person's: the list a refused answer brings stands over its buttons as the
+asking stands again, and on a phone it pushed them past the fold, so the scroll to them ended the
+step meant to confirm it. The step therefore brings its buttons into view, by no more than it
+takes, before it takes their place, and a scroll the person makes after that ends it as any
+other. What is asked lies on nothing, so that a
 person refuses seeing the end of what will not go, and moves nothing: it takes the place of
 Check status, since a press on it would end the step anyway, and that
 place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as

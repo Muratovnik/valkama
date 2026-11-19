@@ -5,7 +5,9 @@
  * «Later…» are unavailable with the reason under them, «Later…» puts the group off to a day or a
  * card's close with its findings, and «Don't do» over open work the question did not ask about
  * shows the list the server's refusal names, what waits on that work on one line, and confirms
- * that list's token, not the one the question was asked with.
+ * that list's token, not the one the question was asked with. The list pushes the answers down,
+ * past a phone's fold, and the record brings them back into view before the asking starts to
+ * watch them move; a scroll the reader makes after that still ends the asking.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -223,19 +225,25 @@ for (const { width, locale } of CASES) {
   test(`at ${width}px in ${locale} «Don't do» over work the group did not ask about confirms the refusal's list`, async ({
     page,
   }) => {
-    const { one, listed, refused, requests } = await refuse(page, { locale, width }, REFUSED)
+    const { one, listed, refused, requests } = await refuse(page, { locale, width }, WAITING)
 
-    // The refusal's list stands over the answers, focus on what it says, and the asking again.
+    // The refusal's list stands over the answers, what closes and what waits on it, focus on what
+    // it says, and the asking again.
     await expect(listed.locator('[data-cancel-part="closes"]')).toContainText(
       'MAIN-314 Accepted work under the goal · codex · 71aa0000',
     )
+    await expect(listed.locator('[data-cancel-part="waiting"]')).toContainText('MAIN-315')
     await expect(listed.getByRole('alert')).toBeFocused()
     await expect(one.getByRole('alert').filter({ hasText: words.asked })).toBeVisible()
     expect(refused).toEqual([
       expect.objectContaining({ answers: { answer: 'drop', items: EVERY } }),
     ])
 
-    await one.getByRole('button', { name: words.drop, exact: true }).last().click()
+    // The list pushed the answers down, and the record brought them back into view itself: the
+    // press that confirms needs no scroll, which would end the asking.
+    const confirm = one.getByRole('button', { name: words.drop, exact: true }).last()
+    await expect(confirm).toBeInViewport({ ratio: 1 })
+    await confirm.click()
     await expect
       .poll(() => requests.writes.map((write) => write.body.answers))
       .toEqual([{ answer: 'drop', items: EVERY, cancels: 'refused-token' }])
@@ -256,5 +264,25 @@ for (const { width, locale } of CASES) {
     })
     expect(lines.count).toBe(1)
     expect(lines.past).toBeLessThanOrEqual(0.5)
+  })
+}
+
+for (const locale of ['en', 'ru'] as const) {
+  const words = WORDS[locale]
+
+  test(`on a phone in ${locale} a scroll the reader makes after the refusal's list came still ends the asking`, async ({
+    page,
+  }) => {
+    const { one, listed, requests } = await refuse(page, { locale, width: 390 }, WAITING)
+    await expect(listed.getByRole('alert')).toBeFocused()
+    const asked = one.getByRole('alert').filter({ hasText: words.asked })
+    await expect(asked).toBeVisible()
+    // The record scrolled the list to bring its answers into view, so there is room back up.
+    const scroller = page.getByRole('dialog').locator('.dialog-frame-body')
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+    await page.mouse.wheel(0, -60)
+    await expect(asked).toHaveCount(0)
+    expect(requests.writes).toHaveLength(0)
   })
 }
