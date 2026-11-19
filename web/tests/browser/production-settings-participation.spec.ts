@@ -1,8 +1,9 @@
 /**
  * Settings → Participation against the whole built app, at the widths its layout changes at:
  * a set changes every row, a space overrides a row and gives it back, a refused save takes the
- * value back with the reason under its row, a label gets a rule, and the space's launch place
- * is changed through the space's own record. At each width nothing runs out of the screen.
+ * value back with the reason under its row, a label gets a rule, a shared rule is removed and a
+ * space changes one field of a rule alone, and the space's launch place is changed through the
+ * space's own record. At each width nothing runs out of the screen.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -171,6 +172,69 @@ for (const width of WIDTHS) {
       .poll(() => launches)
       .toEqual([{ author: 'user', space: 'MAIN', launch_place: 'item_project' }])
     await expectNoSilentClipping(page, `Participation, labels and launch place, at ${width}px`)
+  })
+
+  test(`a shared rule is removed, and a refused removal keeps its row, at ${width}px`, async ({
+    page,
+  }) => {
+    await installBackend(page)
+    const { writes } = await installParticipation(
+      page,
+      {
+        labels: {
+          '': {
+            flow: { ready: true, description: 'The main line of work' },
+            docs: { ready: null, description: 'Documents' },
+          },
+        },
+      },
+      (write) => (write.label === 'docs' ? 'the store is busy' : null),
+    )
+    await open(page, width, ALL_SPACES)
+    const flow = page.locator('[data-participation-label="flow"]')
+    const docs = page.locator('[data-participation-label="docs"]')
+    await expect(flow).toBeVisible()
+    await expectNoSilentClipping(page, `Participation, a rule to remove, at ${width}px`)
+
+    await flow.getByRole('button', { name: 'Remove the rule of flow' }).click()
+    await expect(flow).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: 'Add a rule to a label' })).toBeFocused()
+
+    const removeDocs = docs.getByRole('button', { name: 'Remove the rule of docs' })
+    await removeDocs.click()
+    await expect(docs.getByRole('alert')).toHaveText('Not saved: the store is busy')
+    await expect(docs).toContainText('Documents')
+    await expect(removeDocs).toBeFocused()
+    await expectNoSilentClipping(page, `Participation, a refused removal, at ${width}px`)
+    expect(writes).toEqual([
+      { space: null, label: 'flow', ready: null, description: null },
+      { space: null, label: 'docs', ready: null, description: null },
+    ])
+  })
+
+  test(`a space changes a rule's answer alone and keeps the shared description at ${width}px`, async ({
+    page,
+  }) => {
+    await installBackend(page)
+    const { writes } = await installParticipation(page, {
+      labels: {
+        '': { flow: { ready: true, description: 'The main line of work' } },
+        'MAIN': { flow: { ready: true, description: null } },
+      },
+    })
+    await open(page, width)
+    const flow = page.locator('[data-participation-label="flow"]')
+    // In a space a rule is given back through «Own value», not removed.
+    await expect(flow.getByRole('button', { name: /^Remove the rule/u })).toHaveCount(0)
+    // The row's name names its answer, as every scoped row's does.
+    const ready = flow.getByRole('switch', { name: 'flow own', exact: true })
+    await ready.click()
+    await expect(ready).toHaveAttribute('aria-checked', 'false')
+    await expect(flow.getByRole('textbox', { name: 'Description of flow' })).toHaveValue(
+      'The main line of work',
+    )
+    await expectNoSilentClipping(page, `Participation, a space rule's own answer, at ${width}px`)
+    expect(writes).toEqual([{ space: 'MAIN', label: 'flow', ready: false, description: null }])
   })
 }
 

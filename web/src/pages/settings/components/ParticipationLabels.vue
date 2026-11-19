@@ -8,11 +8,14 @@
  * rule has two fields — whether its findings are ready at once, and what the label means —
  * and a scope keeps each one or takes it from above on its own, so a change of one field
  * leaves the other as the scope's record has it. In a space a label inherits the shared rule
- * until «Own value» is switched on, as every scoped row does.
+ * until «Own value» is switched on, as every scoped row does, and switching it off gives the
+ * whole rule back. In the shared scope «Remove rule» takes a rule away; its row leaves with
+ * the server's answer, and a refusal keeps it with the reason under it. A row that leaves
+ * while the focus is in it hands the focus to the field that adds a rule.
  *
  * Each row carries `data-participation-label` with its label, the hook a check selects it by.
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
@@ -22,6 +25,7 @@ import SettingsScopedRow from '@/pages/settings/components/SettingsScopedRow.vue
 import type { ParticipationEdit, ParticipationLabel } from '@/shared/api/participationApi.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
+import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
@@ -39,6 +43,23 @@ const { t } = useI18n()
 /** What is typed into a description until it is left, by label. */
 const drafts = ref<Record<string, string>>({})
 const picked = ref<string[]>([])
+
+const addRow = useTemplateRef<{ $el: HTMLElement }>('addRow')
+/** The label whose row last took the focus; not shown, so not reactive. */
+let focusedIn: string | null = null
+
+/* A focused control that leaves the page leaves the focus nowhere, on the body. */
+watch(
+  () => props.rules.map((rule) => rule.label),
+  async (labels) => {
+    if (focusedIn === null || labels.includes(focusedIn)) return
+    focusedIn = null
+    await nextTick()
+    const focused = document.activeElement
+    if (focused === null || focused === document.body)
+      addRow.value?.$el.querySelector<HTMLInputElement>('input')?.focus()
+  },
+)
 
 const options = computed(() => {
   const ruled = new Set(props.rules.map((rule) => rule.label))
@@ -108,6 +129,11 @@ function press(event: KeyboardEvent, rule: ParticipationLabel) {
   if (event.key === 'Enter') commitDescription(rule)
 }
 
+/** Takes the shared rule away: both fields null. */
+function remove(rule: ParticipationLabel) {
+  write(rule.label, null, null)
+}
+
 /** A label chosen or typed gets a rule that its findings are ready at once. */
 function add(values: string[]) {
   const label = values.at(-1)?.trim()
@@ -129,6 +155,7 @@ function add(values: string[]) {
       :inherited="inheritedOf(rule)"
       :failure="failureOf(rule.label)"
       :words-of="readyWords"
+      @focusin="focusedIn = rule.label"
       @update:own="(ready) => setOwn(rule, ready)"
     >
       <template #default="{ names, value, update }">
@@ -152,6 +179,16 @@ function add(values: string[]) {
           @focusout="commitDescription(rule)"
           @keydown="press($event, rule)"
         />
+        <VButton
+          v-if="scope === 'global'"
+          class="participation-remove"
+          variant="ghost"
+          size="compact"
+          :aria-label="t('settings.participation.labels.removeName', { label: rule.label })"
+          @click="remove(rule)"
+        >
+          {{ t('settings.participation.labels.remove') }}
+        </VButton>
       </template>
     </SettingsScopedRow>
     <p
@@ -160,7 +197,10 @@ function add(values: string[]) {
     >
       {{ t('settings.participation.labels.empty') }}
     </p>
-    <SettingsRow :label="t('settings.participation.labels.add')">
+    <SettingsRow
+      ref="addRow"
+      :label="t('settings.participation.labels.add')"
+    >
       <SearchCombobox
         :model-value="picked"
         :label="t('settings.participation.labels.add')"
@@ -180,6 +220,11 @@ function add(values: string[]) {
 <style scoped>
 .participation-description {
   width: 100%;
+}
+
+/* The choice column stacks its controls with no gap; the switch keeps its own room. */
+.participation-remove {
+  margin-top: var(--space-2);
 }
 
 .participation-labels-empty {

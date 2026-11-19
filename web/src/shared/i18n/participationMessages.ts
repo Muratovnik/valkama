@@ -82,6 +82,8 @@ export const participationMessages = {
       find: 'Find a label',
       none: 'No such label yet: type it whole',
       create: 'Add «{label}»',
+      remove: 'Remove rule',
+      removeName: 'Remove the rule of {label}',
     },
     launch: {
       title: 'Launch place',
@@ -176,6 +178,8 @@ export const participationMessages = {
       find: 'Найти метку',
       none: 'Такой метки пока нет: введите её целиком',
       create: 'Добавить «{label}»',
+      remove: 'Убрать правило',
+      removeName: 'Убрать правило метки {label}',
     },
     launch: {
       title: 'Место запуска',
