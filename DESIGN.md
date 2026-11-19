@@ -2847,7 +2847,12 @@ between two neighbours: 16px apart with nothing between, the moment ending one w
 the one starting the next stood a few pixels apart and read as one axis. Every window, the five hours, the week and a
 model's week, has its name on one line with «Breakdown», a compact button at the row's end that
 opens what used it in the side panel, the name cut short before the button wraps under it; then
-the same two parts 12px apart: what stands now and the `StepLine` of its readings.
+the same two parts 12px apart: what stands now and the `StepLine` of its readings. Windows side
+by side line their parts up row by row — the name's row, what stands now, the line's head, its
+plot and the line of the window before — each row as tall as the tallest of the pair's, so their
+plots start at one height whatever each holds, a past window open in a card's place too: laid
+out each on its own, a window past its reset, led by two lines, started its plot 41px under its
+running neighbour's.
 The menu beside an account's name, named «Account actions: Work», holds three entries at most.
 «Rename» puts a field in the name's place that saves through the same names and rules as
 Settings, by the account's key, and on the group of an organization no source read by the

@@ -14,6 +14,9 @@
  * window» to return. Its readings are the step line of a window past its reset, on an axis of its
  * own from its start to its reset, and as a table its readings' table. The focus goes to «Current
  * window» on opening, stays on «Earlier» while it steps back, and returns to the line on closing.
+ * Open, it lays its parts on the rows the current window's parts and the line under them take
+ * (`QuotaWindow`'s rows): what it says on the first, its line's head and its plot on the next, so
+ * its plot starts level with the plot of the window beside it.
  *
  * What a reader of the page selects it by: `data-past` — `line` the button, `none` the line with no
  * window, `view` the open window, `shown` its heading, `lead` its share, `earlier`, `no-earlier` and
@@ -185,80 +188,83 @@ async function close() {
     data-past="view"
     :aria-label="viewLabel"
   >
-    <div class="quota-past-head">
-      <p
-        class="quota-past-heading"
-        data-past="shown"
-      >
-        {{ heading }}
-      </p>
-      <div class="quota-past-controls">
-        <VButton
-          v-if="earlier"
-          size="compact"
-          data-past="earlier"
-          :aria-label="earlier"
-          @click="back"
+    <div class="quota-past-says">
+      <div class="quota-past-head">
+        <p
+          class="quota-past-heading"
+          data-past="shown"
         >
-          {{ t('analytics.quota.past.earlier') }}
-        </VButton>
-        <span
-          v-else-if="pastShown"
-          class="quota-past-quiet"
-          data-past="no-earlier"
-        >
-          {{ t('analytics.quota.past.noEarlier') }}
-        </span>
-        <VButton
-          ref="currentButton"
-          size="compact"
-          data-past="current"
-          @click="close"
-        >
-          {{ t('analytics.quota.past.current') }}
-        </VButton>
+          {{ heading }}
+        </p>
+        <div class="quota-past-controls">
+          <VButton
+            v-if="earlier"
+            size="compact"
+            data-past="earlier"
+            :aria-label="earlier"
+            @click="back"
+          >
+            {{ t('analytics.quota.past.earlier') }}
+          </VButton>
+          <span
+            v-else-if="pastShown"
+            class="quota-past-quiet"
+            data-past="no-earlier"
+          >
+            {{ t('analytics.quota.past.noEarlier') }}
+          </span>
+          <VButton
+            ref="currentButton"
+            size="compact"
+            data-past="current"
+            @click="close"
+          >
+            {{ t('analytics.quota.past.current') }}
+          </VButton>
+        </div>
       </div>
-    </div>
-    <p
-      v-if="pastShown"
-      class="quota-past-lead"
-      data-past="lead"
-    >
-      {{ lead }}
-    </p>
-    <p
-      v-if="status === 'reading'"
-      class="quota-past-quiet"
-      role="status"
-      data-past="status"
-    >
-      {{ t('analytics.quota.past.reading') }}
-    </p>
-    <p
-      v-else-if="status === 'failed'"
-      class="quota-past-quiet"
-      role="alert"
-      data-past="status"
-    >
-      {{ t('analytics.quota.past.failed') }}
-      <VButton
-        size="inline"
-        variant="text"
-        @click="past.retry"
+      <p
+        v-if="pastShown"
+        class="quota-past-lead"
+        data-past="lead"
       >
-        {{ t('analytics.quota.past.retry') }}
-      </VButton>
-    </p>
-    <p
-      v-else-if="status === 'gone'"
-      class="quota-past-quiet"
-      data-past="status"
-    >
-      {{ t('analytics.quota.past.gone') }}
-    </p>
+        {{ lead }}
+      </p>
+      <p
+        v-if="status === 'reading'"
+        class="quota-past-quiet"
+        role="status"
+        data-past="status"
+      >
+        {{ t('analytics.quota.past.reading') }}
+      </p>
+      <p
+        v-else-if="status === 'failed'"
+        class="quota-past-quiet"
+        role="alert"
+        data-past="status"
+      >
+        {{ t('analytics.quota.past.failed') }}
+        <VButton
+          size="inline"
+          variant="text"
+          @click="past.retry"
+        >
+          {{ t('analytics.quota.past.retry') }}
+        </VButton>
+      </p>
+      <p
+        v-else-if="status === 'gone'"
+        class="quota-past-quiet"
+        data-past="status"
+      >
+        {{ t('analytics.quota.past.gone') }}
+      </p>
+    </div>
     <template v-if="plot && stepWords">
       <StepLine
         v-if="shown === 'chart'"
+        class="quota-past-readings quota-past-line-of"
         :label="readingsLabel"
         :from="plot.from"
         :to="plot.to"
@@ -273,6 +279,7 @@ async function close() {
       />
       <StepLineTable
         v-else
+        class="quota-past-readings"
         :label="caption"
         :points="points"
         :words="stepWords"
@@ -301,12 +308,33 @@ async function close() {
 </template>
 
 <style scoped>
-/* The open window: its heading row, its share and its readings, a block's lines apart. */
+/* The open window on the rows of the current one's parts and the line under them: what it says,
+   then its readings over two rows, its line's head and its plot, as far apart as the current
+   window's parts, so its line's head stands level with the neighbour's too. */
 .quota-past {
   display: grid;
+  grid-template-rows: subgrid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
+  grid-row: span 4;
+  gap: var(--space-heading-content);
+  align-items: start;
   min-width: 0;
+}
+
+/* Its heading row, its share and what it waits on, a block's lines apart. */
+.quota-past-says {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  min-width: 0;
+}
+
+.quota-past-readings {
+  grid-row: span 2;
+}
+
+.quota-past-line-of {
+  grid-template-rows: subgrid;
 }
 
 /* Its heading and its controls on one row, the controls at the row's end; a narrow window puts

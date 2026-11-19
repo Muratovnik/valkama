@@ -520,9 +520,12 @@ function stand(index: number) {
 <style scoped src="@/shared/ui/stepPlot.css"></style>
 
 <style scoped>
+/* Its head over its plot, each at the top of its row, which a host that lays the line on rows it
+   shares with a neighbour may make taller than it. */
 .step-line {
   display: grid;
   gap: var(--space-2);
+  align-items: start;
   min-inline-size: 0;
   margin: 0;
   font: var(--font-count);

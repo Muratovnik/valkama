@@ -290,14 +290,14 @@ test('the line shows the past window on its own axis, steps back, and returns', 
   expect(Date.parse(first?.get('before') ?? '')).toBe(now - 4 * DAY)
 
   // The current window's facts, bar and readings stand hidden; the one chart shown is the past
-  // window's, from its start to its reset, with its three readings.
+  // window's, from its start to its reset, which its axis names as passed, with its three readings.
   await expect(facts).not.toHaveCount(0)
   for (const fact of await facts.all()) await expect(fact).toBeHidden()
   await expect(card.locator('.window-bar:visible')).toHaveCount(0)
   await expect(chart).toHaveCount(1)
   await expect(view.locator('[data-region="axis"] [data-moment]')).toHaveText([
-    'Oct 31, 14:30',
-    'Nov 7, 14:30',
+    'start Oct 31, 14:30',
+    'reset at Nov 7, 14:30',
   ])
   await expect(view.locator('[data-reading]')).toHaveCount(3)
 
@@ -310,8 +310,8 @@ test('the line shows the past window on its own axis, steps back, and returns', 
     card.getByRole('region', { name: 'Week, past window: Oct 24, 14:30 – Oct 31, 14:30' }),
   ).toBeVisible()
   await expect(view.locator('[data-region="axis"] [data-moment]')).toHaveText([
-    'Oct 24, 14:30',
-    'Oct 31, 14:30',
+    'start Oct 24, 14:30',
+    'reset at Oct 31, 14:30',
   ])
   await expect(view.locator('[data-reading]')).toHaveCount(1)
   await expect(view.locator('[data-past="no-earlier"]')).toHaveText('No readings earlier')

@@ -32,6 +32,13 @@
  * its own root. A group may stand on a surface of its own, and what it holds side by side may stand
  * as far apart as the surface's inset (`apart`), as the windows of an account of the quota do.
  *
+ * Blocks side by side whose parts must line up row by row, as two windows of an account whose
+ * plots must start at one height, each lay themselves on as many rows of the grid that holds them
+ * (`rows`): the heading row on the first and what they hold on the rest, each part of it laying
+ * its own parts on those rows in turn (a subgrid), so a row is as tall as the tallest of its
+ * neighbours' and every part starts level with theirs. Laid out each on its own, the plot of a
+ * window that had reset, led by two lines, stood 41px under its neighbour's.
+ *
  * A heading that changes while the level stands, as a chart's names the page's measure, keeps the
  * room of every heading it takes in turn (`titles`): the others stand unseen in its place, so the
  * row is as wide and as tall as the widest and the controls beside it wrap alike whichever stands.
@@ -75,6 +82,8 @@ const props = withDefaults(
     columns?: 'one' | 'pair' | 'fit'
     /** The heading row keeps one line: the heading is cut short before its controls wrap. */
     oneLine?: boolean
+    /** How many rows of the grid that holds it the level lays itself on, its heading on the first. */
+    rows?: number
     /** Whether the level stands on a surface of its own. */
     surface?: boolean
     /** The heading's words; a heading with more than words takes the `heading` slot. */
@@ -90,6 +99,7 @@ const props = withDefaults(
     columns: 'one',
     columnMin: '20rem',
     oneLine: false,
+    rows: undefined,
     surface: false,
     bodyLabel: undefined,
     about: () => [],
@@ -122,6 +132,11 @@ const cutTitle = computed(() => (props.oneLine ? props.title : ''))
 const rivals = computed(() =>
   props.title ? [...new Set(props.titles)].filter((other) => other !== props.title) : [],
 )
+/** The level's own style: the narrowest a part stands, and the rows it lays itself on. */
+const levelStyle = computed(() => ({
+  '--level-column-min': props.columnMin,
+  ...(props.rows ? { '--level-rows': props.rows, '--level-body-rows': props.rows - 1 } : {}),
+}))
 </script>
 
 <template>
@@ -131,10 +146,10 @@ const rivals = computed(() =>
     :class="[
       `level-${level}`,
       `columns-${columns}`,
-      { 'level-surface': surface, 'level-apart': apart },
+      { 'level-surface': surface, 'level-apart': apart, 'level-rows': rows },
     ]"
     :data-level="level"
-    :style="{ '--level-column-min': columnMin }"
+    :style="levelStyle"
   >
     <div
       v-if="headed || $slots.beside || $slots.actions"
@@ -241,6 +256,8 @@ const rivals = computed(() =>
    beside it, an icon-only one among them, and the controls at its end. */
 .panel-level {
   --level-column-min: 20rem;
+  --level-rows: 2;
+  --level-body-rows: 1;
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -337,6 +354,18 @@ const rivals = computed(() =>
 
 .level-block > .level-body {
   gap: var(--space-2);
+}
+
+/* Laid on rows of the grid that holds it, the heading on the first and what it holds on the rest,
+   each at the level's own air (`rows`). */
+.level-rows {
+  grid-template-rows: subgrid;
+  grid-row: span var(--level-rows);
+
+  > .level-body {
+    grid-template-rows: subgrid;
+    grid-row: span var(--level-body-rows);
+  }
 }
 
 /* On a surface of its own, which a chart's table in it stands on (`--color-chart-table-ground`). */

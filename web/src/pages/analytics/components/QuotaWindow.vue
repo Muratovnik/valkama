@@ -202,6 +202,13 @@ const stepMoment = (at: number) =>
   words.moment(momentAtOffset(at, offsetOf(props.today)), props.today)
 
 const stepWordsOf = useQuotaStepWords()
+/**
+ * The rows of the account's grid a window lays itself on, so two side by side line up row by row
+ * (`PanelLevel`'s `rows`): its heading; what stands now; its line's head; its plot and axis; and
+ * the line of the window before it. A past window open in its place lays itself on the same.
+ */
+const WINDOW_ROWS = 5
+
 const stepWords = computed(() =>
   stepWordsOf(props.window, points.value, { today: props.today, ended: ended.value }),
 )
@@ -247,6 +254,7 @@ const readingsCaption = computed(() =>
     :title="name"
     :data-window="window.kind"
     :data-state="state"
+    :rows="WINDOW_ROWS"
     one-line
   >
     <template
@@ -319,7 +327,7 @@ const readingsCaption = computed(() =>
       </div>
       <StepLine
         v-if="shown === 'chart'"
-        class="quota-window-readings"
+        class="quota-window-readings quota-window-line"
         :label="readingsLabel"
         :from="span.from"
         :to="span.to"
@@ -360,12 +368,25 @@ const readingsCaption = computed(() =>
 /* The window's two parts — what stands now and its readings — stand as far apart as a heading
    from what it heads, each with its own lines closer inside it, and closer than two windows stand
    (16px), so one stacked under another never reads as a part of it. At the block's 8px, the facts
-   ran into the readings' switch. */
+   ran into the readings' head. They take the rows the window lays them on (`WINDOW_ROWS`): what
+   stands now one, the readings two, the line's head and its plot each on a row of its own; each
+   part at its row's top, which a neighbour's taller part may make taller than it. */
 .quota-window-parts {
   display: grid;
+  grid-template-rows: subgrid;
   grid-template-columns: minmax(0, 1fr);
+  grid-row: span 3;
   gap: var(--space-heading-content);
+  align-items: start;
   min-width: 0;
+}
+
+.quota-window-readings {
+  grid-row: span 2;
+}
+
+.quota-window-line {
+  grid-template-rows: subgrid;
 }
 
 /* The lead, the bar and the facts, a line apart each; the bar keeps its own room over and under
