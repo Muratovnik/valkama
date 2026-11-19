@@ -141,7 +141,9 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   )
   const head = page.locator('.work-item-list thead')
   const choice = head.getByRole('combobox', { name: 'Сортировать по' })
-  await expect(choice).toHaveText('Обновлено')
+  // The list opens in the queue's order, which no column names, so the choice names
+  // none of them.
+  await expect(choice).toHaveText('Порядок')
   const cut = () =>
     choice.locator('.choice-title').evaluate((title) => title.scrollWidth - title.clientWidth)
   expect(await cut(), 'the order the list opens on is whole').toBeLessThanOrEqual(0)
@@ -192,7 +194,12 @@ test('Russian Work bar keeps its controls on one row, and the former presets are
   await expect(conditions).toHaveCount(0)
   await field.click()
   await expect(conditions).toBeVisible()
-  await expect(conditions.getByRole('option')).toHaveText(['Можно брать', /^Есть исполнитель/u])
+  await expect(conditions.getByRole('option')).toHaveText([
+    'Можно брать',
+    /^Есть исполнитель/u,
+    'Ждёт моего ответа',
+    'Из другого пространства',
+  ])
   await page.keyboard.press('Escape')
   await field.click()
   // The menu opens on the facets; a state is a step further in.
