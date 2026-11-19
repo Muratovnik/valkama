@@ -32,8 +32,13 @@ describe('a span in its two largest units', () => {
     [59 * MINUTE + 59 * SECOND, '59 min'],
     [HOUR, '1 h'],
     [HOUR + 5 * MINUTE, '1 h 5 min'],
+    [DAY - 5 * MINUTE, '23 h 55 min'],
     [DAY - MINUTE, '23 h 59 min'],
     [DAY, '1 d'],
+    // The second unit counts the hours past the day: none of them is none said, and the minutes
+    // after them are no unit of the two.
+    [DAY + 54 * MINUTE, '1 d'],
+    [DAY + 3 * HOUR, '1 d 3 h'],
     [2 * DAY + 23 * HOUR + 15 * MINUTE, '2 d 23 h'],
     [3 * DAY - SECOND, '2 d 23 h'],
     [3 * DAY, '3 d'],

@@ -12,6 +12,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
+import { useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { writtenText } from '@/shared/ui/textRuns.ts'
 
@@ -22,20 +24,25 @@ const blank = () => h('span')
 
 const NBSP = '\u{A0}'
 
-function wordsIn(locale: 'en' | 'ru') {
+/** The page's words, and the words a task's card says a span of work in (`useUsageWords`). */
+function probeIn(locale: 'en' | 'ru') {
   let words: ReturnType<typeof useSpendingWords> | undefined
+  let card: ReturnType<typeof useUsageWords> | undefined
   mount(
     defineComponent({
       setup() {
         words = useSpendingWords()
+        card = useUsageWords()
         return blank
       },
     }),
     { global: { plugins: [analyticsI18n(locale)] } },
   )
-  if (!words) throw new Error('no words')
-  return words
+  if (!words || !card) throw new Error('no words')
+  return { words, card }
 }
+
+const wordsIn = (locale: 'en' | 'ru') => probeIn(locale).words
 
 const spent = (seconds: number) => ({ seconds, tokens: null, cost: null, unpriced: 0 })
 
@@ -56,6 +63,21 @@ describe('a span of agent time', () => {
         expect(words.scale('time', seconds / 3600), `${seconds} s`).toBe(said)
       }
     })
+})
+
+describe('a span of agent time beside a task’s card', () => {
+  // One rule (`spanWords`): the two largest units, each counted whole, never rounded up, so a
+  // span under a day never reads «1 дн.». The expectations are counted by hand from that rule.
+  it.each([
+    [25 * 60, `25${NBSP}мин`],
+    [23 * 3600 + 55 * 60, `23${NBSP}ч${NBSP}55${NBSP}мин`],
+    [24 * 3600, `1${NBSP}дн.`],
+    [27 * 3600, `1${NBSP}дн.${NBSP}3${NBSP}ч`],
+  ])('%i s reads %s on the page and on the card alike', (seconds, said) => {
+    const { words, card } = probeIn('ru')
+    expect(words.figure('time', spent(seconds))).toBe(said)
+    expect(card.time(seconds)).toBe(said)
+  })
 })
 
 describe('a period', () => {
