@@ -26,7 +26,10 @@
  * goes out as `inspect`. Asked to (`reveal`), it brings itself into view with the focus on it.
  *
  * Given words to find (`find`), it shows only the rows whose name holds them, whatever their case,
- * and says when none does; its count and its download are of the rows shown.
+ * and says when none does; its count and its download are of the rows shown. Its total is then
+ * of the rows shown too, «Total of those found», with the period's own, «Total for the period»,
+ * as a row of its own under it: a total of the period under one found row read as that row's.
+ * The totals are marked `data-total` (`found`, `period`).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -133,6 +136,23 @@ const lines = computed(() =>
     : sorted.value,
 )
 
+/**
+ * The totals under the rows: the period's alone without words looked for; with them, the total of
+ * the rows found, column by column, over the period's, each named for what it adds up.
+ */
+const totals = computed(() => {
+  const { total, totalOf } = model.value
+  const period = { key: 'period', cells: total }
+  if (!sought.value) return [{ ...period, name: t('analytics.panel.table.total') }]
+  const found = totalOf(lines.value.map(({ key }) => key))
+  return [
+    { key: 'found', cells: found, name: t('analytics.panel.table.totalFound') },
+    { ...period, name: t('analytics.panel.table.totalPeriod') },
+  ]
+})
+/** Whether two totals stand at the frame's bottom edge (`data-found`). */
+const found = computed(() => (totals.value.length > 1 ? '' : undefined))
+
 /** Every column's heading, the names' first; each sorts the rows by its column. */
 const headings = computed(() => [
   {
@@ -190,6 +210,7 @@ defineExpose({ reveal })
     :data-measure="measure"
     :data-headings="headingLines"
     :data-rows="rows"
+    :data-found="found"
     :aria-label="model.title"
   >
     <SpendingTableHead
@@ -296,16 +317,21 @@ defineExpose({ reveal })
           />
         </tr>
       </tbody>
-      <tfoot>
-        <tr class="table-total">
+      <tfoot class="table-totals">
+        <tr
+          v-for="total in totals"
+          :key="total.key"
+          class="table-total"
+          :data-total="total.key"
+        >
           <th
             scope="row"
             class="chart-cell chart-name"
           >
-            {{ t('analytics.panel.table.total') }}
+            {{ total.name }}
           </th>
           <SpendingTableFigure
-            v-for="cell in model.total"
+            v-for="cell in total.cells"
             :key="cell.key"
             :cell="cell"
           />
@@ -380,17 +406,24 @@ defineExpose({ reveal })
   }
 }
 
-.table-total .chart-cell {
+/* The totals are held at the bottom edge as one: with a search, the found rows' total over the
+   period's, neither under the other. The names' corner stands over the figures inside them. */
+.table-totals {
   position: sticky;
   inset-block-end: 0;
   z-index: 2;
+}
+
+.table-total .chart-cell {
   color: var(--color-text);
   background: var(--color-chart-table-ground, var(--color-canvas));
   box-shadow: inset 0 1px var(--color-rule);
+}
 
-  &.chart-name {
-    z-index: 3;
-  }
+/* With two totals the room kept at the bottom edge is theirs, so the focus brings a row clear of
+   both. */
+.spending-table[data-found] .spending-table-frame {
+  scroll-padding-block-end: 5rem;
 }
 
 /* A heading that sorts: the heading's own words, pressed as a whole, with the way it runs. */

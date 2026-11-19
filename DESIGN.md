@@ -2875,7 +2875,9 @@ middle button on a task still opens its card in a new tab, and a day, an hour or
 narrows the page. «All N» opens the section's whole table in the panel, every value with the
 period's figures and those of the period before, sorted as the table sorts and with a field that
 finds a value by its name; a value pressed there opens its own panel in its place, a step of the
-history. A card opened from the panel stands over the page while the panel waits closed under
+history. While the field finds some, the total under the rows is theirs, «Total of those found»,
+and the period's own stands under it as a row of its own, «Total for the period»: the period's
+total alone under one found row read as that row's. Both stay at the frame's bottom edge. A card opened from the panel stands over the page while the panel waits closed under
 it, and the panel opens again when the card closes: two surfaces of one layer paint in the order
 they were first drawn, and the panel stood over the card.
 

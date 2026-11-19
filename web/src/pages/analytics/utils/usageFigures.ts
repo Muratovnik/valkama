@@ -50,6 +50,13 @@ export const addSpent = (left: Spent, right: Spent): Spent => ({
   unpriced: left.unpriced + right.unpriced,
 })
 
+/** What lines spent together (`addSpent`); nothing spent for no line. */
+export function spentTogether(spent: readonly Spent[]): Spent {
+  let sum = NOTHING
+  for (const one of spent) sum = addSpent(sum, one)
+  return sum
+}
+
 const HOUR = 3600
 
 /**

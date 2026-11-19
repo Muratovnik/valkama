@@ -7,7 +7,7 @@
  *
  * With the measure «tokens» it adds the tokens of each value by kind (`kindsByValue`), so what the
  * tiles say of the kinds stands value by value. Under the rows is the total of every column, from
- * the read's own total. A cell carries the number it sorts by: the figure in its measure, null
+ * the read's own total, and for rows a search kept, their own total (`totalOf`). A cell carries the number it sorts by: the figure in its measure, null
  * where the read holds none, which sorts after every figure whichever way the column runs.
  */
 import { computed } from 'vue'
@@ -15,7 +15,12 @@ import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FigureWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { kindsByValue, kindsOf, TOKEN_KINDS } from '@/pages/analytics/utils/tokenKinds.ts'
+import {
+  kindsByValue,
+  kindsOf,
+  kindsTogether,
+  TOKEN_KINDS,
+} from '@/pages/analytics/utils/tokenKinds.ts'
 import type { TokenKind } from '@/pages/analytics/utils/tokenKinds.ts'
 import {
   changeOf,
@@ -24,6 +29,7 @@ import {
   measureOf,
   spentAnything,
   spentOf,
+  spentTogether,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { LineChange, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
@@ -235,14 +241,15 @@ export function useTableModel(source: () => TableSource) {
         ...kindCells(tokens),
       ]
     }
-    const lines = comparedLines({
+    const compared = comparedLines({
       rows: usage.rows,
       before: comparison?.rows ?? null,
       dimension: by,
       measure,
       name: (value) => words.valueLabel(by, value),
       across,
-    }).map((line) =>
+    })
+    const lines = compared.map((line) =>
       lineOf(line, [
         cellsOf(line.now, line.before, kindsOf(kinds, line.key), line.change),
         whenOf(measure, line.now, line.before),
@@ -253,6 +260,18 @@ export function useTableModel(source: () => TableSource) {
       comparison ? spentOf(comparison.total) : null,
       usage.total.tokens,
     )
+    /** The total of the rows whose keys are given, column by column, as `total` is the period's. */
+    const totalOf = (keys: readonly string[]) => {
+      const held = new Set(keys)
+      const found = compared.filter((line) => held.has(line.key))
+      return cellsOf(
+        spentTogether(found.map((line) => line.now)),
+        comparison
+          ? spentTogether(found.flatMap((line) => (line.before ? [line.before] : [])))
+          : null,
+        kindsTogether(kinds, [...held]),
+      )
+    }
     // The period compared with is named in its column's heading, so the title need not say it.
     const title = across
       ? t('analytics.table.crossTitle', {
@@ -260,7 +279,7 @@ export function useTableModel(source: () => TableSource) {
           across: t(`analytics.byDimension.${across}`),
         })
       : t('analytics.table.title', { by: t(`analytics.byDimension.${by}`) })
-    return { title, columns, lines, total, firstSort: measure as string }
+    return { title, columns, lines, total, totalOf, firstSort: measure as string }
   }
 
   /**

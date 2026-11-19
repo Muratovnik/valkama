@@ -65,6 +65,13 @@ export function kindsByValue(
 export const kindsOf = (kinds: ReadonlyMap<string, UsageTokens>, key: string) =>
   kinds.get(key) ?? NONE
 
+/** The tokens by kind of the values `keys` names, together; none reported for none of them. */
+export function kindsTogether(kinds: ReadonlyMap<string, UsageTokens>, keys: readonly string[]) {
+  let sum = NONE
+  for (const key of keys) sum = addTokens(sum, kindsOf(kinds, key))
+  return sum
+}
+
 /** The kinds the tokens figure adds up, as the summary counts them: input, cache writes, output. */
 const COUNTED_KINDS = [
   'input',
