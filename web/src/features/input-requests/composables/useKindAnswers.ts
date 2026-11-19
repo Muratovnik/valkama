@@ -8,12 +8,15 @@ import type { QuestionRecord } from '@/features/input-requests/utils/questionRec
 import { editField } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
+import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 
 /** What of one question's writes its kind's answers press on. */
 interface Writes {
   busy: Readonly<Ref<boolean>>
   declining: Readonly<Ref<boolean>>
+  /** What the last answer would cancel, as the server's refusal listed it to be confirmed. */
+  listed: Readonly<Ref<CancelList | null>>
   requiresRefresh: Readonly<Ref<boolean>>
   sendDisabled: Readonly<Ref<boolean>>
   writable: Readonly<Ref<boolean>>
@@ -31,6 +34,11 @@ interface Writes {
  * step of declining does (`useStepAttention`), which is one step with it. The answer that puts the
  * question off opens the choice of a day or of a card whose close brings it back, which is part of
  * what the form holds, and opens again on a form that holds either.
+ *
+ * An answer that cancels work the question did not ask about is refused with the list of that
+ * work (`writes.listed`): its asking stands again over that list, and its confirmed retry sends
+ * the list's token, the refusal's and never the one the question was asked with, which listed
+ * work the answer itself cancels first.
  */
 export function useKindAnswers(host: {
   /** The id of the choice of a day, which the answer that opens it controls. */
@@ -90,8 +98,12 @@ export function useKindAnswers(host: {
   function chooseDay(day: string) {
     host.write(editField(host.draft(), laterField.value, { value: day === '' ? null : day }))
   }
-  const writeAnswer = (index: number) =>
-    writes.resolve('answer', { draft: kindAnswerDraft(host.answers(), index, host.draft()) })
+  const writeAnswer = (index: number) => {
+    const token = writes.listed.value?.list_token
+    return writes.resolve('answer', {
+      draft: kindAnswerDraft(host.answers(), index, host.draft(), token),
+    })
+  }
   async function press(index: number, confirmed: boolean) {
     const answer = host.answers()[index]
     if (!answer || writes.busy.value) return
@@ -108,7 +120,8 @@ export function useKindAnswers(host: {
       return
     }
     back()
-    await writeAnswer(index)
+    const outcome = await writeAnswer(index)
+    if (outcome === 'failed' && writes.listed.value) asked.value = index
   }
   const putOff = () => void writeAnswer(laterAnswer.value)
   /** The answers the foot offers: a kind's while it waits for them, none otherwise. */

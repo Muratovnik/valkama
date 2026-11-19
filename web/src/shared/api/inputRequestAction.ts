@@ -7,7 +7,7 @@
 
 import { boundedList, boundedText, strictObject, z } from '@/shared/api/contract.ts'
 import { summarySchema, TITLE, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
-import { holderField } from '@/shared/api/planningText.ts'
+import { holderField, serverText } from '@/shared/api/planningText.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
 /** The points a write waits for the owner at, as the store's CHECK holds them. */
@@ -53,6 +53,37 @@ const dependentSchema = strictObject({
   how: z.enum(['blocks', 'deferred']),
 })
 
+/** What a cancel closes, what waits on it, and the token a cancel confirms that list by. */
+const cancelListShape = {
+  cancels: z.array(cancelSchema),
+  dependents: z.array(dependentSchema),
+  list_token: z.string().min(1).max(64),
+}
+const cancelListSchema = strictObject(cancelListShape)
+export type CancelList = z.infer<typeof cancelListSchema>
+
+/**
+ * The refusal of an answer that cancels work nobody confirmed (`cancel_list`): the list as it
+ * stands when refused, whose token the answer's retry sends to confirm it. It is the list to
+ * confirm, and not the one a question showed when it was asked: work the answer itself cancels
+ * first is not on it.
+ */
+const cancelListRefusal = strictObject({
+  error: strictObject({
+    code: z.literal('cancel_list'),
+    message: serverText(),
+    ...cancelListShape,
+  }),
+})
+
+/** The list a refusal hands back to confirm, or null for any other refusal. */
+export function readCancelList(payload: unknown): CancelList | null {
+  const parsed = cancelListRefusal.safeParse(payload)
+  if (!parsed.success) return null
+  const { cancels, dependents, list_token } = parsed.data.error
+  return { cancels, dependents, list_token }
+}
+
 /**
  * What the write proposes, by its point: nothing for a goal or a task, which the card
  * itself shows; `state` for a cancel, `until` for putting a goal off, `removed` and
@@ -83,11 +114,7 @@ export const actionSchema = strictObject({
   reason: z.string().max(512).nullable(),
   proposed: proposedSchema,
   /** On a goal's or a cancel's question: the list the cancel closes, as it stands now. */
-  cancel_list: strictObject({
-    cancels: z.array(cancelSchema),
-    dependents: z.array(dependentSchema),
-    list_token: z.string().min(1).max(64),
-  }).optional(),
+  cancel_list: cancelListSchema.optional(),
   /** On a cancel of work other sessions do: what each session asked answered. */
   consent: z
     .array(

@@ -124,6 +124,37 @@ describe('input request wire contract', () => {
     expect(writes[0]?.[0]).toBe('/api/modules/planning/request/decline')
   })
 
+  it('hands back the list a refused cancel names, with its token, and no list for another 409', async () => {
+    const list = {
+      cancels: [
+        {
+          reference: 'TASK-8',
+          title: 'Accepted work under the goal',
+          kind: 'task',
+          state: { key: 'dev', name: 'Dev', category: 'active' },
+          container_state: null,
+          holder: [],
+        },
+      ],
+      dependents: [],
+      list_token: 'refused-token',
+    }
+    serve(
+      { error: { code: 'cancel_list', message: '[cancel_list] TASK-7 has work', ...list } },
+      409,
+    )
+    await expect(answerInputRequest(requestEntry(), { answer: 'drop' })).rejects.toMatchObject({
+      code: 'cancel_list',
+      status: 409,
+      cancelList: list,
+    })
+    serve({ error: { code: 'workflow_guard', message: '[group] not waiting' } }, 409)
+    await expect(answerInputRequest(requestEntry(), { answer: 'drop' })).rejects.toMatchObject({
+      code: 'workflow_guard',
+      cancelList: null,
+    })
+  })
+
   it('sends a note only when there is one, with answers that may be empty', async () => {
     const entry = requestEntry()
     const answered = {

@@ -2335,15 +2335,27 @@ listing names the question's space and project, the head's first line says them 
 number, the space before it and the project after. A question its task's closing withdrew folds on
 «Question withdrawn: MAIN-12 was closed».
 The kind follows the question's purpose: a review shows the task's outcome under what to check
-and answers Accept or Return to work; a group of findings shows the goal it proposes, its findings
-and why, and a goal its description, conditions and how much open work stands under it, both
-answering Do, Later… or Don't do; a task in a goal shows its description and adds Move out of the
-goal; a condition shows what is removed and what each rewritten step was and becomes, with the
-reason, and answers Allow or Keep; a cancel shows what closes, who holds it and what the sessions
-at work answered, and answers Cancel or Keep; a confirmation answers I confirm or Leave to the next
-session; and a return answers as a goal does. A question of any other purpose, or without the
-field its kind answers in, stays a choice of options. What the question does not carry, as a
-card's outcome or description, is read from its card when the record first comes into view.
+and answers Accept or Return to work; a group of findings shows the goal it proposes with its
+conditions, its findings and why, and a goal its description, conditions and how much open work
+stands under it, both answering Do, Later… or Don't do; a task in a goal shows its description
+and adds Move out of the goal; a condition shows what is removed and what each rewritten step was
+and becomes, with the reason, and answers Allow or Keep; a cancel shows what closes, who holds it
+and what the sessions at work answered, and answers Cancel or Keep; a confirmation answers I
+confirm or Leave to the next session; and a return answers as a goal does. A question of any
+other purpose, or without the field its kind answers in, stays a choice of options. What the
+question does not carry, as a card's outcome or description, is read from its card when the
+record first comes into view.
+A group's findings are rows with a box each, a question's rows, all ticked at first and none with
+the recommended word, since the server recommends every one. Ticking only ticks. A finding left
+unticked leaves the group and goes back to triage whatever the answer, so every answer sends what
+is ticked, and once any is unticked Do names how many go: «Do: 7».
+«Later…» puts the goal off with the findings ticked, to a day or until a card closes. «Don't do»
+asks first, as every answer that cancels does. Where open work stands under the goal that the
+question did not ask about, the server refuses it with the list of that work; the list stands
+over the answers, what closes with who holds it and what waits on it, focus goes to its first
+line, which says the answer cancels that work too, and the asking stands again. Confirming it
+sends that list's token, never the one the question was asked with, which listed the findings the
+answer cancels first; a list that changed meanwhile is refused and shown again the same way.
 Where the list holds more than one kind, tabs over it offer All and each kind it holds, each with
 how many of it wait; a kind it holds none of has no tab, and All alone would only repeat the one
 kind, so a list of one kind has none. A tab shows only its kind's questions, the answered ones
