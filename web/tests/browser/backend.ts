@@ -79,6 +79,8 @@ export type BackendOptions = {
   agents?: () => unknown[]
   /** What the card's read answers once everything above has had its say. */
   card?: (read: Record<string, unknown>) => object
+  /** What `GET /api/planning/decisions` answers; no decision in any period by default. */
+  decisions?: (query: URLSearchParams) => object
   /** What `GET /api/open-plan` answers; an empty object by default, which no plan reads as. */
   openPlan?: (query: URLSearchParams) => object
   /** What the space's read answers, where a test needs its items otherwise. */
@@ -212,6 +214,10 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         '/api/sessions': () => fulfill({ sessions: structuredClone(monitorSessions), inbox: [] }),
         '/api/session': () => fulfill(sessionContextFor(url.searchParams.get('id'))),
         '/api/open-plan': () => fulfill(options.openPlan?.(url.searchParams) ?? {}),
+        '/api/planning/decisions': () =>
+          fulfill(
+            options.decisions?.(url.searchParams) ?? { items: [], total: 0, has_more: false },
+          ),
         '/api/open-places': () =>
           fulfill({
             places: {

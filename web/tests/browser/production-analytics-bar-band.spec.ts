@@ -48,7 +48,7 @@ const frames = (page: Page) =>
 const cutsOf = (page: Page) =>
   page.evaluate(() => {
     const bar = document.querySelector('.analytics-bar')
-    const line = document.querySelector('.analytics-bar-line')
+    const line = document.querySelector('.period-bar-line')
     if (!bar || !line) return [{ by: 'no bar', over: Number.NaN, text: '' }]
     const texts: Text[] = []
     const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
@@ -93,17 +93,17 @@ async function barOf(page: Page) {
         ? { top: found.top, bottom: found.bottom, left: found.left, right: found.right }
         : null
     }
-    const periods = box('.analytics-period')
+    const periods = box('.period-bar-periods')
     const refresh = box('.analytics-refresh')
     const words = document.querySelector('.refresh-failed-words')
     // The read again under the periods' row is on the second of two rows.
     let rows = 0
     if (periods && refresh) rows = (refresh.top + refresh.bottom) / 2 > periods.bottom ? 2 : 1
     return {
-      line: box('.analytics-bar-line'),
+      line: box('.period-bar-line'),
       periods,
       refresh,
-      own: box('.analytics-bar-own'),
+      own: box('.period-bar-own'),
       failure: box('.refresh-failed'),
       failureWords: words
         ? { hidden: words.classList.contains('visually-hidden'), ...box('.refresh-failed-words') }
@@ -129,7 +129,7 @@ const scrolls = (page: Page) =>
     for (let up = button.parentElement; up; up = up.parentElement) seen.push(up.scrollLeft)
     return {
       seen,
-      periods: document.querySelector('.analytics-period')?.getBoundingClientRect().left ?? 0,
+      periods: document.querySelector('.period-bar-periods')?.getBoundingClientRect().left ?? 0,
     }
   })
 

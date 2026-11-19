@@ -29,7 +29,7 @@ const PARTS = [
 ]
 
 /** The parts that scroll, which a refresh must leave as far scrolled as they were. */
-const SCROLLERS = ['.analytics-page-rail', '.analytics-panel', '.spending-table-frame']
+const SCROLLERS = ['.analytics-page-rail', '.analytics-panel', '.section-table-frame']
 
 /** Where the parts stand and how far each scroller is scrolled, to the hundredth of a pixel. */
 const layout = (page: Page) =>

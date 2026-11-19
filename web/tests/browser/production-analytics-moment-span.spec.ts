@@ -67,7 +67,7 @@ const columns = (page: Page) =>
 const steady = (page: Page) =>
   page.evaluate(() =>
     Object.fromEntries(
-      ['.analytics-period', '.analytics-refresh', '.analytics-bar', '.analytics-panel'].map(
+      ['.period-bar-periods', '.analytics-refresh', '.analytics-bar', '.analytics-panel'].map(
         (selector) => {
           const box = document.querySelector(selector)?.getBoundingClientRect()
           if (!box) return [selector, null]
@@ -85,9 +85,9 @@ const steady = (page: Page) =>
  */
 const ROWS = [
   [1024, '.analytics-refresh', { open: 'section' }],
-  [1200, '.analytics-period', {}],
-  [1440, '.analytics-period', {}],
-  [1920, '.analytics-period', {}],
+  [1200, '.period-bar-periods', {}],
+  [1440, '.period-bar-periods', {}],
+  [1920, '.period-bar-periods', {}],
 ] as const
 
 for (const lang of ['en', 'ru'] as const)
@@ -103,7 +103,7 @@ for (const lang of ['en', 'ru'] as const)
         await page.clock.install({ time: NOW })
         const double = await serveLive(page, TODAY)
         const analytics = await openReport(page, width, today)
-        const periods = analytics.locator('.analytics-period')
+        const periods = analytics.locator('.period-bar-periods')
         await expect(periods.getByRole('radio', { name: words.today })).toBeChecked()
         await expect(analytics.locator('.spending-days .period-slot')).toHaveCount(24)
         await page.evaluate(() => document.fonts.ready)
@@ -143,9 +143,9 @@ for (const lang of ['en', 'ru'] as const)
         expect(asked.some((query) => query.get('compare') === 'true')).toBe(true)
 
         // The bar names the span in place of the two days, the period chosen its own.
-        const name = analytics.locator('.analytics-bar-span')
+        const name = analytics.locator('.period-bar-span')
         await expect(name).toHaveText(words.span)
-        await expect(analytics.locator('.analytics-bar-days')).toHaveCount(0)
+        await expect(analytics.locator('.period-bar-days')).toHaveCount(0)
         await expect(periods.getByRole('radio', { name: words.today })).not.toBeChecked()
         const after = await steady(page)
         // The name shares the middle of the row it stands on, whole on its one line.
@@ -154,9 +154,9 @@ for (const lang of ['en', 'ru'] as const)
             const box = document.querySelector(selector)?.getBoundingClientRect()
             return box ? box.y + box.height / 2 : Number.NaN
           }
-          const span = document.querySelector('.analytics-bar-span')
+          const span = document.querySelector('.period-bar-span')
           return {
-            off: Math.abs(middle('.analytics-bar-span') - middle(beside)),
+            off: Math.abs(middle('.period-bar-span') - middle(beside)),
             // No name at all is as wrong as a name cut short.
             cut: !span || span.scrollWidth > span.clientWidth,
           }
@@ -200,7 +200,7 @@ for (const lang of ['en', 'ru'] as const)
           ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
           : route.fallback(),
       )
-      const name = page.locator('.analytics-bar-span')
+      const name = page.locator('.period-bar-span')
       const words = WORDS[lang].night
 
       /** Whether the line ends at the read again, and whether the name is cut and laid whole. */
@@ -209,7 +209,7 @@ for (const lang of ['en', 'ru'] as const)
         await expect
           .poll(() =>
             page.evaluate(() => {
-              const line = document.querySelector('.analytics-bar-line')?.getBoundingClientRect()
+              const line = document.querySelector('.period-bar-line')?.getBoundingClientRect()
               const end = document.querySelector('.analytics-refresh')?.getBoundingClientRect()
               return Math.round((end?.right ?? Number.POSITIVE_INFINITY) - (line?.right ?? 0))
             }),

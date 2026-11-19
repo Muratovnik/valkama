@@ -97,10 +97,10 @@ const barState = (page: Page) =>
       window: document.documentElement.clientWidth,
       bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
       body: document.querySelector('.analytics-body')?.getBoundingClientRect().top ?? 0,
-      line: box('.analytics-bar-line'),
+      line: box('.period-bar-line'),
       controls: {
-        periods: box('.analytics-period'),
-        own: box('.analytics-bar-own'),
+        periods: box('.period-bar-periods'),
+        own: box('.period-bar-own'),
         add: box('.analytics-filter-add'),
         fresh: box('.analytics-bar-fresh'),
         refresh: box('.analytics-refresh'),
@@ -209,7 +209,7 @@ for (const width of ONE_HEIGHT)
 /** How far the chosen period stands past either end of the periods' row, which scrolls sideways. */
 const chosenPast = (page: Page) =>
   page.evaluate(() => {
-    const strip = document.querySelector('.analytics-period') as HTMLElement
+    const strip = document.querySelector('.period-bar-periods') as HTMLElement
     const chosen = strip.querySelector('.active') as HTMLElement
     const row = strip.getBoundingClientRect()
     const own = chosen.getBoundingClientRect()
@@ -271,7 +271,7 @@ for (const width of [390, 760, 1440] as const)
 const rightEdges = (page: Page) =>
   page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('.analytics-panel')
-    const line = document.querySelector('.analytics-bar-line')?.getBoundingClientRect()
+    const line = document.querySelector('.period-bar-line')?.getBoundingClientRect()
     if (!panel || !line) return null
     const end = Number.parseFloat(getComputedStyle(panel).paddingRight)
     const left = panel.getBoundingClientRect().left + panel.clientLeft

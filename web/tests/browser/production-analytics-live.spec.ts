@@ -55,7 +55,7 @@ test('«Now» is the last hour by the minute, held in the address and read whole
 }, info) => {
   const { asked } = await serveLive(page, HOUR_OF_WORK)
   const analytics = await openReport(page, 1440, nowAddress)
-  const period = analytics.locator('.analytics-period')
+  const period = analytics.locator('.period-bar-periods')
 
   // The live preset comes first in the period control, and is the one chosen.
   await expect(period.getByRole('radio').first()).toHaveAccessibleName('Now')
@@ -157,7 +157,7 @@ test('«Now» reads itself again every 30 s while the page is seen, and never wh
   expect(roundsOf(await reads())).toBe(2 + INTERVALS)
 
   // Another period never reads itself again, and says nothing of being live.
-  await analytics.locator('.analytics-period').getByRole('radio', { name: 'This week' }).click()
+  await analytics.locator('.period-bar-periods').getByRole('radio', { name: 'This week' }).click()
   await expect(analytics.locator('.spending-days .period-column')).toHaveCount(3)
   await expect(fresh.locator('.analytics-bar-fresh-mark')).toHaveCount(0)
   await expect(fresh).not.toHaveAttribute('data-tooltip', /Live/u)

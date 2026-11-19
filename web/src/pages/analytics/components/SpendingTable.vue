@@ -5,12 +5,12 @@
  * each row's tokens by kind under the measure «tokens» (`useTableModel`). A figure the read does not hold says so in words; a period before that was
  * not read is said once, over the table.
  *
- * Its frame is held to about the window's height and scrolls inside itself both ways: its heading
- * row stays at the frame's top edge, its total at the bottom edge and its names at its start,
- * each held there by the browser as the frame scrolls (`position: sticky`), and a row brought into
+ * It is a section's table (`SectionTable`): its frame is held to about the window's height and
+ * scrolls inside itself both ways, its heading row at the frame's top edge, its total at the bottom
+ * edge and its names at its start, each held there as the frame scrolls, and a row brought into
  * view by the focus stands clear of the heading row and the total. A table shorter than that
- * height stands at its own. Each column's heading sorts by it, largest first, then the other way; the first sort is the chosen
- * measure. A row is one line: the figures take what they need, the name the rest down to its
+ * height stands at its own. Each column's heading sorts by it, largest first, then the other way
+ * (`useTableSort`); the first sort is the chosen measure. A row is one line: the figures take what they need, the name the rest down to its
  * least, cut where the column is narrower (`SpendingTableName`). A cost that leaves tokens without
  * a price says how many on a second line of its cell, under its amount (`SpendingTableFigure`):
  * that row is taller, and its column is as wide as the longer of the two lines. A window too
@@ -32,12 +32,13 @@ import SpendingTableFigure from '@/pages/analytics/components/SpendingTableFigur
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
-import { useHeadingLines } from '@/pages/analytics/composables/useHeadingLines.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
+
+import SectionTable from '@/widgets/section-table/components/SectionTable.vue'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type {
@@ -47,12 +48,9 @@ import type {
   UsageGroupValue,
 } from '@/shared/api/analyticsApi.ts'
 import { offerDownload } from '@/shared/lib/fileDownload.ts'
-import ChartTable from '@/shared/ui/ChartTable.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   /** The second dimension the section is split by; null for none. */
@@ -157,41 +155,46 @@ const emptyWords = computed(() => ({
   empty: sought.value ? t('analytics.filters.noMatches') : t('analytics.bars.empty'),
 }))
 
-const root = ref<HTMLElement | null>(null)
+/** What the headings' lines are measured again for: what the table holds. */
+const holds = computed(() => [model.value])
+const sortWords = (column: string) => t('analytics.panel.table.sortBy', { column })
 
-/** Its headings over figures on one line, or on two where one would widen it past its frame. */
-const headingLines = useHeadingLines(root, [model, held])
-
+const table = ref<InstanceType<typeof SectionTable> | null>(null)
 /** Brings the table into view, its heading row at the top, with the focus on it. */
 function reveal() {
-  const table = root.value
-  if (!table) return
-  table.focus({ preventScroll: true })
-  table.scrollIntoView({ block: 'start' })
+  table.value?.reveal()
 }
 defineExpose({ reveal })
 </script>
 
 <template>
-  <section
-    ref="root"
+  <SectionTable
+    ref="table"
     class="spending-table"
-    tabindex="-1"
+    :columns="headings"
     :data-measure="measure"
-    :data-headings="headingLines"
     :data-rows="rows"
-    :aria-label="model.title"
+    :empty="!lines.length"
+    :empty-words="emptyWords"
+    :held="held"
+    :holds="holds"
+    :label="model.title"
+    :marks="marks"
+    :sort-words="sortWords"
+    @sort="sortBy"
   >
-    <SpendingTableHead
-      :by="by"
-      :lines="lines"
-      :measure="measure"
-      :split="Boolean(across)"
-      :summary="summary"
-      :title="model.title"
-      :waiting="waiting"
-      @download="download"
-    />
+    <template #head>
+      <SpendingTableHead
+        :by="by"
+        :lines="lines"
+        :measure="measure"
+        :split="Boolean(across)"
+        :summary="summary"
+        :title="model.title"
+        :waiting="waiting"
+        @download="download"
+      />
+    </template>
     <FieldError
       v-if="notice"
       role="alert"
@@ -204,87 +207,51 @@ defineExpose({ reveal })
     >
       {{ t('analytics.table.unread') }}
     </p>
-    <div
-      v-if="held"
-      class="spending-table-waiting"
-    >
-      <p
-        v-if="cross.status === 'failed'"
-        class="spending-table-failed"
-        role="alert"
-      >
-        {{ t('analytics.panel.table.failed', { across: acrossWords }) }}
-      </p>
-      <p
-        v-else
-        class="spending-table-reading"
-      >
-        {{ waitWord }}
-      </p>
-      <VButton
-        v-if="cross.status === 'failed'"
-        size="compact"
-        @click="emit('reread')"
-      >
-        {{ t('platform.actions.retry') }}
-      </VButton>
-    </div>
-    <ChartTable
-      v-else
-      class="spending-table-frame"
-      :label="model.title"
-      :empty="!lines.length"
-      :words="emptyWords"
-    >
-      <thead>
-        <tr class="table-head">
-          <th
-            v-for="column in headings"
-            :key="column.key"
-            scope="col"
-            class="chart-cell chart-heading"
-            :data-numeric="column.numeric"
-            :data-chosen="column.chosen"
-            :aria-sort="marks[column.key]?.aria"
-          >
-            <button
-              v-tooltip.clipped="column.text"
-              type="button"
-              class="table-sort"
-              :aria-description="t('analytics.panel.table.sortBy', { column: column.text })"
-              @click="sortBy(column.key)"
-            >
-              {{ column.text }}
-              <VIcon
-                v-if="marks[column.key]"
-                class="table-sort-icon"
-                :name="marks[column.key]?.icon ?? 'arrow-down'"
-                :size="12"
-              />
-            </button>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="line in lines"
-          :key="line.key"
-          class="row-state tabular"
-          :class="{ 'chart-rest': line.rest }"
-          :data-key="line.key"
+    <template #held>
+      <div class="spending-table-waiting">
+        <p
+          v-if="cross.status === 'failed'"
+          class="spending-table-failed"
+          role="alert"
         >
-          <SpendingTableName
-            :by="by"
-            :line="line"
-            @inspect="(value, label) => emit('inspect', value, label)"
-          />
-          <SpendingTableFigure
-            v-for="cell in line.cells"
-            :key="cell.key"
-            :cell="cell"
-          />
-        </tr>
-      </tbody>
+          {{ t('analytics.panel.table.failed', { across: acrossWords }) }}
+        </p>
+        <p
+          v-else
+          class="spending-table-reading"
+        >
+          {{ waitWord }}
+        </p>
+        <VButton
+          v-if="cross.status === 'failed'"
+          size="compact"
+          @click="emit('reread')"
+        >
+          {{ t('platform.actions.retry') }}
+        </VButton>
+      </div>
+    </template>
+    <template #rows>
+      <tr
+        v-for="line in lines"
+        :key="line.key"
+        class="row-state tabular"
+        :class="{ 'chart-rest': line.rest }"
+        :data-key="line.key"
+      >
+        <SpendingTableName
+          :by="by"
+          :line="line"
+          @inspect="(value, label) => emit('inspect', value, label)"
+        />
+        <SpendingTableFigure
+          v-for="cell in line.cells"
+          :key="cell.key"
+          :cell="cell"
+        />
+      </tr>
+    </template>
+    <template #foot>
       <tfoot>
         <tr class="table-total">
           <th
@@ -300,8 +267,8 @@ defineExpose({ reveal })
           />
         </tr>
       </tfoot>
-    </ChartTable>
-  </section>
+    </template>
+  </SectionTable>
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
@@ -309,18 +276,10 @@ defineExpose({ reveal })
 <style scoped src="@/shared/ui/rowStates.css"></style>
 
 <style scoped>
-/* The heading row, the notes and the frame, top to bottom, each as tall as it is. Its headings
-   ask it how wide it is. Focused from a link to it, it rings itself inside its edge. */
+/* What stands over the table in the window, which its frame's height leaves out (`SectionTable`):
+   the context bar, the page's bar, the panel's inset and the table's own heading. */
 .spending-table {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  min-width: 0;
-  container-type: inline-size;
-
-  &:focus-visible {
-    outline-offset: var(--space-half);
-  }
+  --size-section-table-over: 13rem;
 }
 
 .spending-table-note,
@@ -343,32 +302,8 @@ defineExpose({ reveal })
   align-items: center;
 }
 
-/* The frame is held to the window's height, less what stands over the panel and the table's own
-   heading row, so at 1280×800 and 1440×900 the table and its heading row stand in the window
-   together; it scrolls inside itself both ways. A shorter table stands at its own height. Its
-   heading row and total stay at its edges and its names at its start, held by the browser as it
-   scrolls: moved by the panel's scroll through a view timeline instead, they lagged a frame
-   behind the rows and shook. The room kept at its edges (`scroll-padding`) is the heading row's
-   two lines and the total's, so a row the focus brings into view stands clear of both. */
-.spending-table-frame {
-  max-block-size: calc(100dvh - 13rem);
-  overflow: auto;
-  scroll-padding-block: 4rem 3rem;
-}
-
-/* The heading row and the total over the rows, the names' corner over both. */
-.table-head .chart-cell {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 3;
-  background: var(--color-chart-table-ground, var(--color-canvas));
-  box-shadow: inset 0 -1px var(--color-rule);
-
-  &:first-child {
-    z-index: 4;
-  }
-}
-
+/* The total under the rows, held at the frame's bottom edge as it scrolls (`SectionTable`), the
+   names' corner over it. */
 .table-total .chart-cell {
   position: sticky;
   inset-block-end: 0;
@@ -382,48 +317,16 @@ defineExpose({ reveal })
   }
 }
 
-/* A heading that sorts: the heading's own words, pressed as a whole, with the way it runs. */
-.table-sort {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  text-align: inherit;
-  background: none;
-  cursor: pointer;
-
-  [data-numeric='true'] > & {
-    justify-content: flex-end;
-  }
-}
-
-/* The column the rows are sorted by: its heading in the ink of the figures, with its arrow and a
-   rule under it, so the order reads without the hint. */
-.table-head .chart-heading[aria-sort] {
-  color: var(--color-text);
-  box-shadow: inset 0 -2px var(--color-text-muted);
-}
-
 /* The chosen measure, now and before, in the ink the figures of a chart are read in. */
 .chart-cell[data-chosen='true'] {
   color: var(--color-text);
 }
 
-/* A row is one line: each figure and its heading take what they need, the name the rest, cut
+/* A row is one line: each figure takes what it needs, the name the rest down to its least, cut
    where it is longer (`SpendingTableName`); a figure's remark takes a second line of its own
-   (`SpendingTableFigure`). Where the headings on one line would widen the table past its frame,
-   they take a second line instead (`headingLines`). */
+   (`SpendingTableFigure`). */
 .chart-cell[data-numeric='true'] {
   inline-size: 1px;
-}
-
-.chart-heading[data-numeric='true'] {
-  min-inline-size: 0;
-  white-space: nowrap;
 }
 
 /* The name's column takes all the width the figures leave: as wide as the table, less what the
@@ -441,14 +344,5 @@ defineExpose({ reveal })
    the start of its first before it (`PairName`): its column keeps the 12rem that holds them. */
 .spending-table[data-rows='pairs'] .chart-name {
   min-inline-size: 12rem;
-}
-
-/* The headings over figures on two lines, each column at its least: the frame of a narrower
-   table, a period before named with its hours, or the tokens by kind after the change under the
-   measure «tokens», whose table is wider than its frame and whose kinds are reached by the frame's
-   own scroll. The change then stands inside the frame's edge rather than past it. */
-.spending-table[data-headings='two'] .chart-heading[data-numeric='true'] {
-  min-inline-size: 7em;
-  white-space: normal;
 }
 </style>

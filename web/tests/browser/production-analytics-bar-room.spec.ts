@@ -146,7 +146,7 @@ const barParts = (page: Page) =>
     }
     const parts = Object.fromEntries(
       [
-        '.analytics-period',
+        '.period-bar-periods',
         '.analytics-bar-filters',
         '.analytics-bar-fresh',
         '.refresh-failed',
@@ -162,7 +162,7 @@ const barParts = (page: Page) =>
     const panel = document.querySelector('.analytics-panel')?.getBoundingClientRect()
     return {
       window: document.documentElement.clientWidth,
-      line: across('.analytics-bar-line'),
+      line: across('.period-bar-line'),
       parts,
       mark: document.querySelector('.analytics-bar-fresh-mark') !== null,
       bar: bar?.height ?? 0,
@@ -317,10 +317,10 @@ const rowsOf = (page: Page) =>
     return {
       bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
       panel: document.querySelector('.analytics-panel')?.getBoundingClientRect().top ?? 0,
-      line: box('.analytics-bar-line'),
-      periods: box('.analytics-period'),
+      line: box('.period-bar-line'),
+      periods: box('.period-bar-periods'),
       filters: box('.analytics-bar-filters'),
-      own: box('.analytics-bar-own'),
+      own: box('.period-bar-own'),
       refresh: box('.analytics-refresh'),
       days: [...document.querySelectorAll('.analytics-bar input[type="date"]')].map((field) => {
         const { left, right } = field.getBoundingClientRect()
@@ -382,7 +382,7 @@ function expectTwoRows(
     `${name}: the read again's end against the line's`,
   ).toBeLessThanOrEqual(0.5)
   // Each day as wide as a date of the widest figures needs beside its picker, its 8.25rem at the
-  // root's 16px (`AnalyticsOwnPeriod`), and inside the line: the two days of a span of days, none
+  // root's 16px (`PeriodOwnDays`), and inside the line: the two days of a span of days, none
   // of a span between two moments, which its name stands for.
   expect(own.days, `${name}: the days' fields`).toHaveLength(fields)
   for (const day of own.days) {

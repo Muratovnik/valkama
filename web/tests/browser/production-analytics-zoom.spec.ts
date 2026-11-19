@@ -147,7 +147,7 @@ test.describe('an hour pressed, in Russian', () => {
     await page.goBack()
     await expect.poll(() => path(page)).toBe(TODAY_ADDRESS)
     await expect(
-      analytics.locator('.analytics-period').getByRole('radio', { name: 'Сегодня' }),
+      analytics.locator('.period-bar-periods').getByRole('radio', { name: 'Сегодня' }),
     ).toBeChecked()
     await expect(analytics.locator('.spending-days .period-slot')).toHaveCount(24)
   })

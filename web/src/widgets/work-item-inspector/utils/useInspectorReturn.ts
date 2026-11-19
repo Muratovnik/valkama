@@ -32,6 +32,8 @@ interface ChainReading {
 /** What the card was opened with, read as the card's own props. */
 interface CardOpening {
   readonly reference: string
+  /** The section the page it was opened from shows it on first, such as its System events. */
+  readonly opensOn?: string | null
   /** The address names the card's own chain, in this scope: the graph was asked for from here. */
   readonly ownChain?: ChainScope | null
   /** The point this card was opened to return to, if it was reached by Back. */
@@ -58,7 +60,8 @@ interface ReturnOptions {
  * and which card was opened. Coming back puts all of it back once the card's
  * answers are in, then focuses the row that was opened. The parent used to reopen
  * at its top, so walking a chain member by member cost a scroll back down after
- * every step.
+ * every step. A card a page opened on one of its sections (`opensOn`) shows that section
+ * first, unless Back is what brought it.
  *
  * Until it has, `holding` says so: the card has a place to go to, and whatever it would
  * show before that stands somewhere else and jumps. That holds for a moment and no more.
@@ -81,6 +84,7 @@ export function useInspectorReturn(options: ReturnOptions) {
   }
 
   if (!point && card.ownChain) openOnChain(card.ownChain)
+  else if (!point && card.opensOn) options.section.value = card.opensOn
 
   /**
    * Back after «Show on graph» is the card again, over the graph of its own chain, and it opens

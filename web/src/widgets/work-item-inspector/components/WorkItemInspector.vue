@@ -59,6 +59,7 @@ import { useInspectorExecution } from '@/widgets/work-item-inspector/utils/useIn
 import { useInspectorRecord } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
 import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
+import type { InspectorSection } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 import { useQuestionReveal } from '@/widgets/work-item-inspector/utils/useQuestionReveal.ts'
 import { useTakeoverQuestion } from '@/widgets/work-item-inspector/utils/useTakeoverQuestion.ts'
@@ -96,6 +97,8 @@ const props = defineProps<{
   agentsToken?: number
   /** The item's kind as the host's model has it, so its usage can be read with its record. */
   kind?: string
+  /** The section the page it was opened from shows it on first; Back's place wins over it. */
+  opensOn?: InspectorSection | null
   /**
    * The address names this card's own chain, in this scope: the graph was opened from the
    * card's Chain, and the card opens there, its chain in that scope and in view.
