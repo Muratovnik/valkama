@@ -274,10 +274,11 @@ test('the line shows the past window on its own axis, steps back, and returns', 
   await expect(chart).toHaveCount(1)
 
   await card.locator('[data-past="line"]').click()
-  const view = card.getByRole('region', {
-    name: 'Week, past window: Oct 31, 14:30 – Nov 7, 14:30',
-  })
-  await expect(view).toBeVisible()
+  // The view is named by the window it shows, so it is found by its hook once that name changes.
+  const view = card.locator('[data-past="view"]')
+  await expect(
+    card.getByRole('region', { name: 'Week, past window: Oct 31, 14:30 – Nov 7, 14:30' }),
+  ).toBeVisible()
   await expect(view.locator('[data-past="shown"]')).toHaveText(
     'Past window: Oct 31, 14:30 – Nov 7, 14:30',
   )
@@ -305,6 +306,9 @@ test('the line shows the past window on its own axis, steps back, and returns', 
   await expect(view.locator('[data-past="shown"]')).toHaveText(
     'Past window: Oct 24, 14:30 – Oct 31, 14:30',
   )
+  await expect(
+    card.getByRole('region', { name: 'Week, past window: Oct 24, 14:30 – Oct 31, 14:30' }),
+  ).toBeVisible()
   await expect(view.locator('[data-region="axis"] [data-moment]')).toHaveText([
     'Oct 24, 14:30',
     'Oct 31, 14:30',
