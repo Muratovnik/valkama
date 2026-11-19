@@ -25,6 +25,8 @@ const COST_BASIS =
  */
 interface Spend {
   cost?: number | null
+  /** Each kind's tokens as given, in place of the split of `tokens`: both cache writes, say. */
+  kinds?: UsageMeasures['tokens']
   seconds?: number
   tokens?: number | null
   unpriced?: number
@@ -53,12 +55,18 @@ function split(tokens: number | null): UsageMeasures['tokens'] {
   }
 }
 
-function measures({ seconds = 0, tokens = null, cost = null, unpriced = 0 }: Spend): UsageMeasures {
+function measures({
+  seconds = 0,
+  tokens = null,
+  cost = null,
+  unpriced = 0,
+  kinds,
+}: Spend): UsageMeasures {
   return {
     agent_seconds: seconds,
     estimated_seconds: 0,
     quality: seconds > 0 ? 'observed' : null,
-    tokens: split(tokens),
+    tokens: kinds ?? split(tokens),
     estimated_api_cost_usd: cost,
     unpriced_tokens: unpriced,
   }

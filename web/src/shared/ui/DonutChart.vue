@@ -12,8 +12,10 @@
  *
  * A legend always names the parts beside the ring, in its order (`ChartLegend`), so no part is told
  * by its hue alone, and gives each its figure and its bare share in a column at its end, in the
- * text roles of the rows apart under it: the numbers are read there, and no sector carries words,
- * which no hue of the palette held well. The sectors stand apart by a gap of ground.
+ * text roles of the rows apart under it, under a name too long to stand beside them: the numbers
+ * are read there, and no sector carries words, which no hue of the palette held well. A row's
+ * figure (`valueText`) is its figure alone, since the legend says its share after it. The sectors
+ * stand apart by a gap of ground.
  *
  * A sector is a mark of its chart: its one hint, under the pointer or the keyboard, gives its
  * name beside its hue, its figure and its share of the whole, and for the rest its five largest

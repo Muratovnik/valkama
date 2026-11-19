@@ -1080,7 +1080,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and a pair's first part gives way before its end, the model, does; the entry's hint says it
   whole. Broken wherever a letter fell, a task's name took two lines an
   entry and 164 of the day chart's 435 pixels, and a session's four, «Valkama: проектирова / ние
-  системы агентов».
+  системы агентов». In a ring's legend, whose lines end in a figure, a name too long to stand
+  beside its figure takes its line alone and the figure the line under it, at the end where the
+  others end, as a ranked row's name takes a line over its bar in a narrow chart: beside their
+  figures at 1440px the two cache writes of the tokens by kind were cut to «Зап…» and «Запи…».
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
   ranked row — keeps one contract. Pointing at it, or focusing it from the keyboard, shows its
   hint at the mark through the one hint host, a segment's being its period's: the mark's series, its value, its share and the
@@ -1252,12 +1255,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   with the smaller past them folded into one rest in the folded tail's neutral; each part in the
   hue its value has on the page, and a legend beside it naming the parts in the ring's order,
   each with its figure and bare share, «6 h · 47%», at the end of its line in the quiet ink, the
-  figures of the lines ending where the others end. No words stand on a sector: the near-black
-  written there read badly on the darker hues, and the legend holds every number. A sector's
-  one hint gives its figure and share, and the rest's each part it holds; the sectors are one
-  Tab stop walked round with the arrows. Rows that are no part of the whole close it by name
-  and figure under the legend, their figures ending with the legend's. Its table twin is
-  `RankedBarsTable`.
+  figures of the lines ending where the others end. The share is the legend's to say, once: a
+  ring given figures that already carried it read «90 M · 60 % · 60 %». No words stand on a
+  sector: the near-black written there read badly on the darker hues, and the legend holds
+  every number. A sector's one hint gives its figure and share, and the rest's each part it
+  holds; the sectors are one Tab stop walked round with the arrows. Rows that are no part of
+  the whole close it by name and figure under the legend, their figures ending with the
+  legend's. Its table twin is `RankedBarsTable`.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole

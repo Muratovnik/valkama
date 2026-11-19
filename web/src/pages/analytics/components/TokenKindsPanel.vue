@@ -13,7 +13,8 @@
  * output, close the chart as notes with their figures, under the ring's legend or under the bars,
  * and are no part of its whole: the summary leaves them out as well, and no bar's share counts
  * them. A counted kind's bar says its share of the counted kinds after its figure, «1.2M · 40 %»;
- * a note says its figure alone.
+ * a note says its figure alone. The ring is given each figure alone, since its legend says the
+ * share itself: given the bars' figures, its legend said each share twice, «1.2M · 40 % · 40 %».
  *
  * It reads the page's own answer, whatever dimension that was read by: its total and its steps
  * hold the tokens by kind. An answer whose period before could not be read says so at the top.
@@ -69,14 +70,22 @@ const views: readonly SplitView[] = ['ring', 'bars']
 /** A counted kind's share of the counted kinds; none for a note or a kind with no count. */
 const shareOf = (line: KindLine) =>
   line.counted && line.count !== null && counted.value ? line.count / counted.value : null
+/** A kind as a row of the split, with its figure alone. */
+const rowOf = (line: KindLine): RankedRow => ({
+  key: line.kind,
+  label: kindWords.name(line),
+  value: line.count ?? 0,
+  valueText: kindWords.count(line.count),
+  kind: line.counted ? 'category' : 'other',
+  slot: KIND_SLOTS.get(line.kind) ?? 'other',
+})
+/** The ring's parts, each figure alone: its legend says each share itself. */
+const parts = computed(() => lines.value.map((line) => rowOf(line)))
+/** The bars' and the table's rows, each counted kind's share after its figure. */
 const bars = computed<RankedRow[]>(() =>
   lines.value.map((line) => ({
-    key: line.kind,
-    label: kindWords.name(line),
-    value: line.count ?? 0,
+    ...rowOf(line),
     valueText: words.withShare(kindWords.count(line.count), shareOf(line)),
-    kind: line.counted ? 'category' : 'other',
-    slot: KIND_SLOTS.get(line.kind) ?? 'other',
   })),
 )
 const barWords = computed<RankedWords>(() => ({
@@ -156,7 +165,7 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
             <DonutChart
               v-if="view === 'ring'"
               :label="barsTitle"
-              :rows="bars"
+              :rows="parts"
               :words="ringWords"
               :format-value="formatValue"
               :format-part="words.share"

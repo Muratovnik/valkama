@@ -14,7 +14,11 @@
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
- * column of numbers to read down beside the names.
+ * column of numbers to read down beside the names. A name too long to stand beside its figure
+ * takes its line alone and the figure the line under it, still at the end, as a ranked row's name
+ * takes a line of its own over its bar in a narrow chart (`RankedBars`): beside its figure in a
+ * ring's column at 1440 pixels, «Запись в кэш, 5 мин» and «Запись в кэш, 1 ч» were cut to «Зап…»
+ * and «Запи…», which no reader could tell apart.
  *
  * A name takes one line, as wide as the legend at most, and ends in an ellipsis where it is cut; it
  * is cut from its end, so the start that tells it apart, a task's reference, stays. A pair's first
@@ -234,19 +238,27 @@ const figureOf = (key: string) => props.figures?.get(key)
   min-block-size: var(--space-6);
 }
 
-/* Given figures, the legend reads down, an entry a line, its figure at the line's end. */
+/* Given figures, the legend reads down, an entry a line, its figure at the line's end; a name
+   that does not fit beside its figure has its line alone, the 24 pixels its key fills, and the
+   figure goes under it, at the end where the others end. */
 .chart-legend-figures {
   flex-flow: column nowrap;
 
   & .chart-entry {
-    gap: var(--space-3);
+    flex-wrap: wrap;
+    column-gap: var(--space-3);
     justify-content: space-between;
+  }
+
+  & .chart-key {
+    min-block-size: var(--space-6);
   }
 }
 
 .chart-figure {
   flex: none;
   align-self: center;
+  margin-inline-start: auto;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
