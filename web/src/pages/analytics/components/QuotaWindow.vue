@@ -29,8 +29,11 @@
  * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
  * is a bar with no fill that says «0% used» and «up to date». While the window stands, its step line
  * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`). A
- * window past its reset by the panel's moment has neither and shows its whole window alone, even
- * where its answer was read before the reset. Running or past its reset, a window silent by then
+ * window past its reset by the panel's moment (`ended`) has neither and shows its whole window
+ * alone, even where its answer was read before the reset; it leads with that it reset with no
+ * reading since, its share before the reset a quieter line under that, over its bar drawn in the
+ * neutral ink with no tick (`WindowBar`'s `muted`): led by its share in the series' hue, the last
+ * window's figure read as the share spent now. Running or past its reset, a window silent by then
  * (`silent`) has its line stop at its last reading, since nothing was measured after it, while a
  * fresh one's holds to the answer's moment or the reset, a source writing a reading only when a
  * value changes. Where the window's count restarted inside it, the
@@ -46,7 +49,8 @@
  *
  * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
  * at the panel's moment in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
- * `latest`).
+ * `latest`); the lines over its bar are `data-lead`, `share` for a standing window's, `ended` and
+ * `before` for one past its reset.
  */
 import { computed } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
@@ -113,7 +117,8 @@ const courses = computed(() =>
 /**
  * The window's lead and its bar: the share and the state the line says, the forecast's share at
  * the reset its tail draws, and what the bar's hint adds. A silent window says how long it has
- * been silent, so it never reads as fresh.
+ * been silent, so it never reads as fresh. Past its reset it leads with that (`ended`), and its
+ * hint says its latest reading alone, since it draws no pace.
  */
 const bar = computed(() => {
   const { window, now, today, freshFor } = props
@@ -122,8 +127,13 @@ const bar = computed(() => {
   return {
     share: words.share(used),
     state: words.stateWords(window, now, freshFor),
+    ended: words.ended(window, now, today),
+    // Past the reset no pace stands, so no tick is drawn.
+    even: ended.value ? null : window.even_percent,
     label: words.barRead(window, now, today, freshFor),
-    hint: words.meterHint(window, now, today, freshFor),
+    hint: ended.value
+      ? words.latest(window, now, today, freshFor)
+      : words.meterHint(window, now, today, freshFor),
     forecast,
   }
 })
@@ -141,7 +151,7 @@ function spend() {
 
 /**
  * The facts said in words: the forecast, in the text's ink where there is one, and the reset; past
- * the reset the reset alone, which says so. A table leaves the forecast to its account's table and
+ * the reset none, since the lead says when it reset. A table leaves the forecast to its account's table and
  * adds what the bar's hint holds and that table does not: the latest reading, and that there is
  * no pace, where that table has only a dash for it.
  */
@@ -154,7 +164,7 @@ const facts = computed(() => {
       text: words.forecastLine(window, today),
       quiet: window.forecast === null,
     }
-    return ended.value ? [reset] : [forecast, reset]
+    return ended.value ? [] : [forecast, reset]
   }
   const latest = { key: 'latest', text: words.latest(window, now, today, freshFor), quiet: true }
   return [
@@ -254,10 +264,26 @@ const readingsCaption = computed(() =>
     <div class="quota-window-parts">
       <div class="quota-window-summary">
         <template v-if="shown === 'chart'">
+          <template v-if="bar.ended">
+            <p
+              class="quota-window-lead quota-window-ended"
+              data-lead="ended"
+            >
+              {{ bar.ended.lead }}
+            </p>
+            <p
+              class="quota-window-lead"
+              data-lead="before"
+            >
+              {{ bar.ended.before }}
+            </p>
+          </template>
           <Translation
+            v-else
             class="quota-window-lead"
             keypath="analytics.quota.lead"
             tag="p"
+            data-lead="share"
           >
             <template #share>
               <span class="quota-window-share">{{ bar.share }}</span>
@@ -269,11 +295,15 @@ const readingsCaption = computed(() =>
             class="quota-window-bar"
             :label="bar.label"
             :used="window.latest.used_percent"
-            :even="window.even_percent"
+            :even="bar.even"
             :forecast="bar.forecast"
+            :muted="ended"
           />
         </template>
-        <ul class="quota-window-facts">
+        <ul
+          v-if="facts.length"
+          class="quota-window-facts"
+        >
           <li
             v-for="fact in facts"
             :key="fact.key"
@@ -340,6 +370,11 @@ const readingsCaption = computed(() =>
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* Past its reset the window leads with that, in the text's ink, and no figure leads it. */
+.quota-window-ended {
+  color: var(--color-text);
 }
 
 .quota-window-share {

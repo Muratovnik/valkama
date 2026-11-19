@@ -19,7 +19,10 @@
  * its lightness, not by a hue, and reads in grayscale. A fresh 0 % draws the empty track with its
  * tick and any tail from the track's start, and a window with no figure at all (`used` null) the
  * track alone. A forced palette draws the track's edge, the fill, the tail's stripes and the tick
- * in its own inks, the tick ringed in the ground's.
+ * in its own inks, the tick ringed in the ground's. A figure that no longer stands (`muted`), as a
+ * window's past its reset, is drawn in the neutral ink of marks at rest, its track a quieter step
+ * of it, so it is not read as the share spent now; a forced palette draws its fill in the inactive
+ * ink, still apart from the ground.
  *
  * It reads as one image whose words (`label`) say all of it: the value, the pace, the state and
  * the forecast. Over 100 % the fill stops at the track's end, no tail follows, and the words say
@@ -46,6 +49,8 @@ const props = defineProps<{
   even?: number | null
   /** Where the forecast says the window stands at its reset: the hatched tail; none draws none. */
   forecast?: WindowAhead | null
+  /** Drawn in the neutral ink: a figure that no longer stands, as a window's past its reset. */
+  muted?: boolean
   /** The state in words after the value, «fresh», «silent 3 h». */
   note?: string
   /** The value in words beside the bar, «62% used»; none draws the bar alone. */
@@ -89,7 +94,7 @@ const ahead = computed(() => {
 <template>
   <span
     class="window-bar"
-    :class="{ 'window-compact': compact }"
+    :class="{ 'window-compact': compact, 'window-muted': muted }"
   >
     <span
       class="window-track"
@@ -234,6 +239,25 @@ const ahead = computed(() => {
 
 .window-note {
   color: var(--color-text-muted);
+}
+
+/* A figure that no longer stands: the neutral ink of marks at rest, on a quieter step of it. */
+.window-muted {
+  & .window-track {
+    background: color-mix(in srgb, var(--color-text-tertiary) 30%, var(--color-canvas));
+
+    @media (forced-colors: active) {
+      background: Canvas;
+    }
+  }
+
+  & .window-fill {
+    background: var(--color-text-tertiary);
+
+    @media (forced-colors: active) {
+      background: GrayText;
+    }
+  }
 }
 
 /* In a tile: a thinner bar on the tile's own line, its words said by the tile. */
