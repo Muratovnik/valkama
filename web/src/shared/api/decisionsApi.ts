@@ -11,15 +11,14 @@
 
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
+import type { DecisionPoint } from '@/shared/api/planningDecisionPoints.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { SPACE_KEY, TITLE } from '@/shared/api/planningSpaceModel.ts'
 import { enumField, invalid, ISO, PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
-/** The most marks the server answers in one page. */
+/** The most decisions the server answers in one page. */
 const DECISIONS_PAGE = 200
-
-export type DecisionPoint = (typeof DECISION_POINTS)[number]
 
 const decisionSchema = strictObject({
   /** When the event that recorded the decision was written. */

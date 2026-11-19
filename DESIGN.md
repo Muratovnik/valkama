@@ -3126,6 +3126,12 @@ address names it, so Back closes it and gives the page back as it was left; a pr
 modifier or the middle button opens it in a new tab. A card opened from that card opens on its
 own first section, and a card Back returns to opens where it was left.
 
+In a card's System events, an event an agent's own decision recorded carries a mark under its
+title, the agent's sign and «Agent's own decision · Goal closed»: the point's kind, in the words
+of the page's point filter and its table, so a decision read on the card is found on the page by
+the same name, and the history's search finds the event by them. An event no decision marked
+carries nothing, and the mark is the record's own: the event's point as the full record has it.
+
 ### Settings
 
 Settings uses one section anatomy and one type scale, and its groups read as

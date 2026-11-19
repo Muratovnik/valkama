@@ -1,4 +1,4 @@
-import type { DecisionPoint } from '@/shared/api/decisionsApi.ts'
+import type { DecisionPoint } from '@/shared/api/planningDecisionPoints.ts'
 /**
  * The view of the Agent decisions page and its address: the period — today, this week, the past
  * four weeks or days of the reader's own — and the participation point, every point when none is

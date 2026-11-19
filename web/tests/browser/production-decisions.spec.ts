@@ -4,8 +4,10 @@
  * the page's contract in DESIGN.md: a decision is found by its point and its period, and its
  * card opens over the page on its System events, which Back closes; a long period's thousand
  * decisions stand in one table that scrolls inside its own frame while the bar stays where it
- * was; an empty period says so in the page's words. Each run prints what it measured and keeps
- * a picture of each state.
+ * was; an empty period says so in the page's words. On the card's System events the event the
+ * decision was recorded by carries the decision's mark, the point in the page's words, and an
+ * event with no point carries none. Each run prints what it measured and keeps a picture of each
+ * state.
  */
 import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
@@ -22,6 +24,7 @@ import { test } from './test.ts'
 const WORDS = {
   en: {
     count: (count: number) => `${count} decisions`,
+    mark: 'Agent’s own decision · Goal closed',
     empty: 'The agents decided nothing on their own in this period',
     events: 'System events',
     open: `Open ${workItemRef.reference} on its System events`,
@@ -31,6 +34,7 @@ const WORDS = {
   },
   ru: {
     count: (count: number) => `${count} решений`,
+    mark: 'Решение агента · Закрытие цели',
     empty: 'За период агенты ничего не решали сами',
     events: 'Системные события',
     open: `Открыть ${workItemRef.reference} на «Системных событиях»`,
@@ -45,6 +49,24 @@ const SIZES = [
   { lang: 'en', width: 390, height: 844 },
   { lang: 'ru', width: 390, height: 844 },
 ] as const
+
+/** What a call that proved nobody carries on an event. */
+const UNPROVED = { state: 'unconfirmed', source: null, session_id: null, agent_id: null }
+
+/** The card's history: its claim, and the goal's close the sought decision recorded. */
+function cardEvents(at: string) {
+  return [
+    { action: 'claimed', detail: '', author: 'codex', at, identity: UNPROVED },
+    {
+      action: 'transitioned',
+      detail: 'dev -> done',
+      author: 'codex',
+      at,
+      identity: UNPROVED,
+      point: 'goal_close',
+    },
+  ]
+}
 
 const pageAt = (state: Record<string, string> = {}) =>
   serializePlatformRoute({ module_id: 'decisions', scope: spaceScope, state })
@@ -76,7 +98,11 @@ async function openPage(
   state: Record<string, string> = {},
 ) {
   const double = decisionsDouble(decisions)
-  await installBackend(page, { decisions: (query) => double.read(query) })
+  const sought = decisions.find((one) => one.item.reference === workItemRef.reference)
+  await installBackend(page, {
+    decisions: (query) => double.read(query),
+    ...(sought ? { events: cardEvents(sought.at) } : {}),
+  })
   await serveTask(page)
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.goto(pageAt(state))
@@ -126,6 +152,11 @@ for (const size of SIZES) {
         'aria-selected',
         'true',
       )
+      // The decision's event carries its mark, the claim beside it none.
+      const marked = drawer.locator('li.entry', { has: page.locator('.entry-point') })
+      await expect(marked).toHaveCount(1)
+      await expect(marked.locator('.entry-point')).toHaveText(words.mark)
+      await expect(drawer.locator('li.entry')).toHaveCount(2)
       const opened = parsePlatformRoute(new URL(page.url()))
       expect(opened.module_id).toBe('decisions')
       expect(opened.state).toEqual({ period: 'weeks4', point: 'goal_close' })
