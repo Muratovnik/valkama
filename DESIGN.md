@@ -2634,7 +2634,10 @@ organizations, projects, roles, models, efforts, environments, launch classes �
 whole, drawn as
 a ring or as ranked bars and switched with the table as «Ring | Bars | Table», the same numbers
 in each, opening on the ring: the ranked bars list the first twelve, and under them «All N»
-opens every value of the period in the side panel, and the ring (`DonutChart`) names its first
+opens every value of the period in the side panel. N counts the values as their tile and that
+table's heading row do, the values with a figure in the measure, so work with no value there
+is a row of the table and no part of N: counted with it, «All 31» stood beside the tile's
+«30 values». The ring (`DonutChart`) names its first
 parts and folds the smaller into one rest. Split by a second dimension it draws bars alone, since a ring of pairs would tell one
 value's pairs apart by hue alone. Named by free text — tasks and sessions, by their own or on
 either side of a pair — they are a list only, switched with the table as «Chart | Table»: the

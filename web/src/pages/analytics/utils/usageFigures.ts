@@ -81,6 +81,14 @@ export const spentAnything = (spent: Spent) =>
   spent.seconds > 0 || Boolean(spent.tokens) || spent.cost !== null || spent.unpriced > 0
 
 /**
+ * Whether a line is a value of the period in a measure: a real value, not work with no value there
+ * nor work nobody can place, with a figure above zero in the measure. The rail's tile, the table's
+ * heading row and «All N» under the ranked bars each count these, so the three say one number.
+ */
+export const workedValue = (measure: Measure, line: Pick<SpendingLine, 'kind' | 'spent'>) =>
+  line.kind === 'category' && (measureOf(measure, line.spent) ?? 0) > 0
+
+/**
  * A measure's figure as the page reads it: its amount; zero for a line that spent nothing; and
  * null — absent, not zero — for one that spent something the measure has no figure for, work
  * with no price or with no token counted.

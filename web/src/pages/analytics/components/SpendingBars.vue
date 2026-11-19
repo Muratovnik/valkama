@@ -17,8 +17,9 @@
  * as its first value does.
  *
  * The bars list the first twelve values, and so does the table; past them one line, «All 30»,
- * counts every value of the period and, pressed, opens the dimension's full table in the side
- * panel, sent out as `all` (`SpendingTableLink`); the line is found by `data-all`.
+ * counts every value of the period in the measure, as the rail's tile and the full table's heading
+ * row do, and, pressed, opens the dimension's full table in the side panel, sent out as `all`
+ * (`SpendingTableLink`); the line is found by `data-all`.
  *
  * The values split one whole, so a person can draw them as a ring instead (`DonutChart`): each
  * value a sector in its hue, named while its hue stays apart from the others' and the smaller
@@ -50,6 +51,7 @@ import {
   measureOf,
   rankedLines,
   spendingLines,
+  workedValue,
 } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
@@ -117,9 +119,20 @@ const unlisted = computed(() =>
     ? (all.value.find((line) => line.kind === 'other')?.folded ?? 0)
     : Math.max(0, all.value.length - LISTED),
 )
-/** Every value of the period, the folded ones counted one by one. */
-const counted = computed(() =>
-  all.value.reduce((sum, line) => sum + (line.kind === 'other' ? line.folded : 1), 0),
+/**
+ * Every value of the period in the measure, as the rail's tile and the full table's heading row
+ * count them (`workedValue`): work with no value there, work nobody can place and a value that
+ * spent only in another measure are rows of that table, not values of the count. Counted with
+ * them, «All 31» stood beside the tile's «30 values» for one period.
+ */
+const counted = computed(
+  () =>
+    spendingLines(
+      props.rows,
+      breakdownOf(props.by, props.across),
+      props.measure,
+      Number.POSITIVE_INFINITY,
+    ).filter((line) => workedValue(props.measure, line)).length,
 )
 const allWords = computed(() =>
   t('analytics.panel.bars.all', { count: counted.value }, counted.value),

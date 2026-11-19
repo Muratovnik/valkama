@@ -6,6 +6,7 @@ import {
   spendingLines,
   spentAnything,
   spentOf,
+  workedValue,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
@@ -121,8 +122,7 @@ export function dimensionFigures(
     spentAnything(line.spent),
   )
   const weight = (line: SpendingLine) => measureOf(measure, line.spent) ?? 0
-  const worked = (line: SpendingLine) => weight(line) > 0
-  const categories = lines.filter((line) => line.kind === 'category' && worked(line))
+  const categories = lines.filter((line) => workedValue(measure, line))
   const first =
     categories[0] ?? [...lines].sort((left, right) => weight(right) - weight(left)).at(0)
   if (!first) return null
