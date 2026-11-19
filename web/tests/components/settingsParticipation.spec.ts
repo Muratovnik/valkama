@@ -278,12 +278,44 @@ describe('label rules', () => {
     expect(flow.get('[role="switch"]').attributes('aria-checked')).toBe('false')
   })
 
+  it('removes a shared rule with the answer, and keeps a refused one with the reason under it', async () => {
+    const DOCS = { docs: { ready: null, description: 'Documents' } }
+    const rules = { labels: { '': { ...FLOW.labels[''], ...DOCS } } }
+    const { wrapper, held, writes } = mountTab(rules, null, { hold: true })
+    await flushPromises()
+    const ruleRow = (label: string) => wrapper.find(`[data-participation-label="${label}"]`)
+    const removeOf = (label: string) =>
+      ruleRow(label).get(`button[aria-label="Remove the rule of ${label}"]`)
+
+    const flowRemove = removeOf('flow')
+    ;(flowRemove.element as HTMLElement).focus()
+    await flowRemove.trigger('click')
+    await flushPromises()
+    expect(writes).toEqual([{ space: null, label: 'flow', ready: null, description: null }])
+    // Until the answer the row stands as it was.
+    expect(ruleRow('flow').exists()).toBe(true)
+    held[0]?.release()
+    await flushPromises()
+    expect(ruleRow('flow').exists()).toBe(false)
+    // The focus left with the row and goes to the one field that adds a rule.
+    expect(wrapper.findAll('input[role="combobox"]')).toHaveLength(1)
+    expect(document.activeElement).toBe(wrapper.get('input[role="combobox"]').element)
+
+    await removeOf('docs').trigger('click')
+    held[1]?.release(REFUSED('the store is busy'))
+    await flushPromises()
+    expect(ruleRow('docs').text()).toContain('Documents')
+    expect(ruleRow('docs').get('[role="alert"]').text()).toBe('Not saved: the store is busy')
+  })
+
   it('in a space inherits the shared rule until it holds its own, and gives it back', async () => {
     const { wrapper, writes } = mountTab(FLOW)
     await flushPromises()
 
     const flow = () => wrapper.get('[data-participation-label="flow"]')
     expect(flow().text()).toContain('Shared: Ready at once')
+    // A space gives a rule back through «Own value»; «Remove rule» is the shared scope's.
+    expect(flow().find('button[aria-label^="Remove the rule"]').exists()).toBe(false)
     await flow().get('[role="switch"][aria-label^="Own value"]').trigger('click')
     await flushPromises()
     await flow().get('[role="switch"][aria-label^="Ready at once"]').trigger('click')
@@ -291,12 +323,63 @@ describe('label rules', () => {
     await flow().get('[role="switch"][aria-label^="Own value"]').trigger('click')
     await flushPromises()
 
+    // Owning the answer leaves the description to the shared rule: it is written null.
     expect(writes).toEqual([
-      { space: 'MAIN', label: 'flow', ready: true, description: 'The main line of work' },
-      { space: 'MAIN', label: 'flow', ready: false, description: 'The main line of work' },
+      { space: 'MAIN', label: 'flow', ready: true, description: null },
+      { space: 'MAIN', label: 'flow', ready: false, description: null },
       { space: 'MAIN', label: 'flow', ready: null, description: null },
     ])
     expect(flow().text()).toContain('Shared: Ready at once')
+  })
+
+  it('in a space changes «ready» alone and leaves the description inherited', async () => {
+    const { double, wrapper, writes } = mountTab({
+      labels: { ...FLOW.labels, MAIN: { flow: { ready: true, description: null } } },
+    })
+    await flushPromises()
+
+    const flow = () => wrapper.get('[data-participation-label="flow"]')
+    await flow().get('[role="switch"][aria-label^="Ready at once"]').trigger('click')
+    await flushPromises()
+
+    expect(writes).toEqual([{ space: 'MAIN', label: 'flow', ready: false, description: null }])
+    // After the answer the space holds the answer and still reads the shared description.
+    expect(
+      flow().get('[role="switch"][aria-label^="Ready at once"]').attributes('aria-checked'),
+    ).toBe('false')
+    expect((flow().get('input').element as HTMLInputElement).value).toBe('The main line of work')
+    const read = double.read('MAIN').labels.find((rule) => rule.label === 'flow')
+    expect(read?.own).toEqual({ ready: true, description: false })
+
+    // A description of the space's own is written with the answer the space already holds.
+    await flow().get('input').setValue('Ours')
+    await flow().get('input').trigger('focusout')
+    await flushPromises()
+    expect(writes.at(-1)).toEqual({
+      space: 'MAIN',
+      label: 'flow',
+      ready: false,
+      description: 'Ours',
+    })
+  })
+
+  it('in a space changes the description alone and leaves «ready» inherited', async () => {
+    const { wrapper, writes } = mountTab({
+      labels: { ...FLOW.labels, MAIN: { flow: { ready: null, description: 'Ours' } } },
+    })
+    await flushPromises()
+
+    const flow = () => wrapper.get('[data-participation-label="flow"]')
+    await flow().get('input').setValue('Ours, and more')
+    await flow().get('input').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+
+    expect(writes).toEqual([
+      { space: 'MAIN', label: 'flow', ready: null, description: 'Ours, and more' },
+    ])
+    expect(
+      flow().get('[role="switch"][aria-label^="Ready at once"]').attributes('aria-checked'),
+    ).toBe('true')
   })
 })
 

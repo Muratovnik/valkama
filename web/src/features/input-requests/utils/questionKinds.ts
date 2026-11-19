@@ -3,6 +3,7 @@ import type {
   KindAnswer,
   QuestionKind,
   QuestionRecord,
+  Ticks,
 } from '@/features/input-requests/utils/questionRecord.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -43,6 +44,12 @@ const KIND_OF: Partial<Record<Purpose, QuestionKind>> = {
 /** The field a question with a purpose is answered in, and the one a put-off's day or item goes in. */
 const ANSWER_FIELD = 'answer'
 const UNTIL_FIELD = 'until'
+/** The field the token of a cancel's list goes in, under the answer that cancels. */
+const CANCELS_FIELD = 'cancels'
+/** The field of ticks of a group of findings: the findings that stay in the group. */
+const FINDINGS_FIELD = 'items'
+/** The answer that names how many findings go once some are unticked. */
+const COUNTED = 'do'
 
 /**
  * The server's answers of each kind, in the order its buttons stand. An answer the server adds
@@ -69,6 +76,19 @@ export function kindOf(entry: InputRequestEntry): QuestionKind {
 }
 
 /**
+ * The field of ticks a question of a group of findings shows its findings in, each ticked at
+ * first as the server recommends every one; null for any other question. Every answer sends what
+ * is ticked: the server moves an unticked finding out of the group whatever the answer.
+ */
+export function ticksOf(entry: InputRequestEntry): Ticks | null {
+  if (kindOf(entry) !== 'triage') return null
+  const field = entry.request.fields.find((candidate) => candidate.id === FINDINGS_FIELD)
+  if (field?.type !== 'multi_choice') return null
+  const initial = field.options.filter((option) => option.recommended).map(({ id }) => id)
+  return { field: field.id, initial, total: field.options.length }
+}
+
+/**
  * A question as the record of its kind, with the answers its buttons write. `word` names an
  * answer by its option id in the person's language. A question whose purpose names a kind but
  * that offers no field to answer it in stays a choice of options, which its form answers.
@@ -82,6 +102,9 @@ export function kindRecord(
   const field = fields.find((candidate) => candidate.id === ANSWER_FIELD)
   if (kind === 'choice' || field?.type !== 'choice') return choiceRecord(entry)
   const until = fields.some((candidate) => candidate.id === UNTIL_FIELD)
+  const cancels = (option: string) =>
+    fields.some(({ id, under }) => id === CANCELS_FIELD && under?.option === option)
+  const ticks = ticksOf(entry)
   const order = ANSWERS[kind]
   const offered = [...field.options].sort((a, b) => rank(order, a.id) - rank(order, b.id))
   const answers = offered.map((option): KindAnswer => {
@@ -89,6 +112,9 @@ export function kindRecord(
     return {
       label: known ? word(option.id) : option.label,
       answer: { [ANSWER_FIELD]: option.id },
+      ...(cancels(option.id) ? { cancels: { field: CANCELS_FIELD } } : {}),
+      ...(ticks ? { ticks } : {}),
+      ...(ticks && option.id === COUNTED ? { counts: true as const } : {}),
       ...(option.id === 'later' && until ? { later: { field: UNTIL_FIELD } } : {}),
       ...(ASKS_FIRST.has(option.id) ? { twoStep: true as const } : {}),
     }

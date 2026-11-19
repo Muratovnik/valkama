@@ -5,8 +5,9 @@
  *
  * A read of a scope says, for every key, the value in force, whether the scope sets it itself
  * and what it would inherit without it; which of the four sets its points and switches are,
- * or `custom`; and the rules of every label it reads. A write changes one value, a whole set
- * or one label's rule, and answers with the read of its scope.
+ * or `custom`; and the rules of every label it reads, with each field the scope sets itself.
+ * A write changes one value, a whole set or one label's rule, and answers with the read of
+ * its scope.
  */
 
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
@@ -59,6 +60,8 @@ const valueRow = <K extends string, V extends z.ZodTypeAny>(keys: readonly K[], 
   strictObject({ key: enumField(keys), value, own: z.boolean(), inherited: value })
 
 const ruleShape = { ready: z.boolean(), description: serverText().max(20_000).nullable() }
+/** Which fields of a label's rule the scope's own record sets; the others come from above. */
+const ownFields = strictObject({ ready: z.boolean(), description: z.boolean() })
 
 const participationSchema = strictObject({
   /** The space's key; null for the shared values. */
@@ -88,7 +91,7 @@ const participationSchema = strictObject({
     strictObject({
       label: LABEL,
       ...ruleShape,
-      own: z.boolean(),
+      own: ownFields,
       inherited: strictObject(ruleShape),
     }),
   ),
@@ -115,8 +118,8 @@ export interface Participation {
 
 /**
  * One change of a scope, as the server takes it: a value (null to inherit again), a set
- * (null in a space takes its own points and switches away), or a label's rule (both null
- * take the rule away).
+ * (null in a space takes its own points and switches away), or a label's rule (a null field
+ * is taken from above, and both null take the scope's rule away).
  */
 export type ParticipationEdit =
   | { key: ParticipationKey; value: string | number | null }

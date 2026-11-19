@@ -1,3 +1,5 @@
+import { readCancelList } from '@/shared/api/inputRequestAction.ts'
+import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import {
   validateInputRequestDetail,
   validateInputRequestList,
@@ -18,13 +20,16 @@ export class InputRequestError extends Error {
   /** The server's bracketed word on why, such as `item_closed`; empty when it gave none. */
   readonly reason: string
   readonly status: number
+  /** What an answer that cancels work would close, handed back to be confirmed by its token. */
+  readonly cancelList: CancelList | null
 
-  constructor(code: string, status: number, reason = '') {
+  constructor(code: string, status: number, reason = '', cancelList: CancelList | null = null) {
     super(code)
     this.name = 'InputRequestError'
     this.code = code
     this.reason = reason
     this.status = status
+    this.cancelList = cancelList
   }
 }
 
@@ -32,10 +37,12 @@ async function request(url: string, init?: RequestInit): Promise<unknown> {
   const { response, payload } = await readJsonResponse(url, init)
   if (!response.ok) {
     const refusal = readRefusal(payload)
+    const listed = readCancelList(payload)
     throw new InputRequestError(
-      refusal?.error.code ?? 'request_failed',
+      refusal?.error.code ?? (listed ? 'cancel_list' : 'request_failed'),
       response.status,
       /^\[([a-z_]+)\]/u.exec(refusal?.error.message ?? '')?.[1],
+      listed,
     )
   }
   return payload

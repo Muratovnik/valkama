@@ -1,7 +1,7 @@
 /**
  * The words of the kinds of question in «Needs my answer»: the tabs over the list, each kind's
- * answers by the server's option id, the headings of each kind's content, and the put-off until
- * a card closes.
+ * answers by the server's option id, the headings of each kind's content, the put-off until a
+ * card closes, and the open work an answer would cancel that its question did not ask about.
  */
 export const questionKindMessages = {
   en: {
@@ -29,8 +29,9 @@ export const questionKindMessages = {
         keep: 'Keep',
         cancel: 'Cancel',
         confirm: 'I confirm',
-        leave: 'Leave to the next session',
+        leave: 'Leave it open',
       },
+      counted: '{answer}: {n}',
       outcome: 'Task outcome',
       noOutcome: 'The task has no outcome written.',
       conditions: 'Conditions',
@@ -52,6 +53,9 @@ export const questionKindMessages = {
       cardHint: 'Type a number or words of the title',
       noCards: 'No open card answers this',
       untilEither: 'Choose a day, or a card whose closing brings it back.',
+      listed: 'This answer also cancels open work the question did not ask about:',
+      dependents: 'Waiting on it',
+      waitsOn: 'waits on {reference}',
     },
   },
   ru: {
@@ -79,8 +83,9 @@ export const questionKindMessages = {
         keep: 'Оставить',
         cancel: 'Отменить',
         confirm: 'Подтверждаю',
-        leave: 'Оставить следующей сессии',
+        leave: 'Оставить открытой',
       },
+      counted: '{answer}: {n}',
       outcome: 'Итог задачи',
       noOutcome: 'Итог у задачи не записан.',
       conditions: 'Условия',
@@ -102,6 +107,9 @@ export const questionKindMessages = {
       cardHint: 'Номер или слова названия',
       noCards: 'Нет открытой карточки с такими словами',
       untilEither: 'Выберите день или карточку, до закрытия которой отложить.',
+      listed: 'Этот ответ отменит и открытую работу, о которой вопрос не спрашивал:',
+      dependents: 'Её ждут',
+      waitsOn: 'ждёт {reference}',
     },
   },
 }

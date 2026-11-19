@@ -6,7 +6,8 @@
  * A review shows the task's outcome under what to check, which is the question's own words. A
  * goal shows its description and conditions and how much open work stands under it; a task in a
  * goal, its description, its goal being named by the question. A group of findings shows the
- * goal it proposes, its findings and why the agent answers as it does. A condition shows what is
+ * goal it proposes, its findings with a box each, ticked at first (`RequestFindings`), which is
+ * part of what the form holds (`draft`), and why the agent answers as it does. A condition shows what is
  * removed, and what each rewritten step was and becomes, with the agent's reason. A cancel shows
  * what closes and who holds it, and what the sessions at work answered. A confirmation and a
  * return say all they need in their own words: a confirmation adds the outcome the agent wrote.
@@ -17,18 +18,40 @@
  * The root names its kind (`data-kind-subject`) and each part its name (`data-kind-part`), the
  * hooks a check selects them by.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import RequestFindings from '@/features/input-requests/components/RequestFindings.vue'
 import { useQuestionItem } from '@/features/input-requests/composables/useQuestionItem.ts'
+import { closingRows } from '@/features/input-requests/utils/cancelRows.ts'
+import { ticksOf } from '@/features/input-requests/utils/questionKinds.ts'
 import type { QuestionKind } from '@/features/input-requests/utils/questionRecord.ts'
+import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
+import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import RichText from '@/shared/ui/RichText.vue'
 
-const props = defineProps<{ entry: InputRequestEntry; kind: QuestionKind }>()
+const props = withDefaults(
+  defineProps<{
+    entry: InputRequestEntry
+    kind: QuestionKind
+    /** What it offers to tick takes nothing: a write is out, or nothing here can be written. */
+    disabled?: boolean
+    draft?: RequestDraft
+  }>(),
+  { disabled: false, draft: () => EMPTY_DRAFT },
+)
+const emit = defineEmits<{ 'update:draft': [draft: RequestDraft] }>()
 const { t } = useI18n()
+const uid = useId()
+/** The field a group's findings are ticked in, and what stands ticked at first. */
+const ticks = computed(() => {
+  const found = ticksOf(props.entry)
+  const field = props.entry.request.fields.find(({ id }) => id === found?.field)
+  return found && field ? { field, ticks: found } : null
+})
 const root = ref<HTMLElement | null>(null)
 const readsCard = computed(() => ['goal', 'review', 'task'].includes(props.kind))
 const { item, failed } = useQuestionItem(
@@ -67,6 +90,7 @@ const parts = computed(() => {
         ? { note: t('requests.kinds.under', { n: action.value.cancel_list.cancels.length }) }
         : null,
     findings: () => {
+      if (ticks.value) return { ticked: ticks.value }
       const items = props.kind === 'triage' ? (proposed.value.items ?? []) : []
       return items.length ? { rows: items.map((one) => [one.reference, one.title]) } : null
     },
@@ -82,14 +106,7 @@ const parts = computed(() => {
     },
     closes: () => {
       const list = props.kind === 'cancel' ? (action.value?.cancel_list?.cancels ?? []) : []
-      return list.length
-        ? {
-            rows: list.map((one) => [
-              one.reference,
-              `${one.title} · ${one.holder.map((holder) => holderName(holder)).join(', ') || t('requests.kinds.nobody')}`,
-            ]),
-          }
-        : null
+      return list.length ? { rows: closingRows(list, t('requests.kinds.nobody')) } : null
     },
     consent: () => {
       const answers = props.kind === 'cancel' ? (action.value?.consent ?? []) : []
@@ -146,10 +163,20 @@ const parts = computed(() => {
     >
       <p
         v-if="!('bare' in part) && !('note' in part)"
+        :id="`${uid}-${part.name}`"
         class="kind-label"
       >
         {{ t(`requests.kinds.${part.heading}`) }}
       </p>
+      <RequestFindings
+        v-if="'ticked' in part"
+        :disabled="disabled"
+        :draft="draft"
+        :field="part.ticked.field"
+        :labelled-by="`${uid}-${part.name}`"
+        :ticks="part.ticked.ticks"
+        @update:draft="emit('update:draft', $event)"
+      />
       <RichText
         v-if="'text' in part"
         :source="part.text"

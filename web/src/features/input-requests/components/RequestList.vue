@@ -33,7 +33,9 @@
  *
  * Each question is the record of its kind (`kindRecord`): a choice of options, answered by its
  * form, or a kind its server purpose names, which shows its own content (`RequestKindSubject`)
- * and is answered by its kind's buttons. Where the list holds questions of more than one kind,
+ * and is answered by its kind's buttons, which say what they send over what the form holds: the
+ * answer that takes a group of findings on names how many go once some are unticked
+ * (`answersOver`). Where the list holds questions of more than one kind,
  * tabs over it (`useKindTabs`) show all of them or one kind's; the list holds only the questions
  * of the tab shown, so the way through the list in the dialog's head counts that tab's, and focus
  * moves on within it.
@@ -50,6 +52,7 @@ import type { Outcome } from '@/features/input-requests/composables/useRequestWr
 import { useUnderReader } from '@/features/input-requests/composables/useUnderReader.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
 import { kindRecord } from '@/features/input-requests/utils/questionKinds.ts'
+import { answersOver } from '@/features/input-requests/utils/questionRecord.ts'
 import type {
   QuestionRecord,
   RecommendedAnswer,
@@ -220,6 +223,11 @@ const answeredOpen = ref(false)
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
 }
+/** A question's answers as its buttons say them over what its form holds now. */
+const answersOf = (entry: InputRequestEntry) =>
+  answersOver(recordOf(entry).answers, draftFor(entry), (answer, n) =>
+    t('requests.kinds.counted', { answer, n }),
+  )
 /** The blocks that wait in the tab shown, as the records of their kinds. */
 const waitingRecords = computed(() =>
   shown.value
@@ -354,7 +362,7 @@ defineExpose({ holdsFocus, holdsReader })
           :entry="entry"
           :draft="draftFor(entry)"
           :kind="recordOf(entry).kind"
-          :answers="recordOf(entry).answers"
+          :answers="answersOf(entry)"
           :data-request-waiting="waitingMark(entry)"
           standalone
           @update:draft="emit('draft', requestIdentity(entry), $event)"
@@ -362,10 +370,13 @@ defineExpose({ holdsFocus, holdsReader })
           @dismiss="dismiss"
           @select="emit('select', $event)"
         >
-          <template #subject>
+          <template #subject="{ disabled }">
             <RequestKindSubject
               :entry="entry"
               :kind="recordOf(entry).kind"
+              :disabled="disabled"
+              :draft="draftFor(entry)"
+              @update:draft="emit('draft', requestIdentity(entry), $event)"
             />
           </template>
         </RequestCard>

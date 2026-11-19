@@ -1,10 +1,12 @@
 /**
  * Which questions of a choice their recommendation answers, and what accepting it would send;
- * and what one press of a kind's answer sends with what the form holds.
+ * what one press of a kind's answer sends with what the form holds; and, for a group of
+ * findings, which findings go and what the answer that takes them on says.
  */
 import { describe, expect, it } from 'vitest'
 
 import {
+  answersOver,
   choiceRecord,
   kindAnswerDraft,
   recommendedAnswers,
@@ -154,5 +156,53 @@ describe('what one answer of a kind sends', () => {
 
   it('leaves out the day another answer would put the question off to', () => {
     expect(kindAnswerDraft(answers, 0, held).answers).toEqual({ decision: 'do', ticks: ['a'] })
+  })
+})
+
+const counted = (label: string, count: number) => `${label}: ${count}`
+
+describe('the answers of a group of findings', () => {
+  const ticks = { field: 'items', initial: ['main-1', 'main-2', 'main-3'], total: 3 }
+  const group: KindAnswer[] = [
+    { label: 'Do', answer: { answer: 'do' }, ticks, counts: true },
+    { label: 'Later…', answer: { answer: 'later' }, ticks, later: { field: 'until' } },
+    { label: 'Don’t do', answer: { answer: 'drop' }, ticks, cancels: { field: 'cancels' } },
+  ]
+  const unticked: RequestDraft = { ...EMPTY_DRAFT, answers: { items: ['main-1', 'main-3'] } }
+
+  it('send every finding while none was unticked, and only the ticked ones after', () => {
+    expect(kindAnswerDraft(group, 0, EMPTY_DRAFT).answers).toEqual({
+      answer: 'do',
+      items: ['main-1', 'main-2', 'main-3'],
+    })
+    expect(kindAnswerDraft(group, 0, unticked).answers).toEqual({
+      answer: 'do',
+      items: ['main-1', 'main-3'],
+    })
+    expect(kindAnswerDraft(group, 1, unticked).answers.items).toEqual(['main-1', 'main-3'])
+  })
+
+  it('send none when every finding was unticked, rather than ticking them all again', () => {
+    const none: RequestDraft = { ...EMPTY_DRAFT, answers: { items: [] } }
+    expect(kindAnswerDraft(group, 2, none).answers).toEqual({ answer: 'drop', items: [] })
+  })
+
+  it('send a refused list’s token only with the answer that cancels', () => {
+    expect(kindAnswerDraft(group, 2, EMPTY_DRAFT, 'token-b').answers.cancels).toBe('token-b')
+    expect(kindAnswerDraft(group, 0, EMPTY_DRAFT, 'token-b').answers).not.toHaveProperty('cancels')
+    expect(kindAnswerDraft(group, 2, EMPTY_DRAFT).answers).not.toHaveProperty('cancels')
+  })
+
+  it('name how many go on Do once a finding is unticked, and on no other answer', () => {
+    expect(answersOver(group, EMPTY_DRAFT, counted).map(({ label }) => label)).toEqual([
+      'Do',
+      'Later…',
+      'Don’t do',
+    ])
+    expect(answersOver(group, unticked, counted).map(({ label }) => label)).toEqual([
+      'Do: 2',
+      'Later…',
+      'Don’t do',
+    ])
   })
 })

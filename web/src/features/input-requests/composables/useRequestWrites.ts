@@ -1,4 +1,4 @@
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 
 import {
   ANSWER_VERSION_LIMIT,
@@ -8,6 +8,7 @@ import { isCommentList, requestIdentity } from '@/features/input-requests/utils/
 import { checkAnswers, EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
+import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import {
   answerInputRequest,
   changeInputRequestAnswer,
@@ -85,6 +86,11 @@ export function useRequestWrites(host: {
   const local = ref(host.entry())
   const busy = ref(false)
   const error = ref<'' | 'conflict' | 'mutationError' | 'taskClosed'>('')
+  /**
+   * What the last answer would cancel that nobody confirmed, as the server's refusal listed it:
+   * a list to confirm, not a failure, so nothing waits on a read and the question stays open.
+   */
+  const listed = shallowRef<CancelList | null>(null)
   /** The fields the last send refused, by id; each clears once it is edited. */
   const refused = ref<string[]>([])
   const requiresRefresh = ref(false)
@@ -103,6 +109,7 @@ export function useRequestWrites(host: {
   })
   function forget() {
     error.value = ''
+    listed.value = null
     refused.value = []
     requiresRefresh.value = false
     asked.value = false
@@ -238,6 +245,7 @@ export function useRequestWrites(host: {
     const current = ++generation
     busy.value = true
     error.value = ''
+    listed.value = null
     try {
       const result = await send(action, checked, draft)
       if (current !== generation || identity !== requestIdentity(local.value)) return 'held'
@@ -250,7 +258,10 @@ export function useRequestWrites(host: {
       return 'sent'
     } catch (error_) {
       if (current !== generation) return 'held'
-      await fail(failure(error_), true, right)
+      if (error_ instanceof InputRequestError && error_.cancelList) {
+        listed.value = error_.cancelList
+        await host.failed(right)
+      } else await fail(failure(error_), true, right)
       return 'failed'
     } finally {
       if (current === generation) {
@@ -292,6 +303,7 @@ export function useRequestWrites(host: {
     error,
     fieldsDisabled,
     forget,
+    listed,
     local,
     pastDue,
     refresh,
