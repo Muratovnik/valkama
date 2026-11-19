@@ -11,16 +11,20 @@
  *
  * A question of a kind other than a choice is answered by its kind's own row (`answers`), in the
  * place of the two answers. The answer that puts the question off opens over that row the choice
- * of a day or a card (`RequestLater`), where the press that opened it is.
+ * of a day or a card (`RequestLater`), where the press that opened it is. An answer the server
+ * refused with the open work it would cancel has that list over the row (`RequestCancelList`),
+ * where its asking stands again, and focus goes to the list's first line as it goes to an error.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestActions from '@/features/input-requests/components/RequestActions.vue'
+import RequestCancelList from '@/features/input-requests/components/RequestCancelList.vue'
 import RequestLater from '@/features/input-requests/components/RequestLater.vue'
 import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import type { KindAnswer } from '@/features/input-requests/utils/questionRecord.ts'
 
+import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
@@ -57,6 +61,8 @@ const props = withDefaults(
      * day or card it holds.
      */
     later?: { controls: string; entry: InputRequestEntry; open: boolean; value: string } | null
+    /** What the last answer would cancel, as the server's refusal listed it to be confirmed. */
+    listed?: CancelList | null
     /** The comment on the list can be opened from here, how it stands, and what it is on. */
     note?: { disabled: boolean; open: boolean; title: string; written: boolean } | null
     /** What Send says, where it sends something other than an answer. */
@@ -69,6 +75,7 @@ const props = withDefaults(
     declinable: true,
     discardWord: undefined,
     later: null,
+    listed: null,
     note: null,
     sendWord: undefined,
   },
@@ -91,10 +98,11 @@ const edge = computed(() => (props.stuck ? 'end' : undefined))
 const actions = ref<InstanceType<typeof RequestActions> | null>(null)
 const errorLine = ref<HTMLElement | null>(null)
 const day = ref<InstanceType<typeof RequestLater> | null>(null)
+const list = ref<InstanceType<typeof RequestCancelList> | null>(null)
 
 defineExpose({
   focusDay: () => day.value?.focus(),
-  focusError: () => moveFocus(errorLine.value),
+  focusError: () => (list.value ? list.value.focus() : moveFocus(errorLine.value)),
   focusWayOut: () => actions.value?.focusWayOut(),
 })
 </script>
@@ -132,6 +140,11 @@ defineExpose({
       :value="later.value"
       @put-off="emit('put-off')"
       @update:value="emit('day', $event)"
+    />
+    <RequestCancelList
+      v-if="listed"
+      ref="list"
+      :list="listed"
     />
     <RequestActions
       v-show="!askingCancel"

@@ -34,10 +34,13 @@
  *
  * It is the frame of a question of every kind (`QuestionRecord`). A choice of options is
  * answered by its form, as above. Any other kind draws its own content in `subject`, which is
- * handed the question, and is answered by its kind's row of buttons in the foot: one press
+ * handed the question and whether what it offers to tick takes nothing now (`disabled`), and is
+ * answered by its kind's row of buttons in the foot: one press
  * writes, through the same write as Send, what that answer says over what the form holds; an
  * answer that cannot be taken back asks first, as Don't answer does, and the answer that puts
- * the question off opens the choice of a day in place (`RequestLater`). Its history, a change of
+ * the question off opens the choice of a day in place (`RequestLater`). One the server refuses
+ * with the list of open work it would cancel shows that list in the foot and asks again, and
+ * its confirmed retry confirms that list (`useKindAnswers`). Its history, a change of
  * its answer, its fold and what it left unsent are this frame's, whatever its kind. Where the
  * listing says the question's space and project, its head says them.
  *
@@ -54,6 +57,7 @@ import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import RequestFoot from '@/features/input-requests/components/RequestFoot.vue'
 import RequestHead from '@/features/input-requests/components/RequestHead.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
+import { useBlockNote } from '@/features/input-requests/composables/useBlockNote.ts'
 import { useKindAnswers } from '@/features/input-requests/composables/useKindAnswers.ts'
 import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
@@ -142,6 +146,7 @@ const {
   error,
   fieldsDisabled,
   forget,
+  listed,
   pastDue,
   refresh,
   refused,
@@ -184,7 +189,7 @@ const kind = useKindAnswers({
   question: card,
   waiting,
   write: (draft) => emit('update:draft', draft),
-  writes: { busy, declining, requiresRefresh, resolve, sendDisabled, stepBack, writable },
+  writes: { busy, declining, listed, requiresRefresh, resolve, sendDisabled, stepBack, writable },
 })
 const { asking, byAnswers, chooseDay, laterControl, offered, putOff } = kind
 const { press: pressAnswer, stepStands } = kind
@@ -224,26 +229,12 @@ const hasFoot = computed(() =>
   [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
 const busyMark = computed(() => busy.value || undefined)
-/**
- * A block of one question with options offers no comment of its own: the field's comment would
- * say the same. One an older answer wrote there stays open, to be read and changed.
- */
-const offersNote = computed(() => {
-  const [only, ...rest] = request.value.fields
-  return rest.length > 0 || only?.type === 'text' || (answerFields.value?.noteOpen ?? false)
+const { noteToggle, pressNote } = useBlockNote({
+  disabled: fieldsDisabled,
+  fields: answerFields,
+  request,
+  shown: () => inForm.value && supported.value,
 })
-/** The press of the comment on the block, which stands in its head while there is a form. */
-const noteToggle = computed(() =>
-  inForm.value && supported.value && offersNote.value
-    ? {
-        disabled: fieldsDisabled.value,
-        name: t('requests.questionNoteName', { title: request.value.title }),
-        open: answerFields.value?.noteOpen ?? false,
-        written: answerFields.value?.noteWritten ?? false,
-      }
-    : null,
-)
-const pressNote = () => answerFields.value?.pressNote()
 /** Why an answered question offers no change, where that is something to know. */
 const changeFact = computed(() => {
   if (request.value.status !== 'answered' || !props.entry.target.writable) return ''
@@ -393,6 +384,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
         v-else-if="byAnswers"
         name="subject"
         :entry="entry"
+        :disabled="fieldsDisabled"
       />
       <RequestAnswerFields
         v-else
@@ -437,6 +429,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
       :stuck="answerFields?.structured ?? false"
       :undecided="answerFields?.undecided ?? 0"
       :later="laterControl"
+      :listed="listed"
       :waiting="waiting"
       @answer="pressAnswer"
       @day="chooseDay"

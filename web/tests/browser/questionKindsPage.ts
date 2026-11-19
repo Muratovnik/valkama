@@ -32,6 +32,24 @@ const underField = (id: string, option: string, required: boolean): InputRequest
 })
 const until = underField('until', 'later', true)
 const cancels = underField('cancels', 'drop', false)
+/** The findings of the group, each ticked at first, as the server offers them. */
+const FINDINGS = [
+  { reference: 'MAIN-311', title: 'Focus leaves after saving' },
+  { reference: 'MAIN-312', title: 'The hint reads too pale' },
+  { reference: 'MAIN-313', title: 'The switch has no name' },
+]
+const findings: InputRequestField = {
+  id: 'items',
+  label: 'Items in this group',
+  description: 'An item left unticked leaves the group and goes back to triage.',
+  type: 'multi_choice',
+  required: false,
+  options: FINDINGS.map(({ reference, title }) => ({
+    id: reference.toLowerCase(),
+    label: `${reference} · ${title}`,
+    recommended: true,
+  })),
+}
 
 /** The server's fields of each purpose (`request_model.py`). */
 const FIELDS: Record<Purpose, InputRequestField[]> = {
@@ -43,7 +61,7 @@ const FIELDS: Record<Purpose, InputRequestField[]> = {
   cancel: [answerField('cancel', 'keep'), underField('cancels', 'cancel', false)],
   condition: [answerField('allow', 'keep')],
   consent: [answerField('agree', 'object', 'moved_out')],
-  triage: [answerField('do', 'later', 'drop'), until, cancels],
+  triage: [answerField('do', 'later', 'drop'), findings, { ...until, required: false }, cancels],
 }
 
 /** The write a question is about, as the server reads it out: only what each kind shows. */
@@ -95,12 +113,23 @@ const ACTIONS: Partial<Record<Purpose, Request['action']>> = {
   triage: action('finding', {
     proposed: {
       conditions: ['Every switch says its state'],
-      items: [
-        { reference: 'MAIN-311', title: 'Focus leaves after saving' },
-        { reference: 'MAIN-312', title: 'The hint reads too pale' },
-      ],
+      items: FINDINGS,
       answer: 'do',
-      why: 'Both block the settings window.',
+      why: 'They all block the settings window.',
+    },
+    // What the question lists when asked: every task of the group. The answer's refusal lists
+    // what stays after the ticked ones are cancelled, under its own token.
+    cancel_list: {
+      cancels: FINDINGS.map(({ reference, title }) => ({
+        reference,
+        title,
+        kind: 'task',
+        state: { key: 'triage', name: 'Triage', category: 'triage' },
+        container_state: null,
+        holder: [],
+      })),
+      dependents: [],
+      list_token: 'asked-token',
     },
   }),
   confirm: action('goal_close', {

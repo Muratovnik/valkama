@@ -39,7 +39,7 @@ const KINDS = [
   { prompt: 'The cancel question', answers: ['Cancel', 'Keep'], shows: 'MAIN-301' },
   {
     prompt: 'The confirm question',
-    answers: ['I confirm', 'Leave to the next session'],
+    answers: ['I confirm', 'Leave it open'],
     shows: 'The adapter delivers to the tray.',
   },
   { prompt: 'The return question', answers: ['Do', 'Later…', 'Don’t do'], shows: '' },
