@@ -333,12 +333,14 @@ test('a read-down goal has no action in its bar and its reason goes with the fac
   await expect(reason).not.toBeInViewport()
   await expect(drawer.locator('.drawer-frame-action').getByRole('button')).toHaveCount(0)
   await expect(drawer.locator('.drawer-frame-action')).toHaveText('')
-  // The title takes what the empty cell leaves: most of the row up to Close.
+  // The title takes what the empty cell leaves: most of the row up to the first press after it,
+  // «…» where the goal offers something to do with it, else Close.
   const reach = await drawer.locator('.drawer-frame-bar').evaluate((bar) => {
-    const edge = (selector: string) => bar.querySelector(selector)?.getBoundingClientRect()
-    return (
-      (edge('.drawer-frame-close')?.left ?? 0) - (edge('.drawer-frame-pinned-title')?.right ?? 0)
-    )
+    const title = bar.querySelector('.drawer-frame-pinned-title')?.getBoundingClientRect()
+    const after = [...bar.querySelectorAll('button')]
+      .map((press) => press.getBoundingClientRect().left)
+      .filter((left) => left >= (title?.right ?? 0))
+    return Math.min(...after) - (title?.right ?? 0)
   })
   expect(reach).toBeLessThanOrEqual(16 + 1)
 })

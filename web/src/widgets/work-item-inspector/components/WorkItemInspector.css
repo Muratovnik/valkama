@@ -7,9 +7,3 @@
 .inspector-panel {
   min-width: 0;
 }
-
-.inspector-read-recovery {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: var(--space-3);
-}

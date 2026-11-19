@@ -35,6 +35,7 @@ import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemChainMessages } from '@/shared/i18n/workItemChainMessages.ts'
 import { workItemClosingMessages } from '@/shared/i18n/workItemClosingMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
+import { workItemDividingMessages } from '@/shared/i18n/workItemDividingMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemFactMessages } from '@/shared/i18n/workItemFactMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
@@ -666,6 +667,7 @@ export const ru = {
   workItem: {
     agents: workItemAgentMessages.ru.agents,
     closeActions: workItemClosingMessages.ru.closeActions,
+    dividing: workItemDividingMessages.ru.dividing,
     usage: workItemUsageMessages.ru.usage,
     preview: workItemPreviewMessages.ru.preview,
     addDescription: 'Добавить описание',

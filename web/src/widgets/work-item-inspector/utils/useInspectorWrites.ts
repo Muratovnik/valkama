@@ -8,8 +8,9 @@
  * one. Overriding is offered only where the server accepts an override for
  * that exact refusal, and only runs after a second, explicit answer.
  *
- * The writes that close work or put it off ask first, in a window or in place, and are the
- * card's closing writes' (`provideInspectorClosing`), which this provides for the card.
+ * The writes that close work or put it off, and those that change what it is part of, ask
+ * first, in a window or in place, and are the card's closing writes' (`provideInspectorClosing`),
+ * which this provides for the card.
  */
 import { ref } from 'vue'
 import type { Ref } from 'vue'
@@ -25,6 +26,7 @@ import {
   transitionWorkItem,
   updateWorkItemFacts,
 } from '@/shared/api/planningApi.ts'
+import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -62,6 +64,8 @@ interface WriteContext {
 export function useInspectorWrites(options: {
   busy: Ref<boolean>
   item: Ref<WorkItem | null>
+  /** What the card read of the work under the item, which its dividing writes ask. */
+  chain?: Readonly<Ref<WorkItemChain | null>>
   /** Re-read the record and tell the page it changed. */
   changed: () => Promise<void>
   /** The sentence for a failure that is not a refusal: a dropped connection, a timeout. */
