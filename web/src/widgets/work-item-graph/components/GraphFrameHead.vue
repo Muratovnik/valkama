@@ -20,7 +20,6 @@
  * `frame:<id>:fold` and `frame:<id>`; a header drawn only to be measured carries none.
  */
 import { computed, useTemplateRef } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 import GraphFrameCounts from '@/widgets/work-item-graph/components/GraphFrameCounts.vue'
 import GraphFrameFold from '@/widgets/work-item-graph/components/GraphFrameFold.vue'
@@ -67,9 +66,15 @@ const emit = defineEmits<{
   open: [reference: string]
   toggle: [id: string]
 }>()
-const { t } = useI18n()
 
-const { goal, foldLabel, inside, insideShown, openLabel } = useGraphFrameWords({
+const {
+  goal,
+  foldLabel,
+  inside,
+  insideShown,
+  name: title,
+  openLabel,
+} = useGraphFrameWords({
   far: () => far,
   frame: () => frame,
   overview: () => overview,
@@ -81,7 +86,6 @@ const foldTarget = computed(() => `frame:${frame.id}:fold`)
 const foldShown = computed(() => foldIsTarget(frame, overview))
 const openTarget = computed(() => `frame:${frame.id}`)
 
-const title = computed(() => goal.value?.title ?? t('graph.frame.noParent'))
 /** Far out the count takes the band, and the reference stays in the button's name. */
 const referenceShown = computed(() => !(far && inside.value))
 /** Zoomed out the line holds the reference and the work moving; with neither it takes no row. */

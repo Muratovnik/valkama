@@ -1,7 +1,9 @@
 /**
- * What a frame's header says in words: what its buttons are called, and what a
- * fold hides. The buttons' names say what the header shows, so the keyboard and
- * the eye are told one thing at every zoom.
+ * What a frame's header says in words: what its buttons are called, what a fold
+ * hides, and the name of a frame no goal heads — the work under no goal, or another
+ * space's work, named as the list's group and the board's lane of that space are. The
+ * buttons' names say what the header shows, so the keyboard and the eye are told one
+ * thing at every zoom.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +29,12 @@ export function useGraphFrameWords(input: FrameWordsInput) {
   const named = computed(() =>
     goal.value ? { reference: goal.value.reference, title: goal.value.title } : null,
   )
+  /** The frame's name: its goal's title, another space's key and name, or no goal. */
+  const name = computed(() => {
+    const { space } = input.frame()
+    if (goal.value) return goal.value.title
+    return space ? t('workItem.grouped.space', space) : t('graph.frame.noGoal')
+  })
 
   /**
    * What a fold hides: the goal's open work, whatever a filter let through, or
@@ -69,9 +77,10 @@ export function useGraphFrameWords(input: FrameWordsInput) {
   const foldLabel = computed(() => {
     const verb = input.frame().folded ? 'unfold' : 'fold'
     const kind = isStage.value ? 'Stage' : 'Goal'
-    const action = named.value
-      ? t(`graph.frame.${verb}${kind}`, named.value)
-      : t(`graph.frame.${verb}None`)
+    const { space } = input.frame()
+    let action = t(`graph.frame.${verb}None`)
+    if (named.value) action = t(`graph.frame.${verb}${kind}`, named.value)
+    else if (space) action = t(`graph.frame.${verb}Space`, space)
     return [action, ...insideWhole.value, ...(named.value ? [] : live.value)].join(' · ')
   })
 
@@ -79,7 +88,7 @@ export function useGraphFrameWords(input: FrameWordsInput) {
   const openLabel = computed(() => {
     const { progress } = input.frame()
     const kind = isStage.value ? 'stage' : 'goal'
-    const head = named.value ? t(`graph.frame.${kind}`, named.value) : t('graph.frame.noParent')
+    const head = named.value ? t(`graph.frame.${kind}`, named.value) : name.value
     const { done, total } = progress
     const standing = total ? t('graph.frame.doneOf', { done, total }) : t('graph.frame.noTasks')
     const groups = countedGroups(progress).map(({ group, count }) => {
@@ -89,5 +98,5 @@ export function useGraphFrameWords(input: FrameWordsInput) {
     return [head, standing, ...groups, ...insideWhole.value, ...live.value].join(' · ')
   })
 
-  return { goal, foldLabel, inside, insideShown, openLabel }
+  return { goal, foldLabel, inside, insideShown, name, openLabel }
 }

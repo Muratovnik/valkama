@@ -22,6 +22,11 @@
  * while at work on others, silent for over a day. The card's own word is short, and
  * «спрашивает» and «ждёт» are two waits a reader has to tell apart. Each sign's entry says
  * which sign it names in `data-sign`.
+ *
+ * A link whose far end lies in a space the read could not read is not drawn, and the key
+ * says so, by the space's key where the link names it (`unread`). That entry is a fact
+ * about the field rather than a key to a mark, so a screen reader hears it, as it hears
+ * none of the others.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -46,8 +51,16 @@ const props = defineProps<{
   moving?: boolean
   /** The sessions' signs the cards on the field draw, in the order the key names them. */
   signs?: readonly LiveSign[]
+  /** The spaces whose links the read could not read, by key; `''` for one nothing names. */
+  unread?: readonly string[]
 }>()
 const { t } = useI18n()
+
+const unreadWords = computed(() =>
+  (props.unread ?? []).map((key) =>
+    key ? t('graph.frame.unread', { key }) : t('graph.frame.unreadUnnamed'),
+  ),
+)
 
 /** Done leads, as on the card's map: what is finished, then what is under way, then ahead. */
 const entries = computed(() => {
@@ -63,13 +76,19 @@ const entries = computed(() => {
 
 <template>
   <div
-    v-if="entries.length || hasEdges || moving || signs?.length"
+    v-if="entries.length || hasEdges || moving || signs?.length || unreadWords.length"
     class="graph-legend"
-    aria-hidden="true"
   >
+    <span
+      v-for="words in unreadWords"
+      :key="words"
+      class="graph-legend-item graph-legend-unread"
+      >{{ words }}</span
+    >
     <SemanticState
       v-for="entry in entries"
       :key="entry.group"
+      aria-hidden="true"
       class="graph-legend-state"
       dimension="work-item-chain-group"
       :class="{ held: !entry.shown }"
@@ -77,13 +96,20 @@ const entries = computed(() => {
       :label="names[entry.group] ?? t(`workItem.chain.group.${entry.group}`)"
     />
     <template v-if="hasEdges">
-      <span class="graph-legend-item"><i class="stroke solid" />{{ t('graph.edgeBlocks') }}</span>
-      <span class="graph-legend-item"
+      <span
+        class="graph-legend-item"
+        aria-hidden="true"
+        ><i class="stroke solid" />{{ t('graph.edgeBlocks') }}</span
+      >
+      <span
+        class="graph-legend-item"
+        aria-hidden="true"
         ><i class="stroke dashed" />{{ t('graph.edgeDiscovered') }}</span
       >
     </template>
     <span
       v-if="moving"
+      aria-hidden="true"
       class="graph-legend-item"
       ><i class="stroke live" />{{ t('graph.edgeLive') }}</span
     >
@@ -91,6 +117,7 @@ const entries = computed(() => {
       v-for="sign in signs"
       :key="sign"
       class="graph-legend-item graph-legend-sign"
+      aria-hidden="true"
       :data-sign="sign"
       ><SessionSign
         :sign="sign"
@@ -125,6 +152,12 @@ const entries = computed(() => {
   align-items: center;
   min-height: 24px;
   white-space: nowrap;
+}
+
+/* What the field could not draw, said in the text's ink and allowed to wrap on a phone. */
+.graph-legend-unread {
+  color: var(--color-text);
+  white-space: normal;
 }
 
 .stroke {

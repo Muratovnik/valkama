@@ -226,7 +226,7 @@ describe('WorkItemComposer goal and labels', () => {
     await goal?.trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
     expect(optionNames()).toEqual([
-      'No parent',
+      'No goal',
       'MAIN-12 · ParserIn progress',
       'MAIN-3 · Old releaseDone',
     ])

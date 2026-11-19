@@ -95,7 +95,7 @@ const kindOptions = computed(() => facetChoices(KIND_CHOICES))
 const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
 const stateName = useStandingName()
-const parentOptions = computed(() => parentChoices(props.items, t('compose.noParent'), stateName))
+const parentOptions = computed(() => parentChoices(props.items, t('compose.noGoal'), stateName))
 const labelOptions = computed(() => labelChoices(props.items))
 /** The row a parent's title stands in, which needs more than a phone's half. */
 const holdsTitles = (row: readonly FacetId[]) => row.includes('parent')

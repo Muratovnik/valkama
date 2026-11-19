@@ -8,12 +8,18 @@ export type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 /** The frame of the work filed under no goal. */
 export const NO_PARENT_FRAME = 'none'
 
+/** The space another space's work stands in: its key and its name. */
+export type FrameSpace = NonNullable<WorkItemBrief['other_space']>
+
+/** The frame of another space's work, by that space's key; no goal's id starts so. */
+export const spaceFrameId = (key: string) => `space:${key}`
+
 /**
  * A visible work item placed by the layout engine, as a box in the field's own
  * space: every reader measures the box it was given rather than a card size.
  */
 export interface PlacedNode extends WorkItemBrief {
-  /** The frame that holds it: a goal's id or `NO_PARENT_FRAME`. */
+  /** The frame that holds it: a goal's id, `NO_PARENT_FRAME` or another space's (`spaceFrameId`). */
   frameId: string
   height: number
   width: number
@@ -48,7 +54,7 @@ export interface PlacedFrame {
   /** How tall its header is: the room the layout left for it, which is what is drawn. */
   header: number
   height: number
-  /** A goal's or container's `work_item_id`, or `NO_PARENT_FRAME`. */
+  /** A goal's or container's `work_item_id`, `NO_PARENT_FRAME`, or another space's frame. */
   id: string
   /** Open and closed work under it, nested frames' included, for live counts. */
   members: readonly string[]
@@ -58,10 +64,15 @@ export interface PlacedFrame {
   width: number
   x: number
   y: number
+  /** The other space whose work it holds; null for a frame of this space. */
+  space?: FrameSpace | null
 }
 
 /** What a frame's header shows, wherever the frame stands. */
-export type FrameHead = Pick<PlacedFrame, 'goal' | 'foldable' | 'folded' | 'id' | 'progress'>
+export type FrameHead = Pick<
+  PlacedFrame,
+  'goal' | 'foldable' | 'folded' | 'id' | 'progress' | 'space'
+>
 
 export const NODE_WIDTH = 264
 export const NODE_HEIGHT = 112
@@ -77,8 +88,13 @@ export const MARGIN = 24
 export const FRAME_HEADER = 160
 /** The air between an open frame's edge and the work inside it. */
 export const FRAME_PADDING = 16
-/** A folded frame is its header alone, a little wider than a card so its counts fit. */
-export const FOLDED_WIDTH = 288
+/**
+ * A folded frame is its header alone, wider than a card so its counts fit, and so its
+ * reference line holds the longest state a goal or stage derives, «Ждёт подтверждения»,
+ * whole beside a reference of a five-digit number: at 288 that state gave way, and a state
+ * waiting for its owner read only once the pointer found it.
+ */
+export const FOLDED_WIDTH = 312
 
 /**
  * The field's Vue Flow store. The canvas and the camera controls beside it are

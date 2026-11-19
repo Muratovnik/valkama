@@ -34,7 +34,7 @@ function item(n: number, key: string, overrides: Partial<WorkItemBrief> = {}): W
 }
 
 export const LONG_TITLE =
-  'Reconcile the release notes with what the installer actually ships to the desktop'
+  'Reconcile the release notes with what the installer actually ships to the desktop and to the server'
 
 /** The longest reference the read model takes, on a card. */
 export const LONG_REFERENCE = 'LONGKEYS-123456789'

@@ -1,17 +1,20 @@
-/* What a parent's frame on the graph says, in both languages. */
+/* What a frame on the graph says, in both languages: a goal's, a stage's, the work under no
+   goal's and another space's. */
 
 export const graphFrameMessages = {
   en: {
     frame: {
-      noParent: 'No parent',
+      noGoal: 'No goal',
       goal: 'Goal {reference} “{title}”',
       stage: 'Stage {reference} “{title}”',
       foldGoal: 'Collapse goal {reference} “{title}”',
       unfoldGoal: 'Expand goal {reference} “{title}”',
       foldStage: 'Collapse stage {reference} “{title}”',
       unfoldStage: 'Expand stage {reference} “{title}”',
-      foldNone: 'Collapse the work under no parent',
-      unfoldNone: 'Expand the work under no parent',
+      foldNone: 'Collapse the work under no goal',
+      unfoldNone: 'Expand the work under no goal',
+      foldSpace: 'Collapse the work of space {key} · {name}',
+      unfoldSpace: 'Expand the work of space {key} · {name}',
       doneOf: '{done} of {total} done',
       noTasks: 'No tasks',
       openInside: 'open inside',
@@ -21,19 +24,23 @@ export const graphFrameMessages = {
       active: 'in progress',
       blocked: 'blocked',
       working: 'working',
+      unread: 'Links with {key} were not read',
+      unreadUnnamed: 'Links with another space were not read',
     },
   },
   ru: {
     frame: {
-      noParent: 'Без родителя',
+      noGoal: 'Без цели',
       goal: 'Цель {reference} «{title}»',
       stage: 'Этап {reference} «{title}»',
       foldGoal: 'Свернуть цель {reference} «{title}»',
       unfoldGoal: 'Развернуть цель {reference} «{title}»',
       foldStage: 'Свернуть этап {reference} «{title}»',
       unfoldStage: 'Развернуть этап {reference} «{title}»',
-      foldNone: 'Свернуть работу без родителя',
-      unfoldNone: 'Развернуть работу без родителя',
+      foldNone: 'Свернуть работу без цели',
+      unfoldNone: 'Развернуть работу без цели',
+      foldSpace: 'Свернуть работу пространства {key} · {name}',
+      unfoldSpace: 'Развернуть работу пространства {key} · {name}',
       doneOf: '{done} из {total} выполнено',
       noTasks: 'Нет задач',
       openInside: 'открытая внутри | открытых внутри | открытых внутри',
@@ -43,6 +50,8 @@ export const graphFrameMessages = {
       active: 'в работе',
       blocked: 'заблокирована | заблокированы | заблокировано',
       working: 'работает | работают | работают',
+      unread: 'Связи с {key} не прочитаны',
+      unreadUnnamed: 'Связи с другим пространством не прочитаны',
     },
   },
 } as const

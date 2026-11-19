@@ -107,5 +107,5 @@ export function usePlanningCensus(input: CensusInput) {
     return null
   })
 
-  return { counted, counts, exclusion, filtered, matched, scope, visible }
+  return { counted, counts, exclusion, filtered, matched, matches, scope, visible }
 }
