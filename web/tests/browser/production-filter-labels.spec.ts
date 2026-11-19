@@ -247,7 +247,7 @@ test('the menu with the choice passes the accessibility checks', async ({ page }
   await bothPicked(page)
   await anyOf(page).click()
   const results = await new AxeBuilder({ page })
-    .include('.work-filter')
+    .include('.workspace-filter')
     .include('.workspace-chips')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze()

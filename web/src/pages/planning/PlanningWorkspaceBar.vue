@@ -28,19 +28,16 @@ import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
-import WorkFilterChips from '@/features/work-filter/WorkFilterChips.vue'
-import WorkFilterField from '@/features/work-filter/WorkFilterField.vue'
+import { useWorkFilter } from '@/features/work-filter/useWorkFilter.ts'
 
-import {
-  EMPTY_WORK_FILTER,
-  filterTokens,
-  negateToken,
-  removeToken,
-} from '@/entities/work-item/utils/workFilter.ts'
-import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
+import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
+import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import FacetFilter from '@/shared/ui/FacetFilter.vue'
+import FacetFilterChips from '@/shared/ui/FacetFilterChips.vue'
 import ScopeChip from '@/shared/ui/ScopeChip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -137,8 +134,14 @@ const rowsText = computed(() => {
     : ''
 })
 
-const tokens = computed(() => filterTokens(filter.value))
-const labelsAny = computed(() => filter.value.labelsMatch === 'any')
+/** The filter on the shared field and chips (`useWorkFilter`). */
+const work = useWorkFilter({
+  categories: () => props.categories,
+  filter,
+  held: () => heldCount.value,
+  items: () => props.items,
+})
+const { field: fieldWords, text: filterText } = work
 /** Where focus goes when the last chip on the narrow line is taken out. */
 const field = useTemplateRef<{ focus: () => void }>('field')
 function focusField() {
@@ -152,9 +155,6 @@ function reset() {
 const chips = useTemplateRef<{ focusLast: () => boolean }>('chips')
 function focusChips() {
   chips.value?.focusLast()
-}
-function removeChip(token: WorkFilterToken) {
-  filter.value = removeToken(filter.value, token)
 }
 </script>
 
@@ -189,16 +189,32 @@ function removeChip(token: WorkFilterToken) {
         @group="(value) => emit('group', value)"
         @state="(state) => emit('state', state)"
       />
-      <WorkFilterField
+      <FacetFilter
         ref="field"
-        v-model:filter="filter"
+        v-model:text="filterText"
         class="workspace-filter"
-        :categories="categories"
-        :held="heldCount"
-        :items="items"
+        :chips="work.count.value"
+        :clear-label="fieldWords.clearLabel"
+        :label="fieldWords.label"
+        :menu-label="fieldWords.menuLabel"
+        :placeholder="fieldWords.placeholder"
+        :short-placeholder="fieldWords.shortPlaceholder"
+        :source="work.source"
+        :words="fieldWords.words"
         @chips="focusChips"
+        @choose="work.choose"
         @find="(text) => emit('find', text)"
-      />
+        @pick="work.pick"
+        @remove-last="work.removeLast"
+      >
+        <template #value="{ option }">
+          <FacetChoiceMark
+            v-if="option.mark"
+            :mark="option.mark"
+          />
+          <template v-else>{{ option.text }}</template>
+        </template>
+      </FacetFilter>
       <VButton
         v-if="writable"
         v-tooltip.clipped="t('workItem.create')"
@@ -220,13 +236,13 @@ function removeChip(token: WorkFilterToken) {
         @exit="emit('exit-chain')"
       />
       <div class="workspace-chips">
-        <WorkFilterChips
+        <FacetFilterChips
           ref="chips"
-          :labels-any="labelsAny"
-          :tokens="tokens"
+          :chips="work.chips.value"
+          :label="t('workItem.filter.tokens')"
           @leave="focusField"
-          @negate="(token) => (filter = negateToken(filter, token))"
-          @remove="removeChip"
+          @negate="work.negate"
+          @remove="work.remove"
         />
       </div>
       <p

@@ -46,6 +46,11 @@
 
   /* A list of options in groups; a host that knows its room says so on the list. */
   --size-option-groups-max-height: min(60dvh, 420px);
+
+  /* A filter's menu (`FacetFilter`): as wide as its field, up to 24rem. The percentage is the
+     field's, where the menu reads it; a host whose field is narrower than its values says a
+     width of its own on the field. */
+  --size-facet-filter-menu-width: min(24rem, 100%);
   --space-label-value: var(--space-2);
   --space-heading-content: var(--space-3);
 

@@ -93,6 +93,8 @@ export interface OptionGroup<Row> {
     text: string
     title: string
   }[]
+  /** Said under the rows, and no row: a wait for them, a read that failed, nothing found. */
+  note?: string
 }
 
 /** The id of an option in a grouped list (`OptionGroups`), by its place in reading order. */

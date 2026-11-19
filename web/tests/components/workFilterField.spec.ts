@@ -7,14 +7,13 @@ import { createI18n } from 'vue-i18n'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import WorkFilterField from '@/features/work-filter/WorkFilterField.vue'
-
 import { EMPTY_WORK_FILTER, toggleToken } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { boardItem } from '../fixtures/board.ts'
+import WorkFilterField from '../support/workFilterField.ts'
 
 const items = [
   boardItem(1, 'backlog', { labels: ['ui', 'agent'], claim_ref: 'claude (session 1baa03d7)' }),

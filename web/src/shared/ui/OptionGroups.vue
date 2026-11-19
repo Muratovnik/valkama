@@ -24,6 +24,9 @@
  * A list can be one step of several. A row that leads to another list says so with a chevron
  * and is no value, so it carries no `aria-selected`; the list it led to has its group's name as
  * the row back, the first the arrows reach.
+ *
+ * A group may say something under its rows that is no row (`note`): that its values are still
+ * being read, that the read failed, that the text typed found none. The arrows never reach it.
  */
 import { computed } from 'vue'
 
@@ -191,6 +194,12 @@ const NO_VALUE = undefined
           name="chevron-right"
           :size="14"
         />
+      </div>
+      <div
+        v-if="row.group.note"
+        class="option-note"
+      >
+        {{ row.group.note }}
       </div>
     </div>
   </div>
@@ -377,5 +386,15 @@ const NO_VALUE = undefined
   flex: 0 0 auto;
   color: var(--color-text-tertiary);
   font-variant-numeric: tabular-nums;
+}
+
+/* Words under the rows, where a row's would stand, past the check's place, in a row's height. */
+.option-note {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-control-inline);
+  padding: 0 var(--space-2) 0 calc(var(--space-2) * 2 + 14px);
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 </style>

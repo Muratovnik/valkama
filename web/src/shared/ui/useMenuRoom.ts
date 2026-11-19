@@ -7,7 +7,7 @@ import { useEventListener } from '@vueuse/core'
 const FOOT_AIR = 8
 
 /**
- * How tall the filter's menu may stand: from where it starts to the window's foot. It offers
+ * How tall a filter's menu may stand (`FacetFilter`): from where it starts to the window's foot. It offers
  * more than any window holds on a real space, and at a fixed height it hid most of that with
  * half a tall window left over. It is read as the menu opens, when the window changes and when
  * the bar over the menu changes height; nothing else moves where it starts.

@@ -1,79 +1,73 @@
 <script setup lang="ts">
 /**
- * The picked facets as chips, each one a button that takes itself out. A
- * facet's value has a toggle before it, the operator (`ToggleChip`): «=» or,
- * pressed, «≠», which turns the value into one the work must not carry — Linear's
- * «is» and «is not», switched on the chip rather than asked for on every pick.
+ * What a filter holds as chips (`FacetFilter`), each one a button that takes
+ * itself out; the host names each chip and says what taking it out does. A
+ * value the host lets be negated has a toggle before it, the operator
+ * (`ToggleChip`): «=» or, pressed, «≠», which turns the value into one the
+ * filtered must not carry — Linear's «is» and «is not», switched on the chip
+ * rather than asked for on every pick.
  *
- * They stand on the bar's line of state, beside the counts they explain,
- * rather than inside the field: at the widths the bar has, three chips left
- * the text no room. Each is a Tab stop; the field's caret also reaches the
- * last one with ←, the arrows move between them, and → past the last one, or
- * Escape, goes back to the text.
+ * The host places them, beside what they explain, rather than inside the
+ * field: at the widths a bar has, three chips left the text no room. Each is a
+ * Tab stop; the field's caret also reaches the last one with ←, the arrows
+ * move between them, and → past the last one, or Escape, goes back to the text.
  *
- * The labels say how they combine, in the word between two of them, so the
- * filter reads whole without its menu open.
+ * A chip may follow a word that says how it combines with the one before
+ * (`join`), which also describes it, so the filter reads whole without its
+ * menu open. Each chip's item carries `data-filter-chip`, the hook a host
+ * measures the chips by and a test selects them by.
  */
 import { computed, nextTick, useId, useTemplateRef } from 'vue'
-import { useI18n } from 'vue-i18n'
 
-import { tokenKey, tokenName } from '@/features/work-filter/filterOptions.ts'
-
-import type { ValueToken, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
-
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import ToggleChip from '@/shared/ui/ToggleChip.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
+/** One chip, as its host names it. */
+export interface FacetChip {
+  /** Unique among the chips, and the same while the value is in either way. */
+  key: string
+  /** «Label: ui», whole; its hint where the chip cuts it. */
+  name: string
+  /** The remove button's name. */
+  removeName: string
+  /** The word before it, which says how it combines with the chip before. */
+  join?: string
+  /** The «is» / «is not» toggle, for a value that can be negated; named for what it would switch. */
+  operator?: { name: string; pressed: boolean }
+  /** The name as runs, where it holds a title: a task's code drawn as code. */
+  runs?: readonly TextRun[]
+}
+
 const props = defineProps<{
-  /** One of the labels will do, rather than every one of them. */
-  labelsAny: boolean
-  tokens: readonly WorkFilterToken[]
+  chips: readonly FacetChip[]
+  /** The list's name. */
+  label: string
 }>()
 
 const emit = defineEmits<{
   /** Focus leaves the chips for the text, at its end. */
   leave: []
   /** The value switched between «is» and «is not». */
-  negate: [token: ValueToken]
-  remove: [token: WorkFilterToken]
+  negate: [key: string]
+  remove: [key: string]
 }>()
 
-const { t } = useI18n()
 const id = useId()
 
-const chips = computed(() => {
-  const firstLabel = props.tokens.findIndex((token) => token.facet === 'labels')
-  const word = t(`workItem.filter.labelsMatch.${props.labelsAny ? 'any' : 'all'}.join`)
-  const and = t('workItem.filter.labelsMatch.all.join')
-  return props.tokens.map((token, index) => {
-    const name = tokenName(token, t)
-    // The word before it, from the second label on, which also describes the chip.
-    // A label negated is kept out whatever «any» lets in, so the word before it is always «and».
-    const joined = token.facet === 'labels' && token.not ? and : word
-    const join = token.facet === 'labels' && index > firstLabel ? joined : undefined
+const chips = computed(() =>
+  props.chips.map((chip, index) => {
     const joinId = `${id}-join-${index}`
-    const value = 'value' in token ? token : undefined
     return {
-      key: tokenKey(token),
-      name,
-      join,
+      ...chip,
       joinId,
-      describedBy: join && joinId,
-      // The operator's name is the value's whole, so it says what it would switch.
-      operator: value && {
-        token: value,
-        pressed: value.not === true,
-        sign: value.not ? '≠' : '=',
-        name: t('workItem.filter.negate', {
-          name: tokenName({ ...value, not: undefined } as ValueToken, t),
-        }),
-      },
-      removeName: t('workItem.filter.remove', { name }),
-      token,
+      describedBy: chip.join && joinId,
+      sign: chip.operator?.pressed ? '≠' : '=',
     }
-  })
-})
+  }),
+)
 
 const list = useTemplateRef<HTMLElement>('list')
 
@@ -90,13 +84,13 @@ function focusAt(index: number): boolean {
 }
 
 function focusLast(): boolean {
-  return focusAt(props.tokens.length - 1)
+  return focusAt(props.chips.length - 1)
 }
 
 function remove(index: number) {
   const chip = chips.value[index]
   if (!chip) return
-  emit('remove', chip.token)
+  emit('remove', chip.key)
   // The chip before takes focus, the next one when the first went, and the
   // text when none is left.
   void nextTick(() => focusAt(Math.max(0, index - 1)) || emit('leave'))
@@ -137,12 +131,13 @@ defineExpose({ focusLast })
     v-if="chips.length"
     ref="list"
     class="filter-chips"
-    :aria-label="t('workItem.filter.tokens')"
+    :aria-label="label"
   >
     <li
       v-for="(chip, index) in chips"
       :key="chip.key"
       class="filter-chip-item"
+      data-filter-chip
     >
       <span
         v-if="chip.join"
@@ -157,9 +152,9 @@ defineExpose({ focusLast })
           class="filter-chip-operator"
           :pressed="chip.operator.pressed"
           :aria-label="chip.operator.name"
-          @toggle="emit('negate', chip.operator.token)"
+          @toggle="emit('negate', chip.key)"
         >
-          <span class="filter-chip-sign">{{ chip.operator.sign }}</span>
+          <span class="filter-chip-sign">{{ chip.sign }}</span>
         </ToggleChip>
         <button
           v-tooltip.clipped="chip.name"
@@ -170,7 +165,16 @@ defineExpose({ focusLast })
           @click="remove(index)"
           @keydown="keydown($event, index)"
         >
-          <span class="filter-chip-name one-line">{{ chip.name }}</span>
+          <span
+            v-if="chip.runs"
+            v-text-runs="chip.runs"
+            class="filter-chip-name one-line"
+          />
+          <span
+            v-else
+            class="filter-chip-name one-line"
+            >{{ chip.name }}</span
+          >
           <VIcon
             class="filter-chip-remove"
             name="close"
@@ -262,7 +266,7 @@ defineExpose({ focusLast })
 }
 
 /* The label chip's look — control fill, muted ink — one step up, because it
-   sits inside a field that already has the control fill. The fill is the pill's. */
+   sits beside a field that already has the control fill. The fill is the pill's. */
 .filter-chip {
   display: inline-flex;
   gap: var(--space-1);
