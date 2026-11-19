@@ -7,7 +7,7 @@
  * `cellWords`), so a row read and a row drawn say the same. The order of the
  * runs is the one thing kept by hand, here and in the template alike.
  */
-import { isFolded } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { isFolded, labelsUnder } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { Fit, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import { cellWords, runWords } from '@/entities/work-item/components/drawMarks.ts'
@@ -41,6 +41,12 @@ export interface RowReading {
   updated: string
   words: MarkWords
   /**
+   * What «Goal and stage» prints: in its column the path or a dash, folded the path
+   * alone, first on the line of facts; absent where the list does not draw it, as
+   * the tree by goal does not.
+   */
+  goal?: { cell: string; path: string }
+  /**
    * What a tree prints after the title (`WorkItemListTreeWords.vue`): how much
    * under the row matched and the parent the indent no longer shows; none in a
    * flat list.
@@ -51,10 +57,16 @@ export interface RowReading {
 const marksOf = (item: WorkItemBrief, facets: readonly FacetId[], asked: FacetContext = {}) =>
   surfaceMarks('list', item, asked, facets)
 
-/** The line under the title: on a wide list an open blocker and the labels, else the folded columns. */
-function underTitle(item: WorkItemBrief, { context, fit, updated, words }: RowReading): string[] {
-  if (fit === 'wide') return runWords(marksOf(item, ROW_FACETS.UNDER, context), words)
-  const said = runWords(marksOf(item, factsOf(fit), context), words)
+/**
+ * The lines under the title (`listUnderTitle.ts`): a folded goal and stage first;
+ * then on a wide list an open blocker and the labels, else the folded columns.
+ */
+function underTitle(item: WorkItemBrief, reading: RowReading): string[] {
+  const { context, fit, goal, updated, words } = reading
+  const said = goal?.path && isFolded(fit, 'goal') ? [goal.path] : []
+  if (labelsUnder(fit))
+    return [...said, ...runWords(marksOf(item, ROW_FACETS.UNDER, context), words)]
+  said.push(...runWords(marksOf(item, factsOf(fit), context), words))
   // A dash says "nobody" under a heading; on a line of facts it says nothing.
   if (holderRef(item)) said.push(...runWords(marksOf(item, ROW_FACETS.HOLDER), words))
   if (isFolded(fit, 'checklist') && item.checklist.length)
@@ -68,7 +80,7 @@ function underTitle(item: WorkItemBrief, { context, fit, updated, words }: RowRe
  * prints at this width and in this language, and nothing it keeps out of sight.
  */
 export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
-  const { fit, tree = [], updated, words } = reading
+  const { fit, goal, tree = [], updated, words } = reading
   const shown = (key: SortKey) => !isFolded(fit, key)
   const cell = (facets: readonly FacetId[]) => cellWords(marksOf(item, facets), words)
   return [
@@ -78,6 +90,7 @@ export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
     item.title,
     ...tree,
     ...underTitle(item, reading),
+    ...(goal?.cell && shown('goal') ? [goal.cell] : []),
     ...(shown('state') ? runWords(marksOf(item, ROW_FACETS.STATE), words) : []),
     ...(shown('priority') ? cell(ROW_FACETS.PRIORITY) : []),
     ...(shown('claim') ? cell(ROW_FACETS.HOLDER) : []),

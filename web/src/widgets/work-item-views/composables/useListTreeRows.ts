@@ -15,7 +15,11 @@ import { useI18n } from 'vue-i18n'
 
 import { useListTree } from '@/widgets/work-item-views/composables/useListTree.ts'
 import type { SpaceProject } from '@/widgets/work-item-views/utils/boardLanes.ts'
-import { isGroupRow, listProjectGroups } from '@/widgets/work-item-views/utils/listGroups.ts'
+import {
+  isGroupRow,
+  listProjectGroups,
+  listSpaceGroups,
+} from '@/widgets/work-item-views/utils/listGroups.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import type { TreeRow } from '@/shared/lib/treeRows.ts'
@@ -50,7 +54,10 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
   )
   const groups = computed(() => {
     const scope = live()
-    return scope?.grouping === 'project' ? listProjectGroups(scope.scope, scope.projects, t) : null
+    if (!scope) return null
+    return scope.grouping === 'project'
+      ? listProjectGroups(scope.scope, scope.projects, t)
+      : listSpaceGroups(scope.scope, t)
   })
   const tree = live()
     ? useListTree({

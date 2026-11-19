@@ -80,10 +80,11 @@ async function openShort(page: Page, locale: string, width: number, items = shor
 }
 
 for (const { fit, locale, none, width } of [
-  { fit: 'wide', locale: 'en', none: 'No matches', width: 1440 },
+  { fit: 'full', locale: 'en', none: 'No matches', width: 1440 },
+  { fit: 'wide', locale: 'en', none: 'No matches', width: 1280 },
   { fit: 'medium', locale: 'en', none: 'No matches', width: 1000 },
   { fit: 'narrow', locale: 'en', none: 'No matches', width: 390 },
-  { fit: 'wide', locale: 'ru', none: 'Нет совпадений', width: 1440 },
+  { fit: 'full', locale: 'ru', none: 'Нет совпадений', width: 1440 },
 ] as const) {
   test(`on a ${fit} list in ${locale} the find counts what the rows show`, async ({ page }) => {
     const { count, field } = await openShort(page, locale, width)

@@ -15,8 +15,13 @@ import { test } from './test.ts'
 // A phone's width folds five columns, and their sorts as a run of buttons took
 // three lines of it; there they are one choice instead.
 for (const [width, headings, foldedSorts, choice] of [
-  [1440, ['Ref', 'Title', 'State', 'Priority', 'Assignee', 'Steps', 'Updated'], 0, false],
-  [1024, ['Ref', 'Title', 'Steps', 'Updated'], 3, false],
+  [
+    1440,
+    ['Ref', 'Title', 'Goal and stage', 'State', 'Priority', 'Assignee', 'Steps', 'Updated'],
+    0,
+    false,
+  ],
+  [1024, ['Ref', 'Title', 'Steps', 'Updated'], 4, false],
   [390, ['Ref', 'Title'], 0, true],
 ] as const) {
   test(`the list fits its columns at ${width}px and gives the title the rest`, async ({
@@ -85,9 +90,12 @@ test('the rows are one Tab stop, walked by the arrows, and a closed card gives f
   await expect(rows.first()).toBeVisible()
   const count = await rows.count()
   await expect(page.locator('.work-item-list tbody .list-open[tabindex="0"]')).toHaveCount(1)
-  // Tab from the last sort heading lands on the first row, and the next Tab leaves the list.
-  await page.locator('.work-item-list thead .list-sort').last().focus()
-  await page.keyboard.press('Tab')
+  // The sorts are no Tab stops: ↑ from the first row reaches them, and ↓ comes back.
+  await expect(page.locator('.work-item-list thead .list-sort:not([tabindex="-1"])')).toHaveCount(0)
+  await rows.first().focus()
+  await page.keyboard.press('ArrowUp')
+  await expect(page.locator('.work-item-list thead .list-sort').first()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
   await expect(rows.first()).toBeFocused()
   await page.keyboard.press('ArrowDown')
   await expect(rows.nth(1)).toBeFocused()
@@ -270,4 +278,33 @@ test('at the fold the title keeps 36 characters, the references align and nobody
   await expect(list.locator('tbody')).not.toContainText('Workable')
   await expectNoSilentClipping(page, 'list at 900px of list')
   await page.screenshot(shot(info, 'w-list-900.png'))
+})
+
+test('from 1100px «Goal and stage» stands too, and the title still keeps 36 characters', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 800 })
+  await installBackend(page)
+  await serve(page)
+  await openList(page)
+  const list = page.locator('.work-item-list')
+  await expect(list.locator('tbody tr').first()).toBeVisible()
+  // The narrowest list that stands every column, «Goal and stage» with them.
+  await list.evaluate((element) => {
+    element.style.inlineSize = '1100px'
+  })
+  await expect(list).toHaveAttribute('data-fit', 'full')
+  await expect(list.locator('thead th .list-sort:not(.folded)').nth(2)).toHaveText('Goal and stage')
+  const room = await list.evaluate((element) => {
+    const title = element.querySelector<HTMLElement>('tbody .list-title')
+    const probe = document.createElement('span')
+    probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
+    title?.append(probe)
+    const characters =
+      (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
+    probe.remove()
+    return { characters, overflow: element.scrollWidth - element.clientWidth }
+  })
+  expect(room.characters).toBeGreaterThanOrEqual(36)
+  expect(room.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
 })

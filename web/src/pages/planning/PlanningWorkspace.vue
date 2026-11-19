@@ -348,6 +348,7 @@ defineExpose({ toggleFilter })
           :links="model.links"
           :filter="filter"
           :tree="listTree"
+          :space-items="model.work_items"
           :sort="sort"
           @filter="toggleFilter"
           @open="(reference) => emit('open', reference)"

@@ -1791,17 +1791,38 @@ in and about its scrolled window, and gaps hidden from a reader hold the height
 of the rest, so the scroll bar is as long as the whole list. Its columns are as
 wide as all the rows need wherever it scrolls; a sort and a filter act on every
 row; ↑/↓, Home/End and Page Up/Page Down move by a row's place in the whole list
-and bring the row into view; the Tab stop and the row focus is in stay in the
+and bring the row into view; the rows are the list's one Tab stop, and the head's sorts
+and its choice of orders are none of their own, since Tab came to the rows only after a
+stop at every sort, seven for a reader before the first row: ↑ from the first row goes to
+the heading above the cell focus was in, ← and →, Home and End walk the head, and ↓ goes
+back to the rows; nothing in the list or around it listens for a press but its controls,
+since a browser names a listening element clickable to a reader, and the list's box was
+read as «clickable» before its table; the Tab stop and the row focus is in stay in the
 page wherever the list scrolls; the table tells a reader how many rows it has
 and each row where it stands; a printed list prints every row; and Ctrl+F finds
 in every row, as the next rule says. The cost, for now: on a list that long, a
 screen reader's browse mode reaches only the rows in the page.
+After its title a list row's «Goal and stage» («Цель и этап») names the goal and the
+stages it stands under, goal first, «Launch › Beta», read from the whole space, so a
+filter that leaves the goal out of the rows still names it. Work under no goal says a
+dash; a card of another space says nothing there, since this space's read does not name
+that card's goal. The column sorts by the path. It stands from 1100px of list and gives
+way first: beside every other column a list of 900px left the title 20 characters and
+pushed the table past its edge. Folded, the path leads what the row prints under its
+title, on one line cut at the row's edge and whole on hover: a line of its own above an
+open blocker and the labels down to 900px, and the first fact of the line of facts below
+that, where it folds with the state, the priority and the holder. The list by goal draws
+no such column, since a row's place there is its goal; the list by project does.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
 list's sort order. Grouped «By project», it is a tree of one level: a row per group, as
 the board's lanes by project are, its name and counts across the columns, and the cards
 under it in the list's order. A group's row opens nothing: Enter, a press on its arrow, ←
-and → fold and open it. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
+and → fold and open it. A card of another space, which has no parent here, stands by goal
+in a group of its space, «Space ALPHA · name», one a space, after this space's rows, as the
+board's lane and the graph's frame of that space do: a group's row, its cards under it as a
+list with no tree inside, so another space's goal opens nothing here. «From another space»
+negated keeps those cards out and their groups with them. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
 starts folded. A reader's choice against that rule is kept per space and is
 forgotten once it agrees with the rule. A filter lays out the whole scope and
 shows what it let through with the path to it: a path row is quiet, a reader is
@@ -1811,7 +1832,10 @@ the rule folds nothing. Below the indent's last level a row names its parent,
 Up/Page Down move by place in the whole tree. → opens a folded row and
 otherwise goes to the row's first cell. ← folds an open row and otherwise goes
 to its parent. In a cell, ← and → go to the cell beside it, and ← from the
-first cell returns to the row. Enter opens the card. Folding a row that holds
+first cell returns to the row. Enter opens the card. A press on a row's arrow takes no
+focus: it moves focus to the row and then folds or opens it, as the keys do, so a reader
+hears the row and then its change; on the arrow the row took focus from inside itself and
+a reader heard neither. Folding a row that holds
 the focused row moves focus to the folded row. The tree draws its window from
 300 rows it could show, folded rows included, not from the rows it shows. Its
 first column is as wide as the deepest reference needs after its indent, so

@@ -47,7 +47,8 @@ export const LINE_BUDGET = new Map([
   // dot draws itself in currentcolor, and PlatformStatePanel carries two status
   // edges (failure panel, degraded banner).
   ['shared/ui/VTextInput.vue', 1],
-  ['shared/ui/ChoiceSelect.vue', 2],
+  // A choice's list, carried out of its trigger: the overlay's edge and its search field's.
+  ['shared/ui/choiceList.css', 2],
   ['shared/ui/CommandList.vue', 1], // Search field edge; results use tone and a focus outline.
   ['shared/ui/OptionGroups.vue', 1], // Overlay edge of the list a field drives.
   ['shared/ui/MarkdownEditor.vue', 1], // The one field edge, around toolbar, text and foot.
