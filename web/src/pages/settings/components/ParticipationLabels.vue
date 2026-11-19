@@ -5,9 +5,10 @@
  *
  * Only labels with a rule are listed: a space may carry any number of labels, and few of them
  * have one. A new rule is found among the labels the space's work carries, or typed whole. A
- * label's rule is written as a whole — whether its findings are ready at once, and what it
- * means — so each write carries both, as the row shows them. In a space a label inherits the
- * shared rule until «Own value» is switched on, as every scoped row does.
+ * rule has two fields — whether its findings are ready at once, and what the label means —
+ * and a scope keeps each one or takes it from above on its own, so a change of one field
+ * leaves the other as the scope's record has it. In a space a label inherits the shared rule
+ * until «Own value» is switched on, as every scoped row does.
  *
  * Each row carries `data-participation-label` with its label, the hook a check selects it by.
  */
@@ -57,9 +58,9 @@ function readyWords(ready: boolean): string {
   )
 }
 
-/** In the shared scope the rule is always its own; in a space only while it is owned. */
+/** In the shared scope the rule is always its own; in a space while it sets a field itself. */
 function ownOf(rule: ParticipationLabel): boolean | null {
-  return props.scope === 'global' || rule.own ? rule.ready : null
+  return props.scope === 'global' || rule.own.ready || rule.own.description ? rule.ready : null
 }
 
 /** The shared rule's answer, which a space inherits; nothing in the shared scope. */
@@ -75,12 +76,22 @@ function write(label: string, ready: boolean | null, description: string | null)
   emit('edit', { label, ready, description })
 }
 
-/** «Own value» on takes the shared rule as the space's own; off lets the label inherit. */
+/*
+ * A change of one field writes the other as the scope's own record holds it: null where the
+ * record leaves it to the rule above, so that it stays inherited and follows that rule later.
+ */
+function writeReady(rule: ParticipationLabel, ready: boolean) {
+  write(rule.label, ready, rule.own.description ? rule.description : null)
+}
+
+function writeDescription(rule: ParticipationLabel, description: string | null) {
+  write(rule.label, rule.own.ready ? rule.ready : null, description)
+}
+
+/** «Own value» on makes the shared answer the space's own; off lets the whole rule inherit. */
 function setOwn(rule: ParticipationLabel, ready: boolean | null) {
   if (ready === null) write(rule.label, null, null)
-  else if (!rule.own && props.scope === 'space')
-    write(rule.label, ready, rule.inherited.description)
-  else write(rule.label, ready, rule.description)
+  else writeReady(rule, ready)
 }
 
 function commitDescription(rule: ParticipationLabel) {
@@ -90,7 +101,7 @@ function commitDescription(rule: ParticipationLabel) {
     Object.entries(drafts.value).filter(([label]) => label !== rule.label),
   )
   const said = typed.trim() || null
-  if (said !== rule.description) write(rule.label, rule.ready, said)
+  if (said !== rule.description) writeDescription(rule, said)
 }
 
 function press(event: KeyboardEvent, rule: ParticipationLabel) {

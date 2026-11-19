@@ -372,7 +372,7 @@ class LabelTests(Harness):
                 "label": "flow",
                 "ready": True,
                 "description": "Ours",
-                "own": True,
+                "own": {"ready": False, "description": True},
                 "inherited": {"ready": True, "description": "Work on the flow"},
             },
             self.label(read, "flow"),
@@ -382,7 +382,7 @@ class LabelTests(Harness):
                 "label": "flow",
                 "ready": True,
                 "description": "Work on the flow",
-                "own": False,
+                "own": {"ready": False, "description": False},
                 "inherited": {"ready": True, "description": "Work on the flow"},
             },
             self.label(self.read("BETA"), "flow"),
@@ -392,7 +392,7 @@ class LabelTests(Harness):
                 "label": "flow",
                 "ready": True,
                 "description": "Work on the flow",
-                "own": True,
+                "own": {"ready": True, "description": True},
                 "inherited": {"ready": False, "description": None},
             },
             self.label(self.read(), "flow"),
@@ -405,7 +405,7 @@ class LabelTests(Harness):
         )
         # Both null take the space's rule away; the common one stands.
         read = self.person(space="ALPHA", label="flow", ready=None, description=None)
-        self.assertFalse(self.label(read, "flow")["own"])
+        self.assertEqual({"ready": False, "description": False}, self.label(read, "flow")["own"])
         self.assertEqual(
             [(None, "docs", None, "Documents"), (None, "flow", 1, "Work on the flow")],
             sorted(
@@ -414,6 +414,32 @@ class LabelTests(Harness):
                     "SELECT planning_space_id, label, ready, description FROM label_settings"
                 )
             ),
+        )
+
+    def test_a_space_that_sets_one_field_inherits_the_other(self) -> None:
+        self.person(space=None, label="flow", ready=True, description="The main line")
+        read = self.person(space="ALPHA", label="flow", ready=False, description=None)
+        self.assertEqual(
+            {
+                "label": "flow",
+                "ready": False,
+                "description": "The main line",
+                "own": {"ready": True, "description": False},
+                "inherited": {"ready": True, "description": "The main line"},
+            },
+            self.label(read, "flow"),
+        )
+        # The description the space does not set follows the shared one when it changes.
+        self.person(space=None, label="flow", ready=True, description="The new line")
+        flow = self.label(self.read("ALPHA"), "flow")
+        self.assertEqual(
+            (False, "The new line", {"ready": True, "description": False}),
+            (flow["ready"], flow["description"], flow["own"]),
+        )
+        # A shared rule that sets a description alone reads its ready as not its own.
+        self.person(space=None, label="docs", ready=None, description="Documents")
+        self.assertEqual(
+            {"ready": False, "description": True}, self.label(self.read(), "docs")["own"]
         )
 
     def test_the_first_label_ready_in_its_space_makes_a_finding_ready(self) -> None:

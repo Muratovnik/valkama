@@ -423,13 +423,16 @@ every point and switch; a store starts at `default`, which is `human` at
 `proposed_goal`, `decision`, `cancel_shared`, `condition` and `finding` and
 `agent` at the rest. A space overrides single values and inherits the others,
 later changes of the common ones included; a rule of a label says whether a task
-that carries it is ready to be accepted, and the space's rule wins over the
-common one. `GET /api/planning/participation`, with `space` or without it for the
-common setting, reads the scope: its `set` (`custom` once a value differs from
-every set), the `sets`, each key's `value`, whether it is the scope's `own` and
-what it would have `inherited`, and the label rules. `POST /api/planning/participation`
+that carries it is ready to be accepted and what the label means, and each field
+the space's rule sets wins over the common one. `GET /api/planning/participation`,
+with `space` or without it for the common setting, reads the scope: its `set`
+(`custom` once a value differs from every set), the `sets`, each key's `value`,
+whether it is the scope's `own` and what it would have `inherited`, and the label
+rules, whose `own` says of each field whether the scope's own record sets it, as
+`{"ready": true, "description": false}`. `POST /api/planning/participation`
 writes one `key` and `value` (`null` inherits again), a whole `set`, or a `label`
-with `ready` and `description`, and answers with the read; an agent's call is
+with `ready` and `description`, where a `null` field is taken from above and both
+`null` remove the scope's rule, and answers with the read; an agent's call is
 refused with `owner_only` (403, `the owner changes participation in Valkama`).
 
 Where the point says `agent`, the write is made at once, and an agent's decision
