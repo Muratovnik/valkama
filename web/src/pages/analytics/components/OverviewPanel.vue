@@ -19,8 +19,8 @@ import { useI18n } from 'vue-i18n'
  *   tile says both.
  *
  * Its own answer is the read by task, beside the period before; a press that could not do what
- * it asked says why where it was pressed. Its heading names it, and the heading's «ⓘ» says the
- * caveats of its figures once (`useSectionCaveats`).
+ * it asked says why where it was pressed. Its heading names it, and the heading's «ⓘ» says which
+ * projects its figures are of (`scope`) and their caveats once (`useSectionCaveats`).
  */
 import { useResizeObserver } from '@vueuse/core'
 
@@ -61,6 +61,8 @@ const props = defineProps<{
   readAt: Date
   /** Why the last press in a part of the overview did not do what it asked; null otherwise. */
   refused: Refusal | null
+  /** Which projects the figures are of, as a sentence: one project's, or every project's. */
+  scope: string
   usage: Usage
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
@@ -79,8 +81,8 @@ const emit = defineEmits<{
 const measure = defineModel<Measure>('measure', { required: true })
 const { t } = useI18n()
 const caveats = useSectionCaveats()
-/** The caveats of the overview's figures, which its heading's «ⓘ» says. */
-const about = computed(() => caveats.spending(props.usage))
+/** Which projects the figures are of, then the caveats of them, as its heading's «ⓘ» says. */
+const about = computed(() => [props.scope, ...caveats.spending(props.usage)])
 
 /** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
 const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_item')

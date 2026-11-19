@@ -37,6 +37,12 @@ export const analyticsMessages = {
         incomplete: 'Choose the first and the last day of the period.',
         choose: 'Choose the days of the period',
       },
+      scope: {
+        project: 'project {name}',
+        all: 'all projects',
+        aboutProject: 'The figures are of the project {name} alone.',
+        aboutAll: 'The figures are of all projects.',
+      },
       dimensions: {
         seat: 'Account',
         account: 'Organization',
@@ -224,6 +230,12 @@ export const analyticsMessages = {
         reversed: 'Последний день стоит раньше первого.',
         incomplete: 'Выберите первый и последний день периода.',
         choose: 'Выберите дни периода',
+      },
+      scope: {
+        project: 'проект {name}',
+        all: 'все проекты',
+        aboutProject: 'Цифры — только по проекту {name}.',
+        aboutAll: 'Цифры — по всем проектам.',
       },
       dimensions: {
         seat: 'Аккаунт',

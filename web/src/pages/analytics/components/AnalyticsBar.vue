@@ -3,8 +3,10 @@
  * The bar over every section of the Analytics page: the period, with the ends of the reader's own
  * beside it, its two days or the name of a span between two moments (`AnalyticsOwnPeriod`); the
  * filters set, each a chip that takes it out, and the way to add one; how fresh the figures are;
- * and a read of them again. It stays where it is while the rail and the panel under it scroll,
- * since it says what everything under it is of.
+ * and a read of them again. Under that line, at its start, which projects the figures are of,
+ * «project Billing» or «all projects» (`.analytics-bar-scope`), outside the line and none of its
+ * room. It stays where it is while the rail and the panel under it scroll, since it says what
+ * everything under it is of.
  *
  * The bar is one line wherever it has room for the period, its days and the read again, so the
  * panel under it never moves with what the bar holds: the filters (`AnalyticsChips`) take the
@@ -71,6 +73,8 @@ const props = defineProps<{
   live: boolean
   /** Whether the view's read failed with nothing to show, which the panel says. */
   readFailed: boolean
+  /** Which projects the figures are of, in a few words. */
+  scope: string
   /** The day the read was asked on, the last a custom period can name. */
   today: string
   /** What each filter offers, as the read gave it. */
@@ -282,6 +286,7 @@ const freshHint = computed(() =>
         </VButton>
       </div>
     </div>
+    <p class="analytics-bar-scope">{{ scope }}</p>
     <FieldError
       v-if="filtersRefused"
       role="alert"
@@ -366,6 +371,18 @@ const freshHint = computed(() =>
     flex: 1 1 0;
     justify-content: safe flex-end;
   }
+}
+
+/* Which projects the figures are of, under the period in the quiet ink, a fact of every part
+   that takes no room from the line and moves nothing on it. Beside the period, where the line had
+   no room to spare, it took the line to two rows beside the reader's own days at 1440px in
+   Russian, cut a span's name at 1200px and moved the read again when a failure was said. A long
+   name wraps rather than being cut. */
+.analytics-bar-scope {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  overflow-wrap: anywhere;
 }
 
 /* The freshness, one element of one width: the room of the widest age (`data-widest`, one form a

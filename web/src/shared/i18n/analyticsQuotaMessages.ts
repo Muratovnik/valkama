@@ -103,6 +103,7 @@ export const analyticsQuotaMessages = {
       heading: 'Each account',
       intro:
         'The period and the filters above do not apply to the quota, and no two accounts or windows are added.',
+      account: "The quota is the whole account's: the chosen project does not change it.",
       noSource: 'No quota data in the past 7 days.',
       noWindow: {
         quota_five_hour: 'No five-hour reading in the past 7 days.',
@@ -271,6 +272,7 @@ export const analyticsQuotaMessages = {
     panel: {
       heading: 'По аккаунтам',
       intro: 'Период и фильтры выше к квоте не относятся; аккаунты и окна не складываются.',
+      account: 'Квота — на весь аккаунт: выбранный проект её не меняет.',
       noSource: 'Нет данных квоты за 7 дней.',
       noWindow: {
         quota_five_hour: 'Нет показаний пятичасового окна за 7 дней.',

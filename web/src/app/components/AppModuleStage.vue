@@ -12,6 +12,7 @@ import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { projectTitle } from '@/shared/lib/projectTitles.ts'
 
 const props = defineProps<{
   activeModule: ModuleId
@@ -52,6 +53,10 @@ function stateValue(key: string, fallback = '') {
 const scopeProject = computed(() =>
   props.scope.kind === 'project' ? props.scope.project_ref.project_id : null,
 )
+/** That project's name as the context bar names it, or its id where the projects do not hold it. */
+const scopeProjectTitle = computed(() =>
+  scopeProject.value ? projectTitle(props.context?.projects ?? [], scopeProject.value) : null,
+)
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(
   () => planningSurface.value?.selectedId ?? cardOverlay.value?.selectedId ?? null,
@@ -87,6 +92,7 @@ defineExpose({ openCardId, refresh })
     <AnalyticsView
       :route-state="route.state"
       :project-id="scopeProject"
+      :project-title="scopeProjectTitle"
       :covered="cardOver"
       @state="(state, mode) => emit('state', state, mode)"
     />

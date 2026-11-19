@@ -2,8 +2,8 @@
 /**
  * What agent work was spent on in a period, and how that changed from the period before.
  *
- * A monitor screen that fills the module's frame: a bar of the period, the filters, how fresh the
- * figures are and a read of them again over the whole of it; under that a rail of the page's
+ * A monitor screen that fills the module's frame: a bar of the period and which projects it is of,
+ * the filters, how fresh the figures are and a read of them again over the whole of it; under that a rail of the page's
  * sections — the overview, the tokens by kind, the subscription quota's five hours and week, then
  * a dimension each — and the panel of the section on show. The quota's two sections read where
  * each account's quota stands now (`QuotaPanel`), which no period or filter changes. The rail
@@ -63,6 +63,7 @@ import { useQuota } from '@/pages/analytics/composables/useQuota.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { provideReadWaits } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useRefusal } from '@/pages/analytics/composables/useRefusal.ts'
+import { useScopeWords } from '@/pages/analytics/composables/useScopeWords.ts'
 import { useSectionFocus } from '@/pages/analytics/composables/useSectionFocus.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -95,10 +96,12 @@ const props = withDefaults(
     covered?: boolean
     /** The project the page is scoped to; every figure is that project's. */
     projectId?: string | null
+    /** That project's name, as the shell names it; its id where it has none. */
+    projectTitle?: string | null
     /** The module's part of the address: what `writeAddress` wrote, or nothing. */
     routeState?: Readonly<Record<string, string | number | boolean>>
   }>(),
-  { routeState: undefined, projectId: null, covered: false },
+  { routeState: undefined, projectId: null, projectTitle: null, covered: false },
 )
 /** The view's new address: a change in place, or a new place in the history (`push`). */
 const emit = defineEmits<{
@@ -159,6 +162,9 @@ const read = useUsageRead({
 })
 
 const today = computed(() => localDay(read.askedAt.value))
+
+/** Which projects the figures are of, in the bar's words and as the overview's «ⓘ» says it. */
+const scope = useScopeWords({ id: () => props.projectId, title: () => props.projectTitle })
 /** Whether the view's read failed with nothing to show, which the panel says. */
 const readFailed = computed(() => read.state.value.status === 'error')
 
@@ -312,6 +318,7 @@ const emptyDescription = computed(() => {
       :last-event-at="read.lastEventAt.value"
       :live="live"
       :read-failed="readFailed"
+      :scope="scope.bar"
       :today="today"
       :values="read.filterValues.value"
       :view="view"
@@ -382,6 +389,7 @@ const emptyDescription = computed(() => {
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
+              :scope="scope.about"
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
               @inspect="detail.inspect"

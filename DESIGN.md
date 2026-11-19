@@ -2522,8 +2522,15 @@ keeps its scrollbar's room too, out of its end inset, so what it holds ends on t
 whether it scrolls or not; with the room taken only while it scrolled, a section ended 10px
 short of the bar.
 
-The bar holds what every part reads by: the period, the filters, how fresh the data is and the
-refresh. A period is «Now», «Today», this week, the past four weeks or a span of the reader's
+The bar holds what every part reads by: the period, which projects the figures are of, the
+filters, how fresh the data is and the refresh. Under the period, at the bar's start, stand the
+page's projects in the quiet ink, «project Billing» on a page scoped to one, by the name the
+context bar gives it, or «all projects», and the overview's «ⓘ» says the same as a sentence: a
+project's week beside the global one, with the project named only in the context bar, read as
+two answers for one week. They are outside the bar's line and take none of its room: beside the
+period, the line had none to spare, and they took it to two rows beside a span of days at 1440px
+in Russian, cut a span's name at 1200px and moved the refresh when a failure was said.
+A period is «Now», «Today», this week, the past four weeks or a span of the reader's
 own: days chosen in the bar, or the moments a frame on a time axis bounds (Charts). «Now» is
 the last hour by the minute and «Today» the day so far by the hour, against the same hours of
 yesterday; both read again every 30 seconds while the tab is visible, a hidden tab asks
@@ -2719,7 +2726,8 @@ reasoning is part of output.
 
 The quota's two sections read where each account's quota stands now, which no period or
 filter changes, and read it again on the live interval whatever the period; that the period and
-the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says once.
+the filters do not reach it, that it is the whole account's whatever project is chosen, and that
+its shares do not add up, the section's «ⓘ» says once.
 Each tile names the tightest window of its kind across accounts — of those whose reset is still
 ahead, the one nearest its limit by its forecast: first one that runs out before its reset, the
 earliest run-out first; then the one whose forecast ends highest at the reset; then the one most

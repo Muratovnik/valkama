@@ -27,6 +27,9 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.period.reversed': 'value',
   'analytics.period.incomplete': 'instruction',
   'analytics.period.choose': 'instruction',
+  'analytics.scope': 'label',
+  'analytics.scope.aboutProject': 'value',
+  'analytics.scope.aboutAll': 'value',
   'analytics.dimensions': 'label',
   'analytics.roles': 'label',
   'analytics.values': 'label',
@@ -94,6 +97,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.quota.tile.detail': 'label',
   'analytics.quota.panel.heading': 'label',
   'analytics.quota.panel.intro': 'caveat',
+  'analytics.quota.panel.account': 'caveat',
   'analytics.quota.table': 'label',
   'analytics.quota.table.empty': 'value',
   'analytics.quota.spent.title': 'label',
@@ -127,6 +131,7 @@ export const CAVEATS: Record<string, { sections: readonly CaveatSection[]; minut
   'analytics.panel.table.kinds.note': { sections: ['spending', 'kinds'] },
   'analytics.time.estimate': { sections: ['spending', 'kinds'], minutes: true },
   'analytics.quota.panel.intro': { sections: ['quota'] },
+  'analytics.quota.panel.account': { sections: ['quota'] },
   'analytics.quota.spent.basis': { sections: ['quota'] },
 }
 
