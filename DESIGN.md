@@ -1093,8 +1093,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   taller no longer holds the scale up. Its key stays, pressed while its layer shows
   (`aria-pressed`) and, while it is off, its swatch faint and its name in the tertiary ink struck
   through, a state said by more than a tone, and there to turn it back on; nothing else on the
-  chart says a layer is off, no banner and no note. A chart's table keeps every figure. The
-  owner asked for «previous period» and the other added marks to be switches that turn their
+  chart says a layer is off, no banner and no note. A chart's table keeps every figure. A layer
+  obeys its toggle only where the chart carries its key, so a layer turned off can always be
+  found and turned on again: a window's bar has no legend, on its rail tile too, and keeps its
+  pace tick and its forecast tail. The owner asked for «previous period» and the other added marks to be switches that turn their
   display off and on, and drew the line: the data itself — the stacked series, a step line's
   readings — always shows, so a column's sum never disagrees with the figures beside it; the
   hatch of a period still running is how unfinished data is drawn, and a step line's now and

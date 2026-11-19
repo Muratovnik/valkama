@@ -147,6 +147,7 @@ export const analyticsQuotaMessages = {
     },
     readings: {
       label: '{window} of {account} from {from} to {to}: {readings}. {forecast}',
+      labelNoForecast: '{window} of {account} from {from} to {to}: {readings}.',
       reading: '{share} at {at}',
       text: '{at}: {share}, {source}',
       caption: 'Readings of {window} of {account}',
@@ -317,6 +318,7 @@ export const analyticsQuotaMessages = {
     },
     readings: {
       label: '{window}, {account}, с {from} до {to}: {readings}. {forecast}',
+      labelNoForecast: '{window}, {account}, с {from} до {to}: {readings}.',
       reading: '{share} в {at}',
       text: '{at}: {share}, {source}',
       caption: 'Показания: {window}, {account}',

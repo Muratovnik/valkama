@@ -31,6 +31,7 @@ import type {
   QuotaWindow,
 } from '@/shared/api/analyticsApi.ts'
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { useChartLayersStore } from '@/shared/stores/chartLayersStore.ts'
 import type { StepPoint, StepRestart, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
 
 /** The parts of a day a week's run-out is said by, six hours each from midnight. */
@@ -43,6 +44,7 @@ const silent = (window: QuotaWindow, now: number, freshFor: number) =>
 export function useQuotaWords() {
   const { t } = useI18n()
   const words = useSpendingWords()
+  const layers = useChartLayersStore()
   const span = spanWordsOf(t)
 
   const sectionName = (section: QuotaSection) => t(`analytics.quota.sections.${section}`)
@@ -346,7 +348,8 @@ export function useQuotaWords() {
   /**
    * The step line's words for a reader who cannot see it: every reading with its moment, the
    * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`), and
-   * the moments its count restarted, where it did.
+   * the moments its count restarted, where it did. With the forecast's layer turned off, a window
+   * that still stands is named without its forecast, as the line draws it; its table keeps it.
    */
   function readingsLabel(
     account: QuotaAccount,
@@ -354,8 +357,7 @@ export function useQuotaWords() {
     now: number,
     today: string,
   ) {
-    const label = t('analytics.quota.readings.label', {
-      forecast: forecastAt(window, now, today),
+    const values = {
       window: windowName(window),
       account: accountName(account),
       from: window.started_at ? moment(window.started_at, today) : '',
@@ -365,7 +367,14 @@ export function useQuotaWords() {
           t('analytics.quota.readings.reading', { share: point.valueText, at: point.timeText }),
         )
         .join(', '),
-    })
+    }
+    const label =
+      stands(window, now) && !layers.shown('ahead')
+        ? t('analytics.quota.readings.labelNoForecast', values)
+        : t('analytics.quota.readings.label', {
+            ...values,
+            forecast: forecastAt(window, now, today),
+          })
     const restarted = restarts(window, today).map((restart) => restart.timeText)
     return restarted.length
       ? `${label} ${t('analytics.quota.readings.restarts', { at: restarted.join(', ') })}`

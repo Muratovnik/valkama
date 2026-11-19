@@ -70,6 +70,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  localStorage.clear()
   document.body.innerHTML = ''
 })
 
@@ -331,6 +332,29 @@ describe('the quota panel', () => {
     const rows = readings.findAll('.quota-window-readings tbody tr').map((row) => plain(row.text()))
     expect(rows).toHaveLength(4)
     expect(rows[0]).toContain('the poll')
+    expect(rows[3]).toMatch(/^Forecast by the reset100%Limit runs out at \d{2}:\d{2}; Resets /u)
+  })
+
+  it('names a window’s forecast on its line only while the forecast’s layer is drawn, and its table keeps it', async () => {
+    stubAnalyticsReads(usage, quotaOf([0]))
+    const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
+    const line = () => accountNamed(page, 'Work').get('.step-line')
+    const readings = String.raw`^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+\.`
+    // Drawn, the forecast closes the line's name, as it does by default.
+    expect(line().attributes('aria-label')).toMatch(
+      new RegExp(String.raw`${readings} Forecast · Limit runs out at \d{2}:\d{2}$`, 'u'),
+    )
+    // Turned off from its key, the line names its readings alone, as it draws them.
+    await line().get('[data-key="ahead"]').trigger('click')
+    expect(line().get('[data-key="ahead"]').attributes('aria-pressed')).toBe('false')
+    expect(line().attributes('aria-label')).toMatch(new RegExp(`${readings}$`, 'u'))
+    expect(line().attributes('aria-label')).not.toMatch(/forecast|runs out/iu)
+    // The table keeps every figure, the forecast among them.
+    await showTable(page)
+    const rows = accountNamed(page, 'Work')
+      .findAll('.quota-window-readings tbody tr')
+      .map((row) => plain(row.text()))
+    expect(rows).toHaveLength(4)
     expect(rows[3]).toMatch(/^Forecast by the reset100%Limit runs out at \d{2}:\d{2}; Resets /u)
   })
 
