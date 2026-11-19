@@ -203,6 +203,7 @@ export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras
     workable: members.filter((member) => member.workable).length,
     by_category: byCategory,
     by_container_state: {},
+    by_project: [],
     origins: originsOf(root, members, extras.titles ?? {}),
     series: seriesOf(members),
     recent: extras.recent ?? { days: 7, created: 0, closed: 0, trend: 'steady' as const },

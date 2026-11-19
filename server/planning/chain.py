@@ -40,7 +40,7 @@ import sqlite3
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 
-from . import item_tree, leases, model, participation, queue, read_model, states
+from . import item_projects, item_tree, leases, model, participation, queue, read_model, states
 
 #: The scopes a chain is read in.
 SCOPES = ("chain", "tree")
@@ -165,6 +165,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         },
         "scope": scope,
         **_counts(found),
+        "by_project": _by_project(conn, [rows[m["work_item_id"]] for m in found]),
         "origins": _origins(found, root_id, rows, key),
         "series": series(found, utc_offset=0),
         "recent": recent(found, utc_now().date(), utc_offset=0),
@@ -247,6 +248,38 @@ def _counts(found: list[dict]) -> dict:
         "by_category": dict(sorted(categories.items())),
         "by_container_state": dict(sorted(derived.items())),
     }
+
+
+def _by_project(conn: sqlite3.Connection, members: list[sqlite3.Row]) -> list[dict]:
+    """How many member tasks change each project; the goals and stages among them are not counted.
+
+    A task counts once in the row of each project it names, so a task of two projects
+    stands in both and the rows add up to more than the tasks; a task that names none
+    stands in the row of no project, `project_id` null. Each project is named as an
+    item's projects are, with the registry's `display_name`. The most tasks first, then
+    by id, and the row of no project last whatever its count.
+    """
+
+    tasks = [row for row in members if row["kind"] != model.CONTAINER_KIND]
+    named = item_projects.of_items(conn, tasks)
+    counts: Counter[str | None] = Counter()
+    names: dict[str, str | None] = {}
+    for projects in named.values():
+        for project in projects:
+            counts[project["project_id"]] += 1
+            names[project["project_id"]] = project["display_name"]
+        if not projects:
+            counts[None] += 1
+    return [
+        {
+            "project_id": project,
+            "display_name": names.get(project) if project is not None else None,
+            "count": count,
+        }
+        for project, count in sorted(
+            counts.items(), key=lambda entry: (entry[0] is None, -entry[1], entry[0] or "")
+        )
+    ]
 
 
 def _origins(found: list[dict], root_id: str, rows: dict[str, sqlite3.Row], key: str) -> list[dict]:

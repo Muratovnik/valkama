@@ -79,6 +79,13 @@ function contents(members: ChainMember[] = MEMBERS): WorkItemChain {
     // derive a state of their own and stand in no category.
     by_category: { active: 2, completed: 2 },
     by_container_state: { in_progress: 1, awaiting_confirmation: 1 },
+    // Four tasks: MAIN-4 changes alpha and beta and counts in both, so the rows add up to five;
+    // the registry does not name beta, and MAIN-7 names no project.
+    by_project: [
+      { project_id: 'alpha', display_name: 'Alpha', count: 3 },
+      { project_id: 'beta', display_name: null, count: 1 },
+      { project_id: null, display_name: null, count: 1 },
+    ],
     origins: [],
     series: [],
     recent: { days: 7, created: 0, closed: 0, trend: 'steady' },
@@ -131,6 +138,17 @@ describe('a goal’s contents', () => {
       'in_progress In progress1',
       'awaiting_confirmation Awaiting confirmation1',
     ])
+  })
+
+  it('says how many of its tasks change each project, in the order the read gives', () => {
+    const found = mountContents()
+    const line = found.get('[data-counts="project"]')
+    expect(line.find('.contents-counts-label').text()).toBe('By project')
+    expect(
+      line
+        .findAll('[data-count]')
+        .map((count) => `${count.attributes('data-count')} ${count.text()}`),
+    ).toEqual(['alpha Alpha3', 'beta beta1', 'none no project1'])
   })
 
   it('draws the work as a tree, a stage with open work open and one with none folded', () => {
@@ -192,6 +210,7 @@ describe('a goal’s contents', () => {
       open: 0,
       by_category: {},
       by_container_state: {},
+      by_project: [],
     })
     expect(found.text()).toContain('Nothing under it yet.')
     expect(found.find('table').exists()).toBe(false)

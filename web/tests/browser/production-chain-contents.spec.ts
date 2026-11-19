@@ -68,6 +68,12 @@ function contents() {
     workable: 0,
     by_category: { active: 2, completed: 2 },
     by_container_state: { in_progress: 1, awaiting_confirmation: 1 },
+    // One of the four tasks changes both projects and counts in each; one names none.
+    by_project: [
+      { project_id: 'alpha', display_name: 'Alpha', count: 2 },
+      { project_id: 'beta', display_name: 'Beta', count: 2 },
+      { project_id: null, display_name: null, count: 1 },
+    ],
     origins: [],
     members,
     edges: [],
@@ -124,6 +130,11 @@ for (const width of [1280, 390]) {
       /Done\s*2/u,
     ])
     await expect(section.locator('[data-counts="container"] [data-count]')).toHaveCount(2)
+    await expect(section.locator('[data-counts="project"] [data-count]')).toHaveText([
+      /Alpha\s*2/u,
+      /Beta\s*2/u,
+      /no project\s*1/u,
+    ])
 
     const rows = tree.locator('tbody tr')
     await expect(rows).toHaveCount(5)

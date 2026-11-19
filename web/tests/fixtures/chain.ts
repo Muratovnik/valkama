@@ -84,6 +84,7 @@ export function largeGoalChain() {
     workable: 115,
     by_category: { active: 11, completed: 483, ready: 14, review: 1, triage: 107 },
     by_container_state: {},
+    by_project: [],
     origins: [
       { parent_reference: 'MAIN-384', parent_title: 'Planning rethink', count: 273, open: 0 },
       { parent_reference: 'MAIN-779', parent_title: 'Second wave', count: 242, open: 100 },
@@ -140,6 +141,7 @@ export function emptyChain(reference = 'QA-320', id = '00000000-0000-4000-8000-0
     workable: 0,
     by_category: {},
     by_container_state: {},
+    by_project: [],
     origins: [],
     series: [],
     recent: { days: 7, created: 0, closed: 0, trend: 'steady' as const },

@@ -1906,7 +1906,10 @@ primary store.
 «Состав» says first how much of the work under the root stands in each state, the chain
 read's counts in scope `tree` and none counted by the interface: tasks by their state's
 category, then, on a line of their own, the goals and stages under it by the state they
-derive, since «В работе» is said by both. Under the counts the work is the list's tree of
+derive, since «В работе» is said by both; then «По проектам», its tasks by the project each
+changes, the most first and «без проекта» last. A task of two projects counts in both, so
+that line adds up to more than the tasks; a project the registry does not name shows its
+id. Under the counts the work is the list's tree of
 rows: the root's stages and tasks at the top, each stage opening down to its tasks, in the
 order the read gives. A row says its reference, its title on one line, its state and who
 holds it while it is open; at a phone's width the holder gives way. A stage with open work
