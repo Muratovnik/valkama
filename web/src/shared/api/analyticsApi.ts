@@ -405,9 +405,9 @@ export function validateQuotaWindowAnswer(payload: unknown): QuotaPastWindow {
 /** What a past window is asked by: the account's key, the window and the moment it reset by. */
 export interface QuotaWindowQuery {
   account: string
+  before: string
   kind: QuotaShareWindow['kind']
   model: string | null
-  before: string
   utcOffset: number
 }
 

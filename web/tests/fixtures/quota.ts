@@ -51,10 +51,10 @@ export function share(
     readings: Reading[]
     source: QuotaShareWindow['latest']['source']
     model?: string
-    /** Where its count restarted, as many ms before `now` as one of its readings. */
-    restarts?: number[]
     /** How the window before it ended; none by default. */
     previous?: QuotaShareWindow['previous']
+    /** Where its count restarted, as many ms before `now` as one of its readings. */
+    restarts?: number[]
   },
 ): QuotaShareWindow {
   const at = (ms: number) => momentAt(ms, offset)

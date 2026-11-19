@@ -221,7 +221,9 @@ describe('the quota read', () => {
     expect(() => validateQuotaAnswer(missing)).toThrow(/accounts\[0\]\.windows\[0\]/u)
     const unknown = withWindow(0, 0, (window) => ({ ...window, previous: { ...ended, total: 1 } }))
     expect(() => validateQuotaAnswer(unknown)).toThrow(/previous\.total: unknown field/u)
-    const { retained_from: _, ...noRetention } = quotaAt(NOW, 180)
+    const noRetention = Object.fromEntries(
+      Object.entries(quotaAt(NOW, 180)).filter(([key]) => key !== 'retained_from'),
+    )
     expect(() => validateQuotaAnswer(quotaAnswer(noRetention as Quota))).toThrow(
       /quota\.retained_from/u,
     )
@@ -274,7 +276,8 @@ describe('one past quota window', () => {
   it('takes a past window as a current one is given, and refuses a field nobody declared', async () => {
     const week = quotaAt(NOW, 180).accounts[0]?.windows[1]
     answer(pastAnswer({ ...week, even_percent: null, forecast: null }))
-    expect((await fetchQuotaWindow(asked)).window).toMatchObject({ kind: 'week', forecast: null })
+    const found = await fetchQuotaWindow(asked)
+    expect(found.window).toMatchObject({ kind: 'week', forecast: null })
     answer(pastAnswer({ ...week, total_percent: 3 }))
     await expect(fetchQuotaWindow(asked)).rejects.toThrow(
       /analytics\.quotaWindow\.quota_window\.window\.total_percent: unknown field/u,
