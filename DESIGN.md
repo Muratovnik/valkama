@@ -2821,6 +2821,25 @@ apart from the window's bar and readings, on no axis of theirs: under the window
 as tall as the window again, and every window of every account read what used it whether or not
 anyone asked.
 
+Under every window of a share stands one quiet line of how the window before it ended, as the
+answer's `previous` says: «Previous window: until Nov 7, 14:30 — 9%», the moment it reset and its
+last share, with «ran out» where it did; or «Previous window: no readings» where
+the store keeps none, which is words and no control. The line is one row, never wrapped or cut,
+at 1440 and 1024 pixels. The line with a window is a button that shows that window in the card,
+read when asked (`GET /api/analytics/quota/window`) and never for a window nobody opened. While a
+past window is open, nothing of the current window stands in the card — its share, its bar, its
+facts, its forecast, its readings and «Breakdown» are hidden, not mixed with the past window's —
+and the card says plainly which window it shows: «Past window: Oct 31, 14:30 – Nov 7, 14:30» as
+its heading and the open view's accessible name, its share by the reset, with that the limit ran
+out before it where it did, and the `StepLine` of its readings drawn as an ended window, on an
+axis of its own from its start to its reset, or its readings' table. «Earlier», named by the
+window it steps to, shows the window before the one shown while the store keeps one, and «No
+readings earlier» once it does not; «Current window» returns. The focus goes to «Current window»
+on opening, stays on «Earlier» while it steps back, and returns to the line on closing. A wait, a
+read that failed with its retry, and a window aged out of the store since the line was read each
+say so in the view, and the window shown before stays meanwhile. Once a window reset, the page
+used to say nothing of how it had ended.
+
 A value pressed on the page — a bar, a sector, a segment of a day, a legend entry, a name in a
 table, a line of the overview's cards — opens its side panel on the right, the shared resizable
 inspector of the drawer layer, and the page stays as it was: pressing a value used to narrow
