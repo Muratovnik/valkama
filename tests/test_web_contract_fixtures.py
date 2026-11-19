@@ -947,7 +947,7 @@ class ServerFixtureTests(unittest.TestCase):
         for row in usage["rows"]:
             self.assertEqual(measures | {"group"}, set(row))
             self.assertEqual(
-                {"id", "unknown", "reference", "title"}, set(row["group"]["work_item"])
+                {"id", "unknown", "reference", "title", "kind"}, set(row["group"]["work_item"])
             )
             self.assertEqual({"id", "unknown"}, set(row["group"]["model"]))
         self.assertEqual(2, len(usage["series"]))
