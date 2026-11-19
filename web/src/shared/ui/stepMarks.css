@@ -2,8 +2,9 @@
  * The marks of a step line (`StepLine`, `useStepAhead`, `useStepWalk`), read as its own scoped
  * style: each reading's dot and the box it stands in, the corridor of the forecast past them, the
  * hatch over the whole field cut to the corridor's outline, and the marks of its places — a
- * restart of the count on the line, and past the readings «now» and the forecast at the reset —
- * each a ring in the line's hue around the ground, never a reading's dot. Every mark is painted
+ * restart of the count on the line and «now» past the readings, each a ring in the line's hue
+ * around the ground, and the forecast at the reset, a bar from its high end to its low or a dash
+ * at its one value — never a reading's dot. Every mark is painted
  * only while pointed at or focused, its box kept at rest for its hint. None of them takes the
  * pointer: one layer over the field does, for all of them (`StepLine`).
  */
@@ -77,8 +78,8 @@
   }
 }
 
-/* A place past the readings: a ring in the line's hue around the ground, never a reading's dot;
-   at rest unpainted, its box kept for its hint. */
+/* A place of the line: a ring in the line's hue around the ground, never a reading's dot; at rest
+   unpainted, its box kept for its hint. The forecast's mark is no ring (`.step-reset-mark`). */
 .step-target-mark {
   --step-high: 0;
   --step-low: 0;
@@ -108,10 +109,8 @@
   translate: -50% -50%;
 }
 
-/* The forecast: a ring around the band's end, from its faster edge (`--step-high`) to its slower
-   (`--step-low`), at the plot's end, as tall as a round ring where the two meet. A restart: the
-   same ring around the line's fall at its moment, from the share before it to the share after. */
-.step-reset-mark,
+/* A restart: a ring around the line's fall at its moment, from the share before it
+   (`--step-high`) to the share after (`--step-low`), as tall as a round ring where the two meet. */
 .step-restart-mark {
   inset-block-start: calc(
     var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-high) - var(--space-1)
@@ -121,6 +120,67 @@
   );
   border-radius: 999px;
   translate: -50% 0;
+}
+
+/* The forecast at the corridor's end, the plot's end: a range is a stroke in the corridor's hue
+   from its high end (`--step-high`) to its low (`--step-low`), its box exactly that span, capped
+   at each end by a stroke as wide as a reading's dot, so a range a pixel or two tall is a short
+   dash and never a dot. One value is a dash at it (`.step-reset-point`), centred there. A rim of
+   the ground parts it from the hatch under it, as a dot's ring does; a forced palette draws it in
+   its ink. */
+.step-reset-mark {
+  --step-ink: var(--color-series-1);
+  --step-rim: var(--color-canvas);
+  --step-rim-out: var(--space-hair);
+  --step-rim-in: calc(-1 * var(--space-hair));
+
+  inset-block-start: calc(var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-high));
+  inline-size: var(--space-half);
+  block-size: calc((100% - 2 * var(--step-inset)) * (var(--step-low) - var(--step-high)));
+  background: var(--step-ink);
+  filter: drop-shadow(var(--step-rim-out) 0 0 var(--step-rim))
+    drop-shadow(var(--step-rim-in) 0 0 var(--step-rim))
+    drop-shadow(0 var(--step-rim-out) 0 var(--step-rim))
+    drop-shadow(0 var(--step-rim-in) 0 var(--step-rim));
+  outline: none;
+  box-shadow: none;
+  translate: -50% 0;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: 50%;
+    inline-size: var(--space-2);
+    block-size: var(--space-half);
+    background: var(--step-ink);
+  }
+
+  &::before {
+    inset-block-start: 0;
+    translate: -50% -50%;
+  }
+
+  &::after {
+    inset-block-end: 0;
+    translate: -50% 50%;
+  }
+
+  @media (forced-colors: active) {
+    --step-ink: CanvasText;
+    --step-rim: Canvas;
+  }
+}
+
+.step-reset-point {
+  inline-size: var(--space-3);
+  block-size: var(--space-half);
+  translate: -50% -50%;
+
+  &::before,
+  &::after {
+    content: none;
+  }
 }
 
 /* Under the pointer or holding the keyboard's focus: painted, wider. */
@@ -134,8 +194,6 @@
   scale: 1.5;
 }
 
-.step-reset-mark.step-shown,
-.step-target:focus-visible > .step-reset-mark,
 .step-restart-mark.step-shown,
 .step-target:focus-visible > .step-restart-mark {
   scale: 1.5 1;

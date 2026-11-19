@@ -1201,19 +1201,24 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   one only when a value changes, so a dot there stood hours before the line's end. A window silent
   by now, or by its reset where that has passed, measured nothing after its last reading, and its
   line ends there, so the line's visible end is a reading, which the pointer finds at its end.
-  The reading pointed at or focused draws its dot and says its moment, its share and its source in its hint, as every mark does; the one a key stands on
-  keeps its dot whatever the pointer does, and Tab lands on the latest. Past the readings the
-  line has two places of its own, each with its hint and painted only while pointed at or
-  focused, a ring rather than a reading's dot: «now» where the line ends, its share, when the
-  latest reading was and how long the window has been silent, which takes the pointer from the
-  line's end on and leaves the latest reading its own dot; and, while the window stands and its
-  forecast has a share to draw to, the end of the forecast's corridor at the reset, its share
-  there, what that leaves out and when the reset is. The corridor runs from now to the reset in
+  The reading pointed at or focused draws its dot and says its moment, its share and its source
+  in its hint, as every mark does; the one a key stands on keeps its dot whatever the pointer
+  does, and Tab lands on the latest. Past the readings the line has two places of its own, each
+  with its hint and painted only while pointed at or focused, neither a reading's dot: «now»
+  where the line ends, a ring, its share, when the latest reading was and how long the window has
+  been silent, which takes the pointer from the line's end on and leaves the latest reading its
+  own dot; and, while the window stands and its forecast has a share to draw to, the end of the
+  forecast's corridor at the reset, its share there, what that leaves out and when the reset is.
+  Its mark is no ring: for a week's range a bar at the reset, or at the plot's end where the span
+  ends before it, from the range's high end to its low, capped at each end by a stroke as wide as
+  a dot, so a range a pixel or two tall is a short dash and never a dot; for five hours' one
+  value a dash at that value; each in the corridor's hue with a rim of the ground, and in a forced
+  palette's ink. The corridor runs from now to the reset in
   the readings' hue under the same hatch, a band between the slower and the faster pace for a
   week and a ribbon to 100 % at the run-out and flat on for five hours, and the legend names it
   «Forecast». Where the window's count restarted inside it, its reset unchanged, the line falls
   at a reading, and the restart is a place on the line at that moment with its hint, painted only
-  while pointed at or focused as the others are: the forecast's ring around the fall, «Counter
+  while pointed at or focused as the others are: a ring around the fall, «Counter
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
   the readings cannot tell what zeroed it. The arrows walk the readings, each restart before the
   reading at its moment, then «now», then the forecast. A step line opens on
@@ -1229,7 +1234,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   then, its restarts still marked on it. A 0 % has no fill,
   and a window with no figure draws the track alone; the fill stands apart from the ground and
   the track by lightness, so both read in grayscale and under a forced palette in its inks,
-  where the hatch and the rings take its ink too. Their table twins are `WindowBarTable` and
+  where the hatch and the marks take its ink too. Their table twins are `WindowBarTable` and
   `StepLineTable`, each holding the forecast as well, and the second each restart as a row
   before the reading at its moment.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a

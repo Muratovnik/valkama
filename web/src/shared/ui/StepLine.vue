@@ -44,13 +44,15 @@
  * share it stands at, when its latest reading was and how long the window has been silent; its
  * mark is a ring rather than a reading's dot, so it never reads as a reading. Where the corridor
  * ends, its forecast at the reset (`ahead.forecast`): what the slower and the faster pace leave,
- * when the reset is and when the window runs out before it; its mark is a ring around the band's
- * end. Where the span ends before the reset, that mark stands at the plot's end, where the band
- * runs on, and its hint says the reset stands past it (`words.past`).
+ * when the reset is and when the window runs out before it; its mark is no ring but a bar at the
+ * band's end from the forecast's high end to its low, or for a forecast of one value a dash at it,
+ * neither a reading's dot (`stepMarks.css`). Where the span ends before the reset, that mark
+ * stands at the plot's end, where the band runs on, and its hint says the reset stands past it
+ * (`words.past`).
  *
  * One layer over the whole field takes the pointer for every place (`vHintPick`), and nothing else
  * in the plot does: not the drawing, not a place's own box. It runs half a mark past each edge of
- * the field, the reach of a mark (`--step-hit`), so a ring centred on an edge is pointed at whole,
+ * the field, the reach of a mark (`--step-hit`), so a mark centred on an edge is pointed at whole,
  * and it finds the place under the pointer by its x alone (`aimAt`): a mark within that reach, the
  * nearest of several, wins; elsewhere the place whose stretch holds the pointer — a reading's
  * step, from its moment to the next reading's or to `end`, «now» from `end` to the plot's end
@@ -63,22 +65,23 @@
  *
  * The readings, the restarts and the two places are one stop for Tab, walked with the arrows in
  * the order they stand — the readings, each restart before the reading at its moment, then «now»,
- * then the forecast — each saying itself in its hint and as its name. Tab lands on the latest reading. Each hint lies over the page at its mark, so pointing
- * moves nothing: a reading's at the top right of its dot (`data-hint-point`, `hintPlacement.ts`),
- * a place's beside its ring, level with the ring's top (`data-hint-mark`), so a forecast that runs
- * out at the top of the plot keeps its hint off the line's head. Every reading is also in the
- * figure's name and in its table twin (`StepLineTable`), and so is the forecast. The drawing
- * stretches to its host's width, so its lines keep their width (`vector-effect`) and every word,
- * mark and hatch is HTML over it rather than SVG the stretch would distort. A forced palette draws
- * the lines, the hatch and the marks in its inks.
+ * then the forecast — each saying itself in its hint and as its name. Tab lands on the latest
+ * reading. Each hint lies over the page at its mark, so pointing moves nothing: a reading's at the
+ * top right of its dot (`data-hint-point`, `hintPlacement.ts`), a place's beside its mark, level
+ * with the mark's top (`data-hint-mark`), so a forecast that runs out at the top of the plot keeps
+ * its hint off the line's head. Every reading is also in the figure's name and in its table twin
+ * (`StepLineTable`), and so is the forecast. The drawing stretches to its host's width, so its
+ * lines keep their width (`vector-effect`) and every word, mark and hatch is HTML over it rather
+ * than SVG the stretch would distort. A forced palette draws the lines, the hatch and the marks in
+ * its inks.
  *
  * What a reader of the page selects it by: the figure is `data-chart="steps"`; its regions are
  * `data-region` — `head` (`StepLineHead`), `plot`, the `scale`'s figure at its top, the `field`
  * the marks stand in, the `drawing` of its lines, the `hover` layer that takes the pointer, and
  * the `axis`, whose two ends are `data-moment` `from` and `to`; its marks are `data-mark` — the
  * readings' `line`, each `reading`'s dot inside its box (`data-reading`, its order), each
- * `place`'s ring inside its box (`data-target`, `restart`, `now` or `reset`) and the forecast's
- * `corridor`.
+ * `place`'s mark inside its box (`data-target`, `restart`, `now` or `reset`), its shape
+ * `data-shape` — `ring`, or the forecast's `range` or `point` — and the forecast's `corridor`.
  * Each reading's and place's box is its stop (`data-stop`, its order), the element its hint and
  * the keyboard's focus belong to.
  */
@@ -147,9 +150,7 @@ const { shown, whole } = span
 const frame = computed(() => ({ ...shown.value, top: stepTop(props.points) }))
 const readings = computed(() => readingsIn(shown.value, props.points))
 /** Where the readings' line ends: at `end`, or at the last reading of a silent window. */
-const lineEnd = computed(() =>
-  props.silent ? (props.points.at(-1)?.at ?? props.end) : props.end,
-)
+const lineEnd = computed(() => (props.silent ? (props.points.at(-1)?.at ?? props.end) : props.end))
 const path = computed(() => stepPath(frame.value, readings.value.held, lineEnd.value))
 /** The pace across the span shown: where steady use stands at its start and at its end. */
 const evenLine = computed(() => ({
@@ -201,9 +202,8 @@ const reachStyle = ({ reach }: StepTargetPlace) => ({
   insetInlineEnd: reach.start && reach.size ? 'auto' : '0',
   inlineSize: reach.size ?? 'auto',
 })
-/** Where a place's mark stands, as its style: its top and its foot, at its stretch's side. */
 /**
- * The class of a place's ring by its kind, written whole: a class composed from a template hides
+ * The class of a place's mark by its kind, written whole: a class composed from a template hides
  * from a search, and from the guard over the tests' selectors, which class the line writes.
  */
 const PLACE_MARK = {
@@ -212,6 +212,16 @@ const PLACE_MARK = {
   restart: 'step-restart-mark',
 } as const
 
+/**
+ * The shape of a place's mark: a ring for «now» and a restart; for the forecast a bar from its
+ * high end to its low, or a dash where its two ends are one value.
+ */
+function markShape({ kind, mark }: StepTargetPlace) {
+  if (kind !== 'reset') return 'ring'
+  return mark.high === mark.low ? 'point' : 'range'
+}
+
+/** Where a place's mark stands, as its style: its top and its foot, at its stretch's side. */
 const targetMark = ({ mark }: StepTargetPlace) => ({
   '--step-high': mark.high,
   '--step-low': mark.low,
@@ -229,6 +239,12 @@ const { coveredBy, places, readingStop } = walk
 /** The place under the pointer or the keyboard, its mark painted. */
 const pointed = ref<number | null>(null)
 const markClass = (index: number) => ({ 'step-shown': pointed.value === index })
+/** A place's mark's classes: its kind, a dash where the forecast is one value, and pointed at. */
+const placeClass = (target: StepTargetPlace & { stop: number }) => [
+  PLACE_MARK[target.kind],
+  { 'step-reset-point': markShape(target) === 'point' },
+  markClass(target.stop),
+]
 
 /** The one place Tab lands on: the last stood on while it is still there, else the latest reading. */
 const stood = ref<number | null>(null)
@@ -402,7 +418,8 @@ function stand(index: number) {
             class="step-target-mark"
             aria-hidden="true"
             data-mark="place"
-            :class="[PLACE_MARK[target.kind], markClass(target.stop)]"
+            :class="placeClass(target)"
+            :data-shape="markShape(target)"
             :style="targetMark(target)"
             data-hint-mark
         /></span>

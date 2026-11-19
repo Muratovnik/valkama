@@ -6,7 +6,7 @@
  * where its mark stands and the moments it covers for a frame stretched with the keyboard.
  *
  * The pointer finds «now» at its ring, and without a corridor along the rest of the plot from the
- * line's end; the forecast at its ring and along the corridor. The forecast's mark stands at the
+ * line's end; the forecast at its mark and along the corridor. The forecast's mark stands at the
  * corridor's end, which is the plot's end, the reset or where the span shown ends before it; there
  * its hint says the reset stands past it (`words.past`). A place's box, which the keyboard's ring
  * is drawn on, starts at the place: «now»'s is the least width of a box (`--step-reach`) over a

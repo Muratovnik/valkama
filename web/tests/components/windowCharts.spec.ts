@@ -300,7 +300,7 @@ describe('the step line past its readings', () => {
       undefined,
       0,
     ])
-    // The forecast's ring at the plot's end, pointed at half a mark past the field's edge.
+    // The forecast's mark at the plot's end, pointed at half a mark past the field's edge.
     await pointAt(line, 300 + HIT - 1)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
@@ -314,12 +314,17 @@ describe('the step line past its readings', () => {
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     await pointAt(line, 180 + HIT - 1)
     expect(targets(line).map(({ shown }) => shown)).toEqual([true, false])
-    // The reset's mark spans the corridor's end, from its faster edge at 100 % to its slower at 70 %.
+    // The reset's mark spans the corridor's end, from its faster edge at 100 % to its slower at 70 %,
+    // a range rather than a ring; «now» keeps its ring.
     expect(declared(line.get('.step-reset-mark'))).toEqual({
       '--step-high': 0,
       '--step-low': 0.3,
       '--step-side': 100,
     })
+    expect(
+      line.findAll('[data-mark="place"]').map((mark) => mark.attributes('data-shape')),
+    ).toEqual(['ring', 'range'])
+    expect(line.get('.step-reset-mark').classes()).not.toContain('step-reset-point')
     line.unmount()
   })
 
@@ -393,6 +398,22 @@ describe('the step line past its readings', () => {
     await line.get('[data-target="now"]').trigger('keydown', { key: 'ArrowLeft' })
     await nextTick()
     expect((document.activeElement as HTMLElement).dataset.reading).toBe('1')
+    line.unmount()
+  })
+
+  it('marks a forecast of one value at the reset with a dash at that value, no ring', async () => {
+    const line = await stepLine(READ, START + 3 * HOUR)
+    // Five hours that last to the reset at 70 %: one course for both edges, so one value there.
+    const course = [
+      { at: START + 3 * HOUR, value: 50 },
+      { at: START + 5 * HOUR, value: 70 },
+    ]
+    const forecast = { ...AHEAD.forecast, high: course, low: course }
+    await line.setProps({ ahead: { ...AHEAD, forecast } as StepAhead })
+    const mark = line.get('[data-target="reset"] [data-mark="place"]')
+    expect(mark.attributes('data-shape')).toBe('point')
+    expect(mark.classes()).toEqual(expect.arrayContaining(['step-reset-mark', 'step-reset-point']))
+    expect(declared(mark)).toEqual({ '--step-high': 0.3, '--step-low': 0.3, '--step-side': 100 })
     line.unmount()
   })
 
