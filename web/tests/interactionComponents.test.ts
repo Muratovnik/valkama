@@ -19,7 +19,7 @@ const graph = sourceCode('widgets/work-item-graph/components/GraphView.vue')
 const drawer = sourceCode('widgets/work-item-inspector/components/WorkItemInspector.vue')
 const card = sourceCode('widgets/work-item-views/components/WorkItemTile.vue')
 const drawerDetails = sourceCode('widgets/work-item-inspector/components/InspectorOverview.vue')
-const drawerDetailsCss = sourceCode('widgets/work-item-inspector/components/InspectorOverview.css')
+const stepMark = sourceCode('entities/work-item/components/StepMark.vue')
 const graphControls = sourceCode('widgets/work-item-graph/components/GraphControls.vue')
 const graphField = sourceCode('widgets/work-item-graph/components/GraphField.vue')
 const graphNode = sourceCode('widgets/work-item-graph/components/GraphNodeCard.vue')
@@ -220,9 +220,9 @@ test('Planning components carry presentation tones instead of remapping operatio
   // read from its shared presentation: components/planningPresentation.spec.ts.
   assert.doesNotMatch(graphNode, /class="claimed"|'claimed':/)
   assert.match(drawerDetails, /<style\b[^>]*\ssrc="\.\/InspectorOverview\.css"/)
-  const done = [
-    ...compactCss(drawerDetailsCss).matchAll(/\[data-tone='success'\][^{}]*\{([^}]*)\}/g),
-  ]
+  // The step's box is the one the window that confirms a close draws too.
+  assert.match(drawerDetails, /<StepMark\b/)
+  const done = [...compactCss(stepMark).matchAll(/\[data-tone='success'\][^{}]*\{([^}]*)\}/g)]
   assert.ok(
     done.some(
       ([, body]) =>

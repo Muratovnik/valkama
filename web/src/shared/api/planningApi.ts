@@ -9,6 +9,8 @@
 
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
 import type { CommentResolved, CommentWritten } from '@/shared/api/commentWriteModel.ts'
+import { readCancelList } from '@/shared/api/inputRequestAction.ts'
+import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
 import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
 import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
@@ -49,6 +51,20 @@ class PlanningRefusedError extends Error {
   }
 }
 
+/**
+ * A cancel of a goal or stage with open work under it, refused until the list of what it closes is
+ * confirmed: the list as it stands now, whose token the same move sends back to confirm it.
+ */
+export class CancelListError extends Error {
+  readonly list: CancelList
+
+  constructor(list: CancelList) {
+    super('cancel_list')
+    this.name = 'CancelListError'
+    this.list = list
+  }
+}
+
 /** What a refused write said, in the server's own words, and which guards refused it. */
 export interface PlanningRefusal {
   code: string
@@ -84,6 +100,8 @@ async function request(input: string, init?: RequestInit): Promise<unknown> {
   if (response.ok) return payload
   const pending = readPending(payload)
   if (pending !== null) throw new CutoverPendingError(pending.state.reason)
+  const list = readCancelList(payload)
+  if (list !== null) throw new CancelListError(list)
   const refusal = readRefusal(payload)
   if (refusal !== null) {
     if (refusal.error.code === 'cutover_pending')
@@ -109,7 +127,7 @@ function query(parameters: Record<string, string | number | undefined>): string 
 }
 
 /** Every write names the client's author unless the caller names another one. */
-async function write(path: string, body: Record<string, unknown>): Promise<unknown> {
+export async function write(path: string, body: Record<string, unknown>): Promise<unknown> {
   return request(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -2939,6 +2939,7 @@ class ChainToolTests(WireCallTestCase):
             "workable",
             "by_category",
             "by_container_state",
+            "by_project",
         ):
             self.assertEqual(whole[key], answer[key], key)
         self.assertEqual((38, 32, 6), (answer["total"], answer["closed"], answer["open"]))

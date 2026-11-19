@@ -1930,7 +1930,10 @@ primary store.
 «Состав» says first how much of the work under the root stands in each state, the chain
 read's counts in scope `tree` and none counted by the interface: tasks by their state's
 category, then, on a line of their own, the goals and stages under it by the state they
-derive, since «В работе» is said by both. Under the counts the work is the list's tree of
+derive, since «В работе» is said by both; then «По проектам», its tasks by the project each
+changes, the most first and «без проекта» last. A task of two projects counts in both, so
+that line adds up to more than the tasks; a project the registry does not name shows its
+id. Under the counts the work is the list's tree of
 rows: the root's stages and tasks at the top, each stage opening down to its tasks, in the
 order the read gives. A row says its reference, its title on one line, its state and who
 holds it while it is open; at a phone's width the holder gives way. A stage with open work
@@ -2228,7 +2231,10 @@ one heap of state, priority, holder and tags. The rows stand in the registry's o
 (`FACET_ORDER`), the order the new-task dialog asks in and every surface reads an item's
 facets in; the template only draws each row, and the parent once stood before the labels
 because the template put it there. The state is its own transition menu, said
-once, so a move the server refuses leaves the chip naming where the item is, then, while a
+once, so a move the server refuses leaves the chip naming where the item is. A move that closes
+work or puts it off asks first rather than going as it is chosen: putting off opens «Отложить»,
+cancelling a task asks its reason in the band under the bar, and cancelling a goal or a stage at
+work opens the window of what closes with it (**Closing work from its card**). Then, while a
 question waits, «Ответить» with the question's sign: a verb that goes to the question on
 Overview, in the state chip's word and on its baseline. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
 that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
@@ -2250,7 +2256,9 @@ the next line whole and one wider than the line wrapping between its own words, 
 with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody
 following there is no such row. A goal or a stage is held by nobody, its work being its tasks: its
 state row says the state it derives from them, «Не начато», «В работе» or «Ждёт
-подтверждения», with no menu to move it, and where the read of the item names sessions
+подтверждения», and its menu offers only what can be done to it, «Подтвердить закрытие» while it
+awaits that, «Отложить…» and «Отменить…», each where the workflow has a state it leads to;
+«Подтвердить закрытие» stands beside «Ждёт подтверждения» as a button too. Where the read of the item names sessions
 working under it the holder's row is «Работают: N», those sessions printed as the followers
 are, each with the tasks it holds in its tooltip, and no «Взять». A task waiting to be taken
 in «Не разобрано», «Отложено» or «Готово к работе» that was taken before says «начата»
@@ -2258,8 +2266,11 @@ beside its state, quieter than it; a goal never does, its start being its first 
 Accepted work ends the rows with «Принято»: who decided it is to be done, «владелец», «по
 поручению», «как часть цели», «по правилу метки», «решение агента» or «принято до 3.0», and
 when; work nobody accepted has no such row. On Overview a step its former holder marked says
-«отмечено прежним исполнителем» after the one who marked it: that holder's lease lapsed, and
-the mark waits for a fresh one before review or a close. A label chip only filters, its words in its middle with
+«отмечено прежним исполнителем» on a line of its own under the one who marked it: that holder's
+lease lapsed, and the mark waits for a fresh one before review or a close, the mark in the amber
+of a decision waiting. «Подтвердить» under the mark is that fresh tick, the reader's own, on a
+card the client can change. Neither stands in the holder's line, which never wraps: there they
+left a phone's holder a letter a line. A label chip only filters, its words in its middle with
 the same room at either end, at rest and under the pointer alike. The labels are changed
 in one place, the picker the new-task dialog asks with: the «+» that ends the row, or a
 press on the row beside the chips, opens it in the row's place over the space's labels,
@@ -2295,7 +2306,28 @@ What has to be answered or read wherever the reader is — a refusal in the serv
 a failed write, the question before a takeover or before a draft is lost — stands in a
 band between the bar and the scroller, at full width, however far down the write was made.
 Its height follows what it says and never the scroller. The body names only blockers
-that are still open.
+that are still open. Overview opens with what stops the work: work put off says «Отложено до 20
+ноября» or «Отложено до закрытия MAIN-12» and why it waits, then each open blocker, «Ждёт MAIN-12».
+**Closing work from its card.** Each write that closes work or puts it off asks before it goes,
+and a refusal keeps what was chosen with the server's reason under it. «Отложить» asks «До даты»
+or «До закрытия карточки», one choice of the two, the card found by its number or title among the
+space's open cards, and why it waits, which the server takes nothing without; «Отложить» is
+unavailable, the reason under the fields, until both are said and for a day already gone. A
+task's cancel asks its reason in the band under the bar, the caret in the field, then «Отменить
+MAIN-12? Карточка закроется как «Отменено».» with «Отменить задачу»; the reason is the move's and
+the summary's why, since a close needs a summary. A goal's or a stage's cancel at work opens
+«Отменить цель»: what closes with it, each row its number, its title, its state and its holder,
+then the cards outside it that wait on one of it, then the reason every card it closes keeps,
+and «Отменить N карточек». The list is the server's, read as the window opens and confirmed by
+its token; work that changed in between is refused again with the new list, which the window
+shows with «Список изменился…» above it and the new and changed rows marked, the press naming the
+new count, so nothing closes that was not seen. A goal or a stage with nothing open under it is
+cancelled in place, as a task is, and one the server answers with a list goes on in the window,
+its reason kept. «Подтвердить закрытие» shows the conditions of the whole as boxes, those done
+ticked, or «Условий нет: проверяется по описанию» and the description, then what was cancelled
+or moved out from under it with each reason; «Подтвердить» waits for every box, ticks the open
+ones and the marked ones as the reader's, writes the owner's summary where there is none, and
+completes it in one write.
 Overview opens with the next step, when there is one: a quiet line, «Следующий шаг · 3 из
 9», whose number is the step's place in the list and not how many are done, then the step's
 words as a description reads, with no heading over one sentence. «Все шаги» at the end of

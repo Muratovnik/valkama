@@ -5,6 +5,7 @@
  * so every value reaches Reka as a token; typed words offered as a new value are a token
  * of their own kind, which no option can spell.
  */
+import { choicesMatching } from '@/shared/ui/choiceControls.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 const VALUE = 'v:'
@@ -16,19 +17,6 @@ export const freshToken = (words: string) => `${NEW}${words}`
 /** The value a token stands for: an option's, or the typed words. */
 export function tokenValue(token: string): string {
   return token.startsWith(NEW) ? token.slice(NEW.length).trim() : token.slice(VALUE.length)
-}
-
-/** The options whose words or note hold `query`, ignoring case; every option for no query. */
-export function choicesHolding<Option extends ChoiceOption>(
-  options: readonly Option[],
-  query: string,
-): Option[] {
-  const needle = query.trim().toLocaleLowerCase()
-  return needle
-    ? options.filter((option) =>
-        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
-      )
-    : [...options]
 }
 
 export interface SearchedChoices {
@@ -60,7 +48,7 @@ export function searchChoices(input: {
   ]
   const words = input.query.trim()
   const needle = words.toLocaleLowerCase()
-  const found = choicesHolding(listed, words)
+  const found = choicesMatching(listed, words)
   const said = listed.some((option) => option.label.toLocaleLowerCase() === needle)
   return { found, fresh: input.creatable && words && !said ? words : '' }
 }

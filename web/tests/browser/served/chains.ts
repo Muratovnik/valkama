@@ -77,6 +77,7 @@ export function smallChain() {
     workable: items.filter((item) => item.workable).length,
     by_category: {},
     by_container_state: {},
+    by_project: [],
     origins: [
       { parent_reference: workItemRef.reference, parent_title: null, count: 6, open: 2 },
       { parent_reference: null, parent_title: null, count: 10, open: 7 },

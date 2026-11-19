@@ -55,6 +55,30 @@ export function decodeChoiceValue(codec: ChoiceValueCodec, token: string): strin
   return codec.tokenToValue.get(token) ?? null
 }
 
+/** The options whose words or note hold what was typed, ignoring case; all of them for nothing. */
+export function choicesMatching<T extends ChoiceOption>(options: readonly T[], query: string): T[] {
+  const needle = query.trim().toLocaleLowerCase()
+  return needle
+    ? options.filter((option) =>
+        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
+      )
+    : [...options]
+}
+
+/**
+ * Reka gives a list's focus back to its trigger as the list goes, on a timer of its own. A
+ * choice whose effect has taken focus elsewhere by then, a field it opened to be typed in, keeps
+ * it there: the trigger took it back from under the caret. Its `close-auto-focus` handler.
+ */
+export function keepMovedFocus(event: Event) {
+  const now = document.activeElement
+  const moved =
+    now instanceof HTMLElement &&
+    now !== document.body &&
+    !now.closest('.choice-select, .choice-popup')
+  if (moved) event.preventDefault()
+}
+
 /** One row of a grouped list (`OptionGroups`). */
 export interface OptionRow {
   key: string

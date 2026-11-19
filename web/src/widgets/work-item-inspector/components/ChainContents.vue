@@ -6,7 +6,8 @@
  * The counts are the chain read's own, in scope `tree`: work in a state by its category, and
  * the goals and stages under it that derive a state of their own by what they derive, on a
  * line of their own, since «In progress» is said by both and one line would say it twice.
- * Nothing is counted here.
+ * Then its tasks by project, a task of several projects in each, so that line adds up to no
+ * total. Nothing is counted here.
  *
  * The rows are the tree of rows' (`treeRows`, `TreeRowLead`, `useListKeys`), the list's own
  * parts: one Tab stop, ↑ ↓ through the rows, → opens a folded row, ← folds an open one or goes
@@ -14,7 +15,7 @@
  * reference and title, where it stands, and who holds it while it is open.
  *
  * Each row carries `data-id` and `data-reference`, and each count `data-count`: the state it
- * counts.
+ * counts, or the project, `none` for no project.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -63,6 +64,17 @@ const byContainer = computed(() =>
     const count = props.chain.by_container_state[state] ?? 0
     return count ? [{ count, label: t(`workItem.containerState.${state}`), state }] : []
   }),
+)
+/** The tasks by project, as the read orders them; a project the registry does not name by its id. */
+const byProject = computed(() =>
+  props.chain.by_project.map((row) => ({
+    count: row.count,
+    label:
+      row.project_id === null
+        ? t('workItem.chain.contents.noProject')
+        : (row.display_name ?? row.project_id),
+    project: row.project_id ?? 'none',
+  })),
 )
 const countLines = computed(() =>
   [
@@ -127,6 +139,22 @@ defineExpose({ reveal })
           :state="count.state"
           :label="count.label"
         />
+        <span class="contents-count-value">{{ count.count }}</span>
+      </span>
+    </p>
+    <p
+      v-if="byProject.length > 0"
+      class="contents-counts"
+      data-counts="project"
+    >
+      <span class="contents-counts-label">{{ t('workItem.chain.contents.byProject') }}</span>
+      <span
+        v-for="count in byProject"
+        :key="count.project"
+        class="contents-count"
+        :data-count="count.project"
+      >
+        <span class="contents-count-name">{{ count.label }}</span>
         <span class="contents-count-value">{{ count.count }}</span>
       </span>
     </p>
@@ -252,6 +280,10 @@ defineExpose({ reveal })
   gap: var(--space-1);
   align-items: center;
   white-space: nowrap;
+}
+
+.contents-count-name {
+  color: var(--color-text);
 }
 
 .contents-count-value {

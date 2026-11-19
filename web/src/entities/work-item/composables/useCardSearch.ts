@@ -1,23 +1,30 @@
 import { computed, onScopeDispose, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 /** How long typing rests before the words are searched. */
 const PAUSE = 200
 
+/** Where the cards are found: the space they stand in, and the card that waits, which is left out. */
+export interface CardSearchScope {
+  /** The work item id of the card that would wait on the one found. */
+  own: string
+  space: PlanningSpaceRef | undefined
+}
+
 /**
- * The cards a question can be put off until the close of: the open ones of its own space, found
- * by what is typed, and never its own card, which putting off cannot wait on. The server refuses
- * the rest it cannot wait on, an ancestor among them, and says so in the record's foot.
+ * The cards work can be put off until the close of: the open ones of its own space, found by
+ * what is typed, and never the card itself, which putting off cannot wait on. The server refuses
+ * the rest it cannot wait on, an ancestor among them, and says so where the write was made.
  *
  * Nothing is offered before something is typed: a space's open work runs to hundreds of cards.
  * The card chosen stays among the options while other words are searched, so the field keeps
  * naming it.
  */
-export function useCardSearch(entry: () => InputRequestEntry) {
+export function useCardSearch(scope: () => CardSearchScope) {
   const { t } = useI18n()
   const query = shallowRef('')
   const found = shallowRef<ChoiceOption[]>([])
@@ -35,17 +42,17 @@ export function useCardSearch(entry: () => InputRequestEntry) {
   async function run(words: string) {
     const current = new AbortController()
     controller = current
-    const { target, request } = entry()
+    const { own, space } = scope()
     try {
       const result = await searchGlobalPlanningWorkItems(words, current.signal)
       if (controller !== current) return
       found.value = result.items
         .filter(
           ({ target: other, item }) =>
-            other.space_ref.data_scope_id === target.space_ref.data_scope_id &&
-            other.space_ref.space_key === target.space_ref.space_key &&
+            other.space_ref.data_scope_id === space?.data_scope_id &&
+            other.space_ref.space_key === space.space_key &&
             item.open &&
-            item.work_item_id !== request.work_item_id,
+            item.work_item_id !== own,
         )
         .map(({ item }) => ({ value: item.reference, label: `${item.reference} ${item.title}` }))
     } catch {

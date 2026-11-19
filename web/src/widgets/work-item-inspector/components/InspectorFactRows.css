@@ -23,6 +23,13 @@
   }
 }
 
+/* A fact drawn as a word or a mark rather than a menu, on the row's middle. */
+.card-fact {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
 /* Each fact stands at the chip's height, so a row is as high whichever fact is in it. */
 .card-row-value {
   display: flex;

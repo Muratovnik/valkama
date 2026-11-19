@@ -21,10 +21,15 @@ import {
   SelectViewport,
 } from 'reka-ui'
 
-import { choiceValueCodec, decodeChoiceValue, encodeChoiceValue } from '@/shared/ui/choiceControls'
+import {
+  choicesMatching,
+  choiceValueCodec,
+  decodeChoiceValue,
+  encodeChoiceValue,
+  keepMovedFocus,
+} from '@/shared/ui/choiceControls'
 import type { ChoiceOption } from '@/shared/ui/choiceControls'
 import ControlIcon from '@/shared/ui/ControlIcon.vue'
-import { choicesHolding } from '@/shared/ui/searchChoices.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
@@ -76,7 +81,7 @@ const selected = computed(() => props.options.find((option) => option.value === 
 // (a state move the server refused) left the item selected inside the list, and
 // choosing it again changed nothing and sent nothing.
 const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? null)
-const filtered = computed(() => choicesHolding(props.options, query.value))
+const filtered = computed(() => choicesMatching(props.options, query.value))
 /** Out of the Tab order where the host's keys reach the button. */
 const triggerTab = computed(() => (props.keyed ? -1 : undefined))
 
@@ -176,6 +181,7 @@ defineExpose({ show: () => updateOpen(true) })
           :avoid-collisions="true"
           :hide-when-detached="true"
           :body-lock="false"
+          @close-auto-focus="keepMovedFocus"
         >
           <label
             v-if="searchable"
@@ -355,98 +361,14 @@ defineExpose({ show: () => updateOpen(true) })
   font: var(--font-detail);
 }
 
-.choice-popup {
-  z-index: 120;
-  min-width: var(--reka-select-trigger-width);
-  max-width: min(440px, calc(100vw - 24px));
-  max-height: var(--reka-select-content-available-height);
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-text);
-  background: var(--color-surface);
-  overflow: hidden;
-  border-radius: var(--radius-control);
-  box-shadow: 0 14px 34px var(--color-shadow);
-}
-
-.choice-search {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: center;
-  padding: 0 var(--space-2);
-  margin: var(--space-2);
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-text-muted);
-  background: var(--color-control-surface);
-  border-radius: var(--radius-control);
-}
-
-.choice-search-field {
-  width: 100%;
-  min-height: var(--size-control-height-compact);
-  padding: 0;
-  border: 0;
-  color: var(--color-text);
-  background: transparent;
-  outline: 0;
-}
-
-.choice-viewport {
-  max-height: min(320px, var(--reka-select-content-available-height));
-  padding: var(--space-1);
-  overflow-y: auto;
-}
-
-.choice-option {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
-  gap: var(--space-3);
-  align-items: center;
-  min-height: var(--size-control-height);
-  padding: var(--space-2);
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &.has-icon {
-    grid-template-columns: 24px minmax(0, 1fr) 18px;
-  }
-
-  &[data-highlighted] {
-    background: var(--color-surface-active);
-  }
-
-  &[data-disabled] {
-    color: var(--color-text-muted);
-    opacity: 0.58;
-    cursor: not-allowed;
-  }
-
-  &[data-state='checked'] {
-    font-weight: 600;
-  }
-}
-
-.choice-check {
-  width: 18px;
-  height: 18px;
-  color: var(--color-text);
-}
-
-.choice-empty {
-  padding: var(--space-4);
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-interface);
-  text-align: center;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .choice-chevron {
     transition: none;
   }
 }
 </style>
+
+<style src="@/shared/ui/choiceList.css"></style>
 
 <style scoped>
 /* What a host draws in an option's place — a state with its dot, a priority with its glyph — is
