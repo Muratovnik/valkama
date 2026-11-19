@@ -1,7 +1,8 @@
 """What `tests/machine_lock.py` owes: one heavy run at a time, and a waiter that says for whom.
 
 Every lock here is a file in a directory this test made, never the machine's:
-the suite itself runs under that lock when `tests/isolated.py gates` starts it.
+the suite itself runs under that lock, which it takes as it loads, and the tests of
+that loading stand in for the hold it takes.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import tempfile
 import threading
 import time
 import unittest
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from unittest import mock
 
@@ -173,38 +174,44 @@ class LockTests(LockCase):
             finally:
                 store_lock.unlock(handle)
 
-    def test_the_machine_lock_is_outside_the_checkout_and_the_store(self) -> None:
-        # A release coordinator runs the checks with a TEMP inside the checkout; the lock
-        # must not follow it there, or it would hold only the runs given that TEMP.
-        given = str(ROOT / ".git" / "relkit" / "tmp" / "candidate")
-        # The isolated gates runner redirects LOCALAPPDATA into its result directory, which
-        # may sit inside the checkout, and this process was started with that; the lock's
-        # place is pinned here so the check holds whatever the caller's redirection is. Not
-        # under the TEMP this run was given either: the release coordinator runs this very
-        # check with that TEMP inside the checkout.
-        profile = str(Path(ROOT.anchor) / "valkama-lock-profile")
-        with mock.patch.object(tests, "CALLER_LOCAL_APP_DATA", profile):
+    def test_the_machine_lock_stays_put_however_a_run_moves_its_profile_or_temp(self) -> None:
+        # A release coordinator runs the checks with a TEMP inside the checkout, and the
+        # gates runner and the release check move LOCALAPPDATA into a throwaway profile
+        # that may sit there too. A lock that followed either would hold only the runs
+        # given that place. The logon value stands in for the registry's, so the check
+        # does not depend on this machine's.
+        logon = str(Path(ROOT.anchor) / "valkama-lock-logon")
+        moved = str(ROOT / ".git" / "relkit" / "tmp" / "candidate")
+        with (
+            mock.patch.object(machine_lock, "logon_local_app_data", return_value=logon),
+            mock.patch.object(tests, "CALLER_LOCAL_APP_DATA", moved),
+        ):
             reference = machine_lock.lock_path().resolve()
-            with mock.patch.dict(os.environ, {"TMP": given, "TEMP": given, "TMPDIR": given}):
-                with mock.patch.object(tempfile, "tempdir", given):
+            with mock.patch.dict(
+                os.environ, {"LOCALAPPDATA": moved, "TMP": moved, "TEMP": moved, "TMPDIR": moved}
+            ):
+                with mock.patch.object(tempfile, "tempdir", moved):
                     path = machine_lock.lock_path().resolve()
         self.assertFalse(path.is_relative_to(ROOT))
         self.assertFalse(path.is_relative_to(Path.home() / ".valkama"))
         self.assertEqual(reference, path)
 
     @unittest.skipUnless(sys.platform == "win32", "only on Windows is the lock under LOCALAPPDATA")
-    def test_the_lock_stays_with_the_local_application_data_the_caller_gave(self) -> None:
+    def test_with_no_logon_value_the_lock_stays_with_what_the_caller_gave(self) -> None:
         # Importing the `tests` package moved LOCALAPPDATA into the suite's directory, and
         # the gates import this file through it: a lock there would hold no other run.
         caller = Path(tempfile.gettempdir()) / "valkama-caller-profile"
-        with mock.patch.object(tests, "CALLER_LOCAL_APP_DATA", str(caller)):
+        with (
+            mock.patch.object(machine_lock, "logon_local_app_data", return_value=None),
+            mock.patch.object(tests, "CALLER_LOCAL_APP_DATA", str(caller)),
+        ):
             self.assertEqual(caller / "Temp", machine_lock.lock_path().parent)
         self.assertFalse(machine_lock.lock_path().is_relative_to(tests.SUITE_LOCAL_APP_DATA))
         # The browser runner runs the file as a script, which imports no package and must
         # leave the variable alone for the browsers found under it.
         probe = (
-            "import sys; sys.path.insert(0, sys.argv[1]); import machine_lock;"
-            " print('tests' in sys.modules, machine_lock.lock_path().parent)"
+            "import os, sys; sys.path.insert(0, sys.argv[1]); import machine_lock;"
+            " print('tests' in sys.modules, os.environ['LOCALAPPDATA'])"
         )
         found = subprocess.run(
             [sys.executable, "-c", probe, str(ROOT / "tests")],
@@ -213,7 +220,159 @@ class LockTests(LockCase):
             text=True,
             check=True,
         )
-        self.assertEqual(f"False {caller / 'Temp'}", found.stdout.strip())
+        self.assertEqual(f"False {caller}", found.stdout.strip())
+
+
+class AncestorTests(LockCase):
+    """A run started by a holder of the lock goes in at once; any other run still waits."""
+
+    def test_a_run_marked_as_under_a_holder_of_this_lock_goes_in_and_leaves_its_record(
+        self,
+    ) -> None:
+        with held_elsewhere(self.path, "the run that started it"):
+            # Marked once the holder is in, as a child of it would find its environment.
+            with mock.patch.dict(os.environ, machine_lock.marker(self.path)):
+                with machine_lock.held("a step inside it", path=self.path, say=self.fail):
+                    self.assertIn("the run that started it", machine_lock.holder(self.path))
+            self.assertIn("the run that started it", machine_lock.holder(self.path))
+
+    def test_a_mark_for_another_lock_does_not_let_a_run_in(self) -> None:
+        other = self.path.parent / "other.lock"
+        with held_elsewhere(self.path) as release:
+            with mock.patch.dict(os.environ, machine_lock.marker(other)):
+                waiter = Waiter(self.path).start()
+                self.addCleanup(waiter.finish)
+                self.assertFalse(waiter.inside.wait(HELD_SECONDS), "it ran beside the holder")
+            release.set()
+            self.assertTrue(waiter.inside.wait(DEADLINE_SECONDS), "it never got the lock")
+
+    def test_a_command_run_by_the_command_does_not_wait_for_its_own_run(self) -> None:
+        # The inner run waits for ever unless the outer one marks what it starts.
+        nested = subprocess.run(
+            [
+                *(sys.executable, COMMAND, "run", "--run=the outer run", f"--path={self.path}"),
+                *("--", sys.executable, COMMAND, "run", "--run=the inner run"),
+                *(f"--path={self.path}", "--", sys.executable, "-c", "raise SystemExit(7)"),
+            ],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=DEADLINE_SECONDS,
+            check=False,
+        )
+        self.assertEqual(7, nested.returncode, nested.stdout + nested.stderr)
+        self.assertNotIn(b"waiting", nested.stdout)
+
+    def test_a_hold_until_exit_keeps_the_lock_and_marks_the_process(self) -> None:
+        with (
+            mock.patch.dict(os.environ),
+            mock.patch.object(machine_lock.atexit, "register") as register,
+        ):
+            machine_lock.hold_until_exit("the whole suite", path=self.path, say=self.fail)
+            ((release,), _options) = register.call_args
+            self.addCleanup(release)
+            mark = machine_lock.marker(self.path)[machine_lock.HELD_BY_ANCESTOR]
+            self.assertEqual(mark, os.environ[machine_lock.HELD_BY_ANCESTOR])
+            self.assertIn("the whole suite in", machine_lock.holder(self.path))
+            waiter = Waiter(self.path).start()
+            self.addCleanup(waiter.finish)
+            # A thread of the same process: the mark is what lets it in, as a second load would.
+            self.assertTrue(waiter.inside.wait(DEADLINE_SECONDS))
+            waiter.finish()
+        with self.path.open("a+b") as other:
+            self.assertFalse(store_lock.try_lock(other), "the hold ended before the process did")
+        release()
+        with machine_lock.held("after", path=self.path, say=self.fail):
+            pass
+
+
+def loaded_ids(suite: unittest.TestSuite) -> set[str]:
+    """Every test a loaded suite holds, by id."""
+
+    found: set[str] = set()
+    for test in suite:
+        if isinstance(test, unittest.TestSuite):
+            found |= loaded_ids(test)
+        else:
+            # unittest's own id: a test class may define an `id` helper of its own.
+            found.add(unittest.TestCase.id(test))
+    return found
+
+
+class WholeSuiteTests(unittest.TestCase):
+    """The `tests` package takes the lock for a run of the whole suite and for no narrower one.
+
+    Through unittest's own loader, the one `python -m unittest` drives, on this very
+    package, with the hold it takes stood in for.
+    """
+
+    TESTS = ROOT / "tests"
+
+    def load(
+        self, how: Callable[[unittest.TestLoader], unittest.TestSuite], **loader: object
+    ) -> tuple[set[str], int]:
+        """The tests `how` loads and how many times the load took the lock."""
+
+        reader = unittest.TestLoader()
+        for name, value in loader.items():
+            setattr(reader, name, value)
+        with mock.patch.object(machine_lock, "hold_until_exit") as hold:
+            suite = how(reader)
+        return loaded_ids(suite), hold.call_count
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # The walk unittest makes of a package with no hook: what the hook must still find.
+        with mock.patch.object(tests, "load_tests", None):
+            cls.everything = loaded_ids(unittest.TestLoader().discover(str(ROOT), "test_*.py"))
+
+    def test_the_gate_command_takes_the_lock_and_still_finds_every_test(self) -> None:
+        # `-s . -p "test_*.py"`, as the gates and CI spell it.
+        found, holds = self.load(lambda reader: reader.discover(str(ROOT), "test_*.py"))
+        self.assertEqual(1, holds)
+        self.assertEqual(self.everything, found)
+        self.assertTrue(any(name.startswith("tests.quota.") for name in found))
+        self.assertIn(f"{__name__}.{type(self).__name__}.{self._testMethodName}", found)
+
+    def test_every_other_start_at_the_package_takes_it_too(self) -> None:
+        starts = {
+            "discover -s tests -t .": lambda reader: reader.discover(
+                str(self.TESTS), "test_*.py", top_level_dir=str(ROOT)
+            ),
+            "-m unittest tests": lambda reader: reader.loadTestsFromName("tests"),
+            "unittest's own pattern": lambda reader: reader.discover(str(ROOT)),
+        }
+        for start, how in starts.items():
+            with self.subTest(start=start):
+                found, holds = self.load(how)
+                self.assertGreaterEqual(holds, 1)
+                self.assertEqual(self.everything, found)
+
+    def test_a_targeted_run_takes_no_lock(self) -> None:
+        module = "tests.test_machine_lock"
+        targeted = {
+            "a module by name": (lambda reader: reader.loadTestsFromName(module), {}),
+            "a subpackage": (
+                lambda reader: reader.discover(
+                    str(self.TESTS / "quota"), "test_*.py", top_level_dir=str(ROOT)
+                ),
+                {},
+            ),
+            "a narrower pattern": (
+                lambda reader: reader.discover(str(ROOT), "test_machine_lock.py"),
+                {},
+            ),
+            "-k": (
+                lambda reader: reader.discover(str(ROOT), "test_*.py"),
+                {"testNamePatterns": ["*targeted*"]},
+            ),
+        }
+        for run, (how, loader) in targeted.items():
+            with self.subTest(run=run):
+                found, holds = self.load(how, **loader)
+                self.assertEqual(0, holds)
+                # A present control: each run does load tests, only not all of them.
+                self.assertTrue(found)
+                self.assertLess(len(found), len(self.everything))
 
 
 class CommandTests(LockCase):

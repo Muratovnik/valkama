@@ -32,9 +32,11 @@ Each rule here is a way a hand-written wrapper went wrong:
 - `serve` says when the committed `web/dist` it serves is behind `web/src`. A
   browser check once took screenshots of a bundle ten commits behind its sources.
 - The `unittest` step holds the machine's heavy-test lock, `tests/machine_lock.py`,
-  for its own duration and no longer. The whole suite beside another checkout's
-  failed timing budgets that hold alone, so a second such run waits and says for
-  whom; the other steps are light and take no lock.
+  for its own duration and no longer, and runs marked as under it, because the
+  suite takes that lock itself. The whole suite beside another checkout's failed
+  timing budgets that hold alone, so a second such run waits and says for whom in
+  the summary. No other step is held here; the Vitest run of `npm test` takes the
+  lock on its own and says so in its step's log.
 
 A served store copy holds whatever the live store holds, so it lives inside the
 throwaway profile, together with any backup a migration writes beside it, and
@@ -425,9 +427,20 @@ def run_gates(
 
     The modules are read again at each step, because another session's `npm ci`
     may have replaced them while the steps before it ran. An exclusive step waits
-    for the heavy-test lock, the machine's unless `lock` names another file.
+    for the heavy-test lock, the machine's unless `lock` names another file, and
+    runs marked as under it, so the suite inside does not wait for its own step.
     """
 
+    # Imported here, not at the top, for the reason `_refusal` gives.
+    from tests import machine_lock
+
+    # A hold of the run that started this one covers the steps too, though their
+    # environment was built without the caller's `VALKAMA_*`.
+    if machine_lock.HELD_BY_ANCESTOR in os.environ:
+        environment = {
+            **environment,
+            machine_lock.HELD_BY_ANCESTOR: os.environ[machine_lock.HELD_BY_ANCESTOR],
+        }
     logs = out / LOGS
     logs.mkdir(parents=True, exist_ok=True)
     failed: list[str] = []
@@ -449,16 +462,15 @@ def run_gates(
                 report(f"{run.name:<14} refused  {detail}")
                 continue
             if run.exclusive:
-                # Imported here, not at the top, for the reason `_refusal` gives.
-                from tests import machine_lock
-
                 holding: contextlib.AbstractContextManager[None] = machine_lock.held(
                     f"tests/isolated.py gates: the {run.name} step", path=lock, say=report
                 )
+                step_environment = {**environment, **machine_lock.marker(lock)}
             else:
                 holding = contextlib.nullcontext()
+                step_environment = dict(environment)
             with holding:
-                code = _run_step(run, log, environment)
+                code = _run_step(run, log, step_environment)
             if code != 0:
                 failed.append(run.name)
             report(f"{run.name:<14} exit={code}  {_tail(log)}")
