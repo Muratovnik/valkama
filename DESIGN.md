@@ -132,7 +132,10 @@ and only fades the end of a strip that scrolls on past it.
   its level before it is read: the type scale gives each level one size in every
   module — the module's name `module` 18px, a section `section` 16px, a group
   `emphasis` 15px, a block `interface` 14px and a label over a block's lines
-  `dense` 13px — so no heading is the size of the level over it. With no group level, an account of the quota stood
+  `dense` 13px — so no heading is the size of the level over it. Everything on a line of a
+  heading's row shares one centre line — the heading, an icon-only control, a text button, a
+  switch: aligned by baselines, the menu at a quota account's name, which has no baseline of
+  its own, stood 3px above «Name» beside it. With no group level, an account of the quota stood
   16px from the next like any block, under a heading as large as its section's,
   and six accounts ran together into one 4279px list. A module keeps
   `--size-page-gutter` from the panel edge. Density comes from alignment and

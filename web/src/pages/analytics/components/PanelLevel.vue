@@ -10,9 +10,12 @@
  * the heading of the level around it (`usePanelOutline`). The panel shows one section at a time,
  * so the 36px between two sections has no place on it yet.
  *
- * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact) and the
- * controls that act on the whole level, each at the one size a heading's control takes, at the
- * row's end. A row that wraps puts a control under a long heading; a row of one line (`oneLine`)
+ * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact, a menu) and
+ * the controls that act on the whole level, each at the one size a heading's control takes, at the
+ * row's end. Everything on a line of the row shares one centre line: an icon-only control has no
+ * baseline of its own, and aligned by baselines the menu at an account's name stood 3px above
+ * «Name» beside it. A heading that wraps takes its line alone, so nothing beside it is centred on
+ * more than one of its lines. A row that wraps puts a control under a long heading; a row of one line (`oneLine`)
  * cuts the heading short with an ellipsis instead, its whole words in a hint while they are cut,
  * so its controls stay on its line, as a window of the quota keeps its name and «Breakdown»
  * there. A caveat that qualifies the whole level — that a cost is an estimate, what the tokens
@@ -230,7 +233,9 @@ const rivals = computed(() =>
 <style scoped src="@/shared/ui/headingLevels.css"></style>
 
 <style scoped>
-/* The heading row 12px over what the level holds, as every heading stands over its content. */
+/* The heading row 12px over what the level holds, as every heading stands over its content.
+   What stands on a line of the row is centred on it: the heading, the words and the controls
+   beside it, an icon-only one among them, and the controls at its end. */
 .panel-level {
   --level-column-min: 20rem;
 
@@ -245,7 +250,7 @@ const rivals = computed(() =>
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
-  align-items: baseline;
+  align-items: center;
   min-width: 0;
 }
 
@@ -293,13 +298,12 @@ const rivals = computed(() =>
   }
 }
 
-/* The controls stand at the row's end, centred on its first line. */
+/* The controls stand at the row's end. */
 .level-actions {
   display: flex;
   flex: 0 0 auto;
   gap: var(--space-1);
   align-items: center;
-  align-self: center;
   margin-inline-start: auto;
 }
 
