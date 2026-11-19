@@ -8,6 +8,10 @@
 // Not composite: a composite project must list every file it compiles, and the
 // specs reach into src/ through the `@/` alias. src/ cannot import a test back,
 // because the app project is composite and would refuse a file outside its list.
+//
+// src/ is listed as well as tests/: `--build` counts a project up to date while
+// none of its listed files changed, so a change in src/ that breaks only a test
+// would otherwise pass until a forced build.
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
@@ -17,5 +21,5 @@
     "types": ["node"],
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tests.tsbuildinfo"
   },
-  "include": ["tests/**/*.ts", "env.d.ts"]
+  "include": ["tests/**/*.ts", "src/**/*.ts", "src/**/*.vue", "env.d.ts"]
 }
