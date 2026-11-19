@@ -49,6 +49,7 @@ store, and an internal error:
 | `pre-compact` | `PreCompact` | `compact` | yes | yes |
 | `notification` | `Notification` | `attention` | yes | no such hook |
 | `post-tool-use` | `PostToolUse` | `agent_launch`, for the Agent tool only | yes | nothing recorded |
+| `post-tool-use-failure` | `PostToolUseFailure` | nothing: only [commits](#commits) | yes | no such hook |
 | `pre-tool-use` | `PreToolUse` | nothing in the store: [the call pair](#the-call-pair) | yes | not needed |
 | `watch` | `UserPromptSubmit` and `Stop`, with `asyncRewake` | nothing: [the watcher](#the-watcher) | yes | no such mechanism |
 
@@ -57,11 +58,13 @@ For Codex, `user-prompt-submit` does. `post-tool-use` would too, but Host Runtim
 does not register it: Codex runs a hook's command through the session's shell, so
 a handler there starts a shell on every tool call, and no Codex release documents
 `agent_id` on a subagent's `PostToolUse` yet. Codex `stop` is never answered, and
-a Codex input with `agent_id` is a subagent's hook and is answered with nothing
+a Codex input with `agent_id` is a subagent's hook and gets no notice
 (see [when it is told](#when-it-is-told)). That is described in
 [Telling the agent what a person did](#telling-the-agent-what-a-person-did).
 `session-start` with `source` `resume` or `compact` may answer, for both
-clients, with [the resume note](#the-resume-note).
+clients, with [the resume note](#the-resume-note). `post-tool-use` of both
+clients and `post-tool-use-failure` first take the [commits](#commits) the
+session's shell made, and answer with where each went.
 
 An event a client does not have, an unknown client, or input whose
 `hook_event_name` names a different hook than the command line is ignored, with
@@ -533,10 +536,11 @@ the same rules as a person's act and beside the mentions above:
   above) keeps it out as well. Each is one short line,
   `- status at <time> by your agent <id>`, that quotes nothing: the subagent's
   report reaches the orchestrator anyway. Two such events of one kind by one agent
-  at one time are one line, as the claim that starts an item and the close in one
-  call are. Nothing else its subagents wrote is told, a comment, a reply or a
-  mention included. These lines never wake the session or continue its turn: at
-  `Stop` and in the watcher they wait for the next tool call or prompt, and they
+  at one time are one line, and so are two of one kind in one call, as the claim
+  that starts an item and the close are: each event takes the second it is written
+  in, so those two can stand a second apart. Nothing else its subagents wrote is
+  told, a comment, a reply or a mention included. These lines never wake the
+  session or continue its turn: at `Stop` and in the watcher they wait for the next tool call or prompt, and they
   fold past three notices on an item as any other agent's news. Where an
   orchestrator never wrote on the item itself, its place for this news starts
   before its session's first call there, so the one call in which a subagent took
@@ -554,7 +558,9 @@ the same rules as a person's act and beside the mentions above:
   moves to is told to the holders: `blocker_closed` when it reached a terminal
   state and is still there, `blocker_changed` for any other state, a reopen
   included, and for a close another transition undid before it was read. A
-  person's change is in the person's block, another session's in this one; a
+  person's change is in the person's block, another session's in this one, and
+  one Valkama made in a call of its own, such as work put off coming back, in
+  this one too, as [its own](#valkamas-own-records); a
   change by the holder's own session is told to nobody, though its orchestrator
   hears a subagent's change on the blocker itself, as above. Only a close wakes (see
   [when another session's news wakes](#when-another-sessions-news-wakes)): a
@@ -752,10 +758,12 @@ Codex reads `additionalContext` from `PostToolUse` and `UserPromptSubmit` the sa
 way, so `valkama hook codex post-tool-use` and `valkama hook codex
 user-prompt-submit` answer too. Three things differ from Claude Code:
 
-- **A subagent's hook says nothing.** A Codex subagent's hook carries its parent's
+- **A subagent's hook gives no notice.** A Codex subagent's hook carries its parent's
   `session_id`, so only `agent_id` tells it apart. Since 3.0 an input with any
-  `agent_id` is answered with nothing and moves no place: the news stays for the
+  `agent_id` gets no notice and moves no place: the news stays for the
   orchestrator, whose subagent hears nothing of its own session and no tree anyway.
+  It is answered only with the lines about the commits it made
+  ([the answer](#the-answer)).
   An input without one is the orchestrator's; if a Codex release sent a subagent's
   input without `agent_id`, that subagent would be handed the orchestrator's news.
 - **`Stop` is not answered.** Codex has a `Stop` hook, and a `block` answer there
@@ -1170,12 +1178,20 @@ read through the calls' index on the session. Its cost grows with the rows writt
 since, not with the size of the tree. Measured in-process on Windows, a goal of 274
 items, the orchestrator holding one task in it, `collect` with the feed against
 the same call answered from its two reads, median of 200 runs each, interleaved,
-three runs (`tests/test_hooks_tree_cost.py` holds the bounds, 0.5 ms and 2 ms):
+three runs:
 
 | Since the last read | Added |
 | --- | --- |
 | nothing written | 0.00 / 0.01 / 0.00 ms |
 | 100 comments by another session across the tree, 200 rows | 0.86 / 0.87 / 0.85 ms |
+
+These times move with the machine's load: on a machine busy with other work the same
+code took two to five times as long. `tests/test_hooks_tree_cost.py` therefore holds what they
+stand for instead of the times. With nothing written, the tree adds no statement,
+only its three columns, each an uncorrelated subquery that SQLite answers by a search.
+The feed takes one statement for each level climbed and none for each item or row:
+comments on one stage and on every stage take as many statements, and 100 more
+comments on 100 other items add none.
 
 A hook of a newer release can meet a store that release has not opened yet, for
 the seconds between `launcher install` and the first session that switches. When
@@ -1211,7 +1227,8 @@ context no longer says where that work stood, and without help it reads each
 item again to find out. `valkama hook <client> session-start` answers such a
 start with a short note instead: what the agent holds, each item's state, next
 condition and project root, what the lease expiry took from it since its last
-call, and a last line saying that the note stands for that read.
+call, which items have a request waiting for its session's answer, and a last
+line saying that the note stands for that read.
 
 - **When.** Only when the input's `source` is `resume` or `compact`. `startup`,
   `clear` and `fork` open a session with a new id, which holds nothing, so they
@@ -1238,6 +1255,7 @@ Valkama now: this session holds 4 open items; the 3 it wrote to last:
 - MAIN-9 «Draft the release note», Blocked. All 3 conditions ticked. 1 open question. Goal MAIN-1.
 Root of these items: ../main.
 No longer held by you: MAIN-7.
+Waiting for your answer: MAIN-3.
 Current: read an item only for what this note leaves out.
 ```
 
@@ -1290,13 +1308,24 @@ changed between the two is not named. A subagent is told only its own losses,
 its orchestrator those of the whole session. The line is left out when there is
 no loss.
 
+The line `Waiting for your answer: MAIN-3, MAIN-12 and 1 more.` names the items
+with an open request [asked of the session](#asked-of-a-session), each once, the
+item of the newest request first: the requests `list_work_item_requests` with
+`addressed: true` lists for that session. A request answered, declined,
+withdrawn or past its deadline leaves it. The asking was told once, as news, and
+the note neither reads nor moves the places the notices keep, so this line is
+how a request told before a compaction comes back while it still waits. The line
+does not repeat the request's text: the list names it, and
+`get_work_item_request` reads it whole. Only the orchestrator gets it: the request asks the session, and a
+subagent's note has no such line. It is left out when nothing waits.
+
 ### How long it is
 
 The note is at most 600 characters, and that bound holds by construction, not by
 what the store happens to hold. The note tries three items, then two, then one.
 For each count it tries titles of at most 60, 44 and 32 characters with next
-conditions of at most 72, 52 and 36 and 3, 2 and 1 numbers in the line of
-losses, and one item also gets 20 and 24 with 1. It takes
+conditions of at most 72, 52 and 36 and 3, 2 and 1 numbers in each of the lines
+of losses and of requests, and one item also gets 20 and 24 with 1. It takes
 the first version that fits. Inside a field every run of whitespace is one
 space, so a field never breaks a line; a field that is cut ends with `…`; a
 state is at most 20 characters; and a number past 999 is `999+`. A root is at
@@ -1309,8 +1338,8 @@ it is at most 48.
 Beside a start with another `source`, there is no note when notices are
 [switched off](#switching-it-off) or the store is protected, when the store is
 missing, at another schema, or cannot be opened to read, and when the recipient
-holds nothing and lost nothing since its last call. The hook prints nothing then
-and exits 0.
+holds nothing, lost nothing since its last call and, for an orchestrator, has no
+request waiting for its answer. The hook prints nothing then and exits 0.
 
 The note is a stage of its own: the lifecycle event of the start is recorded in
 every case, and a note that fails is reported on stderr and costs nothing else.
@@ -1326,8 +1355,9 @@ then.
 ### What it reads
 
 The store, opened read-only and only at the schema this build writes, the
-history of what the lease expiry released for the line of losses, and the
-project registry, once for every item. The note writes nothing, and it neither reads nor moves the places
+history of what the lease expiry released for the line of losses, the requests
+asked of the session for the line of requests, and the project registry, once
+for every item. The note writes nothing, and it neither reads nor moves the places
 [the notices keep](#where-each-agents-place-is-kept), so news that arrived
 before or after the compaction is still told at the next tool call. The planning
 modules the note reads with are loaded only for a start it answers; a tool call
@@ -1916,6 +1946,256 @@ Under Capabilities → Quota sources:
   The doctor reads those two files and the named folders' manifests, and
   changes nothing. A mod enabled for one project, loaded with `--plugin-dir`
   or from a shell's `CLAUDE_CODE_PLUGIN_DIRS` is not seen, and the text says so.
+
+## Commits
+
+A commit an agent makes reaches the store in two steps. Git runs Valkama's own
+hook after the commit, and that hook leaves a record beside the store; the
+client hook that runs after the agent's shell call takes the record into the
+store. Nothing is written into Git: no trailer, note or branch.
+
+### The Git hook
+
+Git runs hooks from its configuration in addition to the hook directory's own
+ones, and before them, so a global `core.hooksPath` and the hooks it points to
+stay as they are. Valkama's are three entries in the global configuration:
+
+| Name | `event` | `command` |
+| --- | --- | --- |
+| `hook.valkama-commit` | `post-commit` | `<guard>; exec <python> -I -S <launcher>/valkama-launcher.py git-hook run post-commit` |
+| `hook.valkama-rewrite` | `post-rewrite` | the same, ending in `git-hook run post-rewrite` |
+| `hook.valkama-merge` | `post-merge` | the same, ending in `git-hook run post-merge` |
+
+Three names, because Git does not tell a command which event ran it. Git runs
+the command with `sh -c` and appends the event's arguments to it. The guard is
+
+```sh
+[ -n "${CLAUDE_CODE_SESSION_ID:-}${CODEX_SESSION_ID:-}${CODEX_THREAD_ID:-}" ] || exit 0
+```
+
+so a commit made outside every client session, a person's, a test's or a
+build's, ends in the shell Git already started, and Python never starts. A
+repository can turn one off for itself with
+`git config hook.valkama-commit.enabled false`; `--no-verify` does not skip
+`post-*` hooks.
+
+`valkama git-hook run <event>` prints nothing and always exits 0: a `post-*`
+event cannot change what Git did, and anything printed would show in every
+commit. Its own Git calls share five seconds. It:
+
+1. reads the sessions from the environment: `CLAUDE_CODE_SESSION_ID` for Claude
+   Code; `CODEX_SESSION_ID`, or else `CODEX_THREAD_ID`, for Codex, with
+   `CODEX_THREAD_ID` and `CODEX_TOOL_CALL_ID`. A client started from another
+   one's shell inherits that one's variables, so both may be there, and the
+   record carries both. Neither, and nothing is written;
+2. finds the repository with one `git rev-parse`: the parent of the common Git
+   directory when that is named `.git`, which is the main checkout for a linked
+   worktree too, and otherwise the top level. `git -C nested commit` is the
+   nested repository's. While a rebase is under way a `post-commit` run ends
+   here: the rebase reports its old and new hashes together when it ends;
+3. looks that root up in the project registry, exactly and, on Windows,
+   without case. A repository the registry does not name is not recorded, and
+   nobody is told: a project registered later gets its commits from then on;
+4. reads the event's commits with `git log` and leaves the record.
+
+What each event reports:
+
+- `post-commit`: HEAD, the commit just made. An amend and a cherry-pick run it
+  too.
+- `post-rewrite amend` and `post-rewrite rebase`: the `old new` pairs Git writes
+  to the hook's stdin, as `rewritten`, and each new commit once in `commits`. A
+  squash gives several pairs with one new hash. A `fixup!` squashed inside
+  `rebase -i --autosquash` gives a `post-rewrite amend` inside the rebase and then
+  the rebase's own `post-rewrite rebase`; both are recorded.
+- `post-merge`: HEAD, only when this merge made it. Git runs `post-merge` after a
+  fast-forward too, also to a merge commit somebody else made, so HEAD counts
+  only when it has two parents or more, its first parent is where HEAD was
+  before (`HEAD@{1}`), its committer's time is no earlier than two minutes
+  before the hook started, and its committer's address is the one Git makes
+  commits with here (`git var GIT_COMMITTER_IDENT`). The commits a merge or a
+  fast-forward brings are never recorded, and a squash merge (`post-merge 1`)
+  makes no commit. A merge commit by the same committer made in the last two
+  minutes in another clone and then fast-forwarded here is recorded as this
+  session's.
+
+Commits that `git am`, `git stash` or `commit-tree` with `update-ref` make run
+no `post-commit`, and a new commit made inside `rebase -i` (`exec git commit`, a
+split) is skipped with the rebase's own: none of them is recorded.
+
+### The record
+
+One JSON file per run and session:
+
+```json
+{"format": "valkama-commit-record", "version": 1, "event": "post-commit", "rewrite": null,
+ "root": "D:/src/alpha", "project_id": "alpha",
+ "commits": [{"hash": "<40 hex>", "parents": ["<40 hex>"], "subject": "fix: …",
+              "committed_at": "2026-11-20T10:31:02+03:00"}],
+ "rewritten": [], "claude": {"session_id": "…"}, "codex": null,
+ "occurred_at": "2026-11-20T07:31:02.415Z"}
+```
+
+A `post-rewrite` record carries `amend` or `rebase` in `rewrite` and its pairs
+in `rewritten`, each `{"from": "<40 hex>", "to": "<40 hex>"}`; for the other
+events they are `null` and empty.
+
+It is named `<session key>--<nanoseconds>-<16 hex>.json`, the key being the one
+the notice's place files use, so a client hook finds its own session's records
+by the name alone. With two sessions in the environment the same record is
+written twice, one file per key, with the same time and hex part. A file is
+written under a temporary name and moved into place.
+
+It goes to `commits/` beside the store the one configuration resolution names
+(`VALKAMA_DB`, then `~/.valkama/config.json`, then the default), when the
+store's file is there and that directory takes it. The hook creates no
+directory but `commits/` there. Otherwise it goes to
+`<common Git directory>/valkama/commits/` of the repository: Git just wrote the
+commit's objects there, so it takes a file whenever the commit succeeded, and
+it is inside the Git directory, where no commit and no `git status` sees it. A
+store `VALKAMA_PROTECTED_STORE` names gets no record anywhere.
+
+### Taking the records
+
+`post-tool-use` of both clients and Claude Code's `post-tool-use-failure`
+look for the records of their session, in `commits/` beside the store and in
+`<root>/.git/valkama/commits/` of each registered project with a `.git`
+directory of its own; the registry is read as a file. Which records a hook
+takes:
+
+- **Codex**: those whose `codex.session_id` is the input's `session_id` and
+  whose `codex.tool_call_id` is its `tool_use_id`: the shell call the commit was
+  made in.
+- **Claude Code**, on `Bash` or `PowerShell`: those whose `claude.session_id`
+  is the input's `session_id`, written within the call's `duration_ms` before
+  now and two seconds more; without `duration_ms`, within ten minutes, the
+  longest a shell call takes by default.
+- **Leftovers**, on any call of either client: the records of its session that
+  no hook took for eleven minutes, a background command's or one that outlasted
+  its window. Which agent made them is not known, so the session decides
+  (below).
+
+With none, the hook is what it was, a reader: the store is not opened for
+writing. With some, it opens the store for writing with the same one-second
+wait as a lifecycle event, and in one transaction of Valkama's own takes the
+records strictly in the order they were written. It records each commit once
+per pair of project and hash, with the session, the agent (the input's
+`agent_id`; for Codex without it, a `CODEX_THREAD_ID` that is not the session),
+the client and the time. After the transaction commits it deletes those files.
+A record that changes nothing, because its commit is recorded already, is
+deleted as well: that is how the second file of a nested client's commit goes.
+A busy store, or one of another schema, leaves every record where it is for the
+session's next hook, and the answer says nothing of it.
+
+Records apply in one order of time across every session. When the hook's records
+hold a rewrite, it first takes every record of that rewrite's project lying
+before it in the same places, whichever session's: the commit an amend rewrote
+may be another session's, whose record is older than the amend, and deciding
+the new commit before that record is taken would decide it for the wrong
+session. Each such record is decided by the session its file is named for, as a
+leftover is, the answer says nothing of it, and its file stays for its own
+session's hook, which finds it changing nothing and deletes it.
+
+The planning sweep of a long-lived process takes what no hook took: its
+`commits` step, every ten minutes, takes up to 200 records an hour old or more
+from the same places, in the order they were written across every session, each
+decided by the session its file is named for, and answers nobody. It writes as Valkama's own call under the step's name. The step
+cannot act after the pass commits, so it deletes only records that change
+nothing: a record it applied stays until the next pass, or until a hook of its
+session, finds it changing nothing and deletes it. A file there that is no
+readable record is moved into `rejected/` beside it once it is a week old.
+
+### Which task a commit goes to
+
+The same transaction attaches each commit it recorded to a task, signed
+`valkama`: an attachment marked `server`, and a `commit_attached` event whose
+detail is `<project id> <hash>`. A commit recorded already is not decided
+again.
+
+The holds count as `held` counts them, a live claim or an open step, but for
+one holder at a time, in two levels. For a subagent, first the tasks the agent
+holds, then those its session's own holder holds; never another subagent's. For
+the session's own holder, first its own, then its subagents'. The first level
+that holds a task decides:
+
+1. one task: the commit goes to it;
+2. several: it goes to the one whose projects hold the commit's project, a task
+   naming none holding its space's default project. With several such, or none,
+   it goes nowhere, and the answer names those that fit, or every task of the
+   level when none does;
+3. none at either level: it goes to the task the session last moved into a
+   review or completed state, by the same two levels, when that task's projects
+   hold the commit's project. The move counts within the period the task's own
+   space sets in the participation setting `recent_close_minutes`, 30 minutes
+   by default; a newer move past its own space's period does not hide an older
+   one within its own. Entering review ends the claim, so a commit made just
+   after it would otherwise find no task. Otherwise the commit goes nowhere and
+   stays among the commits on no card.
+
+Only tasks: nobody holds a goal or a stage. An attachment gives the task the
+commit's project with the source `commits`, unless the task names it already.
+
+A leftover, or a record the sweep takes, has no known agent: the session's own
+holder is its first level, and the session's subagents its second.
+
+A rewrite is not decided: it carries what was decided for the old commit. For
+each pair whose old commit Valkama knows, the new commit gets a row with the old
+commit's session and agent, unless it has one, the old commit's attachments move
+to it, and the old commit is marked as rewritten to it. A squash unites the
+attachments of its old commits on the new one. Each card whose attachment a
+pair moved or united gets one history event `commit_rewritten`, signed
+`valkama`, whose detail is `<project id> <old hash> -> <new hash>`; a card the
+pair did not touch gets none, and the event is not news to anyone. The new
+commit of a pair is always live: a mark it carries goes, so a rewrite back --
+two amends at a pinned committer time that make the first commit again --
+returns that commit to its cards and hides the one between. A pair applies only
+when its record was written later than the last pair applied to its old or its
+new commit, the pairs of one record not counting against each other (a squash
+names one new commit several times). A record read again, which the sweep does
+until its next pass and a hook does with another session's record, therefore
+changes nothing and is worked off: without this, a rewrite back read again
+would hide the first commit and return it on every pass. A pair whose old
+and new hash are one changes nothing. A card's projects stay as they are: the
+repository is the same. When the old commit is unknown nothing is recorded for
+the pair: after an amend the new commit is the session's own, and
+its `post-commit` decides it; a rebase of commits nobody reported is no new work.
+A commit that a rewrite later in the same batch replaces is recorded without a
+decision of its own, so `git commit && git commit --amend` in one shell call is
+decided once, for the first commit, and the amend then moves that attachment.
+
+### The answer
+
+The lines about the commits come first in the hook's `additionalContext`, one
+per commit decided and one per old commit whose attachments a rewrite moved,
+five at most and then one that counts the rest:
+
+| When | Line |
+| --- | --- |
+| attached | `Valkama attached your commit <repo> <short> "<subject>" to <REF>.` |
+| to the other level's task | `Valkama attached your commit <repo> <short> "<subject>" to <REF>, which your session holds.` |
+| to a task closed lately | `Valkama attached your commit <repo> <short> "<subject>" to <REF>, which you closed <n> min ago. If it belongs elsewhere, move it with the commits group of apply_work_item_changes.` |
+| several tasks fit, or none | `Your commit <repo> <short> "<subject>" fits <REF1> and <REF2>, which you hold. Attach it to the right one: apply_work_item_changes {"id": "<REF>", "commits": [{"repository": "<repo>", "hash": "<short>"}]}.` |
+| no task | `Your commit <repo> <short> "<subject>" is on no card: you hold no task it fits. Claim the task before the work; to attach this commit, use the commits group of apply_work_item_changes on its card.` |
+| rewritten, its attachments moved | `Valkama moved the links of <repo> <old> to the rewritten commit <short>.` |
+| past five | `And <n> more commits: see the cards.` |
+
+`<repo>` is the project id, `<short>` the first nine digits of the hash, `<old>`
+those of the commit a rewrite replaced, and
+`<subject>` the subject, cut to 72 characters. On `post-tool-use` a notice, when
+there is one, follows the lines in the same `additionalContext`, after an empty
+line, and keeps to what the lines leave of its bound. A Codex subagent gets its
+own lines and, as before, no notice. `post-tool-use-failure` is no lifecycle
+event and no point a notice is delivered at: it answers with the lines alone,
+
+```json
+{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure", "additionalContext": "<lines>"}}
+```
+
+and with nothing when there are none. No `systemMessage` is about a commit: a
+person sees it on the card.
+
+Claude Code does not tell a command which agent ran it, so when two agents of
+one session commit at the same time, a commit may go to the other one's task.
+The line names the task, and the agent can move it.
 
 ## Not covered
 

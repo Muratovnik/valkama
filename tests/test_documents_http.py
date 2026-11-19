@@ -27,7 +27,7 @@ SCOPE = "12345678-1234-4234-8234-123456789abc"
 
 
 def space_identity(key: str) -> str:
-    """A planning space's exact identity, the value `GET /api/ref` takes too."""
+    """A planning space's exact identity."""
 
     return planning_space_entity({"data_scope_id": SCOPE, "space_key": key})["resource_id"]
 

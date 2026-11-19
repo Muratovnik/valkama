@@ -276,7 +276,7 @@ export function useUsageRead(options: {
     const asking = ask(query(period, [by], !before), signal)
     const askingBefore = before ? orNull(ask(query(before, [by], false), signal)) : null
     const askingAccounts =
-      by === 'account' ? null : orNull(ask(query(period, ['account'], false), signal))
+      by === 'seat' ? null : orNull(ask(query(period, ['seat'], false), signal))
     let usage: Usage
     try {
       usage = compared(await asking, askingBefore ? await askingBefore : undefined)

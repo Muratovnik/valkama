@@ -123,7 +123,7 @@ describe('a new view', () => {
     control.failing = true
     await page.setProps({ routeState: { period: 'weeks4' } })
     await flushPromises()
-    expect(page.get('[role="alert"]').text()).toContain('could not be read')
+    expect(page.get('[role="alert"]').text()).toContain('could not be loaded')
     expect(mark(page).exists()).toBe(false)
   })
 

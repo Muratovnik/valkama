@@ -8,6 +8,7 @@ import { test } from 'vitest'
 // are the same ones this file asserts relationships about.
 import { readTokens } from '../scripts/sync-tokens.mjs'
 import { over } from './paletteColors.ts'
+import { declarationsOf, sourceCode } from './support/source.ts'
 
 /**
  * The palette's relationships, which no generator can check.
@@ -172,37 +173,33 @@ test('the chrome is tinted as one family, not one step at a time', () => {
 })
 
 test('the chrome is one ground, so the rail and the context bar cannot drift', () => {
-  const shell = readFileSync(
-    fileURLToPath(new URL('../src/app/styles/shell.css', import.meta.url)),
-    'utf8',
-  )
-  const app = readFileSync(fileURLToPath(new URL('../src/app/App.vue', import.meta.url)), 'utf8')
-  // The bar is its own component, so its ground is asserted where it is set.
-  const bar = readFileSync(
-    fileURLToPath(new URL('../src/app/components/AppContextBar.vue', import.meta.url)),
-    'utf8',
-  )
-  // The rail paints itself now, so its ground is asserted where it is set.
-  const rail = readFileSync(
-    fileURLToPath(new URL('../src/widgets/app-nav/components/AppNav.vue', import.meta.url)),
-    'utf8',
-  )
   // The rail and the context bar are one surface with a corner in it. They were
   // painted from two different tokens, so the corner had a seam in it and the
   // header read as a third zone. Whatever `--color-navigation` becomes, both take it.
-  const backgroundOf = (source: string, selector: string) => {
-    const block = new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`).exec(source)
-    assert.ok(block, `${selector} no longer declares a block`)
-    return /background:\s*([^;]+);/.exec(block[1])?.[1].trim()
+  // Each is asserted where it is set: the shell in its stylesheet, the rail and the
+  // bar in their own components. Every ground a rule gives the element counts, in
+  // whichever longhand and at whichever width it is written.
+  const grounds = (path: string, selector: string) => {
+    const found = declarationsOf(sourceCode(path), selector)
+      .filter((each) => /^background(?:-color)?:/.test(each))
+      .map((each) => each.slice(each.indexOf(':') + 1))
+    assert.ok(found.length > 0, `${selector} declares no ground`)
+    return [...new Set(found)]
   }
-  assert.equal(backgroundOf(shell, 'app-shell'), 'var(--color-navigation)')
-  assert.equal(backgroundOf(rail, 'app-nav-shell'), 'var(--color-navigation)')
-  assert.equal(backgroundOf(bar, 'context-bar'), 'var(--color-navigation)')
+  assert.deepEqual(grounds('app/styles/shell.css', '.app-shell'), ['var(--color-navigation)'])
+  assert.deepEqual(grounds('widgets/app-nav/components/AppNav.vue', '.app-nav-shell'), [
+    'var(--color-navigation)',
+  ])
+  assert.deepEqual(grounds('app/components/AppContextBar.vue', '.context-bar'), [
+    'var(--color-navigation)',
+  ])
   // And the workspace is the one element that breaks out of it, at one corner.
-  const stage = /\.module-stage\s*\{([^}]*)\}/.exec(app)
-  assert.ok(stage, 'the workspace panel no longer declares a block')
-  assert.match(stage[1], /background:\s*var\(--color-canvas\);/)
-  assert.match(stage[1], /border-top-left-radius:\s*var\(--radius-shell\);/)
+  assert.deepEqual(grounds('app/App.vue', '.module-stage'), ['var(--color-canvas)'])
+  assert.ok(
+    declarationsOf(sourceCode('app/App.vue'), '.module-stage').includes(
+      'border-top-left-radius:var(--radius-shell)',
+    ),
+  )
 })
 
 test('a card reads on its lane and a lane on the panel, without a line', () => {

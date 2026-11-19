@@ -1,7 +1,7 @@
 /**
  * The work production-analytics-names.spec.ts serves as usage.
  */
-import { task, value } from '../../fixtures/analytics.ts'
+import { seatValue, task, value } from '../../fixtures/analytics.ts'
 import type { TimedStretch } from '../../fixtures/analytics.ts'
 import type { Served } from '../servedContracts.ts'
 import { usageServed } from '../servedUsage.ts'
@@ -10,8 +10,11 @@ export const on = (day: number) => new Date(2026, 10, day, 10)
 
 export const MAIN_ID = 'f0f0f0f0-1111-4222-8333-444455556666'
 export const SIDE_ID = '9c0de5b1-2222-4333-8444-555566667777'
-export const MAIN = value(MAIN_ID)
-export const SIDE = value(SIDE_ID)
+/** Each organization's one account, which the work was spent on. */
+export const MAIN_ACCOUNT = `${MAIN_ID}/a1a1a1a1-2222-4333-8444-555566667777`
+export const SIDE_ACCOUNT = `${SIDE_ID}/b2b2b2b2-2222-4333-8444-555566667777`
+export const MAIN = { account: value(MAIN_ID), seat: seatValue(MAIN_ACCOUNT) }
+export const SIDE = { account: value(SIDE_ID), seat: seatValue(SIDE_ACCOUNT) }
 
 export const session = (id: string, family: string, title: string | null) => ({
   id,
@@ -37,7 +40,7 @@ export const WORLD: TimedStretch[] = [
 ].flatMap(({ executor, account, seconds }, index) =>
   [0, 1, 2].map((day) => ({
     at: on(9 + day),
-    group: { executor, account, work_item: task(index + 1, `Task ${index + 1}`) },
+    group: { executor, ...account, work_item: task(index + 1, `Task ${index + 1}`) },
     spend: { seconds, tokens: 1000, cost: 1 },
   })),
 )

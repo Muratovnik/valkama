@@ -634,6 +634,9 @@ SEAT_1, SEAT_2, SEAT_3 = (
     "week:2030-03-09T05:00Z",
 )
 SEAT_P = "week:2030-03-10T01:00Z"
+#: The account that seat's readings are known by, its organization's own: no account of
+#: it names the seat or resets at that time of week (Sunday, 01:00 UTC).
+WEEKLY_P = "org-a/weekly:7T01:00Z"
 
 
 class SeatTests(UsageStore):
@@ -670,16 +673,18 @@ class SeatTests(UsageStore):
         lines = read[key] if key == "rows" else read["comparison"]["rows"]
         return [(row["group"]["seat"], row["agent_seconds"]) for row in lines]
 
-    def test_a_seat_is_its_account_else_its_weeks_key_else_unknown(self) -> None:
+    def test_a_seat_is_its_account_else_its_organization_else_unknown(self) -> None:
         read = self.read(**{"from": day(0), "to": day(1), "group_by": "seat"})
 
-        def account(organization: str, uuid: str) -> dict:
+        def account(organization: str, uuid: str | None, slot: str | None) -> dict:
+            tail = uuid or ("" if slot is None else f"weekly:{slot}")
             return {
-                "id": f"{organization}/{uuid}",
+                "id": f"{organization}/{tail}",
                 "unknown": False,
                 "organization": organization,
                 "account_uuid": uuid,
-                "seat_key": None,
+                "weekly_reset": slot,
+                "shared": False,
             }
 
         unknown = {
@@ -687,23 +692,20 @@ class SeatTests(UsageStore):
             "unknown": True,
             "organization": None,
             "account_uuid": None,
-            "seat_key": None,
-        }
-        provisional = {
-            "id": f"org-a/{SEAT_P}",
-            "unknown": False,
-            "organization": "org-a",
-            "account_uuid": None,
-            "seat_key": SEAT_P,
+            "weekly_reset": None,
+            "shared": False,
         }
         self.assertEqual(
             [
-                (account("org-a", "acct-1"), 600.0),
-                (account("org-a", "acct-2"), 300.0),
-                (provisional, 100.0),
-                # Work of an organization no sample speaks for, and work of none: one group.
-                (unknown, 70.0),
-                (account("org-c", "acct-1"), 30.0),
+                (account("org-a", "acct-1", "5T09:00Z"), 600.0),
+                (account("org-a", "acct-2", "5T19:00Z"), 300.0),
+                # Known by its weekly reset alone.
+                (account("org-a", None, "7T01:00Z"), 100.0),
+                # Work of an organization no sample speaks for is that organization's.
+                (account("org-b", None, None), 50.0),
+                (account("org-c", "acct-1", "5T09:00Z"), 30.0),
+                # Work of no organization is unknown.
+                (unknown, 20.0),
             ],
             self.seat_rows(read),
         )
@@ -712,7 +714,7 @@ class SeatTests(UsageStore):
             read["total"]["agent_seconds"], sum(row["agent_seconds"] for row in read["rows"])
         )
         self.assertEqual(
-            [["org-a/acct-1", "org-a/acct-2", f"org-a/{SEAT_P}", None, "org-c/acct-1"]],
+            [["org-a/acct-1", "org-a/acct-2", WEEKLY_P, "org-b/", "org-c/acct-1", None]],
             [
                 [group["group"]["seat"]["id"] for group in point["groups"]]
                 for point in read["series"]
@@ -724,11 +726,16 @@ class SeatTests(UsageStore):
             return self.read(**{"from": day(0), "to": day(1), **filters})["total"]["agent_seconds"]
 
         self.assertEqual(630.0, seconds(seat="org-a/acct-1,org-c/acct-1"))
-        self.assertEqual(100.0, seconds(seat=f"org-a/{SEAT_P}"))
-        self.assertEqual(70.0, seconds(none="seat"))
-        self.assertEqual(670.0, seconds(seat="org-a/acct-1", none="seat"))
+        self.assertEqual(100.0, seconds(seat=WEEKLY_P))
+        self.assertEqual(20.0, seconds(none="seat"))
+        self.assertEqual(620.0, seconds(seat="org-a/acct-1", none="seat"))
         self.assertEqual(0.0, seconds(seat="acct-1"))
-        self.assertEqual(50.0, seconds(account="org-b", none="seat"))
+        # An organization's work no sample places is matched by its own value, exactly.
+        self.assertEqual(50.0, seconds(seat="org-b/"))
+        self.assertEqual(0.0, seconds(seat="org-b"))
+        self.assertEqual(0.0, seconds(account="org-b", none="seat"))
+        # A seat's key, as an unreleased build named a weekly account, matches nothing.
+        self.assertEqual(0.0, seconds(seat=f"org-a/{SEAT_P}"))
 
     def test_a_seat_beside_another_dimension_and_the_period_before(self) -> None:
         read = self.read(
@@ -738,8 +745,8 @@ class SeatTests(UsageStore):
             [
                 ("org-a/acct-1", "org-a", 600.0),
                 ("org-a/acct-2", "org-a", 300.0),
-                (f"org-a/{SEAT_P}", "org-a", 100.0),
-                (None, "org-b", 50.0),
+                (WEEKLY_P, "org-a", 100.0),
+                ("org-b/", "org-b", 50.0),
                 ("org-c/acct-1", "org-c", 30.0),
                 (None, None, 20.0),
             ],
@@ -758,9 +765,9 @@ class SeatTests(UsageStore):
 class WindowSpanTests(UsageStore):
     """What used one account's quota window: the read the quota panel asks for each window.
 
-    It names the window's start and the answer's moment as times at the reader's offset, the
-    account's seat and organization, and `none=seat` for the organization's work no sample
-    places, grouped by the breakdown and the seat. Only the account's own work in the span is
+    It names the window's start and the answer's moment as times at the reader's offset, and
+    by `seat` the account and its organization's work no sample places (`<organization>/`),
+    grouped by the breakdown and the seat. Only the account's own work in the span is
     its rows; the work of another account, of its organization or not, on the same item, the
     part of a stretch before the window and another organization's unplaced work are not in the
     answer at all.
@@ -771,12 +778,13 @@ class WindowSpanTests(UsageStore):
         _, self.task = self.item("Answer a review")
         _, self.other = self.item("Fix the import")
         # Each organization's poll names an account from 80 s on: work that ended before that
-        # is on no account anyone knows. The window's organization has a second account, whose
-        # session's own feed puts its work there; the poll's latest says the first for the rest.
+        # is on no account anyone knows. The window's organization has two accounts, and each
+        # session's own feed puts its work on one of them.
         self.quota_sample(80, SEAT_3, organization="org-w", account="acct-v")
         self.quota_sample(120, SEAT_1, organization="org-w", account="acct-w")
         self.quota_sample(100, SEAT_2, organization="org-x", account="acct-x")
         self.quota_sample(100, SEAT_3, session="s-5")
+        self.quota_sample(100, SEAT_1, session="s-1")
         # What that session worked for, outside the window.
         self.segment("s-5", -2 * DAY, -2 * DAY, seconds=0.0, organization="org-w")
         # Half before the window's start, half in it.
@@ -816,7 +824,7 @@ class WindowSpanTests(UsageStore):
     def test_a_seat_over_a_window_span_is_that_account_and_its_organizations_unplaced_work(
         self,
     ) -> None:
-        read = self.window_read(seat="org-w/acct-w", account="org-w", none="seat")
+        read = self.window_read(seat="org-w/acct-w,org-w/")
         self.assertEqual(
             {"from": "2030-03-04T03:00:00+03:00", "to": "2030-03-04T05:00:00+03:00"},
             {name: read["period"][name] for name in ("from", "to")},
@@ -825,11 +833,12 @@ class WindowSpanTests(UsageStore):
             [
                 (self.task, "org-w/acct-w", 1800.0, 0.5),
                 (self.other, "org-w/acct-w", 600.0, 0.2),
-                (None, None, 50.0, 0.03),
+                (None, "org-w/", 50.0, 0.03),
             ],
             self.lines(read),
         )
-        self.assertTrue(read["rows"][2]["group"]["seat"]["unknown"])
+        self.assertFalse(read["rows"][2]["group"]["seat"]["unknown"])
+        self.assertEqual("org-w", read["rows"][2]["group"]["seat"]["organization"])
         self.assertEqual(2450.0, read["total"]["agent_seconds"])
 
     def test_the_seat_alone_is_that_accounts_work_and_no_other_accounts(self) -> None:

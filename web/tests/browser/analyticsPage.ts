@@ -22,11 +22,27 @@ export {
   NOW,
   ONE_VALUE,
   ONLY_WEEK_BEFORE,
+  SESSIONS,
   UNRECORDED_BETWEEN,
+  WORLD,
 } from './served/analyticsWorld.ts'
+
+/**
+ * A chart legend's keys of its series, by the hooks `ChartLegend` documents: never the key of a
+ * mark, such as the hatch's, which no series' key can meet.
+ */
+export const LEGEND_SERIES = '[data-hint-list="legend"] [data-series]'
+/** The names of a legend's keys of its series. */
+export const LEGEND_NAMES = `${LEGEND_SERIES} [data-part="name"]`
 
 export const pageAt = (state: Record<string, string> = {}) =>
   serializePlatformRoute({ module_id: 'analytics', scope: globalScope, state })
+
+/** The section of sessions, whose rows `SESSIONS` fills. */
+export const SESSION_REPORT = pageAt({ by: 'executor' })
+
+/** What a session's row says in its hint: its client and the start of its id, on a line of its own. */
+export const SESSION_PLACE = /^claude · \d{8}$/mu
 
 /** What the double answers: the work it holds, or a read that never answers, or one that fails. */
 export type Answer = 'failed' | 'hold' | readonly TimedStretch[]
@@ -43,7 +59,8 @@ const weekBefore = (query: URLSearchParams) => query.get('from')?.includes('T') 
  * second handler on its way up, as a press on a day's coloured stack does on its way to the day.
  * Nothing here needs the moment held: a run takes seconds of a Wednesday afternoon.
  *
- * `backend` is what the rest of the app's double answers, a task's card among it.
+ * `backend` is what the rest of the app's double answers, a task's card among it; the double is
+ * returned, so a run can read what the page wrote to it.
  */
 export async function serve(
   page: Page,
@@ -52,7 +69,7 @@ export async function serve(
   backend: BackendOptions = {},
 ) {
   await page.clock.setSystemTime(NOW)
-  await installBackend(page, backend)
+  const installed = await installBackend(page, backend)
   await serveQuota(page, quotaAt(NOW))
   await page.route('**/api/analytics/usage?*', async (route) => {
     if (answer === 'hold') return
@@ -66,6 +83,7 @@ export async function serve(
       body: JSON.stringify(serveUsage(answer, query)),
     })
   })
+  return installed
 }
 
 /** The app's search finds the task by its reference; each count of a use is kept. */
@@ -132,18 +150,27 @@ export const NARROW_FRAME = 1200
 export const TASK_REPORT = pageAt({ by: 'work_item' })
 
 /**
- * Opens the page at `width` and waits for the report: its tiles and its days; the report of the
- * task section unless an address is given. A window too narrow for the rail beside the panel
- * opens on the list of sections unless the address says otherwise, and the section the address
- * names is chosen there, as a reader would.
+ * Opens the page at an address and reaches the panel of the section it names, whatever that
+ * panel holds. A window too narrow for the rail beside the panel opens on the list of sections
+ * unless the address says otherwise, and the section the address names is chosen there, as a
+ * reader would.
  */
-export async function openReport(page: Page, width: number, address = TASK_REPORT) {
-  await page.setViewportSize({ width, height: 1000 })
+export async function openPanel(page: Page, address: string) {
   await page.goto(address)
   const analytics = page.locator('.analytics-page')
   await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
   if (!(await analytics.locator('.analytics-panel').isVisible()))
     await analytics.locator('.analytics-rail [aria-current="page"]').click()
+  return analytics
+}
+
+/**
+ * Opens the page at `width` and waits for the report: its tiles and its days; the report of the
+ * task section unless an address is given (`openPanel`).
+ */
+export async function openReport(page: Page, width: number, address = TASK_REPORT) {
+  await page.setViewportSize({ width, height: 1000 })
+  const analytics = await openPanel(page, address)
   await expect(analytics.locator('.tile-figure[data-measure="time"]')).toBeVisible()
   await expect(analytics.locator('.spending-days')).toBeVisible()
   return analytics
@@ -212,9 +239,14 @@ type Box = Awaited<ReturnType<typeof boxes>>[number]
 
 /**
  * A control that follows words: on their line it shares their middle, and wrapped under them it
- * starts where they do, each within a pixel. Nothing to hold when either is not shown.
+ * starts where they do, each within a pixel. Both are drawn where this is asked.
  */
-export function expectBesideOrUnder(words: Box | undefined, control: Box | undefined) {
+export function expectBesideOrUnder(
+  words: Box | null | undefined,
+  control: Box | null | undefined,
+) {
+  expect(words, 'the words drawn').toBeTruthy()
+  expect(control, 'the control drawn').toBeTruthy()
   if (!words || !control) return
   const beside = control.y < words.y + words.height
   const off = beside
@@ -256,8 +288,9 @@ export async function measure(page: Page) {
       }
     }
     const root = document.documentElement
-    // The charts and the table beside the period before, in the page's order.
-    const sections = [...document.querySelectorAll<HTMLElement>('.chart-section, .spending-table')]
+    // The charts, each by the view it says it shows (`ChartSection`), and the table beside the
+    // period before, in the page's order.
+    const sections = [...document.querySelectorAll<HTMLElement>('[data-shown], .spending-table')]
     return {
       viewport: root.clientWidth,
       pageScroll: root.scrollWidth - root.clientWidth,
@@ -276,28 +309,40 @@ export async function measure(page: Page) {
         contentStart(document.querySelector('.analytics-page-bar'))?.x ?? null,
         box(document.querySelector('.analytics-period'))?.x ?? null,
       ],
-      tiles: [...document.querySelectorAll('.spending-tiles .segmented-option')].map((tile) =>
+      // The tiles: the radios that name a measure (`SpendingTiles`).
+      tiles: [...document.querySelectorAll('[role="radio"]:has([data-measure])')].map((tile) =>
         box(tile),
       ),
       sections: sections.map((section) => {
-        const frame = section.querySelector<HTMLElement>('.chart-table-frame')
+        const frame = section.querySelector<HTMLElement>('[data-region="table-frame"]')
         return {
           shown: section.dataset.shown,
           box: box(section),
           tableScroll: frame ? frame.scrollWidth - frame.clientWidth : null,
-          // How wide the table leaves the name of each row, a day or a value.
-          rowNames: [...section.querySelectorAll('th[scope="row"]')].map((name) =>
-            Math.round(name.getBoundingClientRect().width),
-          ),
+          // How wide the table leaves the name of each row, a day or a value, and the em of its
+          // words.
+          rowNames: [...section.querySelectorAll('th[scope="row"]')].map((name) => ({
+            width: Math.round(name.getBoundingClientRect().width),
+            em: Number.parseFloat(getComputedStyle(name).fontSize),
+          })),
         }
       }),
     }
   })
 }
 
+/**
+ * The least a chart's table leaves the name of a row, in the ems of its words: eight, a task's
+ * reference and the start of its title (`chartTable.css`, `SpendingTable`).
+ */
+const NAME_EMS = 8
+
 /** The layout every rendered report holds to, at any width and in any language. */
 export function expectWhole(measured: Awaited<ReturnType<typeof measure>>) {
   expect(measured.pageScroll).toBe(0)
+  // The period's three figures (`SpendingTiles`), and at least one section under them.
+  expect(measured.tiles, 'the tiles').toHaveLength(3)
+  expect(measured.sections.length, 'the sections').toBeGreaterThan(0)
   for (const tile of measured.tiles) {
     expect(tile?.x).toBeGreaterThanOrEqual(0)
     expect((tile?.x ?? 0) + (tile?.width ?? 0)).toBeLessThanOrEqual(measured.viewport)
@@ -311,7 +356,10 @@ export function expectWhole(measured: Awaited<ReturnType<typeof measure>>) {
   // A table wider than its frame scrolls in it, and still leaves each row's name its words:
   // a day squeezed to a letter a line is not readable as a table.
   for (const section of measured.sections)
-    for (const name of section.rowNames) expect(name).toBeGreaterThanOrEqual(80)
+    for (const name of section.rowNames)
+      expect(name.width, `a row's name in ${section.shown ?? 'the table'}`).toBeGreaterThanOrEqual(
+        Math.floor(NAME_EMS * name.em),
+      )
 }
 
 /**
@@ -321,7 +369,7 @@ export function expectWhole(measured: Awaited<ReturnType<typeof measure>>) {
  */
 export async function scrolledNames(page: Page) {
   return page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('.chart-table-frame')].map((frame) => {
+    [...document.querySelectorAll<HTMLElement>('[data-region="table-frame"]')].map((frame) => {
       const name = frame.querySelector('tbody th')
       const corner = frame.querySelector('thead th')
       const left = () => ({
@@ -338,8 +386,13 @@ export async function scrolledNames(page: Page) {
   )
 }
 
-/** Every table that scrolls was scrolled, and kept its row names and their heading in place. */
+/**
+ * Every table that scrolls was scrolled, and kept its row names and their heading in place; the
+ * tables that scroll are counted for the caller, which holds that count where its width makes one
+ * scroll. At least one table was read.
+ */
 export function expectNamesInView(names: Awaited<ReturnType<typeof scrolledNames>>) {
+  expect(names.length, 'the tables read').toBeGreaterThan(0)
   const scrolling = names.filter((table) => table.scroll > 0)
   for (const table of scrolling) {
     expect(table.scrolled).toBeGreaterThan(0)
@@ -365,49 +418,4 @@ export function expectBarsInTracks(measured: Awaited<ReturnType<typeof bars>>) {
   for (const [index, bar] of measured.bars.entries())
     expect(bar.width).toBeLessThanOrEqual(measured.tracks[index]?.width ?? 0)
   expect(Math.max(...measured.bars.map((bar) => bar.width))).toBeGreaterThan(0)
-}
-
-/**
- * What Tab stands on in the page, in order, until it leaves it: each control marked first, so
- * the walk names what it reached and what it never did. A group of radios is one stop, its
- * chosen option; the arrows move inside it.
- */
-export async function tabWalk(page: Page) {
-  const controls = await page.evaluate(() => {
-    for (const marked of document.querySelectorAll<HTMLElement>('[data-stop]'))
-      delete marked.dataset.stop
-    const all = document.querySelectorAll<HTMLElement>(
-      '.analytics-page :is(a[href], button, input, select, textarea, summary, [tabindex])',
-    )
-    const stops = [...all].filter(
-      (element) =>
-        element.tabIndex >= 0 &&
-        !element.matches(':disabled') &&
-        // Shown, and not in a closed disclosure, whose content the browser skips.
-        element.checkVisibility({ visibilityProperty: true }),
-    )
-    for (const [index, element] of stops.entries()) element.dataset.stop = String(index)
-    return stops.length
-  })
-  await page.locator('body').focus()
-  const reached = new Set<string>()
-  for (let press = 0; press < 200 && reached.size < controls; press += 1) {
-    await page.keyboard.press('Tab')
-    const stop = await page.evaluate(
-      () => (document.activeElement as HTMLElement | null)?.dataset.stop ?? null,
-    )
-    if (stop !== null) reached.add(stop)
-  }
-  /** The controls Tab never stood on, by what they say, so a failure names them. */
-  const missed = await page.evaluate(
-    (seen) =>
-      [...document.querySelectorAll<HTMLElement>('[data-stop]')]
-        .filter((element) => !seen.includes(element.dataset.stop ?? ''))
-        .map(
-          (element) =>
-            `${element.tagName.toLowerCase()}.${element.className} ${element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40) ?? ''}`,
-        ),
-    [...reached],
-  )
-  return { controls, reached: reached.size, missed }
 }

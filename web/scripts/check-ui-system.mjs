@@ -9,6 +9,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { scanScopeEscapes } from './ui-system/boundaries.mjs'
+import { DETAIL_TOOLTIPS } from './ui-system/detail-tooltips.mjs'
 import { scanFocusRingWidths } from './ui-system/focus-rings.mjs'
 import { scanImportCycles, scanImportDirection } from './ui-system/imports.mjs'
 import {
@@ -19,14 +20,15 @@ import {
   scanHiddenRules,
 } from './ui-system/lines.mjs'
 import {
-  DETAIL_TOOLTIPS,
   NATIVE_TITLES,
   scanNativeTitles,
   scanTooltipKinds,
+  scanTooltipSides,
+  SIDED_TOOLTIPS,
 } from './ui-system/native-titles.mjs'
 import { ONE_LINE_COPIES, scanOneLineCopies } from './ui-system/one-line.mjs'
 import { scanRevealCopies } from './ui-system/reveal.mjs'
-import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
+import { COPIED_PAINT, scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
 import { scanStateNames, STATE_NAME_READS } from './ui-system/state-names.mjs'
 import {
@@ -37,6 +39,7 @@ import {
   scanUiSources,
 } from './ui-system/styles.mjs'
 import { scanTitleBreaks, UNBROKEN_TITLES } from './ui-system/title-breaks.mjs'
+import { scanTooltipImports } from './ui-system/tooltip-imports.mjs'
 import { scanTreeRoles } from './ui-system/tree-roles.mjs'
 import { scanTrimmedWords } from './ui-system/trimmed-word.mjs'
 
@@ -53,12 +56,13 @@ export function scanUiTree(root = defaultSourceRoot) {
   const titles = product ? UNBROKEN_TITLES : new Map()
   const hints = product ? NATIVE_TITLES : new Map()
   const details = product ? DETAIL_TOOLTIPS : new Map()
+  const sided = product ? SIDED_TOOLTIPS : new Map()
   const stateReads = product ? STATE_NAME_READS : new Map()
   const oneLines = product ? ONE_LINE_COPIES : new Map()
   return [
     ...scanUiSources(sources),
     ...scanRevealCopies(sources),
-    ...scanSemanticStateOwnership(sources),
+    ...scanSemanticStateOwnership(sources, product ? COPIED_PAINT : new Map()),
     ...scanTokenHygiene(sources),
     ...scanTypeStyles(sources),
     ...scanBorderBudget(sources, budget),
@@ -69,6 +73,8 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanTitleBreaks(sources, titles),
     ...scanNativeTitles(sources, hints),
     ...scanTooltipKinds(sources, details),
+    ...scanTooltipSides(sources, sided),
+    ...scanTooltipImports(sources),
     ...scanStateNames(sources, stateReads),
     ...scanTreeRoles(sources),
     ...scanControlSizes(sources, sizes),

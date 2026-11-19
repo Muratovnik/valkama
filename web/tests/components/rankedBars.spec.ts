@@ -21,9 +21,6 @@ const rows: RankedRow[] = [
   { key: 'other', label: 'Other (4)', value: 15, valueText: '15 min', kind: 'other' },
 ]
 
-/** A share as the caller says it, the words its own. */
-const share = (ratio: number) => `${Math.round(ratio * 100)}% of the total`
-
 const mountBars = (given: RankedRow[] = rows) =>
   mount(RankedBars, { props: { label: 'Time by project', rows: given, words } })
 
@@ -88,47 +85,32 @@ describe('ranked bars', () => {
     )
   })
 
-  it('keeps a name to one line, and gives its row a hint of what the row does not print', () => {
+  it('keeps a name to one line, prints the figure it is given, and hints what it does not print', () => {
     const chart = mount(RankedBars, {
       props: {
         label: 'Time by project',
         words,
-        formatShare: share,
         rows: [
           {
             key: 'acct',
             label: 'a1b2c3d4',
             detail: 'a1b2c3d4-0000-4000-8000-00000000abcd',
             value: 3,
-            valueText: '3 h',
+            valueText: '3 h · 75%',
           },
-          { key: 'web', label: 'Web', value: 1, valueText: '1 h' },
+          { key: 'web', label: 'Web', value: 1, valueText: '1 h · 25%' },
         ],
       },
     })
     const account = chart.get('[data-key="acct"]')
-    const web = chart.get('[data-key="web"]')
 
     expect(account.get('.ranked-label').classes()).toContain('one-line')
-    // The row is the mark: its hint is what it leaves out and its share, never its printed words.
+    // The figure with its share is printed whole, so the hint says only what the label leaves out.
+    expect(account.get('.ranked-value').text()).toBe('3 h · 75%')
     expect(account.attributes('data-tooltip-kind')).toBe('detail')
-    expect(account.attributes('data-tooltip')).toBe(
-      'a1b2c3d4-0000-4000-8000-00000000abcd\n75% of the total',
-    )
+    expect(account.attributes('data-tooltip')).toBe('a1b2c3d4-0000-4000-8000-00000000abcd')
     expect(tooltipOf(account.element)?.words).toBe('a1b2c3d4')
     expect(tooltipOf(account.element)?.clipped).toBe(false)
-    expect(web.attributes('data-tooltip')).toBe('25% of the total')
-    // A whole given where the rows are not all of it.
-    const part = mount(RankedBars, {
-      props: {
-        label: 'x',
-        words,
-        formatShare: share,
-        whole: 10,
-        rows: [{ key: 'web', label: 'Web', value: 1, valueText: '1 h' }],
-      },
-    })
-    expect(part.get('[data-key="web"]').attributes('data-tooltip')).toBe('10% of the total')
   })
 
   it('with nothing to add, gives a row the hint of its name, shown only while it is cut', () => {
@@ -158,6 +140,129 @@ describe('ranked bars', () => {
 
     expect(chart.find('.ranked-list').exists()).toBe(false)
     expect(chart.get('[role="status"]').text()).toBe(words.empty)
+  })
+})
+
+/** The rows a chart draws, by key, in its order. */
+const keys = (chart: ReturnType<typeof mountBars>) =>
+  chart.findAll('.ranked-line').map((line) => line.attributes('data-key'))
+
+/**
+ * A row whose figure is less than its unit shows says nothing of how much: the chart leaves it out,
+ * whatever its name, while another row is there to draw; its table lists it as any row.
+ */
+describe('a row below its unit', () => {
+  const tiny: RankedRow[] = [
+    { key: 'core', label: 'Core', value: 2, valueText: '2 h', actionable: true },
+    { key: 'docs', label: 'Docs', value: 0.005, valueText: 'under a minute', belowUnit: true },
+    {
+      key: 'unknown',
+      label: 'Unknown',
+      value: 0.004,
+      valueText: 'under a minute',
+      kind: 'unknown',
+      belowUnit: true,
+    },
+    { key: 'web', label: 'Web', value: 1, valueText: '1 h', kind: 'unknown' },
+  ]
+
+  it('is not drawn, a category or a row apart alike, while another row is', () => {
+    const chart = mountBars(tiny)
+    expect(keys(chart)).toEqual(['core', 'web'])
+    // Unknown work of a full unit stays: it shows a gap in what is placed.
+    expect(chart.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
+      'category',
+      'unknown',
+    ])
+  })
+
+  it('is drawn where every row is below its unit, as a list of nothing else would be empty', () => {
+    const chart = mountBars(tiny.filter((row) => row.belowUnit))
+    expect(keys(chart)).toEqual(['docs', 'unknown'])
+  })
+
+  it('is listed by the table all the same', () => {
+    const table = mountTable(tiny)
+    expect(table.findAll('tbody th').map((cell) => cell.text())).toHaveLength(tiny.length)
+    expect(table.findAll('tbody th').map((cell) => cell.text())).toEqual(
+      expect.arrayContaining(['Docs', 'Unknown']),
+    )
+  })
+})
+
+/**
+ * A list of names of free text, tasks by their titles: each name on lines of its own, two at most,
+ * where the one-line chart cuts it to one; the rows that are not categories apart under a rule with
+ * a bar each in a neutral, on one scale with the categories, where the chart of identifiers draws
+ * them none; and no strip of the whole over the rows, which read as one more row: each row's figure
+ * says its share instead (DESIGN.md, Charts).
+ */
+describe('a ranked list of free text', () => {
+  const tasks: RankedRow[] = [
+    { key: 't2', label: 'MAIN-2 Write the release notes', value: 30, valueText: '30 min', slot: 2 },
+    { key: 'none', label: 'No task', value: 90, valueText: '1 h 30 min', kind: 'none', slot: 2 },
+    { key: 't1', label: 'MAIN-1 Answer the review', value: 60, valueText: '1 h', slot: 1 },
+    { key: 'other', label: 'Other, 4 more', value: 20, valueText: '20 min', kind: 'other' },
+  ]
+  const mountList = (freeText: boolean, given: RankedRow[] = tasks) =>
+    mount(RankedBars, { props: { label: 'Time by task', rows: given, words, freeText } })
+
+  it('clamps each name to lines of its own instead of one', () => {
+    const list = mountList(true)
+    const label = list.get('[data-key="t1"] .ranked-label')
+    expect(list.get('figure').classes()).toContain('ranked-free')
+    expect(label.classes()).toContain('ranked-clamp')
+    expect(label.classes()).not.toContain('one-line')
+    // The control: the chart of identifiers keeps its one line.
+    const chart = mountList(false).get('[data-key="t1"] .ranked-label')
+    expect(chart.classes()).toContain('one-line')
+    expect(chart.classes()).not.toContain('ranked-clamp')
+  })
+
+  it('sets the rows that are not categories apart, each with a neutral bar on one scale', () => {
+    const list = mountList(true)
+    const [ranked, rest] = list.findAll('.ranked-list')
+    expect(
+      ranked?.findAll('.ranked-row').map((row) => row.get('.ranked-line').attributes('data-key')),
+    ).toEqual(['t1', 't2'])
+    expect(rest?.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
+      'other',
+      'none',
+    ])
+    // Work on no task, the largest row, is the whole bar; the categories are measured by it.
+    const bar = (key: string) => list.get(`[data-key="${key}"] .ranked-bar`)
+    expect(bar('none').attributes('style')).toContain('inline-size: 100%')
+    expect(bar('t1').attributes('style')).toContain('inline-size: 66.6')
+    expect(bar('other').attributes('style')).toContain('inline-size: 22.2')
+    // In the neutrals whatever hue the host gave: the darker for no task, the lighter for the rest.
+    expect(bar('none').attributes('data-slot')).toBe('apart')
+    expect(bar('other').attributes('data-slot')).toBe('other')
+    expect(bar('t2').attributes('data-slot')).toBe('2')
+  })
+
+  it('draws no strip of the whole over the rows, whose bars are the only marks', () => {
+    // The control, the strip present where a tile's rows draw nothing, is in analyticsRail.spec.ts.
+    const list = mountList(true)
+    expect(list.findAll('.ranked-row')).toHaveLength(tasks.length)
+    expect(list.find('.mini-share-bar').exists()).toBe(false)
+    expect(list.findAll('.series-fill')).toHaveLength(tasks.length)
+  })
+
+  it('puts each part of a pair on a line of its own', () => {
+    const pair = mountList(true, [
+      {
+        key: 'p',
+        label: 'MAIN-1 Answer the review · opus',
+        labelEnd: ' · opus',
+        value: 1,
+        valueText: '1 h',
+      },
+    ]).get('.pair-name')
+    expect(pair.classes()).toContain('pair-stacked')
+    expect(pair.findAll('span').map((part) => part.text())).toEqual([
+      'MAIN-1 Answer the review',
+      '· opus',
+    ])
   })
 })
 

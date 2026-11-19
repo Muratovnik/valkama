@@ -49,6 +49,16 @@ Second paragraph, under its anchor.
 Third paragraph.
 `
 
+/** The blocks PLAN draws, in its order, read from its text above. */
+const PLAN_BLOCKS = [
+  'The plan',
+  'First paragraph with a note in it.',
+  'Part two',
+  'Second paragraph, under its anchor.',
+  'Third paragraph.',
+]
+const said = (list: HTMLElement[]) => list.map((block) => block.textContent?.trim())
+
 const refreshControl = () => control('Refresh')
 const closeControl = () => control('Close the document')
 
@@ -118,6 +128,7 @@ describe('the states of a document', () => {
     disk['docs/plan.md'] = file('docs/plan.md', PLAN)
     await opened('docs/plan.md', '#kb:gone')
     expect(status()).toBe('There is no #kb:gone in this document, so it opens at the start')
+    expect(said(blocks())).toEqual(PLAN_BLOCKS)
     expect(blocks().some((block) => block.classList.contains('is-target'))).toBe(false)
     expect(scrolledInto).toEqual([])
     expect(document.activeElement?.classList).toContain('overlay-header-name')
@@ -197,6 +208,7 @@ describe('reading a file again', () => {
     disk['docs/plan.md'] = file('docs/plan.md', PLAN)
     await opened()
     const before = blocks()
+    expect(said(before)).toEqual(PLAN_BLOCKS)
     const asked = read.mock.calls.length
     await comeBack()
     expect(read.mock.calls).toHaveLength(asked + 1)

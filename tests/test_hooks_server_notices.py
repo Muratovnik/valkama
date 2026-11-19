@@ -9,8 +9,8 @@ The expectations come from the hook contract: a record Valkama makes in a call o
 own is told as `by Valkama`, in the block that is not the person's, to whoever hears the
 item whole, to a recipient that held it at its last read once more, and through the tree
 to whoever works under the goal. It wakes nobody unless its kind is one that asks for a
-session (`person_events.SERVER_ASKS`, empty for now), and then it wakes as a person's act
-does. A write the server makes inside an agent's call is that agent's.
+session (`person_events.SERVER_ASKS`: a goal or stage awaiting confirmation), and then
+it wakes as a person's act does. A write the server makes inside an agent's call is that agent's.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import unittest
 from unittest import mock
 
 from server.hooks import notify
-from server.planning import leases, person_events, service
+from server.planning import leases, participation, person_events, service
 from tests.test_hooks_tree_notices import (
     AS_A2,
     AS_B,
@@ -57,12 +57,10 @@ class Lapsed(Harness):
     def quiet(self, session: str) -> None:
         """The session last seen past its lease: nobody is behind its claim any more."""
 
+        quiet = leases.quiet_period(participation.load(self.conn), None)
         self.conn.execute(
             "UPDATE sessions SET last_seen = ? WHERE id = ?",
-            (
-                (leases.utc_now() - leases.QUIET_PERIOD).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                session,
-            ),
+            ((leases.utc_now() - quiet).strftime("%Y-%m-%dT%H:%M:%SZ"), session),
         )
         self.conn.commit()
 

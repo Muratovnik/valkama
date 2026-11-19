@@ -83,6 +83,18 @@ table {
   content: '\200B' / '';
 }
 
+/* A word no line breaks inside (`wholeWords.ts`): a box of its own, which goes to the next
+   line whole rather than ending a line at its hyphen. As wide as its words, or as its line
+   where they are wider, and only then broken wherever the line runs out. Its top stands on
+   the top of its line: on its baseline, a word broken so stood on its last line, and the
+   line's first baseline, which a glyph beside the text lines up with, went down with it. */
+.whole-word {
+  display: inline-block;
+  vertical-align: top;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+
 html,
 body,
 #app {

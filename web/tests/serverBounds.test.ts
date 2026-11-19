@@ -105,6 +105,8 @@ const listed = (title = 'Space', projects = [project(0)]) => ({
   space_ref: spaceRef,
   title,
   work_item_count: 0,
+  numbers: { triage: 0, ready: 0, active: 0, waiting_owner: 0 },
+  numbers_absent: null,
   default_project: projects[0]?.project_id ?? null,
   projects,
 })
@@ -145,6 +147,16 @@ const planning = (payload: unknown) => ({
   state: ready(payload),
 })
 
+/** The condition of an item put off until a day, with its reason. */
+const putOff = (reason: string) => ({
+  until: at,
+  until_item: null,
+  reason,
+  since: at,
+  by: { author: 'user', session_id: null },
+  reached_at: null,
+})
+
 describe('a card', () => {
   it.each([
     ['201 links', { links: many(201, link) }],
@@ -152,6 +164,8 @@ describe('a card', () => {
     ['5001 agents', { agents: many(5001, (index) => agent(index)) }],
     ['an agent whose ids run to 200 characters', { agents: [agent(0, 'a'.repeat(200))] }],
     ['33 warnings past 512 characters', { warnings: many(33, () => 'w'.repeat(600)) }],
+    ['501 items a close freed', { freed: many(501, (index) => `QA-${index + 1}`) }],
+    ['a put-off reason of 400 characters', { deferred: putOff('r'.repeat(400)) }],
   ])('reads with %s', (_, change) => {
     const record = { ...workItemFixture('Bounds', 1), ...change }
     expect(() => validateWorkItemRecord(record)).not.toThrow()
@@ -159,6 +173,11 @@ describe('a card', () => {
 
   it('still refuses an agent id past its 200-character limit', () => {
     const record = { ...workItemFixture('Bounds', 1), agents: [agent(0, 'a'.repeat(201))] }
+    expect(() => validateWorkItemRecord(record)).toThrow()
+  })
+
+  it('still refuses a put-off reason past the 400 characters a defer takes', () => {
+    const record = { ...workItemFixture('Bounds', 1), deferred: putOff('r'.repeat(401)) }
     expect(() => validateWorkItemRecord(record)).toThrow()
   })
 

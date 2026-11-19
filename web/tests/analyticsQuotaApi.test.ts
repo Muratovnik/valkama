@@ -3,7 +3,7 @@
  * it asks at the caller's offset and nothing else, takes an answer of every state a window has,
  * and refuses what the contract says no answer holds — a field nobody declared, a percent or a
  * forecast on a window of money, a point forecast for a week, a sum across accounts, an account
- * with no source that still has windows, a provisional seat beside an account's UUID.
+ * with no source that still has windows, an account whose id does not say its own fields.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -58,7 +58,11 @@ describe('the quota read', () => {
     expect(night?.windows[0]).toMatchObject({ state: 'fresh', latest: { used_percent: 0 } })
     expect(night?.windows[1]).toMatchObject({ state: 'silent', latest: { used_percent: 88 } })
     expect(unread).toMatchObject({ no_source: true, windows: [] })
-    expect(seated).toMatchObject({ account_uuid: null, seat: 'week:2026-11-15T09:00Z' })
+    expect(seated).toMatchObject({
+      account: `${seated?.organization}/weekly:7T09:00Z`,
+      account_uuid: null,
+      weekly_reset: '7T09:00Z',
+    })
     expect(work?.windows.map((window) => window.kind)).toEqual([
       'five_hour',
       'week',
@@ -91,7 +95,12 @@ describe('the quota read', () => {
   })
 
   it('refuses a point forecast for a week and a range for the five hours', () => {
-    const point = { outcome: 'runs_out', runs_out_at: '2026-11-11T15:00:00+03:00', basis: 'blend' }
+    const point = {
+      outcome: 'runs_out',
+      runs_out_at: '2026-11-11T15:00:00+03:00',
+      at_reset_percent: null,
+      basis: 'blend',
+    }
     expect(() =>
       validateQuotaAnswer(withWindow(0, 1, (window) => ({ ...window, forecast: point }))),
     ).toThrow(/windows\[1\]/u)
@@ -106,13 +115,50 @@ describe('the quota read', () => {
   })
 
   it('refuses a time to run out at beside a window that lasts', () => {
-    const lasts = { outcome: 'lasts', runs_out_at: '2026-11-11T15:00:00+03:00', basis: 'window' }
+    const lasts = {
+      outcome: 'lasts',
+      runs_out_at: '2026-11-11T15:00:00+03:00',
+      at_reset_percent: 35,
+      basis: 'window',
+    }
     expect(() =>
       validateQuotaAnswer(withWindow(1, 0, (window) => ({ ...window, forecast: lasts }))),
     ).toThrow(/windows\[0\]/u)
   })
 
-  it('refuses an account with no source that has windows, and a seat beside a UUID', () => {
+  it('takes a share at the reset where the five hours last, and nowhere else', () => {
+    const lasts = { outcome: 'lasts', runs_out_at: null, at_reset_percent: 35, basis: 'window' }
+    // The control: a window that lasts, with the share it spends by the reset.
+    expect(() =>
+      validateQuotaAnswer(withWindow(1, 0, (window) => ({ ...window, forecast: lasts }))),
+    ).not.toThrow()
+    for (const forecast of [
+      { ...lasts, at_reset_percent: null },
+      { ...lasts, at_reset_percent: 100.5 },
+      { ...lasts, outcome: 'spent' },
+    ])
+      expect(() =>
+        validateQuotaAnswer(withWindow(1, 0, (window) => ({ ...window, forecast }))),
+      ).toThrow(/windows\[0\]/u)
+  })
+
+  it('takes a restart at a reading’s moment, and refuses one at no reading’s or none', () => {
+    const restartAt = (moment: string) =>
+      withWindow(0, 0, (window) => ({ ...window, restarts: [moment] }))
+    const reading = quotaAt(NOW, 180).accounts[0]?.windows[0]
+    const middle = reading && 'readings' in reading ? reading.readings[1]?.at : undefined
+    if (!middle) throw new Error('a window of three readings')
+    expect(validateQuotaAnswer(restartAt(middle)).accounts[0]?.windows[0]).toMatchObject({
+      restarts: [middle],
+    })
+    expect(() => validateQuotaAnswer(restartAt('2026-11-11T12:00:00.000+03:00'))).toThrow(
+      'a restart is the moment of one of the readings',
+    )
+    const none = withWindow(0, 0, (window) => ({ ...window, restarts: undefined }))
+    expect(() => validateQuotaAnswer(none)).toThrow(/accounts\[0\]\.windows\[0\]/u)
+  })
+
+  it('refuses an account with no source that has windows, and an id its fields do not fit', () => {
     const quota = quotaAt(NOW, 180)
     const [work, night, unread, seated] = quota.accounts
     if (!work || !night || !unread || !seated) throw new Error('four accounts')
@@ -121,9 +167,16 @@ describe('the quota read', () => {
     expect(() => read([work, night, { ...unread, windows: night.windows }, seated])).toThrow(
       /accounts\[2\]\.windows: no source reads no window/u,
     )
-    expect(() =>
-      read([{ ...work, seat: 'week:2026-11-15T09:00Z' }, night, unread, seated]),
-    ).toThrow(/accounts\[0\]\.seat/u)
+    // A UUID beside a weekly id, another organization's id, a UUID on work no account holds.
+    expect(() => read([work, night, unread, { ...seated, account_uuid: 'acct-x' }])).toThrow(
+      /accounts\[3\]\.account: a weekly account has its weekly reset and no UUID/u,
+    )
+    expect(() => read([{ ...work, account: 'org-other/acct-x' }, night, unread, seated])).toThrow(
+      /accounts\[0\]\.account: an account id starts with its organization/u,
+    )
+    expect(() => read([work, night, { ...unread, account_uuid: 'acct-x' }, seated])).toThrow(
+      /accounts\[2\]\.account/u,
+    )
   })
 
   it('gives the moment the page state takes the one form that state checks', async () => {

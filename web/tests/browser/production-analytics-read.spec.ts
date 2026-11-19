@@ -85,7 +85,7 @@ const shown = (page: Page) =>
       (tile) => (tile as HTMLElement).dataset.state,
     ),
     failedTiles: [...document.querySelectorAll('.analytics-rail .rail-tile')].filter((tile) =>
-      tile.textContent?.includes('Could not be read'),
+      tile.textContent?.includes('Could not be loaded'),
     ).length,
   }))
 
@@ -117,9 +117,8 @@ for (const width of [390, 1024, 1440, 1920]) {
     await analytics.locator('.analytics-refresh').click()
     const failed = analytics.locator('.refresh-failed')
     await expect(failed).toBeVisible()
-    // A phone's row has no room for the failure's own retry: the bar's read again beside it asks.
-    const phone = width === 390
-    await expect(failed).toHaveText(phone ? 'Could not refresh' : 'Could not refresh · Retry')
+    // On a phone's row, which has no room for the retry's own word, the words are the retry.
+    await expect(failed).toHaveText('Could not refresh · Retry')
     await expect(analytics.locator('.analytics-rail [aria-busy="true"]')).toHaveCount(0)
     const after = { shown: await shown(page), frame: await frame(page) }
     expect(after.shown).toEqual(before.shown)
@@ -128,11 +127,7 @@ for (const width of [390, 1024, 1440, 1920]) {
 
     // Its retry asks again; answered, the mark goes and the figures stand as read.
     answer.failing = false
-    await (
-      phone
-        ? analytics.locator('.analytics-refresh')
-        : failed.getByRole('button', { name: 'Retry' })
-    ).click()
+    await failed.getByRole('button', { name: /Retry$/u }).click()
     await expect(failed).toHaveCount(0)
     const retried = await shown(page)
     expect(retried.figures).toEqual(before.shown.figures)
@@ -328,7 +323,6 @@ for (const [width, locale] of [
     const analytics = page.locator('.analytics-page')
     await openQuotaWeek(page)
     await expect(analytics.locator('.quota-account')).toHaveCount(4)
-    await expect(analytics.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
     await page.evaluate(() => document.fonts.ready)
     const before = { shown: await quotaShown(page), frame: await frame(page) }
 

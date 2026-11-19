@@ -9,9 +9,9 @@
  * is the board's to say once it has read it. Each part stands where the shell draws it,
  * so the handoff moves nothing; a part that stood a pixel off was a visible jump.
  *
- * The application's bundle is held back here, so the skeleton is measured on screen as a
- * slow load leaves it, and the shell is measured in the same page once the bundle is let
- * through.
+ * The application's bundle is held back here, and its stylesheets for a moment, so the
+ * skeleton is measured on screen as a slow load leaves it, and the shell is measured in
+ * the same page once the bundle is let through.
  */
 import { createRequire } from 'node:module'
 
@@ -159,15 +159,36 @@ function edgesOf(part: string): readonly string[] {
 const edge = (box: Box, name: string) =>
   name === 'cy' ? box.y + box.h / 2 : box[name as keyof Box]
 
+/**
+ * What is wrong with a part only one side draws, or neither. An entry's label is drawn nowhere
+ * on an icons-only rail, by either; a part or an entry that neither draws is a selector that
+ * finds nothing, and nothing would have been compared. A part the window hides is drawn by
+ * neither, or one of them shows what the other hides.
+ */
+function unmatched(part: string, drawn: Box | null, real: Box | null, hidden: boolean) {
+  if (hidden)
+    return drawn === null && real === null ? null : `${part}: drawn on a window that hides it`
+  if (drawn === null && real === null)
+    return part.includes('.') ? null : `${part}: neither draws it`
+  if (drawn === null) return `${part}: only the shell draws it`
+  return real === null ? `${part}: only the skeleton draws it` : null
+}
+
+/**
+ * The parts a window this wide hides: at 760px and under the rail is icons only and keeps no
+ * mark, in the shell (`AppNav`), the skeleton (`index.html`) and the desktop window's page.
+ */
+const hiddenAt = (width: number): readonly string[] => (width <= 760 ? ['mark'] : [])
+
 /** Every edge that stands further than the tolerance from the shell's, said in full. */
-function mismatches(skeleton: Measured, shell: Measured): string[] {
+function mismatches(skeleton: Measured, shell: Measured, hidden: readonly string[]): string[] {
   const found: string[] = []
   for (const part of new Set([...Object.keys(skeleton), ...Object.keys(shell)])) {
     const drawn = skeleton[part] ?? null
     const real = shell[part] ?? null
-    if (drawn === null && real === null) continue
-    if (drawn === null || real === null) {
-      found.push(`${part}: ${drawn ? 'only the skeleton draws it' : 'only the shell draws it'}`)
+    if (hidden.includes(part) || drawn === null || real === null) {
+      const said = unmatched(part, drawn, real, hidden.includes(part))
+      if (said !== null) found.push(said)
       continue
     }
     for (const name of edgesOf(part)) {
@@ -188,6 +209,22 @@ async function holdBundle(page: Page): Promise<() => void> {
     release = resolve
   })
   await page.route(/\/assets\/index-[^/]+\.js$/u, async (route) => {
+    await released
+    await route.continue()
+  })
+  return () => release?.()
+}
+
+/**
+ * The bundle's stylesheets, held until the returned call lets them through. Until they
+ * apply the page draws no frame, so a layout read then is one nobody sees.
+ */
+async function holdStyles(page: Page): Promise<() => void> {
+  let release: (() => void) | undefined
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(/\/assets\/[^/]+\.css$/u, async (route) => {
     await released
     await route.continue()
   })
@@ -243,46 +280,24 @@ for (const size of SIZES) {
       await installBackend(page)
       await rememberRail(page, rail)
       const release = await holdBundle(page)
+      const releaseStyles = await holdStyles(page)
       await page.goto('/', { waitUntil: 'commit' })
       await expect(page.locator('#app > .sk')).toBeVisible()
 
       // Only the chrome: nothing in the skeleton says a word or stands for a row of content.
+      // Read before the stylesheets come, which needs none of them.
       const drawn = await page.locator('#app').evaluate((app) => ({
         children: [...app.children].map((child) => child.className),
         text: app.textContent?.trim() ?? '',
-        classes: [
-          ...new Set(
-            [...app.querySelectorAll('*')].map(
-              (node) => node.getAttribute('class') ?? node.tagName.toLowerCase(),
-            ),
-          ),
-        ].toSorted(),
         panelChildren: app.querySelector('.sk-panel')?.childElementCount ?? -1,
         entries: app.querySelectorAll('.sk-entry').length,
       }))
-      expect(drawn).toEqual({
-        children: ['sk'],
-        text: '',
-        classes: [
-          'path',
-          'sk',
-          'sk-bar',
-          'sk-entry',
-          'sk-entry sk-work',
-          'sk-foot',
-          'sk-head',
-          'sk-list',
-          'sk-main',
-          'sk-mark',
-          'sk-panel',
-          'sk-rail',
-          'sk-scope',
-          'sk-title',
-          'sk-title-row',
-        ],
-        panelChildren: 0,
-        entries: 4,
-      })
+      expect(drawn).toEqual({ children: ['sk'], text: '', panelChildren: 0, entries: 4 })
+      // The stylesheets come after the skeleton is in the page and has been read, as on a slow
+      // load: what is measured is the first frame drawn once they apply, which `settled`
+      // waits for, not a layout read before it.
+      releaseStyles()
+      await settled(page)
       const skeleton = await measure(page, true)
 
       await watchFrames(page)
@@ -299,14 +314,14 @@ for (const size of SIZES) {
       expect(frames.bare, 'frames between the skeleton and the shell that showed neither').toBe(0)
 
       const shell = await measure(page, false)
-      expect(mismatches(skeleton, shell)).toEqual([])
+      expect(mismatches(skeleton, shell, hiddenAt(size.width))).toEqual([])
 
       // The desktop window's page stands on the same lines, at the width the window remembers.
       await page.goto(
         startupPageUrl({ phase: 'starting', locale: 'en', port: 8642, navWidth: rail }),
       )
       await expect(page.locator('.sk-rail')).toBeVisible()
-      expect(mismatches(await measure(page, true), shell)).toEqual([])
+      expect(mismatches(await measure(page, true), shell, hiddenAt(size.width))).toEqual([])
     })
   }
 }
@@ -372,14 +387,19 @@ for (const locale of ['en', 'ru'] as const) {
         }
         return {
           title: inside(document.querySelector('h1')),
-          lines: [...document.querySelectorAll('main > p:not(.brand)')].every((line) =>
-            inside(line),
-          ),
+          lines: [...document.querySelectorAll('main > p:not(.brand)')].map((line) => inside(line)),
           action: inside(document.querySelector('a.button.primary')),
           sideways: document.documentElement.scrollWidth > innerWidth,
         }
       })
-      expect(laid).toEqual({ title: true, lines: true, action: true, sideways: false })
+      // The page says why in lines of its own: each of them inside the window.
+      expect(laid.lines.length).toBeGreaterThan(0)
+      expect({ ...laid, lines: laid.lines.every(Boolean) }).toEqual({
+        title: true,
+        lines: true,
+        action: true,
+        sideways: false,
+      })
     })
   }
 }

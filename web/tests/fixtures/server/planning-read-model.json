@@ -339,89 +339,7 @@
   },
   "work_items": [
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000017",
-      "planning_space_id": "00000000-0000-4000-8000-000000000002",
-      "reference": "MAIN-4",
-      "number": 4,
-      "title": "Goal with participants",
-      "kind": "goal",
-      "priority": "medium",
-      "state": {
-        "state_id": "00000000-0000-4000-8000-000000000003",
-        "key": "triage",
-        "name": "Triage",
-        "category": "triage",
-        "is_terminal": false
-      },
-      "open": true,
-      "container_state": null,
-      "acceptance": null,
-      "started_at": "2026-01-02T03:04:05Z",
-      "waits_for": [],
-      "claim_ref": "",
-      "claim_state": null,
-      "parent_id": null,
-      "labels": [],
-      "projects": [],
-      "source": "",
-      "checklist": [],
-      "revision": 0,
-      "created_at": "2026-01-02T03:04:05Z",
-      "updated_at": "2026-01-02T03:04:05Z",
-      "closed_at": null,
-      "last_claim_ref": null,
-      "withheld": [
-        "goal_or_stage"
-      ],
-      "workable": false,
-      "lapsed_claim": null,
-      "comment_count": 0,
-      "queue_order": null,
-      "other_space": null
-    },
-    {
       "work_item_id": "00000000-0000-4000-8000-000000000034",
-      "planning_space_id": "00000000-0000-4000-8000-000000000002",
-      "reference": "MAIN-5",
-      "number": 5,
-      "title": "Its stage",
-      "kind": "stage",
-      "priority": "medium",
-      "state": {
-        "state_id": "00000000-0000-4000-8000-000000000003",
-        "key": "triage",
-        "name": "Triage",
-        "category": "triage",
-        "is_terminal": false
-      },
-      "open": true,
-      "container_state": null,
-      "acceptance": null,
-      "started_at": "2026-01-02T03:04:05Z",
-      "waits_for": [],
-      "claim_ref": "",
-      "claim_state": null,
-      "parent_id": "00000000-0000-4000-8000-000000000017",
-      "labels": [],
-      "projects": [],
-      "source": "",
-      "checklist": [],
-      "revision": 0,
-      "created_at": "2026-01-02T03:04:05Z",
-      "updated_at": "2026-01-02T03:04:05Z",
-      "closed_at": null,
-      "last_claim_ref": null,
-      "withheld": [
-        "goal_or_stage"
-      ],
-      "workable": false,
-      "lapsed_claim": null,
-      "comment_count": 0,
-      "queue_order": null,
-      "other_space": null
-    },
-    {
-      "work_item_id": "00000000-0000-4000-8000-000000000035",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-7",
       "number": 7,
@@ -438,6 +356,10 @@
       "open": true,
       "container_state": null,
       "acceptance": null,
+      "triage_stack": {
+        "seen_at": null,
+        "seen_by": null
+      },
       "started_at": "2026-01-02T03:04:05Z",
       "waits_for": [],
       "claim_ref": "",
@@ -521,6 +443,10 @@
       "open": true,
       "container_state": null,
       "acceptance": null,
+      "triage_stack": {
+        "seen_at": null,
+        "seen_by": null
+      },
       "started_at": null,
       "waits_for": [],
       "claim_ref": "",
@@ -545,7 +471,7 @@
       "other_space": null
     },
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000036",
+      "work_item_id": "00000000-0000-4000-8000-000000000035",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-15",
       "number": 15,
@@ -562,6 +488,10 @@
       "open": true,
       "container_state": null,
       "acceptance": null,
+      "triage_stack": {
+        "seen_at": "2026-01-02T03:04:05Z",
+        "seen_by": "worker-a"
+      },
       "started_at": null,
       "waits_for": [],
       "claim_ref": "",
@@ -586,12 +516,53 @@
       "other_space": null
     },
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000037",
+      "work_item_id": "00000000-0000-4000-8000-000000000036",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-16",
       "number": 16,
       "title": "Tree stage not accepted yet",
       "kind": "stage",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000003",
+        "key": "triage",
+        "name": "Triage",
+        "category": "triage",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": null,
+      "started_at": null,
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000035",
+      "labels": [],
+      "projects": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "withheld": [
+        "goal_or_stage"
+      ],
+      "workable": false,
+      "lapsed_claim": null,
+      "comment_count": 0,
+      "queue_order": null,
+      "other_space": null
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000037",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-17",
+      "number": 17,
+      "title": "Tree work under the stage not accepted",
+      "kind": "task",
       "priority": "medium",
       "state": {
         "state_id": "00000000-0000-4000-8000-000000000003",
@@ -618,47 +589,6 @@
       "closed_at": null,
       "last_claim_ref": null,
       "withheld": [
-        "goal_or_stage"
-      ],
-      "workable": false,
-      "lapsed_claim": null,
-      "comment_count": 0,
-      "queue_order": null,
-      "other_space": null
-    },
-    {
-      "work_item_id": "00000000-0000-4000-8000-000000000038",
-      "planning_space_id": "00000000-0000-4000-8000-000000000002",
-      "reference": "MAIN-17",
-      "number": 17,
-      "title": "Tree work under the stage not accepted",
-      "kind": "task",
-      "priority": "medium",
-      "state": {
-        "state_id": "00000000-0000-4000-8000-000000000003",
-        "key": "triage",
-        "name": "Triage",
-        "category": "triage",
-        "is_terminal": false
-      },
-      "open": true,
-      "container_state": null,
-      "acceptance": null,
-      "started_at": null,
-      "waits_for": [],
-      "claim_ref": "",
-      "claim_state": null,
-      "parent_id": "00000000-0000-4000-8000-000000000037",
-      "labels": [],
-      "projects": [],
-      "source": "",
-      "checklist": [],
-      "revision": 0,
-      "created_at": "2026-01-02T03:04:05Z",
-      "updated_at": "2026-01-02T03:04:05Z",
-      "closed_at": null,
-      "last_claim_ref": null,
-      "withheld": [
         "not_ready",
         "ancestor_triage"
       ],
@@ -669,7 +599,7 @@
       "other_space": null
     },
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000039",
+      "work_item_id": "00000000-0000-4000-8000-000000000038",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-12",
       "number": 12,
@@ -693,7 +623,7 @@
       "waits_for": [],
       "claim_ref": "",
       "claim_state": null,
-      "parent_id": "00000000-0000-4000-8000-000000000040",
+      "parent_id": "00000000-0000-4000-8000-000000000039",
       "labels": [],
       "projects": [
         {
@@ -717,7 +647,7 @@
       "other_space": null
     },
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000041",
+      "work_item_id": "00000000-0000-4000-8000-000000000040",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-13",
       "number": 13,
@@ -741,7 +671,7 @@
       "waits_for": [],
       "claim_ref": "",
       "claim_state": null,
-      "parent_id": "00000000-0000-4000-8000-000000000042",
+      "parent_id": "00000000-0000-4000-8000-000000000041",
       "labels": [],
       "projects": [],
       "source": "",
@@ -756,6 +686,51 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": 2,
+      "other_space": null
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000042",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-6",
+      "number": 6,
+      "title": "Its task",
+      "kind": "task",
+      "priority": "medium",
+      "state": {
+        "state_id": "00000000-0000-4000-8000-000000000011",
+        "key": "dev",
+        "name": "Dev",
+        "category": "active",
+        "is_terminal": false
+      },
+      "open": true,
+      "container_state": null,
+      "acceptance": {
+        "basis": "inherited",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "claude (session 00000000-0000-4000-8000-000000000019)",
+      "claim_state": "live",
+      "parent_id": "00000000-0000-4000-8000-000000000043",
+      "labels": [],
+      "projects": [],
+      "source": "",
+      "checklist": [],
+      "revision": 1,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "withheld": [
+        "not_ready",
+        "held"
+      ],
+      "workable": false,
+      "lapsed_claim": null,
+      "comment_count": 0,
+      "queue_order": null,
       "other_space": null
     },
     {
@@ -829,52 +804,6 @@
       "other_space": null
     },
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000043",
-      "planning_space_id": "00000000-0000-4000-8000-000000000002",
-      "reference": "MAIN-6",
-      "number": 6,
-      "title": "Its task",
-      "kind": "task",
-      "priority": "medium",
-      "state": {
-        "state_id": "00000000-0000-4000-8000-000000000011",
-        "key": "dev",
-        "name": "Dev",
-        "category": "active",
-        "is_terminal": false
-      },
-      "open": true,
-      "container_state": null,
-      "acceptance": {
-        "basis": "assignment",
-        "at": "2026-01-02T03:04:05Z"
-      },
-      "started_at": "2026-01-02T03:04:05Z",
-      "waits_for": [],
-      "claim_ref": "claude (session 00000000-0000-4000-8000-000000000019)",
-      "claim_state": "live",
-      "parent_id": "00000000-0000-4000-8000-000000000034",
-      "labels": [],
-      "projects": [],
-      "source": "",
-      "checklist": [],
-      "revision": 1,
-      "created_at": "2026-01-02T03:04:05Z",
-      "updated_at": "2026-01-02T03:04:05Z",
-      "closed_at": null,
-      "last_claim_ref": null,
-      "withheld": [
-        "not_ready",
-        "held",
-        "ancestor_triage"
-      ],
-      "workable": false,
-      "lapsed_claim": null,
-      "comment_count": 0,
-      "queue_order": null,
-      "other_space": null
-    },
-    {
       "work_item_id": "00000000-0000-4000-8000-000000000044",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-8",
@@ -899,7 +828,7 @@
       "waits_for": [],
       "claim_ref": "claude (session 00000000-0000-4000-8000-000000000021)",
       "claim_state": "live",
-      "parent_id": "00000000-0000-4000-8000-000000000035",
+      "parent_id": "00000000-0000-4000-8000-000000000034",
       "labels": [],
       "projects": [],
       "source": "",
@@ -965,6 +894,82 @@
       "other_space": null
     },
     {
+      "work_item_id": "00000000-0000-4000-8000-000000000043",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-5",
+      "number": 5,
+      "title": "Its stage",
+      "kind": "stage",
+      "priority": "medium",
+      "state": null,
+      "open": true,
+      "container_state": "in_progress",
+      "acceptance": {
+        "basis": "inherited",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": "00000000-0000-4000-8000-000000000017",
+      "labels": [],
+      "projects": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "withheld": [
+        "goal_or_stage"
+      ],
+      "workable": false,
+      "lapsed_claim": null,
+      "comment_count": 0,
+      "queue_order": null,
+      "other_space": null
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000017",
+      "planning_space_id": "00000000-0000-4000-8000-000000000002",
+      "reference": "MAIN-4",
+      "number": 4,
+      "title": "Goal with participants",
+      "kind": "goal",
+      "priority": "medium",
+      "state": null,
+      "open": true,
+      "container_state": "in_progress",
+      "acceptance": {
+        "basis": "assignment",
+        "at": "2026-01-02T03:04:05Z"
+      },
+      "started_at": "2026-01-02T03:04:05Z",
+      "waits_for": [],
+      "claim_ref": "",
+      "claim_state": null,
+      "parent_id": null,
+      "labels": [],
+      "projects": [],
+      "source": "",
+      "checklist": [],
+      "revision": 0,
+      "created_at": "2026-01-02T03:04:05Z",
+      "updated_at": "2026-01-02T03:04:05Z",
+      "closed_at": null,
+      "last_claim_ref": null,
+      "withheld": [
+        "goal_or_stage"
+      ],
+      "workable": false,
+      "lapsed_claim": null,
+      "comment_count": 0,
+      "queue_order": null,
+      "other_space": null
+    },
+    {
       "work_item_id": "00000000-0000-4000-8000-000000000046",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-9",
@@ -1009,7 +1014,7 @@
       "other_space": null
     },
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000042",
+      "work_item_id": "00000000-0000-4000-8000-000000000041",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-10",
       "number": 10,
@@ -1053,7 +1058,7 @@
       "other_space": null
     },
     {
-      "work_item_id": "00000000-0000-4000-8000-000000000040",
+      "work_item_id": "00000000-0000-4000-8000-000000000039",
       "planning_space_id": "00000000-0000-4000-8000-000000000002",
       "reference": "MAIN-11",
       "number": 11,
@@ -1071,7 +1076,7 @@
       "waits_for": [],
       "claim_ref": "",
       "claim_state": null,
-      "parent_id": "00000000-0000-4000-8000-000000000042",
+      "parent_id": "00000000-0000-4000-8000-000000000041",
       "labels": [],
       "projects": [
         {
@@ -1101,12 +1106,12 @@
   "other_space_ends": [],
   "stale_claims": [],
   "live_work": {
-    "00000000-0000-4000-8000-000000000010": {
+    "00000000-0000-4000-8000-000000000042": {
       "state": "waiting",
       "long": false,
       "asks": false
     },
-    "00000000-0000-4000-8000-000000000043": {
+    "00000000-0000-4000-8000-000000000010": {
       "state": "waiting",
       "long": false,
       "asks": false

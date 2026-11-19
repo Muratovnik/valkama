@@ -32,11 +32,12 @@ import {
   record,
   scrolledNames,
   serve,
-  tabWalk,
   UNRECORDED_BETWEEN,
 } from './analyticsPage.ts'
 import type { Answer } from './analyticsPage.ts'
+import { tabWalk } from './analyticsTabWalk.ts'
 import { shot } from './boardPage.ts'
+import { drawAllLined, drawLined, LINED_SHOWN } from './drawnViews.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
@@ -71,17 +72,25 @@ for (const width of [1440, 1024, 390]) {
     // 1024px the panel beside the rail would have left the report under 560px, so the section
     // has the page to itself instead, and its charts their room.
     const narrow = width < 1024
-    for (const section of await analytics.locator('.chart-section').all())
-      await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : 'chart')
+    // The tasks' bars and their days: the tasks, named by free text, draw no small charts.
+    const sections = analytics.locator('[data-shown]')
+    await expect(sections).toHaveCount(2)
+    for (const section of await sections.all())
+      await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : LINED_SHOWN)
 
     // The day not over yet and the change of accounts are each said where their day is read, in
     // its row of the table or in its day's hint on the chart; no word stands under a name.
     await expect.poll(() => daysSaying(analytics, 'running')).toBe(1)
-    await expect(analytics.locator('.spending-days .period-axis:has-text("running")')).toHaveCount(
-      0,
-    )
+    // The axis the chart draws, where it is drawn rather than its table, names its days, and none
+    // of them with a word under it.
+    const axis = analytics.locator('.spending-days [data-chart="periods"] [data-region="axis"]')
+    await expect(axis).toHaveCount(narrow ? 0 : 1)
+    for (const drawn of await axis.all()) {
+      await expect(drawn).toContainText(/\d/u)
+      await expect(drawn).not.toContainText('running')
+    }
     await expect
-      .poll(() => daysSaying(analytics, 'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0'))
+      .poll(() => daysSaying(analytics, 'Account change: 0b7d4e19 → 0b7d4e19, 7e6d5c4b'))
       .toBe(1)
 
     const measured = await measure(page)
@@ -176,7 +185,7 @@ const READ_STATES: {
       await expect(analytics.locator('.tile-figure[data-measure="tokens"]')).toHaveText('0')
       await expect(analytics.locator('.spending-tiles .tile-change').first()).toContainText('↓ 100')
       await expect(analytics.locator('.spending-bars')).toContainText(
-        ru ? 'нечего разбивать' : 'spent nothing to break down',
+        ru ? 'Нет данных для разбивки' : 'Nothing to break down',
       )
     },
   },
@@ -187,8 +196,8 @@ const READ_STATES: {
       const unread = analytics.locator('.spending-unread')
       await expect(unread.getByRole('status')).toHaveText(
         ru
-          ? 'Предыдущий период не удалось прочитать, поэтому изменение не показано.'
-          : 'The period before could not be read, so no change is shown.',
+          ? 'Не удалось загрузить предыдущий период, поэтому изменение не показано.'
+          : 'The period before could not be loaded, so no change is shown.',
       )
       await expect(unread.getByRole('button')).toHaveText(ru ? 'Повторить' : 'Retry')
     },
@@ -198,7 +207,7 @@ const READ_STATES: {
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
       // Said where the day is read, once: its day's hint on the chart, or its row of the table.
-      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 5b0c7e21 → d4e8a1f0`
+      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 0b7d4e19 → 7e6d5c4b`
       await expect.poll(() => daysSaying(analytics, said), 'days that say it').toBe(1)
     },
   },
@@ -216,7 +225,7 @@ for (const ru of [false, true])
           const measured = await measure(page)
           const unread = await boxes(page, '.spending-unread')
           const [words] = await boxes(page, '.spending-unread-words')
-          const [retry] = await boxes(page, '.spending-unread .button')
+          const [retry] = await boxes(page, '.spending-unread button')
           await record(info, `analytics ${ru ? 'ru ' : ''}${name} ${width}`, {
             ...measured,
             unread,
@@ -227,11 +236,13 @@ for (const ru of [false, true])
               .allTextContents(),
           })
           expectWhole(measured)
+          // Only the period before that could not be read says so, with a retry after its words.
+          expect(unread, 'the notice of the period before').toHaveLength(failWeekBefore ? 1 : 0)
           for (const box of unread) {
             expect(Math.abs(box.x - (measured.page?.x ?? 0))).toBeLessThanOrEqual(1)
             expect(box.x + box.width).toBeLessThanOrEqual(width)
+            expectBesideOrUnder(words, retry)
           }
-          expectBesideOrUnder(words, retry)
           await expectNoSilentClipping(
             page,
             `analytics ${ru ? 'ru ' : ''}${name} at ${width}px`,
@@ -297,6 +308,9 @@ for (const width of [1440, 390])
       await page.screenshot(shot(info, `analytics-${name}-${width}.png`))
     })
 
+/** The width a day's field keeps: its 8.25rem at the root's 16px (`AnalyticsOwnPeriod`). */
+const DAY_FIELD = 8.25 * 16
+
 test('a custom period shows its two date fields whole at 390px', async ({ page }, info) => {
   await serve(page)
   await openReport(page, 390, pageAt({ period: 'custom', from: '2026-11-02', to: '2026-11-11' }))
@@ -314,9 +328,10 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
   for (const field of measured.dateInputs) {
     expect(field.x).toBeGreaterThanOrEqual(0)
     expect(field.x + field.width).toBeLessThanOrEqual(390)
-    // A date field leaves its date and its picker room: «28.08.2026», of the widest figures, ran
-    // under the picker's icon at 124px and stood whole beside it at 132px.
-    expect(field.width).toBeGreaterThanOrEqual(132)
+    // A date field leaves its date and its picker room, and a day is never cut: it is as wide
+    // as «28.08.2026», of the widest figures, needs beside the picker (`AnalyticsOwnPeriod`).
+    // At 124px that date ran under the picker's icon.
+    expect(field.width).toBeGreaterThanOrEqual(DAY_FIELD)
   }
   expect(measured.days).toBe(10)
   await expectNoSilentClipping(page, 'analytics custom period at 390px', '.analytics-page')
@@ -361,7 +376,7 @@ for (const width of [1440, 390]) {
   test(`a chart of one value stands whole at ${width}px`, async ({ page }, info) => {
     await serve(page, ONE_VALUE)
     const analytics = await openReport(page, width)
-    await analytics.locator('.spending-bars').getByRole('radio', { name: 'Chart' }).click()
+    await drawLined(analytics.locator('.spending-bars'))
     await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(1)
     const measured = await bars(page)
     await record(info, `analytics one value ${width}`, measured)
@@ -371,23 +386,21 @@ for (const width of [1440, 390]) {
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-one-${width}.png`))
   })
 
-  test(`a chart of many values, the first twelve a bar and the rest a small «other», stands whole at ${width}px`, async ({
+  test(`a chart of many tasks, the first ten a bar and the rest a large «other» with its own, stands whole at ${width}px`, async ({
     page,
   }, info) => {
     await serve(page, LONG_TAIL)
     const analytics = await openReport(page, width)
-    for (const part of ['.spending-bars', '.spending-multiples'])
-      await analytics.locator(part).getByRole('radio', { name: 'Chart' }).click()
-    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(12)
-    await expect(analytics.locator('.spending-bars-more')).toHaveText('13 more — in the table')
+    await drawLined(analytics.locator('.spending-bars'))
+    // Ten tasks and the other fifteen in one row apart, which draws its bar on the same scale.
+    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(11)
+    // Under the list, every value of the period, which opens in the side panel.
+    await expect(analytics.locator('.spending-bars [data-all]')).toHaveText('All 25')
     const measured = await bars(page)
     await record(info, `analytics large other ${width}`, measured)
-    expect(measured.rest).toEqual([])
-    // The small charts name the eight largest and fold the other seventeen into one.
-    await expect(analytics.locator('.spending-multiples .multiple')).toHaveCount(9)
-    await expect(
-      analytics.locator('.spending-multiples .multiple[data-kind="other"] .multiple-name'),
-    ).toHaveText('Other, 17 more')
+    expect(measured.rest).toEqual(['Other, 15 more'])
+    // The tasks are named by free text: a list, with no small charts beside it.
+    await expect(analytics.locator('.spending-multiples')).toHaveCount(0)
     expectBarsInTracks(measured)
     await expectNoSilentClipping(page, `analytics large other at ${width}px`, '.analytics-page')
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-other-${width}.png`))
@@ -399,10 +412,7 @@ for (const width of [1440, 1024])
     await serve(page)
     const analytics = await openReport(page, width)
     // Each section drawn as its chart first, whichever the width of the panel opened it as.
-    for (const section of await analytics.locator('.chart-section').all()) {
-      await section.getByRole('radio', { name: 'Chart' }).click()
-      await expect(section).toHaveAttribute('data-shown', 'chart')
-    }
+    await drawAllLined(analytics)
     const chart = await measure(page)
     const charted = await bars(page)
     for (const section of await analytics.locator('.chart-section').all()) {

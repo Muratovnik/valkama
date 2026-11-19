@@ -1,14 +1,16 @@
 /**
- * The Analytics panel has one scroll, in the real app over the browser double. The oracle is the
- * requirement: inside the panel nothing scrolls up and down on its own — no element there holds
- * more than it shows under an `overflow-y` of `auto` or `scroll` — in the overview, the task
- * section with 44 tasks and the token kinds, at 1280×800, 1440×900, 1670×985 and 1920×1080. The
- * task table stands at its full height in that scroll; with the panel scrolled to the table's
- * middle and to its last rows, its heading row and its total are both inside the panel's visible
- * box and drawn over the rows, a row's name focused there stands clear of both, and «To the table»
- * over the charts brings the table into view with the focus on it. The heading row and the total
- * hold to the edges as well when the table is drawn anew after the section opened: a split chosen,
- * a split section reloaded and a split taken away. Each run prints what it measured.
+ * The Analytics panel has one scroll and the task table one more, in the real app over the browser
+ * double. The oracle is the requirement: inside the panel only the task table's frame scrolls up
+ * and down on its own — no other element there holds more than it shows under an `overflow-y` of
+ * `auto` or `scroll` — in the overview, the task section with 44 tasks and the token kinds, at
+ * 1280×800, 1440×900, 1670×985 and 1920×1080. The table's frame is held in height, so the table
+ * and its heading line stand in the window together, and it scrolls inside itself. Scrolled, the
+ * table or the panel round it, frame by frame, its heading row stands at the frame's top edge and
+ * its total at its bottom edge, both drawn over the rows, with no frame between scrolls where
+ * either has moved off its edge; a row's name focused there stands clear of both, and «To the
+ * table» over the charts brings the table into view with the focus on it. The heading row and the
+ * total hold to the edges as well when the table is drawn anew after the section opened: a split
+ * chosen, a split section reloaded and a split taken away. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -41,91 +43,100 @@ const ownScrolls = (page: Page) =>
           ['auto', 'scroll'].includes(getComputedStyle(one).overflowY) &&
           one.scrollHeight > one.clientHeight,
       )
-      .map((one) => ({
-        part: one.className,
-        holds: one.scrollHeight,
-        shows: one.clientHeight,
-      }))
+      .map((one) => (one.matches('.spending-table-frame') ? 'spending-table-frame' : one.className))
     return { inner, panel: panel.scrollHeight - panel.clientHeight }
   })
 
-/** Waits two frames, so a scroll-driven part has followed the last scroll. */
+/** Waits two frames, so whatever follows a scroll has followed the last one. */
 const settle = (page: Page) =>
   page.evaluate(
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   )
 
-/**
- * Scrolls the panel so that the share `at` of the task table's height stands at the middle of
- * the panel's visible box, then says where the heading row, the total and the rows stand.
- */
-async function scrollTableTo(page: Page, at: number) {
-  await page.evaluate((share) => {
-    const panel = document.querySelector<HTMLElement>('.analytics-panel')
-    const table = document.querySelector('.spending-table-frame')
-    if (!panel || !table) throw new Error('no table')
-    const box = table.getBoundingClientRect()
-    const top = box.top - panel.getBoundingClientRect().top + panel.scrollTop
-    panel.scrollTop = top + box.height * share - panel.clientHeight / 2
-  }, at)
+/** Brings the table into view through «To the table», as a reader does, and waits for it. */
+async function toTable(page: Page) {
+  await page.getByRole('button', { name: 'To the table' }).click()
+  await expect(page.locator('.spending-table')).toBeFocused()
   await settle(page)
-  return page.evaluate(() => {
+}
+
+/**
+ * Scrolls the table's frame, and then the panel round it, a step a frame, and after every step,
+ * both before the frame is drawn and once it is, says how far the heading row's top stands from
+ * the frame's top edge and the total's bottom from its bottom edge, the frame's scroll bars left
+ * out, and whether each is drawn over the rows where the panel shows it. Returns the samples and
+ * the scrolls they covered.
+ */
+function scrollSamples(page: Page) {
+  return page.evaluate(async () => {
     const panel = document.querySelector<HTMLElement>('.analytics-panel')
-    const frame = document.querySelector('.spending-table-frame')
+    const frame = document.querySelector<HTMLElement>('.spending-table-frame')
     if (!panel || !frame) throw new Error('no table')
-    const shown = panel.getBoundingClientRect()
-    const visible = { top: shown.top, bottom: shown.top + panel.clientHeight }
-    // A cell sticks, not its row group, so the cells say where they stand.
-    const seen = (cell: Element | null) => {
-      if (!cell) return null
+    const head = frame.querySelector('thead th:nth-child(2)')
+    const total = frame.querySelector('tfoot th')
+    if (!head || !total) throw new Error('no heading row or total')
+    // Drawn over the rows, where the panel shows the cell; one the panel scrolled away is not hit.
+    const onTop = (cell: Element) => {
       const { left, right, top, bottom } = cell.getBoundingClientRect()
+      const shown = panel.getBoundingClientRect()
+      if (top < shown.top || bottom > shown.top + panel.clientHeight) return true
       const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2)
-      return {
-        top: Math.round(top),
-        bottom: Math.round(bottom),
-        inside: top >= visible.top - 0.5 && bottom <= visible.bottom + 0.5,
-        onTop: hit !== null && cell.contains(hit),
-      }
+      return hit !== null && cell.contains(hit)
     }
-    const rows = [...frame.querySelectorAll('tbody tr')].filter((row) => {
-      const box = row.getBoundingClientRect()
-      return box.bottom > visible.top && box.top < visible.bottom
-    })
-    return {
-      scrolled: Math.round(panel.scrollTop),
-      visible: { top: Math.round(visible.top), bottom: Math.round(visible.bottom) },
-      rowsInView: rows.length,
-      head: seen(frame.querySelector('thead th:nth-child(2)')),
-      total: seen(frame.querySelector('tfoot th')),
+    const samples: { by: string; head: number; onTop: boolean; total: number }[] = []
+    const sample = (by: string) => {
+      const box = frame.getBoundingClientRect()
+      const top = box.top + frame.clientTop
+      const bottom = top + frame.clientHeight
+      samples.push({
+        by,
+        head: Math.round((head.getBoundingClientRect().top - top) * 10) / 10,
+        total: Math.round((bottom - total.getBoundingClientRect().bottom) * 10) / 10,
+        onTop: onTop(head) && onTop(total),
+      })
     }
+    const end = frame.scrollHeight - frame.clientHeight
+    const steps = 12
+    for (let step = 1; step <= steps; step += 1) {
+      frame.scrollTop = (end * step) / steps
+      sample('table')
+      await new Promise((done) => requestAnimationFrame(done))
+      sample('table')
+    }
+    // The table halfway, and the panel scrolled round it, up and back down a step a frame.
+    frame.scrollTop = end / 2
+    const at = panel.scrollTop
+    for (const shift of [-40, -80, -120, -80, -40, 0]) {
+      panel.scrollTop = at + shift
+      sample('panel')
+      await new Promise((done) => requestAnimationFrame(done))
+      sample('panel')
+    }
+    return { samples, tableEnd: end, panelAt: at }
   })
 }
 
 /**
- * Scrolls the panel to the task table's middle and to its last rows and holds that the heading row
- * and the total are inside the panel's visible box and drawn over the rows there, the heading row
- * over the total, and in the middle at the panel's top and bottom edges; `path` names how the
- * table was reached. Each miss is reported and the run goes on, so every path says how it stood.
- * Returns what it measured.
+ * Holds that the table's frame scrolls inside itself and that at every sample of a scroll of it
+ * and of the panel round it (`scrollSamples`), its heading row and total stand at its edges and
+ * are drawn over the rows; `path` names how the table was reached. Each miss is reported and the
+ * run goes on. Returns what it measured.
  */
-async function expectStuck(page: Page, path: string) {
-  const middle = await scrollTableTo(page, 0.5)
-  const end = await scrollTableTo(page, 0.97)
-  for (const [where, at] of Object.entries({ middle, end })) {
-    const said = `${path}, ${where}`
-    expect.soft(at.rowsInView, `${said}: rows in view`).toBeGreaterThan(0)
-    expect.soft(at.head, `${said}: the heading row`).toMatchObject({ inside: true, onTop: true })
-    expect.soft(at.total, `${said}: the total`).toMatchObject({ inside: true, onTop: true })
-    expect
-      .soft(at.head?.bottom ?? 0, `${said}: the heading row over the total`)
-      .toBeLessThanOrEqual(at.total?.top ?? 0)
+async function expectEdges(page: Page, path: string) {
+  const measured = await scrollSamples(page)
+  expect.soft(measured.tableEnd, `${path}: the frame scrolls inside itself`).toBeGreaterThan(0)
+  const off = measured.samples.filter(
+    (one) => Math.abs(one.head) > 0.5 || Math.abs(one.total) > 0.5 || !one.onTop,
+  )
+  expect.soft(off, `${path}: samples with the heading row or total off its edge`).toEqual([])
+  const worst = (side: 'head' | 'total') =>
+    Math.max(...measured.samples.map((one) => Math.abs(one[side])))
+  return {
+    tableEnd: measured.tableEnd,
+    panelAt: measured.panelAt,
+    samples: measured.samples.length,
+    worst: { head: worst('head'), total: worst('total') },
   }
-  // In the middle the heading row stands at the panel's top edge and the total at its bottom.
-  const top = Math.abs((middle.head?.top ?? 0) - middle.visible.top)
-  const bottom = Math.abs((middle.total?.bottom ?? 0) - middle.visible.bottom)
-  expect.soft(top, `${path}: the heading row at the top edge`).toBeLessThanOrEqual(1)
-  expect.soft(bottom, `${path}: the total at the bottom edge`).toBeLessThanOrEqual(1)
-  return { middle, end }
 }
 
 /** Chooses the second dimension the task section is split by, through «Split by» in its heading. */
@@ -137,7 +148,7 @@ async function splitBy(page: Page, name: string) {
 /**
  * The table is drawn anew after its section opened whenever a split is chosen or taken away, and
  * on a reload of a split section it comes only once the read by both dimensions lands: on each of
- * those paths its heading row and total keep to the panel's edges as on the first opening.
+ * those paths its heading row and total keep to its frame's edges as on the first opening.
  */
 test('the heading row and total keep to the edges on every path to the table', async ({
   page,
@@ -150,23 +161,27 @@ test('the heading row and total keep to the edges on every path to the table', a
   await page.evaluate(() => document.fonts.ready)
   const seen: Record<string, unknown> = {}
 
-  // The account a pair names after its task, by the start of its id, says the split has landed.
+  // The organization a pair names after its task, by the start of its id, says the split has
+  // landed.
   const paired = rows.first().getByText('5b0c7e21', { exact: false })
-  await splitBy(page, 'Account')
+  await splitBy(page, 'Organization')
   await expect(paired).toBeVisible()
-  seen.split = await expectStuck(page, 'split chosen')
+  await toTable(page)
+  seen.split = await expectEdges(page, 'split chosen')
 
   await page.reload()
   await expect(paired).toBeVisible()
   await expect(rows).toHaveCount(44)
   await page.evaluate(() => document.fonts.ready)
-  seen.reloaded = await expectStuck(page, 'split section reloaded')
+  await toTable(page)
+  seen.reloaded = await expectEdges(page, 'split section reloaded')
 
   await splitBy(page, 'None')
   await expect(paired).toHaveCount(0)
   await expect(rows).toHaveCount(44)
-  seen.unsplit = await expectStuck(page, 'split taken away')
-  await record(info, 'stuck edges on every path', seen)
+  await toTable(page)
+  seen.unsplit = await expectEdges(page, 'split taken away')
+  await record(info, 'table edges on every path', seen)
 })
 
 for (const [width, height] of SIZES)
@@ -176,7 +191,7 @@ for (const [width, height] of SIZES)
       await page.setViewportSize({ width, height })
     })
 
-    test('nothing inside the panel scrolls up and down on its own', async ({ page }, info) => {
+    test('only the task table scrolls up and down inside the panel', async ({ page }, info) => {
       const seen: Record<string, unknown> = {}
       for (const section of SECTIONS) {
         await page.goto(section.address)
@@ -185,28 +200,54 @@ for (const [width, height] of SIZES)
         await settle(page)
         const scrolls = await ownScrolls(page)
         seen[section.name] = scrolls
-        expect(scrolls.inner, `${section.name}: parts that scroll on their own`).toEqual([])
+        expect(scrolls.inner, `${section.name}: parts that scroll on their own`).toEqual(
+          section.name === 'task' ? ['spending-table-frame'] : [],
+        )
       }
-      // The task section holds every one of its rows in the panel's one scroll.
-      await page.goto(TASK_REPORT)
-      await expect(page.locator('.spending-table tbody tr')).toHaveCount(44)
-      await record(info, `one scroll ${width}x${height}`, seen)
+      await record(info, `scrolls ${width}x${height}`, seen)
       // The overview's chart keeps a drawing field of 200 pixels at least.
       await page.goto(pageAt())
       const field = await page.locator('.overview-panel .period-field').boundingBox()
       expect(Math.round(field?.height ?? 0)).toBeGreaterThanOrEqual(200)
     })
 
-    test('the table’s heading row and total stay in view while its rows are', async ({
+    test('the table and its heading line stand in the window together', async ({ page }, info) => {
+      await page.goto(TASK_REPORT)
+      await expect(page.locator('.spending-table tbody tr')).toHaveCount(44)
+      await page.evaluate(() => document.fonts.ready)
+      await toTable(page)
+      const placed = await page.evaluate(() => {
+        const panel = document.querySelector<HTMLElement>('.analytics-panel')
+        const table = document.querySelector('.spending-table')
+        const frame = document.querySelector<HTMLElement>('.spending-table-frame')
+        if (!panel || !table || !frame) throw new Error('no table')
+        const shown = panel.getBoundingClientRect()
+        const box = table.getBoundingClientRect()
+        return {
+          panel: { top: Math.round(shown.top), bottom: Math.round(shown.top + panel.clientHeight) },
+          table: { top: Math.round(box.top), bottom: Math.round(box.bottom) },
+          frame: { holds: frame.scrollHeight, shows: frame.clientHeight },
+        }
+      })
+      await record(info, `table in the window ${width}x${height}`, placed)
+      expect(placed.frame.holds, 'a frame that holds every row').toBeGreaterThan(placed.frame.shows)
+      expect(placed.table.top).toBeGreaterThanOrEqual(placed.panel.top)
+      expect(placed.table.bottom).toBeLessThanOrEqual(placed.panel.bottom)
+    })
+
+    test('the heading row and total stay at the frame’s edges while it and the panel scroll', async ({
       page,
     }, info) => {
       await page.goto(TASK_REPORT)
       await expect(page.locator('.spending-table tbody tr').first()).toBeVisible()
       await page.evaluate(() => document.fonts.ready)
-      await record(info, `stuck edges ${width}x${height}`, await expectStuck(page, 'opened'))
+      await toTable(page)
+      await record(info, `table edges ${width}x${height}`, await expectEdges(page, 'opened'))
 
       // A row's name focused under the total is brought up clear of it, and of the heading row.
-      await scrollTableTo(page, 0.2)
+      await page.locator('.spending-table-frame').evaluate((frame) => {
+        frame.scrollTop = 0
+      })
       const name = page.locator('.spending-table tbody tr').nth(30).locator('.chart-press')
       await name.focus()
       await settle(page)
@@ -225,9 +266,7 @@ for (const [width, height] of SIZES)
     test('«To the table» brings the table into view with the focus on it', async ({ page }) => {
       await page.goto(TASK_REPORT)
       await expect(page.locator('.spending-table tbody tr').first()).toBeVisible()
-      await page.getByRole('button', { name: 'To the table' }).click()
-      await expect(page.locator('.spending-table')).toBeFocused()
-      await settle(page)
+      await toTable(page)
       const placed = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>('.analytics-panel')
         const table = document.querySelector('.spending-table')?.getBoundingClientRect()

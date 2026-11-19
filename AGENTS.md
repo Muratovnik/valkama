@@ -12,8 +12,9 @@ A machine may carry a local overlay as `AGENTS.local.md`. It is not tracked
 here, it never contradicts this file, and its absence changes nothing: this file
 is complete on its own.
 
-- Read `README.md` before changing a tool. `CONTRIBUTING.md` states the same
-  gates for a human contributor.
+- Read `README.md`, and the guide in `docs/guides/` for the tool, before
+  changing a tool. `CONTRIBUTING.md` states the same gates for a human
+  contributor.
 - `DESIGN.md` is about 100 KB: find the passage by its component, token or
   `**Label:**` and read that passage; read a whole section of it only when your
   change is to that section's rules.
@@ -26,13 +27,41 @@ is complete on its own.
   and item record fields, the scope `tree`, `acceptance`, the computed order of
   work and its queue (`rank` retired, `within`, `label`, `project`, the
   session's space, `queue_order`, `withheld`, `lapsed_claim`,
-  `by_previous_holder`), and the retired words
+  `by_previous_holder`), a close that ends its item's requests (`expired_reason`
+  `item_completed` and `item_cancelled`, `[item_closed]`, `purpose`), the
+  guards a creation or a move meets (`new_item`, `blocker` with a stated reason
+  only, `checklist`, `summary` and `review_question` entering review,
+  `question`, `children`), a question with a purpose (`owner_only`,
+  `not_asker`, `[purpose]`; withdrawing review's returns its item to `ready`),
+  or one a write waiting for the owner carries, a goal an agent proposes, a
+  task it files in accepted goals and a task a label's rule accepts, which may
+  wait for the owner or be accepted at once (`waits_for_owner`, `agent`,
+  `label_rule`), a second write of a point that waits (`[participation]`),
+  the queue where the owner hands out work by hand (`queue_off`),
+  a decision that recommends an answer in every required field and may come
+  back answered by it (`[decision]`), a launch that no longer moves its item
+  to review, a cancel of a goal or stage with open work under it (`cancel_list`, `cancels`), a parent cleared only by
+  `move_out` and never under an unaccepted goal (`[parent]`), work put off
+  only by `defer` and brought back by itself (`deferred`, `returned`), work
+  the owner is asked whether to do or take up again (`acceptance_question`),
+  a cancel of work outside the agent's own or that other sessions do, which
+  waits for the owner or for those sessions (`waits_for_owner`,
+  `waits_for_sessions`, `consent`, `[consent]`),
+  an agent's change of a goal's or stage's steps, its confirmation or its
+  put-off, which may wait for the owner (`checklist_reason`, `clarifies`,
+  `close_with_waiting`),
+  the step's text alone as the detail of an expired step's
+  `checklist_released`, and the retired words
   refused on input — for spaces and projects — the registry formats 2 and 4, a
   space without `project_id`, an optional `space` on `create_work_item`, the
   scope `space` and the module levels — and for reading an item by parts — the
   arguments and answer of `get_work_item`, `section` among them, the `verbose`
   answer of a write, the `work_item` of `claim_ready_work_item`, and the
-  handshake text about reading — as
+  handshake text about reading — and for commits — the ref kind `commit`,
+  commits among an item's refs, `kind=commit` and `space` on `GET /api/ref`,
+  and the handshake text about commits — and for the directory of spaces —
+  a `work_item_count` that is `null` for a space whose store could not be
+  read — as
   `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
   covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a
@@ -49,16 +78,20 @@ is complete on its own.
   changelog.
 - Every schema or destructive data operation requires a tested backup and
   rollback path.
-- `store.STORE_SCHEMA_VERSION` is a ratchet, not a release number. Raise it in
-  the same commit that changes what an existing row means, and a build made
-  before that change refuses the store instead of misreading it. Migrations here
-  are forward-only and idempotent, so an added table or column does not need it;
-  a changed meaning does. It is read before the first write, so it governs a
-  server that was spawned old. Under the launcher a running session follows the
-  pin through its stdio front, `mcp_front`, which stops the old release before
-  the new one opens the store. A process with no front that went stale while it
-  ran still holds its connection, and `static_assets.SourceWatch` is what warns
-  about that one.
+- `store.STORE_SCHEMA_VERSION` is a ratchet, not a release number. Raise it by
+  one in the same commit that changes the store's declaration (a table, column,
+  index, trigger or `CHECK`) or what an existing row means. A build opens a store
+  only at its own number and reads one at that number without bringing it up, so
+  one number names one declaration, and a build refuses a store of another one
+  instead of misreading it or failing on its first read. It is read before the
+  first write, so it governs a server that was spawned old. Under the launcher a
+  running session follows the pin through its stdio front, `mcp_front`, which
+  stops the old release before the new one opens the store. A process with no
+  front that went stale while it ran still holds its connection, and
+  `static_assets.SourceWatch` is what warns about that one.
+  `tests/test_store_schema_pin.py` pins the fresh store's
+  declaration to the version it belongs to: a change to that declaration without
+  a raise fails it, and the commit that makes the raise moves the pin there.
 - For Valkama changes run:
 
 ```powershell
@@ -113,6 +146,10 @@ How to run one browser spec, a probe spec kept outside the suite, or the whole
 suite, and which specs that runner leaves out, is in
 `.agents/rules/quality-gates.md`: read it before the first browser run.
 
+What a web test may select a set by, and what lets its check fail, is in
+`.agents/rules/web-tests.md`: read it before writing or changing a test under
+`web/tests`.
+
 `npm run build` is mandatory, and it is not the last step. The server serves the
 snapshot of `web/dist` it read when it started, so a browser check against a
 listener that predates the build inspects the bundle that build replaced, and a
@@ -152,10 +189,11 @@ and a source guard holds every decoding call to naming both.
 The top level is five owned directories, one entry point, and the configuration
 a repository root has to carry — `server/`, `web/`, `desktop/`, `windows/`,
 `tests/`, plus `docs/` and the `.agents/rules/` this file routes to.
-`README.md` states what each owns. A new file at the top level needs an argument
-for why it belongs to none of them; the usual answer is that it belongs to
-`windows/`, which holds what exists only because the host is Windows — the tray
-script, the icon, the generator that renders it, and the installer.
+`docs/guides/repository-layout.md` states what each owns. A new file at the
+top level needs an argument for why it belongs to none of them; the usual
+answer is that it belongs to `windows/`, which holds what exists only because
+the host is Windows — the tray script, the icon, the generator that renders it,
+and the installer.
 
 The server lives in `server/`, split into domain and surfaces. Domain modules
 answer questions about the store and know nothing about who asked: `store`,
@@ -238,16 +276,17 @@ one facade.
 Planning owns the work loop, including execution and exact session context.
 Memory and Settings supply its supporting capabilities, and Analytics is where a
 person reads the usage and quota of agent work: time, tokens, an API-price
-estimate, subscription quota. The module list is code:
-`server/platform/modules.py` declares the four modules, so adding one is a code
+estimate, subscription quota. Volumes is where a person reads how much work
+stands in each state, what it took and what is left. The module list is code:
+`server/platform/modules.py` declares the six modules, so adding one is a code
 change and nothing at runtime turns one on or off. `GET /api/modules` and the
 MCP tool `list_platform_modules` answer from that list without reading the
 store. Analytics holds the id of a retired flow-metrics module, and only the id
 came back: the flow metrics with their portfolio and compare read models, and the
 Improvements, Skills management and Sessions monitoring screens, must not return
-to the list. `tests/test_work_focus_migration.py` holds the new declaration to
-none of the old one's read models, events, actions or capability. Removing those
-screens does not remove session identity, work-item history, execution links or
+to the list. `tests/test_work_focus_migration.py` holds the new declarations, Analytics's,
+Agent decisions' and Volumes', to none of the old one's read models, events, actions or
+capability. Removing those screens does not remove session identity, work-item history, execution links or
 installed client skills and settings.
 
 The extension registry (services, connections, assignments, grants, actions,
@@ -321,6 +360,10 @@ force, and the gates hold each:
   committed so a clone serves the built UI with no build step; rebuild it
   whenever `web/src` changes and include it in the next incremental local
   commit after a coherent task-owned green boundary.
+- Test fixtures, comments and titles carry no value from a live store or the
+  owner's own records: no figure, name or id. A case found on live data is
+  rebuilt from made-up values, and its comment says the case, not where it was
+  found.
 - Commit subjects are Conventional Commits with the Angular type set: `build`,
   `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`,
   `test`, an optional lowercase scope, and `!` for a break. A merge commit's
@@ -351,8 +394,9 @@ replies.
   commits, PRs, release notes or artifacts. Raw evidence remains ignored.
 - This repository's documentation: `docs/` here. Every document under `docs/`
   declares its lifecycle in frontmatter — `status: draft | adopted | superseded`.
-  `tests/test_docs_lifecycle.py` refuses an orphan; `README.md` files describe a
-  directory rather than one piece of work and are exempt.
+  `tests/test_docs_lifecycle.py` refuses an orphan. `README.md` files describe a
+  directory, and the guides in `docs/guides/` the product as it is now, rather
+  than one piece of work, so both are exempt.
 - The deep halves of `AGENTS.md`: `.agents/rules/`, one topic per file, each
   reached by a pointer in this file. They are instructions, not lifecycle
   documents, so they carry no frontmatter; a topic file nothing points to is

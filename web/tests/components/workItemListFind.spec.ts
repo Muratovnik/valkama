@@ -15,7 +15,6 @@ import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
-import { fold, termOf } from '@/widgets/work-item-views/utils/listFind.ts'
 import { rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -297,7 +296,8 @@ describe('a term in the bar', () => {
     const marks = [...current(), ...others()]
     expect(count()).toBe(`1 of ${items.length}`)
     expect(marks).toHaveLength(items.length)
-    for (const mark of marks) expect(fold(mark.text).text).toBe(termOf('backlog'))
+    // Each mark is the state's word as its row writes it, whatever its case.
+    for (const mark of marks) expect(mark.text.toLowerCase()).toBe('backlog')
   })
 
   it('says so when nothing matches, and the steps go nowhere', async () => {
@@ -414,6 +414,8 @@ describe('a list that goes with its find open', () => {
     const wrapper = await list()
     await open(wrapper, 'login')
     expect(painted.size).toBeGreaterThan(0)
+    // The open find listens on the window for its keys, so the spy sees what it must take away.
+    expect(added.mock.calls.map(([type]) => type)).toContain('keydown')
     wrapper.unmount()
     await flushPromises()
     expect(painted.size).toBe(0)

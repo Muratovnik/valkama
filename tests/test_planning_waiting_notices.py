@@ -17,7 +17,17 @@ from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from server import mcp_surface, sessions, store
-from server.planning import api, calls, leases, model, person_events, service, sweep, waiting
+from server.planning import (
+    api,
+    calls,
+    leases,
+    model,
+    participation,
+    person_events,
+    service,
+    sweep,
+    waiting,
+)
 
 B = "b0000000-0000-4000-8000-00000000000b"
 E = "e0000000-0000-4000-8000-00000000000e"
@@ -94,12 +104,10 @@ class Harness(unittest.TestCase):
     def quiet(self, session: str) -> None:
         """The session last seen past its lease: nobody is behind its work any more."""
 
+        quiet = leases.quiet_period(participation.load(self.conn), None)
         self.conn.execute(
             "UPDATE sessions SET last_seen = ? WHERE id = ?",
-            (
-                (leases.utc_now() - leases.QUIET_PERIOD).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                session,
-            ),
+            ((leases.utc_now() - quiet).strftime("%Y-%m-%dT%H:%M:%SZ"), session),
         )
         self.conn.commit()
 
@@ -231,9 +239,30 @@ class LeftByAPersonTests(Harness):
         self.conn.commit()
         [row] = self.rows(self.goal)
         self.assertEqual(("valkama", "test-writer"), tuple(self.call(row["created_call"]))[:2])
+        self.says(self.goal)
         claimed = self.agent("claim_work_item", E, id=elsewhere)
         [left] = claimed["waiting"]
-        self.assertEqual((self.goal, []), (left["reference"], left["said"]))
+        self.assertEqual(
+            (self.goal, [SAID]), (left["reference"], [entry["text"] for entry in left["said"]])
+        )
+        self.assertEqual(
+            [(waiting.SPACE, E), (waiting.TREE, None)],
+            [(row["scope"], row["delivered_session"]) for row in self.rows(self.goal)],
+            "the space row went to the claim, and the tree row stays open",
+        )
+
+    def test_a_claim_with_nothing_left_for_its_session_has_no_waiting_entry(self) -> None:
+        """The session took the space row outside the goal; the tree row holds the same act."""
+        elsewhere = self.item("a task under no goal")
+        with calls.bind(calls.valkama(), "test-writer"):
+            self.assertTrue(waiting.leave(self.conn, self.goal_id(), waiting.SPACE))
+        self.conn.commit()
+        self.says(self.goal)
+        [left] = self.agent("claim_work_item", E, id=elsewhere)["waiting"]
+        self.assertEqual([SAID], [entry["text"] for entry in left["said"]])
+        under = self.agent("claim_work_item", E, id=self.t4)
+        self.assertNotIn("waiting", under, "the session already had every word of the tree row")
+        self.assertEqual(E, self.rows(self.goal)[1]["delivered_session"])
 
     def test_the_words_go_with_their_goal(self) -> None:
         empty = self.item("a goal with nothing under it", "goal")

@@ -25,6 +25,7 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 import { executionHistory } from '../browser/executionFixtures.ts'
 import { boardWorkflow } from '../fixtures/board.ts'
 import { workItemFixture } from '../fixtures/workItem.ts'
+import { textBefore } from '../support/documentOrder.ts'
 import { present } from '../support/present.ts'
 import { root } from '../support/threadCard.ts'
 
@@ -222,9 +223,7 @@ describe('recorded history', () => {
       props: { item: activityItem() },
       global: { plugins: plugins() },
     })
-    expect(activity.element.firstElementChild).toBe(
-      activity.findComponent(HistoryFilterBar).element,
-    )
+    expect(textBefore(activity.element, activity.findComponent(HistoryFilterBar).element)).toBe('')
     expect(activity.text()).not.toContain('Searches only')
     activity.unmount()
 
@@ -240,7 +239,11 @@ describe('recorded history', () => {
       },
       global: { plugins: plugins() },
     })
-    expect(executions.findAll('section.executions > p')).toHaveLength(0)
+    // Only the heading and the actions come before the records' filter.
+    expect(executions.get('h3').text()).toBe('Executions')
+    expect(textBefore(executions.element, executions.findComponent(HistoryFilterBar).element)).toBe(
+      executions.get('h3').text() + executions.get('.execution-actions').text(),
+    )
     expect(executions.text()).not.toContain('Searches only')
     expect(executions.text()).not.toContain('Every attempt at this item')
     executions.unmount()

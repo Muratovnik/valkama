@@ -24,6 +24,8 @@ test('the shell keeps its status region, and an open card does not cover the not
     }),
   )
   await expect(page.locator('.drawer .card-identity')).toBeVisible()
+  // Nothing has been said yet: the notice is shown present once something is, in
+  // production-board.spec.ts.
   await expect(page.locator('.notice')).toHaveCount(0)
   const region = page.locator('#app > [role="status"]')
   await expect(region).toHaveCount(1)

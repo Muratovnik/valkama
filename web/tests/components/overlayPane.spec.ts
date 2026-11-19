@@ -137,11 +137,9 @@ describe.each([
     expect(names).toEqual(['The card', 'Document: The plan'])
 
     // The stops either side of the surface send focus round to the far end, past both panes.
-    const stops =
-      dialogs[0]?.parentElement?.querySelectorAll<HTMLElement>(':scope > [tabindex="0"]')
-    stops?.[0]?.focus()
+    element('[data-focus-guard="start"]').focus()
     expect(document.activeElement).toBe(element('.pane-last'))
-    stops?.[1]?.focus()
+    element('[data-focus-guard="end"]').focus()
     expect(dialogs[0]?.contains(document.activeElement)).toBe(true)
     expect(element('.overlay-pane').contains(document.activeElement)).toBe(false)
   })

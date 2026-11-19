@@ -34,19 +34,18 @@ const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
     global: ['project', 'planning-space'],
     space: ['planning-space', 'work-item'],
   },
-  sessions: { global: ['execution', 'session'], space: [] },
   analytics: { global: ['work-item'], space: ['work-item'] },
-  improvements: { global: ['work-item', 'improvement-case'], space: [] },
-  skills: { global: ['skill'], space: ['skill'] },
+  decisions: { global: ['work-item'], space: ['work-item'] },
+  volumes: { global: ['work-item'], space: ['work-item'] },
   memory: { global: ['memory-resource'], space: ['memory-resource', 'work-item'] },
   settings: { global: ['work-item'], space: ['work-item'] },
 } as const
 
-test('valkama-modules has exactly four registrations with both operating levels', () => {
-  assert.equal(OFFLINE_MODULE_FALLBACK.length, 4)
+test('valkama-modules has exactly six registrations with both operating levels', () => {
+  assert.equal(OFFLINE_MODULE_FALLBACK.length, 6)
   assert.deepEqual(
     OFFLINE_MODULE_FALLBACK.map((module) => module.module_id),
-    ['planning', 'analytics', 'memory', 'settings'],
+    ['planning', 'analytics', 'decisions', 'volumes', 'memory', 'settings'],
   )
   for (const module of OFFLINE_MODULE_FALLBACK) {
     assert.equal(module.interface_version, MODULES_INTERFACE)
@@ -55,12 +54,7 @@ test('valkama-modules has exactly four registrations with both operating levels'
     assert.ok(module.semantics.global)
     assert.ok(module.semantics.space)
     assert.ok(module.states.global.supported.includes('loading'))
-    if (module.module_id === 'improvements') {
-      assert.deepEqual(module.states.space.supported, ['unavailable'])
-      assert.equal(module.states.space.unsupported_reason, 'improvements_project_scope_unsupported')
-    } else {
-      assert.ok(module.states.space.supported.includes('permission-denied'))
-    }
+    assert.ok(module.states.space.supported.includes('permission-denied'))
   }
 })
 
@@ -80,7 +74,7 @@ test('offline secondary contexts exactly mirror the authoritative scoped contrac
 
 test('valkama-modules payload validates and rejects additive fields', () => {
   const payload = modulesPayload()
-  assert.equal(validateModulesPayload(payload).modules.length, 4)
+  assert.equal(validateModulesPayload(payload).modules.length, 6)
   const additive = structuredClone(payload) as Record<string, unknown>
   additive.extra = true
   assert.throws(() => validateModulesPayload(additive), /unknown field/)
@@ -147,7 +141,7 @@ test('every registration is enabled and fixed, and anything else is refused', ()
   assert.equal(
     validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: moduleRegistrations() })
       .modules.length,
-    4,
+    6,
   )
   for (const [field, value, message] of [
     ['state', 'disabled', /state: expected enabled/],

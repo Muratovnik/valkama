@@ -21,7 +21,17 @@ import unittest
 
 from server import mcp_surface
 from server.hooks import notify
-from server.planning import api, calls, model, questions, requests
+from server.planning import (
+    api,
+    calls,
+    model,
+    participation,
+    questions,
+    read_model,
+    requests,
+    service,
+    waiting,
+)
 from tests.test_hooks_tree_notices import (
     A1,
     AS_A1,
@@ -255,6 +265,46 @@ class AgentAsksTests(Asked):
         )
 
 
+class ConsentTests(Asked):
+    """An agent's cancel of work another session holds waits for that session, which
+    Valkama's call asks: the answer is the cancelling agent's, as if it had asked."""
+
+    def test_the_agent_whose_cancel_waits_hears_the_answer_valkama_asked_for_it(self) -> None:
+        participation.write_set(
+            self.conn, read_model.space_identity(self.conn, self.space), participation.MINIMAL
+        )
+        self.conn.commit()
+        self.agent(
+            "apply_work_item_changes",
+            AS_A1,
+            id=self.t1,
+            summary={"done": "Nothing: T3 covers it.", "next": "Nothing."},
+            transition={"state": "cancelled", "reason": "T3 covers it"},
+        )
+        [asked] = self.conn.execute(
+            "SELECT request_id, revision FROM work_item_requests"
+            " WHERE purpose = 'consent' AND addressee = ?",
+            (E,),
+        ).fetchall()
+        self.hook(E)
+        self.assertIsNone(self.hook(A), "A asked nothing of the owner, and hears nothing yet")
+        self.agent(
+            "answer_work_item_request",
+            AS_E1,
+            id=asked["request_id"],
+            answers={"answer": "object", "reason": "T1 is nearly done"},
+            expected_revision=asked["revision"],
+        )
+        status, text = self.watch(A)
+        self.assertEqual(notify.WAKE_STATUS, status, "the answer wakes the agent that asked")
+        self.assertRegex(
+            text,
+            rf"\n- your question answered at \S+ by agent {E1} of session {E}:"
+            r" answer=object, reason=T1 is nearly done\n",
+        )
+        self.assertIsNone(self.hook(A), "once")
+
+
 class ListTests(Asked):
     def test_a_list_by_another_session_is_no_question_to_the_holder(self) -> None:
         self.comment(AS_B, self.t1, "Findings on T1, marker L-1", list=LIST)
@@ -330,6 +380,39 @@ class WordsLeftTests(Harness):
         self.assertEqual([self.g2], [left["reference"] for left in claimed["waiting"]])
         self.assertEqual((0, ""), self.watch(E, alive=1.0), "its answer was enough")
         self.assertIsNone(self.hook(E))
+
+    def test_an_orchestrator_hears_once_words_that_both_rows_of_a_goal_hold(self) -> None:
+        """The space row starts before the comment and the tree row at it: both hold SAID."""
+
+        with calls.bind(calls.valkama(), "test-writer"):
+            waiting.leave(
+                self.conn,
+                str(service.get_work_item(self.conn, self.g2)["work_item_id"]),
+                waiting.SPACE,
+            )
+        self.conn.commit()
+        self.person(COMMENT, id=self.g2, body=SAID)
+        self.agent("claim_work_item", AS_E1, id=self.t4)
+        self.heard_once()
+
+    def test_an_orchestrator_is_not_handed_again_what_its_subagent_already_had(self) -> None:
+        """The subagent takes the space row outside the tree, then the tree row under the goal."""
+
+        with calls.bind(calls.valkama(), "test-writer"):
+            waiting.leave(
+                self.conn,
+                str(service.get_work_item(self.conn, self.g2)["work_item_id"]),
+                waiting.SPACE,
+            )
+        self.conn.commit()
+        self.person(COMMENT, id=self.g2, body=SAID)
+        self.agent("claim_work_item", AS_E1, id=self.made("T outside the goal"))
+        first = self.hook(E)
+        assert first is not None, "the claim outside handed the space row to E"
+        self.assertEqual(1, first.count(SAID), first)
+        self.agent("claim_work_item", AS_E1, id=self.t4)
+        again = self.hook(E) or ""
+        self.assertNotIn(SAID, again, "the words were handed once already")
 
     def test_words_after_the_claim_are_the_trees_news(self) -> None:
         self.person(COMMENT, id=self.g2, body=SAID)

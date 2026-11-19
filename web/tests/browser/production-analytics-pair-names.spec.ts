@@ -12,16 +12,17 @@
  * small charts' names and the table's at 1200 in English are cut, so the run holds the cut case
  * and not only names that fit. The bars give a pair's name a line of its own, where these pairs
  * fit; the task pairs' spec holds their cut case, with titles longer than any line. A
- * cut name is said whole in its hint, and each name of the table, its row's control, is named by
- * its whole pair, as a cut one is too. Each run prints what it measured.
+ * cut name is said whole in its hint, or in the table, where it is all its hint says, laid whole
+ * over itself, and each name of the table, its row's control, is named by its whole pair, as a
+ * cut one is too. Each run prints what it measured.
  *
  * A control of a bar, a small chart or the legend is named by what pressing it does, which for a
- * pair names its model alone: «Show the tasks of claude-opus-5-5» named the high and the medium
- * row alike, and their descriptions said only their figures, so a screen reader told them apart
- * by nothing. Each is described by its whole pair, as the browser computes it, and no two of one
+ * pair names its model alone: «Details of claude-opus-5-5» names the high and the medium row
+ * alike, and descriptions that said only their figures left a screen reader nothing to tell them
+ * apart by. Each is described by its whole pair, as the browser computes it, and no two of one
  * chart are named and described alike; a single value's controls keep their name and description.
  *
- * A table's name has its hint only while it is cut. The press's hit area stands 12px past its
+ * A table's name is laid whole only while it is cut. The press's hit area stands 12px past its
  * words to each side and 8px over and under, and counted as a cut it raised the hint of every
  * name, «claude-sonnet-5-5 · high» whole at 1280 in Russian among them.
  *
@@ -31,7 +32,17 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { NOW, openReport, pageAt, record, serve } from './analyticsPage.ts'
+import {
+  LEGEND_NAMES,
+  LEGEND_SERIES,
+  NOW,
+  openReport,
+  pageAt,
+  record,
+  serve,
+} from './analyticsPage.ts'
+import { drawLined } from './drawnViews.ts'
+import { hint as hintUp } from './hintFramesPage.ts'
 import { pairNames } from './pairNames.ts'
 import { LONG_MODEL, ONE_LONG, SHORT_MODEL, WORLD } from './served/analyticsPairNames.ts'
 import { test } from './test.ts'
@@ -49,7 +60,7 @@ const SPLIT = pageAt({ by: 'model', across: 'effort' })
 const PLACES = {
   bars: '.spending-bars .ranked-label',
   multiples: '.spending-multiples .multiple-name',
-  legend: '.spending-days .chart-key-name',
+  legend: `.spending-days ${LEGEND_NAMES}`,
   table: '.spending-table tbody th .table-name',
 } as const
 
@@ -76,7 +87,6 @@ async function openPairs(
   await serve(page, WORLD)
   await openReport(page, size.width, SPLIT)
   await page.setViewportSize(size)
-  await expect(page.locator(PLACES.legend)).toHaveCount(PAIRS.length)
   await expect(page.locator(PLACES.bars).first()).toHaveText(PAIRS[0] ?? '')
   await page.evaluate(() => document.fonts.ready)
   await (held
@@ -89,16 +99,17 @@ async function openPairs(
 type Measured = Awaited<ReturnType<typeof pairNames>>
 
 /**
- * The hint the first cut name of a place shows under the pointer, with the pair it names; null
- * where no name of the place is cut.
+ * The hint the first cut name of a place shows under the pointer, with the pair it names: a box
+ * that says the cut words before what it adds, or the words laid whole over the cut ones where
+ * they are all it says; null where no name of the place is cut.
  */
 async function hintOfCut(page: Page, place: Locator, found: Measured) {
   const index = found.findIndex((one) => one.cut)
   if (index < 0) return null
   await page.mouse.move(0, 0)
-  await expect(page.getByRole('tooltip')).toBeHidden()
+  await expect(hintUp(page)).toHaveCount(0)
   await place.nth(index).hover()
-  const hint = page.getByRole('tooltip')
+  const hint = hintUp(page)
   await expect(hint).toBeVisible()
   return { pair: found[index]?.words ?? '', hint: (await hint.textContent()) ?? '' }
 }
@@ -158,17 +169,17 @@ for (const locale of ['en', 'ru'] as const)
         await expect(presses.nth(index)).toHaveAccessibleName(pair)
     })
 
-/** The controls of each chart that names its values, where a press narrows the view to one. */
+/** The controls of each chart that names its values, where a press opens one's side panel. */
 const CONTROLS = {
   bars: '.spending-bars .ranked-line:is(button, a)',
   multiples: '.spending-multiples .multiple-name:is(button, a)',
-  legend: '.spending-days .chart-key:is(button, a)',
+  legend: `.spending-days ${LEGEND_SERIES}:is(button, a)`,
 } as const
 
-/** What a control that narrows the view to a model is called, in each language. */
+/** What a control that opens a model's side panel is called, in each language. */
 const ACTION = {
-  en: (model: string) => `Show the tasks of ${model}`,
-  ru: (model: string) => `Показать задачи: ${model}`,
+  en: (model: string) => `Details of ${model}`,
+  ru: (model: string) => `Подробнее: ${model}`,
 }
 
 /** Each control a selector finds, by the name and description the browser computed for it. */
@@ -202,9 +213,10 @@ async function described(page: Page, selector: string) {
 const modelOf = (pair: string) => pair.split(' · ')[0] ?? pair
 
 /**
- * Whether the hint of the table's name at `index` shows under the pointer, on a page whose clock
- * is held (`openPairs`): a hint shows after the host's delay of half a second, so a name whose
- * hint has not come when the clock has moved a second past the pointer's arrival has none.
+ * Whether the table's name at `index` shows a hint under the pointer, its words laid whole over it
+ * or any other, on a page whose clock is held (`openPairs`): a hint shows after the manager's delay
+ * of half a second, so a name whose hint has not come when the clock has moved a second past the
+ * pointer's arrival has none.
  */
 async function hintShows(page: Page, index: number) {
   const name = page.locator(PLACES.table).nth(index)
@@ -212,13 +224,13 @@ async function hintShows(page: Page, index: number) {
   await name.scrollIntoViewIfNeeded()
   await page.mouse.move(0, 0)
   await page.clock.runFor(1000)
-  await expect(page.getByRole('tooltip')).toBeHidden()
+  await expect(hintUp(page)).toHaveCount(0)
   await name.hover()
   await page.clock.runFor(1000)
   // The hint is placed in steps that wait on each other and on frames of that clock, so it is
   // given a few more of them, a second in all, before it counts as not come.
   for (let step = 0; step < 10; step += 1) {
-    if (await page.getByRole('tooltip').isVisible()) return true
+    if (await hintUp(page).isVisible()) return true
     await page.clock.runFor(100)
   }
   return false
@@ -269,6 +281,8 @@ for (const locale of ['en', 'ru'] as const)
     }, info) => {
       await openPairs(page, locale, size, true)
       const found = await pairNames(page, PLACES.table)
+      // A row of the table for every pair.
+      expect(found, 'the names of the table').toHaveLength(PAIRS.length)
       const hints: boolean[] = []
       for (const index of found.keys()) hints.push(await hintShows(page, index))
       const seen = found.map((one, index) => ({
@@ -342,6 +356,7 @@ for (const locale of ['en', 'ru'] as const)
     await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
     await serve(page, WORLD)
     await openReport(page, 1280, pageAt({ by: 'model' }))
+    await drawLined(page.locator('.spending-bars'))
     const models = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
     await expect(page.locator(PLACES.bars)).toHaveText(models)
     for (const [where, selector] of Object.entries(CONTROLS)) {

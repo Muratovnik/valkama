@@ -11,8 +11,10 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { expectNoLineOverPlot } from './plotWords.ts'
 import { NONE, SWITCHING, TWO } from './served/analyticsChanges.ts'
 import { test } from './test.ts'
+
 /** Opens the overview at a window size and waits for its chart of days to stand. */
 async function openOverview(page: Page, width: number, height: number, address = pageAt()) {
   await page.setViewportSize({ width, height })
@@ -23,22 +25,23 @@ async function openOverview(page: Page, width: number, height: number, address =
   return chart
 }
 
-/** The overview chart's plot field and frame, any line over it, and whatever stands under it. */
+/** The overview's chart of days, by the hook `PeriodColumns` documents. */
+const OVERVIEW = '.overview-chart [data-chart="periods"]'
+
+/** The overview chart's plot field and frame, and the lines of its changes up the plot. */
 const plotParts = (page: Page) =>
-  page.evaluate(() => {
-    const chart = document.querySelector('.overview-chart')
+  page.evaluate((figure) => {
+    const chart = document.querySelector(figure)
     const box = (selector: string) => {
       const found = chart?.querySelector(selector)?.getBoundingClientRect()
       return found && { top: found.top, height: found.height, width: found.width }
     }
     return {
-      field: box('.period-field'),
-      readouts: chart?.querySelectorAll('.period-readout').length ?? -1,
-      frame: box('.period-frame'),
-      notes: chart?.querySelectorAll('.period-notes, .period-markers').length ?? -1,
-      marks: chart?.querySelectorAll('.period-mark').length ?? -1,
+      field: box('[data-region="field"]'),
+      frame: box('[data-region="frame"]'),
+      marks: chart?.querySelectorAll('[data-region="field"] [data-mark="change"]').length ?? -1,
     }
-  })
+  }, OVERVIEW)
 
 /**
  * Points at a day over its stack, where no segment of it stands, and waits for its hint, once the
@@ -67,10 +70,9 @@ test('two account changes leave the overview plot as tall as none at 1440×900, 
 
   expect(none.marks).toBe(0)
   expect(two.marks).toBe(2)
-  expect(two.notes).toBe(0)
   expect(two.field?.height).toBe(none.field?.height)
   expect(two.frame?.height).toBe(none.frame?.height)
-  expect(two.readouts).toBe(0)
+  await expectNoLineOverPlot(page, OVERVIEW)
 
   // Each day says its own change in its hint, Wednesday and Tuesday.
   const columns = chart.locator('.period-column')
@@ -80,7 +82,9 @@ test('two account changes leave the overview plot as tall as none at 1440×900, 
   await expect(await pointAt(page, columns.nth(1))).toContainText(
     'Account change: f0f0f0f0 → f0f0f0f0, 2a2a2a2a',
   )
-  await expect(chart.locator('.period-slot').nth(1).locator('.period-mark')).toHaveCount(1)
+  await expect(
+    chart.locator('[data-tooltip-area]').nth(1).locator('[data-mark="change"]'),
+  ).toHaveCount(1)
 
   // The table keeps saying each change in its day's row.
   await chart.getByRole('radio', { name: 'Table' }).click()
@@ -96,8 +100,8 @@ test('twelve account changes are twelve lines up the plot and no line under it',
   const analytics = await openReport(page, 1440, pageAt({ by: 'work_item', period: 'weeks4' }))
   const days = analytics.locator('.spending-days')
   await days.getByRole('radio', { name: 'Chart' }).click()
-  await expect(days.locator('.period-mark')).toHaveCount(12)
-  await expect(days.locator('.period-notes, .period-markers')).toHaveCount(0)
+  await expect(days.locator('[data-region="field"] [data-mark="change"]')).toHaveCount(12)
+  await expectNoLineOverPlot(page, '.spending-days [data-chart="periods"]')
   // Each day here is a full stack, so a day is read by the keyboard: the one before the latest,
   // stood on with an arrow, says its change in its hint.
   await days.locator('.period-column[tabindex="0"]').focus()

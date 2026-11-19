@@ -76,7 +76,7 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 ### Removed tools
 
 The catalogue holds one tool per capability. A write to one item's fields,
-steps, refs, links, discussion, summary or state is a group of
+steps, refs, commits, links, discussion, summary or state is a group of
 `apply_work_item_changes` (see
 [Several changes in one call](#several-changes-in-one-call)); the tools that
 made one such write each are no longer published, and the HTTP writes behind
@@ -113,10 +113,10 @@ changed. `url` is described in [The address of a work item](#the-address-of-a-wo
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim`, `links` or `group`, and `waits_for_owner` when a group waits for the owner ([A group of findings](#a-group-of-findings)); `started` and `warnings` from its claim when there are any; `project_roots` when it took `claim` |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)); `project_roots` unless it released |
 | `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`, `by_previous_holder`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim` |
+| `apply_work_item_changes` | `applied`, what each group changed, with `applied.triage_seen` (`{seen_at}` or `{cleared: true}`) when the batch marked an item, `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items; `project_roots` when it took `claim`; `unreported_commits`, `unreported_total` and `unreported_unread` when a close found any (see [The net at a close](#the-net-at-a-close)) |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 `project_roots` is the root of each project the claimed task changes, or of its
@@ -200,7 +200,14 @@ in every space unless `space` is given. With `space`, it keeps that space's
 items that name it, and other spaces' items that name it when it is one of the
 space's projects. A goal or stage stores no projects and names those of every
 task under it, at any depth, so it is kept when one of them names the project;
-a project no item names lists nothing.
+a project no item names lists nothing. They take `triage_stack` as well,
+`unseen` or `seen`: the list keeps the items that wait for a triage review (see
+`triage_stack` in [The work model](#the-work-model)) that no review marked, or
+those one did, oldest entry first. An item entered at its last change of state,
+or at its creation when its history records none; a tie goes to the smaller space
+key, then the smaller number. Any other value is refused:
+`triage_stack must be one of seen, unseen`. The other filters narrow it as they
+narrow each other.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -286,7 +293,9 @@ instead, is in
 
 A goal or a stage is never claimed or worked itself: what stands under it is. A
 `kind` sent as `goal` with a parent is read as `stage`; `stage` without one is
-refused. An edit changes a kind only among `task`, `bug` and `improvement`.
+refused. An edit changes a kind only among `task`, `bug` and `improvement`; a
+task and a goal or stage become each other by
+[converting](#converting-a-task-into-a-goal-or-stage).
 `list_work_items` with `kind=goal` lists the goals, with `kind=stage` the stages.
 
 | Category | The work in it |
@@ -297,7 +306,7 @@ refused. An edit changes a kind only among `task`, `bug` and `improvement`.
 | `active` | being worked: it always has a holder |
 | `review` | done and waiting for the owner's answer |
 | `completed` | done |
-| `blocked` | waiting on something else |
+| `blocked` | stopped by hand, with a stated reason, for a cause outside Valkama; work that waits on another item is linked `blocks` and stays where it is |
 | `cancelled` | not to be done |
 
 The whole record of an item -- the answer of `GET /api/planning/work-item`, an
@@ -310,11 +319,13 @@ model; the card's `state` has no `is_terminal`:
 | `state` | `key`, `name`, `category` and `is_terminal` of its workflow state; `null` exactly for an accepted open goal or stage |
 | `open` | whether its work is still open: false in a `completed` or `cancelled` state. A reader decides openness by it, since an accepted open goal or stage has no `state` to read `is_terminal` from |
 | `container_state` | for an accepted open goal or stage, `not_started`, `in_progress` or `awaiting_confirmation`; `null` for every other item, a goal or stage in `triage`, `deferred`, `completed` or `cancelled` included, whose `state` says where it stands |
-| `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule` or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
+| `acceptance` | `{basis, at}`: why and when the work was accepted, the basis being `owner`, `assignment`, `inherited`, `label_rule`, `agent` (an agent's own decision where the owner's participation setting leaves it to the agent) or `migrated`; `null` while it is not, in `triage`, `deferred`, or cancelled before it was |
+| `triage_stack` | `{seen_at, seen_by}`, only on an item that waits for a triage review: in a `triage` state, under no goal or stage or under goals and stages all accepted and open, and with no question to the owner open on it. When a review marked it seen and who; both `null` while no review did. Absent from every other item |
 | `started_at` | when work on it began: its first claim or its first entry into `active`, `review` or `completed`. A goal's or stage's is the earliest of the work under it |
 | `waits_for` | the open items that block it |
+| `cancelled_blockers` | the cancelled items still linked `blocks` to it, by reference, which `waits_for` no longer names: the work it waited for will not be done. Only on open work and only when there is one; it lasts while the link stands |
 | `workable` | whether its space's take-next queue may give it now: `withheld` is empty. It is the rule `claim_ready_work_item` takes work by |
-| `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open), `outside_space` (a read of another space holds it, for a project of that space it names: that space's queue never gives it). Empty exactly when `workable` |
+| `withheld` | why the queue does not give it, as codes in this order: `goal_or_stage` (a goal or stage, which has no other code), `not_ready` (not in a `ready` state), `held` (a claim, or a claimed step), `waits` (an unfinished blocker), `question` (an open question to the owner), `no_start` (in a `ready` state its workflow leads nowhere into work from), `ancestor_triage` and `ancestor_deferred` (a goal or stage over it stands there), `ancestor_cancelling` (a cancel of a goal or stage over it waits for the owner or for the sessions it asked), `ancestor_waits` (a goal or stage over it has an unfinished blocker), `ancestor_closed` (a goal or stage over it is closed while it is open), `outside_space` (a read of another space holds it, for a project of that space it names: that space's queue never gives it). Empty exactly when `workable` |
 | `projects` | the projects it changes, by `project_id`: each with the registry's `display_name` (`null` while the registry does not record it) and its `source`, `named`, `commits` or `migrated` (see [The projects an item changes](#the-projects-an-item-changes)). A goal's or stage's are those of every task under it |
 
 Four other answers carry only some of these fields:
@@ -322,7 +333,8 @@ Four other answers carry only some of these fields:
 - an MCP list row (`list_work_items`, unless `verbose`) carries `state`, as its
   key (`null` for an accepted open goal or stage), `container_state` where the
   item has one, `queue_order` where the queue gives it and `withheld` where it
-  does not; none of `open`, `acceptance`, `started_at`, `waits_for` or `workable`;
+  does not; none of `open`, `acceptance`, `triage_stack`, `started_at`, `waits_for`
+  or `workable`;
 - an HTTP chain member of `GET /api/planning/work-item/chain` carries `state`,
   `open`, `container_state` and `workable`; none of `acceptance`, `started_at` or
   `waits_for`;
@@ -354,7 +366,8 @@ gives the basis in one order, whoever makes it:
 
 A basis is given only to an item that has none: one in `triage` or `deferred`,
 or cancelled before it was accepted, when it moves to `ready`, `active`,
-`review`, `blocked` or `completed`, is created there, or is claimed. Accepted work
+`review`, `blocked` or `completed`, is created in `ready` or `active`, or is
+claimed. Accepted work
 keeps its basis through a close and a reopening; a move to `triage` takes it away.
 An agent's `create_work_item` with no `state` and no basis to give therefore
 files the item in `triage` rather than refusing it. `migrated` is the basis the
@@ -371,10 +384,292 @@ and open, and otherwise the basis the accepting write gave, `owner` from the
 browser and the `acceptance` an agent sent. A stage accepted under a goal that is
 not accepted thus gives its work the stage's own basis, as a claim of that work
 would, and leaves the goal as it is. A goal or stage in `deferred` stops the
-descent, and nothing under it changes.
+descent, and nothing under it changes. An agent's write leaves out an item on
+which the owner's question whether to do it stands: it stays in `triage` for the
+answer, named in `warnings` as `MAIN-12 stays in triage: the owner has not decided
+whether it is to be done (question <id>)`, and a goal or stage left so stops the
+descent as a deferred one does. A person's write takes it along, and that ends
+the question as withdrawn.
 
 A record carries no `container` and no `ready` field: `kind` says which items
 hold others, and `workable` which may be taken.
+
+#### Writes that wait for the owner
+
+The owner decides which of an agent's writes are the agent's to make and which
+are the owner's, by a participation setting that only the server reads; no tool
+argument or answer says what it is, and the tool descriptions and the skill read
+the same at any setting. A point of the setting is `agent` or `human`:
+
+| Point | The agent's write it decides |
+| --- | --- |
+| `proposed_goal` | `create_work_item` of a goal with no parent, which then lies in `triage`, and a move of such a goal out of `triage` into accepted work without `acceptance`, which accepts it on `agent` |
+| `task_in_goal` | a task filed under goals and stages all accepted and open, or moved there by `parent` or out of `triage` into them |
+| `cancel_outside` | a cancel of an item that its own work did not file |
+| `cancel_shared` | a cancel of work other live sessions do |
+| `condition` | a removal or rewording of a step of a goal or stage |
+| `goal_close` | the completion of a goal, which confirms it: its work all closed, or nothing under it |
+| `goal_defer` | `defer` of an accepted goal or stage |
+| `decision` | a request of kind `decision`: at `agent` it comes back `answered` by its recommendations |
+| `finding` | the review of work in `triage`; a finding an agent files lies in `triage` at any setting |
+
+Two switches stand beside them, `queue` (`on`, or `off` where the owner hands out
+work by hand, see [The order of work](#the-order-of-work)) and `triage_reminder`,
+and four numbers: `triage_age_days` (10, from 1 to 365), `triage_count` (100,
+from 1 to 10,000), `lease_quiet_days` (3, from 1 to 60, the
+[lease term](#claims-are-leases)) and `recent_close_minutes` (30, from 1 to
+1,440). The sets `minimal`, `default`, `maximal` and `manual` name a value for
+every point and switch; a store starts at `default`, which is `human` at
+`proposed_goal`, `decision`, `cancel_shared`, `condition` and `finding` and
+`agent` at the rest. A space overrides single values and inherits the others,
+later changes of the common ones included; a rule of a label says whether a task
+that carries it is ready to be accepted, and the space's rule wins over the
+common one. `GET /api/planning/participation`, with `space` or without it for the
+common setting, reads the scope: its `set` (`custom` once a value differs from
+every set), the `sets`, each key's `value`, whether it is the scope's `own` and
+what it would have `inherited`, and the label rules. `POST /api/planning/participation`
+writes one `key` and `value` (`null` inherits again), a whole `set`, or a `label`
+with `ready` and `description`, and answers with the read; an agent's call is
+refused with `owner_only` (403, `the owner changes participation in Valkama`).
+
+Where the point says `agent`, the write is made at once, and an agent's decision
+is marked on the event that records it: `GET /api/planning/decisions` (`space`,
+`project`, repeated `point`, `from`, `to`, `limit` up to 200, `offset`) lists
+the marks newest first, and the full record's event carries its `point`. Where
+it says `human`, nothing of the write is written. The item stays as it was, the
+owner is asked a question on it, and the answer of the write carries:
+
+```json
+"waits_for_owner": {"action": "5f0c2a…", "point": "cancel_outside",
+                    "question": "9a41…", "what": "cancel MAIN-12"}
+```
+
+`what` is the line the summary of decisions would carry. The same write sent
+again while it waits answers the same and writes nothing; another write of the
+point on the item is refused with `[participation]`. The top-level session that
+asked follows the item, unless it holds it. A goal waits in `triage` without a
+basis, and an agent's claim of it, or of a task with no basis under it, and its
+move anywhere but a cancelled state meet `acceptance_question` until the answer.
+
+The question has a `purpose` and one required choice `answer`, the option the
+agent asked for recommended: `goal` (`do`, `later` with the text `until`, `drop`
+with the text `cancels`, a cancel list's token), `task` (`do`, `later` with
+`until`, `out`, `drop`), `cancel` (`cancel` with `cancels`, `keep`), `condition`
+(`allow`, `keep`) and, for `goal_close`, the `confirm` of the goal's period of
+waiting, or the agent's own for a goal with nothing under it (`confirm`, `leave`,
+labelled `Leave it open`: no period of waiting stands behind it, so the goal stays
+open and no session is handed it).
+Only a person answers it, in Valkama (`owner_only`), and its answer is never
+declined or changed (`[purpose]`); only the session that asked withdraws it
+(`not_asker`). Read whole, it carries the `action`:
+
+```json
+"action": {"id": "5f0c2a…", "point": "cancel_shared", "asked_by": "claude (session 3c9e…)",
+           "asked_at": "2026-11-16T15:12:00Z", "reason": "superseded by MAIN-40",
+           "proposed": {}, "outcome": null,
+           "cancel_list": {"cancels": [], "dependents": [], "list_token": "1f2e…"},
+           "consent": [{"session": "codex (session 71aa…)", "answer": "object",
+                        "reason": "…", "at": "2026-11-16T15:30:00Z"}]}
+```
+
+`asked_by` is the holder label of the session whose call asked, `Valkama` for a
+question Valkama asked itself (a put-off goal that came back, which nobody
+withdraws), and the call's `author` when it proved no session. `proposed` holds
+the `until` of a put-off, the steps `removed` (`id`, `text`) and `rewritten`
+(`id`, `from`, `to`) of a step change, or the `summary` of a completion.
+`cancel_list`, read as it stands, comes with `goal`, `cancel` and `triage`, and
+`consent` with `cancel_shared`. The compact form carries `purpose` and `action.point`.
+
+The owner's answer makes the write, if it still applies, as the owner's: the
+basis it gives is `owner`, and the `accepted`, `opened`, `transitioned` and
+`checklist_replaced` events that record it end with `as asked by <asker>`, after
+`: ` behind a state key or a count alone and after `; ` behind a reason. The
+action ends `carried_out`, or `declined` for an answer that leaves the item as it
+was. One that no longer applies (the item moved, a step it changes was changed,
+the goal is no longer in `triage`) ends `dropped` and leaves an `action_dropped`
+event, `<point>: <why>`, the answer standing as given; so does one whose item
+closes, merges or a person claims or moves meanwhile. A `cancel` or `drop` over
+a cancel list that grew or changed is refused with `cancel_list` and the new list.
+Expiring the question takes the write back (`withdrawn`).
+
+A cancel of work other live sessions do asks each of them, by a call of
+Valkama's for the agent, a request of purpose `consent`, answered by that
+session once with `{"answer": "agree"}`, `{"answer": "object", "reason": "…"}`,
+or `{"answer": "moved_out"}` once `move_out` took its work out of what the cancel
+closes (`[consent]` otherwise). Where `cancel_shared` says `human` the owner is
+asked beside them, and the owner's answer decides. Otherwise, and for a cancel
+whose `transition.following` names an answered question of the owner on the
+item or above it, the write answers:
+
+```json
+"waits_for_sessions": {"action": "5f0c2a…", "point": "cancel_shared",
+                       "sessions": ["claude (session 3c9e…)", "codex (session 71aa…)"],
+                       "until": "2026-11-17T15:12:00Z"}
+```
+
+and the cancel is made as Valkama's write once each session agreed, moved its
+work out or ended, or passes to the owner on an objection or at `until`, a day
+after it was asked. A `following` that names no such question, or comes with any
+move but a cancel, is refused with `[participation]`.
+
+A change of a goal's or stage's steps that removes or rewrites one needs
+`checklist_reason` (up to 500 characters; `[checklist]` without it), in the
+`apply_work_item_changes` call and as `reason` of
+`POST /api/planning/work-item/checklist`. A step sent by its `id` with
+`clarifies: true` and a new text only clarifies its wording: it is written at
+once at any setting and marked `condition`. A call whose `transition` closes the
+item while another of its writes waits is refused whole with
+`close_with_waiting` (409), before any guard of the move, and `force` does not
+carry it.
+
+| Code | Status | When |
+| --- | --- | --- |
+| `[participation]` | 400 | another write of the point waits on the item: `[participation] MAIN-12 already waits for the owner on cancel_outside: withdraw that question first`; a `following` that names no answered question of the owner |
+| `close_with_waiting` | 409 | `the checklist change in this call waits for the owner, so the item cannot close in it: close it after the answer, or send the change in another call` |
+| `[checklist]` | 400 | `removing or rewriting a step of a goal or stage needs checklist_reason`; `clarifies` on a step not named by its `id` with a new text |
+| `[consent]` | 400 | a consent answer that is not `agree`, `object` with a `reason` or `moved_out`, or `moved_out` while the session's work is still in the list |
+| `owner_only` | 403 | an agent's answer to a question with a purpose but `consent`, or to one a waiting write carries; an agent's write of the setting |
+| `not_asker` | 403 | a withdrawal by another session than the one that asked, or of a question Valkama asked |
+
+#### The triage stack
+
+The items that carry `triage_stack` wait for a triage review: in a `triage`
+state, under no goal or stage or under goals and stages all accepted and open,
+with no question to the owner open on them. A review lists them with the
+`triage_stack` filter of the lists, oldest entry first, decides them by a merge,
+a [group](#a-group-of-findings) or a move, and marks each one it leaves as it is
+with the batch's group `triage_seen`, in `apply_work_item_changes` and
+`POST /api/planning/work-item/apply`:
+
+- `true` marks the item seen by the call, and marking it again moves the mark to
+  the later call; `false` takes the mark away. The answer carries
+  `applied.triage_seen`, `{"seen_at": "…"}` or `{"cleared": true}`. The item
+  records a `triage_seen` event with the detail `seen` or `cleared`, which is told
+  to nobody, and its revision does not move.
+- The group comes after `summary`, so a comment sent in the same call is written
+  first and the mark stays. Beside `transition`, `defer` or `move_out` it is
+  refused with `invalid_request` (400): `[triage_seen] a mark stays only on an
+  item that stays in triage: send it without transition, defer or move_out`.
+- An item that does not wait in the stack is refused, for `true` and `false`
+  alike, with `workflow_guard` (409): `[triage_seen] MAIN-12 is not waiting for a
+  triage review: <why>`, the why being `it is not in triage`, `it waits for the
+  owner's answer` or `it lies under MAIN-3`.
+
+The store takes the mark away, with no event of its own, when the item's state or
+parent changes, when it gains a comment (a reply, a summary and the note a merge
+into it writes among them) or a question to the owner, and when a merge moves a
+thread or a pending question to the owner onto it. A change of state takes it
+away, so only an item in `triage` holds one. A request asked of a session and a
+list under a comment are no questions to the owner and leave it.
+
+A row of the MCP `list_work_items` carries no `triage_stack`, as the list above
+says: a review lists the stack with the filter, which already says whether the
+rows it gives are marked, and reads when and by whom on `get_work_item`, a
+`verbose` list or the HTTP list.
+
+#### A group of findings
+
+A review of work in `triage` proposes tasks that belong together as one new goal:
+`create_work_item` of a goal, and `POST /api/planning/work-items`, take the step
+`group` after `links`:
+
+```json
+{"kind": "goal", "title": "…", "checklist": ["…"],
+ "group": {"items": ["MAIN-41", "MAIN-42"], "answer": "later", "until": "2026-12-01", "why": "…"}}
+```
+
+`items` names 1 to 20 distinct tasks that wait in the triage stack: in `triage`,
+under no goal or stage, in the goal's space, with no question of the owner open
+on them. A task alone is one of priority `high` or `urgent`, its priority read
+when the group is written. `answer` is `do`, `later` or `drop`; `until`, a day or
+an item's reference as `defer` takes it, comes with `later` and only with it; `why` is one
+line of up to 386 characters, the longest that `agent: later: <why>` holds whole
+as a defer reason. A longer one is refused and no reason is cut. The goal names
+its conditions in `checklist` and
+no `parent`, `acceptance`, `claim` or `state`. The goal is created in `triage`,
+the tasks move under it at once, and the answer carries
+`applied.group = {items, answer, carried_out}`.
+
+Who decides reads two points, `finding` and `proposed_goal`, and the owner does
+if either says `human`; for `drop` also where `cancel_outside` says `human` and
+a task was filed outside the agent's own work. Otherwise the same call carries
+the answer out (`carried_out: true`): `do` accepts the goal on `agent` with its
+tasks `inherited`; `later` puts it off until `until`, its reason
+`agent: later: <why>`; `drop` cancels each task, its reason
+`Not to be done: <why>`, then the goal. One decision is marked, at `finding`, on
+the goal's event that records the answer: `group «<title>»: do 3 items`, or
+`do 1 item` for a group of one. A person's group is the owner's write, made at
+once.
+
+Where the owner decides, nothing is carried out (`carried_out: false`): the goal
+stays in `triage` with its tasks under it, `waits_for_owner` names the point
+`finding`, and the question of purpose `triage`, `Group of <n> items: «<title>»`
+(`Group of 1 item` for one),
+offers `answer` (`do`, `later`, `drop`, the agent's recommended with its
+`why`), `items` (a `multi_choice`, one option per task with its lowercase
+reference as id and `MAIN-41 · <title>` as label, all recommended), `until` and
+`cancels`. Its `action.proposed` holds the goal's `conditions` when asked, the
+`items` (`reference`, `title`), `answer`, `until` with `later`, and `why`. While
+it waits, no agent claims or moves a task of the group (`acceptance_question`),
+and no rule of a label accepts one.
+
+The owner's answer is carried out as theirs in the write that gives it, the tasks
+it keeps being the ones `items` ticks. First every open child of the goal lying
+in `triage` that is not ticked, one put under the goal after the question among
+them, leaves it by `move_out` with the reason `owner: not in this group`: it
+goes back to the triage stack, unmarked, entering it with the answer. A ticked
+task that no longer lies under the goal in `triage` (moved out, accepted,
+closed or merged meanwhile) takes no part and stays as it is. Then `do` accepts
+the goal on `owner`, and the ticked tasks under it in `triage` take `inherited`;
+`later` puts the goal off until the answer's `until`, or the agent's when it
+names none, with the reason `owner: later`, the tasks lying under it; `drop`
+cancels each ticked task under the goal in `triage` with the reason `owner: not
+to be done`, then the goal, whose summary says `Not needed: the owner answered
+not to do it` unless it said what was done (the note, when given, is the `why`
+of these summaries). Open work not in `triage` under the goal, such as a task a
+person accepted meanwhile, was not in the question, and the goal's cancel would
+close it: `drop` is then refused with `cancel_list` (409), the list and its
+token; answered again with that token in `cancels`, it cancels the goal by the
+list, that work with it.
+A `do` or `later` with no ticked task left under the goal in `triage` no longer
+applies: the action ends `dropped` (`finding: no item ticked lies under the goal
+in triage`), the goal staying in `triage` as a card of the stack; so does any
+answer once the goal left `triage` or was accepted, with nothing done. The
+action ends `carried_out` when the owner's answer is the agent's, `declined`
+otherwise. The answer's record says what was done:
+
+```json
+"carried_out": {"answer": "do", "moved_out": ["MAIN-42"], "skipped": ["MAIN-43"]}
+```
+
+The session that asked may withdraw the question instead, which dissolves the
+group as its own write: the action ends `withdrawn`, every child of the goal
+lying in `triage` leaves it by `move_out` with the reason `group withdrawn` and
+goes back to the triage stack, and the goal, with nothing open left under it, is
+cancelled with the reason `group withdrawn`, its summary saying `Not needed: the
+group was withdrawn` unless it said what was done. Work a person accepted under
+the goal meanwhile keeps the goal open in `triage`, since its cancel would close
+that work too.
+
+A person who decides on the goal before answering decides the group by that
+write. Moving the goal into accepted work accepts it on `owner`, and the tasks
+under it in `triage` take `inherited`; putting it off leaves them under it.
+Either ends the question `withdrawn` and the action `dropped`
+(`finding: taken by the owner`). Cancelling the goal goes by its cancel list,
+the tasks under it included, and the close ends the question as `item_cancelled`
+and the action `dropped`.
+
+| Code | Status | When |
+| --- | --- | --- |
+| `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 1 to 20 items: <what is wrong>` |
+| `[group]` | 409 | a task alone below `high`: `[group] a group of one takes a task of priority high or urgent: MAIN-41 is medium` |
+| `[group]` | 409 | a task that does not wait in the stack: `[group] MAIN-41 is not waiting for a triage review: <why>`, the why being `it is in another space`, `it is a goal or stage`, `it is not in triage`, `it lies under MAIN-3` or `it waits for the owner's answer` |
+| `[triage]` | 400 | the owner's answer: `do` or `later` with no task ticked, `[triage] tick what is to be done, or answer drop`; `later` with no `until` of its own or the agent's, `[triage] later needs until: a date (2026-12-01) or an item reference` |
+| `cancel_list` | 409 | `drop` while open work not in `triage` stands under the goal, and `cancels` is missing or names another list: the list and its `list_token`, as a cancel's first call hands them over |
+
+Either `[group]` refusal creates nothing and spends no number; a `[triage]` or
+`cancel_list` refusal of the owner's answer writes nothing and leaves the
+question open.
 
 #### Retired words
 
@@ -394,7 +689,7 @@ replaces the word; none is read as its replacement.
 ### The projects an item changes
 
 A task names the projects it changes, at most 20 and each once, by their ids in
-the [project registry](../README.md#project-registry); the space it lies in does
+the [project registry](guides/configuration.md#project-registry); the space it lies in does
 not change with them. `create_work_item` takes them as `projects`, and the
 `update` group of `apply_work_item_changes` (and `POST
 /api/planning/work-item/update`) replaces the whole set with `projects`, each
@@ -517,6 +812,19 @@ written, the release of lapsed leases included:
 A task of any space is claimed by number with `claim_work_item`, whatever the
 queue a session reads.
 
+Where the owner hands out work by hand, the space's setting `queue` is `off`, and
+`claim_ready_work_item` and its HTTP write are refused with `queue_off` (409):
+`the owner hands out work in MAIN by hand: take the item they named with
+claim_work_item`, the space being the one whose queue the call reads. The refusal
+writes nothing, the release of lapsed leases included. Nothing under a goal or
+stage whose cancel waits for the owner or for the sessions it asked is given
+(`ancestor_cancelling`). An agent's claim of an item the owner is asked whether
+to do (a question of purpose `goal`, `task` or `triage`) or to take up again
+(`return`), or of an item with no basis under a goal or stage so asked, is
+refused with `acceptance_question`, as is its move of that item anywhere but a
+cancelled state, and `force` does not carry it. A person's claim or move takes
+the item and ends the question `withdrawn` and the write waiting on it `dropped`.
+
 Every read of many items stands on one total order: the state's place in its
 workflow, the key of work, the space's key, the number. `list_work_items` and its
 pages, `GET /api/planning/work-items`, the board's `GET /api/planning`, the
@@ -525,7 +833,8 @@ take it, given and not given rows alike; a goal or stage takes the parts of the
 key from its own priority, the earliest start under it and its parent. Without a
 space the rows of different spaces interleave, a tie going to the smaller space
 key. The key reads stored fields and the tree of items, never the clock or a
-lease.
+lease. A list read with `triage_stack` takes the stack's order instead, which is
+total as well.
 
 A row of a list read -- `list_work_items`, its pages, `work_items` of
 `GET /api/planning` -- and a chain member carry `queue_order`: the row's 1-based
@@ -602,9 +911,9 @@ whole record and took `full`, is in
 | `events` | integer, 1 to 1000 | that many of the newest history events |
 | `section` | a section key, or a list of them | those sections of the description, with their text |
 
-The parts are `card`, `comments`, `events`, `links`, `refs`, `questions`,
-`mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections` and
-`participants`. Without `parts` and without a mode the read is `["card"]`. A
+The parts are `card`, `comments`, `events`, `links`, `refs`, `commits`,
+`questions`, `mentions`, `sessions`, `images`, `subscribers`, `claim`, `sections`,
+`participants` and `confirmation`. Without `parts` and without a mode the read is `["card"]`. A
 mode without `parts` reads only the part it cuts: `unresolved`, `thread` and
 `comments_after` the comments, `events` the events, `section` the sections, and
 several modes read each of their parts. Each of these is refused with
@@ -612,7 +921,7 @@ several modes read each of their parts. Each of these is refused with
 
 | Call | Refusal |
 | --- | --- |
-| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, questions, mentions, sessions, images, subscribers, claim, sections, participants` |
+| a part no item has | `unknown part 'history'; parts are card, comments, events, links, refs, commits, questions, mentions, sessions, images, subscribers, claim, sections, participants, confirmation` |
 | a mode beside a `parts` without its part | `thread reads the comments part: add comments to parts or leave parts out`, and the same for `unresolved` and `comments_after`; `events reads the events part: …`; `section reads the sections part: …` |
 | `events` outside its bounds | `events must be between 1 and 1000` |
 | `thread` with `comments_after` or `unresolved` | `thread and comments_after exclude each other`, or `thread and unresolved …` |
@@ -632,8 +941,10 @@ at, and beside them the fields of each part named:
 | `mentions` | `mentions`, the newest 50, oldest first, and `mentions_total`; see [Mentions](#mentions) |
 | `sections` | `sections`, as [Sections of the description](#sections-of-the-description) says |
 | `claim` | `claim`, the lease as [Claims are leases](#claims-are-leases) shows it, `null` while nobody holds the item |
+| `commits` | `commits`, as [The commits part](#the-commits-part) says |
 | `links`, `refs`, `questions`, `sessions`, `images`, `subscribers` | the field of that name, as described below and in [Reading a question](#reading-a-question) |
 | `participants` | on a goal or a stage, the field of that name, as [Participants](#participants) shows it; a task has no such part, and naming it is refused with `unknown part 'participants'; a task's parts are card, comments, …` |
+| `confirmation` | on a goal or stage awaiting confirmation, the field of that name, as [Completing a goal or stage](#completing-a-goal-or-stage) shows it; on any other item the answer has no such field |
 
 #### The card
 
@@ -661,7 +972,8 @@ The card leaves out what its reference and parts stand for: `work_item_id`,
 `comment_count`, the `state_id` and `is_terminal` of the state, the lease (the
 `claim` part) and every list of the history. A write's answer keeps, beside the
 card, what the write itself reports, such as `applied`, `started`, `requeued`,
-`released`, `merged`, `similar`, `warnings`, `overridden` and `from_person`.
+`released`, `merged`, `similar`, `warnings`, `overridden`, `from_person` and the
+`unreported_*` fields of a close.
 
 `parts` names each other part with what it holds, and leaves out a part with
 nothing in it:
@@ -673,6 +985,7 @@ nothing in it:
 | `questions` | `count` and `open`, the questions to the owner, and `addressed_open`, the open requests asked of agent sessions; it stands while any of them is above 0 |
 | `sections` | `count`, and only for a description longer than 2,000 characters; a shorter one is cheaper to read whole |
 | `claim` | `count`, 1 while somebody holds the item |
+| `commits` | `count`, the commits attached now |
 | `links`, `refs`, `mentions`, `sessions`, `images`, `subscribers`, `participants` | `count` |
 
 ```json
@@ -737,6 +1050,31 @@ counts its calls. A call is counted on the item it acted on first: a link counts
 for its source item, not its target. Because Valkama records this itself, a
 caller does not attach its own session id as a ref.
 
+#### The commits part
+
+**Since 3.0.** `commits` lists the commits attached to the item now, the newest
+attachment first. Valkama attaches the commits a session makes; a caller
+attaches one by hand with the `commits` group of
+[Several changes in one call](#several-changes-in-one-call). A commit a rewrite
+replaced is not listed: its attachments moved to the commit that replaced it.
+`delete_work_item` takes the item's attachments with it, and the commits stay.
+
+```json
+{"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+ "subject": "fix(hooks): read the record once", "committed_at": "2026-11-20T10:31:02+03:00",
+ "session": "019a…", "agent": null, "attached_by": "server", "label": ""}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `repository` | the registered project's id; `null` for a commit whose repository is not known |
+| `display_name` | the project's name in the registry, read when the item is; `null` while the registry does not record the project, and beside a `null` `repository` |
+| `hash` | the whole hash, in lower case |
+| `subject`, `committed_at` | the commit's subject and committer time; `""` and `null` for a commit attached by its whole hash on a machine without the project's root |
+| `session`, `agent` | the session and agent that made it; `null` for a commit no session reported |
+| `attached_by` | `server` (Valkama, from the session's work), `manual` (a caller or a person) or `migrated` |
+| `label` | the words the attachment was given, `""` without them |
+
 #### Sections of the description
 
 **Since 3.0.** A card carries its description whole; an agent that wants to
@@ -788,7 +1126,7 @@ inside `work_item`, and reads `unresolved`, `thread`, `comments_after` and
 record, as before 3.0, and the parameters below are the cuts of that record.
 
 The full record carries every current field of the item -- state, checklist,
-links, refs, summary, the lease as `claim`, its followers as `subscribers` --
+links, refs, commits, summary, the lease as `claim`, its followers as `subscribers` --
 with every comment and every history event, oldest first, and `mentions` with
 `mentions_total`, the texts on other items that named this one (see
 [Mentions](#mentions)). A cut adds `comments_total`, `threads_total`,
@@ -823,6 +1161,144 @@ agents. Its size does not grow with the item's history, and it is what a
 preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
 refused with 400; an unknown item is 404 and a space that is not there is 409,
 as for the full read.
+
+### Commits on no card
+
+**Since 3.0.** A commit a session made that no item holds waits on a list until
+someone attaches it: the hook answer names it to the agent, and the interface
+shows the list to the person. A commit is on it while it has a session, no item
+holds it, and no rewrite replaced it. A commit migrated from a ref or attached by
+hand never has a session, so it is never on the list; a session's commit
+detached from its last item is on it again.
+
+`GET /api/planning/commits/unattached` reads it by one scope:
+
+- `space=<key>` — the commits of the projects the registry binds to the space,
+  its default project among them;
+- `project=<id>` — the commits of one registered project, bound to a space or
+  not;
+- neither — every commit of the store on no card, whatever its project. The
+  registry gives only the names here, and when it cannot be read every
+  `display_name` is `null`.
+
+```json
+{"total": 2,
+ "items": [{"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+            "subject": "fix(hooks): read the record once",
+            "committed_at": "2026-11-20T10:31:02+03:00", "session": "019a…",
+            "agent": null, "client": "claude", "reported_at": "2026-11-20T07:31:04.120Z"}]}
+```
+
+`items` is newest first, by the committer time, with its offset as Git gives it;
+`reported_at` is when Valkama learned of the commit. `repository`, `display_name`,
+`hash`, `subject`, `committed_at`, `session` and `agent` mean what they mean in
+[the commits part](#the-commits-part); `client` is `claude` or `codex`, the
+client whose hook reported it.
+
+- `since=<time>`, an ISO time with its offset or `Z`, keeps the commits made at
+  that time or later.
+- `limit` is how many items the answer lists: 100 when it is left out, 0 to 500.
+- `total` counts every commit the scope and `since` keep, however many `limit`
+  lists.
+
+Each refusal is `invalid_request` (400): both scopes
+(`[commit] the commits on no card are read by a space or by a project, not both`),
+a project the registry does not record
+(`[commit] <id> is not a registered project: <ids>`), a space the store does not
+have (`no planning space named <key>`), a registry that cannot be read for a
+space or a project, a `since` without its offset or that is no time, and a
+`limit` above 500 or below 0.
+
+`POST /api/planning/work-item/commit` attaches one of them, or with
+`"remove": true` detaches a commit, as one entry of the `commits` group of
+[Several changes in one call](#several-changes-in-one-call) does, and is
+refused as that entry is, by the same `[commit]` texts:
+
+```json
+{"reference": "MAIN-12", "repository": "valkama", "hash": "3f2a9c1"}
+```
+
+It takes no other field. Written from the interface, it is the person's write:
+the attachment is `manual`, and it and its `commit_attached` or
+`commit_detached` event are signed by the person. The answer names the item and
+the revision it is at, the commit as the item's record lists it (as it is
+attached now, or once detached as it was; `null` for a commit a rewrite
+replaced, which the record does not list) and whether the write changed
+anything; attaching a commit the item holds already changes nothing.
+
+```json
+{"reference": "MAIN-12", "revision": 7,
+ "commit": {"repository": "valkama", "display_name": "Valkama", "hash": "3f2a9c1…",
+            "subject": "fix(hooks): read the record once",
+            "committed_at": "2026-11-20T10:31:02+03:00", "session": "019a…",
+            "agent": null, "attached_by": "manual", "label": ""},
+ "changed": true}
+```
+
+### The net at a close
+
+**Since 3.0.** A commit no hook reported -- one a person made, a client without a
+session, a session whose hook is off, or `git am` and a commit inside
+`rebase -i`, which fire no commit hook -- reaches no item on its own. So an
+agent's transition into a `review` or `completed` state names the commits made
+in the card's repositories since the card was taken, and attaches none of them:
+the agent attaches the ones that belong with the `commits` group of
+[Several changes in one call](#several-changes-in-one-call).
+
+The window opens where the work began, read in the same write before the
+transition ends the claim, by the first of these that holds:
+
+1. the item is claimed: when the call that claimed it arrived;
+2. it is not, and the caller's holder holds one of its steps: the newest claim or
+   takeover of that step by a call of the caller's session, the earliest of them
+   when it holds several;
+3. neither: the newest claim or takeover of the item by a call of the closing
+   session, as for a close from review, whose entry ended the claim;
+4. none of these: there is no window, and the answer says nothing of commits.
+
+Once the transition has committed, the records the commit hook left that no
+client hook has taken yet -- the closing session's and those of a commit in the
+card's projects -- are taken first, in a transaction of their own and in the
+order they were written across every session, so a commit a hook did report is
+known before anything is named. Then Git is asked, outside any
+transaction and for at most 5 seconds, in each root of the card's projects that
+is on this machine with a repository of its own:
+`git log --branches --tags HEAD --since=<window>`. Of what it lists, a commit is
+named when its committer address is the one Git commits with in that root
+(`git var GIT_COMMITTER_IDENT`, the environment and then the configuration) and
+the store does not hold it for that project. `refs/stash`, a remote's branches
+and the notes are not read, and a commit somebody else committed into a local
+branch, such as one a pull brought, has another address. A commit of the same
+address from another machine, pulled into a local branch while the work was
+held, is named too; the agent leaves it. So is the copy a rebase in the window
+makes of a commit Valkama did not know: its committer time falls in the window,
+and its address is the session's own.
+
+Only an agent's close runs the net. A person's transition in the interface
+does not, and its HTTP answer carries none of these fields: the line speaks to
+an agent and offers the `commits` group, which a person does not have. The
+answer of the agent's transition -- the acknowledgement and the `verbose` card
+of `apply_work_item_changes` -- carries each field only when it is not empty:
+
+| Field | Holds |
+| --- | --- |
+| `unreported_commits` | up to 20 commits, newest first, each `{repository, hash, subject, committed_at}` as [the commits part](#the-commits-part) means them |
+| `unreported_total` | how many there are, when there are more than the 20 listed |
+| `unreported_unread` | the ids of the projects whose root did not answer: the transition stands all the same |
+
+A line among the answer's `warnings` names them to the agent: "These commits in
+the card's repositories were made since the card was taken and no hook reported
+them: valkama 3f2a9c1d0, valkama 7b1e2a9c4 and 3 more. Attach the ones that
+belong here with the commits group." The card was taken when the window above
+began: by its claim, by a step's claim or by the session's last claim of it.
+
+```json
+{"reference": "MAIN-12", "state": {"key": "review", "name": "Review", "is_terminal": false},
+ "applied": {"transition": {"state": "review", "released": "codex (session 019a…)"}},
+ "unreported_commits": [{"repository": "valkama", "hash": "3f2a9c1d0…",
+                         "subject": "docs: note the limit",
+                         "committed_at": "2026-11-20T10:31:02+03:00"}]}
+```
 
 ### Pictures on an item
 
@@ -1086,7 +1562,40 @@ it shows and does not move, so a draft stays where it is.
 
 The panel holds the questions that wait for a person. A
 [list on a comment](#a-list-on-a-comment) waits for nobody, so the panel neither
-shows nor counts one.
+shows nor counts one, and a request asked of an agent session, such as one of
+purpose `consent`, is that session's to answer and not shown there.
+
+The panel reads `GET /api/modules/planning/requests` page by page: `limit` (1 to
+200, 100 by default) and `offset` cut one page from every source read whole and
+sorted, `total` counts them all, and `has_more` says another page follows. It
+reads on while `has_more` holds, so it shows the whole list; a page that brings
+nothing new ends the read early, the list having changed under it, and then the
+panel says that some questions may be missing. A question with a purpose shows
+its own form: `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
+`condition` and `triage`, each answered once, by the owner, and carried out in
+the same write ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
+
+Beside the questions, every answer of that read carries `triage_due`: one line
+for each space read whose work waiting for a triage review has grown past the
+owner's thresholds, such as
+`[{"space": {"key": "MAIN", "name": "Main"}, "count": 120, "oldest_at": "2026-11-02T09:12:00Z"}]`.
+The work counted is the items in `triage` that no question to the owner holds,
+with no parent or under goals and stages all accepted and open, that no review
+has marked `triage_seen`. A space has a line while its `triage_reminder` is `on`
+and that work counts at least `triage_count` items, or the oldest of them came
+to `triage` at least `triage_age_days` days ago (see
+[the owner's participation](#writes-that-wait-for-the-owner)); `count` is how
+many there are and `oldest_at` when the oldest came. The answer carries no clock
+of the server: the reader counts the age from `oldest_at`. A line is no
+question: it is not in `items`, `total`, `limit`, `offset` or `has_more`, and it
+takes no answer. Nothing stores it, so it goes once the work is reviewed, and
+the MCP list of requests does not carry it.
+
+The lines belong to the whole list, not to a page, so only the first page
+carries them: `triage_due` is empty when `offset` is above 0, and a reader that
+reads on while `has_more` holds takes them from that first page. It is empty too
+when `status` names anything but `pending` and when `reference` names one item.
+A source the read could not reach is named in `coverage` and has no line.
 
 ### The card's waiting question
 
@@ -1355,10 +1864,12 @@ answers with `interface_version` and `usage`:
 | `by_item` | one line per item: `work_item_id`, `reference`, `title`, `elapsed_seconds`, `agent_seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. A chain's starts at its root and lists every member; a session's lists the items it worked on, then its line with no item, whose `work_item_id` is `null`. An item since deleted keeps its id, with a `null` number and title |
 
 An item's read adds `work_item_id`, `reference`, `title` and `scope`, and says who spent
-the work and under which account:
+the work, under which account and how much of each account's week it took:
 
 | Field | What it holds |
 | --- | --- |
+| `sessions` | how many sessions worked on the item, or with `chain` or `tree` on any of its members: each session whose stretches of work went to it, with its subagents', and each session whose confirmed write calls acted on it, counted once. It can be larger than the list of sessions on the item's card, which holds only the writers |
+| `quota` | `weeks` and `unknown_share`, below |
 | `account_stretches` | the work in time order, one line for each run of stretches under one account: `account`, `started_at` (its first stretch's start), `ended_at` (the latest end among them), `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. Two neighbouring lines never share an account, and an unknown account is a value of its own, so not every line after the first is a change of account: a change is a line under a known account after one under a different known account, with or without lines under an unknown account between them, and a line under an unknown account is never one. `a`, unknown, `a` has no change; `a`, unknown, `b` has one, where `b` starts. Stretches of agents working side by side follow one another by their start |
 | `accounts` | each account the work ran under, the most time first, then the most cost: `account`, `share` of `agent_seconds`, and the same figures |
 | `roles` | the work by who did it, ranked the same way: `role` — `main` for the session's own agent, `subagent`, or `advisor` for an adviser's own calls, whoever it advised — with `launch_class`, `effort` and the same figures |
@@ -1390,6 +1901,28 @@ one unit of what its segments add up to, and each segment the period read adds i
 half a unit of its own figure. Three segments of 10.0004 s at $0.0000304 each make one line
 of 30.001 s and $0.000091 here, and 30.0 s and $0.00009 in the period read. Where every
 segment's seconds and cost are whole units, the two are equal.
+
+`quota` is the item's part of each account's weekly quota, for the same stretches of work
+as the rest of the read, so with `tree` for the whole tree. Each stretch is on the seat the
+[quota samples](#subscription-quota-samples-and-accounts) put it on. `weeks` has one line per
+seat the work was on, the latest week first:
+
+| Field | What it holds |
+| --- | --- |
+| `account` | `organization`, and `account_uuid`, `null` for a seat no account, or two, can be shown to name |
+| `seat` | the seat, which names one week of that account |
+| `week_ends_at` | when that week resets |
+| `share` | the item's cost at API prices on that seat, divided by the cost of every stretch on the seat that week, the item's and everyone else's; `null` when the seat's work that week had no cost |
+| `week_used_percent` | how much of the week is spent, by the latest `week` sample of the seat; `null` with none |
+| `percent` | `share` times `week_used_percent`, rounded to two places; `null` when either is |
+
+`unknown_share` is the part of the item's cost on stretches with no seat that can be shown,
+`null` when the item's work had no cost. No figure is a sum of percentages: lines of
+different accounts and weeks are never added up, as in
+[each account's quota](#each-accounts-subscription-quota). The figure assumes a quota is
+spent in proportion to the API price, which no published formula confirms. It also leans
+high: a week's percent holds work no stretch here records, such as another client's or a
+chat in a browser, while the share counts only the recorded stretches.
 
 A session's adds
 `session_id`, `first_at`, `last_at`, `excluded` (`human`, `subagent`, `external` and
@@ -1510,7 +2043,7 @@ no project or several, are groups of their own too, with an `id` of `null` and `
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
 | `launch_class` | how a subagent's run was launched, as the usage rows hold it. A session's own run is launched by no one, so it has none (`unknown` `false`); a subagent's run that does not say is unknown | — |
 | `model`, `effort`, `environment` | as the usage rows hold them | — |
-| `seat` | the subscription account of its organization the work was spent on, read from the quota samples when the answer is made: a stretch is on the seat the latest sample of each feed at or before it says, until that window resets, its own session's feeds first. The `id` is the organization, a `/` and the account's UUID, or, for a seat no sample with a UUID names in that organization that week, the seat's key for the week, `week:2030-03-08T09:00Z`, which does not hold across weeks. The same UUID in two organizations is two accounts. Unknown where the work names no organization or no sample of it says where it was: one group, never counted to an account | `organization`, `account_uuid` and `seat_key`, the parts of the `id`; all `null` when unknown |
+| `seat` | the subscription account the work was spent on, read from the quota samples when the answer is made: a stretch is on the seat the latest sample of each feed at or before it says, until that window resets, its own session's feeds first, and the seat is the account the rules of [Subscription quota samples and accounts](#subscription-quota-samples-and-accounts) make it. The `id` is the account's key: its organization, a `/` and its UUID, `org-a/0b7d4e19-…`, or, for an account no sample names a UUID for, `weekly:` and the time of week its week resets, `org-a/weekly:5T09:00Z`, which holds from week to week. The organization and a `/` alone, `org-a/`, is that organization's work no sample places on an account: one group per organization, never counted to an account. The same UUID in two organizations is two accounts. Unknown where the work names no organization: one group | `organization`, `account_uuid` and `weekly_reset`, the parts of the `id`, with `weekly_reset` also for an account known by its UUID whose samples name a week; and `shared`, `true` for an account known by its weekly reset that two accounts' readings run under. `null` and `false` where the `id` does not say them |
 
 The answer carries ids, the names and numbers a card already shows, times and counts.
 It holds no path and no folder. The one text from a transcript is an executor's
@@ -1522,8 +2055,389 @@ read once per answer and again only after it changed, so a period of many sessio
 costs the status of their files once each has been read. Because a person can rename a
 session, the `title` is one of two values in the answer that two reads of the same rows may
 give differently. The other is `seat`: a quota sample that arrives later, such as imported
-history, can say where earlier work was, and one that names an account's UUID turns a seat's
-key into its account.
+history, can say where earlier work was, and one that names an account's UUID turns an
+account known by its weekly reset into the account of that UUID.
+
+### How much work stands and what it took
+
+The Volumes read counts the work of a scope by where it stands: how much waits in each
+category now, which card has stood there longest, and how much came to be completed or
+cancelled in a period, what waits for the owner, which commits stand on no card, what
+each goal took and what its open work has left, what work stands outside goals, how work
+flowed day by day, and the done work its estimates are judged by. It answers
+`GET /api/planning/volumes` with `interface_version` `valkama-planning-api` and
+`volumes`; `GET /api/planning/goal-volumes` gives the rows of the goals and stages it is asked for,
+whole (see [A goal's row](#a-goals-row)). A later build only adds fields and sections to
+these answers. No MCP tool reads them: the numbers would cost an agent context.
+
+| Parameter | What it takes |
+| --- | --- |
+| `scope_kind` | required: `global`, every space of the store this service writes, or `space` |
+| `data_scope_id`, `space_key` | with `space`, required: the space, named exactly as the shell names it |
+| `project_id` | with `space`, optional: a project, which narrows the space to the items that name it |
+| `from`, `to` | required: a date or a time with its offset, as in [What agent work spent in a period](#what-agent-work-spent-in-a-period). The period holds at most 2,400 days |
+| `utc_offset` | required: the caller's offset from UTC in minutes, from `-840` to `840`; a date means the start of that day at it |
+| `kind` | optional, repeatable: `task`, `bug` or `improvement`; the read keeps the tasks of any kind named (see [Filtering by kind and label](#filtering-by-kind-and-label)) |
+| `label` | optional, repeatable: a label; the read keeps the tasks carrying every label named |
+
+A space's scope holds the items the space's board holds, so a number opens the board on
+the same work: the space's items, and the items of other spaces that name one of the
+projects the registry binds to the space, as `list_work_items` reads a space (see
+[Tool results](#tool-results)). A goal or stage names what the tasks under it name, at
+any depth. With `project_id`, the scope keeps the space's items that name the project,
+and other spaces' items that name it when it is one of the space's projects; a project
+of another space that the space's items name keeps only the space's own.
+
+```json
+{"interface_version": "valkama-planning-api",
+ "volumes": {
+   "scope": {"kind": "space",
+             "space_ref": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001",
+                           "space_key": "MAIN"},
+             "project_ref": null},
+   "period": {"from": "2030-03-04T00:00:00+03:00", "to": "2030-03-11T00:00:00+03:00",
+              "utc_offset": 180},
+   "filter": null,
+   "measured_from": "2030-02-17T16:03:29.000Z",
+   "counts": {
+     "categories": [
+       {"category": "triage", "tasks": 40, "goals": 1, "stages": 1,
+        "oldest": {"work_item_id": "6f1c2a8e-0000-4000-8000-000000000012",
+                   "reference": "MAIN-12", "since": "2030-01-03T10:00:00Z"}},
+       {"category": "completed", "tasks": 31, "goals": 1, "stages": 0, "oldest": null},
+       {"…": "the other six categories"}],
+     "waiting_owner": {"count": 12,
+                       "oldest": {"request_id": "6f1c2a8e-0000-4000-8000-000000000090",
+                                  "reference": "MAIN-90", "since": "2030-02-28T09:00:00.000Z"}},
+     "unattached_commits": 3},
+   "goals": [{"…": "a goal's row, with the rows of its stages in children"}],
+   "outside": {
+     "tasks": 43,
+     "by_project": [
+       {"project": {"id": "app", "unknown": false, "name": "App", "combinations": null},
+        "categories": {"triage": 30, "deferred": 2, "ready": 3, "active": 1, "review": 0,
+                       "completed": 4, "blocked": 0, "cancelled": 1}},
+       {"…": "a row for several projects, and one for none"}],
+     "by_label": [
+       {"label": "ui", "categories": {"triage": 9, "…": "the other seven categories"}},
+       {"label": null, "categories": {"triage": 21, "…": "the other seven categories"}}]},
+   "flow": {
+     "days": [{"day": "2030-03-04", "created": 14, "closed": 11, "decisions": 6, "commits": 9},
+              {"…": "every other day of the period"}],
+     "totals": {"created": 70, "closed": 64, "decisions": 24, "commits": 51},
+     "pace": {"open": 640,
+              "recent": {"days": 7, "created": 70, "closed": 64, "trend": "growing"},
+              "series": [{"day": "2030-01-03", "created": 3, "closed": 0, "total": 3,
+                          "closed_total": 0}]}},
+   "estimates": {
+     "min_basis": 5, "basis": 210,
+     "rows": [
+       {"level": "project_kind",
+        "project": {"id": "app", "unknown": false, "name": "App", "combinations": null},
+        "space": null, "kind": "task", "label": null, "tasks": 64,
+        "agent_seconds": {"median": 1260.0, "q1": 540.0, "q3": 2880.0, "mean": 2310.5},
+        "tokens_anew": {"median": 61000, "q1": 24000, "q3": 150000, "mean": 118000},
+        "estimated_api_cost_usd": {"median": 2.1, "q1": 0.85, "q3": 5.4, "mean": 4.75}},
+       {"level": "project_kind_label", "label": "ui", "…": "the same project and kind"}]}}}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `scope` | the scope read: `kind`, `space_ref` (`{data_scope_id, space_key}`, or `null` for `global`) and `project_ref` (`{project_id}`, or `null`) |
+| `period` | the period asked for, with `from` and `to` at the caller's offset |
+| `filter` | the filter asked for, `{"kinds": [...], "labels": [...]}` with each in the order named and once, or `null` when the read names no `kind` and no `label` |
+| `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
+| `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest`; under a filter `goals` and `stages` are `null` |
+| `counts.waiting_owner` | the questions to the owner still open on the scope's items: `count`, and `oldest`, the one asked first, with `request_id`, the `reference` of its item and its `created_at` as `since`, or `null` when none waits |
+| `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store; `null` when that list refuses the scope, a project only items name or a space or project read while the projects registry cannot be read, and the rest of the answer stands |
+| `goals` | the scope's open goals and the goals that came to be completed or cancelled inside the period, by space key and number, each a [goal's row](#a-goals-row) |
+| `outside` | the scope's tasks under no goal: `tasks`, how many, and the rows `by_project` and `by_label` (see below) |
+| `flow` | how work flowed through the scope: `days`, `totals` and `pace` (see [The flow](#the-flow)) |
+| `estimates` | the scope's done work that estimates are judged by: `min_basis`, `basis` and `rows` (see [Estimates](#estimates)) |
+
+A category counts the items of the scope that stand in a state of it. An accepted open
+goal or stage stands in no category and is in none of these counts. Work in an open
+category is counted as it stands now; `completed` and `cancelled` count the items that
+came to stand there inside the period, and only those. An item came to stand where it
+is at its last state entry in history order: the last `created`, `transitioned` or
+`opened` event of its history as written (the highest id, not the latest `created_at`),
+or at its creation when its history holds none. `oldest` is the item of an
+open category that came to stand there first, with that moment as `since`; it is `null`
+for a category nothing stands in, and always for `completed` and `cancelled`. How long
+ago that was is the reader's to say: the answer holds no clock of the server.
+
+A question waits for the owner while it is pending, asks the owner rather than an agent
+session, is no list on a comment, and has not run out past its deadline or with its
+execution: the same test the owner's alert and the queue's `question` apply. The commits
+on no card do not depend on which items the scope holds, only on its projects: those of
+the project read, those the registry binds to the space, or every commit of the store.
+
+`outside` counts the scope's tasks with no parent, each as the categories count it: in
+an open category as it stands now, in `completed` or `cancelled` only when it came to
+stand there inside the period; `tasks` is how many count. Each row says how many of its
+tasks stand in each of the eight categories, all eight named, and the rows come with the
+most tasks first. `by_project` gives each task one row, so its rows add up to `tasks`:
+the project it names, its tasks naming several projects together, or those naming none.
+`project` is written as the `project` group of
+[What agent work spent in a period](#what-agent-work-spent-in-a-period) is: `id` and
+`name`, as the projects registry gives it or `null`, with `unknown` `false`; the row of
+several has `id` `null` and lists in `combinations` every set of projects its tasks
+name, each as `{"id", "name"}`, which the other rows hold as `null`. `by_label` gives a
+task the row of each of its labels, and a task with none the row whose `label` is `null`,
+so those rows add up to no total.
+
+The read counts the store this service writes, where usage is counted. A space of an
+attached store is refused rather than counted short.
+
+| Refusal (`400`, `invalid_request`) | When |
+| --- | --- |
+| `scope_kind must be global or space` | `scope_kind` is missing or neither |
+| `a space scope names data_scope_id and space_key` | a space scope lacks one of them |
+| `a global scope names no space and no project` | a global scope names one |
+| `volumes read the store this service writes; <KEY> lives in an attached store` | the space is in an attached store |
+| `no planning space <KEY>` | the store holds no such space, or the `data_scope_id` is no store this service knows |
+| `no project <id>` | neither the projects registry nor any item of the store names the project |
+| `kind filters tasks: task, bug or improvement` | a `kind` that is no kind of a task, `goal` and `stage` among them |
+| `no work item carries label <label>` | a `label` no item of the store carries; a label the store holds but the scope does not gives an empty answer instead |
+| the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
+| `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
+
+#### A goal's row
+
+A row says what a goal or a stage took over all its time, whatever the period. The
+`goals` of the Volumes read holds one for each goal, with the rows of the stages under
+it in `children`, in number order; `GET /api/planning/goal-volumes` gives the rows of
+the goals and stages it names, without `children`, in the order named.
+
+```json
+{"work_item_id": "6f1c2a8e-0000-4000-8000-000000000007", "reference": "MAIN-7",
+ "title": "Ship the importer", "kind": "goal",
+ "state": null, "container_state": "in_progress", "open": true, "parent_reference": null,
+ "other_space": null, "partial": false,
+ "tasks": {"total": 120, "closed": 78, "completed": 74, "cancelled": 4,
+           "by_category": {"triage": 6, "deferred": 2, "ready": 20, "active": 5, "review": 7,
+                           "completed": 74, "blocked": 2, "cancelled": 4}},
+ "baseline": {"tasks": 70, "basis": "accepted", "taken_at": "2030-01-05T09:00:00Z"},
+ "baseline_absent": null,
+ "spent": {"agent_seconds": 79200.0,
+           "tokens": {"input": 120000, "cached_read": 9000000, "cache_write_5m": 300000,
+                      "cache_write_1h": null, "output": 410000, "reasoning": null},
+           "estimated_api_cost_usd": 412.5, "unpriced_tokens": 0, "quality": "mixed",
+           "partly_measured": 0},
+ "spent_with_cancelled": {"agent_seconds": 81000.0, "…": "the same figures"},
+ "sessions": 61, "commits": 140, "commits_unknown_repository": 3,
+ "remaining": {"agent_seconds": 30100.0,
+               "tokens": {"input": 41000, "cached_read": 2100000, "cache_write_5m": 90000,
+                          "cache_write_1h": 0, "output": 120000, "reasoning": 0},
+               "estimated_api_cost_usd": 150.2, "basis": 31, "estimated": 40, "unestimated": 2},
+ "children": [{"…": "the row of each stage directly under it"}]}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `kind` | `goal`, or `stage` for one under a parent |
+| `state`, `container_state` | where it stands, as a record says it: `state` a public state, or `null` for an accepted open goal or stage, whose `container_state` is what it derives (see [The work model](#the-work-model)) |
+| `open` | whether it stands in neither completed nor cancelled |
+| `parent_reference` | the goal or stage it is filed under, or `null` |
+| `other_space` | `{key, name}` of the goal's space when that is not the space read; `null` for the space's own goals, in a `global` read and in `goal-volumes` |
+| `partial` | some of the items under it are outside the scope, which adds up only the rest |
+| `tasks` | its tasks (`task`, `bug`, `improvement`) under it now, at any depth and in any state, that the scope holds: `total`, `closed` of them, `completed` and `cancelled`, and `by_category`, the eight categories, every one |
+| `baseline` | how many tasks stood under it when it was accepted: `tasks`, `basis` and `taken_at`; or `null` |
+| `baseline_absent` | why `baseline` is `null`, or `null` when it is given |
+| `spent` | what its items spent, leaving out every item that stands cancelled now |
+| `spent_with_cancelled` | what all its items spent |
+| `sessions` | the sessions that spent on any of its items or made a confirmed write to one, each once |
+| `commits` | the commits of a known repository attached to any of its items, each once |
+| `commits_unknown_repository` | the records of commits of no known repository attached to its items: records, not commits |
+| `remaining` | what its open tasks have left by their estimates: `agent_seconds`, `tokens` by kind and `estimated_api_cost_usd`, with `basis`, `estimated` and `unestimated` (see [Estimates](#estimates)); `null` when no open task stands under it |
+
+The items of a goal are the items under it now, at any depth, with the goal itself.
+An item moved out of it, or filed under another goal, leaves with what it spent; a move
+between its own stages changes nothing of the goal. A goal's spending leaves out the
+items that were cancelled; the sum with them stands beside it. An item cancelled takes
+only its own work out of `spent`, and the items under it count by where each stands: a
+stage cancelled takes its work and its cancelled tasks out, and a task done under it
+stays. For each of the two numbers, a row is its own work, the rows of its stages and
+the work of the tasks directly under it, and `spent_with_cancelled` of a goal read
+whole is what [How much work an item took](#how-much-work-an-item-took) gives for it
+with scope `tree`.
+
+Each number holds `agent_seconds`, `tokens` by kind, `estimated_api_cost_usd` and
+`unpriced_tokens` as an item's usage holds them, with `quality` and `partly_measured` of
+the items it adds up. Time is agent time, the sum of the stretches: it adds up from
+tasks to goals; the union a card's line shows does not. `partly_measured` counts the
+tasks it adds up that started before `measured_from`, or were created before it when
+they never started: each may have spent more than its usage says.
+
+`tasks` counts the cancelled tasks too: `cancelled` is how many there are. A task moved
+out of the goal is not among them, wherever it went.
+
+`baseline` is the count of the tasks under the goal or stage, at any depth and in any
+state, when it was accepted (`basis` `accepted`). One accepted with no task under it
+takes the count when the first task under it starts (`basis` `started`): a plan of
+nothing says nothing. Entering triage or deferred takes the acceptance away and the
+count with it; accepted again, it is counted anew. Without a count, `baseline_absent`
+says why, the first of these that holds:
+
+| `baseline_absent` | When |
+| --- | --- |
+| `filtered` | the read names a `kind` or a `label`: the count is of all its tasks, of every kind and label, and a task's kind and labels change after it (see [Filtering by kind and label](#filtering-by-kind-and-label)) |
+| `partial` | the row is `partial`: the count is of all its tasks, `tasks` only of the scope's |
+| `not_accepted` | it is not accepted: it stands in triage or deferred, or was closed from there |
+| `migrated` | it was accepted before the work model, which kept no count of what stood under it then |
+| `not_started` | it was accepted with no task under it, and none under it has started yet |
+
+`sessions` counts the sessions of [How much work an item took](#how-much-work-an-item-took)
+over all its items at once: a session that worked on two of them is one session, so a
+row's number is not the sum of its tasks' and stages'. `commits` counts the commits
+attached now, a commit a rewrite replaced not among them, the way an item's read lists
+them; a commit attached to two of its items is one. A commit of no known repository
+keeps its hash as it was written, abbreviated too, so one commit may stand as two
+records: those are counted apart, as records.
+
+A space's read adds up what its scope holds of each goal. A goal of the space is all
+its own work there, unless a project narrows the read; a goal of another space comes
+into it through the tasks that name one of the space's projects, and only they and
+the goals and stages over them are added up. A row with anything else under it is
+`partial`.
+
+`goal-volumes` takes `id`, a reference or a work item id, from 1 to 100 times, and reads
+each goal or stage whole: its row is never `partial` and names no `other_space`. It
+answers `interface_version` `valkama-planning-api` and `goals`.
+
+| Refusal | When |
+| --- | --- |
+| `400` `invalid_request`: `id takes 1 to 100 goals or stages` | no `id`, or more than 100 |
+| `400` `invalid_request`: `<REF> is a task: goal volumes read goals and stages` | an `id` names a task |
+| `404` `not_found`: `no work item <id>` | an `id` names no item |
+
+#### The flow
+
+`flow` says how work moved through the scope on each day of the period, a day of the
+caller's clock at `utc_offset`. `days` holds every day the period touches, oldest first,
+the quiet ones too, and `totals` adds them up.
+
+| Field | What a day counts |
+| --- | --- |
+| `created` | the scope's tasks created that day |
+| `closed` | the scope's tasks whose present entry into completed or cancelled fell on that day: a task reopened and closed again counts on the later day |
+| `decisions` | the owner's decisions: requests of the scope's items answered or declined that day by a call from the interface. The latest call that answered, changed or declined a request says whose it is, so an agent's answer is no decision, and an answer changed later is still one decision, on the day of its latest change |
+| `commits` | the commits of a known repository made that day, by the committer time Git gave or, without one, when Valkama learned of the commit, that are attached now to an item of the scope or stand on no card of its projects; each commit once |
+
+Only tasks are created and closed here: making or closing a goal or a stage is not work
+flowing. The projects whose commits on no card a scope holds are the project read, the
+projects the registry binds to the space read, or, in a `global` read, every known
+repository. A commit of no known repository is left out: its hash is kept as it was
+written, so one commit may stand as two records.
+
+`pace` reads the scope's tasks as [Reading a chain of work](#reading-a-chain-of-work)
+reads a chain's members, with a day of the caller's clock in place of a UTC day: `open`,
+how many stand open now; `recent`, the last 7 days up to today, whatever the period; and
+`series`, each day with a change since the first. With `utc_offset` `0`, the pace of a
+scope that holds one goal's tasks and nothing else is what the chain of that goal gives
+in scope `tree`.
+
+#### Estimates
+
+An estimate says what an open task has left, judged by done tasks like it. The done
+tasks it is judged by, the basis, are the tasks of the store (`task`, `bug`,
+`improvement`) that stand completed, spent agent time, and were counted whole: they
+started, or were created when they never started, no earlier than `measured_from`. A
+cancelled task's spending says nothing of what done work costs, and a task done with
+nothing spent was carried over or closed with no work.
+
+A task's group is its project and its kind; a task naming several projects or none
+adds its space, so that work of no project in two spaces is not mixed. An open task
+that has spent `s` of agent time is judged on the first rung of this ladder that holds
+at least `min_basis`, five, done tasks that spent more than `s`:
+
+1. its group, the tasks sharing a label with it;
+2. its group;
+3. its project, or its space's tasks of several projects or of none, of any kind.
+
+Its time left is the mean of `v - s` over those tasks, `v` being what each spent,
+without the tenth of them, rounded down, that had the most left: a few very long
+tasks would otherwise pull the mean up. Its tokens of each kind and its cost left are
+the mean of `v - s` over the same tasks, and never below zero. A task with no such
+rung has no estimate: it has spent more than the work it could be judged by, and
+nothing left would be untrue. A task's cost is what its priced rows cost.
+
+A goal's or stage's `remaining` adds up the estimates of all its open tasks that the
+scope holds, in triage and deferred too: the goal does not close while they are open,
+and `tasks.by_category` says how many of them are put off. `estimated` and
+`unestimated` count its open tasks with an estimate and without one, and `basis` the
+different done tasks its estimates were judged by. With no open task under it
+`remaining` is `null`; when none of them has an estimate it holds zeros with
+`estimated` `0`. A reader shows `basis` beside the estimate, and says the estimate is
+incomplete while `unestimated` is above zero.
+
+The groups are read across the store whatever the scope: a project is one project in
+every space. The table describes the basis the scope holds. Each row of
+`level` `project_kind` holds the done tasks of one project and kind, the most tasks
+first, and is followed by a row of `level` `project_kind_label` for each label one of
+them carries, the most tasks first; a task with no label stands only in the row of its
+project and kind. `project` is written as in `outside`, and `space` is `{key, name}` of
+the space in a row of several projects or of none, `null` otherwise. `tasks` is how
+many done tasks a row holds; `agent_seconds`, `tokens_anew` (the input, cache write and
+output tokens) and `estimated_api_cost_usd` each give their `median`, the quartiles
+`q1` and `q3` by linear interpolation between the values in order, and `mean`, tokens
+in whole units. The mean, not the median, is what adds up over a goal's tasks. `basis`
+is how many done tasks the scope holds.
+
+An estimate is a rough figure. About half of the goals checked halfway through their
+work came within a factor of two, so a reader rounds it, to an hour and a million
+tokens, rather than show it to the second.
+
+#### Filtering by kind and label
+
+`kind` and `label` keep the scope's tasks that match, by the rules of the board's
+filter, so a number under a filter opens the board on the same tasks with the same
+filter: a task matches when its kind is any of the kinds named, or any kind when none
+is, and when it carries every label named. Both together keep what both keep:
+`kind=bug&kind=task&label=ui` keeps the bugs and the tasks labelled `ui`. A goal or a
+stage never matches: it has no kind of a task, and its labels are not labels of work.
+A filter narrows the tasks every section counts; a goal row then adds up only those
+tasks, without the work of its goals and stages, and carries no count at acceptance.
+
+| Part | Under a filter |
+| --- | --- |
+| `counts.categories` | `tasks` counts the tasks that match and `oldest` is the one of them that came to stand there first; `goals` and `stages` are `null`, not `0` |
+| `counts.waiting_owner` | the questions to the owner on the tasks that match |
+| `counts.unattached_commits` | as without a filter: a commit on no card has no task whose kind and labels could match, and the number opens the list a commit is attached from |
+| `goals` | the goals, and in `children` the stages, with a task that matches under them; the others have no row. A row is the rows of its stages and its tasks that match: `spent`, `spent_with_cancelled`, `sessions`, `commits`, `tasks` and `remaining` count those tasks alone, never the work of a goal or stage itself. `baseline` is `null` with `baseline_absent` `filtered`: the count was taken of every task, and how many of them were of a kind or carried a label then is not known. What each task has left is what it has left without a filter, since the groups it is judged by are read across the store; the filter only chooses whose estimates add up |
+| `outside` | the tasks that match with no parent; with a `label` named, `by_label` holds the rows of the labels named alone, since a row of another label would only show where it meets the filter |
+| `flow` | `created`, `closed` and `pace` read the tasks that match, `decisions` their requests and `commits` the commits attached to them; no commit on no card is counted |
+| `estimates` | the table describes the done tasks of the scope's basis that match, and `basis` counts them; with a `label` named, the rows of `level` `project_kind_label` are those of the labels named alone, since a row of another label would only show where it meets the filter |
+
+#### A space's card in the portfolio
+
+The directory of spaces, `GET /api/platform/planning` at global scope, which «All
+spaces» reads with `directory_only=true`, lists each space with `numbers`: the four
+numbers of its card. They are counted as the Volumes read counts the space, with no
+filter, so a card's numbers are those of the space's Volumes page and open its board on
+the same work. Unlike that read, the directory counts a space of an attached store too:
+the four numbers take nothing from usage.
+
+```json
+{"space_ref": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001", "space_key": "MAIN"},
+ "title": "Main work", "work_item_count": 412,
+ "numbers": {"triage": 41, "ready": 20, "active": 5, "waiting_owner": 12},
+ "numbers_absent": null,
+ "default_project": "app", "projects": [{"project_id": "app", "display_name": "App"}]}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `work_item_count` | the space's own items, in every state; `null` when its store could not be read |
+| `numbers.triage` | every card of the space's scope in triage: its tasks, goals and stages |
+| `numbers.ready`, `numbers.active` | the scope's tasks in `ready` and in `active` |
+| `numbers.waiting_owner` | the questions to the owner still open on the scope's items, the `count` of `counts.waiting_owner` |
+| `numbers_absent` | why `numbers` is `null`, or `null` when they are given |
+
+| `numbers_absent` | When |
+| --- | --- |
+| `old_store` | an earlier build wrote the space's store, which is attached and read as it is: its states stand in the categories of before. The rest of the record is what the store gives |
+| `unreadable` | the space's store was listed when the read began, then did not open or did not answer. The record holds what is known without it: `space_ref`, the projects the registry binds, the key as `title`, and `work_item_count` `null`, since no count is known. The directory still answers for every other space |
 
 ### How often each analytics surface is opened
 
@@ -1541,7 +2455,7 @@ anywhere. The kinds are a closed list:
 | `task_open` | a task opened from any of those |
 
 `POST /api/analytics/uses` counts one use, under the rules of every write from the page
-([local HTTP security](../README.md#local-http-security)): an allowed `Origin`
+([local HTTP security](guides/http-security.md#browser-writes-and-the-installation-token)): an allowed `Origin`
 (`origin_refused`, 403), `Sec-Fetch-Site: same-origin` (`fetch_metadata_refused`, 403)
 and the page's session credential in `X-Valkama-Session` (401 without it), with a JSON
 object for a body:
@@ -1631,16 +2545,49 @@ source named, and nothing else of a profile: no e-mail address and no name. A re
 names an organization and an account's UUID makes the row if it is not there yet, and a
 plan it names replaces the one there; a plan comes only with the UUID. The UUID does not
 change when a week resets, so the row and whatever is kept against the account hold from
-week to week. The name the owner gives an account is kept apart, by its organization
-([The owner's names for accounts](#the-owners-names-for-accounts)), and no source writes it.
+week to week. The name the owner gives an account is kept apart, by the account's key or
+its organization's id ([The owner's names for accounts](#the-owners-names-for-accounts)),
+and no source writes it.
 
 A seat key comes from the week's reset, so it changes every week, and two seats whose
 weeks reset within the same ten minutes cannot be told apart by it and share one key. A
-sample without an account's UUID belongs to the account whose samples in the same
-organization name the same seat: a key names one week's reset, so the same key is the same
-week. A seat no sample with a UUID names, or that samples of two accounts name, is
-provisional: it is known for its week and its account is not. Without a source that gives
-the UUID, seats are told apart only within a week.
+session's sample carries no organization of its own: it is the one the session's usage
+rows say it worked for at the sample's time, and a session that changes its login, or a
+subagent still running under the login before, can make that the wrong one. So the account
+a seat's samples are on is decided from every sample of that seat, whatever span a read
+covers, and a seat is the same account in every read (`server.quota.accounts`):
+
+1. A sample with a UUID is that account's, in the organization it names.
+2. Where two counters run under one seat, as the next paragraph but one says, a sample
+   without a UUID cannot be told apart and stays in the organization it was read for, as
+   that organization's account known by its weekly reset, marked `shared`.
+3. Otherwise, where exactly one account of the sample's own organization names the seat
+   with its UUID, it is that account's; where two do, it is the account known by its weekly
+   reset, marked `shared`.
+4. Otherwise, where exactly one account of any organization names the seat with its UUID,
+   it is that account's, in that account's organization: the sample was read for the wrong
+   one.
+5. Otherwise the seat's organization is the one most of its samples were read for, the
+   latest of them on a tie. Within it, an account whose UUID names the seat; else the one
+   account whose week resets at the same time of week in the nearest week that has one, and
+   which names no other seat within a week of this one; else the account known only by its
+   weekly reset. Two accounts tied for nearest leave the account known by its weekly reset,
+   marked `shared`.
+
+An account's key is its organization, a `/`, and its UUID, or `weekly:` and its weekly
+reset: the ISO weekday and the time to ten minutes, in UTC, at which its week resets,
+`<ISO weekday>T<HH:MM>Z`. An organization's id holds no `/`, so the two never meet. A week
+resets at the same time of week every week, so an account known by its weekly reset holds
+from week to week; without a source that gives the UUID, two accounts whose weeks reset
+within the same ten minutes are one such account.
+
+Two counters run under one seat when two feeds disagree while both are current: a reading
+of one feed, taken within `fresh_for_seconds` of another feed's latest, is apart from it, a
+week's share by more than two points or a five-hour window's reset by more than ten
+minutes, and that other feed's next reading is still apart from it. The last condition
+tells two counters from a window's count that restarted, after which every feed falls and
+the one that read high agrees again. Accounts of one seat never read near the same time do
+not show this way.
 
 A usage segment holds its organization and no seat, because a change of seat leaves no
 trace in a transcript. Its seat is read from the samples, and a sample that arrives
@@ -1661,12 +2608,12 @@ sample nearest in time.
    time.
 4. Without one, the feeds of the organization count: its poll's and imports', and another
    session's while that session was working for it.
-5. With none, the seat is unknown. A segment with no organization is on a seat unknown too.
-6. The account is the naming sample's UUID, or else the one the seat belongs to by the
-   rule above; a provisional seat has none.
+5. With none, the seat is unknown, and the segment is its organization's work on no known
+   account. A segment with no organization is on a seat unknown, of no organization.
+6. The account is the one the naming sample's seat is by the rules above.
 
 The read says which rule named the seat: `session` or `organization`, with that sample's
-time, and the account's UUID or none for a provisional seat.
+time, and the account.
 
 Percentages and money never share a figure. No answer carries a sum of percentages: a
 percentage belongs to one account and one window, and the percentages of different
@@ -1710,8 +2657,9 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
  "quota": {
    "now": "2030-03-06T13:00:00.000+03:00", "utc_offset": 180, "fresh_for_seconds": 900,
    "accounts": [
-     {"organization": "org-a", "account_uuid": "acct-a", "seat": null, "plan": "Max",
-      "name": null, "no_source": false,
+     {"account": "org-a/acct-a", "organization": "org-a", "account_uuid": "acct-a",
+      "weekly_reset": "5T09:00Z", "shared": false, "plan": "Max",
+      "name": null, "organization_name": "Work", "no_source": false,
       "windows": [
         {"kind": "five_hour", "model": null, "state": "fresh",
          "resets_at": "2030-03-06T16:00:00.000+03:00",
@@ -1722,18 +2670,22 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
                        "source": "poll"},
                       {"at": "2030-03-06T12:55:00.000+03:00", "used_percent": 50.0,
                        "source": "poll"}],
+         "restarts": [],
          "forecast": {"outcome": "runs_out",
-                      "runs_out_at": "2030-03-06T13:40:00.000+03:00", "basis": "blend"}},
+                      "runs_out_at": "2030-03-06T13:40:00.000+03:00",
+                      "at_reset_percent": null, "basis": "blend"}},
         {"kind": "week", "model": null, "state": "fresh",
          "resets_at": "2030-03-08T12:00:00.000+03:00",
          "latest": {"…": "as above", "used_percent": 41.0},
          "started_at": "2030-03-01T12:00:00.000+03:00", "even_percent": 72.02,
-         "readings": ["…"],
+         "readings": ["…"], "restarts": [],
          "forecast": {"low_percent": 56.93, "high_percent": 61.2}}]},
-     {"organization": "org-b", "account_uuid": null, "seat": null, "plan": null,
-      "name": null, "no_source": true, "windows": []},
-     {"organization": "org-c", "account_uuid": null, "seat": "week:2030-03-08T09:00Z",
-      "plan": null, "name": null, "no_source": false,
+     {"account": "org-b/", "organization": "org-b", "account_uuid": null,
+      "weekly_reset": null, "shared": false, "plan": null,
+      "name": null, "organization_name": null, "no_source": true, "windows": []},
+     {"account": "org-c/weekly:5T09:00Z", "organization": "org-c", "account_uuid": null,
+      "weekly_reset": "5T09:00Z", "shared": false, "plan": null,
+      "name": null, "organization_name": null, "no_source": false,
       "windows": [
         {"kind": "spend_limit", "model": null, "state": "silent", "resets_at": null,
          "latest": {"at": "2030-03-06T12:00:00.000+03:00", "source": "statusline"}}]}]}}
@@ -1743,12 +2695,15 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
 | --- | --- |
 | `now` | the moment the answer was worked out; every pace and state is as of it |
 | `fresh_for_seconds` | how old a window's latest sample may be and still be fresh: 900, the span the quota alerts read too |
-| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. A provisional seat whose week has ended is left out, and its organization is not then an entry with no source. Ordered by organization, then account |
+| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. An account known by its weekly reset is one entry however many weeks it was read in, and one read only in a week that has ended stands with that week silent. Ordered by `account` |
+| `account` | the account's key, as the `seat` dimension gives it: `<organization>/<UUID>`, `<organization>/weekly:<reset>` for an account no sample names a UUID for, or `<organization>/` for an organization with no sample |
 | `organization` | the organization's id |
-| `account_uuid` | the account's UUID: the sample's own, or the one its seat belongs to by the rule above; `null` for a provisional seat and for an organization with no sample |
-| `seat` | the provisional seat the samples without a UUID are on, `null` when the UUID is known. A provisional seat is known for one week, so once its week has ended it is no entry: the same machine read across a reset is the next week's seat alone, not two accounts |
+| `account_uuid` | the account's UUID by the rules above; `null` for an account known by its weekly reset and for an organization with no sample |
+| `weekly_reset` | the time of week the account's week resets, `5T09:00Z`, where its samples name a week; `null` otherwise |
+| `shared` | `true` for an account known by its weekly reset that two accounts' readings run under, by the rule above: its windows may hold both. `false` otherwise |
 | `plan` | the plan a source named for the account, or `null` |
-| `name` | the name the owner gave the account's organization, as the next section says, or `null` when none is set. Every entry of one organization has its name |
+| `name` | the name the owner gave the account itself, as the next section says: by its key, or for an account known by its UUID by its weekly-reset key; `null` when none is set and for an organization with no sample |
+| `organization_name` | the name the owner gave the account's organization, or `null`. Every entry of one organization has it |
 | `no_source` | `true` for an organization whose work no quota source has read in the seven days; its `windows` are empty. An account with samples is `false` |
 | `windows` | the account's windows, in the kinds' order above, a model's week by model: one per `kind` and `model` its samples have |
 
@@ -1762,8 +2717,9 @@ A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
 | `resets_at` | when the window resets, as its latest sample said; `null` when the window has not started |
 | `started_at` | its reset less its length, five hours or seven days; `null` without a reset |
 | `even_percent` | how much of the window steady use from its start would have spent by `now`: the pace tick. `null` without a reset or once the reset has passed |
-| `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it |
-| `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts`, `runs_out` with `runs_out_at`, or `spent`, and `basis`, the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
+| `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it, and a source's own reading falls where the window's count restarted |
+| `restarts` | the moments, oldest first, at which the window's count restarted inside it, its reset unchanged: one feed's reading fell ten points or more below that feed's previous reading of the window, and as far below the count. A feed is one session's samples, or the organization's poll and imports. The forecast reads only the readings from the latest restart on. Another feed's lower reading is no restart but a stale one, and is left out of the forecast. Empty where the count never restarted. What zeroed the counter is not said: the samples cannot tell |
+| `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts` with `at_reset_percent`, the share of the window its pace will have spent by the reset, at most 100 and rounded to the hundredth as a week's range is; `runs_out` with `runs_out_at`; or `spent`. `runs_out_at` and `at_reset_percent` are `null` for the other outcomes. `basis` is the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
 
 A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,
 `state`, `resets_at` and `latest` with `at` and `source` alone: no percent, no amount
@@ -1777,37 +2733,46 @@ an account's UUID nor a seat, belongs to no account and is not in the answer.
 
 ### The owner's names for accounts
 
-The usage rows and the quota samples hold an account's organization id and nothing that
-names it, so the owner names it, and Valkama keeps one name per organization in the store's
-`quota_account_names` table: `organization`, `name` and `updated_at`, the UTC time of the
-write to the millisecond. An organization with no name has no row. Settings writes the
-name; the Analytics page on every device and the quota alerts read it, and the store's
-snapshots and restore carry it with the other quota tables. Other server modules read it
-through `server.quota.names.names_of(conn, organizations)`, which answers the names of any
-number of organizations in one query, by organization, leaving out one with none.
+The usage rows and the quota samples hold ids and nothing that names them, so the owner
+names them, and Valkama keeps the names in the store's `quota_account_names` table:
+`account`, the key a name is given to, `name` and `updated_at`, the UTC time of the write
+to the millisecond. A key is one of two:
+
+- an account's key, as the `seat` dimension and the quota answer give it: its
+  organization, a slash, and its UUID or `weekly:` with the time of week its week resets,
+  `<ISO weekday>T<HH:MM>Z` in UTC;
+- an organization's id alone. Its name labels the organization, and each of its accounts
+  that has no name of its own.
+
+An account known by its UUID also answers to the name given to its weekly-reset key, so a
+name given before the UUID turned up stays with it. A key with no name has no row.
+Settings writes the name; the Analytics page on every device and the quota alerts read it,
+and the store's snapshots and restore carry it with the other quota tables. Other server
+modules read it through `server.quota.names.names_of(conn, keys)`, which answers the names
+of any number of keys in one query, by key, leaving out one with none.
 
 | Route | What it does |
 | --- | --- |
-| `GET /api/quota/account-names` | every name: `{"names": {"<organization>": "<name>"}}`, `{"names": {}}` until one is given |
-| `PUT /api/quota/account-names` | `{"names": {"<organization>": "<name>"}, "replace": true}` names each account given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for an organization that has none, and an empty one changes nothing |
+| `GET /api/quota/account-names` | every name: `{"names": {"<key>": "<name>"}}`, `{"names": {}}` until one is given |
+| `PUT /api/quota/account-names` | `{"names": {"<key>": "<name>"}, "replace": true}` names each key given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for a key that has none, and an empty one changes nothing |
 
 A name is one line: its runs of spaces and line breaks are collapsed to one space and its
-ends trimmed, and what is left is at most 80 characters, counted as characters rather
-than UTF-16 units, with no control character. An organization is 1 to 512 characters with
-no NUL. A write that breaks either rule, names more than 1000 accounts, or carries a field
-other than `names` and `replace` is refused whole with `400`,
-`{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing. The read
-answers under the `Host` rule alone; the write takes the browser's credential, as the
-quota settings do.
+ends trimmed, and what is left is at most 80 characters, counted as characters rather than
+UTF-16 units, with no control character. A key is 1 to 512 characters with no NUL, and one
+with a slash is an account's key as above. A write that breaks either rule, names more than
+1000 accounts, or carries a field other than `names` and `replace` is refused whole with
+`400`, `{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing.
+The read answers under the `Host` rule alone; the write takes the browser's credential, as
+the quota settings do.
 
 A device that kept names of its own, as builds before this one did in the settings each
 browser and the desktop app keep, writes them once with `"replace": false` the first time
 it opens Settings or Analytics, so a name given since on another device stays, and drops
 them once the write succeeded. A write that failed leaves them for the next open.
 
-A quota alert names the account by its organization's name where there is one, before the
-share spent, and says no name where there is none, nor where the owner chose notifications
-whose text reveals nothing of the work.
+A quota alert names the account by the name the owner gave it, else by its organization's,
+before the share spent, and says no name where there is neither, nor where the owner chose
+notifications whose text reveals nothing of the work.
 
 ### The poll of the usage endpoint
 
@@ -2167,7 +3132,7 @@ most 50.
 
 `apply_work_item_changes` applies several writes to one item in one call, all or
 nothing. It is the one MCP tool that edits an item's fields, sets and ticks its
-steps, attaches refs, links it, writes and resolves its discussion, records its
+steps, attaches refs and commits, links it, writes and resolves its discussion, records its
 summary and moves its state. It takes `id`, `author`, `expected_revision`,
 `verbose` and any of these groups, and applies them in this order:
 
@@ -2176,15 +3141,20 @@ summary and moves its state. It takes `id`, `author`, `expected_revision`,
 | `claim` | `true`; `false` is no change | `/claim`, as `claim_work_item` |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
 | `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, kind?, parent?, source?, mentions?}` | `/update` |
+| `convert` | `{to, leftover?: {title?, steps?}, force?}`; not with `transition`, `defer` or `move_out` | `/convert`, see [Converting a task into a goal or stage](#converting-a-task-into-a-goal-or-stage) |
 | `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `/checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `/checklist/tick` |
-| `refs` | list of `{kind, value, label?}` | `/ref` |
+| `refs` | list of `{kind, value, label?}`, `kind` one of `memory`, `session`, `url`; `commit` is refused, naming the `commits` group | `/ref` |
+| `commits` | list of `{repository, hash, label?, remove?}` | only here |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `/link` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `/comment` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?, addressees?}` | `/request`, as `create_work_item_request` |
 | `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
-| `transition` | `{state, reason?, force?, acceptance?}` | `/transition` |
+| `triage_seen` | `true` or `false`; not with `transition`, `defer` or `move_out` | only here, see [The triage stack](#the-triage-stack) |
+| `transition` | `{state, reason?, force?, acceptance?, to_check?, cancels?}` | `/transition` |
+| `defer` | `{until, reason, force?}`; not with `transition`, `move_out` or `convert` | `/defer`, see [Putting work off](#putting-work-off) |
+| `move_out` | `{reason, force?}`; not with `transition`, `defer` or `convert` | `/move-out`, see [Moving work out of a goal or stage](#moving-work-out-of-a-goal-or-stage) |
 
 Each path in the last column is under `POST /api/planning/work-item`.
 
@@ -2230,8 +3200,13 @@ refused; both are `invalid_request` before anything is written.
 It belongs to the call: `update` takes none of its own.
 
 `update` edits the item: a field that is absent or
-null is left alone, `parent: ""` clears the parent, and an edit writes no
-history event. It is applied after the claim.
+null is left alone, and an edit writes no history event. It is applied after
+the claim. `parent` moves the item under another goal or stage; `parent: ""`,
+which cleared the parent, is refused with `[parent]`, `invalid_request`, naming
+`move_out`: an item leaves its goal or stage only with the reason that group
+records. `convert`, `transition`, `defer` and `move_out` each change the state,
+and a call that names two of them is refused with `invalid_request` before anything is
+written.
 
 `comments` writes up to 100 comments in the order sent, each as `comment`
 writes one. The older `comment` group, one comment, still
@@ -2240,16 +3215,54 @@ in `reply_to` must already exist when that entry is written: the id of a
 comment the same call writes is not known to the caller, so a reply to it is a
 second call. The same holds for `resolutions`.
 
+**Since 3.0.** `commits` attaches commits by hand, or detaches them with
+`remove: true`. Valkama attaches the commits a session makes and says so in the
+hook answer, as `docs/hook-contract.md` describes; this group places a commit it
+could not place, one made outside a session, or one on the wrong item, which
+moves by a `remove` there and an attachment on the right one.
+
+- `repository` is a registered project's id. `hash` is a whole hash or its
+  start of at least 7 hex digits, in either case.
+- An attachment asks the project's root `git rev-parse --verify <hash>^{commit}`
+  for the whole hash, and records a commit Valkama did not know with its subject
+  and time and no session. On a machine without the project's root a whole hash
+  is recorded as it is.
+- The attachment is signed `manual`. On a task it adds the commit's project with
+  the source `commits`, as
+  [The projects an item changes](#the-projects-an-item-changes) says; a goal or
+  stage takes the commit and no project.
+- A detach names one of the commits attached to the item, by its whole hash or
+  a start, and asks no repository. The commit stays, and a session's commit
+  attached nowhere else is on no card again. A task loses the commit's project
+  when it held it by its commits alone and no other attached commit is of it.
+- Each attachment and detachment writes the history event `commit_attached` or
+  `commit_detached` with the detail `<repository> <hash>`. An attachment the item
+  has already writes nothing.
+
+An entry is refused with `invalid_request`:
+
+| Entry | Refusal |
+| --- | --- |
+| a project the registry does not record | `[commit] <repository> is not a registered project: <ids>` |
+| a hash its repository holds no commit of, or one that is no hash | `[commit] <hash> is not a commit in <repository>` |
+| a start of a hash, on a machine without the project's root | `[commit] <repository> has no root on this machine, so the short hash <hash> cannot be resolved: send the full hash` |
+| a start that more than one object of the repository begins with | `[commit] <hash> is ambiguous in <repository>: send more digits` |
+| `remove` of a commit the item does not have | `[commit] <repository> <hash> is not attached to <REF>` |
+
 `questions` asks up to 100 questions, each with what `create_work_item_request`
 takes and checked by the same rules. Without `addressees` each is that tool's
 question: it waits in the owner's list and raises the owner's alert once the call
 is committed. With `addressees` an entry asks those sessions instead, as that tool
 does, one request each, and waits in no owner's list. A call that asks a question
 and closes the item with its `transition` is refused, `invalid_request` on the `transition` step, and
-`force` does not carry it: a closed item reads a waiting question `expired`, so
-it would be asked and lost in one write. Move the item to review, or leave the
-question out. A question asked by an earlier call does not stop a close, as it
-never did. A closed item takes no question, and `questions` is applied before
+`force` does not carry it: the close ends every request still pending on the item in
+the same write, so the question would be asked and ended unanswered at once. The
+refusal reads `transition: a question on an item this call closes would end
+unanswered in the same write: ask it in a call that leaves the item open`. An
+agent's call that asks the owner and completes the item meets the
+[`question` guard](#review-asks-the-owner) first, `workflow_guard` on the same step.
+A question asked by an earlier call does not stop a person's close, nor an agent's
+cancellation; the close ends it, as below. A closed item takes no question, and `questions` is applied before
 `transition`, so a call that reopens an item cannot also ask on it.
 
 The steps run inside one transaction. When one is refused, none of them is
@@ -2270,6 +3283,9 @@ one call with its identity, and every row its steps write points to that call.
 
 The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent;
+`commits` is `{attached, removed, unchanged}`: the `{repository, hash}` of each
+commit attached and removed, and how many entries named a commit attached
+already;
 `comments` and `questions` list every comment and question the call wrote, so
 a reply or a withdrawal needs no read first. A question with `addressees` lists its
 `requests`, each `request_id` with its `addressee`, in place of `request_id` and
@@ -2282,10 +3298,14 @@ hear the items an `update`'s description named stands beside `applied`, as
 ```json
 {"claim": true, "update": ["title", "priority"],
  "checklist": [{"item_id": "…", "text": "write it", "done": false}],
- "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1, "links": 1,
+ "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
+ "commits": {"attached": [{"repository": "valkama", "hash": "3f2a9c1…"}], "removed": [],
+             "unchanged": 0},
+ "links": 1,
  "comments": [{"comment_id": 41, "reply_to": null, "reply_to_request": null}],
  "questions": [{"request_id": "…", "revision": 0}],
- "summary": {"summary_comment_id": 42}, "transition": {"state": "review"}}
+ "summary": {"summary_comment_id": 42},
+ "transition": {"state": "review", "review_request_id": "…"}}
 ```
 
 The batch is also the HTTP write `POST /api/planning/work-item/apply`, which
@@ -2343,6 +3363,14 @@ The call is recorded once with its identity, and the creation's, the claim's and
 both ends of each link's events point to it. Without `claim`, `checklist` or
 `links`, the call and its answer are what they were before.
 
+A named `state` meets the refusals a move there does. A new item stands in
+`triage`, `ready` or, with `claim`, its active state: a state of the categories
+`review`, `blocked`, `completed` or `cancelled` is refused with the `new_item`
+guard (`409 workflow_guard`), which `force` does not carry, before anything is
+written. Entering one asks for what a creation does not carry — what the owner
+is to check, the reason, the summary — so the item is created, then moved there
+with a transition.
+
 ### Merging items that are one change
 
 `merge_work_items` (`POST /api/planning/work-item/merge`) folds items that turned
@@ -2364,6 +3392,9 @@ What moves to the survivor:
   item, and the replies under a question move with the question. `moved.comments`
   counts the rows that moved;
 - the refs, except one the survivor already has, which stays where it was;
+- **since 3.0**, the attached commits, except one the survivor has already,
+  whose attachment to the merged item goes; `moved.commits` counts those that
+  moved. The projects they gave move with the item's projects;
 - the [pin](#pins), which the survivor keeps when it has one already;
 - the links, each in its own direction: `MAIN-13 blocks MAIN-20` becomes
   `MAIN-12 blocks MAIN-20`. A link to the survivor or to another item of the
@@ -2376,8 +3407,8 @@ What moves to the survivor:
 
 Each merged item is then linked `duplicates` to the survivor, gets a summary
 naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs,
-1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the reason), loses
-its claim and closes in the first `cancelled` state its workflow reaches from
+3 commits, 1 link and 0 projects.", `next` "Continue in MAIN-12.", `why` the
+reason), loses its claim and closes in the first `cancelled` state its workflow reaches from
 where it stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
 history, the [mentions](#mentions) of it, its reports, its description, labels and
@@ -2406,7 +3437,8 @@ and `warnings` and `overridden` when there are any:
 ```json
 {"reference": "MAIN-12", "revision": 9, "merged": [
   {"reference": "MAIN-13", "work_item_id": "…", "state": "cancelled",
-   "moved": {"steps": 2, "comments": 1, "refs": 0, "links": 1}}],
+   "moved": {"steps": 2, "comments": 1, "refs": 0, "commits": 3, "links": 1,
+             "projects": 0}}],
  "warnings": ["MAIN-13 stays under MAIN-4; MAIN-12 keeps its own parent"]}
 ```
 
@@ -2500,7 +3532,7 @@ An event written before calls were recorded, or by the execution runner outside
 any call, has
 `{"state": "unconfirmed", "source": null, "session_id": null, "agent_id": null}`.
 A write from the browser UI is `confirmed` with source `browser` and no session;
-see [Local HTTP security](../README.md#local-http-security).
+see [Local HTTP security](guides/http-security.md#whose-write-it-is).
 
 `browser` means this and no more: the request carried the fetch metadata a
 browser sets on its own -- `Sec-Fetch-Site: same-origin` -- together with the
@@ -2547,8 +3579,13 @@ and never written by one:
 | --- | --- |
 | nobody holds the item | `null` |
 | the claim names no call, the call is not `confirmed`, or it has no session | `unconfirmed` |
-| the session has no row, is `ended` or `failed`, or was last seen more than 3 days ago | `stale` |
+| the session has no row, is `ended` or `failed`, or was last seen longer ago than the lease term | `stale` |
 | otherwise | `live` |
+
+The lease term is the setting `lease_quiet_days` of the item's space, 3 days unless
+the owner changed it ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
+What is read about a session with no item, how long it counts as live and the
+notices of its hook among it, takes the common value.
 
 A claim made before calls were recorded, by a build that does not record them,
 or in the browser reads `unconfirmed`: none of them names a session.
@@ -2613,9 +3650,9 @@ and its `parts` counts the lease:
 
 `holder` is `claim_ref`. `acquired_at` is when the claiming call arrived and is
 `null` for a claim that names no call; `last_seen` is the session's, and
-`expires_at` is `last_seen` plus 3 days while the lease is `live`, and for an
+`expires_at` is `last_seen` plus the lease term while the lease is `live`, and for an
 `unconfirmed` claim the item's last history event (its `updated_at` when it has
-none) plus 3 days; `null` while an open question to the owner stops the count,
+none) plus the lease term; `null` while an open question to the owner stops the count,
 and for a `stale` lease. It answers how long a session that shows no sign of
 life keeps a live lease, and promises nothing about a session that ends: from
 that moment the lease is `stale`, `expires_at` is `null`, and the grace above
@@ -2683,13 +3720,13 @@ Who may release or take over a claim follows the lease:
   another session that signs with the same `author`, and a call with no
   confirmed session at all.
 - `claim_work_item` on an item under a `stale` lease, or an `unconfirmed` claim
-  past its 3 days, releases it before it does anything else, in the grace or
+  past its lease term, releases it before it does anything else, in the grace or
   not, with the steps the same session holds there: whoever asks for that item
   takes it now, without `force`, and the session that comes back later finds it
   taken. Its history reads `released` and then `claimed`.
   `claim_work_item` with `release` on a stale lease stops after that release.
 - `claim_ready_work_item` first releases every lapsed hold in its space, as the
-  sweep below does. It neither gives nor releases an item whose lease is in the
+  sweep below does, except one the calling session holds. It neither gives nor releases an item whose lease is in the
   grace, because nobody asked for that item in particular.
 - A task in an active state whose workflow lets it reach no `ready` state keeps
   its stale lease: releasing it would leave work with no holder, so every sweep
@@ -2706,24 +3743,34 @@ Who may release or take over a claim follows the lease:
   | --- | --- |
   | `session-ended` | ended or failed |
   | `session-missing` | has no row |
-  | `lease-expired` | was last seen more than 3 days ago, or, for a claim or step no session proved, the item had no event for 3 days |
+  | `lease-expired` | was last seen longer ago than the lease term, or, for a claim or step no session proved, the item had no event for that term |
 
   Releases written before the reasons were told apart say `lease-expired`,
   whatever the cause, and stay as they were written.
+- A checklist step's claim records no call of its own, so it lapses with the
+  session its holder names, by the same rules, read from that session's newest
+  confirmed call. Releasing a lapsed lease releases the steps the same holder
+  holds there in the same write, whether the grace is over or a caller asked for
+  the item. A step of any other holder is released once its own lease lapses, by
+  the same sweeps that release a lease, whether or not somebody holds the item,
+  and a task left at work with nothing holding it goes back to the queue. A done
+  step is nobody's hold, and a step of a closed item never lapses. A claim or a
+  step of the session making the call stays, as `claim_work_item` keeps its
+  claim: the call is that session's sign of life.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases. It has no session to go quiet, so it lapses when its item has had no
-  history event for 3 days, and so does a step whose holder no session proved.
-  The owner's own claim made in the browser lapses the same way, as does a claim
-  a launch took for its runner. It reads `unconfirmed` until the release.
+  history event for the lease term, and so does a step whose holder no session proved.
+  The owner's own claim made in the browser lapses the same way. It reads
+  `unconfirmed` until the release.
 
 With nobody calling, [the planning sweep](#the-planning-sweep) releases every
 lapsed hold: each claim and claimed step whose stale lease is past its grace, or
-whose `unconfirmed` hold is past its 3 days. A grace is over at exactly 12 hours
+whose `unconfirmed` hold is past its lease term. A grace is over at exactly 12 hours
 after `ended_at`, so a pass at that second releases the lease.
 
 The space's list of abandoned claims (`stale_claims` in the read model) holds
 every claim of an item at work or blocked whose lease is `stale`, in its grace or
-not, and every `unconfirmed` claim whose 3 days without an event are over, until
+not, and every `unconfirmed` claim whose lease term without an event is over, until
 a release takes it away.
 
 A claim still counts as the executor that starting an item requires. Starting
@@ -2738,7 +3785,7 @@ request and within the start-up budget, and then again every 10 minutes on a
 connection of their own, on the thread `valkama-planning-sweep`, for as long as
 they run. Two processes passing at once need no agreement: a step changes
 nothing the second time, and every write checks the revision it read. Ten minutes is a
-margin against terms of 12 hours and 3 days, and between passes
+margin against terms of 12 hours and a lease term of a day or more, and between passes
 `claim_ready_work_item` and `claim_work_item` still release what they meet.
 
 A pass runs its steps in order, each in a transaction of its own:
@@ -2748,6 +3795,9 @@ A pass runs its steps in order, each in a transaction of its own:
 | `leases` | releases every lapsed claim and claimed step, as [above](#who-holds-a-claim-or-a-step), and marks the lapsed holder's ticks |
 | `waiting` | leaves [words waiting](#words-that-wait-for-a-session) on a goal or stage that a session stopped working on while its claim, step or subscription still stands -- it ended, or went quiet past the lease -- once no live session works there; the words are what a person did there after that session's last call, and they wait under a call of `valkama` with the tool `waiting-recovery` |
 | `subscriptions` | removes every [subscription](#subscriptions) and mute whose session lapsed |
+| `returns` | brings back [work put off](#putting-work-off) whose day or time passed, or whose item closed by a path that did not bring it back, one call of `valkama` under the tool `deferral-return` per item |
+| `commits` | takes the commit records no client hook took within an hour, each decided by its session, and deletes those that change nothing, as the [hook contract](hook-contract.md#taking-the-records) describes; a record it applied is deleted at the next pass |
+| `confirmations` | asks the owner to confirm a goal or stage that awaits confirmation with no live session working there, or unconfirmed a day after its wait began, once in a period of waiting, under the tool `confirmation-question`; and records the wait, with its event, of one a write left unrecorded (see [Completing a goal or stage](#completing-a-goal-or-stage)) |
 
 Every step keeps the same contract:
 
@@ -2832,8 +3882,9 @@ requeued task keeps its checklist, comments and history, and goes to `ready`,
 never back to `triage`, so the queue offers it before work nobody has accepted.
 
 `transition` sent beside `claim` in one `apply_work_item_changes` call applies
-after the claim's move: `{"claim": true, "transition": {"state": "review"}}`
-moves a task in `triage` to `dev` and then to `review`.
+after the claim's move: `{"claim": true, "summary": {…}, "transition": {"state":
+"review", "to_check": "…"}}` moves a task in `triage` with no open step to `dev` and
+then to `review`.
 
 ### A close ends the claims
 
@@ -2858,6 +3909,18 @@ A close of an item nobody holds releases nothing and carries no `released`. A
 move to `ready`, `triage` or `review` releases the same way; a move among the
 `active` and `blocked` states keeps the claim.
 
+A close also ends every request still pending on the item -- a question or a
+decision, asked of the owner or of an agent session, and a list under a comment --
+in the same write. Each is written `expired`, with `expired_reason: item_completed`
+when the item closes into a `completed` state and `item_cancelled` when it closes
+into a `cancelled` one, and gets a `request_expired` event naming the request, after
+the `transitioned` one, with the close's author and call. When a person closes the
+item, the agent that asked hears it as `question_withdrawn`, as it hears any question
+a person takes back (see [the hook contract](hook-contract.md#who-is-told)), and
+reads the reason on the request. A request that had already lapsed, past its
+deadline or on an execution that ended, is written with that reason, `deadline` or
+`execution_closed`, and gets no event: the close did not end it.
+
 A checklist step's claim ends too, recorded as `checklist_released` with the
 step's text. A completed close never has one: the guard requires every step
 ticked, and a tick clears the step's claim. A cancelled close leaves its undone
@@ -2866,7 +3929,9 @@ steps stay open and become unheld, so a reopened item does not read as being
 worked by their former holders.
 
 Reopening a closed item -- a transition back to an open state -- restores no
-claim. Whoever takes the work again claims it.
+claim and no request: whoever takes the work again claims it, and a question the
+close ended stays ended, since it was about the item before the close; one still
+needed is asked again.
 
 Who held the item is still on the record. The card (`get_work_item`, a
 `verbose` answer), the full record (`GET /api/planning/work-item`) and the briefs of the HTTP
@@ -2890,6 +3955,374 @@ the field is `null`.
 The card's own read says more about who that was: `last_claim_executor` is the
 same `executor` its claim, steps and agents carry, for the holder
 `last_claim_ref` names, with `state` `none` when there is no session to open.
+
+### Completing a goal or stage
+
+A goal or stage is done when nothing under it is open, so a move of one to a
+`completed` state is refused with the `children` guard (409 `workflow_guard`) while
+an item under it, at any depth, is open, one in `triage` or `deferred` included.
+`force` does not carry it, and a person meets it as an agent does. The message names
+up to five of the open items and counts the rest: `[children] MAIN-3 has 7 open
+item(s) under it: MAIN-4, MAIN-5, MAIN-6, MAIN-8, MAIN-9 and 2 more; close, cancel or
+move out what is open under it, and it awaits confirmation once nothing is`.
+
+**Awaiting confirmation.** The write that closes, moves out, moves away or deletes
+the last open item under an accepted open goal or stage brings it to
+`container_state: awaiting_confirmation`, and in the same transaction:
+
+- the answer of that write, over HTTP and as an MCP acknowledgement, adds
+  `awaiting_confirmation`, the references of the goals and stages that came to wait
+  in it. Confirming the last open stage under a goal is such a write: the goal comes
+  to wait in it;
+- Valkama records `awaiting_confirmation` on the goal or stage in a call of its own,
+  with the tool `awaiting-confirmation` and the author `valkama`. Its detail names
+  what closed without being done and what left, such as `cancelled MAIN-12, MAIN-14;
+  moved out MAIN-15`, at most 512 characters, the references that do not fit counted
+  as `and N more`. A goal or stage with no steps ends it with `no steps: check it
+  against its description`. The record's kind asks for a session, so it wakes the
+  sessions working there (see [the hook contract](hook-contract.md));
+- when an agent's write did it, that agent's top-level session follows the goal or
+  stage, so a coordinator whose subagent closed the last task hears it. A person's
+  write and Valkama's own subscribe nobody.
+
+While it waits, a read of it by parts names the part `confirmation` in its card's
+`parts`, with `count` the items it lists, and reads it by that name:
+
+| Field | What it holds |
+| --- | --- |
+| `since` | when this period of waiting began |
+| `steps` | how many steps the goal or stage has; 0 means it is checked against its description |
+| `cancelled` | the items under it that were cancelled, each `{reference, reason}`: the reason of the move that cancelled it, else its summary's `why`, else its `done`, else `null` |
+| `moved_out` | the items that left it and did not come back, each `{reference, reason}`: the reason the move out gave, or `moved under MAIN-7`; `null` where the move recorded none |
+| `asked` | the id of the owner's confirmation question, once it is asked; `null` before |
+| `left_for_next_session` | when the owner left it to the next session; `null` otherwise |
+
+A goal or stage that does not wait has no such part, and a read that names it answers
+without the field.
+
+**Confirming.** Any session or a person confirms it by completing it, under the guards
+a task meets: every step ticked and a summary. Whoever confirms checks its steps, or
+its description when it has none, against what was done; when something is missing,
+they file a task under it, which brings it back to work. A new or reopened item under
+it, or one moved under it, ends the wait in that write, and an open confirmation
+question ends `expired` with `expired_reason: withdrawn`.
+
+**The owner's question.** The planning sweep's `confirmations` step asks the owner
+when no live session works on the goal or stage (see [Participants](#participants)),
+or when a day has passed since the wait began and nobody confirmed it. It asks once
+in a period of waiting, in a call of Valkama's own with the tool
+`confirmation-question`: `kind` `question`, purpose `confirm`, the prompt `All work
+under MAIN-3 is closed: confirm it, or leave it to the next session that takes work in
+this space.` followed by what was cancelled and what moved out, each with its reason,
+and its steps, or `It has no steps: check what was done against its description.`,
+and one required choice field, `answer`, with the options `confirm` (`Confirm it`)
+and `leave` (`Leave it to the next session`).
+
+Only a person answers it, in Valkama (`owner_only`, 403, for an agent), and as with
+[review's question](#review-asks-the-owner) it is not declined, its answer is not
+changed and an own variant is no answer to it (`[purpose]`). Valkama asked it, so
+nobody withdraws it (`not_asker`, 403): the write that ends the wait ends it. The
+answer is carried out in the write that gives it, and a refused move refuses the
+answer; the answer's record says what it did as `carried_out`:
+
+- `confirm` ticks the open steps as the person's, writes the summary `done`
+  `Confirmed by the owner: all work under it is closed.`, `next` `Nothing: the work
+  under it is closed.` and the answer's note as `why`, and moves it to the first
+  `completed` state of its workflow: `carried_out: completed`;
+- `leave` leaves it as [words that wait](#words-that-wait-for-a-session) for the first
+  session that takes work anywhere in its space, with the scope `space`, and records
+  `left_for_next_session`: `carried_out: left_for_next_session`. It goes on waiting,
+  and no question is asked again in this period.
+
+A session's confirmation while the question is open completes it, which ends the
+question with `expired_reason: item_completed`. A confirmation question does not hold
+that completion (see [the `question` guard](#review-asks-the-owner)).
+
+### Cancelling a goal or stage
+
+A goal or stage is cancelled with the open work under it, at any depth, so a cancel
+of one with open work under it takes two calls: the first answers with what would
+close, the second confirms it.
+
+The first call, a move of the goal or stage to a `cancelled` state without
+`cancels`, is refused with code `cancel_list` (409), and nothing is written. `force`
+does not carry it, and a person meets it as an agent does. Its body carries, beside
+`code` and `message`:
+
+| Field | What it holds |
+| --- | --- |
+| `cancels` | the open items under it, at any depth, in number order: `reference`, `title`, `kind`, `state` (`{key, name, category}`, `null` for an accepted open goal or stage) with `container_state`, and `holder`, who holds the item or one of its steps, empty when nobody does |
+| `dependents` | the open items outside that list that wait on one of its items or on the goal or stage itself: `reference`, `title`, `kind`, `waits_on` and `how`, `blocks` for a `blocks` link and `deferred` for work [put off](#putting-work-off) until it; one row for each item waited on |
+| `list_token` | 16 hexadecimal digits that fingerprint the list |
+
+The second call is the same move with `cancels` set to `list_token`. The server
+builds the list again and cancels exactly that list when its token matches; when
+it does not, because work was filed under the goal, a holder or a state changed, or
+a dependent came or went, the call is refused again with the new list and its
+token, and nothing is cancelled. A new title, description or comment changes no
+token. The token is the first 16 hexadecimal digits of the SHA-256 of
+`{"cancels": [[reference, state, holders], ...], "dependents": [[reference, waits_on,
+how], ...]}` written as JSON with sorted keys, no spaces and ASCII only, where
+`state` is the item's state key or, for an accepted open goal or stage, its
+`container_state`, `holders` is the sorted `holder` list, and each table is sorted.
+It holds nothing on the server, so any caller that read the list gets the same one.
+
+In that one write every item of the list moves to the first `cancelled` state its
+workflow reaches, the deepest first, with the reason `cancelled with MAIN-3`, so its
+`transitioned` detail reads `cancelled: cancelled with MAIN-3`. The guard for what a
+person did holds for the goal or stage named, not for the work under it. Each
+closes with a summary written as a new report: one without a summary gets `done`
+`Cancelled with MAIN-3.` and `next` `Nothing: the goal or stage it served was
+cancelled.`; one with a summary keeps its `done` and gets `next` `Nothing: cancelled
+with MAIN-3, the goal or stage it served.`, the summary before staying a report in
+its comments. The goal's or stage's `reason`, when the move gives one, is each
+summary's `why`. Their claims and step claims end and their requests end as
+[a close ends the claims](#a-close-ends-the-claims) says. An item of the list whose
+workflow reaches no `cancelled` state refuses the whole cancel, before any list is
+handed over: `[transition] MAIN-14 is under MAIN-3 and cannot be cancelled from where
+it stands`. `cancels` with any other move, a task's cancel among them, is refused with
+`invalid_request`.
+
+The answer, and `applied.transition` of a batch, adds `cancelled`, the references of
+the items under it the cancel closed, and `released`, a list of `{reference,
+holder}` for each claim it ended on them, in place of the one holder a close names.
+
+A cancel of a task, or of a goal or stage with nothing open under it, is one call.
+Any close, completed or cancelled, adds `freed`: the open items it blocked that
+nothing open blocks any more, by reference. An open item still linked `blocks` to a
+cancelled one names it in `cancelled_blockers`.
+
+### Moving work out of a goal or stage
+
+An item leaves its goal or stage with a reason, by the `move_out` group of
+`apply_work_item_changes` or `POST /api/planning/work-item/move-out` with
+`{id, reason, force?, expected_revision?, author?}`. In one write:
+
+- it goes to the top level, and to the first `triage` state its workflow reaches
+  from where it stands, or stays in the `triage` state it is in; its
+  `transitioned` detail reads `triage: moved out of MAIN-3: <reason>`;
+- it keeps `started_at`, its claims and step claims end (`released`), and its
+  basis goes, as every move to triage takes it;
+- a goal or stage takes the work under it along and becomes a goal; an accepted
+  one goes to triage too, though no move puts one there, and the work under it
+  stays as it was, which the queue does not give while the goal stands in triage;
+- the goal or stage it left records `child_left` with the detail `MAIN-12:
+  <reason>`, which its [`confirmation` part](#completing-a-goal-or-stage) reads,
+  and comes to await confirmation when nothing under it is open any more.
+
+The answer adds `moved_out: {from, reason}`, `from` the reference of the goal or
+stage it left; over MCP the acknowledgement carries it, and `applied.move_out`
+says `state`, the key of the triage state, and `released`. It is refused with
+`invalid_request`, nothing written, without a `reason` (`[move_out]`), for an item
+under no goal or stage or a closed one (`[move_out]`), for one whose workflow
+reaches no `triage` state (`[move_out]`), and for one another session holds:
+`MAIN-12 is held by …; pass force to move it out anyway`. `force` carries the
+last through and records `overridden` with `claim`.
+
+**Moving under another goal or stage** is the edit `update {parent}`. The goal
+or stage it left records `child_left` with the detail `MAIN-12: moved under
+MAIN-7`, and both come to await confirmation, or stop, in that write. The new
+parent meets the rules of a creation's, and two more:
+
+- an accepted open item, one with a basis and in neither `triage` nor
+  `deferred`, is refused under a goal or stage that, or one over which, stands in
+  `triage` or `deferred`: `[parent] an accepted item does not move under a goal or
+  stage that is not accepted: accept it first, or move the item out`;
+- an item in `triage` moved under goals and stages all accepted and open is
+  accepted with them, as if filed there: basis `inherited`, a task in the first
+  `ready` state its workflow reaches, a goal or stage in the service state with
+  the work in triage under it, and the reason `moved under MAIN-7`. An item put
+  off stays put off.
+
+A parent in another space is refused as before.
+
+### Converting a task into a goal or stage
+
+A task becomes a goal or stage, and a goal or stage with nothing under it a task
+again, by the `convert` group of `apply_work_item_changes` or
+`POST /api/planning/work-item/convert` with `{id, to, leftover?, force?,
+expected_revision?, author?}`. `to` is `stage` for a task under a parent and
+`goal` for one without, the word its place gives, or `task`, `bug` or
+`improvement` for a goal or stage. In one write:
+
+- the item keeps its number, title, description, comments, history, links,
+  questions, subscribers, refs, steps with their ticks and the wait it was put
+  off on; a `bug` or `improvement` made a goal or stage takes its kind as a label;
+- a task accepted and open comes to stand in the service state, recorded `opened`
+  with `converted from a task`, and loses `started_at`, which a goal or stage
+  reads from the work under it; a goal or stage accepted and open goes to the first
+  `ready` state, recorded `transitioned` with `<key>: converted from a goal`; each
+  keeps its basis, and one in `triage` or `deferred` stays there;
+- its claim and step claims end (`released`, `checklist_released`);
+- a held task, by its claim or a claim of a step, leaves the work at hand in a new
+  task under it: its holder with the call that took the claim, so the lease reads
+  as it did, every claimed step with its claim (`claimed`, `checklist_claimed`),
+  the steps `leftover.steps` names by `item_id`, with their ids and ticks, the
+  title `leftover.title` or the task's own, its kind, priority, `started_at` and
+  projects. It stands in the first `active` state, or in the task's `blocked`
+  state for the same reason, with the basis `inherited` under goals and stages all
+  accepted and open, else the task's. A task nobody holds leaves one only when
+  `leftover` is sent, in the first `ready` state, or `triage` when the item is in
+  triage or deferred; without one the task's projects are dropped, since a goal
+  or stage names none;
+- the top-level session of each holder follows the converted item;
+- the goal or stage it stands under, and the item, are marked: a goal or stage
+  made a task stops awaiting confirmation, and its `confirm` question is
+  withdrawn.
+
+The item records `converted` with the detail `task -> stage`, then `; leftover
+MAIN-15: 2 steps`, how many steps went to the new task, and `; projects dropped:
+alpha` when so. The answer adds `converted:
+{from, to, leftover, projects_dropped}`, `from` and `to` the kinds, `leftover`
+the new task's reference or null; over MCP the acknowledgement carries it, and
+`applied.convert` says `kind`, `state` (null for a goal or stage accepted and
+open, with its `container_state`) and `released`. It is refused with
+`invalid_request`, nothing written, for another word, naming the one that passes
+(`[convert]`), for a closed item, one in `review`, a goal or stage with any item
+under it (one that left does not count) or with `leftover`, and a step
+`leftover` does not find (`[convert]`); with `workflow_guard` for an agent's
+conversion while a question to the owner other than a `confirm` one is open on
+it (`question`, which `force` does not carry); and for an item another session
+holds: `MAIN-12 is held by …; pass force to convert it anyway`. `force` carries
+the last through and records `overridden` with `claim`.
+
+The refusals that lead here name the word that passes: a parent that is a task,
+`MAIN-12 is a task and holds no children: convert it first, with convert {to:
+stage} in apply_work_item_changes` (`goal` for one without a parent); an edit of
+a task's kind to a goal or stage, `an edit changes kind among task, bug and
+improvement: MAIN-12 becomes a stage with convert {to: stage}`; and of a goal's or
+stage's kind to a task, `an edit does not make a goal or stage a task: MAIN-12
+becomes one with convert {to: task}, and goal or stage follows from the parent`.
+
+### Putting work off
+
+Work that is to wait is put off by the `defer` group of `apply_work_item_changes`
+or `POST /api/planning/work-item/defer` with `{id, until, reason, force?,
+expected_revision?, author?}`. A `transition` into a `deferred` state is refused,
+naming `defer`. `until` is one of:
+
+- a day, `2026-12-01`, which comes at 00:00 UTC;
+- a time with its zone, such as `2026-12-01T09:00:00Z` or `2026-12-01T12:00:00+03:00`;
+- the reference or `work_item_id` of the open item whose close it waits on: not
+  the item itself, and not a goal or stage it stands under, which closes only
+  once nothing under it is open.
+
+`reason`, at most 400 characters, says why the work waits; the owner reads it when
+it comes back. In one write the item moves to the first `deferred` state its
+workflow reaches, with the `transitioned` detail `deferred: until 2026-12-01:
+<reason>`; its basis goes and its claims and step claims end (`released`), as on
+every move there. An item put off already stays where it is and takes the new
+condition. The answer adds `deferred`, and `applied.defer` of a batch says `state`,
+`deferred` and `released`. It is refused with `invalid_request`, nothing written,
+without `until` or `reason`, for an `until` that is no day, time or open item it
+may wait on or a moment already past, and for a closed item (`[deferral]`); and for one another session holds: `MAIN-12 is
+held by …; pass force to put it off anyway`. `force` carries the last through and
+records `overridden` with `claim`.
+
+The full record and the card of an item put off carry `deferred`:
+
+| Field | What it says |
+| --- | --- |
+| `until`, `until_item` | the moment it comes back, or the reference of the item it waits on; one of them is `null` |
+| `reason`, `since`, `by` | why, when and who put it off: `by` is `{author, session_id}` of that call; the card leaves these to the history |
+| `reached_at` | when its condition came while the owner is asked whether to take it up; otherwise `null` |
+
+**Coming back.** The work comes back when its day or time passes, read by the
+sweep's `returns` step and by `claim_ready_work_item` for its space before it reads
+the queue, and in the write that completes, cancels or deletes the item it waits
+on. An item merged away passes the wait to the item it merged into. It comes back
+to the first `triage` state its workflow reaches, with the `transitioned` detail
+`triage: returned, date 2026-12-01` and a `returned` event whose detail is `date
+2026-12-01`, `completed MAIN-12`, `cancelled MAIN-12` or `deleted MAIN-12`. While
+that move is its newest, its record carries `returned`: `because` (`date`,
+`completed`, `cancelled` or `deleted`), the `item`, `null` for a date, and `at`. A
+close or a delete that brought work back answers with `returned`, the references
+it brought back.
+
+Under goals and stages all accepted and open, or when its workflow reaches no
+`triage` state, the item stays put off with `reached_at` set, and Valkama asks the
+owner a question of purpose `return`: `MAIN-12 was put off until 2026-12-01; that
+has come. Do it, put it off again, or drop it.` It is asked once: the item waited
+on closing again, or being deleted, asks nothing more. A delete of that item, before
+or after its close, leaves `until` at the moment the condition came and
+`until_item` `null`. Its one required choice, `answer`,
+takes `do`, `later` with the text `until`, or `drop` with the optional text
+`cancels`, a cancel list's token. As with [review](#review-asks-the-owner), only a
+person answers it, and the answer is carried out in the same write: `do` moves the
+item to its first `ready` state (`carried_out: ready`), `later` puts it off until
+the new condition (`deferred`), `drop` cancels it with a summary saying the owner
+dropped it (`cancelled`). While the question is open an agent's claim of the item,
+and its move anywhere but a cancelled state, is refused with
+`acceptance_question`, which `force` does not carry.
+
+A claim, or any move out of `deferred`, a cancel included, ends the condition and
+withdraws its question; moving the item under another parent keeps them. Merged
+into an item that is not put off, the item's question ends withdrawn in the merge
+and moves to the survivor closed, since its answer `do` would move the survivor
+from wherever it stands; a survivor put off takes the question still waiting. A read
+writes nothing: a condition that came stands until a write brings the work back.
+
+**A goal or stage put off** keeps the work under it with whoever holds it, and the
+queue gives none of it (`ancestor_deferred`) until it comes back. The sessions
+working under it hear that it was put off and that it came back, once each; an
+agent's write wakes none of them, a person's wakes them all.
+
+### Review asks the owner
+
+A move into a `review` state from a state of another category is an agent handing
+its result to the owner, so it needs what a close needs and says what to check:
+
+- every step done and a summary (`checklist`, `summary`), and no step marked
+  `by_previous_holder` (`previous_holder`); `force` carries these;
+- `to_check`, text of at most 8000 characters naming what the owner is to check.
+  Without it the move is refused with `review_question`, which `force` does not
+  carry. `to_check` on a move to any other state is refused with `invalid_request`.
+
+A move between two `review` states is no entry and asks nothing.
+
+The move asks the owner a question in the same write: `kind` `question`, purpose
+`review`, the `to_check` text as its prompt and one required choice field,
+`answer`, with the options `accept` (`Accept it`) and `return` (`Return it to
+work`). The transition's answer names it as `review_request_id`, in
+`applied.transition` of a batch too. The owner's alert for it is the review alert,
+not a question alert; another question asked in the same call still raises its own.
+
+Only a person answers it, in Valkama: an agent's answer is refused with
+`owner_only` (403). It is not declined and its answer is not changed, and an own
+variant is no answer to it: each is refused with `invalid_request`, the message
+starting `[purpose]`. The answer is carried out in the same write as the move it
+names, under the same guards, and a refused move refuses the answer: `accept`
+moves the item to the workflow's first `completed` state, `return` to its first
+`ready` state, with the answer's note as the move's reason when it fits. The
+answer's record says which as `carried_out`, `completed` or `ready`. Only the
+session that asked withdraws the question (`not_asker`, 403, for anyone else, a
+person included); the withdrawal, `expired` with `expired_reason: withdrawn`,
+returns the item to `ready` with the reason `review withdrawn`, and its record
+says `carried_out: ready`. A returned item keeps `started_at`.
+
+Leaving review by any other move ends the question: a close as
+[a close ends the claims](#a-close-ends-the-claims) says, and a move to an open
+state as `expired` with `expired_reason: withdrawn`.
+
+An agent waits for the owner's answer. An agent's move that completes an item, or
+that takes it out of `review` to anything but a `cancelled` state, is refused with
+the `question` guard while a question asked of the owner is open on the item, and
+`force` does not carry it: `[question] MAIN-12 has 1 open question(s) to the owner,
+and an agent does not complete it over them: wait for the owner's answer, or
+withdraw a question you asked`. A question asked of an agent session does not
+count, and a confirmation question does not hold a completion. A person's move is
+not held.
+
+A launch moves nothing. The ending of a launch writes its comment and leaves the
+item where its agent left it; the launched agent moves the item to `review` with
+`to_check` when the work is done. A task its launch left at work goes back to
+`ready` when the launch's claim lapses. That claim is taken in a call of the
+launch's own (`identity_source` `launch`) and is the lease of the session the
+launch started, so it lapses 12 hours after that session ends. The session is
+the client's own when the launch assigns or resumes it, and the launch's
+(`launch-…`) on a fresh run of a client that announces its session once it runs,
+as Codex does; the session that client announces does not hold the claim, and a
+resume of that item reattaches to it.
 
 ### What a person did reaches the agent
 
@@ -3006,7 +4439,7 @@ takes every word waiting on the goals and stages over the task, in the claim's
 own transaction: a refused claim takes nothing. The MCP answer of the claim --
 `claim_work_item`, `claim_ready_work_item`, `claim_work_item_checklist_item`, and
 `apply_work_item_changes` or `create_work_item` with `claim` -- then carries
-`waiting`, one entry per goal or stage:
+`waiting`, one entry per goal or stage that still holds words for the session:
 
 ```json
 "waiting": [{"reference": "MAIN-10", "title": "Release 3.0",
@@ -3020,9 +4453,11 @@ claim, as the entries of `from_person`, and such a record of Valkama's with
 earlier ones when there are more, and each text whole up to 1500 characters, a
 longer one cut there with `cut: true`. A whole text has no `cut`. The words are
 taken once: the next claim under the same goal gets nothing until a person acts
-there again with nobody working. They never lapse, and they go with their item.
-The key is absent when nothing waited, and the HTTP answer of a claim never has
-it: the interface takes no work for an agent.
+there again with nobody working. A session also hears each act once: a goal or
+stage whose acts it already got through another of its open words is no entry,
+though both stay as the record. They never lapse, and they go with their item.
+The key is absent when nothing waited for the session, and the HTTP answer of a
+claim never has it: the interface takes no work for an agent.
 
 ### A close over what a person did
 
@@ -3033,7 +4468,9 @@ anything to the item first -- a comment saying what it did about them -- empties
 the window and the close goes through; `force: true` carries it through as it
 does every guard and records `overridden` with `person_spoke`, and the answer
 still carries `from_person`. A `transition` group is judged the same way, with
-the window counted from before the batch.
+the window counted from before the batch. A cancel whose `transition.following`
+names an answered question leaves out that question's `question_answered` event:
+the guard reads the rest of the window, so any other act of a person still refuses.
 
 A person closing an item is not guarded, nor is a write made outside any call. An
 item a person closed or cancelled is told to the agent by its next write's
@@ -3167,10 +4604,22 @@ stays on its item, so its records go on naming the merged item.
 item. `get_work_item_request` and `list_work_item_requests` are read-only tools.
 The answer, decline and expire tools take the request's own `expected_revision`;
 it is independent of the work item revision. Only one concurrent resolution can
-succeed. A closed task, ended bound execution or elapsed deadline prevents a
-late answer, and so does the end of the session a request was
-[asked of](#a-question-asked-of-an-agent-session). Reading effective expiry does
-not write to an attached store.
+succeed. An ended bound execution or elapsed deadline prevents a late answer,
+and so does the end of the session a request was
+[asked of](#a-question-asked-of-an-agent-session); those are read, not written, and
+reading effective expiry does not write to an attached store. A close of the item
+ends the request in its own write ([closing](#a-close-ends-the-claims)), and a
+closed item takes no new request.
+
+A request record says why one ended unanswered in `expired_reason`: `deadline`,
+`withdrawn`, `execution_closed`, `item_completed`, `item_cancelled`, or the
+`session_gone` that is only read; `null` otherwise. `purpose` names what the owner's
+answer carries out -- `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
+`condition` or `triage` -- or, on a request asked of a session, `consent`, and is
+`null` on every other request. A question a write that waits for the owner
+carries also names its `action_id`
+([Writes that wait for the owner](#writes-that-wait-for-the-owner)). The compact form of `get_work_item`'s `questions` carries each of
+the two only where it is set.
 
 Fields have stable IDs and one of five types: `text`, `choice`, `multi_choice`,
 `boolean` or `verdict`. A required boolean can be answered `false`; omission is
@@ -3664,7 +5113,7 @@ Refused with `invalid_request`, nothing written:
 | a list on a reply | `a list stands on a root, and this is a reply` |
 | a key a list does not take, or options outside 1 to 20 | `list requires label and options and takes nothing else` |
 | a list on an item that is closed | `a list on a closed item could never be answered; reopen it first, or leave the list out` |
-| a list in a call that closes the item | `transition: a list on an item this call closes could never be answered; send it to review, or leave the list out`, on the `transition` step |
+| a list in a call that closes the item | `transition: a list on an item this call closes would end unticked in the same write: write it in a call that leaves the item open`, on the `transition` step |
 
 **What it does not do.** A list holds nothing: its item closes with a list
 unticked, as with no question at all. It raises no Windows notification and takes
@@ -3691,13 +5140,13 @@ hear it, as for any question (see
 [the hook contract](hook-contract.md#who-is-told)), and the next agent write
 carries it in `from_person`. Changing it is changing an answer.
 
-**Close and reopen.** A pending list on a closed item reads `expired` with
-`expired_reason: task_closed`, as any pending question there does, and nothing is
-written: reopening the item makes it `pending` again with what it held. An answered
-list on a closed item cannot be changed (`[task_closed]`). So a list freezes with
-its item: the interface keeps ticks not yet sent in view and says that the item is
-closed, the ticks would reach nobody, and reopening it lets them be sent. An agent
-that wants the ticks keeps the item open, in review for instance.
+**Close and reopen.** The close of its item ends a pending list as it ends any
+pending question there: `expired`, with `expired_reason` `item_completed` or
+`item_cancelled`, and reopening the item leaves it so. An answered list on a closed
+item cannot be changed (`[item_closed]`); once the item reopens it can. The
+interface keeps ticks not yet sent in view and says that the item is closed and the
+ticks reach nobody. An agent that wants the ticks keeps the item open until they
+come.
 
 **Merging.** A list goes with its comment: a comment root's list moves to the
 survivor with it, and a report's list stays with the report on the merged item. A
@@ -3774,7 +5223,11 @@ any request.
 **Who is told.** Where Valkama's client hooks are installed, the asking wakes the
 session asked, and what becomes of the request reaches that session and the one that
 asked, nobody else: see
-[asked of a session](hook-contract.md#asked-of-a-session).
+[asked of a session](hook-contract.md#asked-of-a-session). That news is told
+once; while a request still waits, the session asked finds its item again in the
+line `Waiting for your answer: …` of its
+[resume note](hook-contract.md#the-resume-note) after a resume or a compaction,
+and none of its subagents does.
 
 ### Steps from a comment
 
@@ -4082,5 +5535,5 @@ one open under `preschema14`). A store already at 15 opens without either. A
 build of the previous release, at schema 14, refuses a store at 15 with
 `StoreTooNew` and leaves it untouched rather than show cards it would refuse;
 going back to it means restoring the `preschema15` snapshot with its pictures
-(see [Migrating an older store](../README.md#migrating-an-older-store)), which
+(see [Restoring a snapshot](guides/store-upgrades.md#restoring-a-snapshot)), which
 loses everything written since.

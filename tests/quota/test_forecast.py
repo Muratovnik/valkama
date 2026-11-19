@@ -18,6 +18,7 @@ from server.quota.forecast import (
     FIVE_HOURS,
     HOUR,
     MIN,
+    RESTART_FALL,
     WEEK,
     Basis,
     Ceiling,
@@ -37,6 +38,7 @@ from server.quota.forecast import (
     WeekRange,
     Window,
     ceiling_for,
+    count,
     even_left,
     first_stop,
     forecast,
@@ -109,17 +111,111 @@ class TrustedReadingsTests(Case):
         self.assertEqual(settle(readings, FIVE_HOURS, RESET), [at(T0, 40), at(T0 + 5 * MIN, 41)])
 
 
+def fed(
+    moment: int, percent: float, feed: str, resets_at: int = RESET, length: int = FIVE_HOURS
+) -> Reading:
+    return Reading(moment, percent, resets_at, length, feed)
+
+
+#: A counter zeroed inside its five-hour window, its reset unchanged: feed A reads 99, and 20
+#: minutes before now 0; B, which read 45 while A stood at 99, reads 0 a minute after A; then
+#: A climbs again. The window began an hour before now and resets four hours after it.
+ZEROED = [
+    fed(T0 - 58 * MIN, 50, "a"),
+    fed(T0 - 50 * MIN, 40, "b"),
+    fed(T0 - 45 * MIN, 99, "a"),
+    fed(T0 - 30 * MIN, 45, "b"),
+    fed(T0 - 20 * MIN, 0, "a"),
+    fed(T0 - 19 * MIN, 0, "b"),
+    fed(T0 - 15 * MIN, 3, "a"),
+    fed(T0, 6, "a"),
+]
+
+
+class RestartTests(Case):
+    """A feed's own large fall inside one window restarts the window's count; another feed's
+    lower reading, a reading of no known feed and a point's wobble stay stale ones."""
+
+    def test_a_feeds_own_fall_restarts_the_count_and_is_its_moment(self) -> None:
+        found = count(ZEROED, FIVE_HOURS, RESET)
+        self.assertEqual(found.restarts, [T0 - 20 * MIN])
+        # B's 45 under A's 99 was stale and is left out; B's 0 after the restart is no
+        # second restart, since the count stands at 0 already.
+        self.assertEqual(found.readings, ZEROED[4:])
+        self.assertEqual(settle(ZEROED, FIVE_HOURS, RESET), ZEROED[4:])
+
+    def test_the_forecast_after_a_restart_reads_only_the_count_since_it(self) -> None:
+        found = self.of(Enough, forecast(five(6), ZEROED, T0))
+        # From 3 a quarter hour ago, 0.2 a minute; from 0 at the restart 20 minutes ago, 0.3:
+        # the blend is 0.25, which spends 60 of the 94 left in the 240 minutes to the reset.
+        self.assertEqual(found.basis, Basis("blend", 20 * MIN, 15 * MIN))
+        self.near(found.ratio, 60 / 94)
+        self.near(found.reached, 66)
+        # The same readings with no feed named keep the window's top of 99 in force, with one
+        # point left, and call the window short.
+        unknown = [Reading(one.at, one.percent, one.resets_at, one.window_length) for one in ZEROED]
+        self.of(Short, forecast(five(6), unknown, T0))
+
+    def test_another_feeds_lower_reading_never_restarts_the_count(self) -> None:
+        readings = [fed(T0 - 30 * MIN, 99, "a"), fed(T0 - 20 * MIN, 0, "b")]
+        found = count(readings, FIVE_HOURS, RESET)
+        self.assertEqual((found.readings, found.restarts), (readings[:1], []))
+
+    def test_a_wobble_of_a_point_or_a_fall_short_of_the_threshold_is_stale(self) -> None:
+        for fall in (1, RESTART_FALL - 1):
+            with self.subTest(fall=fall):
+                readings = [
+                    fed(T0 - 30 * MIN, 60, "a"),
+                    fed(T0 - 20 * MIN, 60 - fall, "a"),
+                    fed(T0, 61, "a"),
+                ]
+                found = count(readings, FIVE_HOURS, RESET)
+                self.assertEqual((found.readings, found.restarts), ([readings[0], readings[2]], []))
+        readings = [fed(T0 - 30 * MIN, 60, "a"), fed(T0 - 20 * MIN, 60 - RESTART_FALL, "a")]
+        self.assertEqual(count(readings, FIVE_HOURS, RESET).restarts, [T0 - 20 * MIN])
+
+    def test_a_fall_across_two_resets_is_a_new_window_and_no_restart(self) -> None:
+        readings = [fed(T0 - 2 * HOUR, 90, "a", T0), fed(T0, 5, "a")]
+        found = count(readings, FIVE_HOURS, RESET)
+        self.assertEqual((found.readings, found.restarts), (readings[1:], []))
+
+    def test_a_weeks_range_after_a_restart_runs_from_the_restart(self) -> None:
+        reset = T0 + 3 * DAY
+        restart = T0 - 2 * DAY + 37 * MIN
+        readings = [
+            fed(T0 - 3 * DAY, 40, "a", reset, WEEK),
+            fed(T0 - 2 * DAY, 99, "a", reset, WEEK),
+            fed(restart, 2, "a", reset, WEEK),
+            fed(restart + 3 * MIN, 2, "b", reset, WEEK),
+            fed(T0 - DAY, 50, "a", reset, WEEK),
+            fed(T0, 95, "a", reset, WEEK),
+        ]
+        found = self.of(WeekRange, outlook(week(95, reset), readings, T0))
+        # The last day spent 45; the average runs from 2 at the restart, not from 0 at the week's
+        # start four days ago.
+        since = T0 - restart
+        self.assertEqual(
+            [one.basis for one in found.estimates], [Basis("recent", DAY), Basis("window", since)]
+        )
+        self.near(found.low, 95 + 45 * 3)
+        self.near(found.high, 95 + 93 * (3 * DAY) / since)
+
+
 class ForecastTests(Case):
     # With 80% left and 240 minutes to the reset, 5% a quarter hour spends the window
     # exactly at it.
     def test_a_pace_a_little_slower_than_the_lasting_one_lasts(self) -> None:
-        found = forecast(five(20), [at(T0 - 15 * MIN, 15.5), at(T0, 20)], T0)
-        self.near(self.of(Enough, found).ratio, 0.9)
+        found = self.of(Enough, forecast(five(20), [at(T0 - 15 * MIN, 15.5), at(T0, 20)], T0))
+        self.near(found.ratio, 0.9)
+        # 4.5 a quarter hour for the 240 minutes to the reset: 72 more on the 20 spent.
+        self.near(found.reached, 20 + 4.5 * 16)
 
     def test_a_pace_a_little_faster_runs_out_before_the_reset_and_says_when(self) -> None:
         found = self.of(Short, forecast(five(20), [at(T0 - 15 * MIN, 14.5), at(T0, 20)], T0))
         self.near(found.ratio, 1.1)
         self.near(found.at, T0 + (80 / 5.5) * 15 * MIN, 1)
+        # 5.5 a quarter hour would spend 88 by the reset, 108 in all: past the window's end.
+        self.near(found.reached, 20 + 5.5 * 16)
 
     def test_a_spent_window_says_so_and_an_unknown_reset_or_window_says_nothing(self) -> None:
         self.assertEqual(forecast(five(100), [], T0), Spent(RESET))
@@ -146,7 +242,7 @@ class ForecastTests(Case):
     def test_no_spending_since_the_lookback_began_lasts_at_rest(self) -> None:
         self.assertEqual(
             forecast(five(40), [at(T0 - 20 * MIN, 40)], T0),
-            Enough(0, RESET, Basis("blend", 20 * MIN, 15 * MIN)),
+            Enough(0, RESET, Basis("blend", 20 * MIN, 15 * MIN), reached=40),
         )
 
     def test_the_first_minutes_of_a_fresh_window_with_no_readings_say_nothing(self) -> None:
@@ -199,8 +295,8 @@ WEEKLY_14 = week(98, NOW_14 + 18 * HOUR)
 class WeekHoldsFiveHourTests(Case):
     def test_a_week_running_out_first_caps_the_window(self) -> None:
         now = NOW_14
-        session_forecast = Enough(0.8, now + 5 * HOUR, Basis("recent", 15 * MIN))
-        week_forecast = Short(9, now + 18 * HOUR, now + 24 * MIN, Basis("recent", DAY))
+        session_forecast = Enough(0.8, now + 5 * HOUR, Basis("recent", 15 * MIN), reached=92.8)
+        week_forecast = Short(9, now + 18 * HOUR, now + 24 * MIN, Basis("recent", DAY), reached=116)
         self.assertEqual(
             week_caps(five(64, now + 5 * HOUR), session_forecast, WEEKLY_14, week_forecast, now),
             Coupling(WEEKLY_14, now + 24 * MIN, spent=False),
@@ -217,8 +313,12 @@ class WeekHoldsFiveHourTests(Case):
     def test_a_week_lasting_longer_than_the_window_leaves_it_alone(self) -> None:
         now = NOW_14
         session = five(64, now + 5 * HOUR)
-        session_forecast = Short(2, now + 5 * HOUR, now + HOUR, Basis("recent", 15 * MIN))
-        week_forecast = Short(1.2, now + 18 * HOUR, now + 2 * HOUR, Basis("recent", DAY))
+        session_forecast = Short(
+            2, now + 5 * HOUR, now + HOUR, Basis("recent", 15 * MIN), reached=136
+        )
+        week_forecast = Short(
+            1.2, now + 18 * HOUR, now + 2 * HOUR, Basis("recent", DAY), reached=100.4
+        )
         self.assertIsNone(week_caps(session, session_forecast, WEEKLY_14, week_forecast, now))
         self.assertIsNone(week_caps(session, None, WEEKLY_14, None, now))
         self.assertIsNone(week_caps(session, None, None, week_forecast, now))
@@ -227,8 +327,14 @@ class WeekHoldsFiveHourTests(Case):
         now = NOW_14
         scoped = Window(WEEK, 100, now + 18 * HOUR, model="Fable")
         stops: list[tuple[Window, Forecast | None]] = [
-            (five(64), Short(2, now + 5 * HOUR, now + HOUR, Basis("recent", 15 * MIN))),
-            (WEEKLY_14, Short(9, now + 18 * HOUR, now + 24 * MIN, Basis("recent", DAY))),
+            (
+                five(64),
+                Short(2, now + 5 * HOUR, now + HOUR, Basis("recent", 15 * MIN), reached=136),
+            ),
+            (
+                WEEKLY_14,
+                Short(9, now + 18 * HOUR, now + 24 * MIN, Basis("recent", DAY), reached=116),
+            ),
             (scoped, Spent(now + 18 * HOUR)),
         ]
         self.assertEqual(first_stop(stops, now), Stop(WEEKLY_14, now + 24 * MIN))
@@ -345,9 +451,15 @@ class FiveHourHoldsWeekTests(Case):
         self.assertEqual(self.of(Ceiling, found.held).cost, 0.05)
 
     def test_a_ceiling_low_enough_makes_the_week_last(self) -> None:
-        found = forecast(weekly(60), PACE, NOW_15, Ceiling(20, SESSION_RESET, 0.03))
+        found = self.of(
+            Enough, forecast(weekly(60), PACE, NOW_15, Ceiling(20, SESSION_RESET, 0.03))
+        )
         # 0.6 points before the window resets, then 3 a window for 47 hours.
-        self.near(self.of(Enough, found).ratio, (0.6 + (47 / 5) * 3) / 40)
+        self.near(found.ratio, (0.6 + (47 / 5) * 3) / 40)
+        # The week reaches what the ceiling lets through on the 60 spent, not what its pace
+        # would, two points an hour for 48 hours.
+        self.assertIsNotNone(found.held)
+        self.near(found.reached, 60 + 0.6 + (47 / 5) * 3)
 
     def test_a_spent_window_holds_the_week_until_it_resets(self) -> None:
         found = forecast(weekly(60), PACE, NOW_15, Ceiling(0, NOW_15 + 47 * HOUR, 0.2))

@@ -19,13 +19,22 @@ import { messages } from '@/shared/i18n/index.ts'
 
 const FONT_CSS = new URL('../node_modules/@fontsource-variable/inter/index.css', import.meta.url)
 const SECTION = new URL('../src/widgets/work-item-inspector/components/', import.meta.url)
-const COMPONENTS = [
-  'InspectorChain.vue',
-  'ChainBranchMap.vue',
-  'ChainBranchTip.vue',
-  'ChainMembers.vue',
-  'ChainScopeChart.vue',
-]
+// The section is the card's chain component and every component of this folder it
+// reaches through its imports, so a part added to the section is read with it.
+const ENTRY = 'InspectorChain.vue'
+const FOLDER_IMPORT = /from '@\/widgets\/work-item-inspector\/components\/([\w-]+\.vue)'/gu
+
+function sectionSources(): Map<string, string> {
+  const sources = new Map<string, string>()
+  const visit = (name: string) => {
+    if (sources.has(name)) return
+    const source = fs.readFileSync(fileURLToPath(new URL(name, SECTION)), 'utf8')
+    sources.set(name, source)
+    for (const [, child] of source.matchAll(FOLDER_IMPORT)) visit(child)
+  }
+  visit(ENTRY)
+  return sources
+}
 
 /** Every `unicode-range` the stylesheet declares, as inclusive code point pairs. */
 function loadedRanges(): [number, number][] {
@@ -47,9 +56,11 @@ function strings(value: unknown): string[] {
 
 /** What the section's own templates write, outside any message. */
 function templates(): string[] {
-  return COMPONENTS.map((name) => {
-    const source = fs.readFileSync(fileURLToPath(new URL(name, SECTION)), 'utf8')
-    return /<template>([\s\S]*)<\/template>/u.exec(source)?.[1] ?? ''
+  return [...sectionSources()].map(([name, source]) => {
+    const template = /<template>([\s\S]*)<\/template>/u.exec(source)?.[1]
+    // A template the pattern cannot read would otherwise pass as no characters at all.
+    if (!template?.trim()) throw new Error(`${name}: no template read`)
+    return template
   })
 }
 
@@ -68,6 +79,19 @@ describe('the chain section’s characters', () => {
     expect(carried('✓')).toBe(false)
     expect(carried('≈')).toBe(false)
     expect(carried('ж')).toBe(true)
+  })
+
+  it('reads every part of the section', () => {
+    // The parts the section drew when this was written; a part it grows is read through its import.
+    const parts = [...sectionSources().keys()]
+    for (const part of [
+      'InspectorChain.vue',
+      'ChainBranchMap.vue',
+      'ChainBranchTip.vue',
+      'ChainMembers.vue',
+      'ChainScopeChart.vue',
+    ])
+      expect(parts).toContain(part)
   })
 
   it('stay inside them, in both languages, in the templates and in the dates it formats', () => {

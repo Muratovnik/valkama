@@ -11,6 +11,7 @@ against another store or opens a listening socket.
 from __future__ import annotations
 
 import io
+import os
 import sqlite3
 import sys
 import threading
@@ -18,11 +19,15 @@ import time
 import unittest
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest import mock
 
 from server import housekeeping, http_surface, mcp_surface, store
+from server.hooks import commit_records
 from server.ops import tray
-from server.planning import calls, leases, service, sweep
+from server.planning import calls, closing, leases, service, sweep
+from tests import test_planning_closing as closing_tests
+from tests.registry_fixtures import project_entry, registry_bytes
 from tests.test_planning_leases import (
     ONE,
     ONE_UNCONFIRMED,
@@ -157,7 +162,19 @@ class LeaseStepTests(PassTestCase):
         self.lapse_after_ticks()
         done = self.run_pass(deadline=time.monotonic() - 1)
         self.assertEqual(
-            ([sweep.LEASES, sweep.WAITING, sweep.SUBSCRIPTIONS], {}), (done.left, done.changed)
+            (
+                [
+                    sweep.LEASES,
+                    sweep.WAITING,
+                    sweep.SUBSCRIPTIONS,
+                    sweep.RETURNS,
+                    sweep.COMMITS,
+                    sweep.CONFIRMATIONS,
+                    sweep.CONSENT,
+                ],
+                {},
+            ),
+            (done.left, done.changed),
         )
         self.assertEqual(held(ONE), self.read()["claim_ref"])
 
@@ -209,6 +226,193 @@ class LimitTests(PassTestCase):
         self.assertEqual({sweep.LEASES: 1}, self.run_pass().changed)
         self.assertEqual([], self.held())
         self.assertEqual({}, self.run_pass().changed)
+
+
+class CommitStepTests(PassTestCase):
+    """The records no client hook took, taken by the `commits` step.
+
+    The records are written as the Git hook writes them, for the Codex session
+    that holds LSE-1, beside the store and in the Git directory of `alpha`, which
+    a registry of the test's own names.
+    """
+
+    PROJECT = "alpha"
+
+    def setUp(self) -> None:
+        super().setUp()
+        local = self.root / "local"
+        self.alpha = self.root / "alpha"
+        (local / "Valkama").mkdir(parents=True)
+        (self.alpha / ".git").mkdir(parents=True)
+        (local / "Valkama" / "projects.json").write_bytes(
+            registry_bytes([project_entry(self.PROJECT, self.alpha)])
+        )
+        patch = mock.patch.dict(os.environ, {"LOCALAPPDATA": str(local)})
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.take(codex(ONE))
+        self.beside = Path(store.db_path()).parent / commit_records.DIRECTORY
+        self.in_git = self.alpha / ".git" / "valkama" / "commits"
+
+    def record(self, where: Path, age: timedelta, digit: str, content: bytes | None = None) -> Path:
+        """A record of one commit `digit * 40` by the session, written `age` before now."""
+
+        at = int((self.now - age).timestamp()) * 1_000_000_000
+        commit = {
+            "hash": digit * 40,
+            "parents": [],
+            "subject": f"feat: {digit}",
+            "committed_at": None,
+        }
+        written = {
+            "format": commit_records.FORMAT,
+            "version": commit_records.VERSION,
+            "event": "post-commit",
+            "rewrite": None,
+            "root": str(self.alpha).replace("\\", "/"),
+            "project_id": self.PROJECT,
+            "commits": [commit],
+            "rewritten": [],
+            "claude": None,
+            "codex": {"session_id": ONE, "thread_id": ONE, "tool_call_id": "call_gone"},
+            "occurred_at": commit_records.timestamp(at),
+        }
+        where.mkdir(parents=True, exist_ok=True)
+        path = where / f"{ONE}--{at}-{digit * 16}.json"
+        path.write_bytes(commit_records.encode(written) if content is None else content)
+        return path
+
+    def attached(self) -> list[tuple[str, str, str]]:
+        return [
+            (str(row[0]), str(row[1]), str(row[2]))
+            for row in self.conn.execute(
+                "SELECT c.hash, a.attached_by, a.author FROM work_item_commits a"
+                " JOIN commits c ON c.commit_id = a.commit_id ORDER BY c.hash"
+            )
+        ]
+
+    def written(self) -> tuple[int, ...]:
+        return tuple(
+            int(self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in ("commits", "work_item_commits", "work_item_events", "execution_events")
+        )
+
+    def test_the_commit_step_takes_old_records_once(self) -> None:
+        old = self.record(self.beside, timedelta(minutes=61), "a")
+        waiting_in_git = self.record(self.in_git, timedelta(minutes=61), "b")
+        young = self.record(self.beside, timedelta(minutes=30), "c")
+        broken = self.record(self.beside, timedelta(days=8), "d", b"{not a record")
+        unread = self.record(self.beside, timedelta(hours=2), "e", b"{not a record")
+        self.assertEqual({sweep.COMMITS: 2}, self.run_pass().changed)
+        self.assertEqual(
+            [("a" * 40, "server", "valkama"), ("b" * 40, "server", "valkama")], self.attached()
+        )
+        self.assertEqual([("valkama", sweep.COMMITS)] * 2, self.calls_of("commit_attached"))
+        self.assertTrue(old.exists() and waiting_in_git.exists(), "applied: they wait a pass")
+        self.assertTrue(young.exists(), "under an hour: a hook of its session may take it")
+        self.assertFalse(broken.exists())
+        self.assertTrue((self.beside / commit_records.REJECTED / broken.name).is_file())
+        self.assertTrue(unread.exists(), "unreadable, but not a week old")
+
+    def test_the_next_pass_deletes_what_the_last_applied(self) -> None:
+        old = self.record(self.beside, timedelta(minutes=61), "a")
+        waiting_in_git = self.record(self.in_git, timedelta(minutes=61), "b")
+        young = self.record(self.beside, timedelta(minutes=30), "c")
+        self.run_pass()
+        written, revision = self.written(), self.read()["revision"]
+        self.assertEqual({sweep.COMMITS: 0}, self.run_pass().changed)
+        self.assertEqual((written, revision), (self.written(), self.read()["revision"]))
+        self.assertFalse(old.exists() or waiting_in_git.exists(), "worked off, and deleted")
+        self.assertTrue(young.exists())
+        self.assertEqual({}, self.run_pass().changed, "nothing pending: no write lock asked for")
+
+    def test_the_commit_step_takes_at_most_its_limit(self) -> None:
+        first = self.record(self.beside, timedelta(minutes=62), "a")
+        second = self.record(self.beside, timedelta(minutes=61), "b")
+        with mock.patch.object(sweep, "LIMIT", 1):
+            self.assertEqual({sweep.COMMITS: 1}, self.run_pass().changed)
+            self.assertEqual(["a" * 40], [row[0] for row in self.attached()])
+            # The applied record is the oldest still, and the next pass spends its one on it.
+            self.assertEqual({sweep.COMMITS: 0}, self.run_pass().changed)
+            self.assertFalse(first.exists())
+            self.assertEqual({sweep.COMMITS: 1}, self.run_pass().changed)
+            self.assertEqual({sweep.COMMITS: 0}, self.run_pass().changed)
+            self.assertFalse(second.exists())
+            self.assertEqual({}, self.run_pass().changed)
+        self.assertEqual(2, len(self.attached()))
+
+    def test_the_step_reads_the_time_from_the_lease_clock(self) -> None:
+        """A record an hour old by the replaced clock and seconds old by the real one."""
+
+        self.now += timedelta(hours=2)
+        self.record(self.beside, timedelta(minutes=61), "a")
+        self.assertEqual({}, sweep.run_pass(self.conn).changed, "the real clock: too young")
+        self.assertEqual({sweep.COMMITS: 1}, self.run_pass().changed)
+
+
+class ConfirmationsStepTests(closing_tests.Tree):
+    """The `confirmations` step held to the step contract, on goals nobody works on."""
+
+    def awaiting_goals(self, count: int) -> list[str]:
+        """Goals that each came to wait when a person closed the one task under it."""
+
+        goals = []
+        for index in range(count):
+            goal = self.made(f"Goal {index}", "goal")
+            task = self.made(f"Task {index}", parent=goal)
+            self.person(
+                closing_tests.APPLY,
+                id=task,
+                summary=closing_tests.DONE,
+                transition={"state": "done"},
+            )
+            goals.append(goal)
+        return goals
+
+    def asked(self) -> list[int]:
+        return [
+            int(row[0])
+            for row in self.conn.execute(
+                "SELECT i.number FROM work_item_requests r"
+                " JOIN work_items i ON i.work_item_id = r.work_item_id"
+                " WHERE r.purpose = 'confirm' ORDER BY i.number"
+            )
+        ]
+
+    def test_at_most_limit_items_a_pass_then_the_rest_then_nothing(self) -> None:
+        goals = self.awaiting_goals(3)
+        # Two of them came to wait in a write that went around the marks.
+        self.conn.execute(
+            "DELETE FROM work_item_confirmations WHERE work_item_id IN (?, ?)",
+            (self.identity(goals[0]), self.identity(goals[2])),
+        )
+        self.conn.commit()
+        numbers = [int(goal.rsplit("-", 1)[1]) for goal in goals]
+        with mock.patch.object(sweep, "LIMIT", 2):
+            self.assertEqual({sweep.CONFIRMATIONS: 2}, sweep.run_pass(self.conn).changed)
+            self.assertEqual([numbers[0], numbers[2]], self.asked(), "recorded, then asked")
+            self.assertEqual({sweep.CONFIRMATIONS: 1}, sweep.run_pass(self.conn).changed)
+            self.assertEqual(numbers, self.asked())
+            written = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+            self.assertEqual({}, sweep.run_pass(self.conn).changed)
+            self.assertEqual(
+                written, self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+            )
+        self.holds()
+
+    def test_its_writes_are_valkamas_own_calls_under_their_names(self) -> None:
+        [goal] = self.awaiting_goals(1)
+        self.conn.execute("DELETE FROM work_item_confirmations")
+        self.conn.commit()
+        sweep.run_pass(self.conn)
+        [*_before, recorded] = self.events(goal, "awaiting_confirmation")
+        [asked] = self.events(goal, "request_created")
+        self.assertEqual(
+            ("valkama", "valkama", sweep.CONFIRMATIONS), (recorded[1], recorded[3], recorded[4])
+        )
+        self.assertEqual(
+            ("valkama", "valkama", closing.QUESTION_TOOL), (asked[1], asked[3], asked[4])
+        )
 
 
 class _Serving:

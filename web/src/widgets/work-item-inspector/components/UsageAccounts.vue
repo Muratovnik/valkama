@@ -7,8 +7,9 @@
  *
  * The strip is drawn for the eye. The list names every organization it shows and the changes say
  * where it changed, the organization it starts under included, so no part of it is told by its
- * hue alone. An organization the record does not hold is drawn hatched in the neutral and named as
- * unknown in the list; it is never a change. An organization's id is printed by its start, as an
+ * hue alone. An organization the record does not hold is drawn in the plain neutral and named as
+ * unknown in the list, never hatched, since a hatch says a figure not final yet; it is never a
+ * change. An organization's id is printed by its start, as an
  * agent's is, and whole in its hint.
  */
 import { computed } from 'vue'
@@ -128,7 +129,6 @@ const percent = (part: number) => `${part * 100}%`
           v-for="part in strip.parts"
           :key="part.key"
           class="account-part series-fill"
-          :class="{ 'is-unknown': part.account.unknown }"
           :data-slot="part.slot"
           :style="{ insetInlineStart: percent(part.start), inlineSize: percent(part.size) }"
         />
@@ -152,7 +152,6 @@ const percent = (part: number) => `${part * 100}%`
         <span
           aria-hidden="true"
           class="account-swatch series-fill"
-          :class="{ 'is-unknown': row.unknown }"
           :data-slot="row.slot"
         />
         <span
@@ -227,15 +226,6 @@ const percent = (part: number) => `${part * 100}%`
   position: absolute;
   inset-block: 0;
   min-inline-size: var(--space-hair);
-}
-
-/* An organization nobody recorded: the neutral, hatched, which says it apart from any hue. */
-.is-unknown {
-  mask-image: repeating-linear-gradient(
-    135deg,
-    black 0 var(--space-half),
-    rgb(0 0 0 / 40%) var(--space-half) var(--space-1)
-  );
 }
 
 /* A change: a line across the strip in the ink of the text, which no hue next to it hides. */

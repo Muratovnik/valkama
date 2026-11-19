@@ -122,7 +122,7 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
       <template #trigger="{ toggle, popup }">
         <button
           ref="control"
-          v-tooltip:right.detail="{ text: hint, words: status }"
+          v-tooltip.detail="{ text: hint, words: status }"
           type="button"
           class="nav-refresh"
           :class="{ refreshing }"

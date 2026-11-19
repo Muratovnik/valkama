@@ -20,6 +20,7 @@ from . import (
     leases,
     live_work,
     model,
+    participation,
     read_model,
     service,
     states,
@@ -66,6 +67,7 @@ def planning_payload(
     data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
     spaces = item_projects.with_projects(spaces, listing, data_scope_id)
     (shown,) = item_projects.with_projects([chosen], listing, data_scope_id)
+    settings = participation.load(conn)
     return {
         "interface_version": READ_MODEL_INTERFACE,
         "planning_spaces": spaces,
@@ -74,21 +76,24 @@ def planning_payload(
         "work_items": items,
         "links": links,
         "other_space_ends": ends,
-        "stale_claims": stale_claims(conn, space=space_id),
+        "stale_claims": stale_claims(conn, settings=settings, space=space_id),
         # Which items an agent is at work on now: by `live_work`'s rule, and
         # only for the items that have some.
-        "live_work": live_work.live_work(conn, items),
+        "live_work": live_work.live_work(conn, items, settings=settings),
     }
 
 
-def stale_claims(conn: sqlite3.Connection, *, space: str | None = None) -> list[dict]:
+def stale_claims(
+    conn: sqlite3.Connection, *, settings: participation.Settings, space: str | None = None
+) -> list[dict]:
     """Held items whose holder is no longer there, so their ownership is abandoned.
 
     Abandoned by the lease's own rule (`leases.abandoned`): a lease a confirmed
     session holds when it reads `stale`, in its grace or not, however recently
     somebody else touched the item, and never while it is `live`; a claim no
-    session proved when its item has had no event for `leases.QUIET_PERIOD`,
-    the owner's own claim from the browser and a launch's for its runner alike.
+    session proved when its item has had no event for the quiet period of its
+    space (`leases.quiet_period`, read from `settings`, the read's snapshot), the
+    owner's own claim from the browser and a launch's for its runner alike.
     Such a claim stays here only until the next sweep releases it.
 
     A claim only stands where somebody is supposed to be working: at work or
@@ -103,7 +108,7 @@ def stale_claims(conn: sqlite3.Connection, *, space: str | None = None) -> list[
     parameters: list[object] = [json.dumps(model.HELD_CATEGORIES)]
     if space is not None:
         clauses.append("w.planning_space_id = ?")
-        parameters.append(service.space_identity(conn, space))
+        parameters.append(read_model.space_identity(conn, space))
     query = service.with_clauses(
         "SELECT w.*, p.key || '-' || w.number AS reference, s.key, s.name, s.category,"
         " s.is_terminal,"
@@ -119,7 +124,7 @@ def stale_claims(conn: sqlite3.Connection, *, space: str | None = None) -> list[
     query += " GROUP BY w.work_item_id ORDER BY quiet_days DESC, w.number"
     abandoned = []
     for row in conn.execute(query, parameters).fetchall():
-        lease = leases.lease(conn, row)
+        lease = leases.lease(conn, row, settings=settings)
         if lease is None or not leases.abandoned(lease):
             continue
         abandoned.append(

@@ -196,6 +196,13 @@ NOT_WORK_MODEL_KINDS: dict[str, str] = {
     "POST /api/planning/work-item/request": "a request kind",
 }
 
+#: Inputs named `kind` that came after the words were retired: they never took one, and
+#: refuse it as they refuse any value that is no kind they take, naming the kinds they do.
+KINDS_SINCE_RETIRED: dict[str, str] = {
+    "GET /api/planning/volumes": "a filter of tasks: task, bug or improvement"
+    " (`tests/test_planning_volumes.py` drives goal, stage, epic and container)",
+}
+
 #: The names a route reads from its request; a helper it passes the request to reads them too.
 REQUEST_MAPPINGS = frozenset({"payload", "parameters"})
 
@@ -329,7 +336,9 @@ class RetiredWordTests(unittest.TestCase):
         driven = {
             (field, where.split(",")[0]) for field, inputs in INPUTS.items() for where in inputs
         }
-        listed = driven | {("kind", where) for where in NOT_WORK_MODEL_KINDS}
+        listed = driven | {
+            ("kind", where) for where in (*NOT_WORK_MODEL_KINDS, *KINDS_SINCE_RETIRED)
+        }
         self.assertEqual(set(), published - listed, "published but neither driven nor listed")
         self.assertEqual(set(), listed - published, "driven or listed but not published")
 

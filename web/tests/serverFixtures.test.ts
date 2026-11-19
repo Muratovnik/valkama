@@ -6,8 +6,7 @@
  * are stale), so a key the server adds, drops or reshapes fails here.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { readdirSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
@@ -46,8 +45,12 @@ import {
 import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
+  validatePlatformPlanningPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
+import { validateGoalVolumesAnswer, validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
+
+import { readServerFixture, SERVER_FIXTURES } from './support/serverFixtures.ts'
 
 const STEP_KINDS = [
   'focus-folder',
@@ -59,8 +62,8 @@ const STEP_KINDS = [
   'explain',
 ] as const
 
-const directory = fileURLToPath(new URL('./fixtures/server/', import.meta.url))
-const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${name}`, 'utf8'))
+const directory = SERVER_FIXTURES
+const read = readServerFixture
 
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
@@ -71,6 +74,9 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'card-goal.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-deferred.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-returned.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-converted.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
   'description-told.json': (value) => validateWorkItemRecord(value),
@@ -79,6 +85,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'documents-resolve-unbound.json': validateResolved,
   'documents-resolve.json': validateResolved,
   'documents-search.json': validateFound,
+  'goal-volumes.json': validateGoalVolumesAnswer,
   'live-frame.json': validateLiveFrame,
   'open-places.json': validateOpenPlaces,
   'open-plan-copy.json': validateOpenPlan,
@@ -92,14 +99,20 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'open-plan-silent.json': validateOpenPlan,
   'open-plan-session.json': validateOpenPlan,
   'planning-chain-tree.json': (value) => validateWorkItemChain(value),
+  'planning-portfolio.json': (value) => validatePlatformPlanningPayload(value),
   'planning-read-model.json': (value) => validateReadModel(value),
   'planning-search.json': validateGlobalPlanningSearch,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
+  'request-proposed-goal.json': validateInputRequestDetail,
   'request-session-gone.json': validateInputRequestDetail,
+  'request-triage-group.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
+  'volumes-filtered.json': validateVolumesAnswer,
+  'volumes-project.json': validateVolumesAnswer,
+  'volumes-space.json': validateVolumesAnswer,
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
@@ -114,6 +127,22 @@ const agentOnly = new Set([
 /** Where a record stands, in words a test can compare: in a state, or deriving one. */
 const standing = (item: { container_state: string | null; state: { category?: string } | null }) =>
   item.state === null ? `derives ${item.container_state}` : `stands in ${item.state.category}`
+
+/** The work item of a card fixture the card read answered. */
+const cardItem = (name: string) => {
+  const card = validatePlanningWorkItemPayload(read(name))
+  if (card.state.status !== 'ready') throw new Error('the card read is not ready')
+  return card.state.payload.work_item
+}
+
+/** A seat as the server writes it, but for its weekly reset: by its id, organization and UUID. */
+const seat = (id: string | null, organization: string | null, uuid: string | null) => ({
+  id,
+  unknown: id === null,
+  organization,
+  account_uuid: uuid,
+  shared: false,
+})
 
 describe('the server fixtures', () => {
   it('are each read by the web or named as an agent read', () => {
@@ -138,19 +167,43 @@ describe('the server fixtures', () => {
     })
   })
 
-  it('give every quota code the doctor reports a title and a detail in each language', () => {
+  it('give every quota and commit-hook code the doctor reports a title and a detail in each language', () => {
     // Read from the server's source, so a code the server adds fails here until it has words.
-    const { quota } = read('doctor-vocabulary.json') as { quota: string[] }
+    const { commit, quota } = read('doctor-vocabulary.json') as {
+      commit: string[]
+      quota: string[]
+    }
     expect(quota.length).toBeGreaterThan(0)
+    expect(commit.length).toBeGreaterThan(0)
     const missing = (['en', 'ru'] as const).flatMap((locale) => {
       const findings: Record<string, { detail?: unknown; title?: unknown } | undefined> =
         messages[locale].health.finding
-      return quota
+      return [...quota, ...commit]
         .filter((code) => {
           const words = findings[code]
           return typeof words?.title !== 'string' || typeof words.detail !== 'string'
         })
         .map((code) => `${locale}: ${code}`)
+    })
+    expect(missing).toEqual([])
+  })
+
+  it('name in both languages each count a commit-records code reports', () => {
+    const counted: Record<string, string[]> = {
+      'commit-records-current': ['{waiting}'],
+      'commit-records-waiting': ['{count}', '{oldest}'],
+      'commit-records-rejected': ['{rejected}', '{paths}'],
+      'commit-records-waiting-rejected': ['{count}', '{oldest}', '{rejected}', '{paths}'],
+    }
+    const missing = (['en', 'ru'] as const).flatMap((locale) => {
+      const findings: Record<string, { detail?: unknown } | undefined> =
+        messages[locale].health.finding
+      return Object.entries(counted).flatMap(([code, placeholders]) => {
+        const detail = String(findings[code]?.detail)
+        return placeholders
+          .filter((placeholder) => !detail.includes(placeholder))
+          .map((placeholder) => `${locale}: ${code} lacks ${placeholder}`)
+      })
     })
     expect(missing).toEqual([])
   })
@@ -172,6 +225,38 @@ describe('the server fixtures', () => {
       { holds: 0, follows: true },
       { holds: 1, follows: false },
     ])
+  })
+
+  it('say what put-off work waits on, and why work in triage came back', () => {
+    const waiting = cardItem('card-deferred.json')
+    expect([waiting.state?.category, waiting.deferred?.until, waiting.returned]).toEqual([
+      'deferred',
+      null,
+      undefined,
+    ])
+    expect(waiting.deferred?.until_item).toMatch(/^MAIN-\d+$/u)
+    const back = cardItem('card-returned.json')
+    expect([back.state?.category, back.deferred, back.returned?.because]).toEqual([
+      'triage',
+      undefined,
+      'deleted',
+    ])
+    expect(back.events.at(-1)?.action).toBe('returned')
+  })
+
+  it('read a task converted into a goal as the goal it became', () => {
+    const goal = cardItem('card-converted.json')
+    expect([goal.kind, goal.state, goal.container_state, goal.labels]).toEqual([
+      'goal',
+      null,
+      'in_progress',
+      ['bug'],
+    ])
+    expect(goal.checklist.map((step) => [step.text, step.done])).toEqual([
+      ['Found', true],
+      ['Fix', false],
+    ])
+    expect(goal.events.at(-1)?.detail).toMatch(/^bug -> goal; leftover MAIN-\d+: 0 steps$/u)
   })
 
   it('carry what a path in a text can come to', () => {
@@ -204,26 +289,44 @@ describe('the server fixtures', () => {
     ).toBe(0)
   })
 
-  it('name the seat of the work, which the page reads without taking it for its own', () => {
+  it("give a card's sessions and its share of each account's week", () => {
+    // Two sessions spent on the card and a third, which follows it, wrote to it. One stretch
+    // of its work, $0.01 of $0.26, is half its seat's cost that week, which the poll put at
+    // 40 %: the session's stretch the day before has no reading before it, so it takes the
+    // seat of the session's next one.
+    const usage = validateItemUsageAnswer(read('usage-item.json'))
+    expect(usage.sessions).toBe(3)
+    expect(
+      usage.quota.weeks.map(({ account, seat, share, percent }) => ({
+        account,
+        seat,
+        share,
+        percent,
+      })),
+    ).toEqual([
+      {
+        account: { organization: 'org-fixture', account_uuid: 'acct-fixture' },
+        seat: 'week:2026-11-16T09:00Z',
+        share: 0.5,
+        percent: 20,
+      },
+    ])
+    // The rest, $0.25 of $0.26, is on no seat: the fixture's other rows name no organization.
+    expect(usage.quota.unknown_share).toBeCloseTo(0.25 / 0.26, 4)
+  })
+
+  it('name the account of the work by its id, a dimension of the page', () => {
     const usage = validateUsageAnswer(read('analytics-usage-seat.json'))
     expect(usage.rows.map(({ group }) => group.seat)).toEqual([
       {
-        id: 'org-fixture/acct-fixture',
-        unknown: false,
-        organization: 'org-fixture',
-        account_uuid: 'acct-fixture',
-        seat_key: null,
+        ...seat('org-fixture/acct-fixture', 'org-fixture', 'acct-fixture'),
+        weekly_reset: '1T09:00Z',
       },
-      {
-        id: 'org-fixture/week:2026-11-17T19:00Z',
-        unknown: false,
-        organization: 'org-fixture',
-        account_uuid: null,
-        seat_key: 'week:2026-11-17T19:00Z',
-      },
-      { id: null, unknown: true, organization: null, account_uuid: null, seat_key: null },
+      { ...seat('org-fixture/weekly:2T19:00Z', 'org-fixture', null), weekly_reset: '2T19:00Z' },
+      { ...seat('org-unread/', 'org-unread', null), weekly_reset: null },
+      { ...seat(null, null, null), weekly_reset: null },
     ])
-    expect(pageDimensionOf(usage)).toBeNull()
+    expect(pageDimensionOf(usage)).toBe('seat')
     expect(pageDimensionOf(validateUsageAnswer(read('analytics-usage.json')))).toBe('work_item')
   })
 
@@ -281,5 +384,16 @@ describe('the server fixtures', () => {
       'expired',
       'session_gone',
     ])
+    // A goal an agent proposes: the question carries the write that waits for the owner.
+    const proposed = validateInputRequestDetail(read('request-proposed-goal.json')).request
+    expect([proposed.purpose, proposed.action?.point]).toEqual(['goal', 'proposed_goal'])
+    // A group of findings: the question names the tasks, and the action what was proposed.
+    const group = validateInputRequestDetail(read('request-triage-group.json')).request
+    expect([group.purpose, group.action?.point, group.action?.proposed.answer]).toEqual([
+      'triage',
+      'finding',
+      'later',
+    ])
+    expect(group.action?.proposed.items?.length).toBe(2)
   })
 })

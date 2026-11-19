@@ -138,7 +138,8 @@ describe('a tile on the board is never placed by hand', () => {
     for (const grouping of ['none', 'goal'] as const) {
       const wrapper = board({ grouping })
       expect(wrapper.get('[id$="-keys"]').text()).toBe(messages.en.workItem.order.hint)
-      expect(wrapper.find('.board-order-note').exists()).toBe(false)
+      // No note says a shared order beside the hint: nothing is placed by hand to be told of.
+      expect(wrapper.text()).not.toMatch(/order is shared/iu)
       wrapper.unmount()
     }
     expect(messages.en.workItem.order.hint).toBe('Arrow keys move focus between work items.')

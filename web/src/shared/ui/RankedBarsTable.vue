@@ -76,6 +76,7 @@ const empty = computed(() => !props.rows.length)
             v-if="row.href"
             class="chart-press"
             :href="row.href"
+            :aria-description="row.action"
             :data-key="row.key"
             @click="(event: MouseEvent) => emit('follow', row.key, event)"
             @auxclick="(event: MouseEvent) => pressAside(row.key, event)"

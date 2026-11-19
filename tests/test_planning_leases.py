@@ -39,7 +39,7 @@ from unittest import mock
 from server import housekeeping, http_surface, mcp_surface, store
 from server.hooks import ingest, normalize
 from server.ops import tray
-from server.planning import leases, requests, service, sweep, views
+from server.planning import leases, participation, requests, service, sweep, views
 
 PROTOCOL = {"io.modelcontextprotocol/protocolVersion": mcp_surface.MODERN_PROTOCOL}
 ONE = "019a3c2e-0001-7c11-9e0f-2f4b6d8a1c3e"
@@ -79,6 +79,9 @@ class LeaseTestCase(unittest.TestCase):
                 "VALKAMA_DB": str(self.root / "valkama.sqlite3"),
                 "HOME": str(self.root),
                 "USERPROFILE": str(self.root),
+                # The registry too: a pass of the sweep takes the commit records waiting
+                # in each registered project's Git directory into the store it runs on.
+                "LOCALAPPDATA": str(self.root / "local"),
             },
         )
         environment.start()
@@ -428,7 +431,7 @@ class ExpiryTests(LeaseTestCase):
         self.mcp("claim_work_item", {"id": live, "author": "codex"}, codex(TWO))
         # The call above started the loop, and the loop swept on its way in.
         self.assertEqual("", self.item()["claim_ref"])
-        self.assertEqual("valkama: released 1 expired Planning lease(s)\n", self.stderr.getvalue())
+        self.assertEqual(RELEASED, self.stderr.getvalue())
         self.assert_expired_by_valkama()
         self.assertEqual(0, housekeeping.run(self.conn).expired_leases)
         self.assertEqual("live", service.get_work_item(self.conn, live)["claim_state"])
@@ -556,13 +559,18 @@ class HookedLeaseTestCase(LeaseTestCase):
 
     def abandoned(self, moment: datetime) -> list[str]:
         with self.clock(moment):
-            return [claim["reference"] for claim in views.stale_claims(self.conn, space="LSE")]
+            return [
+                claim["reference"]
+                for claim in views.stale_claims(
+                    self.conn, settings=participation.load(self.conn), space="LSE"
+                )
+            ]
 
 
 END = datetime(2026, 10, 1, 20, 2, 23, tzinfo=UTC)
 #: The contract's number, spelled out: this is what the tests hold the code to.
 GRACE = timedelta(hours=12)
-RELEASED = "valkama: released 1 expired Planning lease(s)\n"
+RELEASED = "valkama: released expired Planning claims on 1 work item(s)\n"
 
 
 class EndedSessionGraceTests(HookedLeaseTestCase):
@@ -876,6 +884,10 @@ class StartUpTests(unittest.TestCase):
                 f"planning sweep leases: {later}",
                 f"planning sweep waiting: {later}",
                 f"planning sweep subscriptions: {later}",
+                f"planning sweep returns: {later}",
+                f"planning sweep commits: {later}",
+                f"planning sweep confirmations: {later}",
+                f"planning sweep consent: {later}",
                 "quota retention: no time left; it runs at the next start",
             ],
             report.failures,
@@ -929,7 +941,9 @@ class AbandonedClaimTests(LeaseTestCase):
     def abandoned(self) -> list[tuple[str, str | None]]:
         return [
             (claim["reference"], claim["claim_state"])
-            for claim in views.stale_claims(self.conn, space="LSE")
+            for claim in views.stale_claims(
+                self.conn, settings=participation.load(self.conn), space="LSE"
+            )
         ]
 
     def test_a_lease_is_judged_by_its_session_not_by_quiet(self) -> None:
@@ -1257,6 +1271,70 @@ class StepHoldTests(SweepTestCase):
             self.by_valkama(),
         )
 
+    def write_holder(self, index: int, holder: str) -> None:
+        """Write a step's holder into the store directly, for a state no current write leaves."""
+
+        steps = json.loads(self.conn.execute("SELECT checklist FROM work_items").fetchone()[0])
+        steps[index]["claimed_by"] = holder
+        self.conn.execute("UPDATE work_items SET checklist = ?", (json.dumps(steps),))
+        self.conn.commit()
+
+    def test_the_take_next_queue_keeps_the_callers_own_lapsed_holds(self) -> None:
+        self.take(codex(ONE))
+        self.take_step(codex(ONE), 0)
+        # ONE reads lapsed until its own call is written, which is its heartbeat.
+        self.silent(ONE, QUIET + MINUTE)
+        with self.at_now():
+            self.mcp("claim_ready_work_item", {"space": "LSE"}, codex(ONE), started=True)
+        self.assertEqual((held(ONE), [held(ONE), "", ""], "dev"), self.holders())
+        self.assertEqual([], self.by_valkama())
+
+    def test_the_callers_own_step_stays_while_it_takes_a_lapsed_item(self) -> None:
+        self.take(codex(ONE))
+        self.take_step(codex(TWO), 1)
+        self.ended(ONE, timedelta(hours=1))
+        # TWO reads lapsed until its own call is written, which is its heartbeat.
+        self.silent(TWO, QUIET + MINUTE)
+        with self.at_now():
+            taken = self.claim(codex(TWO), author="codex", started=True)
+        self.assertEqual(held(TWO), taken["claim_ref"])
+        self.assertEqual((held(TWO), ["", held(TWO), ""], "dev"), self.holders())
+        self.assertEqual([("released", f"session-ended: {held(ONE)}")], self.by_valkama())
+
+    def test_an_item_whose_only_holder_left_is_on_a_done_step_goes_back_to_the_queue(
+        self,
+    ) -> None:
+        self.take(codex(ONE))
+        self.tick(codex(ONE), 0)
+        # A done step still carrying its holder, which no current write leaves behind:
+        # a done step is nobody's hold.
+        self.write_holder(0, held(ONE))
+        self.ended(ONE, GRACE + MINUTE)
+        self.assertEqual(1, self.sweep())
+        self.assertEqual(("", [held(ONE), "", ""], "ready"), self.holders())
+        self.assertEqual(
+            [
+                ("released", f"session-ended: {held(ONE)}"),
+                ("transitioned", "ready: session-ended"),
+            ],
+            self.by_valkama(),
+        )
+
+    def test_a_closed_item_keeps_its_lapsed_step_as_it_was_closed(self) -> None:
+        self.take_step(codex(ONE), 0)
+        service.transition_work_item(self.conn, self.reference, "cancelled", force=True)
+        self.conn.commit()
+        # An open step still held after the close, which an earlier build could leave.
+        self.write_holder(0, held(ONE))
+        self.ended(ONE, GRACE + MINUTE)
+        before = self.read()
+        self.assertEqual(0, self.sweep())
+        after = self.read()
+        self.assertEqual(
+            (before["revision"], before["checklist"], before["events"]),
+            (after["revision"], after["checklist"], after["events"]),
+        )
+
 
 class UnprovedHoldTests(SweepTestCase):
     """A hold no session proved ages with its item, the owner's own as well."""
@@ -1423,9 +1501,11 @@ class PreviousHolderTests(SweepTestCase):
         self.lapse_after_ticks()
         self.sweep()
         self.take(codex(THREE))
-        review = {"transition": {"state": "review"}}
+        self.tick(codex(THREE), 2)
+        move = {"state": "review", "to_check": "All three steps hold."}
+        review = {"summary": SUMMARY, "transition": move}
         self.assertEqual(ONE_UNCONFIRMED, self.refusal(self.write(codex(THREE), **review)))
-        forced = self.write(codex(THREE), transition={"state": "review", "force": True})
+        forced = self.write(codex(THREE), summary=SUMMARY, transition={**move, "force": True})
         self.assertEqual(["previous_holder"], forced["overridden"])
         item = self.read()
         self.assertEqual("review", item["state"]["category"])

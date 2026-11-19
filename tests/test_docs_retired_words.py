@@ -6,10 +6,10 @@ categories, the state key `todo` and the service word `container`; the list is
 this build does must not teach one of them as current behaviour, or a reader
 sends the word the server refuses.
 
-Read: the README, SERVICE, CONTRIBUTING and DESIGN at the root, and the contracts
-directly under `docs/`. Not read: the changelog, which is history, and
-`docs/decisions/`, which records decisions as they were taken, the one that
-retires these words among them.
+Read: the README, SERVICE, CONTRIBUTING and DESIGN at the root, the contracts
+directly under `docs/` and the guides in `docs/guides/`. Not read: the changelog,
+which is history, and `docs/decisions/`, which records decisions as they were
+taken, the one that retires these words among them.
 
 A read document may still name a retired word where it says so, and only by one
 of these rules, each written below with its reason:
@@ -42,6 +42,7 @@ GUARDED = (
     ROOT / "CONTRIBUTING.md",
     ROOT / "DESIGN.md",
     *sorted(DOCS.glob("*.md")),
+    *sorted((DOCS / "guides").glob("*.md")),
 )
 
 #: Every word the model refuses, from the one list, read as a word of its own and
@@ -197,7 +198,7 @@ class TheRulesAreNarrowTests(unittest.TestCase):
 
     def test_a_word_put_back_into_the_readme_is_named_by_file_and_line(self) -> None:
         lines = self.readme.splitlines()
-        at = lines.index("## Planning: Kanban view") + 1
+        at = lines.index("## What you can do") + 1
         put_back = f"README.md:{at + 1}: epic"
         self.assertNotIn(put_back, offences("README.md", self.readme))
         lines.insert(at, "Each epic is a lane.")

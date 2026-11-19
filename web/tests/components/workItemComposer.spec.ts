@@ -168,8 +168,8 @@ describe('WorkItemComposer priority', () => {
           rows.find((item) => item.textContent?.includes(name)),
           `${locale} option ${name}`,
         )
-        // A level is one line: no note under its word.
-        expect(option.querySelector('.choice-note'), `${locale} ${name}`).toBeNull()
+        // A level is one line: its word and no note under it, whatever class a note would take.
+        expect(option.textContent?.trim(), `${locale} ${name}`).toBe(name)
       }
       wrapper.unmount()
     }

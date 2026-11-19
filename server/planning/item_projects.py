@@ -20,8 +20,10 @@ Where a new item lies is `placement`, where a launch from an item runs
 `launch_root`, the roots a claim names `project_roots`, and the roots a launch gets
 beside its own `added_roots`: each is the one answer to its question.
 
-Which project a commit belongs to is `commit_projects`: the one answer to it, asked
-of Git in the registered roots.
+Which commits the text of a 2.9 commit ref names, each with its project, is
+`commit_pairs`: the one answer to it, asked of Git in the registered roots. The
+projects a task takes from its commits, `commit_projects`, are read off those pairs,
+so the projects and the commits the migration carries cannot disagree.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ import re
 import sqlite3
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 from .. import processes, sessions
 from ..projects import project_registry
@@ -42,6 +44,7 @@ from . import model
 #: The sources a project comes to an item by, strongest first.
 SOURCES = model.PROJECT_SOURCES
 NAMED = SOURCES[0]
+COMMITS = SOURCES[1]
 #: The most projects one item names.
 MAX_PROJECTS = 20
 _PROJECT_ID_LIMIT = 160
@@ -512,6 +515,15 @@ def _put(conn: sqlite3.Connection, work_item_id: str, project_id: str, source: s
         )
 
 
+def put_from_commit(conn: sqlite3.Connection, work_item_id: str, project_id: str) -> None:
+    """The project of a commit attached to a task, with the source `commits`.
+
+    A project the task names stays `named`: the stronger source wins.
+    """
+
+    _put(conn, work_item_id, project_id, COMMITS)
+
+
 def differs(conn: sqlite3.Connection, work_item_id: str, projects: Sequence[str]) -> bool:
     """Whether `replace` with `projects` would change the item's set or a source."""
 
@@ -547,6 +559,17 @@ def carry(conn: sqlite3.Connection, source_id: str, target_id: str) -> int:
     return len(moving)
 
 
+def drop(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
+    """Take every project off an item, which is becoming a goal or stage; the ids taken, sorted.
+
+    A goal or stage names none: the tasks under it do (`CONTAINER_NAMES_NONE`).
+    """
+
+    dropped = sorted(_stored(conn, work_item_id))
+    conn.execute("DELETE FROM work_item_projects WHERE work_item_id = ?", (work_item_id,))
+    return dropped
+
+
 #: The items that name one of the projects of a JSON list, and every goal or stage above
 #: them: a container names what the tasks under it name, at any depth.
 _NAMING = (
@@ -579,16 +602,71 @@ def naming(conn: sqlite3.Connection, projects: Iterable[str]) -> list[str]:
     return [str(row[0]) for row in rows]
 
 
-def space_project_ids(conn: sqlite3.Connection, space_key: str) -> list[str]:
+def space_project_ids(
+    conn: sqlite3.Connection,
+    space_key: str,
+    *,
+    listing: project_registry.RegistryResult | None = None,
+) -> list[str]:
     """The ids of the projects the registry binds to one space of the store `conn` reads.
 
-    A registry that was not read binds none that a read could rely on.
+    `listing` is the registry a caller read already, read here when it names none. A
+    registry that was not read binds none that a read could rely on.
     """
 
-    listing = project_registry.read_registry()
+    if listing is None:
+        listing = project_registry.read_registry()
     if listing["status"] != "available":
         return []
     return [str(project["project_id"]) for project in _bound(conn, listing, space_key)]
+
+
+def space_read(
+    conn: sqlite3.Connection,
+    space: sqlite3.Row | None,
+    project: str | None = None,
+    *,
+    other_spaces: bool = True,
+    listing: project_registry.RegistryResult | None = None,
+) -> tuple[list[str], list[object]]:
+    """The items a read holds, as conditions on `work_items i` and their parameters, in order.
+
+    The one rule of which items a read of a space holds, for every reader that counts
+    them as its board does. `space` is the space's row, its `planning_space_id` and
+    `key`, or None for every space. A read of a space holds its items and, with
+    `other_spaces`, the items of other spaces that name a project the registry binds
+    to it. `project` (an id) narrows the read to the items naming it (`naming`): from
+    the space, and from other spaces only when it is one of the space's projects, so
+    a project of another space that the space's items name brings only the space's
+    own. Without a space it keeps the items naming it in every space. The conditions
+    are joined by `AND`; none means every item. `listing` is the registry a caller
+    read already, read here when it names none.
+    """
+
+    kept = naming(conn, [project]) if project is not None else None
+    clauses: list[str] = []
+    parameters: list[object] = []
+    if space is not None:
+        space_id = str(space["planning_space_id"])
+        foreign = (
+            space_project_ids(conn, str(space["key"]), listing=listing) if other_spaces else []
+        )
+        if kept is not None:
+            # Narrowed to one project, other spaces bring what names it, if it is the space's.
+            foreign = [found for found in foreign if found == project]
+        if foreign:
+            clauses.append(
+                "(i.planning_space_id = ? OR i.work_item_id IN (SELECT value FROM json_each(?)))"
+            )
+            reached = kept if kept is not None else naming(conn, foreign)
+            parameters.extend([space_id, json.dumps(reached)])
+        else:
+            clauses.append("i.planning_space_id = ?")
+            parameters.append(space_id)
+    if kept is not None:
+        clauses.append("i.work_item_id IN (SELECT value FROM json_each(?))")
+        parameters.append(json.dumps(kept))
+    return clauses, parameters
 
 
 def naming_like(conn: sqlite3.Connection, like: str) -> list[str]:
@@ -679,39 +757,23 @@ def of_item(conn: sqlite3.Connection, row: sqlite3.Row) -> list[dict]:
 
 # -- the project of a commit ---------------------------------------------------
 
-# A recorded commit value may name its repository before the revision, as
-# `repo@abc1234` or `repo abc1234`: a name that starts with a letter or digit,
-# then `@` or spaces, then one word that is not git's own `@{...}` syntax.
-# Anything else is the revision as written. The web's `sameCommit` reads a
-# value by this same rule, and both test suites hold the same examples.
-_NAMED_COMMIT = re.compile(r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?:@(?!\{)| +)(?P<rev>\S+)")
-#: A revision that is a commit hash, full or abbreviated, and nothing else. Shorter
-#: than seven, a hex word such as `facade` would be asked about as one.
-_COMMIT_HASH = re.compile(r"[0-9a-fA-F]{7,64}")
 #: How long one repository may take to answer for every hash at once.
 _GIT_TIMEOUT = 120
 
 
-def split_commit_value(value: str) -> tuple[str | None, str]:
-    """The repository name a commit value carries, if any, and its revision."""
-
-    named = _NAMED_COMMIT.fullmatch(value)
-    if named is None:
-        return None, value
-    return named["name"], named["rev"]
-
-
-def _held_commits(root: str, hashes: Sequence[str]) -> set[str]:
-    """The hashes whose commit the repository at `root` holds.
+def _held_commits(root: str, hashes: Sequence[str]) -> dict[str, str]:
+    """The whole hash of each of `hashes` whose commit the repository at `root` holds.
 
     One `git cat-file --batch-check` for all of them; its answer has one line per
     question, in order. A root that is no repository of its own holds none: Git
-    would answer from the repository around it, which is another project's.
+    would answer from the repository around it, which is another project's. A
+    branch or tag named like a hash resolves too, to a commit its digits do not
+    start, and is not taken.
     """
 
     # A linked worktree's `.git` is a file, and it is a repository too.
-    if not os.path.exists(os.path.join(root, ".git")):
-        return set()
+    if not hashes or not os.path.exists(os.path.join(root, ".git")):
+        return {}
     question = "".join(f"{value}^{{commit}}\n" for value in hashes).encode("ascii")
     try:
         answered = processes.run_text(
@@ -721,44 +783,222 @@ def _held_commits(root: str, hashes: Sequence[str]) -> set[str]:
         raise RuntimeError(f"git cannot be asked in {root}: {error}") from error
     if answered.returncode != 0:
         raise RuntimeError(f"git cat-file failed in {root}: {answered.stderr.strip()}")
-    held: set[str] = set()
+    held: dict[str, str] = {}
     for value, line in zip(hashes, answered.stdout.split("\n"), strict=False):
         fields = line.split()
-        if len(fields) == 3 and fields[1] == "commit":
-            held.add(value)
+        if len(fields) == 3 and fields[1] == "commit" and fields[0].startswith(value):
+            held[value] = fields[0]
     return held
 
 
-def commit_projects(values: Iterable[str], projects: Sequence[Mapping[str, Any]]) -> dict[str, str]:
-    """The registered project each commit value belongs to, by value.
+def _described_commits(root: str, whole: Sequence[str]) -> dict[str, tuple[str, str]]:
+    """The subject and committer time of each commit `whole` names, by its whole hash.
 
-    A value that names a registered project's id before its revision
-    (`valkama@1a2b3c4`, `valkama 1a2b3c4`) belongs to that project. A bare hash
-    belongs to the one registered project whose repository holds that commit. A
-    value that resolves to no project or to more than one -- a name nobody
-    registered, a hash two repositories hold, a range, a url -- is left out.
+    One `git log --no-walk` for all of them, read from its standard input: a command
+    line would not hold thousands of hashes. The subject is shown to a person and is
+    decoded leniently; the hash that decides the pair was read strictly.
+    """
+
+    if not whole:
+        return {}
+    try:
+        logged = processes.run_text(
+            [
+                "git",
+                "-C",
+                root,
+                "-c",
+                "i18n.logOutputEncoding=UTF-8",
+                "log",
+                "--no-walk",
+                "--stdin",
+                "--format=%H%x00%cI%x00%s",
+            ],
+            timeout=_GIT_TIMEOUT,
+            stdin="".join(f"{value}\n" for value in whole).encode("ascii"),
+            errors="replace",
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError(f"git cannot be asked in {root}: {error}") from error
+    if logged.returncode != 0:
+        raise RuntimeError(f"git log failed in {root}: {logged.stderr.strip()}")
+    described: dict[str, tuple[str, str]] = {}
+    for line in logged.stdout.split("\n"):
+        fields = line.split("\x00")
+        if len(fields) == 3:
+            described[fields[0]] = (fields[2], fields[1])
+    return described
+
+
+# -- the commits a 2.9 commit ref names -------------------------------------------
+
+#: A hex word: 7 to 64 hex digits that no letter, digit or underscore continues on
+#: either side. Shorter than seven, a word such as `facade` would be read as one.
+_HEX_WORD = re.compile(r"(?<!\w)[0-9a-fA-F]{7,64}(?!\w)")
+#: A repository named just before a hex word: `name@`, `name:`, `name ` or
+#: `owner/name@`. The hint is the last segment of the path.
+_HINT = r"(?:[\w.-]+/)*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?:@|:| +)"
+_HINT_BEFORE = re.compile(rf"(?<![\w./-]){_HINT}$")
+#: A text that is one hash, with or without a repository before it.
+_PLAIN = re.compile(rf"(?:{_HINT})?[0-9a-fA-F]{{7,64}}")
+#: A word that names where work started rather than the work: the one right after
+#: `base`, `from`, `onto` or `от`, which a bracket or a colon may stand around.
+_BASE_BEFORE = re.compile(r"(?<!\w)(?:base|from|onto|от)\s*[(:]?\s*$", re.IGNORECASE)
+#: The left end of a range `X..Y` or `X...Y`: where the range starts.
+_RANGE_AFTER = re.compile(r"\.{2,3}(?=\w)")
+#: An address, and an address of one commit: `…/<name>/commit/<hash>` or GitLab's
+#: `…/<name>/-/commit/<hash>`.
+_ADDRESS = re.compile(r"https?://\S+", re.IGNORECASE)
+_COMMIT_ADDRESS = re.compile(
+    r"https?://\S*?/(?P<name>[^/\s]+)(?:/-)?/commit/(?P<hash>[0-9a-fA-F]{7,64})(?:[/?#]\S*)?",
+    re.IGNORECASE,
+)
+
+
+class CommitText(NamedTuple):
+    """What the text of one commit ref says, before any repository is asked.
+
+    `words` are the hashes it names, each with the repository named before it or
+    None, in lower case and in the order written; `skipped` the hex words it names
+    as a starting point, not as work; `url` whether it is an address that names no
+    commit; `plain` whether it is one hash, with or without a repository before it.
+    """
+
+    words: tuple[tuple[str | None, str], ...]
+    skipped: tuple[str, ...]
+    url: bool
+    plain: bool
+
+
+def read_commit_text(value: str) -> CommitText:
+    """The hashes the text of a commit ref names, read by the rule of its forms.
+
+    An address of a commit reads as `<name>@<hash>`; any other address names no
+    commit. Otherwise every hex word counts, with the repository a hint before it
+    names, except the left end of a range and the word right after `base`, `from`,
+    `onto` or `от`, which are skipped.
+    """
+
+    text = value.strip()
+    address = _COMMIT_ADDRESS.fullmatch(text)
+    if address is not None:
+        return CommitText(
+            ((address["name"].lower(), address["hash"].lower()),), (), url=False, plain=False
+        )
+    if _ADDRESS.fullmatch(text):
+        return CommitText((), (), url=True, plain=False)
+    words: list[tuple[str | None, str]] = []
+    skipped: list[str] = []
+    for found in _HEX_WORD.finditer(text):
+        written, before = found[0].lower(), text[: found.start()]
+        if _RANGE_AFTER.match(text, found.end()) or _BASE_BEFORE.search(before):
+            skipped.append(written)
+            continue
+        hint = _HINT_BEFORE.search(before)
+        words.append((hint["name"].lower() if hint else None, written))
+    return CommitText(
+        tuple(dict.fromkeys(words)),
+        tuple(dict.fromkeys(skipped)),
+        url=False,
+        plain=_PLAIN.fullmatch(text) is not None,
+    )
+
+
+def commit_label(label: str, value: str) -> str:
+    """The label a commit carried over from a ref takes: the ref's own, and its text
+    after it when that text says more than which commit it is -- an address, a note."""
+
+    text = value.strip()
+    if read_commit_text(text).plain:
+        return label
+    return f"{label} — {text}" if label else text
+
+
+class CommitPair(TypedDict):
+    """One commit a ref names: its project, or None when no repository holds it,
+    and its hash, whole when a repository holds it and as written otherwise."""
+
+    project: str | None
+    hash: str
+    subject: str
+    committed_at: str | None
+
+
+class CommitRefPairs(TypedDict):
+    """What one commit ref's text comes to: its pairs, the hex words it skipped, and
+    whether it is an address that names no commit."""
+
+    pairs: list[CommitPair]
+    skipped: list[str]
+    url: bool
+
+
+def commit_pairs(
+    values: Iterable[str], projects: Sequence[Mapping[str, Any]]
+) -> dict[str, CommitRefPairs]:
+    """The commits each commit ref text names, each with its registered project.
+
+    For each hash `read_commit_text` finds: a hint that is a registered project's id
+    gives that project, with the whole hash when its repository holds the commit and
+    the hash as written when it does not; otherwise the one registered repository
+    that holds the commit gives its project and the whole hash; otherwise the hash as
+    written stands with no project. A commit a repository holds carries its subject
+    and committer time. Every repository is asked once for every hash at once.
     """
 
     roots = {str(project["project_id"]): str(project["canonical_root"]) for project in projects}
-    found: dict[str, str] = {}
-    bare: dict[str, list[str]] = {}
-    for value in values:
-        name, revision = split_commit_value(value.strip())
-        if name is not None:
-            if name.lower() in roots:
-                found[value] = name.lower()
-        elif _COMMIT_HASH.fullmatch(revision):
-            bare.setdefault(revision.lower(), []).append(value)
-    if not bare:
-        return found
-    asked = sorted(bare)
-    holders: dict[str, set[str]] = {}
-    for project, root in sorted(roots.items()):
-        for commit in _held_commits(root, asked):
-            holders.setdefault(commit, set()).add(project)
-    for commit, written in bare.items():
-        owners = holders.get(commit, set())
-        if len(owners) == 1:
-            for value in written:
-                found[value] = next(iter(owners))
-    return found
+    texts = {value: read_commit_text(value) for value in dict.fromkeys(values)}
+    hinted: dict[str, set[str]] = {}
+    searched: set[str] = set()
+    for text in texts.values():
+        for hint, written in text.words:
+            if hint in roots:
+                hinted.setdefault(hint, set()).add(written)
+            else:
+                searched.add(written)
+    held = {
+        project: _held_commits(root, sorted(hinted.get(project, set()) | searched))
+        for project, root in sorted(roots.items())
+    }
+
+    def pair(hint: str | None, written: str) -> tuple[str | None, str]:
+        if hint is not None and hint in roots:
+            return hint, held[hint].get(written, written)
+        owners = {(project, whole[written]) for project, whole in held.items() if written in whole}
+        return next(iter(owners)) if len(owners) == 1 else (None, written)
+
+    resolved = {
+        value: list(dict.fromkeys(pair(hint, written) for hint, written in text.words))
+        for value, text in texts.items()
+    }
+    holds = {project: set(whole.values()) for project, whole in held.items()}
+    found: dict[str, set[str]] = {}
+    for named in resolved.values():
+        for project, whole in named:
+            if project is not None and whole in holds[project]:
+                found.setdefault(project, set()).add(whole)
+    described = {
+        project: _described_commits(roots[project], sorted(hashes))
+        for project, hashes in sorted(found.items())
+    }
+    answer: dict[str, CommitRefPairs] = {}
+    for value, text in texts.items():
+        pairs: list[CommitPair] = []
+        for project, whole in resolved[value]:
+            subject, committed_at = described.get(project or "", {}).get(whole, ("", None))
+            pairs.append(
+                {
+                    "project": project,
+                    "hash": whole,
+                    "subject": subject,
+                    "committed_at": committed_at,
+                }
+            )
+        answer[value] = {"pairs": pairs, "skipped": list(text.skipped), "url": text.url}
+    return answer
+
+
+def commit_projects(pairs: Iterable[Mapping[str, Any]]) -> list[str]:
+    """The registered projects of `pairs`, sorted: those a task takes from its commits."""
+
+    return sorted({str(pair["project"]) for pair in pairs if pair["project"] is not None})

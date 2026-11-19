@@ -16,13 +16,13 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest import mock
 
 from server import mcp_surface, store
 from server.planning import api as planning_api
 from server.planning import chain, service
-from tests.planning_fixtures import basis_for
+from tests.planning_fixtures import standing_in
 from tests.planning_tree import Tree
 
 CHAIN_PATH = "/api/planning/work-item/chain"
@@ -50,10 +50,8 @@ class ChainFixture(unittest.TestCase):
         self.refs: dict[str, str] = {}
 
         def make(name: str, *, state: str | None = None, **fields: object) -> None:
-            fields = {**basis_for(state), **fields}
-            item = service.create_work_item(
-                self.conn, space=str(fields.pop("space", "QA")), title=name, state=state, **fields
-            )
+            space = str(fields.pop("space", "QA"))
+            item = standing_in(self.conn, state, space=space, title=name, **fields)
             self.ids[name] = str(item["work_item_id"])
             self.refs[name] = str(item["reference"])
 
@@ -625,6 +623,65 @@ class ChainOrderTests(unittest.TestCase):
         self.assertEqual(["t1", "t2", "t3", "t4"], self.names([row["reference"] for row in rows]))
         self.assertEqual([None, 1, 2, None], [row["queue_order"] for row in rows])
         self.assertFalse(any("rank" in row for row in rows))
+
+
+class ChainDayTests(unittest.TestCase):
+    """The day a stamp falls on is the caller's: its UTC time moved by the offset."""
+
+    def test_an_offset_moves_an_event_across_midnight_in_the_series(self) -> None:
+        found = [{"created_at": "2026-03-01T22:30:00Z", "closed_at": None}]
+        self.assertEqual(
+            [{"day": "2026-03-01", "created": 1, "closed": 0, "total": 1, "closed_total": 0}],
+            chain.series(found, utc_offset=0),
+        )
+        self.assertEqual(
+            [{"day": "2026-03-02", "created": 1, "closed": 0, "total": 1, "closed_total": 0}],
+            chain.series(found, utc_offset=180),
+        )
+
+    def test_an_offset_moves_a_closing_across_midnight_in_the_series(self) -> None:
+        found = [{"created_at": "2026-02-20T12:00:00Z", "closed_at": "2026-03-01T22:30:00Z"}]
+        self.assertEqual(
+            [
+                {"day": "2026-02-20", "created": 1, "closed": 0, "total": 1, "closed_total": 0},
+                {"day": "2026-03-01", "created": 0, "closed": 1, "total": 1, "closed_total": 1},
+            ],
+            chain.series(found, utc_offset=0),
+        )
+        self.assertEqual(
+            [
+                {"day": "2026-02-20", "created": 1, "closed": 0, "total": 1, "closed_total": 0},
+                {"day": "2026-03-02", "created": 0, "closed": 1, "total": 1, "closed_total": 1},
+            ],
+            chain.series(found, utc_offset=180),
+        )
+
+    def test_an_offset_moves_an_event_across_midnight_in_the_recent_window(self) -> None:
+        found = [{"created_at": "2026-03-01T22:30:00Z", "closed_at": None}]
+        # The window is seven days, today included: 02-23..03-01 for the first day here,
+        # and 03-02..03-08 for the last. Offset 0 puts the event on 03-01, offset 180 on 03-02.
+        for today, utc_offset, created, trend in (
+            (date(2026, 3, 1), 0, 1, "growing"),
+            (date(2026, 3, 1), 180, 0, "steady"),
+            (date(2026, 3, 8), 0, 0, "steady"),
+            (date(2026, 3, 8), 180, 1, "growing"),
+        ):
+            with self.subTest(today=today.isoformat(), utc_offset=utc_offset):
+                self.assertEqual(
+                    {"days": 7, "created": created, "closed": 0, "trend": trend},
+                    chain.recent(found, today, utc_offset=utc_offset),
+                )
+
+    def test_a_negative_offset_moves_a_stamp_after_midnight_back_a_day(self) -> None:
+        found = [{"created_at": "2026-03-02T00:30:00Z", "closed_at": None}]
+        self.assertEqual(
+            [{"day": "2026-03-02", "created": 1, "closed": 0, "total": 1, "closed_total": 0}],
+            chain.series(found, utc_offset=0),
+        )
+        self.assertEqual(
+            [{"day": "2026-03-01", "created": 1, "closed": 0, "total": 1, "closed_total": 0}],
+            chain.series(found, utc_offset=-300),
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this

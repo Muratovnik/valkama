@@ -14,8 +14,8 @@ import { test } from './test.ts'
 /** Where something stands, read in the page so that a missing one fails there. */
 const boxOf = (locator: Locator) =>
   locator.evaluate((node) => {
-    const { x, y } = node.getBoundingClientRect()
-    return { x, y }
+    const { x, y, right } = node.getBoundingClientRect()
+    return { x, y, right }
   })
 
 test('focus shows the focused control’s own hint, and none of the element it is in', async ({
@@ -40,24 +40,33 @@ test('focus shows the focused control’s own hint, and none of the element it i
   await expect(page.locator('.tooltip-hint')).toHaveCount(0)
 })
 
-test('the pointer moved straight to the next cut word shows its hint at once', async ({ page }) => {
+test('a cut word laid whole holds the pointer over the next word, and off it that word shows at once', async ({
+  page,
+}) => {
   await page.clock.install()
   await page.goto('/tests/browser/harness.html?lang=en&surface=hints')
-  const words = page.getByRole('tooltip')
+  const whole = page.locator('.whole-text')
   const [name, title] = [page.locator('.hints-name'), page.locator('.hints-title')]
   await expect(title).toBeVisible()
   await name.hover()
   await page.clock.runFor(1000)
-  await expect(words).toHaveText('A name cut short by its box')
-  // Straight across onto the start of the next word, which stands in the room between the
-  // first word and its wider hint: the library's way to a hint the pointer may enter, which a
-  // hint the pointer passes through has no use for.
+  await expect(whole).toHaveText('A name cut short by its box')
+  // Straight across onto the start of the next word, which the first one's whole words cover:
+  // the pointer is on them, and they stay.
   const box = await boxOf(title)
   await page.mouse.move(box.x + 4, box.y + 3, { steps: 8 })
-  await expect(words).toHaveText('A title cut short beside it')
-  // And still, once the moment for passing on is long gone.
   await page.clock.runFor(1000)
-  await expect(words).toHaveText('A title cut short beside it')
+  await expect(whole).toHaveText('A name cut short by its box')
+  // Off them, past their end on the same line, they go a moment later; back on the next word,
+  // now bare, its own whole words show at once, and stay.
+  const laid = await boxOf(whole)
+  await page.mouse.move(laid.right + 24, box.y + 3, { steps: 4 })
+  await page.clock.runFor(200)
+  await expect(whole).toHaveCount(0)
+  await page.mouse.move(box.x + 4, box.y + 3, { steps: 4 })
+  await expect(whole).toHaveText('A title cut short beside it')
+  await page.clock.runFor(1000)
+  await expect(whole).toHaveText('A title cut short beside it')
 })
 
 test('a hint the keyboard holds up lets a press through to what it covers', async ({ page }) => {
@@ -68,19 +77,22 @@ test('a hint the keyboard holds up lets a press through to what it covers', asyn
   await page.keyboard.press('Tab')
   const hint = page.locator('.tooltip-hint')
   await expect(hint).toBeVisible()
-  // What a press at the middle of the hint lands on, and whether the hint stands over the
-  // control above its own there, which is the case this asks about.
+  // What a press lands on where the hint stands over the control below its own, which is the
+  // case this asks about: a detail stands below its element, over the next control. It stood
+  // above, over the control before it, while a hint took its side from its call site.
   const landed = await page.evaluate(() => {
     const card = document.querySelector('.tooltip-hint')?.getBoundingClientRect()
-    const below = document.querySelector('.hints-under')?.getBoundingClientRect()
+    const below = document.querySelector('.hints-inner')?.getBoundingClientRect()
     if (!card || !below) return { over: false, on: null }
-    const [x, y] = [card.left + card.width / 2, card.top + card.height / 2]
+    const [left, right] = [Math.max(card.left, below.left), Math.min(card.right, below.right)]
+    const [top, bottom] = [Math.max(card.top, below.top), Math.min(card.bottom, below.bottom)]
+    const [x, y] = [(left + right) / 2, (top + bottom) / 2]
     return {
-      over: below.top < y && y < below.bottom,
+      over: right - left > 1 && bottom - top > 1,
       on: document.elementFromPoint(x, y)?.className,
     }
   })
-  expect(landed).toEqual({ over: true, on: 'hints-under' })
+  expect(landed).toEqual({ over: true, on: 'hints-inner' })
 })
 
 /** The hint's lines: its element's whole words when it says them, and the detail under them. */
@@ -127,14 +139,12 @@ test('a detail on a cut name says the name whole over it, and on a whole name th
   await page.clock.runFor(1000)
   expect(await hintLines(page)).toEqual({ words: null, text: 'Held since Monday', under: null })
 
-  // With nothing to add, a cut name's hint is its words, as a `clipped` one is.
+  // With nothing to add, a cut name's hint is its words, as a `clipped` one is: laid whole
+  // over it, with no box of words beside it.
   await bare.hover()
   await page.clock.runFor(1000)
-  expect(await hintLines(page)).toEqual({
-    words: null,
-    text: 'A name with nothing to add',
-    under: null,
-  })
+  await expect(page.locator('.whole-text')).toHaveText('A name with nothing to add')
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
 })
 
 test('a whole word with a clipped hint leaves the pointer to the hint of the control it is in', async ({
@@ -149,5 +159,6 @@ test('a whole word with a clipped hint leaves the pointer to the hint of the con
   // A cut word still says itself, over whatever holds it.
   await page.locator('.hints-name').hover()
   await page.clock.runFor(1000)
-  await expect(words).toHaveText('A name cut short by its box')
+  await expect(page.locator('.whole-text')).toHaveText('A name cut short by its box')
+  await expect(words).toHaveCount(0)
 })

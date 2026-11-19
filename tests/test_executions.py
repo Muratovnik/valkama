@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import timedelta
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +31,8 @@ from server.executions import artifacts
 from server.executions import lifecycle as executions
 from server.executions import results as execution_results
 from server.executions import service as execution_service
+from server.planning import calls as planning_calls
+from server.planning import leases, participation, sweep
 from server.planning import model as planning_model
 from server.planning import service as planning
 from server.planning import views as planning_views
@@ -105,6 +108,23 @@ class LaunchHarness(unittest.TestCase):
     def packet(self, reference: str, **overrides) -> dict:
         return {"work_item": reference, "client": "claude", "repo": self.repo, **overrides}
 
+    def deliver(self, reference: str) -> None:
+        """The structured result of an attempt that delivered what it was asked."""
+
+        runner.RUNNER._running[reference].capture.append(
+            json.dumps(
+                {
+                    "structured_output": {
+                        "outcome": "complete",
+                        "expected_effect": "change_required",
+                        "delivery": "owned change",
+                        "oracle": "focused tests passed",
+                        "unresolved": "none",
+                    }
+                }
+            )
+        )
+
 
 class LaunchLifecycleTests(LaunchHarness):
     """Launching is a store operation first: nothing may be handed out twice."""
@@ -157,6 +177,37 @@ class LaunchLifecycleTests(LaunchHarness):
         self.assertEqual("ready", detail["state"]["key"])
         self.assertEqual("", detail["claim_ref"])
         self.assertIn("launch_failed", detail["comments"][-1]["body"])
+        self.assertNotIn(
+            "active",
+            [row[0] for row in self.conn.execute("SELECT status FROM sessions")],
+            "the session its claim opened never ran, so it is not left open",
+        )
+
+    def test_a_launch_failure_puts_put_off_work_back_with_its_condition(self) -> None:
+        """The launch took it out of deferred, and the condition went with it."""
+
+        reference = self.item("put off")
+        with planning_calls.bind(planning_calls.browser(), "/api/planning/work-item/defer"):
+            planning.defer_work_item(
+                self.conn, reference, until="2099-01-01", reason="waits for the vendor"
+            )
+        self.conn.commit()
+        condition = (
+            "SELECT until_at, until_item_id, reason, call_id, since, reached_at"
+            " FROM work_item_deferrals"
+        )
+        before = self.conn.execute(condition).fetchall()
+        runner.RUNNER = runner.Runner(
+            spawn=lambda _argv, _cwd, _environment: (_ for _ in ()).throw(OSError("boom"))
+        )
+        with self.assertRaisesRegex(runner.LaunchError, "cannot start claude"):
+            executions.launch_work_item(self.conn, self.packet(reference))
+        detail = planning.get_work_item(self.conn, reference)
+        self.assertEqual(("deferred", ""), (detail["state"]["key"], detail["claim_ref"]))
+        self.assertEqual(
+            [tuple(row) for row in before], [tuple(row) for row in self.conn.execute(condition)]
+        )
+        self.assertEqual("2099-01-01T00:00:00Z", detail["deferred"]["until"])
 
     def test_stopping_records_the_stop_on_the_item_and_the_session(self) -> None:
         reference = self.item("stop me")
@@ -168,28 +219,206 @@ class LaunchLifecycleTests(LaunchHarness):
         row = sessions.session_context(self.conn, started["client_session_id"])
         self.assertEqual("ended", row["status"])
 
-    def test_a_finished_launch_moves_its_item_to_review(self) -> None:
+    def test_a_finished_launch_leaves_its_item_where_its_agent_left_it(self) -> None:
+        # Work enters review only with what the owner is to check, which the agent
+        # that did it asks: the launch's end moves nothing and says so in its note.
         reference = self.item("finish me")
         executions.launch_work_item(self.conn, self.packet(reference))
-        runner.RUNNER._running[reference].capture.append(
-            json.dumps(
-                {
-                    "structured_output": {
-                        "outcome": "complete",
-                        "expected_effect": "change_required",
-                        "delivery": "owned change",
-                        "oracle": "focused tests passed",
-                        "unresolved": "none",
-                    }
-                }
-            )
+        prompt = " ".join(self.spawned[0][0])
+        self.assertIn(
+            "When the work is done, move the item to review with to_check, what the owner is"
+            " to check: the launch does not move it.",
+            prompt,
+            "the result contract tells the agent",
         )
+        self.deliver(reference)
         self.processes[0].code = 0
         ended = executions.reap_launches(self.conn)
         self.assertEqual([reference], [item["reference"] for item in ended])
+        self.assertEqual([], [key for key in ended[0] if "review" in key], "no move is reported")
         detail = planning.get_work_item(self.conn, reference)
-        self.assertEqual("review", detail["state"]["key"])
+        self.assertEqual("dev", detail["state"]["key"])
         self.assertIn("outcome=complete", detail["comments"][-1]["body"])
+        self.assertEqual("runner", detail["comments"][-1]["author"])
+
+    def test_a_task_its_launch_left_at_work_goes_back_to_ready_when_its_claim_lapses(
+        self,
+    ) -> None:
+        reference = self.item("left at work")
+        executions.launch_work_item(self.conn, self.packet(reference))
+        started = planning.get_work_item(self.conn, reference)["started_at"]
+        self.assertIsNotNone(started)
+        self.deliver(reference)
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        self.conn.commit()
+        # The launch's claim is a lease of the session the launch started: held through
+        # the grace an ended session has to come back, released by the sweep after it.
+        self.assert_lapses_after_the_grace(reference)
+        detail = planning.get_work_item(self.conn, reference)
+        self.assertEqual("", detail["claim_ref"])
+        self.assertEqual(started, detail["started_at"], "it stays started")
+        self.assertIn(
+            ("released", "session-ended: claude:executor"),
+            [(event["action"], event["detail"]) for event in detail["events"]],
+        )
+
+    def sessions(self) -> list[tuple[str, str]]:
+        """Every session row, by its id and status."""
+
+        return [(row[0], row[1]) for row in self.conn.execute("SELECT id, status FROM sessions")]
+
+    def assert_lapses_after_the_grace(self, reference: str) -> None:
+        """The sweep holds the item at work until `ENDED_GRACE` after its session ended."""
+
+        ended = leases.utc_now()
+        for after, state in (
+            (leases.ENDED_GRACE - timedelta(minutes=1), "dev"),
+            (leases.ENDED_GRACE + timedelta(minutes=1), "ready"),
+        ):
+            with mock.patch.object(leases, "utc_now", return_value=ended + after):
+                sweep.run_pass(self.conn)
+            self.assertEqual(
+                state, planning.get_work_item(self.conn, reference)["state"]["key"], after
+            )
+
+    def test_a_launch_claims_as_a_lease_of_the_session_it_starts(self) -> None:
+        reference = self.item("lease me")
+        started = executions.launch_work_item(self.conn, self.packet(reference))
+        session = started["client_session_id"]
+        claim = planning.get_work_item(self.conn, reference)["claim"]
+        # Proved by the launch, which assigned the session, and recorded as the launch's.
+        self.assertEqual(
+            ("claude:executor", "live", session, "launch"),
+            (claim["holder"], claim["state"], claim["session_id"], claim["source"]),
+        )
+        self.assertEqual([(session, "active")], self.sessions())
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        # One session, opened and ended under the one id the claim names.
+        self.assertEqual([(session, "ended")], self.sessions())
+        self.assertEqual("stale", planning.get_work_item(self.conn, reference)["claim"]["state"])
+
+    def test_the_queue_hands_out_a_task_whose_launch_ended_past_its_grace(self) -> None:
+        reference = self.item("hand me out")
+        executions.launch_work_item(self.conn, self.packet(reference))
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        self.conn.commit()
+        ended = leases.utc_now()
+        with mock.patch.object(
+            leases, "utc_now", return_value=ended + leases.ENDED_GRACE - timedelta(minutes=1)
+        ):
+            self.assertIsNone(planning.claim_ready_work_item(self.conn, space="TST"))
+        with mock.patch.object(
+            leases, "utc_now", return_value=ended + leases.ENDED_GRACE + timedelta(minutes=1)
+        ):
+            taken = planning.claim_ready_work_item(self.conn, space="TST", author="worker-b")
+        assert taken is not None
+        self.assertEqual((reference, "worker-b"), (taken["reference"], taken["claim_ref"]))
+
+    def test_a_resumed_launch_holds_by_the_same_session_and_lapses_by_the_same_rule(
+        self,
+    ) -> None:
+        reference = self.item("resume and leave")
+        first = executions.launch_work_item(self.conn, self.packet(reference))
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        executions.launch_work_item(self.conn, self.packet(reference, resume=True))
+        detail = planning.get_work_item(self.conn, reference)
+        session = first["client_session_id"]
+        self.assertEqual(
+            ("live", session, "launch"),
+            (detail["claim"]["state"], detail["claim"]["session_id"], detail["claim"]["source"]),
+        )
+        self.assertNotIn("released", [event["action"] for event in detail["events"]])
+        self.processes[1].code = 0
+        executions.reap_launches(self.conn)
+        self.conn.commit()
+        self.assertEqual([(session, "ended")], self.sessions())
+        self.assert_lapses_after_the_grace(reference)
+
+    def launch_codex(self, reference: str, **overrides) -> dict:
+        """Launch the client that announces its own session once it runs."""
+
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_CODEX_BIN": sys.executable}),
+            mock.patch.object(tempfile, "tempdir", self._dir.name),
+        ):
+            return executions.launch_work_item(
+                self.conn, self.packet(reference, client="codex", **overrides)
+            )
+
+    def announce(self, reference: str, thread: str) -> None:
+        """The line the running client prints when it has minted its session."""
+
+        runner.RUNNER._running[reference].capture.append(
+            json.dumps({"type": "thread.started", "thread_id": thread})
+        )
+
+    def lease_of(self, reference: str) -> tuple[str, str, str]:
+        claim = planning.get_work_item(self.conn, reference)["claim"]
+        return claim["state"], claim["session_id"], claim["source"]
+
+    def test_a_client_announcing_its_own_session_claims_for_the_launch_session(self) -> None:
+        # Its identity exists only once it runs, so the launch runs it under its own id
+        # from start to end, and the claim is the lease of that session.
+        reference = self.item("announce it")
+        started = self.launch_codex(reference)
+        launched = started["launch_id"]
+        self.assertEqual(launched, started["session_id"])
+        self.assertEqual(("live", launched, "launch"), self.lease_of(reference))
+        self.assertEqual([(launched, "active")], self.sessions())
+        self.announce(reference, "thread-a")
+        self.assertEqual("thread-a", runner.RUNNER.running()[0]["client_session_id"])
+        # The identity it announced starts nothing, and the claim still names the launch's.
+        self.assertEqual([(launched, "active")], self.sessions())
+        self.assertEqual(("live", launched, "launch"), self.lease_of(reference))
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        self.conn.commit()
+        # The launch's session ends under the id it opened under. The client's own is
+        # recorded as ended too, for the attempt's link, and the claim reads none of it.
+        self.assertEqual("ended", dict(self.sessions())[launched])
+        self.assertEqual(("stale", launched, "launch"), self.lease_of(reference))
+        self.assertEqual(
+            {launched, "thread-a"},
+            {
+                link["session_id"]
+                for link in execution_service.executions_for_work_item(
+                    self.conn, str(planning.get_work_item(self.conn, reference)["work_item_id"])
+                )[0]["sessions"]
+            },
+        )
+        self.assert_lapses_after_the_grace(reference)
+        self.assertEqual("", planning.get_work_item(self.conn, reference)["claim_ref"])
+
+    def test_a_resumed_codex_launch_reattaches_to_the_session_its_client_announced(
+        self,
+    ) -> None:
+        reference = self.item("resume the thread")
+        self.launch_codex(reference)
+        self.announce(reference, "thread-a")
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        resumed = self.launch_codex(reference, resume=True)
+        argv = self.spawned[-1][0]
+        self.assertEqual(["resume", "--json"], argv[2:4])
+        self.assertEqual("thread-a", argv[-2], "the session comes right before the task")
+        self.assertEqual([], [part for part in argv if part.startswith("launch-")])
+        self.assertEqual(("thread-a", "thread-a"), (resumed["resumed_from"], resumed["session_id"]))
+        self.assertEqual(("live", "thread-a", "launch"), self.lease_of(reference))
+        self.processes[1].code = 0
+        executions.reap_launches(self.conn)
+
+    def test_a_codex_launch_that_never_announced_its_session_cannot_be_resumed(self) -> None:
+        # Its only link is the launch's own id, which no client can reattach to.
+        reference = self.item("never announced")
+        self.launch_codex(reference)
+        self.processes[0].code = 0
+        executions.reap_launches(self.conn)
+        with self.assertRaisesRegex(runner.LaunchError, "no exact resumable codex session"):
+            self.launch_codex(reference, resume=True)
 
     def test_zero_exit_without_structured_delivery_does_not_advance(self) -> None:
         reference = self.item("empty success")
@@ -229,7 +458,9 @@ class LaunchLifecycleTests(LaunchHarness):
             self.conn, fresh, "dev", author="codex", acceptance="assignment"
         )
         self.conn.commit()
-        self.assertEqual([], planning_views.stale_claims(self.conn))
+        self.assertEqual(
+            [], planning_views.stale_claims(self.conn, settings=participation.load(self.conn))
+        )
 
         old = self.item("abandoned")
         planning.claim_work_item(self.conn, old, author="ghost")
@@ -253,7 +484,7 @@ class LaunchLifecycleTests(LaunchHarness):
             (identity,),
         )
         self.conn.commit()
-        stale = planning_views.stale_claims(self.conn)
+        stale = planning_views.stale_claims(self.conn, settings=participation.load(self.conn))
         self.assertEqual([old], [item["reference"] for item in stale])
         self.assertEqual("ghost", stale[0]["claim_ref"])
         self.assertGreaterEqual(stale[0]["quiet_days"], 3)
@@ -545,9 +776,9 @@ class ReapLoopTests(unittest.TestCase):
     """The loop that owes every later cycle must survive one that failed.
 
     It runs as a bare daemon thread with no supervisor, and it owns three
-    things: reaping, the move to review a finished launch earns, and every
-    change notification an open stream is waiting on. One uncaught exception
-    used to end all three for the life of the process.
+    things: reaping, the alert a failed launch owes, and every change
+    notification an open stream is waiting on. One uncaught exception used to
+    end all three for the life of the process.
     """
 
     def test_a_raising_reap_is_reported_and_the_loop_keeps_publishing(self) -> None:
@@ -576,7 +807,7 @@ class ReapLoopTests(unittest.TestCase):
 class ReaperPassTests(LaunchHarness):
     """The pass the listener's loop makes, not only the verb beneath it."""
 
-    def test_a_pass_records_the_ending_and_moves_the_item_to_review(self) -> None:
+    def test_a_pass_records_the_ending_and_leaves_the_item_at_work(self) -> None:
         reference = self.item("finish me")
         executions.launch_work_item(self.conn, self.packet(reference))
         runner.RUNNER._running[reference].capture.append(
@@ -599,7 +830,7 @@ class ReaperPassTests(LaunchHarness):
         self.assertEqual("", reported.getvalue(), "the ending recorded without a complaint")
         self.assertEqual([reference], [item["reference"] for item in ended])
         detail = planning.get_work_item(self.conn, reference)
-        self.assertEqual("review", detail["state"]["key"])
+        self.assertEqual("dev", detail["state"]["key"])
         self.assertIn("outcome=complete", detail["comments"][-1]["body"])
         self.assertFalse(self.conn.in_transaction)
 
@@ -1040,7 +1271,7 @@ with open(os.path.join(os.getcwd(), "delivered.txt"), "w", encoding="utf-8") as 
 
         runner.RUNNER = runner.Runner(spawn=spawn)
 
-    def test_a_delivered_attempt_moves_the_item_to_review_with_its_evidence(self) -> None:
+    def test_a_delivered_attempt_records_its_evidence_and_leaves_the_item_at_work(self) -> None:
         completed = processes.run_text(["git", "-C", self.repo, "init", "-b", "main"])
         if completed.returncode != 0:
             raise unittest.SkipTest("git is unavailable here")
@@ -1089,7 +1320,7 @@ with open(os.path.join(os.getcwd(), "delivered.txt"), "w", encoding="utf-8") as 
         self.assertEqual("high", answer["argv"][answer["argv"].index("--effort") + 1])
 
         item = planning.get_work_item(self.conn, reference)
-        self.assertEqual("review", item["state"]["key"], "a delivery moves the work on")
+        self.assertEqual("dev", item["state"]["key"], "the agent moves the work on, not the end")
         attempt = execution_service.executions_for_work_item(self.conn, str(item["work_item_id"]))[
             0
         ]

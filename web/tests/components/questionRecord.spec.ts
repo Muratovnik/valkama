@@ -322,7 +322,7 @@ describe.each(kinds)('the record of $name', (kind) => {
     const wrapper = mounted(entry)
     await kind.fill(wrapper)
     await wrapper.setProps({
-      entry: closed(entry, { status: 'expired', expired_reason: 'task_closed' }),
+      entry: closed(entry, { status: 'expired', expired_reason: 'item_completed' }),
     })
     await flushPromises()
     expect(wrapper.get('.request-state').text()).toMatch(

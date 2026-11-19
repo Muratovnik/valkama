@@ -33,6 +33,7 @@ export function requestEntry(): InputRequestEntry {
       resolved_at: null,
       revision: 1,
       expired_reason: null,
+      purpose: null,
     },
   }
 }
@@ -50,7 +51,9 @@ export function requestList(items = [requestEntry()]): InputRequestList {
       },
     ],
     limit: 100,
+    total: items.length,
     has_more: false,
+    triage_due: [],
   }
 }
 

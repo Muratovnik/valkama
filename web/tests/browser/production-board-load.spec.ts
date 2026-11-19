@@ -98,9 +98,9 @@ test('a tile draws what it shows and nothing to measure it by', async ({ page })
   // here. A copy of the chips drawn out of sight to be measured was eight more a
   // tile, and a box around every glyph one more each. The one box left is the steps
   // glyph's line, which centres it on the letters of its count; a glyph with no word
-  // beside it is its mark's own line and has none.
+  // beside it is its mark's own line and has none. A copy drawn back would cross the count.
+  expect(drawn.nodes.length, 'the tiles counted').toBeGreaterThan(0)
   expect(Math.max(...drawn.nodes)).toBeLessThanOrEqual(49)
-  await expect(page.locator('[data-ghost], .facet-ghost')).toHaveCount(0)
   // Whole chips only: a chip counted as fitting is never shortened.
   expect(drawn.cut).toBe(0)
 })
@@ -188,7 +188,7 @@ test('a list one row short of a window paints its first rows first, then all of 
   })
   await serveSpace(page, rows, [], { answered })
   await page.addInitScript(() => {
-    const frames: { cells: number[]; rows: number }[] = []
+    const frames: { cells: number[]; held: number; rows: number }[] = []
     Object.assign(globalThis, { listFrames: frames })
     const watch = () => {
       const row = document.querySelector<HTMLTableRowElement>('tbody tr')
@@ -196,6 +196,7 @@ test('a list one row short of a window paints its first rows first, then all of 
       if (row && frames.at(-1)?.rows !== count)
         frames.push({
           cells: [...row.cells].map((cell) => cell.getBoundingClientRect().left),
+          held: document.querySelectorAll('tbody tr.list-row-held').length,
           rows: count,
         })
       requestAnimationFrame(watch)
@@ -213,10 +214,14 @@ test('a list one row short of a window paints its first rows first, then all of 
   await expect(list).toHaveCount(299)
   await stillFrames(page)
   const frames = await page.evaluate(
-    () => (globalThis as unknown as { listFrames: { cells: number[]; rows: number }[] }).listFrames,
+    () =>
+      (globalThis as unknown as { listFrames: { cells: number[]; held: number; rows: number }[] })
+        .listFrames,
   )
   // Under what fills the list's height at first, and every row in the end.
   expect(frames[0]?.rows).toBeLessThan(60)
+  // The first frame holds the rows that give the columns their widths, drawn but not shown.
+  expect(frames[0]?.held).toBeGreaterThan(0)
   expect(frames.at(-1)?.rows).toBe(299)
   // The widths the far rows need were there from the first frame.
   expect(frames.at(-1)?.cells).toEqual(frames[0]?.cells)

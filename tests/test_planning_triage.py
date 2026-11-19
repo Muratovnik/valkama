@@ -1,0 +1,848 @@
+"""The triage stack and the review's mark, as the store keeps them.
+
+The oracle is the rule of the stack: an item waits there when it stands in triage,
+has no parent or stands in accepted open goals and stages all the way up, and has no
+question to the owner open, which is a request pending with no comment under it and
+no session asked (`questions.OWNER_QUESTION`). It entered at its last state entry, or
+at its creation when its history records none, and the stack is read oldest entry
+first, then by space key and number. A mark stays until the item leaves triage or
+moves under a goal or out of one, or gains a comment, a thread or a question to the
+owner, which a merge moving one onto it counts as; the store takes it away then, and
+nothing else does.
+
+Goal G, filed by the person and so accepted, holds what each case names. Session B
+files the findings, which stand in triage with no basis.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sqlite3
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from unittest import mock
+
+from server.planning import (
+    api,
+    deferral,
+    interactions,
+    leases,
+    model,
+    questions,
+    service,
+    sweep,
+    triage,
+)
+from server.planning.routing import PlanningRouting
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
+from tests.registry_fixtures import project_binding, project_entry, registry_bytes
+from tests.test_planning_closing import APPLY, AS_A, AS_B, MERGE, NOW, UPDATE, Tree
+
+FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
+QUESTION = {"kind": "question", "prompt": "Is this one change or two?", "fields": [FIELD]}
+#: A decision recommends an answer in its one required field, as the batch's tests send it.
+DECISION = {
+    "kind": "decision",
+    "prompt": "Which path?",
+    "fields": [
+        {
+            "id": "path",
+            "label": "Which path?",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {"id": "near", "label": "Near", "recommended": True},
+                {"id": "far", "label": "Far"},
+            ],
+        }
+    ],
+}
+ANSWER = "/api/planning/request/answer"
+MOVE_OUT = "/api/planning/work-item/move-out"
+PARTICIPATION = "/api/planning/participation"
+BATCH = "apply_work_item_changes"
+#: A deferral whose day comes on the next clock tick, after which the sweep brings it back.
+DEFER_UNTIL = "2026-11-18"
+DAY_CAME = datetime(2026, 11, 18, 0, 0, 1, tzinfo=UTC)
+T1 = "2026-11-10T09:00:00Z"
+T2 = "2026-11-11T09:00:00Z"
+T3 = "2026-11-12T09:00:00Z"
+
+
+class Stack(Tree):
+    def setUp(self) -> None:
+        super().setUp()
+        self.space = str(
+            self.conn.execute(
+                "SELECT planning_space_id FROM planning_spaces WHERE key = 'MAIN'"
+            ).fetchone()[0]
+        )
+
+    # -- writes ---------------------------------------------------------------------
+
+    def found(self, title: str, kind: str = "task", parent: str | None = None) -> str:
+        """An item session B filed: with nothing accepted over it, it stands in triage."""
+
+        arguments: dict = {"space": "MAIN", "title": title, "kind": kind}
+        if parent is not None:
+            arguments["parent"] = parent
+        return str(self.agent("create_work_item", AS_B, **arguments)["reference"])
+
+    def asked(self, reference: str) -> None:
+        self.agent("apply_work_item_changes", AS_B, id=reference, questions=[QUESTION])
+
+    def marked(self, reference: str) -> None:
+        answer = triage.mark(
+            self.conn, self.identity(reference), True, author="worker-a", call_id=None
+        )
+        self.conn.commit()
+        self.assertEqual({"seen_at"}, set(answer))
+
+    def entries_at(self, reference: str, moment: str) -> None:
+        """Date every state entry and the creation of the item to `moment`."""
+
+        identity = self.identity(reference)
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at = ? WHERE work_item_id = ?"
+            " AND action IN ('created', 'transitioned', 'opened')",
+            (moment, identity),
+        )
+        self.conn.execute(
+            "UPDATE work_items SET created_at = ? WHERE work_item_id = ?", (moment, identity)
+        )
+        self.conn.commit()
+
+    # -- reads ----------------------------------------------------------------------
+
+    def mark_of(self, reference: str) -> tuple | None:
+        found = self.conn.execute(
+            "SELECT seen_at, author FROM triage_marks WHERE work_item_id = ?",
+            (self.identity(reference),),
+        ).fetchone()
+        return None if found is None else tuple(found)
+
+    def stack(self) -> list[str]:
+        return [
+            f"{found.space_key}-{found.number}" for found in triage.waiting(self.conn, self.space)
+        ]
+
+
+class SelectionTests(Stack):
+    def test_the_stack_holds_what_waits_in_triage_and_nothing_decided_elsewhere(self) -> None:
+        f = self.found("f, a finding")
+        t = self.made("t, a task in the accepted goal", parent=self.goal)
+        self.person(APPLY, id=t, transition={"state": "triage"})
+        stage = self.made("S", "stage", parent=self.goal)
+        deep = self.made("d, a task in an accepted stage", parent=stage)
+        self.person(APPLY, id=deep, transition={"state": "triage"})
+        g = self.found("g, a goal nobody accepted", "goal")
+        u = self.found("u, under the goal nobody accepted", parent=g)
+        q = self.found("q, a finding asked about")
+        self.asked(q)
+        ready = self.made("r, accepted")
+
+        listed = self.stack()
+
+        self.assertEqual(sorted([f, t, deep]), sorted(listed))
+        for outside in (g, u, q, ready, self.goal, stage):
+            self.assertNotIn(outside, listed)
+        # The goal waits for the owner's answer to the question its proposal asked;
+        # once nobody waits for one, it is the review's to see.
+        [(request_id, revision)] = self.conn.execute(
+            "SELECT request_id, revision FROM work_item_requests WHERE work_item_id = ?"
+            " AND status = 'pending'",
+            (self.identity(g),),
+        ).fetchall()
+        self.agent("expire_work_item_request", AS_B, id=request_id, expected_revision=revision)
+        self.assertEqual(sorted([f, t, deep, g]), sorted(self.stack()))
+
+    def test_the_stack_is_read_by_entry_then_number(self) -> None:
+        first, second, third = (self.found(name) for name in ("first", "second", "third"))
+        self.entries_at(first, T2)
+        self.entries_at(second, T1)
+        self.entries_at(third, T2)
+
+        self.assertEqual([second, first, third], self.stack())
+
+    def test_an_item_enters_at_its_last_state_entry_or_else_its_creation(self) -> None:
+        moved = self.found("moved")
+        self.entries_at(moved, T1)
+        self.person(APPLY, id=moved, transition={"state": "ready"})
+        self.person(APPLY, id=moved, transition={"state": "triage"})
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at = ? WHERE work_item_id = ?"
+            " AND action = 'transitioned'",
+            (T3, self.identity(moved)),
+        )
+        bare = self.found("bare")
+        self.entries_at(bare, T2)
+        self.conn.execute(
+            "DELETE FROM work_item_events WHERE work_item_id = ?", (self.identity(bare),)
+        )
+        self.conn.commit()
+
+        self.assertEqual(T3, triage.entered(self.conn, self.identity(moved)))
+        self.assertEqual(T2, triage.entered(self.conn, self.identity(bare)))
+        self.assertIsNone(triage.entered(self.conn, "no such item"))
+        self.assertEqual(
+            {bare: T2, moved: T3},
+            {
+                f"{found.space_key}-{found.number}": found.entered_at
+                for found in triage.waiting(self.conn, self.space)
+            },
+        )
+
+    def test_the_field_is_the_mark_of_an_item_in_the_stack_only(self) -> None:
+        seen, unseen = self.found("seen"), self.found("unseen")
+        self.marked(seen)
+        outside = self.made("accepted")
+
+        field = triage.field(self.conn, [self.identity(r) for r in (seen, unseen, outside)])
+
+        seen_at, author = self.mark_of(seen) or (None, None)
+        self.assertEqual(
+            {
+                self.identity(seen): {"seen_at": seen_at, "seen_by": "worker-a"},
+                self.identity(unseen): {"seen_at": None, "seen_by": None},
+            },
+            dict(field),
+        )
+        self.assertEqual("worker-a", author)
+        self.assertEqual({}, dict(triage.field(self.conn, [])))
+
+
+class MarkTests(Stack):
+    def test_a_mark_is_set_and_taken_away_by_its_call_alone(self) -> None:
+        item = self.found("s1")
+        self.marked(item)
+        self.assertIsNotNone(self.mark_of(item))
+
+        answer = triage.mark(self.conn, self.identity(item), False, author="worker-a", call_id=None)
+
+        self.assertEqual({"cleared": True}, answer)
+        self.assertIsNone(self.mark_of(item))
+
+    def test_what_the_store_takes_the_mark_away_on(self) -> None:
+        """Each write on its own item; the mark goes on the first five and stays on the rest."""
+
+        donor = self.found("a finding whose thread moves")
+        unaccepted = self.found("a goal nobody accepted", "goal")
+        self.agent("apply_work_item_changes", AS_B, id=donor, comment={"body": "Seen twice"})
+        writes = {
+            "it leaves triage": lambda item: self.person(
+                APPLY, id=item, transition={"state": "ready"}
+            ),
+            "it moves under a goal": lambda item: self.person(UPDATE, id=item, parent=unaccepted),
+            "a comment": lambda item: self.agent(
+                "apply_work_item_changes", AS_B, id=item, comment={"body": "Still seen"}
+            ),
+            "a thread moved onto it": lambda item: self.person(MERGE, id=item, items=[donor]),
+            "a question to the owner": self.asked,
+        }
+        kept = {
+            "an edit of its title": lambda item: self.person(UPDATE, id=item, title="Renamed"),
+            "an edit of its labels": lambda item: self.person(UPDATE, id=item, labels=["docs"]),
+        }
+        for name, write in {**writes, **kept}.items():
+            with self.subTest(name):
+                item = self.found(f"marked before {name}")
+                self.marked(item)
+                write(item)
+                if name in writes:
+                    self.assertIsNone(self.mark_of(item))
+                else:
+                    self.assertIsNotNone(self.mark_of(item))
+        self.assertEqual(
+            0,
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_events WHERE action = 'triage_seen'"
+            ).fetchone()[0],
+            "the store takes a mark away with no event",
+        )
+
+    def test_a_question_merged_in_clears_the_mark(self) -> None:
+        """A finding with a question still waiting merged into a marked one: the question
+        moves, the mark goes, and the survivor leaves the stack while it is open.
+
+        A merge also notes on the survivor what it moved there, a comment, which takes a
+        mark away by itself; that the moved question does as well is held where a row
+        moves alone (`QuestionTriggerTests`)."""
+
+        s1 = self.found("s1")
+        self.marked(s1)
+        f8 = self.found("f8, asked about")
+        self.asked(f8)
+
+        self.person(MERGE, id=s1, items=[f8])
+
+        [(request_id, revision, item)] = self.conn.execute(
+            "SELECT request_id, revision, work_item_id FROM work_item_requests"
+        ).fetchall()
+        self.assertEqual(self.identity(s1), item, "the question moved onto s1")
+        self.assertIsNone(self.mark_of(s1))
+        self.assertNotIn(s1, self.stack())
+
+        self.person(
+            ANSWER, id=request_id, expected_revision=revision, answers={"answer": "One change"}
+        )
+        self.assertIn(s1, self.stack(), "back in the stack once answered")
+        self.assertEqual({"seen_at": None, "seen_by": None}, triage.field(self.conn, [item])[item])
+
+
+class GroupTests(Stack):
+    """The batch's `triage_seen` group: what it marks, what it refuses, and what clears it."""
+
+    # -- writes and reads -------------------------------------------------------------
+
+    def batch(self, reference: str, **groups: object) -> dict:
+        return self.agent(BATCH, AS_B, id=reference, **groups)
+
+    def refused(self, reference: str, **groups: object) -> tuple[str, str, str]:
+        """The status, code and message of a refused batch, with nothing of it kept."""
+
+        with self.assertRaises((model.PlanningError, api.PlanningHttpError)) as caught:
+            self.batch(reference, **groups)
+        status, body = api.error_response(caught.exception)
+        error = body["error"]
+        assert isinstance(error, dict)
+        return str(status), str(error["code"]), str(error["message"])
+
+    def seen_events(self, reference: str) -> int:
+        return int(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?"
+                " AND action = 'triage_seen'",
+                (self.identity(reference),),
+            ).fetchone()[0]
+        )
+
+    def state_of(self, reference: str) -> tuple:
+        return tuple(
+            self.conn.execute(
+                "SELECT revision, state_id FROM work_items WHERE work_item_id = ?",
+                (self.identity(reference),),
+            ).fetchone()
+        )
+
+    def merge_thread(self, item: str) -> None:
+        """A finding with a comment of its own, merged into `item`: its thread moves onto it."""
+
+        donor = self.found("f9, with a thread")
+        self.agent(BATCH, AS_B, id=donor, comment={"body": "Seen twice"})
+        self.person(MERGE, id=item, items=[donor])
+
+    def under_goal_and_back(self, item: str) -> None:
+        self.person(UPDATE, id=item, parent=self.goal)
+        self.person(MOVE_OUT, id=item, reason="Taken out again")
+
+    def deferred_and_back(self, item: str) -> None:
+        self.person(APPLY, id=item, defer={"until": DEFER_UNTIL, "reason": "Waits for a vendor"})
+        self.assertNotIn(item, self.stack(), "a deferred item is out of the stack")
+        with mock.patch.object(leases, "utc_now", lambda: DAY_CAME):
+            sweep.run_pass(self.conn)
+        self.conn.commit()
+        self.assertIn(item, self.stack(), "back in triage on its day")
+
+    # -- the cases ---------------------------------------------------------------------
+
+    def test_what_clears_the_mark(self) -> None:
+        """Each write on its own item, after the group marked it. Every write clears the mark
+        but one: a comment and the mark in one call, which marks after the comment and so
+        keeps it. The store takes a mark away with no event, so each item keeps one
+        `triage_seen` event, the mark's own."""
+
+        writes = {
+            "a comment of its own": lambda item: self.batch(item, comment={"body": "Still seen"}),
+            "a thread merged in": lambda item: self.merge_thread(item),
+            "a decision on it": lambda item: self.batch(item, questions=[DECISION]),
+            "moved under a goal and back": lambda item: self.under_goal_and_back(item),
+            "deferred and back": lambda item: self.deferred_and_back(item),
+        }
+        for name, write in writes.items():
+            with self.subTest(name):
+                item = self.found(f"marked before {name}")
+                answer = self.batch(item, triage_seen=True)
+                self.assertEqual({"seen_at"}, set(answer["applied"]["triage_seen"]))
+                write(item)
+                self.assertIsNone(self.mark_of(item), "the write cleared the mark")
+                self.assertEqual(1, self.seen_events(item), "the store wrote no event")
+
+    def test_a_comment_and_the_mark_in_one_call_keep_the_mark(self) -> None:
+        item = self.found("commented and marked in one call")
+
+        answer = self.batch(item, comment={"body": "Kept as it is"}, triage_seen=True)
+
+        self.assertEqual({"seen_at"}, set(answer["applied"]["triage_seen"]))
+        self.assertIsNotNone(self.mark_of(item))
+        self.assertEqual(1, self.seen_events(item))
+
+    def test_the_group_takes_the_mark_away_with_its_own_event(self) -> None:
+        item = self.found("taken off by its review")
+        self.batch(item, triage_seen=True)
+
+        answer = self.batch(item, triage_seen=False)
+
+        self.assertEqual({"cleared": True}, answer["applied"]["triage_seen"])
+        self.assertIsNone(self.mark_of(item))
+        self.assertEqual(2, self.seen_events(item), "the set and the take-away are both recorded")
+
+    def test_only_a_waiting_card_is_marked(self) -> None:
+        """An item under an unaccepted goal, one with an open question to the owner, and one
+        in ready are refused with the reason, both for a mark and for taking it away; a
+        batch that marks and changes the state is refused whole."""
+
+        unaccepted = self.found("a goal nobody accepted", "goal")
+        under = self.found("t, under the unaccepted goal", parent=unaccepted)
+        asked = self.found("s, with an open question")
+        self.asked(asked)
+        ready = self.found("r, moved to ready")
+        self.person(APPLY, id=ready, transition={"state": "ready"})
+        cases = {
+            under: f"it lies under {unaccepted}",
+            asked: "it waits for the owner's answer",
+            ready: "it is not in triage",
+        }
+        for item, reason in cases.items():
+            for mark in (True, False):
+                with self.subTest(item=item, mark=mark):
+                    status, code, message = self.refused(item, triage_seen=mark)
+                    self.assertEqual(("409", "workflow_guard"), (status, code))
+                    self.assertIn(
+                        f"[triage_seen] {item} is not waiting for a triage review: {reason}",
+                        message,
+                    )
+                    self.assertIsNone(self.mark_of(item))
+                    self.assertEqual(0, self.seen_events(item))
+
+        waiting = self.found("a finding that waits")
+        before = self.state_of(waiting)
+        for groups in (
+            {"transition": {"state": "ready"}},
+            {"defer": {"until": DEFER_UNTIL, "reason": "Waits"}},
+            {"move_out": {"reason": "Taken out"}},
+        ):
+            with self.subTest(groups=next(iter(groups))):
+                status, code, message = self.refused(waiting, triage_seen=True, **groups)
+                self.assertEqual(("400", "invalid_request"), (status, code))
+                self.assertIn(
+                    "[triage_seen] a mark stays only on an item that stays in triage: send it"
+                    " without transition, defer or move_out",
+                    message,
+                )
+                self.assertEqual(before, self.state_of(waiting), "nothing was written")
+                self.assertIsNone(self.mark_of(waiting))
+                self.assertEqual(0, self.seen_events(waiting))
+
+        _status, _code, message = self.refused(waiting, triage_seen="yes")
+        self.assertIn("triage_seen must be a boolean", message)
+        self.assertIsNone(self.mark_of(waiting))
+        self.assertEqual(0, self.seen_events(waiting))
+
+
+class QuestionTriggerTests(Stack):
+    def test_the_question_triggers_read_the_owner_question(self) -> None:
+        """Their conditions are `questions.OWNER_QUESTION` on the row `NEW`, as stored."""
+
+        owner_question = re.sub(r"\br\.", "NEW.", questions.OWNER_QUESTION)
+        stored = dict(
+            self.conn.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type = 'trigger'"
+                " AND name IN ('triage_marks_question', 'triage_marks_question_moved')"
+            ).fetchall()
+        )
+        conditions = {
+            name: re.search(r"\nWHEN (.*)\nBEGIN ", sql, re.DOTALL).group(1)  # type: ignore[union-attr]
+            for name, sql in stored.items()
+        }
+        self.assertEqual(
+            {
+                "triage_marks_question": owner_question,
+                "triage_marks_question_moved": "NEW.work_item_id IS NOT OLD.work_item_id AND "
+                + owner_question,
+            },
+            conditions,
+        )
+
+    def test_only_a_question_to_the_owner_takes_the_mark_away(self) -> None:
+        """Rows written straight into the store, inserted and moved: a list under a comment,
+        a request asked of a session and an answered question leave the mark."""
+
+        self.conn.execute("INSERT INTO sessions(id, client) VALUES('worker-b-session', 'codex')")
+        other = self.identity(self.found("the item a request moves from"))
+        rows = {
+            "a list under a comment": {"comment": True},
+            "a request asked of a session": {"addressee": "worker-b-session"},
+            "an answered question": {"status": "answered"},
+            "a question to the owner": {},
+        }
+        for moved in (False, True):
+            for name, row in rows.items():
+                with self.subTest(name, moved=moved):
+                    reference = self.found(f"{name}, moved {moved}")
+                    identity = self.identity(reference)
+                    comment = None
+                    if row.get("comment"):
+                        comment = self.conn.execute(
+                            "INSERT INTO work_item_comments(work_item_id, body) VALUES(?, 'x')",
+                            (other if moved else identity,),
+                        ).lastrowid
+                    self.marked(reference)
+                    request_id = f"{reference}-{moved}"
+                    self.conn.execute(
+                        "INSERT INTO work_item_requests(request_id, work_item_id, kind, prompt,"
+                        " fields_json, status, author, created_at, comment_id, addressee)"
+                        " VALUES(?, ?, 'question', 'Which?', '[]', ?, 'worker-b', ?, ?, ?)",
+                        (
+                            request_id,
+                            other if moved else identity,
+                            row.get("status", "pending"),
+                            T1,
+                            comment,
+                            row.get("addressee"),
+                        ),
+                    )
+                    if moved:
+                        self.conn.execute(
+                            "UPDATE work_item_requests SET work_item_id = ? WHERE request_id = ?",
+                            (identity, request_id),
+                        )
+                    self.conn.commit()
+                    if name == "a question to the owner":
+                        self.assertIsNone(self.mark_of(reference))
+                    else:
+                        self.assertIsNotNone(self.mark_of(reference))
+
+
+class DeclarationTests(Stack):
+    def test_a_mark_goes_with_its_item(self) -> None:
+        item = self.found("deleted")
+        self.marked(item)
+        self.conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (self.identity(item),))
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) FROM triage_marks").fetchone()[0])
+
+    def test_a_mark_names_an_item_the_store_holds(self) -> None:
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                "INSERT INTO triage_marks(work_item_id, seen_at, author) VALUES('nobody', ?, 'x')",
+                (T1,),
+            )
+        self.conn.rollback()
+
+
+class DueTests(Stack):
+    """The line that the stack is due for a review, beside the person's list of questions.
+
+    The oracle is the rule of the line: the space's reminder is on, and the items of its
+    stack with no mark are at least `triage_count`, or the oldest of them entered at
+    least `triage_age_days` days before the clock reads. The line names the space, counts
+    those items and says when the oldest entered; it is no question, so the questions
+    the list holds stay as they were.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.db = os.environ["VALKAMA_DB"]
+        root = Path(self.db).parent
+        self.space_ref = {
+            "data_scope_id": read_store_metadata(self.conn)["data_scope_id"],
+            "space_key": "MAIN",
+        }
+        self.registry = root / "projects.json"
+        self.registry.write_bytes(
+            registry_bytes(
+                [
+                    project_entry(
+                        "app",
+                        root,
+                        bindings=[project_binding("app", planning_space_entity(self.space_ref))],
+                    )
+                ]
+            )
+        )
+
+    def setting(self, key: str, value: object) -> None:
+        self.person(PARTICIPATION, space="MAIN", key=key, value=value)
+
+    def listed(self, **parameters: str | None) -> dict:
+        """The person's read of every source's open questions, as the interface asks it;
+        a parameter given None is left out."""
+
+        routing = PlanningRouting(self.conn, self.db, registry_reader=self.registry.read_bytes)
+        asked = {"scope_kind": "global", "status": "pending", **parameters}
+        return interactions.request_list(
+            routing, {key: [value] for key, value in asked.items() if value is not None}
+        )
+
+    def filed_at(self, title: str, moment: str) -> str:
+        reference = self.found(title)
+        self.entries_at(reference, moment)
+        return reference
+
+    def five_due(self) -> tuple[dict, list[str]]:
+        """O2's stack: the list read with four findings, then a fifth filed; the line stands.
+
+        Returns the first read and the five findings, oldest first."""
+
+        self.setting("triage_count", 5)
+        self.setting("triage_age_days", 365)
+        filed = [
+            self.filed_at(f"f{number}", f"2026-11-17T0{number}:00:00Z") for number in range(1, 5)
+        ]
+        before = self.listed()
+        filed.append(self.filed_at("f5", "2026-11-17T09:00:00Z"))
+        line = {
+            "space": {"key": "MAIN", "name": "Crew"},
+            "count": 5,
+            "oldest_at": "2026-11-17T01:00:00Z",
+        }
+        self.assertEqual([line], self.listed()["triage_due"])
+        return before, filed
+
+    def test_the_line_appears_at_the_count(self) -> None:
+        before, _filed = self.five_due()
+
+        self.assertEqual([], before["triage_due"], "four findings are under the count of five")
+
+    def test_the_line_appears_at_the_age(self) -> None:
+        self.setting("triage_count", 100)
+        self.setting("triage_age_days", 10)
+        entered = deferral.stamp(NOW - timedelta(days=9))
+        self.filed_at("f1", entered)
+
+        self.assertEqual([], self.listed()["triage_due"], "nine days are under the age of ten")
+        with mock.patch.object(leases, "utc_now", lambda: NOW + timedelta(days=1)):
+            due = self.listed()["triage_due"]
+
+        self.assertEqual(
+            [{"space": {"key": "MAIN", "name": "Crew"}, "count": 1, "oldest_at": entered}], due
+        )
+
+    def test_the_line_goes_once_the_stack_is_reviewed(self) -> None:
+        before, filed = self.five_due()
+
+        for reference in filed:
+            self.agent(BATCH, AS_B, id=reference, triage_seen=True)
+
+        after = self.listed()
+        self.assertEqual([], after["triage_due"])
+        self.assertEqual(
+            (before["total"], before["items"]),
+            (after["total"], after["items"]),
+            "the line was never a question: the list's count is what it was before it",
+        )
+
+    def test_the_line_follows_the_reminder(self) -> None:
+        self.five_due()
+
+        self.setting("triage_reminder", "off")
+
+        self.assertEqual([], self.listed()["triage_due"])
+
+    def test_the_line_stands_beside_the_requests(self) -> None:
+        """Two spaces read, one past its count; a bound source no store here holds.
+
+        The line is the list's, not a page's: a read of open questions has it on its
+        first page, of the whole space too, and a read of answered ones, of one item's
+        or of a later page has none. A source that could not be read is named in the
+        coverage alone."""
+
+        service.create_planning_space(self.conn, name="Alpha", key="ALPHA")
+        self.conn.commit()
+        alpha = str(
+            self.agent("create_work_item", AS_B, space="ALPHA", title="a finding of alpha")[
+                "reference"
+            ]
+        )
+        self.entries_at(alpha, deferral.stamp(NOW - timedelta(days=1)))
+        away = {"data_scope_id": "99999999-9999-4999-8999-999999999999", "space_key": "AWAY"}
+        self.registry.write_bytes(
+            registry_bytes(
+                [
+                    project_entry(
+                        "app",
+                        self.registry.parent,
+                        bindings=[project_binding("app", planning_space_entity(self.space_ref))],
+                    ),
+                    project_entry(
+                        "lib",
+                        self.registry.parent / "lib",
+                        bindings=[project_binding("lib", planning_space_entity(away))],
+                    ),
+                ]
+            )
+        )
+        _before, filed = self.five_due()
+        line = {
+            "space": {"key": "MAIN", "name": "Crew"},
+            "count": 5,
+            "oldest_at": "2026-11-17T01:00:00Z",
+        }
+
+        pending = self.listed()
+        self.assertEqual([line], pending["triage_due"], "only the space past its count")
+        self.assertEqual(
+            {
+                "MAIN": ("searched", None),
+                "ALPHA": ("searched", None),
+                "AWAY": ("unavailable", "store_not_attached"),
+            },
+            {
+                source["space_ref"]["space_key"]: (source["status"], source["reason"])
+                for source in pending["coverage"]
+            },
+        )
+        space = {
+            "scope_kind": "space",
+            "data_scope_id": self.space_ref["data_scope_id"],
+            "space_key": "MAIN",
+        }
+        with_line = {
+            "every status": {"status": None},
+            "the whole space": {**space, "status": None},
+        }
+        without_line = {
+            "answered": {"status": "answered"},
+            "one item's": {**space, "reference": filed[0], "status": None},
+            "the second page": {"offset": "200"},
+        }
+        for name, parameters in {**with_line, **without_line}.items():
+            with self.subTest(name):
+                expected = [line] if name in with_line else []
+                self.assertEqual(expected, self.listed(**parameters)["triage_due"])
+
+
+class ReadTests(Stack):
+    """The stack as a reader sees it: the field on an item's records and the list's filter.
+
+    s1 is marked and s2 is not; t lies under a goal nobody accepted, which its answer
+    decides, so it is not in the stack. The other findings date their entries so that
+    the order of the stack shows: oldest entry first, a tie going to the smaller number.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.s1 = self.found("s1, seen by a review")
+        self.s2 = self.found("s2, not seen yet")
+        unaccepted = self.found("G, a goal nobody accepted", "goal")
+        self.t = self.found("t, under the goal nobody accepted", parent=unaccepted)
+        self.later, self.earliest, self.tied = (
+            self.found(name) for name in ("entered second", "entered first", "entered second too")
+        )
+        self.entries_at(self.later, T2)
+        self.entries_at(self.earliest, T1)
+        self.entries_at(self.tied, T2)
+        self.entries_at(self.s2, T3)
+        self.entries_at(self.s1, T1)
+        self.mark = self.agent(BATCH, AS_B, id=self.s1, triage_seen=True)["applied"]["triage_seen"]
+
+    def listed(self, seen: str, **filters: object) -> list[str]:
+        """The references `list_work_items` gives, as an agent reads them."""
+
+        answer = self.agent("list_work_items", AS_B, triage_stack=seen, **filters)
+        return [str(row["reference"]) for row in answer["work_items"]]
+
+    def http_list(self, **parameters: str) -> dict:
+        answer = api.handle_get(
+            self.conn,
+            "/api/planning/work-items",
+            {name: [value] for name, value in parameters.items()},
+        )
+        assert answer is not None
+        return answer[1]
+
+    def test_the_stack_reads_on_the_card_and_the_list(self) -> None:
+        """O20: the card carries the mark of an item in the stack, nulls for one unmarked
+        and nothing for one outside; `unseen` and `seen` list the stack in its order."""
+
+        seen_by = self.mark_of(self.s1)[1]  # type: ignore[index]
+        marked = {"seen_at": self.mark["seen_at"], "seen_by": seen_by}
+        unmarked = {"seen_at": None, "seen_by": None}
+        cards = {
+            ref: self.agent("get_work_item", AS_B, id=ref) for ref in (self.s1, self.s2, self.t)
+        }
+        self.assertEqual(marked, cards[self.s1]["triage_stack"])
+        self.assertEqual(unmarked, cards[self.s2]["triage_stack"])
+        self.assertNotIn("triage_stack", cards[self.t])
+        # The card places the field right after `acceptance`.
+        names = list(cards[self.s1])
+        self.assertEqual("triage_stack", names[names.index("acceptance") + 1])
+        # The full record and the brief one carry it as the card does.
+        for brief in (False, True):
+            with self.subTest(brief=brief):
+                read = {"brief": ["true"]} if brief else {}
+                records = {
+                    ref: api.handle_get(
+                        self.conn, "/api/planning/work-item", {"id": [ref], **read}
+                    )[1]  # type: ignore[index]
+                    for ref in (self.s1, self.s2, self.t)
+                }
+                records = {ref: found.get("work_item", found) for ref, found in records.items()}
+                self.assertEqual(marked, records[self.s1]["triage_stack"])
+                self.assertEqual(unmarked, records[self.s2]["triage_stack"])
+                self.assertNotIn("triage_stack", records[self.t])
+
+        oldest_first = [self.earliest, self.later, self.tied, self.s2]
+        self.assertEqual(oldest_first, self.listed("unseen", space="MAIN"))
+        self.assertEqual([self.s1], self.listed("seen", space="MAIN"))
+        # Each item of the HTTP list carries its field; one the filter leaves out is absent.
+        rows = self.http_list(space="MAIN", triage_stack="unseen")["work_items"]
+        self.assertEqual(oldest_first, [row["reference"] for row in rows])
+        self.assertEqual([unmarked] * 4, [row["triage_stack"] for row in rows])
+        everything = {row["reference"]: row for row in self.http_list(space="MAIN")["work_items"]}
+        self.assertEqual(marked, everything[self.s1]["triage_stack"])
+        self.assertNotIn("triage_stack", everything[self.t])
+        self.assertNotIn("triage_stack", everything[self.goal])
+
+    def test_the_filter_pages_and_narrows_as_any_list_does(self) -> None:
+        """Pages cut the stack's order once each; another filter narrows it; a value the
+        filter does not take is refused with the values it does."""
+
+        waiting = self.made("w, waiting in the accepted goal", parent=self.goal)
+        self.person(APPLY, id=waiting, transition={"state": "triage"})
+        whole = self.listed("unseen", space="MAIN")
+        self.assertIn(waiting, whole)
+
+        walked: list[str] = []
+        offset: int | None = 0
+        while offset is not None:
+            page = self.http_list(
+                space="MAIN", triage_stack="unseen", limit="2", offset=str(offset)
+            )
+            walked += [row["reference"] for row in page["work_items"]]
+            offset = page["next_offset"]
+        self.assertEqual(whole, walked)
+
+        self.assertEqual([waiting], self.listed("unseen", parent=self.goal))
+        self.assertEqual([], self.listed("seen", parent=self.goal))
+        self.assertEqual([], self.listed("unseen", kind="goal"))
+        with self.assertRaises((model.PlanningError, api.PlanningHttpError)) as caught:
+            self.http_list(space="MAIN", triage_stack="all")
+        self.assertIn("triage_stack must be one of seen, unseen", str(caught.exception))
+
+    def test_a_request_to_a_session_leaves_the_stack(self) -> None:
+        """O32: a request one session asks of another is no question to the owner, so the
+        mark of s1 stays and both stay where the filter finds them."""
+
+        for item in (self.s1, self.s2):
+            self.agent(
+                "create_work_item_request",
+                AS_A,
+                id=item,
+                kind="question",
+                prompt="Did you see this one?",
+                fields=[FIELD],
+                addressees=[AS_B["sessionId"]],
+            )
+        self.assertEqual(
+            2,
+            self.conn.execute(
+                "SELECT COUNT(*) FROM work_item_requests WHERE addressee = ? AND status = 'pending'",
+                (AS_B["sessionId"],),
+            ).fetchone()[0],
+        )
+
+        self.assertIsNotNone(self.mark_of(self.s1))
+        self.assertEqual([self.s1], self.listed("seen", space="MAIN"))
+        self.assertIn(self.s2, self.listed("unseen", space="MAIN"))

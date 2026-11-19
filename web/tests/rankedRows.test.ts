@@ -71,6 +71,41 @@ describe('ranked rows', () => {
     )
   })
 
+  test('drawn apart, the rows that are not categories close the chart with bars on one scale', () => {
+    const rows = [
+      row('a', 10),
+      row('none', 40, 'none'),
+      row('other', 20, 'other'),
+      row('unknown', 5, 'unknown'),
+      row('b', 20),
+    ]
+    // Asked to rank them as well, they still close the chart: apart wins.
+    for (const rankAll of [false, true]) {
+      const { ranked, rest } = rankRows(rows, rankAll, true)
+      // The longest of every row, work on no task's 40, sets the scale.
+      assert.deepEqual(
+        ranked.map((one) => [one.key, one.length]),
+        [
+          ['b', 0.5],
+          ['a', 0.25],
+        ],
+      )
+      assert.deepEqual(
+        rest.map((one) => [one.key, one.length]),
+        [
+          ['other', 0.5],
+          ['none', 1],
+          ['unknown', 0.125],
+        ],
+      )
+    }
+    // Nothing spent draws a bar of nothing rather than none.
+    assert.deepEqual(
+      rankRows([row('none', 0, 'none')], false, true).rest.map((one) => one.length),
+      [0],
+    )
+  })
+
   test('a tie keeps one order whatever order the rows came in', () => {
     const forward = rankRows([row('beta', 5), row('alpha', 5)]).ranked.map((one) => one.key)
     const backward = rankRows([row('alpha', 5), row('beta', 5)]).ranked.map((one) => one.key)

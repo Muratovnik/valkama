@@ -76,8 +76,14 @@ export interface RankedRow extends MarkAction {
   /** The value as the reader reads it: formatted by the caller, units and all. */
   valueText: string
   /**
-   * What the label leaves out, said in its hint: the whole id of a value the label names by
-   * the start of it.
+   * Whether the row's figure is less than the least its words count, «under a minute» or
+   * «< $0.01»: the chart leaves it out while it has another row to draw, under any name, and its
+   * table twin lists it as every other row.
+   */
+  belowUnit?: boolean
+  /**
+   * What the label leaves out, said in its hint: the client and the start of the id of a session
+   * the label names by its title.
    */
   detail?: string
   kind?: RankedRowKind
@@ -95,8 +101,8 @@ export interface RankedRow extends MarkAction {
 export interface PlacedRow extends RankedRow {
   kind: RankedRowKind
   /**
-   * The bar's length as a share of the longest category's, from 0 to 1; null for a row that is
-   * not a category, which is not drawn on the categories' scale.
+   * The bar's length as a share of the longest bar's, from 0 to 1; null for a row that is not a
+   * category and draws no bar (`rankRows`).
    */
   length: number | null
 }
@@ -120,17 +126,22 @@ const REST_ORDER: readonly RankedRowKind[] = ['other', 'none', 'unknown']
  * of them would set a scale that leaves every category short. They draw no bar (`length` null)
  * and are read by their figures. With `rankAll`, as a section of the Analytics page asks, work
  * with no value and unknown work are ranked and drawn on the categories' scale, and only the
- * folded tail closes the chart.
+ * folded tail closes the chart. With `drawApart`, as a list of values named by free text asks,
+ * all three close the chart unranked and each draws its bar, on one scale with the categories
+ * that the longest of every row sets: work on no task can be the largest part of a period, and
+ * a bar shows that where a figure among short ones does not.
  */
 export function rankRows(
   rows: readonly RankedRow[],
   /** Rank work with no value and unknown work among the categories, by their figures. */
   rankAll = false,
+  /** Close the chart with every row that is not a category, each with its bar on one scale. */
+  drawApart = false,
 ): { ranked: PlacedRow[]; rest: PlacedRow[] } {
   const ranks = (row: RankedRow) =>
-    (row.kind ?? 'category') === 'category' || (rankAll && row.kind !== 'other')
+    (row.kind ?? 'category') === 'category' || (rankAll && !drawApart && row.kind !== 'other')
   const categories = rows.filter((row) => ranks(row))
-  const longest = Math.max(0, ...categories.map((row) => drawable(row.value)))
+  const longest = Math.max(0, ...(drawApart ? rows : categories).map((row) => drawable(row.value)))
   const ranked = categories
     .map((row) => ({
       ...row,
@@ -143,10 +154,14 @@ export function rankRows(
         byCodePoint(left.label, right.label) ||
         byCodePoint(left.key, right.key),
     )
+  const apartLength = (row: RankedRow) => {
+    if (!drawApart) return null
+    return longest ? drawable(row.value) / longest : 0
+  }
   const rest = REST_ORDER.flatMap((kind) =>
     rows
       .filter((row) => row.kind === kind && !ranks(row))
-      .map((row) => ({ ...row, kind, length: null })),
+      .map((row) => ({ ...row, kind, length: apartLength(row) })),
   )
   return { ranked, rest }
 }
@@ -156,6 +171,8 @@ export interface PeriodSeries extends MarkAction {
   key: string
   label: string
   slot: SeriesSlot
+  /** The end of a pair's `label` that stays whole while the rest gives way (`PairName`). */
+  labelEnd?: string
 }
 
 export interface PeriodColumn {
@@ -209,6 +226,11 @@ export interface PeriodMark {
 export interface PeriodWords {
   empty: string
   /**
+   * What the legend calls the hatch a period still running is drawn with, beside a hatched
+   * swatch while such a period is on the plot: "in progress".
+   */
+  hatch: string
+  /**
    * What a period still running says of itself, in its hint, its name and its row of the
    * table: no word stands under its name on the axis, where it is hatched instead.
    */
@@ -246,6 +268,13 @@ export interface PeriodChartProps {
    * value: a span of time in one unit (`durationAxis`).
    */
   valueAxis?: ValueAxis
+  /**
+   * A share as bare as a column of shares prints it, «42 %»: a period's hint draws each series'
+   * share in a column of its own (`periodHint`), where what it is a share of goes without saying.
+   * Without it that column is absent. The words of the hint, which assistive technology reads,
+   * keep `formatShare`, and so does a legend entry's hint.
+   */
+  formatPart?: (ratio: number) => string
   /** A share of a whole as the reader reads it, for the hints: «42 % of the total». */
   formatShare?: (ratio: number) => string
   /** A value as the reader reads it, for the scale, the hints, the names and the table. */
@@ -458,6 +487,15 @@ export function dayTicks(
 
 type Format = (value: number) => string
 
+/** A part's share of its whole in words (`formatShare`), or nothing where none can be said. */
+export function shareWords(
+  value: number,
+  whole: number,
+  share: ((ratio: number) => string) | undefined,
+): string {
+  return share && whole > 0 && Number.isFinite(value) ? share(Math.max(0, value) / whole) : ''
+}
+
 /** A period named in full, as its accessible name and its hint name it. */
 export const periodName = (stacked: StackedColumn) =>
   stacked.column.fullLabel ?? stacked.column.label
@@ -485,7 +523,7 @@ export function columnHead(stacked: StackedColumn, words: PeriodWords, format: F
 }
 
 /** Whether words about a period say its sum: it has one, and its figures are in. */
-const saysSum = (stacked: StackedColumn) => hasSum(stacked) && !stacked.column.pending
+export const saysSum = (stacked: StackedColumn) => hasSum(stacked) && !stacked.column.pending
 
 /** A period's sum, «total 3 h», and «so far» after it while the period is still running. */
 function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {
@@ -493,18 +531,31 @@ function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {
   return `${words.total} ${format(stacked.total)}${running}`
 }
 
-/** Each segment as its series and its figure: «opus 2 h». */
-export const seriesParts = (segments: readonly StackSegment[], format: Format) =>
-  segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
+/** A segment as its series and its figure, «opus 2 h», and after a comma what `more` says. */
+function seriesPart(segment: StackSegment, format: Format, more = '') {
+  const figure = `${segment.series.label} ${format(segment.value)}`
+  return more ? `${figure}, ${more}` : figure
+}
 
-/** One segment in words, with the sum of the period it stands in. */
+/** Each segment as its series and its figure, «opus 2 h», with what `more` says of each. */
+export const seriesParts = (
+  segments: readonly StackSegment[],
+  format: Format,
+  more?: (segment: StackSegment) => string,
+) => segments.map((segment) => seriesPart(segment, format, more?.(segment)))
+
+/**
+ * One segment in words: its figure, its share of the period where the chart says how a share
+ * reads, and the sum of the period it stands in.
+ */
 export function segmentSummary(
   stacked: StackedColumn,
   segment: StackSegment,
-  words: PeriodWords,
-  format: Format,
+  chart: Pick<PeriodChartProps, 'formatShare' | 'formatValue' | 'words'>,
 ): string {
-  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${sumWords(stacked, words, format)}`
+  const { formatShare, formatValue: format, words } = chart
+  const share = shareWords(segment.value, stacked.total, formatShare)
+  const head = `${periodName(stacked)}: ${seriesPart(segment, format, share)}, ${sumWords(stacked, words, format)}`
   return [head, ...columnNotes(stacked, words, { withSum: true })].join('. ')
 }
 

@@ -116,6 +116,9 @@ for (const [view, width] of [
     await expect(
       page.locator('.workspace-stage > :not(.platform-state-panel, [role="status"])').first(),
     ).toBeVisible()
+    // The space's view is drawn here, which is what is gone while the next one is read.
+    const drawnView = page.locator('.work-item-tile, .work-item-list, .graph')
+    await expect(drawnView.first()).toBeVisible()
     const before = await bar.boundingBox()
 
     await chooseScope(page, SECOND_TITLE)
@@ -131,9 +134,9 @@ for (const [view, width] of [
     await expect(page.getByRole('combobox', { name: 'Filter work' })).toBeVisible()
     await expect(bar.locator('.workspace-action')).toBeVisible()
     // Nothing of the space it left is drawn under it, and no count stands for the next one.
-    await expect(page.locator('.work-item-tile, .work-item-list, .graph')).toHaveCount(0)
+    await expect(drawnView).toHaveCount(0)
+    // The bar's counts are its figures, which say nothing now and the next space's once read.
     await expect(bar.locator('.workspace-figures')).toHaveText('')
-    await expect(bar.locator('.count-badge')).toHaveCount(0)
 
     answer?.()
     await expect(reading).toHaveCount(0)

@@ -235,7 +235,7 @@ test('an outcome held past its move says nothing of the move, and saving it only
   await drawer.getByRole('button', { name: 'Back to the unsent outcome', exact: true }).click()
   const save = await expectOnlySaves(drawer)
   await save.click()
-  await expect(drawer.locator('.closing-form')).toHaveCount(0)
+  await expect(drawer.getByRole('form', { name: 'Task outcome', exact: true })).toHaveCount(0)
   // The person replaces the agent's outcome by that press, and nothing moves.
   expect(backend.item.summary).toEqual({ done: 'My own words', next: 'My own next' })
   expect(transitions(backend.writes)).toHaveLength(moves)
@@ -293,7 +293,7 @@ for (const [what, change, state] of [
       'My own words',
     )
     await save.click()
-    await expect(drawer.locator('.closing-form')).toHaveCount(0)
+    await expect(drawer.getByRole('form', { name: 'Task outcome', exact: true })).toHaveCount(0)
     expect(backend.item.summary).toEqual({ done: 'My own words', next: 'My own next' })
     expect(transitions(backend.writes)).toHaveLength(moves)
     await expectState(drawer, state)

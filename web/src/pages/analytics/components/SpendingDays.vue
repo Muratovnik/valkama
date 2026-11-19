@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /**
  * The period day by day: a column per day of the chosen measure, stacked by the largest values
- * of the dimension and «other» for the rest; work with no value there and unknown work stack
- * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
- * «so far», so its short column does not read as a fall; a line stands where the known accounts
+ * of the dimension and «other» for the rest, the series `other` wherever a series' key is read
+ * (`data-series`); work with no value there and unknown work stack
+ * apart, as in the bars, and never inside «other». The day not over yet is hatched, its hint
+ * says it is running and the legend names the hatch, «in progress», so its short column does not
+ * read as a fall; a line stands where the known accounts
  * with a figure in the measure shown changed from the last day a known account had one, and that
  * day's hint, name and table row say the change, «Account change: a → b» (`accountChanges`):
  * work whose organization nobody recorded is no account and marks nothing. The marks are the ones
@@ -16,7 +18,7 @@
  * frame along the chart (`frames`) goes out as `frame` with the span of the periods it covers, the
  * moments they run between or their days, and leaves the breakdown as it is. A
  * value's segment, legend entry and figure in the table do what its row does (`useLineMarks`): a
- * task opens its card, a value the read can filter by goes out as `narrow`. The
+ * value the read can filter by opens its side panel, going out as `inspect`. The
  * axis names a day by its weekday, «27 Tue», and the first day it names and the first of each
  * later month by the date with its month, «Oct 27» (`stepName`, `dayTicks`); the table names each
  * in full.
@@ -41,6 +43,7 @@ import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
+import { useDayWords } from '@/pages/analytics/composables/useDayWords.ts'
 import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -51,6 +54,7 @@ import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/
 import type { StackLine } from '@/pages/analytics/utils/dayFigures.ts'
 import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
+import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
@@ -79,22 +83,27 @@ const props = defineProps<{
 }>()
 /**
  * A period pressed to narrow the view to it, or the periods a frame covers, as the reader's own
- * period they name and its name in full; or a value pressed.
+ * period they name and its name in full; or a value pressed, to open its side panel.
  */
 const emit = defineEmits<{
   frame: [span: OwnPeriod, label: string]
-  narrow: [value: string | null, label: string]
+  inspect: [value: string | null, label: string]
   step: [span: OwnPeriod, label: string]
 }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
+const dayWords = useDayWords()
 
 /** How the period is cut: by days, by hours or by minutes. */
 const step = computed(() => props.usage.period.step)
 
 const title = computed(() =>
   words.stepChartTitle(props.measure, props.by, step.value, props.across),
+)
+/** The title under every measure, whose room its heading row keeps. */
+const titles = computed(() =>
+  MEASURES.map((each) => words.stepChartTitle(each, props.by, step.value, props.across)),
 )
 
 /** The steps of the period before, when they were read. */
@@ -121,13 +130,14 @@ const stacked = computed(() =>
 const marks = useLineMarks({
   by: () => props.by,
   lines: () => stacked.value.flatMap((one) => (one.line ? [one.line] : [])),
-  narrow: (value, label) => emit('narrow', value, label),
+  inspect: (value, label) => emit('inspect', value, label),
 })
 
 const series = computed(() =>
   stacked.value.map((one) => ({
     ...one,
     label: seriesName(one.line),
+    ...(one.line ? { labelEnd: words.lineEnd(one.line) } : {}),
     ...(one.line ? marks.markOf(one.line) : {}),
   })),
 )
@@ -160,6 +170,9 @@ function actionOf(index: number) {
   return { action: t('analytics.drill.step', { span: spanName(index, index) }) }
 }
 
+/** The chart's words, its scale and its axis, in the page's measure and step. */
+const said = computed(() => dayWords(props.measure, step.value))
+
 const chart = computed<PeriodChartProps>(() => ({
   label: title.value,
   series: series.value,
@@ -170,6 +183,7 @@ const chart = computed<PeriodChartProps>(() => ({
     ...actionOf(index),
   })),
   formatShare: words.markShare,
+  formatPart: words.share,
   marks:
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts, props.measure).map((change) => ({
@@ -177,19 +191,9 @@ const chart = computed<PeriodChartProps>(() => ({
           label: words.accounts(change.before, change.after),
         }))
       : [],
-  words: {
-    // Time is always counted; tokens and a price can be absent from a day that spent.
-    absent: props.measure === 'time' ? undefined : t(`analytics.days.absent.${props.measure}`),
-    before: t('analytics.overview.before.word'),
-    empty: t('analytics.days.empty'),
-    incomplete: t('analytics.days.soFar'),
-    note: t('analytics.days.note'),
-    pending: t('analytics.time.notYet'),
-    period: t(`analytics.time.steps.${step.value}.name`),
-    total: t('analytics.days.total'),
-  },
-  formatValue: (amount: number) => words.scale(props.measure, amount),
-  valueAxis: words.axis(props.measure),
+  words: said.value.words,
+  formatValue: said.value.formatValue,
+  valueAxis: said.value.valueAxis,
 }))
 
 /** The places of the periods keyed `first` and `last` in the answer's steps. */
@@ -214,6 +218,7 @@ function frame(firstKey: string, lastKey: string) {
   <ChartSection
     class="spending-days"
     :title="title"
+    :titles="titles"
     :narrow="narrow"
     :notice="notice"
   >

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * One card of the overview: the first five rows of a dimension in the page's measure, each a
- * row with its name, a bar on the card's own scale and its figure. Work with no value there and
+ * row with its name, a bar on the card's own scale and its figure with its share of every value of
+ * the dimension, «4 d 1 h · 78 %», the ones past the first five counted. Work with no value there and
  * work nobody can place are ranked by their figure among the values, since they can be most of
  * the period: their bar is the neutral, their name in the quiet ink, and they lead nowhere. The
  * folded tail is no answer to «which ones», and the dimension's own section lists it. A value's
@@ -9,9 +10,10 @@
  * `useColourPlaces`), the one its tile and charts draw it in.
  *
  * The heading opens that section. A row acts as a bar of the breakdown does (`useRankedLines`):
- * a task is a link to its card, a value the read can filter by narrows the view to it, sent out
- * as `narrow`. A card whose values are being read for the first time, or could not be, says so in
- * one quiet line; one being read again keeps what it showed.
+ * a value the read can filter by opens its side panel, sent out as `inspect`, and a task is a
+ * link to its card as well. A card whose values are being read for the first time, or could not be, says so in
+ * one quiet line; one being read again keeps what it showed. The card names its dimension
+ * (`data-card`), for the page and a reader of it to find it by.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -39,8 +41,8 @@ const props = defineProps<{
   measure: Measure
   read: TopRead
 }>()
-/** The heading pressed, to open the section; a value pressed, to narrow the view to it. */
-const emit = defineEmits<{ narrow: [value: string | null, label: string]; open: [] }>()
+/** The heading pressed, to open the section; a value pressed, to open its side panel. */
+const emit = defineEmits<{ inspect: [value: string | null, label: string]; open: [] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -67,29 +69,39 @@ const weight = (line: SpendingLine) => measureOf(props.measure, line.spent) ?? 0
  * The first rows: values, no value and unknown work alike by their figure; never the tail, and
  * never a row with nothing in the period, which answers no «which ones».
  */
-const lines = computed(() =>
+const all = computed(() =>
   values.value
     ? spendingLines(values.value, props.dimension, props.measure, Number.POSITIVE_INFINITY)
-        .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
-        .sort((left, right) => weight(right) - weight(left))
-        .slice(0, FIRST)
     : [],
 )
+const lines = computed(() =>
+  all.value
+    .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
+    .sort((left, right) => weight(right) - weight(left))
+    .slice(0, FIRST),
+)
+/** What every value of the dimension adds up to: what each row's figure says its share of. */
+const whole = computed(() => all.value.reduce((sum, line) => sum + weight(line), 0))
 const places = useColourPlaces()
 const slots = computed(() =>
   values.value
     ? rankedSlots(places.rows(props.dimension) ?? values.value, props.dimension, props.measure)
     : new Map(),
 )
-const { rows, follow, select } = useRankedLines({
+const {
+  shared: rows,
+  follow,
+  select,
+} = useRankedLines({
   by: () => props.dimension,
   lines: () => lines.value,
   measure: () => props.measure,
+  whole: () => whole.value,
   more: (line) => ({
     slot: slots.value.get(line.key) ?? 'other',
     quiet: line.kind !== 'category',
   }),
-  narrow: (value, label) => emit('narrow', value, label),
+  inspect: (value, label) => emit('inspect', value, label),
 })
 
 const barWords = computed(() => ({

@@ -16,7 +16,8 @@ import { pairKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import { value } from '../fixtures/analytics.ts'
 import { hues } from './analyticsHues.ts'
-import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { LEGEND_SERIES, openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { drawLined } from './drawnViews.ts'
 import { HAIKU, MINI, OPUS, SONNET, WORLD } from './served/analyticsColourFilter.ts'
 import { test } from './test.ts'
 const modelKey = (model: string) => `v:${model}`
@@ -59,6 +60,7 @@ for (const locale of ['en', 'ru'] as const) {
     }, info) => {
       await openReport(page, 1440, pageAt({ by: 'model' }))
       await page.setViewportSize({ width: 1440, height: 900 })
+      await drawLined(page.locator('.spending-bars'))
       const tile = page.locator('[data-section="model"] .mini-share-part')
       await expect(tile.first()).toBeVisible()
       await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(OPUS)
@@ -68,7 +70,7 @@ for (const locale of ['en', 'ru'] as const) {
       await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(SONNET)
       for (const gone of [
         tile.and(page.locator(`[data-key="${modelKey(OPUS)}"]`)),
-        page.locator(`.spending-days .chart-key[data-series="${modelKey(OPUS)}"]`),
+        page.locator(`.spending-days [data-hint-list="legend"] [data-series="${modelKey(OPUS)}"]`),
         page.locator(`.spending-multiples .multiple[data-key="${modelKey(OPUS)}"]`),
       ])
         await expect(gone).toHaveCount(0)
@@ -93,7 +95,7 @@ for (const locale of ['en', 'ru'] as const) {
       await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(
         `${OPUS} · high`,
       )
-      await expect(page.locator('.spending-days .chart-key[data-series]')).not.toHaveCount(0)
+      await expect(page.locator(`.spending-days ${LEGEND_SERIES}`)).not.toHaveCount(0)
       const before = await hues(page, 'model')
 
       await filterMedium(page)
@@ -103,7 +105,7 @@ for (const locale of ['en', 'ru'] as const) {
       await expect(page.locator('.spending-bars .ranked-label', { hasText: '· high' })).toHaveCount(
         0,
       )
-      await expect(page.locator('.spending-days .chart-key[data-series]')).toHaveCount(3)
+      await expect(page.locator(`.spending-days ${LEGEND_SERIES}`)).toHaveCount(3)
       const after = await hues(page, 'model')
       await record(info, `pair colour under a filter ${locale}`, { before, after })
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from . import model
+from . import model, request_model
 
 _EVENT_ACTION_SQL = ",".join(f"'{action}'" for action in model.EVENT_ACTIONS)
 _CATEGORY_SQL = ",".join(f"'{category}'" for category in model.STORED_CATEGORIES)
@@ -73,7 +73,7 @@ def _appended(table: str) -> str:
 
 #: The agent session a request asks instead of the owner, a top-level one; null asks
 #: the owner. The 3.0 migration appends it after the columns above, so the base
-#: schema declares it last and both stores have one order.
+#: schema declares it after them, with only `purpose` behind it.
 ADDRESSEE_COLUMN = "addressee TEXT REFERENCES sessions(id)"
 #: The open requests asked of one session, read by that session.
 ADDRESSEE_INDEX = (
@@ -110,6 +110,180 @@ WAITING_DELIVERED_INDEX = (
     "CREATE INDEX IF NOT EXISTS work_item_waiting_notices_delivered"
     " ON work_item_waiting_notices(delivered_session, notice_id) WHERE delivered_call IS NOT NULL"
 )
+#: A goal or stage that awaits confirmation, one row for exactly as long as it does
+#: (`planning.closing`): since when, the call that recorded it -- Valkama's call that
+#: wrote the event, or the sweep step's that wrote the row; none for a row the
+#: work-model migration wrote -- the question to confirm it, once asked, and when the
+#: owner left it to the next session. It goes with the item.
+CONFIRMATIONS = """CREATE TABLE IF NOT EXISTS work_item_confirmations(
+    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    since TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    request_id TEXT REFERENCES work_item_requests(request_id),
+    left_at TEXT
+)"""
+#: The condition put-off work comes back on (`planning.deferral`), one row for exactly
+#: as long as its item stands in a deferred state: a moment, or another item's close,
+#: never both. The item it waits on is held without an action on delete, so a delete
+#: that went around the return fails rather than leaving the condition unmet forever.
+#: `call_id` is the call that set it -- the put-off, or the owner's answer to put it
+#: off again -- which a failed launch's put-back keeps, null for a write made outside
+#: any call; `reached_at` is when it came and the owner was asked instead. It goes
+#: with the item.
+DEFERRALS = """CREATE TABLE IF NOT EXISTS work_item_deferrals(
+    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    until_at TEXT,
+    until_item_id TEXT REFERENCES work_items(work_item_id),
+    reason TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    since TEXT NOT NULL,
+    reached_at TEXT,
+    CHECK((until_at IS NULL) <> (until_item_id IS NULL))
+)"""
+#: What comes due by the clock, and who waits on one item, each read by its own column.
+DEFERRALS_UNTIL_AT_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_deferrals_until_at"
+    " ON work_item_deferrals(until_at) WHERE until_at IS NOT NULL"
+)
+DEFERRALS_UNTIL_ITEM_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_deferrals_until_item"
+    " ON work_item_deferrals(until_item_id) WHERE until_item_id IS NOT NULL"
+)
+
+#: The keys of the owner's participation setting (`planning.participation` says what
+#: each means and which values it takes): the points and switches a set gives, then
+#: the numbers beside them.
+PARTICIPATION_KEYS = (
+    "queue",
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "decision",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+    "triage_reminder",
+    "triage_age_days",
+    "triage_count",
+    "lease_quiet_days",
+    "recent_close_minutes",
+)
+_PARTICIPATION_KEY_SQL = ",".join(f"'{key}'" for key in PARTICIPATION_KEYS)
+#: The owner's participation setting, one row per value set: without a space the common
+#: value, with one that space's own. A key with no row takes the value above it, and
+#: above the common one the default set the code holds, so a store with no row reads as
+#: that set. The value is text, checked by its key in the code; `call_id` is the
+#: person's call that wrote it. It goes with its space.
+PARTICIPATION_SETTINGS = f"""CREATE TABLE IF NOT EXISTS participation_settings(
+    planning_space_id TEXT REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
+    key TEXT NOT NULL CHECK(key IN ({_PARTICIPATION_KEY_SQL})),
+    value TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    updated_at TEXT NOT NULL
+)"""
+#: One value per scope and key; the common scope is the one without a space.
+PARTICIPATION_SETTINGS_SCOPE = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS participation_settings_scope"
+    " ON participation_settings(ifnull(planning_space_id, ''), key)"
+)
+#: The owner's rules of a label, in the same two scopes: `ready` 1 makes a finding with
+#: the label ready at once, 0 refuses in a space the common rule, null takes the rule
+#: above; `description` says what the label means. A row holds at least one of them.
+LABEL_SETTINGS = """CREATE TABLE IF NOT EXISTS label_settings(
+    planning_space_id TEXT REFERENCES planning_spaces(planning_space_id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    ready INTEGER CHECK(ready IN (0, 1)),
+    description TEXT,
+    call_id INTEGER REFERENCES execution_events(id),
+    updated_at TEXT NOT NULL,
+    CHECK(ready IS NOT NULL OR description IS NOT NULL)
+)"""
+LABEL_SETTINGS_SCOPE = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS label_settings_scope"
+    " ON label_settings(ifnull(planning_space_id, ''), label)"
+)
+#: Both tables and their indexes, as a fresh store and the work-model migration create them.
+PARTICIPATION = (
+    PARTICIPATION_SETTINGS,
+    PARTICIPATION_SETTINGS_SCOPE,
+    LABEL_SETTINGS,
+    LABEL_SETTINGS_SCOPE,
+)
+_PARTICIPATION = "".join(f"{statement};\n" for statement in PARTICIPATION)
+
+#: The points at which an agent's own decision is marked for the owner to read back
+#: (`planning.decisions`): the participation points, and an acceptance by assignment.
+DECISION_POINTS = (
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "decision",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+    "assignment",
+)
+_DECISION_POINT_SQL = ",".join(f"'{point}'" for point in DECISION_POINTS)
+#: An agent's decision, as a mark on the event that recorded it: when, which item and
+#: which session are the event's and its call's, so the mark holds only the point and
+#: what was decided. It goes with its event, and the event with its item.
+AGENT_DECISIONS = f"""CREATE TABLE IF NOT EXISTS agent_decisions(
+    event_id INTEGER PRIMARY KEY REFERENCES work_item_events(id) ON DELETE CASCADE,
+    point TEXT NOT NULL CHECK(point IN ({_DECISION_POINT_SQL})),
+    what TEXT NOT NULL
+)"""
+
+#: The points at which an agent's write can wait for the owner (`planning.pending`):
+#: `decision` is a question and no write, and `finding` is the review of findings at once.
+PENDING_POINTS = (
+    "finding",
+    "proposed_goal",
+    "task_in_goal",
+    "cancel_outside",
+    "cancel_shared",
+    "condition",
+    "goal_close",
+    "goal_defer",
+)
+#: How a waiting action ended: done on the answer, declined by it, dropped as no longer
+#: applying or with its item gone another way, or withdrawn by the session that asked.
+PENDING_OUTCOMES = ("carried_out", "declined", "dropped", "withdrawn")
+_PENDING_POINT_SQL = ",".join(f"'{point}'" for point in PENDING_POINTS)
+_PENDING_OUTCOME_SQL = ",".join(f"'{outcome}'" for outcome in PENDING_OUTCOMES)
+#: A write an agent asked for that waits for the owner's answer: the point, the write as
+#: checked and what its asker saw (`action_json`), the call that asked, and once it
+#: ended, how and by which call. Its questions name it (`work_item_requests.action_id`).
+#: It goes with its item.
+PENDING_ACTIONS = f"""CREATE TABLE IF NOT EXISTS pending_actions(
+    action_id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    point TEXT NOT NULL CHECK(point IN ({_PENDING_POINT_SQL})),
+    action_json TEXT NOT NULL,
+    asked_call INTEGER NOT NULL REFERENCES execution_events(id),
+    created_at TEXT NOT NULL,
+    outcome TEXT CHECK(outcome IN ({_PENDING_OUTCOME_SQL})),
+    ended_call INTEGER REFERENCES execution_events(id),
+    ended_at TEXT,
+    CHECK((outcome IS NULL) = (ended_at IS NULL))
+)"""
+#: One open action per item and point.
+PENDING_ACTIONS_OPEN = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS pending_actions_open"
+    " ON pending_actions(work_item_id, point) WHERE outcome IS NULL"
+)
+#: The questions and requests of one action, which its end closes together.
+REQUESTS_ACTION_INDEX = (
+    "CREATE INDEX IF NOT EXISTS work_item_requests_action"
+    " ON work_item_requests(action_id) WHERE action_id IS NOT NULL"
+)
+#: The table, its index and the index of the requests, as a fresh store and the
+#: work-model migration create them.
+PENDING = (PENDING_ACTIONS, PENDING_ACTIONS_OPEN, REQUESTS_ACTION_INDEX)
+_PENDING = "".join(f"{statement};\n" for statement in PENDING)
 
 
 _ACCEPTED_SQL = ",".join(f"'{category}'" for category in model.ACCEPTED_CATEGORIES)
@@ -217,10 +391,53 @@ _WORK_ITEMS = f"""(
     started_at TEXT,
     UNIQUE(planning_space_id, number)
 )"""
+#: An item's pointers: a session, a memory record or a url (`model.REF_KINDS`). The
+#: work-model migration rebuilds the table of a store that still takes `commit`.
+_WORK_ITEM_REFS = f"""(
+    id INTEGER PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN ({_REF_SQL})),
+    value TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    author TEXT NOT NULL DEFAULT 'agent',
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    call_id INTEGER REFERENCES execution_events(id),
+    UNIQUE(work_item_id, kind, value)
+)"""
+_EXPIRED_REASON_SQL = ",".join(f"'{reason}'" for reason in request_model.EXPIRED_REASONS)
+_PURPOSE_SQL = ",".join(f"'{purpose}'" for purpose in request_model.PURPOSES)
+#: A question, a decision or a list, asked of the owner or of one agent session, and
+#: how it ended. Closing its item ends one still pending (`questions.end`), as done or
+#: cancelled. The 3.0 migration rebuilds the table from this text, so the columns
+#: later schemas appended stand in the order they were appended, then `purpose` and the
+#: action waiting for the owner the question is about (`action_id`), last.
+_WORK_ITEM_REQUESTS = f"""(
+    request_id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN ('question','decision')),
+    prompt TEXT NOT NULL,
+    fields_json TEXT NOT NULL,
+    answers_json TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','answered','declined','expired')),
+    author TEXT NOT NULL,
+    answered_by TEXT NOT NULL DEFAULT '',
+    execution_id TEXT REFERENCES executions(execution_id),
+    session_id TEXT REFERENCES sessions(id),
+    expires_at TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    revision INTEGER NOT NULL DEFAULT 0,
+    expired_reason TEXT CHECK(expired_reason IN ({_EXPIRED_REASON_SQL})){_appended("work_item_requests")},
+    {ADDRESSEE_COLUMN},
+    purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL})),
+    action_id TEXT REFERENCES pending_actions(action_id) ON DELETE CASCADE
+)"""
 _REBUILT = {
     "planning_spaces": _PLANNING_SPACES,
     "workflow_states": _WORKFLOW_STATES,
     "work_items": _WORK_ITEMS,
+    "work_item_refs": _WORK_ITEM_REFS,
+    "work_item_requests": _WORK_ITEM_REQUESTS,
 }
 #: The items of one state of one space, which every read of a state's items takes.
 #: Declared apart because the 3.0 migration creates it anew rather than from the
@@ -244,6 +461,114 @@ ITEM_PROJECTS = (
     "CREATE INDEX IF NOT EXISTS work_item_projects_by_project ON work_item_projects(project_id)",
 )
 _ITEM_PROJECTS = "".join(f"{statement};\n" for statement in ITEM_PROJECTS)
+
+#: The commits Valkama knows, one row per pair of a registry project and a hash, and
+#: which item each is attached to and by whom (`planning.commits`). `project_id` is NULL
+#: only for a commit carried over whose repository was not found, `session_id` for one
+#: no hook reported; `rewritten_to` names the commit an amend or a rebase replaced it
+#: with, and `rewrite_recorded_ns` when the record of the last rewrite applied to it, as
+#: its old or its new commit, was written. A fresh store creates them from this text, and
+#: so does the work-model migration.
+COMMITS = (
+    "CREATE TABLE IF NOT EXISTS commits(\n"
+    "    commit_id INTEGER PRIMARY KEY,\n"
+    "    project_id TEXT,\n"
+    "    hash TEXT NOT NULL"
+    " CHECK(length(hash) BETWEEN 7 AND 64 AND hash NOT GLOB '*[^0-9a-f]*'),\n"
+    "    subject TEXT NOT NULL DEFAULT '',\n"
+    "    committed_at TEXT,\n"
+    "    session_id TEXT,\n"
+    "    agent_id TEXT,\n"
+    "    client TEXT,\n"
+    "    reported_at TEXT NOT NULL,\n"
+    "    rewritten_to INTEGER REFERENCES commits(commit_id),\n"
+    "    rewrite_recorded_ns INTEGER\n"
+    ")",
+    "CREATE UNIQUE INDEX IF NOT EXISTS commits_pair ON commits(COALESCE(project_id, ''), hash)",
+    "CREATE INDEX IF NOT EXISTS commits_session ON commits(session_id, reported_at)",
+    "CREATE TABLE IF NOT EXISTS work_item_commits(\n"
+    "    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    commit_id INTEGER NOT NULL REFERENCES commits(commit_id),\n"
+    "    attached_by TEXT NOT NULL CHECK(attached_by IN ('server','manual','migrated')),\n"
+    "    label TEXT NOT NULL DEFAULT '',\n"
+    "    author TEXT NOT NULL DEFAULT 'agent',\n"
+    "    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n"
+    "    call_id INTEGER REFERENCES execution_events(id),\n"
+    "    PRIMARY KEY(work_item_id, commit_id)\n"
+    ")",
+    "CREATE INDEX IF NOT EXISTS work_item_commits_by_commit ON work_item_commits(commit_id)",
+)
+_COMMITS = "".join(f"{statement};\n" for statement in COMMITS)
+
+_BASELINE_BASIS_SQL = ",".join(f"'{basis}'" for basis in model.BASELINE_BASES)
+#: How many tasks stood under a goal or stage when it was accepted, or when work under
+#: one accepted empty first started (`planning.baselines`): one row for as long as its
+#: acceptance stands, none for an acceptance the work-model migration gave. A fresh
+#: store creates it from this text, and so does the work-model migration.
+ITEM_BASELINES = (
+    "CREATE TABLE IF NOT EXISTS work_item_baselines(\n"
+    "    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    tasks INTEGER NOT NULL CHECK(tasks >= 0),\n"
+    f"    basis TEXT NOT NULL CHECK(basis IN ({_BASELINE_BASIS_SQL})),\n"
+    "    taken_at TEXT NOT NULL\n"
+    ") WITHOUT ROWID"
+)
+
+#: A question to the owner on the row `NEW`: `questions.OWNER_QUESTION` read off the
+#: request a trigger sees. A trigger cannot name a constant of the code, and
+#: `questions` reads this module, so the text is written here and a test holds the two
+#: equal.
+_NEW_OWNER_QUESTION = "NEW.status = 'pending' AND NEW.comment_id IS NULL AND NEW.addressee IS NULL"
+#: The triggers that take a triage mark away, each by the table it stands on. Not the
+#: writes but the store does it, because a mark goes with anything that changes what
+#: the review saw, and the writes that do are many: the item leaving triage or moving
+#: under a goal or out of one, a comment on it, a thread a merge moves onto it, a
+#: question to the owner asked on it, and one a merge moves onto it still pending.
+TRIAGE_MARK_TRIGGERS = {
+    "triage_marks_item_moved": "work_items",
+    "triage_marks_comment": "work_item_comments",
+    "triage_marks_thread_moved": "work_item_comments",
+    "triage_marks_question": "work_item_requests",
+    "triage_marks_question_moved": "work_item_requests",
+}
+_UNMARK = "BEGIN DELETE FROM triage_marks WHERE work_item_id = NEW.work_item_id; END"
+#: The items a triage review saw and left where they are (`planning.triage`): one row
+#: per item, when, by whom and in which call, and the triggers that take it away. A
+#: fresh store creates them from this text, and so does the work-model migration.
+TRIAGE_MARKS = (
+    "CREATE TABLE IF NOT EXISTS triage_marks(\n"
+    "    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,\n"
+    "    seen_at TEXT NOT NULL,\n"
+    "    author TEXT NOT NULL,\n"
+    "    call_id INTEGER REFERENCES execution_events(id)\n"
+    ")",
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_item_moved\n"
+    "AFTER UPDATE OF state_id, parent_id ON work_items\n"
+    "WHEN NEW.state_id IS NOT OLD.state_id OR NEW.parent_id IS NOT OLD.parent_id\n" + _UNMARK,
+    f"CREATE TRIGGER IF NOT EXISTS triage_marks_comment\nAFTER INSERT ON work_item_comments\n{_UNMARK}",
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_thread_moved\n"
+    "AFTER UPDATE OF work_item_id ON work_item_comments\n"
+    "WHEN NEW.work_item_id IS NOT OLD.work_item_id\n" + _UNMARK,
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_question\n"
+    "AFTER INSERT ON work_item_requests\n"
+    f"WHEN {_NEW_OWNER_QUESTION}\n{_UNMARK}",
+    "CREATE TRIGGER IF NOT EXISTS triage_marks_question_moved\n"
+    "AFTER UPDATE OF work_item_id ON work_item_requests\n"
+    f"WHEN NEW.work_item_id IS NOT OLD.work_item_id AND {_NEW_OWNER_QUESTION}\n{_UNMARK}",
+)
+_TRIAGE_MARKS = "".join(f"{statement};\n" for statement in TRIAGE_MARKS)
+
+
+def has_table(conn: sqlite3.Connection, name: str) -> bool:
+    """Whether a store has a table. An attached store is read as it is, and an older
+    one lacks what later schemas added: it has nothing of that to say."""
+
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+        ).fetchone()
+        is not None
+    )
 
 
 def table_definition(table: str, name: str) -> str:
@@ -303,17 +628,7 @@ CREATE TABLE IF NOT EXISTS work_item_comments(
     call_id INTEGER REFERENCES execution_events(id){_appended("work_item_comments")}
 );
 CREATE INDEX IF NOT EXISTS work_item_comments_item ON work_item_comments(work_item_id, id);
-CREATE TABLE IF NOT EXISTS work_item_refs(
-    id INTEGER PRIMARY KEY,
-    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK(kind IN ({_REF_SQL})),
-    value TEXT NOT NULL,
-    label TEXT NOT NULL DEFAULT '',
-    author TEXT NOT NULL DEFAULT 'agent',
-    created_at TEXT NOT NULL DEFAULT {_NOW},
-    call_id INTEGER REFERENCES execution_events(id),
-    UNIQUE(work_item_id, kind, value)
-);
+CREATE TABLE IF NOT EXISTS work_item_refs{_WORK_ITEM_REFS};
 CREATE TABLE IF NOT EXISTS work_item_events(
     id INTEGER PRIMARY KEY,
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
@@ -324,25 +639,7 @@ CREATE TABLE IF NOT EXISTS work_item_events(
     call_id INTEGER REFERENCES execution_events(id)
 );
 CREATE INDEX IF NOT EXISTS work_item_events_item ON work_item_events(work_item_id, id);
-CREATE TABLE IF NOT EXISTS work_item_requests(
-    request_id TEXT PRIMARY KEY,
-    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK(kind IN ('question','decision')),
-    prompt TEXT NOT NULL,
-    fields_json TEXT NOT NULL,
-    answers_json TEXT,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','answered','declined','expired')),
-    author TEXT NOT NULL,
-    answered_by TEXT NOT NULL DEFAULT '',
-    execution_id TEXT REFERENCES executions(execution_id),
-    session_id TEXT REFERENCES sessions(id),
-    expires_at TEXT,
-    created_at TEXT NOT NULL,
-    resolved_at TEXT,
-    revision INTEGER NOT NULL DEFAULT 0,
-    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed')){_appended("work_item_requests")},
-    {ADDRESSEE_COLUMN}
-);
+CREATE TABLE IF NOT EXISTS work_item_requests{_WORK_ITEM_REQUESTS};
 CREATE INDEX IF NOT EXISTS work_item_requests_item ON work_item_requests(work_item_id,created_at);
 {ADDRESSEE_INDEX};
 -- The answers a question's current one replaced, one row per version. The
@@ -401,9 +698,16 @@ CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 {WAITING_NOTICES};
 {WAITING_OPEN_INDEX};
 {WAITING_DELIVERED_INDEX};
-
-{_ITEM_PROJECTS}
-"""
+{CONFIRMATIONS};
+{DEFERRALS};
+{DEFERRALS_UNTIL_AT_INDEX};
+{DEFERRALS_UNTIL_ITEM_INDEX};
+{_PARTICIPATION}
+{AGENT_DECISIONS};
+{_PENDING}{_ITEM_PROJECTS}
+{_COMMITS}
+{ITEM_BASELINES};
+{_TRIAGE_MARKS}"""
 
 
 def interactions_migration_needed(conn: sqlite3.Connection) -> bool:
@@ -475,9 +779,28 @@ def rebuild_table(conn: sqlite3.Connection, table: str, definition: str, rows: s
 
     Dropping a table others reference cascades into them while foreign keys are
     enforced, so a caller rebuilding such a table turns them off first, outside its
-    transaction, where SQLite takes the pragma.
+    transaction, where SQLite takes the pragma (`store.schema_change` does). With
+    them on, such a table is refused before anything is written.
     """
 
+    if conn.execute("PRAGMA foreign_keys").fetchone()[0]:
+        referencing = sorted(
+            {
+                str(row[0])
+                for row in conn.execute(
+                    "SELECT m.name FROM sqlite_master m, pragma_foreign_key_list(m.name) f"
+                    " WHERE m.type = 'table' AND m.name != ? COLLATE NOCASE"
+                    ' AND f."table" = ? COLLATE NOCASE',
+                    (table, table),
+                )
+            }
+        )
+        if referencing:
+            raise RuntimeError(
+                f"rebuilding {table} with foreign keys on would delete the rows of"
+                f" {', '.join(referencing)} that reference it; turn foreign keys off"
+                " outside the transaction first"
+            )
     stored = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
     ).fetchone()
@@ -818,7 +1141,17 @@ SCHEMA_TABLES = (
     "work_item_subscriptions",
     "work_item_images",
     "work_item_waiting_notices",
+    "work_item_confirmations",
+    "work_item_deferrals",
     "work_item_projects",
+    "participation_settings",
+    "label_settings",
+    "agent_decisions",
+    "pending_actions",
+    "commits",
+    "work_item_commits",
+    "work_item_baselines",
+    "triage_marks",
 )
 
 

@@ -308,7 +308,7 @@ describe('changing an answer', () => {
 
   it('says a closed task in its own words, not as a conflict', async () => {
     vi.mocked(changeInputRequestAnswer).mockRejectedValue(
-      new InputRequestError('workflow_guard', 409, 'task_closed'),
+      new InputRequestError('workflow_guard', 409, 'item_closed'),
     )
     const wrapper = card(entry())
     await press(wrapper, 'Change answer')

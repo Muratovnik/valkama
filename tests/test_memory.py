@@ -348,7 +348,11 @@ class MemoryLinkTests(unittest.TestCase):
 
     def test_only_memory_refs_are_memory(self) -> None:
         planning_service.attach_ref(
-            self.conn, self.item["work_item_id"], "commit", "0f1e2d3", label="a commit"
+            self.conn,
+            self.item["work_item_id"],
+            "url",
+            "https://example.test/0f1e2d3",
+            label="a page",
         )
         self.assertEqual([], service.linked(self.conn, "sample")["links"])
 

@@ -1,9 +1,10 @@
-"""Resolve a work item ref into what it points at.
+"""Resolve a work item ref, or an attached commit, into what it points at.
 
-A ref is a pointer Planning stores verbatim — a session id, a commit hash, a
+A ref is a pointer Planning stores verbatim — a session id, a memory id, a
 url. Turning one into something displayable means asking the system that owns
 it, which is why this is not part of the Planning domain: Planning never needs
-the answer, only the surfaces do.
+the answer, only the surfaces do. A commit is no ref: it is attached as a
+registered project and a hash, and `show_commit` asks that project's repository.
 """
 
 from __future__ import annotations
@@ -15,158 +16,90 @@ import subprocess
 import time
 
 from . import processes
-from .documents import REF_RESOLVE_TIMEOUT, doc_roots
-from .planning.item_projects import split_commit_value
+from .documents import REF_RESOLVE_TIMEOUT
+from .planning import commits, model
 from .projects import project_registry
 from .sessions import session_context
-from .store import REF_KINDS, connect
-from .store_identity.primitives import ContractError
-from .store_identity.refs import planning_space_ref
+from .store import connect
 
 
-def _commit_roots(space: str | None, name: str | None) -> list[str]:
-    """The repositories a commit is looked for in, in the order they are asked.
+def show_commit(repository: str, hash_text: str) -> dict:
+    """Read-only context for one attached commit: its subject and the files it changed.
 
-    Every directory comes from the owner's configuration, never from the
-    request. First the registered project the value names (`name` matched,
-    ignoring case, against a project's id or its directory's name), then the
-    projects the registry binds the card's planning space to, its default
-    project first and the others by id, then the configured document roots,
-    then every other registered project: a space still carries commits of
-    repositories it does not hold.
-
-    `space` is the exact identity of the card's planning space, never a path.
-    An identity that does not parse is refused, so a crafted value reaches no
-    directory at all; one the registry does not bind adds nothing, and a name
-    that matches no project only leaves the usual order.
+    `repository` is a registered project's id and `hash_text` a hash or a start of
+    one; anything else is refused, so the request names no directory and no
+    revision git could read as an option or a file. Git is asked in that project's
+    root alone, and a root this machine lacks is reported, not looked around for.
     """
 
-    space_ref = None
-    if space is not None:
-        try:
-            space_ref = planning_space_ref({"kind": "planning-space", "resource_id": space})
-        except ContractError as error:
-            raise ValueError("space must be a planning space's exact identity") from error
-    # An unreadable or malformed registry adds no root; the card still shows
-    # whatever the other sources find.
-    projects = project_registry.read_registry()["projects"]
-    named = [
-        str(project["canonical_root"])
-        for project in projects
-        if name is not None
-        and name.lower()
-        in {
-            project["project_id"].lower(),
-            os.path.basename(os.path.normpath(str(project["canonical_root"]))).lower(),
+    project = commits.registered(repository)
+    value = commits.stored_hash(hash_text, repository)
+    if not commits.rooted(project):
+        return {
+            "kind": "commit",
+            "value": value,
+            "resolved": False,
+            "detail": f"{repository} has no root on this machine",
         }
-    ]
-    bound = (
-        []
-        if space_ref is None
-        else [
-            str(project["canonical_root"])
-            for project in project_registry.space_projects(projects, space_ref)
-        ]
-    )
-    registered = [str(project["canonical_root"]) for project in projects]
-    roots: list[str] = []
-    seen: set[str] = set()
-    for root in [*named, *bound, *doc_roots(), *registered]:
-        key = os.path.normcase(os.path.abspath(root))
-        if key not in seen:
-            seen.add(key)
-            roots.append(root)
-    return roots
+    root = project["root"]
+    try:
+        # Git's stat is human-facing context; replacement preserves a
+        # diagnostic when an older commit carries invalid UTF-8. `^{commit}`
+        # keeps a hash from naming any other object.
+        completed = processes.run_text(
+            [
+                "git",
+                "-C",
+                root,
+                "show",
+                "--stat",
+                "--no-color",
+                "--format=%h %an %ad%n%s",
+                "--end-of-options",
+                f"{value}^{{commit}}",
+            ],
+            encoding="utf-8",
+            errors="replace",
+            timeout=REF_RESOLVE_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return {
+            "kind": "commit",
+            "value": value,
+            "resolved": False,
+            "detail": f"git unavailable: {error}",
+        }
+    if completed.returncode != 0:
+        return {
+            "kind": "commit",
+            "value": value,
+            "resolved": False,
+            "detail": f"commit not found in {repository}",
+        }
+    return {
+        "kind": "commit",
+        "value": value,
+        "resolved": True,
+        "repository": root,
+        "detail": completed.stdout.strip()[:4000],
+    }
 
 
-def resolve_ref(
-    kind: str,
-    value: str,
-    conn: sqlite3.Connection | None = None,
-    *,
-    space: str | None = None,
-) -> dict:
+def resolve_ref(kind: str, value: str, conn: sqlite3.Connection | None = None) -> dict:
     """Read-only context for one card ref, so a timeline row means something.
 
-    Bounded and local: a commit is resolved with git in the owner's registered
-    project repositories and configured document roots, in the order
-    `_commit_roots` gives, stopping at the first that has it; a session only as the existence and size of its transcript (its contents
-    are deliberately out of scope), and a memory id only as the pointer it is,
-    because provider resolution is outside this process.
+    Bounded and local: a session only as the existence and size of its transcript
+    (its contents are deliberately out of scope), and a memory id only as the
+    pointer it is, because provider resolution is outside this process.
     """
-    if kind not in REF_KINDS:
-        raise ValueError(f"unknown ref kind {kind!r}")
+    if kind not in model.REF_KINDS:
+        hint = (
+            f": {model.COMMIT_REF_HINT}, and GET /api/commit shows one" if kind == "commit" else ""
+        )
+        raise ValueError(f"unknown ref kind {kind!r}{hint}")
     value = value.strip()
     if not value:
         raise ValueError("a ref value is required")
-    if kind == "commit":
-        # A value is a revision and only that: one that begins like an option
-        # is not asked about (`--output=` would have git write a file), the
-        # options end before it, and `^{commit}` keeps `rev:path` from reading
-        # a file out of the repository. A repository name in front of it only
-        # chooses which registered root is asked first.
-        name, revision = split_commit_value(value)
-        if revision.startswith("-"):
-            return {
-                "kind": kind,
-                "value": value,
-                "resolved": False,
-                "detail": "a commit ref cannot begin with '-'",
-            }
-        commit = f"{revision}^{{commit}}"
-        for root in _commit_roots(space, name):
-            # A linked worktree's `.git` is a file, and it is a repository too.
-            if not os.path.exists(os.path.join(root, ".git")):
-                continue
-            try:
-                # Many roots may be asked: each gets one existence check, and
-                # only the first that has the commit is asked to show it.
-                present = processes.run_text(
-                    ["git", "-C", root, "cat-file", "-e", "--end-of-options", commit],
-                    timeout=REF_RESOLVE_TIMEOUT,
-                )
-                if present.returncode != 0:
-                    continue
-                # Git's stat is human-facing context; replacement preserves a
-                # diagnostic when an older commit carries invalid UTF-8.
-                completed = processes.run_text(
-                    [
-                        "git",
-                        "-C",
-                        root,
-                        "show",
-                        "--stat",
-                        "--no-color",
-                        "--format=%h %an %ad%n%s",
-                        "--end-of-options",
-                        commit,
-                    ],
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=REF_RESOLVE_TIMEOUT,
-                )
-            except (OSError, subprocess.SubprocessError) as error:
-                return {
-                    "kind": kind,
-                    "value": value,
-                    "resolved": False,
-                    "detail": f"git unavailable: {error}",
-                }
-            if completed.returncode == 0:
-                return {
-                    "kind": kind,
-                    "value": value,
-                    "resolved": True,
-                    "repository": root,
-                    "detail": completed.stdout.strip()[:4000],
-                }
-        return {
-            "kind": kind,
-            "value": value,
-            "resolved": False,
-            "detail": "commit not found in the project's repository, any configured"
-            " document root or any other registered project",
-        }
     if kind == "session":
         # The platform's own session table first: it knows every observed client,
         # not only Claude, and it can answer a prefix the way humans write one

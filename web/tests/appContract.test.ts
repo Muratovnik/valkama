@@ -1,45 +1,56 @@
+/**
+ * The shell's ownership rules that hold as text.
+ *
+ * Each check reads a file as code, comments taken out: a door the shell must not
+ * have (an endpoint, a storage key, a retired name) is absent, a contract string the
+ * server answers on is present, and a rule with one owner is reached through that
+ * owner's exported function. How a route, a session or an entry resolves is the
+ * behaviour tests' to say, and a comment beside a test here names the test that says it.
+ */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
 import { test } from 'vitest'
 
-import { compactCss } from './support/source.ts'
+import { declarationsOf, sourceCode } from './support/source.ts'
 
-const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
-const app = source('../src/app/App.vue')
-const navigation = source('../src/app/composables/usePlatformNavigation.ts')
-const contextBar = source('../src/app/components/AppContextBar.vue')
-const planningSurface = source('../src/pages/planning/PlanningModuleSurface.vue')
-const planningMoves = source('../src/pages/planning/composables/usePlanningMoves.ts')
-const moduleStage = source('../src/app/components/AppModuleStage.vue')
-const entryRestore = source('../src/app/composables/usePlatformEntryRestore.ts')
-const readModels = source('../src/app/composables/usePlatformReadModels.ts')
-const liveFeed = source('../src/app/composables/usePlatformLiveFeed.ts')
-const sessionWorkItemRoute = source('../src/features/session-open/sessionWorkItemRoute.ts')
-const sessionOpening = source('../src/app/composables/useSessionOpening.ts')
-const moduleAuthority = source('../src/app/composables/useModuleRouteAuthority.ts')
-const api = source('../src/shared/api/platformApi.ts')
-const planningApi = source('../src/shared/api/platformPlanningApi.ts')
-const coreApi = source('../src/shared/api/api.ts')
-const nav = source('../src/widgets/app-nav/components/AppNav.vue')
-const inspector = source('../src/widgets/work-item-inspector/components/WorkItemInspector.vue')
-const inspectorTabs = source('../src/widgets/work-item-inspector/components/InspectorTabs.vue')
-const overview = source('../src/widgets/work-item-inspector/components/InspectorOverview.vue')
-const identity = source('../src/widgets/work-item-inspector/components/InspectorIdentity.vue')
-const inspectorMemory = source('../src/widgets/work-item-inspector/components/InspectorMemory.vue')
-const workspace = source('../src/pages/planning/PlanningWorkspace.vue')
-const portfolio = source('../src/pages/planning/PlanningPortfolio.vue')
-const itemList = source('../src/widgets/work-item-views/components/WorkItemList.vue')
-const segmented = source('../src/shared/ui/SegmentedControl.vue')
-const settings = source('../src/pages/settings/SettingsView.vue')
+const app = sourceCode('app/App.vue')
+const navigation = sourceCode('app/composables/usePlatformNavigation.ts')
+const contextBar = sourceCode('app/components/AppContextBar.vue')
+const planningSurface = sourceCode('pages/planning/PlanningModuleSurface.vue')
+const routeSelection = sourceCode('pages/planning/composables/usePlanningRouteSelection.ts')
+const moduleStage = sourceCode('app/components/AppModuleStage.vue')
+const entryRestore = sourceCode('app/composables/usePlatformEntryRestore.ts')
+const readModels = sourceCode('app/composables/usePlatformReadModels.ts')
+const liveFeed = sourceCode('app/composables/usePlatformLiveFeed.ts')
+const sessionOpening = sourceCode('app/composables/useSessionOpening.ts')
+const moduleAuthority = sourceCode('app/composables/useModuleRouteAuthority.ts')
+const api = sourceCode('shared/api/platformApi.ts')
+const planningApi = sourceCode('shared/api/platformPlanningApi.ts')
+const coreApi = sourceCode('shared/api/api.ts')
+const nav = sourceCode('widgets/app-nav/components/AppNav.vue')
+const inspector = sourceCode('widgets/work-item-inspector/components/WorkItemInspector.vue')
+const inspectorTabs = sourceCode('widgets/work-item-inspector/components/InspectorTabs.vue')
+const overview = sourceCode('widgets/work-item-inspector/components/InspectorOverview.vue')
+const identity = sourceCode('widgets/work-item-inspector/components/InspectorIdentity.vue')
+const inspectorMemory = sourceCode('widgets/work-item-inspector/components/InspectorMemory.vue')
+const workspace = sourceCode('pages/planning/PlanningWorkspace.vue')
+const portfolio = sourceCode('pages/planning/PlanningPortfolio.vue')
+const itemList = sourceCode('widgets/work-item-views/components/WorkItemList.vue')
+const segmented = sourceCode('shared/ui/SegmentedControl.vue')
+const settings = sourceCode('pages/settings/SettingsView.vue')
+
+/** A call of `name`, which an import or a type alone does not satisfy. */
+const calls = (name: string) => new RegExp(`\\b${name}\\(`)
+/** A component tag a template renders, with or without attributes. */
+const renders = (tag: string) => new RegExp(`<${tag}(?=[\\s/>])`)
 
 test('platformRoute is the sole route owner for the six-module shell', () => {
-  assert.match(navigation, /resolvePlatformRoute/)
-  assert.match(navigation, /serializePlatformRoute/)
-  // Normal routing resolves the active manifest only from validated server rows.
+  assert.match(navigation, calls('resolvePlatformRoute'))
+  assert.match(navigation, calls('serializePlatformRoute'))
+  // Normal routing resolves the active manifest only from validated server rows: a
+  // route checked against the manifest that answers it is platformModules.test.ts.
   assert.doesNotMatch(app, /builtinManifest|OFFLINE_MODULE_FALLBACK/)
-  assert.match(moduleAuthority, /registrations\.value\.find/)
-  assert.match(nav, /navigation_group/)
+  assert.match(nav, /\bnavigation_group\b/)
   assert.match(nav, /platform\.navigation\.groups/)
   assert.doesNotMatch(app, /moduleRoute|kanban-scope:|improvements_scope/)
   assert.doesNotMatch(nav, /useStorage|localStorage|navigation-collapsed|goal-index-collapsed/)
@@ -48,8 +59,9 @@ test('platformRoute is the sole route owner for the six-module shell', () => {
 test('one explicit operating-scope grammar owns every space, a space and its project', () => {
   assert.match(contextBar, /platform\.scope\.label/)
   assert.match(contextBar, /platform\.scope\.project/)
-  assert.match(app, /switchScope/)
-  assert.match(app, /:spaces="barSpaces"/)
+  // The shell renders the bar its spaces; which spaces and projects the bar offers
+  // and what a pick does is components/appContextBar.spec.ts.
+  assert.match(app, renders('AppContextBar'))
   assert.doesNotMatch(
     app,
     /scope_kind:\s*['"]all['"]|\?scope=|\?board=|localStorage\.getItem\([^)]*scope/,
@@ -65,7 +77,7 @@ test('the frontend consumes only the frozen Platform API endpoints', () => {
     '/api/modules/planning/work-item',
     '/api/platform/ui-prefs',
   ])
-    assert.match(endpoints, new RegExp(endpoint.replaceAll('/', '\\/')))
+    assert.ok(endpoints.includes(endpoint), endpoint)
   // The extension registry and the commands that wrote through it are not the
   // web client's to call: no Settings screen or inspector panel reads them.
   assert.doesNotMatch(
@@ -92,16 +104,11 @@ test('the inspector reads no extension registry', () => {
 })
 
 test('a plan anchor is asked about under the exact Planning space of its card', () => {
-  assert.match(planningSurface, /boundSpaceResourceRef/)
-  assert.match(planningSurface, /resourceRef: boundSpaceResourceRef\.value/)
-  assert.match(inspector, /:resource-ref="resourceRef"/)
-  // The head's icon stands outside the card's layer of links, so it asks for its
-  // own on the same space. What pressing it does is `inspectorSource.spec.ts`.
-  assert.match(inspector, /:space="resourceRef\.resource_id"/)
-  assert.match(
-    identity,
-    /useDocumentLinks\(\(\) => \(\{ space: props\.resourceRef\.resource_id \}\)\)/,
-  )
+  // The surface names its space through its route selection, which builds it with
+  // Planning's ref grammar. The head asking about a path under the card's own space,
+  // and what pressing it does, is components/inspectorSource.spec.ts.
+  assert.match(planningSurface, calls('usePlanningRouteSelection'))
+  assert.match(routeSelection, calls('planningSpaceEntity'))
   assert.doesNotMatch(
     `${planningSurface}\n${inspector}\n${overview}\n${identity}`,
     /sourceRoot|source_root/,
@@ -109,14 +116,11 @@ test('a plan anchor is asked about under the exact Planning space of its card', 
 })
 
 test('session navigation opens only a space this workstation lists', () => {
-  assert.match(sessionWorkItemRoute, /resolveManifestRouteAuthority/)
-  assert.match(sessionWorkItemRoute, /planningWorkItemEntity\(\{ space_ref: space, reference \}/)
-  assert.match(
-    sessionWorkItemRoute,
-    /spaces \?\? \[\]\)\.some\(\(item\) => sameSpace\(item, held\)\)/,
-  )
-  assert.match(sessionOpening, /resolveSessionWorkItemRoute\(/)
-  assert.match(app, /useSessionOpening\(/)
+  // Only a space this workstation lists, held exactly, resolves a session's item,
+  // and an unlisted one is refused: sessionWorkItemRoute.test.ts. The shell reaches that
+  // resolver through its session-opening composable.
+  assert.match(sessionOpening, calls('resolveSessionWorkItemRoute'))
+  assert.match(app, calls('useSessionOpening'))
   assert.doesNotMatch(liveFeed, /kind: 'work-item'/)
 })
 
@@ -131,23 +135,21 @@ test('Settings changes nothing about which modules exist', () => {
 test('planning projects three views from one read of the space', () => {
   // The three views take the same model apart rather than each fetching their
   // own: one `/api/planning` answer carries the workflow, the items and the links.
-  assert.match(planningSurface, /fetchPlanning\(target\)/)
-  assert.match(workspace, /<WorkItemBoard/)
-  assert.match(workspace, /<WorkItemList/)
-  assert.match(workspace, /<WorkItemGraph/)
-  assert.match(workspace, /:items="visibleItems"/)
+  assert.match(planningSurface, calls('fetchPlanning'))
+  assert.match(workspace, renders('WorkItemBoard'))
+  assert.match(workspace, renders('WorkItemList'))
+  assert.match(workspace, renders('WorkItemGraph'))
   assert.doesNotMatch(workspace, /fetchPlanning|fetchPlanningGraph|secureFetch/)
   // A board move is written by the surface's moves, as a transition alone: the
-  // server computes the order of work, and nothing places an item by hand.
-  assert.match(planningSurface, /usePlanningMoves\(/)
-  assert.match(planningMoves, /transitionWorkItem\(/)
-  assert.doesNotMatch(planningMoves, /rank/)
+  // server computes the order of work, and nothing places an item by hand:
+  // planningMoves.test.ts.
+  assert.match(planningSurface, calls('usePlanningMoves'))
   // `open-space` is the portfolio's own event; the surface's part is routing it on.
-  assert.match(planningSurface, /<PlanningPortfolio/)
-  assert.match(planningSurface, /'open-space': \[space: PlanningSpaceRef\]/)
+  assert.match(planningSurface, renders('PlanningPortfolioFrame'))
+  assert.match(planningSurface, /'open-space'\s*:\s*\[/)
   // An opened item is a route, not module state: that is what makes it survive a
   // reload and what makes Back close it.
-  assert.match(planningSurface, /planningWorkItemEntity\(\{ space_ref: space, reference \}\)/)
+  assert.match(planningSurface, calls('planningWorkItemEntity'))
   assert.doesNotMatch(planningSurface, /open\.value = /)
   assert.match(portfolio, /platform\.planning\.openSpace/)
   assert.doesNotMatch(portfolio, /:disabled=/)
@@ -156,15 +158,12 @@ test('planning projects three views from one read of the space', () => {
 })
 
 test('clean entry restores the last server-side route without legacy storage', () => {
-  assert.match(navigation, /isCleanEntry/)
-  assert.match(app, /entryRestorePending/)
-  assert.match(app, /usePlatformEntryRestore/)
-  assert.match(entryRestore, /restoredEntryRoute/)
-  assert.match(entryRestore, /savePlatformUiPrefs/)
-  // The restored destination must still resolve, or the app lands on a dead one.
-  assert.match(entryRestore, /restoredScope/)
-  assert.match(entryRestore, /modulesSettled/)
-  assert.match(contextBar, /projectChoices\.value\.length > 1/)
+  // A clean entry waiting for both reads, and the restored space and project still
+  // resolving or falling back: platformEntryRestore.test.ts.
+  assert.match(app, calls('usePlatformEntryRestore'))
+  assert.match(entryRestore, calls('savePlatformUiPrefs'))
+  // The bar offers a project only where there is a choice between two:
+  // components/appContextBar.spec.ts.
   for (const shellSource of [app, entryRestore]) {
     assert.doesNotMatch(
       shellSource,
@@ -182,14 +181,14 @@ test('generic shell and contracts contain no Planning storage identity', () => {
     entryRestore,
     readModels,
     liveFeed,
-    source('../src/shared/api/platformEntityRef.ts'),
-    source('../src/shared/api/platformApiTypes.ts'),
-    source('../src/shared/api/platformContextPayload.ts'),
-    source('../src/shared/api/platformRoute.ts'),
+    sourceCode('shared/api/platformEntityRef.ts'),
+    sourceCode('shared/api/platformApiTypes.ts'),
+    sourceCode('shared/api/platformContextPayload.ts'),
+    sourceCode('shared/api/platformRoute.ts'),
   ]) {
     assert.doesNotMatch(genericSource, /BoardRef|CardRef|board_name|board_ref|card_ref/)
   }
-  assert.doesNotMatch(source('../src/shared/api/platformRoute.ts'), /LEGACY_QUERY_KEYS/)
+  assert.doesNotMatch(sourceCode('shared/api/platformRoute.ts'), /LEGACY_QUERY_KEYS/)
   // Planning's ref grammar has exactly one owner. A scope names its space by the
   // space's own reference, which the shell passes on as it is; decoding an entity
   // into a space or an item is Planning's alone. The live feed is left out of this
@@ -202,37 +201,38 @@ test('generic shell and contracts contain no Planning storage identity', () => {
     navigation,
     entryRestore,
     readModels,
-    source('../src/shared/api/platformEntityRef.ts'),
-    source('../src/shared/api/platformRoute.ts'),
+    sourceCode('shared/api/platformEntityRef.ts'),
+    sourceCode('shared/api/platformRoute.ts'),
   ]) {
     assert.doesNotMatch(genericSource, /WorkItemRef|planningSpaceRef\(|planningWorkItemRef\(/)
   }
-  assert.match(source('../src/shared/api/platformPlanningRefs.ts'), /PlanningSpaceRef|WorkItemRef/)
-  assert.match(moduleAuthority, /resolveManifestRouteAuthority/)
-  assert.match(entryRestore, /resolveManifestRouteAuthority/)
+  assert.match(sourceCode('shared/api/platformPlanningRefs.ts'), /PlanningSpaceRef|WorkItemRef/)
+  assert.match(moduleAuthority, calls('resolveManifestRouteAuthority'))
+  assert.match(entryRestore, calls('resolveManifestRouteAuthority'))
 })
 
 test('the shell read models own no generation bookkeeping of their own', () => {
   // Newest-wins is a property of resourceState now, and platformReadModels.test.ts
   // proves it by interleaving two requests rather than by matching source text.
   assert.doesNotMatch(readModels, /Generation\b/)
-  assert.match(readModels, /resourceState\.ts/)
+  assert.match(readModels, /from '@\/shared\/api\/resourceState\.ts'/)
 })
 
 test('common responsive controls keep keyboard focus and 44px targets', () => {
   // The context bar measures the space it was given rather than the window: the
   // rail beside it is 260px or 64px, so the same 1024px screen hands the bar
   // 764px or 960px and only one of those was ever the tested one.
-  assert.match(compactCss(contextBar), /@containermain\(width<=764px\)/)
-  assert.match(compactCss(contextBar), /@containermain\(width<=586px\)/)
+  assert.match(contextBar, /@container\s+main\s*\(\s*width\s*<=\s*764px\s*\)/)
+  assert.match(contextBar, /@container\s+main\s*\(\s*width\s*<=\s*586px\s*\)/)
   // The inspector's section switch is the shared segmented control rather than a
   // tablist of its own, so the row it stands in is the primitive's answer. It
   // lives in the shared frame now, with the two writes it sits beside, as the
   // card's own strip of sections.
-  assert.match(inspector, /<InspectorTabs/)
-  assert.match(inspectorTabs, /<SegmentedControl/)
-  assert.match(
-    compactCss(segmented),
-    /\.segmented-option\{[^}]*min-height:calc\(var\(--size-control-height\)/,
+  assert.match(inspector, renders('InspectorTabs'))
+  assert.match(inspectorTabs, renders('SegmentedControl'))
+  assert.ok(
+    declarationsOf(segmented, '.segmented-option').some((each) =>
+      each.startsWith('min-height:calc(var(--size-control-height)'),
+    ),
   )
 })

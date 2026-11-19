@@ -16,9 +16,17 @@ import type { Usage } from '@/shared/api/analyticsApi.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
-import { momentAt, noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
+import {
+  momentAt,
+  noTask,
+  seatValue,
+  task,
+  unknownTask,
+  usageAnswer,
+} from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { plotWords } from '../support/plotWords.ts'
 
 // What the panel asks is counted and ordered here; the rail's own reads are held elsewhere.
 vi.mock('@/pages/analytics/composables/useRailReads.ts', () => import('../support/quietRail.ts'))
@@ -37,9 +45,14 @@ const STRETCHES: Stretch[] = Array.from({ length: 7 }, (_, index) => ({
 const week = (stretches: readonly Stretch[] = STRETCHES) =>
   usageAnswer({ first: MONDAY, days: 3, end: WEDNESDAY, groupBy: ['work_item'], stretches }).usage
 
+/** Two accounts of one organization, and its work no reading places on an account. */
+const A = 'org-a/acc-a'
+const B = 'org-a/acc-b'
+const UNPLACED = 'org-a/'
+
 const worked = (day: number, account: string, hours: number): Stretch => ({
   day,
-  group: { account: value(account) },
+  group: { seat: seatValue(account) },
   spend: { seconds: hours * 3600 },
 })
 
@@ -48,13 +61,13 @@ function byAccount(): Usage {
   return usageAnswer({
     first: MONDAY,
     days: 5,
-    groupBy: ['account'],
+    groupBy: ['seat'],
     stretches: [
-      worked(0, 'acc-a', 1),
-      worked(1, 'acc-a', 2),
-      worked(3, 'acc-b', 1),
-      worked(4, 'acc-a', 2),
-      worked(4, 'acc-b', 1),
+      worked(0, A, 1),
+      worked(1, A, 2),
+      worked(3, B, 1),
+      worked(4, A, 2),
+      worked(4, B, 1),
     ],
   }).usage
 }
@@ -180,24 +193,29 @@ describe('the days', () => {
   })
 
   // A press on a part of a day once acted for the day: it now does what the part's row does.
-  it('let a value narrow from its segment and legend entry, and the folded tail lead nowhere', async () => {
+  it('let a value open its side panel from its segment and legend entry, and the folded tail lead nowhere', async () => {
     const days = mountDays(
       week([...STRETCHES, { day: 1, group: { work_item: noTask }, spend: { seconds: 9 * 3600 } }]),
     )
-    const none = days.findAll('button.period-segment')
-    expect(none.length).toBeGreaterThan(0)
-    expect(new Set(none.map((one) => one.attributes('data-series')))).toEqual(new Set(['none']))
+    // Every value the read can filter by is a control, each task and work with no task alike; a
+    // task the app has no card link for here is one too, and the folded tail is not.
+    const series = (at: string) => days.findAll(at).map((one) => one.attributes('data-series'))
+    expect(series('.period-segment')).toEqual(expect.arrayContaining(['none', 'other']))
+    const values = series('.period-segment').filter((key) => key !== 'other')
+    expect(new Set(series('button.period-segment'))).toEqual(new Set(values))
+    const none = days.findAll('button.period-segment[data-series="none"]')
     const folded = days.findAll('.period-segment[data-series="other"]')
     expect(folded.length).toBeGreaterThan(0)
     for (const one of folded) {
       expect(one.element.tagName).toBe('SPAN')
-      expect(one.attributes('data-tooltip')).toContain('Other')
     }
+    // The folded tail only shows: a segment has no hint of its own, and its day's hint names it.
+    expect(spokenDays(days).some((day) => day.holds.includes('Other'))).toBe(true)
 
     await none[0]?.trigger('click')
     await days.get('button.chart-key[data-series="none"]').trigger('click')
     await days.findAll('.period-segment[data-series="other"]')[0]?.trigger('click')
-    expect(days.emitted('narrow')).toEqual([
+    expect(days.emitted('inspect')).toEqual([
       [null, 'No task'],
       [null, 'No task'],
     ])
@@ -208,16 +226,15 @@ describe('the days', () => {
 
   it('mark the day not over yet as running, and only that day', () => {
     const days = mountDays(week())
-    const stacks = days.findAll('.period-stack')
-    expect(stacks.map((stack) => stack.classes().includes('period-incomplete'))).toEqual([
-      false,
-      false,
-      true,
-    ])
-    // Its hatching and its hint say it is under way; no word stands under its name.
-    expect(days.get('.period-axis').text()).not.toContain('running')
+    const stacks = days.findAll('.period-stack').map((stack) => stack.classes('period-incomplete'))
+    expect(stacks).toEqual([false, false, true])
+    // Its hatching and its hint say it is under way: no word stands under its name, and no line
+    // of words over the plot, whose words are its edges' labels alone (`plotWords`, which
+    // periodColumns.spec.ts shows reading a legend and both edges present).
     expect(spokenDays(days).at(-1)?.holds).toContain('running')
-    expect(days.find('.period-readout').exists()).toBe(false)
+    const { edges, stray } = plotWords(days.get('figure').element)
+    expect(edges.flatMap((edge) => edge.labels).join(' ')).not.toContain('running')
+    expect(stray).toEqual([])
   })
 
   it('mark no day once the period is over', () => {
@@ -233,16 +250,17 @@ describe('the days', () => {
     ])
     const days = mountDays(fiveDays(), { accounts: byAccount(), readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(2)
-    // Said where the day is read, not in a note under the chart.
-    expect(days.find('.period-notes').exists()).toBe(false)
+    // Said where the day is read, in its hint below, and nowhere in the section's words: not in a
+    // note under the chart, nor in a row over the plot.
+    expect(days.text()).not.toContain('Account change')
     // A span of time keeps its figure and unit together with a space no line breaks at.
     const hint = (index: number) =>
       (spokenDays(days)[index]?.holds ?? '').replaceAll(/[^\S\n]/gu, ' ')
     expect(hint(4)).toBe(
-      'Friday, November 13: total 1 h\nAccount change: acc-b → acc-a, acc-b\nMAIN-1 One 1 h',
+      'Friday, November 13: total 1 h\nAccount change: acc-b → acc-a, acc-b\nMAIN-1 One 1 h, 100% of the total',
     )
     expect(hint(3)).toBe(
-      'Thursday, November 12: total 1 h\nAccount change: acc-a → acc-b\nMAIN-1 One 1 h',
+      'Thursday, November 12: total 1 h\nAccount change: acc-a → acc-b\nMAIN-1 One 1 h, 100% of the total',
     )
   })
 
@@ -297,7 +315,7 @@ describe('the days', () => {
   })
 })
 
-/** Work whose organization nobody recorded: no account, only work. */
+/** Work no reading places on any account, of no organization known: no account, only work. */
 const UNRECORDED = 'unrecorded'
 
 /** An answer by account over a day per entry, each day worked by the accounts it names. */
@@ -305,7 +323,7 @@ function daysOf(...days: readonly (readonly string[])[]): Usage {
   return usageAnswer({
     first: MONDAY,
     days: days.length,
-    groupBy: ['account'],
+    groupBy: ['seat'],
     stretches: days.flatMap((accounts, day) =>
       accounts.map((account) =>
         account === UNRECORDED
@@ -337,40 +355,34 @@ const everyDay = (count: number) =>
     })),
   }).usage
 
-// Work whose organization nobody recorded is not an account: it is neither a change nor hides one.
+// Work no reading places on an account, of an organization or of none, is not an account: it is
+// neither a change nor hides one.
 describe('the account marks', () => {
   it('mark no change where unrecorded work joins the same accounts', () => {
-    expect(changesOf(daysOf(['acc-a'], ['acc-a', UNRECORDED]))).toEqual([])
+    expect(changesOf(daysOf([A], [A, UNRECORDED]))).toEqual([])
+    expect(changesOf(daysOf([A], [A, UNPLACED]))).toEqual([])
   })
 
   it('mark no change across a day of unrecorded work alone between the same account', () => {
-    expect(changesOf(daysOf(['acc-a'], [UNRECORDED], ['acc-a']))).toEqual([])
+    expect(changesOf(daysOf([A], [UNRECORDED], [A]))).toEqual([])
+    expect(changesOf(daysOf([A], [UNPLACED], [A]))).toEqual([])
   })
 
   it('mark the change hidden behind a day of unrecorded work on the day the new account works', () => {
-    expect(changesOf(daysOf(['acc-a'], [UNRECORDED], ['acc-b']))).toEqual([
-      { day: 2, before: ['acc-a'], after: ['acc-b'] },
-    ])
+    expect(changesOf(daysOf([A], [UNRECORDED], [B]))).toEqual([{ day: 2, before: [A], after: [B] }])
+    expect(changesOf(daysOf([A], [UNPLACED], [B]))).toEqual([{ day: 2, before: [A], after: [B] }])
   })
 
   it('mark the accounts with a figure above zero in the measure shown, and only those', () => {
-    // acc-b joins on the second day with an hour of work, no token counted and no price.
+    // B joins on the second day with an hour of work, no token counted and no price.
     const usage = usageAnswer({
       first: MONDAY,
       days: 2,
-      groupBy: ['account'],
+      groupBy: ['seat'],
       stretches: [
-        {
-          day: 0,
-          group: { account: value('acc-a') },
-          spend: { seconds: 3600, tokens: 9, cost: 1 },
-        },
-        {
-          day: 1,
-          group: { account: value('acc-a') },
-          spend: { seconds: 3600, tokens: 9, cost: 1 },
-        },
-        { day: 1, group: { account: value('acc-b') }, spend: { seconds: 3600, unpriced: 5 } },
+        { day: 0, group: { seat: seatValue(A) }, spend: { seconds: 3600, tokens: 9, cost: 1 } },
+        { day: 1, group: { seat: seatValue(A) }, spend: { seconds: 3600, tokens: 9, cost: 1 } },
+        { day: 1, group: { seat: seatValue(B) }, spend: { seconds: 3600, unpriced: 5 } },
       ],
     }).usage
     const at = (measure: Measure) => accountChanges(usage, measure).map((change) => change.at)
@@ -383,13 +395,11 @@ describe('the account marks', () => {
   })
 
   it('mark a change where a known account joins', () => {
-    expect(changesOf(daysOf(['acc-a'], ['acc-a', 'acc-b']))).toEqual([
-      { day: 1, before: ['acc-a'], after: ['acc-a', 'acc-b'] },
-    ])
+    expect(changesOf(daysOf([A], [A, B]))).toEqual([{ day: 1, before: [A], after: [A, B] }])
   })
 
   it('say the change in the hint of its day and to a screen reader by the known accounts alone', () => {
-    const accounts = daysOf(['acc-a'], [UNRECORDED], ['acc-b', UNRECORDED], ['acc-b'])
+    const accounts = daysOf([A], [UNRECORDED], [B, UNPLACED, UNRECORDED], [B])
     const days = mountDays(everyDay(4), { accounts, readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(1)
     const named = spokenDays(days).map((day) => day.holds)
@@ -401,6 +411,7 @@ describe('the account marks', () => {
     ])
     expect(named[2]).toContain('Account change: acc-a → acc-b')
     expect(named.join(' ')).not.toContain('Unknown')
+    expect(named.join(' ')).not.toContain('account not known')
 
     const table = mountDays(everyDay(4), { narrow: true, accounts, readAt: AFTER })
     const notes = table
@@ -414,13 +425,13 @@ describe('the account marks', () => {
 describe('the days on the page', () => {
   it('ask for the period by account beside the page read, and not again when it is by account', async () => {
     const reads = stubAnalyticsReads((query) =>
-      query.get('group_by') === 'account'
+      query.get('group_by') === 'seat'
         ? { interface_version: 'valkama-analytics-api', usage: byAccount() }
         : { interface_version: 'valkama-analytics-api', usage: week() },
     )
     const page = await mountAnalytics()
     await flushPromises()
-    const accounts = reads.grouped('account')
+    const accounts = reads.grouped('seat')
     expect(accounts).toHaveLength(1)
     expect(accounts[0]?.get('compare')).toBeNull()
     expect(accounts[0]?.get('from')).toBe(reads.grouped('work_item')[0]?.get('from'))
@@ -429,13 +440,10 @@ describe('the days on the page', () => {
     // By account, the page's own answer is the accounts: its read and the same days of the week
     // before, and no third read.
     const asked = reads.asked.length
-    const byAccountPage = await mountAnalytics({ routeState: { by: 'account' } })
+    const byAccountPage = await mountAnalytics({ routeState: { by: 'seat' } })
     await flushPromises()
     expect(byAccountPage.findComponent(PeriodColumns).exists()).toBe(true)
-    expect(reads.asked.slice(asked).map((query) => query.get('group_by'))).toEqual([
-      'account',
-      'account',
-    ])
+    expect(reads.asked.slice(asked).map((query) => query.get('group_by'))).toEqual(['seat', 'seat'])
     expect(byAccountPage.findAll('.period-mark').length).toBeGreaterThan(0)
   })
 })

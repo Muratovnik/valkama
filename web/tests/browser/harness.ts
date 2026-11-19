@@ -33,7 +33,7 @@ import { hintsSurface } from './hintsSurface.ts'
 import { marksSurface } from './marksSurface.ts'
 import { MenuSurface } from './menuSurface.ts'
 import { now } from './planningFixtures.ts'
-import { previewSurface } from './previewSurface.ts'
+import { PreviewCardsSurface, previewSurface } from './previewSurface.ts'
 import { SettingsRowsSurface } from './settingsRowsSurface.ts'
 
 import './harness.css'
@@ -202,6 +202,7 @@ const Harness = defineComponent({
           h(AppNav, { modules, badges: {}, active: 'settings', connection: 'live' }),
           h('div', { class: 'settings-rows-stage' }, [h(SettingsRowsSurface)]),
         ])
+    if (requestedSurface === 'preview-cards') return () => h(PreviewCardsSurface)
     if (contextHarness) {
       return () =>
         h('main', { class: 'harness-shell' }, [

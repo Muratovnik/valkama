@@ -72,12 +72,28 @@ def _moved(item: dict) -> dict:
     `started` is a claim moving unstarted work into the active state; `requeued`
     a release putting work under way back in the queue; `released` the holder
     whose claim a move into a terminal state ended; `warnings` what the move's
-    guards had to say, or why an item that should have moved did not.
+    guards had to say, or why an item that should have moved did not;
+    `awaiting_confirmation` the goals and stages the write left with nothing open
+    under them, which now wait for their confirmation; `moved_out` the goal or stage
+    a move out took the item out of, with the reason; `converted` what a conversion
+    made of the item and the task it left; `waits_for_owner` the write the owner's
+    setting kept back for their answer, with the question they answer, and
+    `waits_for_sessions` a cancel that waits for the sessions whose work it ends.
     """
 
     return {
         name: item[name]
-        for name in ("started", "requeued", "released", "warnings")
+        for name in (
+            "started",
+            "requeued",
+            "released",
+            "warnings",
+            "awaiting_confirmation",
+            "moved_out",
+            "converted",
+            "waits_for_owner",
+            "waits_for_sessions",
+        )
         if item.get(name)
     }
 
@@ -92,7 +108,9 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
     """A new item: the defaults the caller may not have named are the news.
 
     A creation that also claimed or linked the item says so in `applied`, as a
-    batch does; one that did neither answers without it.
+    batch does; one that did neither answers without it. A part split off a task
+    names that task as `split_from` and the ids of the steps it took as
+    `moved_steps`, and `overridden` when `force` took it from another session.
     """
 
     answer = {
@@ -101,7 +119,11 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
         "kind": item["kind"],
         "priority": item["priority"],
         **_moved(item),
+        **_forced(item),
     }
+    if "split_from" in item:
+        answer["split_from"] = item["split_from"]
+        answer["moved_steps"] = item["moved_steps"]
     if "applied" in item:
         answer["applied"] = item["applied"]
     return answer
@@ -135,7 +157,7 @@ def merged(item: dict, _arguments: Mapping[str, object]) -> dict:
     """The survivor, and what each merged item handed it before it closed."""
 
     answer = {**_base(item), "merged": item["merged"]}
-    for name in ("warnings", "overridden"):
+    for name in ("warnings", "overridden", "awaiting_confirmation"):
         if item.get(name):
             answer[name] = item[name]
     return answer

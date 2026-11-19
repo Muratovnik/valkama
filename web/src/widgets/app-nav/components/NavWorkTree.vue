@@ -32,7 +32,10 @@ export const NAME_INDENT_TOUCH = 'calc(var(--size-control-target) + var(--space-
  *
  * On the rail Escape folds the fold or the space around focus and gives focus to its fold;
  * folded, the next Escape goes on to the one around it, and past the spaces to the list
- * itself (`NavWorkGroup`). In the phone's panel Escape closes the panel.
+ * itself (`NavWorkGroup`). In the phone's panel Escape closes the panel. Each space and each
+ * fold says which it is (`data-nav-node`: `space:<key>`, or the fold's kind and its space's key),
+ * which is how Escape finds the one around focus, and the pinned stand in a group of their own
+ * (`role="group"`), so the work to follow now is what a space holds outside both.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -264,7 +267,7 @@ function escape(event: KeyboardEvent) {
           </button>
           <a
             v-if="entry.href"
-            v-tooltip:right.clipped="nameHint(entry)"
+            v-tooltip.clipped="nameHint(entry)"
             class="nav-tree-space-name nav-tree-space-link one-line"
             :href="entry.href"
             :aria-current="spaceCurrent(entry)"
@@ -273,13 +276,13 @@ function escape(event: KeyboardEvent) {
           >
           <span
             v-else-if="entry.space"
-            v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"
+            v-tooltip.detail="{ text: t('liveWork.noProject'), words: entry.label }"
             class="nav-tree-space-name one-line"
             >{{ entry.label }}</span
           >
           <span
             v-else
-            v-tooltip:right.clipped="nameHint(entry)"
+            v-tooltip.clipped="nameHint(entry)"
             class="nav-tree-space-name one-line"
             >{{ entry.label }}</span
           >

@@ -1,0 +1,37 @@
+{
+  "interface_version": "valkama-planning",
+  "scope": {
+    "kind": "global"
+  },
+  "state": {
+    "interface_version": "valkama-ui-state",
+    "status": "ready",
+    "payload": {
+      "spaces": [
+        {
+          "space_ref": {
+            "data_scope_id": "00000000-0000-4000-8000-000000000004",
+            "space_key": "MAIN"
+          },
+          "title": "Contract",
+          "work_item_count": 26,
+          "numbers": {
+            "triage": 10,
+            "ready": 2,
+            "active": 5,
+            "waiting_owner": 2
+          },
+          "numbers_absent": null,
+          "default_project": "example-project",
+          "projects": [
+            {
+              "project_id": "example-project",
+              "display_name": "example-project"
+            }
+          ]
+        }
+      ],
+      "planning_spaces": []
+    }
+  }
+}

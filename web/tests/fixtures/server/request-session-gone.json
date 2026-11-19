@@ -53,6 +53,7 @@
     "revision": 0,
     "expired_reason": "session_gone",
     "comment_id": null,
+    "purpose": null,
     "by_person": null,
     "history": []
   }

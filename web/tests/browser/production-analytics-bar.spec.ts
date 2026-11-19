@@ -127,11 +127,38 @@ test('on a phone the bar is three rows, its periods one row, and the rail right 
   await record(info, 'bar-phone', measured)
   expect(measured.options).toHaveLength(5)
   expect(new Set(measured.options).size, 'the periods in one row').toBe(1)
-  // The periods, the filter with the read again, and the room of the reader's own days.
-  expect(measured.bar).toBeLessThanOrEqual(160)
   expect(measured.gap).toBeGreaterThanOrEqual(0)
   expect(measured.gap).toBeLessThan(40)
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible()
+
+  // Three rows of one height whatever period is chosen (DESIGN.md): the periods, the filter with
+  // the read again, and the room of the reader's own days, which a span of days fills without
+  // moving anything.
+  await page.goto(pageAt({ period: 'custom', from: '2026-11-09', to: '2026-11-11' }))
+  await expect(page.locator('.analytics-bar input[type="date"]')).toHaveCount(2)
+  const own = await page.evaluate(() => {
+    const box = (selector: string) => {
+      const found = document.querySelector(selector)?.getBoundingClientRect()
+      return found ? { top: found.top, bottom: found.bottom } : null
+    }
+    return {
+      bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
+      rows: [
+        box('.analytics-period'),
+        box('.analytics-refresh'),
+        box('.analytics-bar input[type="date"]'),
+      ],
+    }
+  })
+  await record(info, 'bar-phone-own', own)
+  expect(own.bar, 'the bar beside a span of days').toBe(measured.bar)
+  for (const [index, row] of own.rows.slice(1).entries())
+    expect(
+      row?.top ?? Number.NaN,
+      `row ${index + 2} under row ${index + 1}`,
+    ).toBeGreaterThanOrEqual((own.rows[index]?.bottom ?? Number.NaN) - 0.5)
+  await page.goto(pageAt())
+  await expect(page.locator('.analytics-rail-entry').first()).toBeVisible()
 
   // The freshness shows its age alone, whole, inside the bar; the sentence with the clock time is
   // its hint, and what a screen reader hears.
@@ -229,7 +256,7 @@ test('«Today» is its hours 0 to 23, the running one hatched, against the same 
   })
 })
 
-/** The newest record of the owner's report: 6 h 44 min before now. */
+/** A newest record hours old: 6 h 44 min before now. */
 const OLD = new Date(NOW.getTime() - (6 * 60 + 44) * 60_000)
 
 /** Filters of none to four values, each a chip. */
@@ -364,7 +391,7 @@ test('the list of filters opens over the panel and moves nothing', async ({ page
   await add.click()
   const list = page.locator('.analytics-filter-body')
   await expect(list).toBeVisible()
-  await expect(list.locator('[data-dimension]')).toHaveCount(9)
+  await expect(list.locator('[data-dimension]')).toHaveCount(10)
   const after = await panel.boundingBox()
   const over = await list.boundingBox()
   await record(info, 'bar-filter-list', { before, after, over })

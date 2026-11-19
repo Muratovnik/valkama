@@ -1,0 +1,199 @@
+/**
+ * The day chart of the Analytics page as its day-hint specs read it: where a day's parts stand,
+ * the hints the page shows, noted every frame, and where a hint stands against its day.
+ */
+import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
+
+import { openReport, serve, TASK_REPORT } from './analyticsPage.ts'
+import type { Answer } from './analyticsPage.ts'
+
+export interface Box {
+  bottom: number
+  left: number
+  right: number
+  top: number
+}
+
+export interface Shown {
+  box: Box
+  /** Which element the hint is: the host keeps one while it shows, from one element to the next. */
+  id: number
+  text: string
+}
+
+/** Where one day's parts stand, and where the next day's slot does. */
+export const dayParts = (page: Page, index: number) =>
+  page.evaluate((at) => {
+    // This body runs in the page, so a helper at the module's own scope would not be there.
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+    const box = (element: Element | null | undefined): Box => {
+      const { left, top, right, bottom } = element?.getBoundingClientRect() ?? new DOMRect()
+      return { left, top, right, bottom }
+    }
+    const days = document.querySelector('.spending-days')
+    const slots = [...(days?.querySelectorAll('.period-slot') ?? [])]
+    const slot = slots[at]
+    return {
+      field: box(days?.querySelector('.period-field')),
+      slot: box(slot),
+      column: box(slot?.querySelector('.period-column')),
+      stack: box(slot?.querySelector('.period-stack')),
+      // From the foot of the stack up.
+      segments: [...(slot?.querySelectorAll('.period-segment') ?? [])]
+        .map((segment) => box(segment))
+        .sort((low, high) => high.bottom - low.bottom),
+      next: box(slots[at + 1]),
+    }
+  }, index)
+
+export type Parts = Awaited<ReturnType<typeof dayParts>>
+
+/**
+ * Teaches the page to note every hint it shows — which element it is, the words it shows and
+ * its box — and, from then on, to note them every frame, so a hint that swapped for a frame and
+ * back is noted too. The words leave out the copy a day's hint, drawn as a grid, keeps for a
+ * screen reader, which can trail the words on screen by a render.
+ */
+const noteHints = (page: Page) =>
+  page.evaluate(() => {
+    const host = window as unknown as { hintFrames?: Shown[][]; hintsNow?: () => Shown[] }
+    const ids = new WeakMap<Element, number>()
+    let count = 0
+    host.hintsNow = () =>
+      [...document.querySelectorAll('.tooltip-hint')].map((hint) => {
+        if (!ids.has(hint)) {
+          count += 1
+          ids.set(hint, count)
+        }
+        const shown = hint.cloneNode(true) as Element
+        for (const copy of shown.querySelectorAll('[role="tooltip"]')) copy.remove()
+        const { left, top, right, bottom } = hint.getBoundingClientRect()
+        return {
+          id: ids.get(hint) ?? 0,
+          text: shown.textContent ?? '',
+          box: { left, top, right, bottom },
+        }
+      })
+    host.hintFrames = []
+    const note = () => {
+      host.hintFrames?.push(host.hintsNow?.() ?? [])
+      requestAnimationFrame(note)
+    }
+    requestAnimationFrame(note)
+  })
+
+/** Every hint shown now (`noteHints`). */
+export const hintsNow = (page: Page) =>
+  page.evaluate(() => (window as unknown as { hintsNow: () => Shown[] }).hintsNow())
+
+/** The hints noted every frame since the last call (`noteHints`). */
+export const hintFrames = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { hintFrames: Shown[][] }).hintFrames.splice(0) as Shown[][],
+  )
+
+/** Two frames, so what the last move asked for is drawn. */
+export const frames = (page: Page) =>
+  page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  )
+
+/** The one hint shown, once it has stood still for two frames. */
+export async function settledHint(page: Page): Promise<Shown> {
+  let last: Shown[] = []
+  await expect
+    .poll(async () => {
+      const shown = await hintsNow(page)
+      await frames(page)
+      last = await hintsNow(page)
+      return last.length === 1 && JSON.stringify(shown) === JSON.stringify(last)
+    }, 'one hint, standing still')
+    .toBe(true)
+  return last[0] as Shown
+}
+
+export const middleOf = (box: Box) => ({
+  x: (box.left + box.right) / 2,
+  y: (box.top + box.bottom) / 2,
+})
+
+const overlaps = (one: Box, other: Box) =>
+  one.left < other.right &&
+  other.left < one.right &&
+  one.top < other.bottom &&
+  other.top < one.bottom
+
+/**
+ * Where a hint stands against the day's stack, the column drawn: on which side of it, how far
+ * from its edge on that side, how far its top stands under the stack's, and whether it covers any
+ * of the stack. The day's slot, the place the pointer takes for it, is wider than its stack: a hint
+ * beside the slot stood up to 300px from the stack of a day of two.
+ */
+export function placeOf(hint: Box, parts: Parts) {
+  const { stack } = parts
+  let side = 'neither'
+  if (hint.left >= stack.right) side = 'right'
+  else if (hint.right <= stack.left) side = 'left'
+  return {
+    side,
+    apart: side === 'left' ? stack.left - hint.right : hint.left - stack.right,
+    below: hint.top - stack.top,
+    covers: overlaps(hint, stack),
+  }
+}
+
+/**
+ * Where a day stands that holds a segment that does nothing when pressed, a hue only, and another
+ * segment beside it: that segment, the other one and the day's ground beside its stack.
+ */
+export const dayWithIdleSegment = (page: Page) =>
+  page.evaluate(() => {
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
+    const box = (element: Element): Box => {
+      const { left, top, right, bottom } = element.getBoundingClientRect()
+      return { left, top, right, bottom }
+    }
+    const slots = [...document.querySelectorAll('.spending-days .period-slot')]
+    for (const slot of slots) {
+      const segments = [...slot.querySelectorAll('.period-segment')].filter(
+        (one) => one.getBoundingClientRect().height > 6,
+      )
+      const idle = segments.find((one) => one.getAttribute('aria-hidden') === 'true')
+      const other = segments.find((one) => one !== idle)
+      const stack = slot.querySelector('.period-stack')
+      if (idle && other && stack)
+        return {
+          index: slots.indexOf(slot),
+          idle: box(idle),
+          other: box(other),
+          slot: box(slot),
+          stack: box(stack),
+        }
+    }
+    throw new Error('no day holds a segment that only shows beside another one')
+  })
+
+/** Real time passing in the page, past the hint's delay, while its frames are noted. */
+export const pastTheDelay = (page: Page) =>
+  page.evaluate(() => new Promise((done) => setTimeout(done, 800)))
+
+/**
+ * The days of the task section, drawn as a plot at `width`: of this week, unless `address` says.
+ * A page too narrow to open them as a plot (`NARROWEST` in the day-hint spec) opens their table,
+ * and the plot is chosen there, as a reader chooses it.
+ */
+export async function openDays(page: Page, width: number, answer?: Answer, address = TASK_REPORT) {
+  await serve(page, answer)
+  const analytics = await openReport(page, width, address)
+  const days = analytics.locator('.spending-days')
+  if ((await days.getAttribute('data-shown')) === 'table')
+    await days.getByRole('radio', { name: 'Chart' }).check()
+  await expect(days).toHaveAttribute('data-shown', 'chart')
+  // The plot in the middle of the window, so a hint has room over and under it.
+  await days
+    .locator('.period-field')
+    .evaluate((field) => field.scrollIntoView({ block: 'center', inline: 'nearest' }))
+  await noteHints(page)
+  return days
+}

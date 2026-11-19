@@ -43,26 +43,30 @@ interface Drawn {
 }
 
 /**
- * Reads one heading's drawn parts; runs in the page, so it carries everything it uses. `bare`
- * reads it laid out with the lines after its first starting at its own edge rather than under its
- * words, and puts it back before anything is painted.
+ * Reads one heading's drawn parts; runs in the page, so it carries everything it uses. With
+ * `narrower` it reads it laid out with the lines after its first starting at its own edge rather
+ * than under its words, across that many px less of the board, and puts it back before anything
+ * is painted.
  */
-const drawnHeading = (head: Element, bare = false): Drawn => {
+const drawnHeading = (head: Element, narrower?: number): Drawn => {
   // Bare, the toggle's way back out of the heading's inset and the inset itself are taken off,
   // and put back, at once: under less motion each change of either is otherwise eased over a
   // frame, and read in that frame it has not happened yet.
-  const inset = (bare ? [head.querySelector('.lane-toggle'), head] : []).map(
+  const inset = (narrower === undefined ? [] : [head.querySelector('.lane-toggle'), head]).map(
     (node) => (node as HTMLElement | null)?.style,
   )
-  const lay = (value: string) => {
+  /** Lays the inset out as `value`, and the board's width the heading is drawn across as `across`. */
+  const lay = (value: string, across: string) => {
     for (const style of inset) style?.setProperty('transition', 'none', 'important')
     for (const [at, style] of inset.entries())
       style?.setProperty(['margin-inline-start', 'padding-inline-start'][at] ?? '', value)
+    // The words beside the actions end by that width too.
+    inset[1]?.setProperty('--board-visible-width', across)
     // The change is applied before the easing comes back.
     if (inset.length > 0) getComputedStyle(head).paddingInlineStart.at(0)
     for (const style of inset) style?.removeProperty('transition')
   }
-  lay('0px')
+  lay('0px', `${head.getBoundingClientRect().width - Number(narrower)}px`)
   const origin = head.getBoundingClientRect()
   const parts: Part[] = []
   /** Adds what is drawn of `rect`, cut to `within` when given. */
@@ -121,7 +125,7 @@ const drawnHeading = (head: Element, bare = false): Drawn => {
   if (canvas && title) canvas.font = getComputedStyle(title).font
   const clipped = Boolean(title && title.scrollWidth > title.clientWidth + 0.5)
   const ellipsis = clipped ? (canvas?.measureText('…').width ?? 0) : 0
-  lay('')
+  lay('', '')
   return {
     actionsShown: actions !== null && Number(getComputedStyle(actions).opacity) > 0,
     height: origin.height,
@@ -183,9 +187,9 @@ export async function readHeading(head: Locator): Promise<Reading> {
 
 /**
  * How many rows the heading would draw were its lines after the first to start at its own edge
- * rather than under its words.
+ * rather than under its words, across `narrower` px less of the board.
  */
-export async function rowsFromTheEdge(head: Locator): Promise<number> {
-  const drawn = await head.evaluate(drawnHeading, true)
+export async function rowsFromTheEdge(head: Locator, narrower = 0): Promise<number> {
+  const drawn = await head.evaluate(drawnHeading, narrower)
   return rowsOf(drawn.parts).length
 }

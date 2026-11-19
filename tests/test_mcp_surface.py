@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -44,7 +45,7 @@ from server.planning import model as planning_model
 from server.planning import read_model as planning_read_model
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
-from tests.planning_fixtures import basis_for, bulk_items
+from tests.planning_fixtures import bulk_items, standing_in
 
 SPACE_NAME = "Wire Surface"
 SPACE_KEY = "WIR"
@@ -610,6 +611,31 @@ class DispatchTests(McpSurfaceTestCase):
         self.assertEqual("workflow_guard", result["structuredContent"]["error"]["code"])
         self.assertIn("executor", result["structuredContent"]["error"]["message"])
 
+    def test_a_cancel_refused_with_its_list_carries_the_list(self) -> None:
+        goal = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="goal", kind="goal"
+        )
+        task = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="under it", parent=goal["reference"]
+        )
+        self.conn.commit()
+        result = self.call(
+            "apply_work_item_changes",
+            {
+                "id": goal["reference"],
+                "summary": {"done": "Not needed", "next": "Nothing"},
+                "transition": {"state": "cancelled"},
+            },
+        )
+        self.assertTrue(result["isError"])
+        error = result["structuredContent"]["error"]
+        self.assertEqual("cancel_list", error["code"])
+        self.assertEqual([task["reference"]], [entry["reference"] for entry in error["cancels"]])
+        self.assertEqual([], error["dependents"])
+        self.assertRegex(error["list_token"], r"^[0-9a-f]{16}$")
+        self.assertEqual(result["structuredContent"], self.payload(result))
+        self.assertTrue(planning_service.get_work_item(self.conn, goal["reference"])["open"])
+
     def check_compact_json(self, text: str) -> None:
         """One line, no padding after separators, and still the same document."""
 
@@ -930,7 +956,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
         self.call_tool(
             "apply_work_item_changes",
             reference=self.second,
-            refs=[{"kind": "commit", "value": "d5678"}],
+            refs=[{"kind": "memory", "value": "d5678"}],
         )
         self.assertEqual(
             1, self.call_tool("get_work_item", id=self.second)["parts"]["refs"]["count"]
@@ -1783,7 +1809,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
             "author": "one",
             "claim": True,
             "checklist_ticks": [{"item_id": self.steps[0]}, {"item_id": self.steps[1]}],
-            "refs": [{"kind": "commit", "value": "abc1234", "label": "the change"}],
+            "refs": [{"kind": "memory", "value": "abc1234", "label": "the change"}],
             "links": [{"other": self.other, "kind": "relates-to"}],
             "comment": {"body": "closing note", "checklist_item_id": self.steps[1]},
             "summary": {"done": "both steps", "next": "nothing"},
@@ -1844,7 +1870,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual([True, True], [step["done"] for step in item["checklist"]])
         self.assertEqual(["one", "one"], [step["done_by"] for step in item["checklist"]])
         self.assertEqual(
-            [("commit", "abc1234", "the change")],
+            [("memory", "abc1234", "the change")],
             [(ref["kind"], ref["value"], ref["label"]) for ref in item["refs"]],
         )
         self.assertEqual(
@@ -2049,6 +2075,26 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 with self.subTest(document=name, word=word):
                     self.assertIn(word, document)
 
+    def test_the_item_read_and_the_texts_name_the_requests_and_who_works_on_it(self) -> None:
+        """The open requests asked of sessions, the participants part and the note's line of requests."""
+
+        [tool] = [tool for tool in mcp_surface.catalogue() if tool["name"] == "get_work_item"]
+        words = ("addressed_open", "participants", "Waiting for your answer")
+        texts = {"get_work_item": tool["description"]}
+        for name in (
+            "server/skill/valkama/SKILL.md",
+            "server/skill/valkama/references/tools.md",
+            "docs/connection-contract.md",
+            "docs/hook-contract.md",
+        ):
+            with open(os.path.join(ROOT, *name.split("/")), encoding="utf-8") as handle:
+                texts[name] = handle.read()
+        for name, text in texts.items():
+            # The hook contract describes the note, not the parts of an item read.
+            for word in words[2:] if name == "docs/hook-contract.md" else words:
+                with self.subTest(text=name, word=word):
+                    self.assertIn(word, text)
+
     def test_an_object_parameter_named_like_text_shows_its_form(self) -> None:
         """A bare-text value for an object parameter fails in the client, before this server.
 
@@ -2093,16 +2139,22 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "claim",
                 "subscribe",
                 "update",
+                "convert",
                 "checklist",
+                "checklist_reason",
                 "checklist_ticks",
                 "refs",
+                "commits",
                 "links",
                 "comment",
                 "comments",
                 "resolutions",
                 "questions",
                 "summary",
+                "triage_seen",
                 "transition",
+                "defer",
+                "move_out",
                 "expected_revision",
                 "author",
                 "verbose",
@@ -2342,6 +2394,18 @@ class ServerInstructionTests(unittest.TestCase):
                 "only for an item that should never have existed."
             )
         )
+
+    def test_the_texts_name_no_planning_item_or_anchor_but_their_examples(self) -> None:
+        # What an agent reads is published: an item number or plan anchor of the
+        # project's own planning would be a private trace. MAIN-n and the two
+        # placeholder anchors are the examples the texts teach with.
+        texts = {"instructions": mcp_surface.PLANNING_INSTRUCTIONS}
+        texts.update((tool["name"], json.dumps(tool)) for tool in planning_tools.TOOLS)
+        for name, text in texts.items():
+            with self.subTest(text=name):
+                numbers = set(re.findall(r"\b[A-Z][A-Z0-9]+-\d+\b", text))
+                self.assertEqual(set(), {n for n in numbers if not n.startswith(("MAIN-", "SHA-"))})
+                self.assertLessEqual(set(re.findall(r"kb:[\w-]+", text)), {"kb:xxxx", "kb:a7f3"})
 
     def test_the_text_reads_an_item_by_parts_and_names_no_whole_record(self) -> None:
         # `full` left get_work_item, and a verbose write answers with the card.
@@ -2649,8 +2713,8 @@ class CompactWorkItemReadTests(WireCallTestCase):
             (
                 {"parts": "history"},
                 "unknown part 'history'; parts are card, comments, events, links, refs,"
-                " questions, mentions, sessions, images, subscribers, claim, sections,"
-                " participants",
+                " commits, questions, mentions, sessions, images, subscribers, claim, sections,"
+                " participants, confirmation",
             ),
             (
                 {"parts": ["card"], "thread": root},
@@ -2807,13 +2871,8 @@ class ChainToolTests(WireCallTestCase):
             ("review", "review"),
             ("claimed", "ready"),
         ):
-            self.children[name] = planning_service.create_work_item(
-                self.conn,
-                space=SPACE_KEY,
-                title=name,
-                state=state,
-                parent=self.root,
-                **basis_for(state),
+            self.children[name] = standing_in(
+                self.conn, state, space=SPACE_KEY, title=name, parent=self.root
             )["reference"]
         # A claim starts its item: the active child is the one taken.
         planning_service.claim_work_item(self.conn, self.children["active"], author="worker")
@@ -2826,13 +2885,8 @@ class ChainToolTests(WireCallTestCase):
         )
         # Enough closed children on distinct days for the series to be cut.
         for day in range(1, 33):
-            done = planning_service.create_work_item(
-                self.conn,
-                space=SPACE_KEY,
-                title=f"done {day}",
-                state="done",
-                parent=self.root,
-                acceptance="assignment",
+            done = standing_in(
+                self.conn, "done", space=SPACE_KEY, title=f"done {day}", parent=self.root
             )
             stamp = f"{date(2026, 7, 31) + timedelta(days=day)}T08:00:00Z"
             self.conn.execute(

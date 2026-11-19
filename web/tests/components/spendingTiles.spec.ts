@@ -79,7 +79,7 @@ describe('the tiles', () => {
     }
     // Not read is not nothing spent: the words say which.
     const notRead = mountTiles(NOW, null)
-    expect(tile(notRead, 'time').text).toContain('The period before was not read')
+    expect(tile(notRead, 'time').text).toContain('The period before was not loaded')
     expect(tile(notRead, 'time').text).not.toContain('Nothing spent')
   })
 
@@ -138,26 +138,38 @@ describe('the tiles', () => {
     )
     const notRead = mountTiles(NOW, null, 'time', 'ru')
     expect(tile(notRead, 'time').text).toContain(
-      'Предыдущий период не прочитан, сравнивать не с чем',
+      'Предыдущий период не загружен, сравнивать не с чем',
     )
   })
 
-  // The month cut short ends the change with a stop of its own, and the hint that says the tile
-  // whole, sentence by sentence, adds none after it: «2–8 нояб..» read as a typing slip.
-  it('say the tile whole in its hint with one stop after a period named in Russian', () => {
+  // A line the tile cuts says its own words whole over itself, as every cut text does: the month
+  // cut short keeps its own stop, and no hint joins the tile's lines into sentences of its own.
+  it('say each line it may cut whole as that line, the cut month with its own stop', () => {
     const moved = mountTiles(
       NOW,
       { seconds: 3600, tokens: 2_400_000, cost: 12.5, unpriced: 0 },
       'time',
       'ru',
     )
+    expect(moved.find('.tile-body[data-tooltip]').exists()).toBe(false)
     for (const measure of ['time', 'tokens', 'cost'] as const) {
-      const hint = moved
-        .get(`.tile-figure[data-measure="${measure}"]`)
-        .element.closest('.tile-body')
-      const said = (hint as HTMLElement | null)?.dataset.tooltip?.replaceAll(/\s/gu, ' ') ?? ''
-      expect(said).toContain('2–8 нояб.')
-      expect(said).not.toContain('..')
+      const segment = tile(moved, measure).segment
+      // Every line with a hint: the figure, the change and the tokens' two notes, what they
+      // processed anew and the cache reads, say themselves whole, as a cut line does; every token
+      // is priced, so the cost has no note. The trend says what it draws, and the rate of the
+      // tokens and the cost what it is of, in hints of their own (`detail`).
+      const hinted = [...segment.querySelectorAll<HTMLElement>('[data-tooltip-kind]')]
+      const clipped = hinted.filter((line) => line.dataset.tooltipKind === 'clipped')
+      expect(clipped).toHaveLength(measure === 'tokens' ? 4 : 2)
+      expect(hinted.length - clipped.length).toBe(measure === 'time' ? 1 : 2)
+      for (const line of clipped) expect(line.dataset.tooltip).toBe(line.textContent)
+      // And no line but the tile's name stands with no hint at all.
+      let rest = segment.textContent
+      for (const line of hinted) rest = rest.replace(line.textContent, '')
+      expect(rest.trim()).toBe(segment.querySelector('.tile-name')?.textContent.trim())
+      const change = segment.querySelector('.tile-change')?.textContent ?? ''
+      expect(change.replaceAll(/\s/gu, ' ')).toContain('2–8 нояб.')
+      expect(change).not.toContain('..')
     }
   })
 

@@ -20,7 +20,7 @@ from unittest import mock
 
 from server import sessions
 from server.analytics import usage
-from server.planning import executors, live_frame, live_work, model, service
+from server.planning import executors, live_frame, live_work, model, participation, service
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -265,7 +265,14 @@ class RowTests(FrameCase):
         epic, idle_epic = self.epic(), self.epic()
         task, idle = self.child(epic), self.child(idle_epic)
         service.set_summary(self.conn, epic, {"done": "Dropped", "next": "Nothing"})
-        service.transition_work_item(self.conn, epic, "cancelled")
+        # A goal cancelled over open work under it, as a store an earlier build wrote
+        # holds one: a cancel now takes the open work under it along.
+        self.conn.execute(
+            "UPDATE work_items SET state_id = (SELECT s.state_id FROM workflow_states s"
+            " WHERE s.workflow_id = work_items.workflow_id AND s.category = 'cancelled'"
+            " ORDER BY s.position LIMIT 1) WHERE work_item_id = ?",
+            (service.get_work_item(self.conn, epic)["work_item_id"],),
+        )
         self.working(task)
         rows = self.rows()
         self.assertEqual({epic, task}, set(rows), (idle, idle_epic))
@@ -403,8 +410,10 @@ class AgentTests(FrameCase):
         self.subagent(session, "a1")
         self.comment(first, session, "a1")
         items = service.list_work_items(self.conn, space=SPACE, limit=None)
+        settings = participation.load(self.conn)
         self.assertEqual(
-            live_work.live_work(self.conn, items), live_work.placed(self.conn, items).live
+            live_work.live_work(self.conn, items, settings=settings),
+            live_work.placed(self.conn, items, settings=settings).live,
         )
 
 

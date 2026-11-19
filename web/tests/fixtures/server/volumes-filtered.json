@@ -1,0 +1,396 @@
+{
+  "interface_version": "valkama-planning-api",
+  "volumes": {
+    "scope": {
+      "kind": "space",
+      "space_ref": {
+        "data_scope_id": "00000000-0000-4000-8000-000000000004",
+        "space_key": "MAIN"
+      },
+      "project_ref": null
+    },
+    "period": {
+      "from": "2026-01-02T03:04:05+03:00",
+      "to": "2026-01-02T03:04:05+03:00",
+      "utc_offset": 180
+    },
+    "filter": {
+      "kinds": [
+        "task",
+        "bug"
+      ],
+      "labels": [
+        "ui"
+      ]
+    },
+    "measured_from": "2026-01-02T03:04:05.000Z",
+    "counts": {
+      "categories": [
+        {
+          "category": "triage",
+          "tasks": 1,
+          "goals": null,
+          "stages": null,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000058",
+            "reference": "MAIN-27",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "deferred",
+          "tasks": 0,
+          "goals": null,
+          "stages": null,
+          "oldest": null
+        },
+        {
+          "category": "ready",
+          "tasks": 1,
+          "goals": null,
+          "stages": null,
+          "oldest": {
+            "work_item_id": "00000000-0000-4000-8000-000000000040",
+            "reference": "MAIN-13",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        },
+        {
+          "category": "active",
+          "tasks": 0,
+          "goals": null,
+          "stages": null,
+          "oldest": null
+        },
+        {
+          "category": "review",
+          "tasks": 0,
+          "goals": null,
+          "stages": null,
+          "oldest": null
+        },
+        {
+          "category": "completed",
+          "tasks": 0,
+          "goals": null,
+          "stages": null,
+          "oldest": null
+        },
+        {
+          "category": "blocked",
+          "tasks": 0,
+          "goals": null,
+          "stages": null,
+          "oldest": null
+        },
+        {
+          "category": "cancelled",
+          "tasks": 0,
+          "goals": null,
+          "stages": null,
+          "oldest": null
+        }
+      ],
+      "waiting_owner": {
+        "count": 0,
+        "oldest": null
+      },
+      "unattached_commits": 1
+    },
+    "goals": [
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000046",
+        "reference": "MAIN-9",
+        "title": "Tree goal",
+        "kind": "goal",
+        "state": null,
+        "container_state": "in_progress",
+        "open": true,
+        "parent_reference": null,
+        "other_space": null,
+        "partial": false,
+        "tasks": {
+          "total": 1,
+          "closed": 0,
+          "completed": 0,
+          "cancelled": 0,
+          "by_category": {
+            "triage": 0,
+            "deferred": 0,
+            "ready": 1,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        },
+        "baseline": null,
+        "baseline_absent": "filtered",
+        "spent": {
+          "agent_seconds": 300.0,
+          "tokens": {
+            "input": 40,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 8,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 48,
+          "quality": "observed",
+          "partly_measured": 0
+        },
+        "spent_with_cancelled": {
+          "agent_seconds": 300.0,
+          "tokens": {
+            "input": 40,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 8,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": null,
+          "unpriced_tokens": 48,
+          "quality": "observed",
+          "partly_measured": 0
+        },
+        "sessions": 1,
+        "commits": 0,
+        "commits_unknown_repository": 0,
+        "remaining": {
+          "agent_seconds": 0.0,
+          "tokens": {
+            "input": 0,
+            "cached_read": 0,
+            "cache_write_5m": 0,
+            "cache_write_1h": 0,
+            "output": 0,
+            "reasoning": 0
+          },
+          "estimated_api_cost_usd": 0.0,
+          "basis": 0,
+          "estimated": 0,
+          "unestimated": 1
+        },
+        "children": [
+          {
+            "work_item_id": "00000000-0000-4000-8000-000000000041",
+            "reference": "MAIN-10",
+            "title": "Tree stage",
+            "kind": "stage",
+            "state": null,
+            "container_state": "not_started",
+            "open": true,
+            "parent_reference": "MAIN-9",
+            "other_space": null,
+            "partial": false,
+            "tasks": {
+              "total": 1,
+              "closed": 0,
+              "completed": 0,
+              "cancelled": 0,
+              "by_category": {
+                "triage": 0,
+                "deferred": 0,
+                "ready": 1,
+                "active": 0,
+                "review": 0,
+                "completed": 0,
+                "blocked": 0,
+                "cancelled": 0
+              }
+            },
+            "baseline": null,
+            "baseline_absent": "filtered",
+            "spent": {
+              "agent_seconds": 300.0,
+              "tokens": {
+                "input": 40,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": 8,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 48,
+              "quality": "observed",
+              "partly_measured": 0
+            },
+            "spent_with_cancelled": {
+              "agent_seconds": 300.0,
+              "tokens": {
+                "input": 40,
+                "cached_read": null,
+                "cache_write_5m": null,
+                "cache_write_1h": null,
+                "output": 8,
+                "reasoning": null
+              },
+              "estimated_api_cost_usd": null,
+              "unpriced_tokens": 48,
+              "quality": "observed",
+              "partly_measured": 0
+            },
+            "sessions": 1,
+            "commits": 0,
+            "commits_unknown_repository": 0,
+            "remaining": {
+              "agent_seconds": 0.0,
+              "tokens": {
+                "input": 0,
+                "cached_read": 0,
+                "cache_write_5m": 0,
+                "cache_write_1h": 0,
+                "output": 0,
+                "reasoning": 0
+              },
+              "estimated_api_cost_usd": 0.0,
+              "basis": 0,
+              "estimated": 0,
+              "unestimated": 1
+            },
+            "children": []
+          }
+        ]
+      }
+    ],
+    "outside": {
+      "tasks": 1,
+      "by_project": [
+        {
+          "project": {
+            "id": "example-project",
+            "unknown": false,
+            "name": "example-project",
+            "combinations": null
+          },
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ],
+      "by_label": [
+        {
+          "label": "ui",
+          "categories": {
+            "triage": 1,
+            "deferred": 0,
+            "ready": 0,
+            "active": 0,
+            "review": 0,
+            "completed": 0,
+            "blocked": 0,
+            "cancelled": 0
+          }
+        }
+      ]
+    },
+    "flow": {
+      "days": [
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 2,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        },
+        {
+          "day": "2026-01-02",
+          "created": 0,
+          "closed": 0,
+          "decisions": 0,
+          "commits": 0
+        }
+      ],
+      "totals": {
+        "created": 2,
+        "closed": 0,
+        "decisions": 0,
+        "commits": 0
+      },
+      "pace": {
+        "open": 2,
+        "recent": {
+          "days": 7,
+          "created": 2,
+          "closed": 0,
+          "trend": "growing"
+        },
+        "series": [
+          {
+            "day": "2026-01-02",
+            "created": 2,
+            "closed": 0,
+            "total": 2,
+            "closed_total": 0
+          }
+        ]
+      }
+    },
+    "estimates": {
+      "min_basis": 5,
+      "basis": 0,
+      "rows": []
+    }
+  }
+}

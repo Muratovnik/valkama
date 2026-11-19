@@ -19,7 +19,8 @@ from server.planning.routing import PlanningRouting
 from server.projects import scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
-from tests import schema9
+from tests import schema9, schema17
+from tests.planning_tree import Tree
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 
 OTHER_STORE = "fedcbafe-dcba-4fed-8cba-fedcbafedcba"
@@ -323,6 +324,9 @@ class PlanningExactApiTests(unittest.TestCase):
                     "space_ref": self.space_ref,
                     "title": "Example Space",
                     "work_item_count": 1,
+                    # Its one item was filed and waits in triage.
+                    "numbers": {"triage": 1, "ready": 0, "active": 0, "waiting_owner": 0},
+                    "numbers_absent": None,
                     "default_project": "example-project",
                     "projects": [
                         {"project_id": "example-project", "display_name": "Example Board"}
@@ -332,6 +336,8 @@ class PlanningExactApiTests(unittest.TestCase):
                     "space_ref": {**self.space_ref, "space_key": "SEC"},
                     "title": "Second Space",
                     "work_item_count": 0,
+                    "numbers": {"triage": 0, "ready": 0, "active": 0, "waiting_owner": 0},
+                    "numbers_absent": None,
                     "default_project": None,
                     "projects": [],
                 },
@@ -485,6 +491,145 @@ class PlanningExactApiTests(unittest.TestCase):
             exact_api.planning_payload(self.routing(), self.exact(project_id="not-registered"))
         self.assertEqual(404, refusal.exception.status)
 
+    def directory(self, routing: PlanningRouting | None = None) -> dict[str, dict]:
+        """The directory the portfolio page reads, each space's record by `data_scope_id:KEY`."""
+
+        answer = exact_api.planning_payload(
+            routing or self.routing(), self.query(scope_kind="global", directory_only="true")
+        )
+        self.assertEqual("ready", answer["state"]["status"])
+        return {
+            f"{space['space_ref']['data_scope_id']}:{space['space_ref']['space_key']}": space
+            for space in answer["state"]["payload"]["spaces"]
+        }
+
+    def test_a_store_an_earlier_build_wrote_lists_its_spaces_without_numbers(self) -> None:
+        """Its space stands as it did, named and counted, with no numbers and the reason why;
+        the other spaces keep theirs."""
+
+        for name, build, data_scope_id in (
+            (
+                "schema-9",
+                lambda path, scope: schema9.build(path, fixture=schema9.LAST, data_scope_id=scope),
+                "00000000-0000-4000-8000-000000000093",
+            ),
+            (
+                "two-nine",
+                lambda path, scope: schema17.build_2_9(path, data_scope_id=scope),
+                "00000000-0000-4000-8000-000000000094",
+            ),
+        ):
+            with self.subTest(store=name):
+
+                def old(path: str, build=build, data_scope_id: str = data_scope_id) -> str:
+                    build(path, data_scope_id)
+                    conn = sqlite3.connect(path)
+                    try:
+                        schema9.populate(conn)
+                        conn.commit()
+                    finally:
+                        conn.close()
+                    return "KEEP"
+
+                space_ref = self.attach_store(name, old)
+                spaces = self.directory()
+                kept = spaces[f"{data_scope_id}:KEEP"]
+                self.assertEqual(
+                    ("Kept", 2, None, "old_store", "example-project"),
+                    (
+                        kept["title"],
+                        kept["work_item_count"],
+                        kept["numbers"],
+                        kept["numbers_absent"],
+                        kept["default_project"],
+                    ),
+                )
+                self.assertEqual(space_ref, kept["space_ref"])
+                own = spaces[f"{self.data_scope_id}:EXA"]
+                self.assertEqual(
+                    ({"triage": 1, "ready": 0, "active": 0, "waiting_owner": 0}, None),
+                    (own["numbers"], own["numbers_absent"]),
+                )
+
+    def test_a_store_that_cannot_be_read_costs_its_own_spaces_alone(self) -> None:
+        """A store listed when the read began that then fails to open or to answer: its space
+        stands by what is known without it, and the directory answers for the others."""
+
+        def current(path: str) -> str:
+            with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
+                conn = store.connect()
+                try:
+                    planning_service.create_planning_space(conn, name="Far Space", key="FAR")
+                    planning_service.create_work_item(conn, space="FAR", title="Far item")
+                    conn.commit()
+                finally:
+                    conn.close()
+            return "FAR"
+
+        far = self.attach_store("attached", current)
+        path = self.root / "attached.sqlite3"
+        key = f"{far['data_scope_id']}:FAR"
+        readable = self.directory()[key]
+        self.assertEqual(
+            ("Far Space", 1, {"triage": 1, "ready": 0, "active": 0, "waiting_owner": 0}, None),
+            (
+                readable["title"],
+                readable["work_item_count"],
+                readable["numbers"],
+                readable["numbers_absent"],
+            ),
+        )
+        unread = {
+            "space_ref": far,
+            "title": "FAR",
+            "work_item_count": None,
+            "numbers": None,
+            "numbers_absent": "unreadable",
+            "default_project": "example-project",
+            "projects": [{"project_id": "example-project", "display_name": "example-project"}],
+        }
+        own = {
+            "space_ref": self.space_ref,
+            "title": "Example Space",
+            "work_item_count": 1,
+            "numbers": {"triage": 1, "ready": 0, "active": 0, "waiting_owner": 0},
+            "numbers_absent": None,
+            "default_project": None,
+            "projects": [],
+        }
+
+        def spoiled(spoil: Callable[[], None]) -> dict[str, dict]:
+            # The routing lists the store's spaces first; the store fails afterwards.
+            routing = self.routing()
+            spoil()
+            return self.directory(routing)
+
+        def drop_items() -> None:
+            conn = sqlite3.connect(path)
+            try:
+                conn.execute("DROP TABLE work_items")
+                conn.commit()
+            finally:
+                conn.close()
+
+        for name, spoil in (
+            ("does not answer", drop_items),
+            ("is gone", lambda: path.rename(self.root / "gone.sqlite3")),
+        ):
+            with self.subTest(store=name):
+                self.assertEqual({f"{self.data_scope_id}:EXA": own, key: unread}, spoiled(spoil))
+
+    def test_an_error_that_is_no_store_failing_still_stops_the_directory(self) -> None:
+        """Only opening and reading a store is caught: a defect in the count is not hidden."""
+
+        with (
+            mock.patch.object(
+                exact_api.volumes, "portfolio_numbers", side_effect=ValueError("a defect")
+            ),
+            self.assertRaisesRegex(ValueError, "a defect"),
+        ):
+            self.directory()
+
     def test_an_unreadable_registry_answers_no_space(self) -> None:
         self.registry_path.write_bytes(b"{}")
         routing = self.routing()
@@ -514,6 +659,116 @@ class PlanningExactApiTests(unittest.TestCase):
         )
         self.assertEqual(before, self.conn.total_changes)
         self.assertFalse(self.conn.in_transaction)
+
+
+class PortfolioNumberTests(unittest.TestCase):
+    """MAIN, bound to `app`, and ALPHA, bound to `lib`, with work in every state the card
+    counts and some it does not, and questions to the owner and to a session.
+
+    Items are placed straight in SQL (`planning_tree.Tree`); every expected number below is
+    counted by hand from what this case placed, by the rule of a space's board: its items,
+    and the items of other spaces that name one of its projects.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.db = str(self.root / "valkama.sqlite3")
+        environment = mock.patch.dict(
+            os.environ,
+            {"VALKAMA_DB": self.db, "LOCALAPPDATA": str(self.root / "local")},
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        self.data_scope_id = str(read_store_metadata(self.conn)["data_scope_id"])
+        self.registry_path = self.root / "projects.json"
+        entries = []
+        for project, key in (("app", "MAIN"), ("lib", "ALPHA")):
+            entry = project_entry(project, self.root / project)
+            entry["planning_binding"] = {
+                **planning_space_entity({"data_scope_id": self.data_scope_id, "space_key": key}),
+                "default": True,
+            }
+            entries.append(entry)
+        self.registry_path.write_bytes(registry_bytes(entries))
+        main, alpha = Tree(self.conn, "MAIN"), Tree(self.conn, "ALPHA")
+        # MAIN: in triage a goal, a stage under it, a task under the stage and a loose task;
+        # two tasks ready; one at work, and one at work under an accepted goal, which itself
+        # stands in no category the card counts; one done and one put off, counted by none.
+        main.add("g", kind="goal")
+        main.add("s", kind="stage", parent="g")
+        main.add("t1", parent="s")
+        main.add("t2")
+        main.add("r1", state="ready")
+        main.add("r2", state="ready")
+        main.add("a1", state="dev", started=True)
+        main.add("G2", kind="goal", state="container")
+        main.add("w", state="dev", started=True, parent="G2")
+        main.add("d", state="done", started=True)
+        main.add("x", state="deferred")
+        # ALPHA: a task in triage and one ready that name `app`, so MAIN's board holds them
+        # too, and a task in triage that names nothing.
+        alpha.add("k")
+        alpha.add("m", state="ready")
+        alpha.add("o")
+        for name in ("k", "m"):
+            self.conn.execute(
+                "INSERT INTO work_item_projects(work_item_id, project_id, source)"
+                " VALUES (?, 'app', 'named')",
+                (alpha.ids[name],),
+            )
+        self.conn.execute("INSERT INTO sessions(id, client) VALUES ('sess-x', 'codex')")
+        # Waiting for the owner: on MAIN's t2, on ALPHA's k (which names `app`) and on
+        # ALPHA's o. Not waiting: one asked of a session, one answered.
+        for item, created, status, addressee in (
+            (main.ids["t2"], "2026-11-05T09:00:00.000Z", "pending", None),
+            (alpha.ids["k"], "2026-11-04T09:00:00.000Z", "pending", None),
+            (alpha.ids["o"], "2026-11-03T09:00:00.000Z", "pending", None),
+            (main.ids["r1"], "2026-11-02T09:00:00.000Z", "pending", "sess-x"),
+            (main.ids["r1"], "2026-11-02T10:00:00.000Z", "answered", None),
+        ):
+            self.conn.execute(
+                "INSERT INTO work_item_requests(request_id, work_item_id, kind, prompt,"
+                " fields_json, status, author, created_at, addressee)"
+                " VALUES (?, ?, 'question', 'Which way?', '[]', ?, 'asking-agent', ?, ?)",
+                (f"request-{created}", item, status, created, addressee),
+            )
+        self.conn.commit()
+
+    def test_a_space_carries_its_four_numbers(self) -> None:
+        routing = PlanningRouting(self.conn, self.db, registry_reader=self.registry_path.read_bytes)
+        answer = exact_api.planning_payload(
+            routing, {"scope_kind": ["global"], "directory_only": ["true"]}
+        )
+        spaces = {
+            space["space_ref"]["space_key"]: (space["numbers"], space["numbers_absent"])
+            for space in answer["state"]["payload"]["spaces"]
+        }
+        self.assertEqual(
+            {
+                # g, s, t1, t2 and ALPHA's k; r1, r2 and ALPHA's m; a1 and w; t2's and k's.
+                "MAIN": ({"triage": 5, "ready": 3, "active": 2, "waiting_owner": 2}, None),
+                # k and o; m; none at work; k's and o's.
+                "ALPHA": ({"triage": 2, "ready": 1, "active": 0, "waiting_owner": 2}, None),
+            },
+            spaces,
+        )
+        # The tool's answer is what it was: each space's own items, `open` all but the done.
+        self.assertEqual(
+            {"MAIN": (11, 10, 2, 1), "ALPHA": (3, 3, 0, 0)},
+            {
+                space["key"]: (
+                    space["work_items"],
+                    space["open"],
+                    space["active"],
+                    space["completed"],
+                )
+                for space in planning_service.list_planning_spaces(self.conn)
+            },
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this

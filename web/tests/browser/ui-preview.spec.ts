@@ -9,6 +9,7 @@ import { drawnColours } from './contrast.ts'
 import { test } from './test.ts'
 
 const STATES = [
+  'agent',
   'claimed',
   'closed',
   'foreign',
@@ -67,5 +68,7 @@ test('its facts are hidden from assistive technology, and only its controls have
   await expect(previews).toHaveCount(STATES.length)
   for (const title of await page.locator('.work-item-preview .preview-title').all())
     await expect(title).toHaveAttribute('aria-hidden', 'true')
+  // Its controls do carry hover text, which is the same attribute found on nothing else.
+  await expect(page.locator('.preview-harness button[data-tooltip]').first()).toBeAttached()
   await expect(page.locator('.preview-harness [data-tooltip]:not(button)')).toHaveCount(0)
 })

@@ -23,7 +23,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import http_surface, store
-from server.quota import names
+from server.quota import accounts, names
 
 MAIN = "f0f0f0f0-1111-4222-8333-444455556666"
 SIDE = "9c0de5b1-2222-4333-8444-555566667777"
@@ -90,7 +90,7 @@ class RuleTests(_Store):
     def test_the_table_itself_refuses_a_name_over_the_bound(self) -> None:
         with self.assertRaises(sqlite3.IntegrityError):
             self.conn.execute(
-                "INSERT INTO quota_account_names(organization, name, updated_at) VALUES (?,?,?)",
+                "INSERT INTO quota_account_names(account, name, updated_at) VALUES (?,?,?)",
                 (MAIN, "y" * 81, "2030-03-04T09:00:00.000Z"),
             )
         self.conn.rollback()
@@ -117,6 +117,59 @@ class WriteTests(_Store):
             {MAIN: "Given since", SIDE: "Side"},
             names.write(self.conn, {"names": {MAIN: ""}, "replace": False}),
         )
+
+
+class KeyTests(_Store):
+    """A name is given to an account by its key, or to an organization by its id."""
+
+    ORG = "org-key"
+    UUID_KEY = f"{ORG}/{MAIN}"
+    WEEKLY_KEY = f"{ORG}/weekly:4T13:00Z"
+
+    def test_an_account_and_its_organization_are_named_side_by_side(self) -> None:
+        given = {self.UUID_KEY: "Work", self.WEEKLY_KEY: "Thursday", self.ORG: "Team"}
+        self.assertEqual(given, names.write(self.conn, {"names": given}))
+        self.assertEqual(
+            {self.WEEKLY_KEY: "Thursday", self.ORG: "Team"},
+            names.names_of(self.conn, [self.WEEKLY_KEY, self.ORG, f"{self.ORG}/other"]),
+        )
+
+    def test_a_key_with_a_slash_that_is_no_account_s_is_refused_changing_nothing(self) -> None:
+        names.write(self.conn, {"names": {self.ORG: "Team"}})
+        for key in (
+            f"{self.ORG}/",
+            f"/{MAIN}",
+            f"{self.ORG}/{MAIN}/more",
+            f"{self.ORG}/two words",
+            f"{self.ORG}/{'u' * 129}",
+            f"{self.ORG}/weekly:",
+            f"{self.ORG}/weekly:8T13:00Z",
+            f"{self.ORG}/weekly:4T24:00Z",
+            f"{self.ORG}/weekly:4T13:05Z",
+            f"{self.ORG}/weekly:4T13:00",
+        ):
+            with self.subTest(key=key), self.assertRaises(names.NamesError) as refusal:
+                names.write(self.conn, {"names": {self.UUID_KEY: "Work", key: "Bad"}})
+            self.assertIn("neither an organization nor an account", str(refusal.exception))
+            self.assertEqual({self.ORG: "Team"}, names.read(self.conn))
+        for key in (f"{self.ORG}/{'u' * 128}", f"{self.ORG}/weekly:7T23:50Z", "org.with:dots"):
+            with self.subTest(key=key):
+                names.write(self.conn, {"names": {key: "Good"}})
+                self.assertEqual("Good", names.read(self.conn)[key])
+
+    def test_an_account_s_own_name_is_under_its_key_or_its_weekly_reset_s(self) -> None:
+        account = accounts.Account(self.ORG, MAIN, "4T13:00Z")
+        self.assertEqual((self.UUID_KEY, self.WEEKLY_KEY, self.ORG), names.keys_of(account))
+        weekly = accounts.Account(self.ORG, None, "4T13:00Z")
+        self.assertEqual((self.WEEKLY_KEY, self.ORG), names.keys_of(weekly))
+        # The organization's name is no account's own.
+        self.assertIsNone(names.own_name({self.ORG: "Team"}, account))
+        # A name given the weekly reset before the UUID turned up stays with the account.
+        self.assertEqual("Thursday", names.own_name({self.WEEKLY_KEY: "Thursday"}, account))
+        # Its own key comes first.
+        both = {self.WEEKLY_KEY: "Thursday", self.UUID_KEY: "Work"}
+        self.assertEqual("Work", names.own_name(both, account))
+        self.assertEqual("Thursday", names.own_name(both, weekly))
 
 
 class ReaderTests(_Store):

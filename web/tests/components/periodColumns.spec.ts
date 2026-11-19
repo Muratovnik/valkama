@@ -12,9 +12,13 @@ import type {
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
+import { seriesNames } from '../support/legend.ts'
+import { plotWords } from '../support/plotWords.ts'
+
 const words: PeriodWords = {
   total: 'total',
   incomplete: 'so far',
+  hatch: 'in progress',
   period: 'Day',
   note: 'Note',
   empty: 'No sessions in this range.',
@@ -31,6 +35,9 @@ const columns: PeriodColumn[] = [
   { key: 'd3', label: '3', fullLabel: 'May 3', values: { work: 3 } },
   { key: 'd4', label: '4', fullLabel: 'May 4', values: { ci: 1 }, incomplete: true },
 ]
+
+/** The same periods once the last is over: nothing on the plot is hatched. */
+const finished = columns.map((column) => ({ ...column, incomplete: false }))
 
 /** Each period a control that narrows to itself, as a chart of days is. */
 const acting = columns.map((column) => ({ ...column, action: `Show ${column.fullLabel}` }))
@@ -88,12 +95,12 @@ describe('period columns that open nothing', () => {
 
   it('carries a legend for two series and none for one', () => {
     expect(
-      mountColumns()
+      mountColumns({ columns: finished })
         .findAll('.chart-key')
         .map((key) => key.text()),
     ).toEqual(['ci', 'work'])
     expect(
-      mountColumns({ series: [series[0] as PeriodSeries] })
+      mountColumns({ columns: finished, series: [series[0] as PeriodSeries] })
         .find('.chart-legend')
         .exists(),
     ).toBe(false)
@@ -113,7 +120,45 @@ describe('period columns that open nothing', () => {
 
     expect(chart.findAll('.period-incomplete')).toHaveLength(1)
     expect(chart.get('[data-key="d4"] .period-stack').classes()).toContain('period-incomplete')
+    // Its segments are hatched, and only its: the hatch is a figure not final yet.
+    expect(
+      chart.findAll('.period-segment.hatched').map((one) => one.attributes('data-series')),
+    ).toEqual(['ci'])
     expect(chart.get('.period-axis').text()).not.toContain('so far')
+  })
+
+  it('names the hatch in the legend while a running period is drawn, and only then', () => {
+    const running = mountColumns()
+    const key = running.get('.chart-mark[data-mark="hatch"]')
+    expect(key.text()).toBe('in progress')
+    expect(key.get('.chart-hatch').classes()).toContain('hatched')
+    // The key only shows: no link, no button, no focus.
+    expect(key.element.tagName).toBe('SPAN')
+    expect(key.attributes('tabindex')).toBeUndefined()
+    // Its hint is an entry's with nothing to add: its name, whole while it is cut.
+    expect(key.attributes('data-tooltip')).toBe('in progress')
+    expect(key.attributes('data-tooltip-kind')).toBe('clipped')
+
+    const over = mountColumns({ columns: finished })
+    expect(over.find('.chart-mark[data-mark="hatch"]').exists()).toBe(false)
+    expect(over.findAll('.hatched')).toHaveLength(0)
+    // The legend is still there for its two series: the key is gone, not the legend.
+    expect(over.findAll('.chart-key')).toHaveLength(2)
+  })
+
+  it('gives a single series a legend for the hatch alone while its period runs', () => {
+    const one = [series[0] as PeriodSeries]
+    // The title names the lone series; the legend keys only the hatch, which the title does not.
+    const running = mountColumns({ series: one })
+    expect(seriesNames(running)).toEqual([])
+    expect(
+      running.findAll('[data-hint-list="legend"] [data-mark]').map((key) => key.text()),
+    ).toEqual(['in progress'])
+    const over = mountColumns({
+      series: one,
+      columns: finished,
+    })
+    expect(over.find('.chart-legend').exists()).toBe(false)
   })
 
   it('marks a change by a line in its period, says it in its hint and keeps no row for it', () => {
@@ -121,10 +166,19 @@ describe('period columns that open nothing', () => {
 
     expect(chart.findAll('.period-mark')).toHaveLength(1)
     expect(chart.find('[data-key="d3"] .period-mark').exists()).toBe(true)
-    // No footnote under the chart, and no row of numbers over the plot.
-    expect(chart.find('.period-notes').exists()).toBe(false)
-    expect(chart.find('.period-markers').exists()).toBe(false)
-    expect(chart.findAll('.period-plot > .chart-ticks')).toHaveLength(2)
+    // No footnote under the chart, and no row of numbers over the plot: the only rows of labels
+    // are the scale up its side and the periods' names under it, and the change's words stand
+    // nowhere on the chart.
+    const words = plotWords(chart.element)
+    const along = words.edges.map((edge) => edge.along)
+    expect(along).toHaveLength(2)
+    expect(along).toEqual(expect.arrayContaining(['block', 'inline']))
+    // The axis names as many periods as it has room for, the last always among them.
+    const names = words.edges.find((edge) => edge.along === 'inline')?.labels ?? []
+    expect(names).toContain('4')
+    expect(names.filter((name) => !columns.some((column) => column.label === name))).toEqual([])
+    expect(words.stray).toEqual([])
+    expect(chart.text()).not.toContain('Switched to work')
     expect(chart.get('[data-cell="2:"]').attributes('data-tooltip')).toBe(
       'May 3: total 3 h\nSwitched to work\nwork 3 h',
     )
@@ -134,9 +188,11 @@ describe('period columns that open nothing', () => {
   it('stands no line of words over the plot', () => {
     const chart = mountColumns()
 
-    expect(chart.find('.period-readout').exists()).toBe(false)
-    expect(chart.findAll('figure > p')).toHaveLength(0)
-    expect(chart.get('figure').element.children[1]?.classList.contains('period-frame')).toBe(true)
+    const words = plotWords(chart.element)
+    // The chart's words are its legend's and its edges' alone: present, and no line besides.
+    expect(words.legend).toEqual(['ci', 'work', 'in progress'])
+    expect(words.edges.flatMap((edge) => edge.labels)).toContain('4')
+    expect(words.stray).toEqual([])
   })
 
   it('gives each period a hint of its sum, the period before and its series largest first', () => {
@@ -151,23 +207,38 @@ describe('period columns that open nothing', () => {
     )
   })
 
-  it('gives each segment a hint of its series, its value and its share of the period', () => {
+  // Each segment once had a hint of its own, and crossing a period swapped the period's for it.
+  it('gives a period one hint, with each series’ share of it, and its segments none', () => {
     const chart = mountColumns({ formatShare: share })
-    const segments = chart.findAll('[data-key="d1"] .period-segment')
+    const slot = chart.get('[data-key="d1"]')
+    const segments = slot.findAll('.period-segment')
 
-    expect(segments.map((one) => one.attributes('data-tooltip'))).toEqual([
-      'ci 2 h, 67% of the total\nMay 1',
-      'work 1 h, 33% of the total\nMay 1',
-    ])
+    // The period's slot is one place for the pointer and the focus, its column the one hint.
+    expect(slot.attributes()).toHaveProperty('data-tooltip-area')
+    const hints = slot.findAll('[data-tooltip]')
+    expect(hints).toHaveLength(1)
+    expect(hints[0]?.classes()).toContain('period-column')
+    expect(slot.get('.period-column').attributes('data-tooltip')).toBe(
+      'May 1: total 3 h\nci 2 h, 67% of the total\nwork 1 h, 33% of the total',
+    )
+    expect(chart.get('[data-cell="3:"]').attributes('data-tooltip')).toBe(
+      'May 4: total 1 h so far\nci 1 h, 100% of the total',
+    )
     // A segment that leads nowhere is a block of hue, out of the reader's way.
     expect(segments.map((one) => one.attributes('aria-hidden'))).toEqual(['true', 'true'])
-    expect(chart.get('[data-key="d4"] .period-segment').attributes('data-tooltip')).toBe(
-      'ci 1 h so far, 100% of the total\nMay 4',
-    )
+  })
+
+  // What the segment's own hint said to a screen reader, its name now says.
+  it('names a segment that acts with its share of the period, and gives it no hint', () => {
+    const chart = mountColumns({ series: pressed, formatShare: share })
+    const link = chart.get('[data-cell="0:0"]')
+
+    expect(link.attributes('aria-label')).toBe('May 1: ci 2 h, 67% of the total, total 3 h')
+    expect(chart.findAll('.period-segment[data-tooltip]')).toHaveLength(0)
   })
 
   it('gives each legend entry a hint of its series over the span and its share', () => {
-    const chart = mountColumns({ formatShare: share })
+    const chart = mountColumns({ columns: finished, formatShare: share })
 
     expect(chart.findAll('.chart-key').map((key) => key.attributes('data-tooltip'))).toEqual([
       '3 h, 43% of the total',

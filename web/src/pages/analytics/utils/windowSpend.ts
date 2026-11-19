@@ -1,15 +1,3 @@
-/**
- * What used a quota window, as the usage read answers it: the work Valkama recorded on one
- * account from the window's start to the answer's moment, by its API price estimate, broken down
- * by task, project or model. The estimate is the read's own (`cost_basis`); no figure here is a
- * share of the quota, because no verified weights turn tokens into quota points, and nothing here
- * adds two accounts.
- *
- * One read answers a window: the account's organization, the account's seat and work of that
- * organization whose seat no sample names, grouped by the breakdown and the seat. The account's
- * own rows are its breakdown, each line's share a share of the account's estimate; the rest is
- * work its organization did with no account known, which is said apart and never counted to it.
- */
 import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
 import {
   addSpent,
@@ -19,6 +7,19 @@ import {
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
+/**
+ * What used a quota window, as the usage read answers it: the work Valkama recorded on one
+ * account from the window's start to the answer's moment, by its API price estimate, broken down
+ * by task, project or model. The estimate is the read's own (`cost_basis`); no figure here is a
+ * share of the quota, because no verified weights turn tokens into quota points, and nothing here
+ * adds two accounts.
+ *
+ * One read answers a window: by `seat`, the account and the work of its organization no sample
+ * places on an account (`<organization>/`), grouped by the breakdown and the seat. The account's
+ * own rows are its breakdown, each line's share a share of the account's estimate; the rest is
+ * work its organization did with no account known, which is said apart and never counted to it.
+ */
+import { readAccountId, unplacedId } from '@/shared/api/accountIds.ts'
 import type {
   Quota,
   QuotaAccount,
@@ -43,13 +44,11 @@ const LISTED = 5
 export const SPEND_STEP = 5 * 60_000
 
 /**
- * The value the usage read gives the account's work under `seat`: its organization, a slash and
- * its account's UUID, or its provisional seat's key; null for an organization no source read,
- * which has no account to read by.
+ * The value the usage read gives the account's work under `seat`: its id; null for an
+ * organization no source read, which has no account to read by.
  */
 export function seatOf(account: QuotaAccount): string | null {
-  const held = account.account_uuid ?? account.seat
-  return held === null ? null : `${account.organization}/${held}`
+  return account.no_source ? null : account.account
 }
 
 /**
@@ -84,8 +83,8 @@ export function spendQuery(
     step: 'day',
     compare: false,
     groupBy: [by, 'seat'],
-    // The account's seat, and its organization's work no sample places on an account.
-    filters: { account: [account.organization], seat: [seat, null] },
+    // The account, and its organization's work no sample places on an account.
+    filters: { seat: [seat, unplacedId(account.organization)] },
   }
 }
 
@@ -93,6 +92,8 @@ export function spendQuery(
 export interface WindowSpent {
   /** The account's work by the breakdown, the costliest first, the rest folded into one line. */
   lines: SpendingLine[]
+  /** Every line of it, the costliest first and none folded, for a ring that folds its own rest. */
+  parts: SpendingLine[]
   /** All of the account's work in the span: what each line's share is a share of. */
   total: Spent
   /** Its organization's work with no account known, never counted to it; null for none. */
@@ -110,9 +111,12 @@ function sum(rows: readonly UsageRow[]) {
 /** The account's breakdown and its organization's unplaced work, from one window's read. */
 export function windowSpent(usage: Usage, seat: string, by: SpendBy): WindowSpent {
   const own = usage.rows.filter((row) => row.group.seat?.id === seat)
-  const apart = sum(usage.rows.filter((row) => row.group.seat?.unknown === true))
+  const organization = readAccountId(seat)?.organization
+  const unplaced = organization === undefined ? null : unplacedId(organization)
+  const apart = sum(usage.rows.filter((row) => row.group.seat?.id === unplaced))
   return {
     lines: rankedLines(own, by, 'cost', LISTED),
+    parts: rankedLines(own, by, 'cost', Number.POSITIVE_INFINITY),
     total: sum(own),
     unplaced: spentAnything(apart) ? apart : null,
   }

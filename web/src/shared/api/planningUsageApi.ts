@@ -17,6 +17,8 @@ const SCOPES = ['item', 'chain', 'tree'] as const
 export type UsageScope = (typeof SCOPES)[number]
 
 const RUN_TEXT = /^[^\u{0}]{1,200}$/u
+/** A seat: `week:` and its week's reset to the ten minutes. */
+const SEAT = /^week:\d{4}-\d{2}-\d{2}T\d{2}:\d0Z$/u
 
 const seconds = () => z.number().nonnegative()
 const moment = () => boundedText(ISO, 96).nullable()
@@ -91,6 +93,34 @@ const valueSchema = strictObject({ id: runText().nullable(), unknown: z.boolean(
 
 const ROLES = ['main', 'subagent', 'advisor'] as const
 
+/** A part of a whole, from 0 to 1; null where there is no whole to divide. */
+const share = () => z.number().min(0).max(1).nullable()
+
+/**
+ * What the work took of each account's week, the newest first: its share of the cost of the
+ * seat's work that week times the week's percent. Weeks are never added together, and the
+ * figure leans high: the week's percent holds work no usage row records.
+ */
+const quotaSchema = strictObject({
+  weeks: z.array(
+    strictObject({
+      account: strictObject({
+        organization: runText(),
+        /** Null for a seat no account, or two, can be shown to name. */
+        account_uuid: runText().nullable(),
+      }),
+      seat: boundedText(SEAT, 32),
+      week_ends_at: boundedText(ISO, 96),
+      share: share(),
+      /** Null when no reading of the seat's week says how much of it is spent. */
+      week_used_percent: z.number().nonnegative().nullable(),
+      percent: z.number().nonnegative().nullable(),
+    }),
+  ),
+  /** The part of the work's cost on no seat that can be shown. */
+  unknown_share: share(),
+})
+
 /** The parts below add up to the item's whole exactly, in milliseconds and millionths of a dollar. */
 const part = { seconds: seconds(), ...spent }
 
@@ -99,6 +129,8 @@ const itemUsageSchema = strictObject({
   reference: boundedText(WORK_ITEM_REFERENCE, 20),
   title: boundedText(TITLE, 200),
   scope: enumField(SCOPES),
+  /** Every session that spent on the work or wrote to it, each once. */
+  sessions: positiveInt(true),
   ...summary,
   /**
    * In time order; two neighbours never share an account. A change of account is a line under a
@@ -124,6 +156,7 @@ const itemUsageSchema = strictObject({
       ...part,
     }),
   ),
+  quota: quotaSchema,
 })
 
 const sessionUsageSchema = strictObject({

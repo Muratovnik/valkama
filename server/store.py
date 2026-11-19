@@ -28,7 +28,7 @@ import platform
 import sqlite3
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from . import store_adoption, store_backups, store_lock, store_rename, store_steps
@@ -153,7 +153,8 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
     # and empty in an upgraded store, so this script is the whole of its migration.
     + analytics_store.SCHEMA
     # The quota accounts, samples and settings, added with schema 17. Additive and empty in an
-    # upgraded store, so this script is the whole of its migration.
+    # upgraded store, so this script is the whole of its migration, but for schema 18's
+    # rename of the names' key (`quota_store.migrate`).
     + quota_store.SCHEMA
 )
 
@@ -237,13 +238,54 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # write into a store at 16 that has no quota tables yet, where stamped 17 it waits for a
 # full open, and a build at 16 would keep samples past their year.
 #
-# 18 is the work model: eight categories in place of `backlog` and `queued` with a
+# 18 renamed the key of the owner's names for the quota accounts (`quota_account_names`)
+# from `organization` to `account`: a name is given to an account, by its organization
+# and its UUID or weekly reset, as well as to an organization, and every name there was
+# keeps its organization's id as its key. It is raised so the upgrade takes a recovery
+# point of its own, and because a build at 17 reads and writes the names by the column
+# `organization`, so every name it read or wrote in a store at 18 would fail; the
+# ratchet makes it refuse the store instead, and what opens a store without bringing it
+# up waits on a store at 17 for a full open.
+#
+# 19 is the work model: eight categories in place of `backlog` and `queued` with a
 # service state beside them in every workflow, the `container` kind in place of
 # `epic`, the `accepted`, `opened` and `child_left` events, and a trigger that keeps a
 # container out of the states work is held in. Existing rows change their meaning, so
-# no build before it may read a store at 18, and this one opens a store at 17 only
-# once `migrate work-model` has carried it forward.
-STORE_SCHEMA_VERSION = 18
+# no build before it may read a store at 19, and this one opens a store Valkama 2.9
+# left, at 17 or at 18, only once `migrate work-model` has carried it forward.
+#
+# 20 stores how a request on a closed item ended. A close writes every request still
+# pending on its item `expired`, as `item_completed` or `item_cancelled`, where a
+# build at 19 left the row pending and read it `task_closed` while the item stayed
+# closed; a request also names its `purpose`. A build at 19 would read a request
+# ended by a close as pending again once its item reopened, and refuse the whole
+# request over a reason it does not know; the ratchet makes it refuse a store at 20.
+#
+# 21 keeps the owner's participation setting and the rules of the labels
+# (`participation_settings`, `label_settings`), empty in a migrated store, which reads
+# as the default set. The owner sets there where an agent's decision waits for them; a
+# build at 20 would read none of it and let an agent go ahead where the owner chose to
+# decide, so the ratchet makes it refuse a store at 21. The same schema marks the
+# decisions an agent took on its own (`agent_decisions`), and holds the writes that wait
+# for the owner's answer (`pending_actions`, named by their questions' `action_id`), both
+# empty in a migrated store.
+#
+# 22 keeps how many tasks stood under a goal or stage when it was accepted, or when the
+# first task under one accepted empty started (`work_item_baselines`), empty in a
+# migrated store: every acceptance 2.9 left is `migrated`, and its count is not known.
+# A write that accepts a goal or stage, starts the first task under it, or takes its
+# acceptance away (triage, deferred) takes or drops its row; a build at 21 would do
+# neither and leave a row standing for an acceptance that no longer holds, or none for
+# one that does, so the ratchet makes it refuse a store at 22.
+#
+# 23 keeps the marks a triage review leaves on the items it saw (`triage_marks`), empty
+# in a migrated store, and the five triggers through which the store takes a mark away
+# when the item leaves triage, moves under a goal or out of one, or gains a comment, a
+# thread or a question to the owner. A store a build at 22 brought to its number has
+# neither, and would pass for current; the ratchet makes this build refuse it, and a
+# build at 22 refuse a store at 23. The work-model migration carries a store at 18
+# straight to 23, and one at 17 too, through 18's rename first.
+STORE_SCHEMA_VERSION = 23
 
 
 class StoreTooNewError(RuntimeError):
@@ -261,9 +303,13 @@ class StoreTooNewError(RuntimeError):
         self.supported = supported
 
 
-#: The schema Valkama 2.9 leaves a store at. 2.8 left the same number without the
-#: word index, so a store of 2.9 is told apart by that index.
-RELEASE_2_9_SCHEMA_VERSION = 17
+#: The schema Valkama 2.9.0 leaves a store at, and the one a 2.9 build before its
+#: schema 18 left: the work-model migration carries a store at either, the older
+#: through schema 18's step first. A store of 2.9 at either number holds the word index;
+#: 2.8 left 17 without it, so a store of 2.9 at 17 is told apart by that index.
+RELEASE_2_9_SCHEMA_VERSION = 18
+EARLIER_2_9_SCHEMA_VERSION = 17
+SCHEMAS_2_9 = (EARLIER_2_9_SCHEMA_VERSION, RELEASE_2_9_SCHEMA_VERSION)
 
 
 class StoreTooOldError(RuntimeError):
@@ -277,8 +323,9 @@ class StoreTooOldError(RuntimeError):
     def __init__(self, stored: int) -> None:
         super().__init__(
             f"this store is at schema {stored} and only a store that Valkama 2.9 left,"
-            f" at schema {RELEASE_2_9_SCHEMA_VERSION} with its word index, can be carried"
-            " to this build: open it with Valkama 2.9 first."
+            f" at schema {EARLIER_2_9_SCHEMA_VERSION} or {RELEASE_2_9_SCHEMA_VERSION}"
+            " with its word index, can be carried to this build: open it with Valkama 2.9"
+            " first."
         )
         self.stored = stored
 
@@ -310,8 +357,64 @@ class WorkModelPreconditionError(RuntimeError):
         self.report = report
 
 
-LINK_KINDS = ("blocks", "blocked_by", "discovered_from")
-REF_KINDS = ("session", "commit", "memory", "url")
+class DanglingReferenceError(RuntimeError):
+    """A schema change that would leave rows naming a parent that is not there.
+
+    Raised before the commit, which therefore never happens: the store is left as it
+    was before the transaction. `tables` names each table holding such a row.
+    """
+
+    def __init__(self, tables: list[str]) -> None:
+        super().__init__(
+            "the schema change would leave rows naming a missing parent in "
+            f"{', '.join(tables)}; it was rolled back and nothing was written"
+        )
+        self.tables = tables
+
+
+@contextlib.contextmanager
+def schema_change(
+    conn: sqlite3.Connection,
+    *,
+    committing: Callable[[], contextlib.AbstractContextManager[object]] = contextlib.nullcontext,
+) -> Iterator[None]:
+    """One transaction that may change the schema, by SQLite's procedure for it.
+
+    Foreign keys go off before `BEGIN IMMEDIATE`, where SQLite takes the pragma: a
+    table rebuilt inside drops its old copy, and while keys are enforced that drop
+    deletes its rows and cascades into every table that references them. A
+    transaction that wrote anything, schema or rows, commits only if
+    `PRAGMA foreign_key_check` comes back empty; otherwise it rolls back with
+    `DanglingReferenceError`. One that wrote nothing commits without the check, so an
+    open of a store that is already current does not pay for it. After the commit,
+    or the rollback of a failed change, the keys are on again, as every connection
+    of the package holds them.
+    `committing` surrounds the check and the commit, for a caller that times them.
+    """
+
+    conn.execute("PRAGMA foreign_keys=OFF")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        schema = _schema_cookie(conn)
+        changes = conn.total_changes
+        yield
+        with committing():
+            if conn.total_changes != changes or _schema_cookie(conn) != schema:
+                found = conn.execute("PRAGMA foreign_key_check").fetchall()
+                if found:
+                    raise DanglingReferenceError(sorted({str(row[0]) for row in found}))
+            conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+
+
+def _schema_cookie(conn: sqlite3.Connection) -> int:
+    """The counter SQLite moves on every change to the schema."""
+
+    return int(conn.execute("PRAGMA schema_version").fetchone()[0])
 
 
 DATA_ROOT = ".valkama"
@@ -510,6 +613,7 @@ def _assert_current_catalog(conn: sqlite3.Connection) -> None:
     planning_store.assert_threads_postconditions(conn)
     planning_store.assert_links_postconditions(conn)
     usage_store.assert_current(conn)
+    quota_store.assert_current(conn)
 
 
 def _read_stored_version_without_write(path: str) -> int:
@@ -523,9 +627,9 @@ def _read_stored_version_without_write(path: str) -> int:
 def refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool = False) -> None:
     """Refuse a store of any schema but this build's, naming what brings it here.
 
-    Newer is `StoreTooNewError`. A store Valkama 2.9 left, at its schema with the
-    word index, is `WorkModelMigrationRequiredError`; anything older, a store of 2.8
-    at the same number included, is `StoreTooOldError`. A file that holds no table
+    Newer is `StoreTooNewError`. A store Valkama 2.9 left, at one of its schemas
+    (`SCHEMAS_2_9`) with the word index, is `WorkModelMigrationRequiredError`; any
+    other, a store of 2.8 at 17 included, is `StoreTooOldError`. A file that holds no table
     yet is not a store of an earlier build: it is created as a fresh one, as a
     missing file is.
     """
@@ -544,7 +648,7 @@ def refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool = F
         ).fetchone()
         is not None
     )
-    if stored_version == RELEASE_2_9_SCHEMA_VERSION and indexed:
+    if stored_version in SCHEMAS_2_9 and indexed:
         raise WorkModelMigrationRequiredError(stored_version)
     raise StoreTooOldError(stored_version)
 
@@ -663,10 +767,10 @@ def connect(path: str | None = None) -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's to 17's, one at 11 only schema 12's to 17's, one
-            # at 12 only schema 13's to 17's, one at 13 only schema 14's to 17's, one
-            # at 14 only schema 15's to 17's, one at 15 only schema 16's and 17's, and
-            # one at 16 only schema 17's.
+            # 10 only schema 11's to 18's, one at 11 only schema 12's to 18's, one
+            # at 12 only schema 13's to 18's, one at 13 only schema 14's to 18's, one
+            # at 14 only schema 15's to 18's, one at 15 only schema 16's to 18's, one
+            # at 16 only schema 17's and 18's, and one at 17 only schema 18's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a
@@ -741,111 +845,115 @@ def connect(path: str | None = None) -> sqlite3.Connection:
                 )
 
             conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute("BEGIN IMMEDIATE")
-            if source_identity is not None:
-                store_backups.integrity_check(conn, source="source store")
-                if store_backups.logical_identity(conn) != source_identity:
-                    raise RuntimeError("source store drifted after its migration snapshot")
+            with schema_change(conn):
+                if source_identity is not None:
+                    store_backups.integrity_check(conn, source="source store")
+                    if store_backups.logical_identity(conn) != source_identity:
+                        raise RuntimeError("source store drifted after its migration snapshot")
 
-            if store_rename.predates_rename(conn):
-                store_rename.migrate_off_former_name(conn)
-            if platform_migrations.module_registry_migration_needed(conn):
-                platform_migrations.migrate_module_registry(conn)
-            # A table this build adds, schema 10's included, is declared in
-            # `SCHEMA` alone, with its name in `SCHEMA_TABLES`: run against an
-            # upgraded store inside this transaction and under its recovery
-            # point, the script creates it exactly as in a fresh store, and
-            # `_assert_current_catalog` checks it by that name.
-            _execute_script(conn, SCHEMA)
-            if before_schema9:
-                # The steps below were written against schema 8's catalog, which
-                # this build no longer declares; the last step drops it again.
-                platform_migrations.ensure_schema8_catalog(conn)
-            planning_store.migrate_discussion(conn)
-            planning_store.migrate_interactions(conn)
-            planning_store.migrate_identity(conn)
-            _migrate_session_identity(conn)
-            # Schema 10: columns cannot come from the script, which leaves an
-            # existing table alone, so they are appended here.
-            planning_store.migrate_threads(conn)
-            # A mirror written between the read above and this transaction would be
-            # deleted with no recovery point holding it: refused, the next open takes one.
-            if (
-                planning_store.symmetric_mirrors_present(conn)
-                and source_identity is None
-                and pretable_backup is None
-            ):
-                raise RuntimeError("merging mirrored links requires a pre-mutation snapshot")
-            planning_store.migrate_symmetric_links(conn)
-            _migrate_session_place(conn)
-            # Schema 16: the usage columns, and one row per request in the whole store.
-            usage_store.migrate(conn)
-            # The word index, after every step that adds a column its triggers name.
-            planning_words.migrate(conn)
-            audit_migration = platform_migrations.schema_migration_needed(conn)
-            audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
-            authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)
-            owner_migration = store_metadata.store_owner_migration_needed(conn)
-            if (
-                (
-                    audit_migration
-                    or audit_order_migration
-                    or authorization_migration
-                    or owner_migration
+                if store_rename.predates_rename(conn):
+                    store_rename.migrate_off_former_name(conn)
+                if platform_migrations.module_registry_migration_needed(conn):
+                    platform_migrations.migrate_module_registry(conn)
+                # A table this build adds, schema 10's included, is declared in
+                # `SCHEMA` alone, with its name in `SCHEMA_TABLES`: run against an
+                # upgraded store inside this transaction and under its recovery
+                # point, the script creates it exactly as in a fresh store, and
+                # `_assert_current_catalog` checks it by that name.
+                _execute_script(conn, SCHEMA)
+                if before_schema9:
+                    # The steps below were written against schema 8's catalog, which
+                    # this build no longer declares; the last step drops it again.
+                    platform_migrations.ensure_schema8_catalog(conn)
+                planning_store.migrate_discussion(conn)
+                planning_store.migrate_interactions(conn)
+                planning_store.migrate_identity(conn)
+                _migrate_session_identity(conn)
+                # Schema 10: columns cannot come from the script, which leaves an
+                # existing table alone, so they are appended here.
+                planning_store.migrate_threads(conn)
+                # A mirror written between the read above and this transaction would be
+                # deleted with no recovery point holding it: refused, the next open takes one.
+                if (
+                    planning_store.symmetric_mirrors_present(conn)
+                    and source_identity is None
+                    and pretable_backup is None
+                ):
+                    raise RuntimeError("merging mirrored links requires a pre-mutation snapshot")
+                planning_store.migrate_symmetric_links(conn)
+                _migrate_session_place(conn)
+                # Schema 16: the usage columns, and one row per request in the whole store.
+                usage_store.migrate(conn)
+                # Schema 18: the names of the quota accounts keyed by account.
+                quota_store.migrate(conn)
+                # The word index, after every step that adds a column its triggers name.
+                planning_words.migrate(conn)
+                audit_migration = platform_migrations.schema_migration_needed(conn)
+                audit_order_migration = platform_migrations.registry_audit_order_migration_needed(
+                    conn
                 )
-                and pretable_backup is None
-                and source_identity is None
-            ):
-                # This branch is retained for additive pre-ratchet stores. The
-                # schema-4 cutover always used the verified snapshot above.
-                raise RuntimeError("platform migration requires a pre-mutation snapshot")
-            if audit_migration:
-                platform_migrations.migrate_schema(conn)
-            if audit_migration or audit_order_migration:
-                # `migrate_schema` appends the column, so a store that has just
-                # gained it needs the same normalization as one that gained it
-                # long ago.
-                platform_migrations.migrate_registry_audit_order(conn)
-            if owner_migration:
-                store_metadata.migrate_store_owner(conn)
-            if authorization_migration:
-                platform_migrations.migrate_authorization_owner_model(conn)
-            if historical and source_generation not in {
-                "planning-only",
-                "neutral-catalog",
-            }:
-                platform_migrations.migrate_product_model(conn)
-            if historical:
-                platform_migrations.retire_work_support_modules(conn)
-            if before_schema9:
-                # Schema 9: the registry's tables, the module rows with their
-                # audit, and the integration switches nothing has written since
-                # the registry replaced them. The recovery point holds them.
-                platform_migrations.drop_retired_tables(conn)
-                conn.execute("DROP TABLE IF EXISTS integration_settings")
-            # No "is this a new store" flag: bring-up writes the store's
-            # identity only when it is missing, which is the same answer for a
-            # store being created and one being upgraded.
-            platform_core.initialize(conn, path, caller_owns_transaction=True)
-            platform_migrations.assert_product_model_postconditions(conn)
-            _assert_current_catalog(conn)
-            # The full check reads every page, so it runs where something was
-            # migrated -- a recovery point was taken or the stamp moves -- and
-            # not on every open of a store that is already current.
-            if (
-                stored_version != STORE_SCHEMA_VERSION
-                or source_identity is not None
-                or pretable_backup is not None
-            ):
-                store_backups.integrity_check(conn, source="post-migration store")
-            # Under this open's write lock, so no upload stands between its file and
-            # its row: a picture file no row names is nobody's and goes.
-            planning_images.sweep(conn)
-            # The schema ratchet is the final statement in the same transaction.
-            if stored_version != STORE_SCHEMA_VERSION:
-                conn.execute(f"PRAGMA user_version={STORE_SCHEMA_VERSION}")
-            conn.commit()
+                authorization_migration = platform_migrations.authorization_owner_migration_needed(
+                    conn
+                )
+                owner_migration = store_metadata.store_owner_migration_needed(conn)
+                if (
+                    (
+                        audit_migration
+                        or audit_order_migration
+                        or authorization_migration
+                        or owner_migration
+                    )
+                    and pretable_backup is None
+                    and source_identity is None
+                ):
+                    # This branch is retained for additive pre-ratchet stores. The
+                    # schema-4 cutover always used the verified snapshot above.
+                    raise RuntimeError("platform migration requires a pre-mutation snapshot")
+                if audit_migration:
+                    platform_migrations.migrate_schema(conn)
+                if audit_migration or audit_order_migration:
+                    # `migrate_schema` appends the column, so a store that has just
+                    # gained it needs the same normalization as one that gained it
+                    # long ago.
+                    platform_migrations.migrate_registry_audit_order(conn)
+                if owner_migration:
+                    store_metadata.migrate_store_owner(conn)
+                if authorization_migration:
+                    platform_migrations.migrate_authorization_owner_model(conn)
+                if historical and source_generation not in {
+                    "planning-only",
+                    "neutral-catalog",
+                }:
+                    platform_migrations.migrate_product_model(conn)
+                if historical:
+                    platform_migrations.retire_work_support_modules(conn)
+                if before_schema9:
+                    # Schema 9: the registry's tables, the module rows with their
+                    # audit, and the integration switches nothing has written since
+                    # the registry replaced them. The recovery point holds them.
+                    platform_migrations.drop_retired_tables(conn)
+                    conn.execute("DROP TABLE IF EXISTS integration_settings")
+                # No "is this a new store" flag: bring-up writes the store's
+                # identity only when it is missing, which is the same answer for a
+                # store being created and one being upgraded.
+                platform_core.initialize(conn, path, caller_owns_transaction=True)
+                platform_migrations.assert_product_model_postconditions(conn)
+                _assert_current_catalog(conn)
+                # The full check reads every page, so it runs where something was
+                # migrated -- a recovery point was taken or the stamp moves -- and
+                # not on every open of a store that is already current.
+                if (
+                    stored_version != STORE_SCHEMA_VERSION
+                    or source_identity is not None
+                    or pretable_backup is not None
+                ):
+                    store_backups.integrity_check(conn, source="post-migration store")
+                # Under this open's write lock, so no upload stands between its file and
+                # its row: a picture file no row names is nobody's and goes.
+                planning_images.sweep(conn)
+                # The schema ratchet is the final statement in the same transaction.
+                if stored_version != STORE_SCHEMA_VERSION:
+                    conn.execute(f"PRAGMA user_version={STORE_SCHEMA_VERSION}")
             return conn
         except BaseException:
             conn.rollback()
@@ -960,7 +1068,8 @@ def _recovery_point_holds(
 
     Its logical identity is the source's, read when it was taken and again inside the
     migration's transaction before the first write, and every picture is beside it.
-    Restoring it is copying it into the store's place, as `README.md` describes.
+    Restoring it is copying it into the store's place, as `docs/guides/store-upgrades.md`
+    describes.
     """
 
     del conn
@@ -983,6 +1092,40 @@ RECOVERY_POINT = store_steps.Postcondition(
 )
 
 
+def _quota_names_keyed_otherwise(conn: sqlite3.Connection, context: store_steps.Context) -> bool:
+    del context
+    columns = tuple(str(row[1]) for row in conn.execute("PRAGMA table_info(quota_account_names)"))
+    return columns != quota_store.NAMES_COLUMNS
+
+
+def _key_quota_names_by_account(
+    conn: sqlite3.Connection, context: store_steps.Context
+) -> Mapping[str, Any]:
+    del context
+    quota_store.migrate(conn)
+    names = int(conn.execute("SELECT COUNT(*) FROM quota_account_names").fetchone()[0])
+    return {"names": names}
+
+
+def _quota_names_keyed_by_account(conn: sqlite3.Connection, context: store_steps.Context) -> None:
+    del context
+    quota_store.assert_current(conn)
+
+
+#: Schema 18's step, the one Valkama 2.9.0 takes as it opens a store at 17: the names
+#: of the quota accounts keyed by `account`. The work-model migration takes it first, so
+#: a store a 2.9 build left at 17 reaches what one at 18 holds before the work model's
+#: steps read either; on a store at 18 it has nothing to do. Here rather than among
+#: Planning's steps, which read nothing of Quota.
+QUOTA_NAMES = store_steps.Step(
+    "quota-names",
+    "the names of the quota accounts keyed by account",
+    _key_quota_names_by_account,
+    _quota_names_keyed_otherwise,
+    _quota_names_keyed_by_account,
+)
+
+
 def migrate_work_model(
     path: str | None = None, *, item_projects: str | None = None
 ) -> dict[str, Any]:
@@ -1000,7 +1143,8 @@ def migrate_work_model(
     write. Then a verified recovery point labelled `WORK_MODEL_LABEL` is taken,
     with the pictures beside it. Then, with
     foreign keys off -- set before the transaction, since SQLite ignores the pragma
-    inside one -- the steps of `planning.work_model_migration` run in one
+    inside one -- schema 18's step (`QUOTA_NAMES`), which a store at 17 needs and one
+    at 18 does not, and the steps of `planning.work_model_migration` run in one
     transaction, the schema is stamped and every postcondition is checked; a failed
     step or postcondition rolls all of it back and raises `store_steps.RunFailedError`
     carrying the report. After the commit the word index is brought current.
@@ -1041,13 +1185,13 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
     if store_generation(path) == "current":
         report.update(status="current", message=_ALREADY)
         return
-    report["schema"]["from"] = RELEASE_2_9_SCHEMA_VERSION
     report["environment"] = _environment(path)
     with store_lock.migration_lock(path):
         # Again under the lock: another process may have run it meanwhile.
         if store_generation(path) == "current":
             report.update(status="current", message=_ALREADY)
             return
+        report["schema"]["from"] = _read_stored_version_without_write(path)
         conn = sqlite3.connect(path, timeout=5)
         conn.row_factory = sqlite3.Row
         try:
@@ -1065,9 +1209,7 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
                 for name, seconds in timings.items()
             ]
             report["recovery_point"] = recovery_point
-            conn.execute("PRAGMA foreign_keys=OFF")
-            conn.execute("BEGIN IMMEDIATE")
-            try:
+            with schema_change(conn, committing=lambda: store_steps.phase(report, "commit")):
                 with store_steps.phase(report, "identity_in_transaction"):
                     before = store_backups.logical_identity(conn)
                 context = store_steps.Context(
@@ -1081,18 +1223,12 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
                 )
                 store_steps.run(
                     conn,
-                    steps=work_model_migration.STEPS,
+                    steps=(QUOTA_NAMES, *work_model_migration.STEPS),
                     postconditions=(*work_model_migration.POSTCONDITIONS, RECOVERY_POINT),
                     context=context,
                     report=report,
                     schema=STORE_SCHEMA_VERSION,
                 )
-                with store_steps.phase(report, "commit"):
-                    conn.commit()
-            except BaseException:
-                conn.rollback()
-                raise
-            conn.execute("PRAGMA foreign_keys=ON")
             with store_steps.phase(report, "bring_current"):
                 conn.execute("BEGIN IMMEDIATE")
                 planning_words.bring_current(conn)

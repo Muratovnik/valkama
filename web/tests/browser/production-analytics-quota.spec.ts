@@ -5,8 +5,8 @@
  *
  * Its two tiles stand after the token kinds and before the dimensions. A tile chosen opens its
  * panel, and the choice is in the address, so a reload opens the same panel. The panel has a group
- * per account, its windows side by side where the width allows, and for each window its bar, its
- * facts and the step line of its readings, each on its window's edge; nothing
+ * per account, its windows side by side where the width allows, and for each window its lead, its
+ * bar, its facts and the step line of its readings, each on its window's edge; nothing
  * in it or on the tiles is cut without a sign, nothing moves while the pointer passes over the
  * tiles, the bars and the readings, and no money stands beside a share. Each run prints what it
  * measured and keeps a picture of the panel.
@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test'
 
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { routeState, shot } from './boardPage.ts'
+import { drawLined } from './drawnViews.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
@@ -34,7 +35,7 @@ const boxes = (page: Page) =>
 
 /**
  * The parts of the panel whose left edge strays more than a pixel from where it stands: the parts
- * of a window on the window's edge, and the windows that start a row, and what is not a window, on
+ * of a window, and the lines of what stands now in it, on the window's edge, and the windows that start a row, and what is not a window, on
  * their account's name. Windows side by side start each where the one before ends.
  */
 const edges = (page: Page) =>
@@ -59,7 +60,11 @@ const edges = (page: Page) =>
         ),
         ...windows.flatMap((one) =>
           stray(
-            [...one.window.querySelectorAll(':scope > .level-head, :scope > .level-body > *')],
+            [
+              ...one.window.querySelectorAll(
+                ':scope > .level-head, .quota-window-parts > *, .quota-window-summary > *',
+              ),
+            ],
             one.left,
           ),
         ),
@@ -84,8 +89,6 @@ async function settled(page: Page) {
     0,
   )
   await expect(page.locator('.quota-account')).toHaveCount(4)
-  // What used each window is read after the quota, by each window's own block.
-  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 
@@ -109,13 +112,13 @@ for (const colorScheme of ['light', 'dark'] as const)
         'token_kind',
         'quota_five_hour',
         'quota_week',
-        'account',
+        'seat',
       ])
       await expect(entry(page, 'quota_five_hour')).toContainText('a1b2c3d4')
       await expect(entry(page, 'quota_five_hour')).toContainText('74%')
-      await expect(entry(page, 'quota_five_hour')).toContainText('fresh')
+      await expect(entry(page, 'quota_five_hour')).toContainText('up to date')
       await expect(entry(page, 'quota_week')).toContainText('88%')
-      await expect(entry(page, 'quota_week')).toContainText('silent')
+      await expect(entry(page, 'quota_week')).toContainText('no data for')
       await expectNoSilentClipping(page, `rail at ${width}px`, '.analytics-rail')
       // The pointer over the quota's tiles moves no tile.
       const rail = await boxes(page)
@@ -135,7 +138,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       expect(shares.length).toBeGreaterThan(0)
       expect(shares.join(' '), 'no money beside a share').not.toContain('$')
       // Every part of an account starts at one edge, within a pixel: its name and the windows
-      // that start a row, and each window's name, bar, facts and readings at the window's.
+      // that start a row, and each window's name, lead, bar, facts and readings at the window's.
       expect(await edges(page), 'every part at its account edge').toEqual([])
       await expectNoSilentClipping(page, `five hours at ${width}px`, '.analytics-panel')
       await page
@@ -168,13 +171,18 @@ for (const colorScheme of ['light', 'dark'] as const)
       await expect(page.locator('.quota-panel h2')).toHaveText('Five hours')
       await settled(page)
 
-      // The week, its forecasts said as ranges.
+      // The week, its forecasts said as ranges: drawn, after the key of their hatch; as a table,
+      // as narrow pages open, in its account's table.
       await choose(page, 'quota_week')
       await settled(page)
       await expect(page.locator('.quota-panel h2')).toHaveText('Week')
       await expect(
-        page.locator('.quota-window[data-window="week"] [data-fact="forecast"]').first(),
-      ).toHaveText('By the reset: 57% to 61%')
+        page
+          .locator(
+            '[data-window="week"] [data-fact="forecast"], [data-key="week"] [data-cell="forecast"]',
+          )
+          .first(),
+      ).toContainText('By the reset: 57% to 61%')
       // «Work» reads two weeks, side by side where the width allows.
       expect(await edges(page), 'every part of the week at its edge').toEqual([])
       await expectNoSilentClipping(page, `week at ${width}px`, '.analytics-panel')
@@ -183,3 +191,46 @@ for (const colorScheme of ['light', 'dark'] as const)
         .screenshot(shot(info, `quota-week-${width}-${colorScheme}.png`))
       await record(info, `quota ${width} ${colorScheme}`, { sections, parts: still.length })
     })
+
+for (const width of [390, 1440])
+  test(`at ${width}px every switch of a drawn window stands inside the window`, async ({
+    page,
+  }, info) => {
+    // A narrow page opens on the table; drawn, a window's switches once ran past its edge.
+    await serve(page)
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto(pageAt())
+    for (const section of ['quota_five_hour', 'quota_week']) {
+      await choose(page, section)
+      await settled(page)
+      await drawLined(page.locator('.chart-section').first())
+      // Each window by its hook (`QuotaWindow`), and each switch in it by its role.
+      const { past, switches, windows } = await page
+        .locator('[data-window]')
+        .evaluateAll((found) => {
+          const groups = found.map((window) => [
+            window,
+            [...window.querySelectorAll('[role="radiogroup"]')],
+          ])
+          return {
+            windows: found.length,
+            switches: groups.reduce((all, [, one]) => all + (one as Element[]).length, 0),
+            past: groups.flatMap(([window, one]) => {
+              const edge = (window as Element).getBoundingClientRect().right
+              return (one as Element[])
+                .map((group) => group.getBoundingClientRect().right - edge)
+                .filter((beyond) => beyond > 1)
+                .map(
+                  (beyond) => `${(window as HTMLElement).dataset.window}: ${Math.round(beyond)}px`,
+                )
+            }),
+          }
+        })
+      expect(windows, `${section}: the windows drawn`).toBeGreaterThan(0)
+      expect(switches, `${section}: the switches drawn`).toBeGreaterThan(0)
+      expect(past, `${section}: switches past their window`).toEqual([])
+      await page
+        .locator('.analytics-panel')
+        .screenshot(shot(info, `quota-drawn-${section}-${width}.png`))
+    }
+  })

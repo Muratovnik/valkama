@@ -301,7 +301,35 @@ class OwnSubagentTests(Harness):
         self.assertIsNone(self.hook(), "once")
 
     def test_an_orchestrator_hears_a_claim_and_close_in_one_call(self) -> None:
+        """One line for the move the claim made and the close, whatever second each took.
+
+        Each event takes the second it is written in, so on a slow machine the two moves
+        of one call stand a second apart: the claim's is put a second before the close's
+        here, as such a machine writes them.
+        """
+
         self.close(AS_CHILD, self.held, claim=True)
+        moves = [
+            row[0]
+            for row in self.conn.execute(
+                "SELECT id FROM work_item_events WHERE action = 'transitioned'"
+                " AND call_id = (SELECT MAX(call_id) FROM work_item_events) ORDER BY id"
+            )
+        ]
+        self.assertEqual(2, len(moves), "the call started the item and closed it")
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at ="
+            " strftime('%Y-%m-%dT%H:%M:%SZ', created_at, '-1 second') WHERE id = ?",
+            (moves[0],),
+        )
+        self.conn.commit()
+        started, closed = (
+            self.conn.execute(
+                "SELECT created_at FROM work_item_events WHERE id = ?", (move,)
+            ).fetchone()[0]
+            for move in moves
+        )
+        self.assertLess(started, closed)
         told = self.hook()
         self.told_closed(told, self.held, "Held by B")
         assert told is not None
@@ -734,16 +762,30 @@ class LapseTests(Harness):
         self.assertEqual([CHILD], [entry["agent"] for entry in self.listed])
 
     def test_the_hook_reads_the_periods_the_planning_rule_has(self) -> None:
-        from server.planning import leases, subscriptions
+        from server.planning import leases, participation, subscriptions
+
+        def common() -> float:
+            return leases.quiet_period(participation.load(self.conn), None).total_seconds()
 
         # A subscription keeps its own silence, not a lease's: the hook reads that one.
         self.assertEqual(
             subscriptions.QUIET_PERIOD.total_seconds(), notify.SUBSCRIPTION_QUIET_SECONDS
         )
-        self.assertNotEqual(leases.QUIET_PERIOD, subscriptions.QUIET_PERIOD)
+        self.assertNotEqual(common(), subscriptions.QUIET_PERIOD.total_seconds())
         self.assertEqual(leases.ENDED_GRACE.total_seconds(), notify.ENDED_GRACE_SECONDS)
-        # The tree a session works on is a participant's, live by the lease's silence.
-        self.assertEqual(leases.QUIET_PERIOD.total_seconds(), notify.LEASE_QUIET_SECONDS)
+        # The tree a session works on is a participant's, live by the common quiet period
+        # of a lease: the setting's when the owner sets it, its default when not.
+        self.assertEqual(participation.NUMBERS["lease_quiet_days"], notify.LEASE_QUIET_DAYS)
+        self.assertEqual(common(), notify.lease_quiet_seconds(self.conn))
+        participation.write_value(self.conn, None, "lease_quiet_days", 5)
+        self.assertEqual(5 * 24 * 3600, notify.lease_quiet_seconds(self.conn))
+        self.assertEqual(common(), notify.lease_quiet_seconds(self.conn))
+        # A value its bounds refuse reads as no row in both.
+        self.conn.execute(
+            "UPDATE participation_settings SET value = '0' WHERE key = 'lease_quiet_days'"
+        )
+        self.assertEqual(3 * 24 * 3600, notify.lease_quiet_seconds(self.conn))
+        self.assertEqual(common(), notify.lease_quiet_seconds(self.conn))
 
 
 class LockTests(Harness):

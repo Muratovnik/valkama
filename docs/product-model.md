@@ -55,7 +55,7 @@ An external Adapter's manifest has exactly four fields: the contract it speaks,
 its identity, its version, and the Capabilities it answers. A field the
 contract does not name is refused rather than ignored. Where the adapter runs
 is the owner's transport record, never part of the manifest; the
-[README](../README.md#external-adapters) describes the calls and the checks.
+[external adapters guide](guides/external-adapters.md) describes the calls and the checks.
 
 A Module uses the provider it is built with: Memory answers through its
 built-in Markdown provider for each registered project. No module selects among
@@ -67,7 +67,7 @@ exception or a silent absence.
 
 ## Module list
 
-The server declares `planning`, `analytics`, `memory`, and `settings` in its
+The server declares `planning`, `analytics`, `decisions`, `volumes`, `memory`, and `settings` in its
 code, and that list is the whole answer: no store row records it and nothing
 changes it at runtime. `GET /api/modules` and the MCP tool `list_platform_modules` return
 each module's manifest inside a registration that keeps the wire's `state`,
@@ -85,6 +85,22 @@ opening with `POST /api/analytics/uses`. All four are described in
 `connection-contract.md`. Improvements, Skills, and standalone Sessions registrations,
 pages, and APIs are retired, as are the flow-metrics Analytics dashboards and
 exports that an earlier build registered under the same id.
+
+`decisions` (Agent decisions) is the destination for the decisions agents took.
+It reads the `planning.decisions` model, served as `GET /api/planning/decisions`,
+at both operating levels: every space at Global, the exact space at Space. It
+has no screen yet, so the shell shows it as an unavailable view until that screen
+arrives.
+
+`volumes` (Volumes) is the destination for how much work stands in each state, what
+it took and what is left. It reads the `planning.volumes` model, served as
+`GET /api/planning/volumes`, at both operating levels: every space at Global, the
+exact space or one of its projects at Space. Its one action,
+`module.volumes.attach-commit`, attaches a commit with no item from the list the
+page counts. Planning declares `planning.goal-volumes` beside it, served as
+`GET /api/planning/goal-volumes`: what each goal or stage took, which its list and
+its card read. Both reads are described in `connection-contract.md`. Volumes has no
+screen yet either, and the shell shows it as an unavailable view until it has one.
 
 A store does not record the list. Store schema 9 dropped the
 `platform_modules` rows an earlier build wrote, their audit in
@@ -135,7 +151,7 @@ or resumes the session; `session_end` records `ended` or `failed`;
 `turn_end` records waiting without ending the session; `attention` records a
 lifecycle attention reason. A failed terminal outcome remains until an explicit
 new start. The installation bearer and loopback requirements are documented in
-the [README](../README.md#local-http-security).
+[Local HTTP security](guides/http-security.md#browser-writes-and-the-installation-token).
 
 `GET /api/session?id=<id>` resolves an exact stored identity or unique prefix
 and returns its work item, client family, and project-root resolution; it exposes
@@ -203,7 +219,8 @@ with a `state`. An item with no live work is not in the map, and no MCP tool ans
 carries it. The sessions behind an item are the one whose confirmed call took its claim
 and the ones its open steps' holders name; a subagent's claim or step names its parent's
 session. A session counts while its row says active and its last sign of life is no older
-than a claim's lease, three days. A subscription is kept longer, fourteen days.
+than a claim's lease term, the common `lease_quiet_days` (three days unless the owner
+changed it). A subscription is kept longer, fourteen days.
 
 A session is at work when a turn of its own runs, or when it has a live subagent: active,
 started since the session last really started, and with a transcript written within two

@@ -109,7 +109,7 @@ export const mixedField: InputRequestField = {
   ],
 }
 
-/** How many questions one read of the list brings, as the server's limit does. */
+/** How many questions one read of the list brings when it names no limit, as the server's. */
 const READ_LIMIT = 100
 
 /** The next `answer_version` and `history` of a question that one of these writes reached. */
@@ -157,10 +157,15 @@ export async function installQuestions(page: Page, entries: InputRequestEntry[])
                 : (entry.request.comment_id ?? null) === null),
           )
           .sort((a, b) => b.request.created_at.localeCompare(a.request.created_at))
+        // One page of them, from `offset`, as the server cuts it.
+        const limit = Number(url.searchParams.get('limit') ?? READ_LIMIT)
+        const offset = Number(url.searchParams.get('offset') ?? 0)
         return route.fulfill({
           json: {
-            ...requestList(structuredClone(items.slice(0, READ_LIMIT))),
-            has_more: items.length > READ_LIMIT,
+            ...requestList(structuredClone(items.slice(offset, offset + limit))),
+            limit,
+            total: items.length,
+            has_more: offset + limit < items.length,
             coverage: [{ space_ref: spaceRef, status: 'searched', reason: null }],
           },
         })

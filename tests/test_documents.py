@@ -19,7 +19,7 @@ from tests.registry_fixtures import project_entry, registry_bytes
 from tests.test_document_path_samples import load_rows
 
 ROOT = Path(__file__).resolve().parents[1]
-#: Every code `locate` may answer with, as the README lists them.
+#: Every code `locate` may answer with, as `docs/guides/project-documents.md` lists them.
 CODES = {
     "ambiguous",
     "invalid_path",

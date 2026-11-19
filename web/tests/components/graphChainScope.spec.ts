@@ -284,7 +284,7 @@ describe('the graph scoped to one chain', () => {
       edges: chainEdges,
       items: closedRoot,
     })
-    await drawn(graph)
+    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-3', 'MAIN-4'])
     const cards = graph.findAllComponents(GraphNodeCard)
     const root = cards.find((entry) => entry.props('node').reference === 'MAIN-1')
     expect(root?.props('root')).toBe(true)
@@ -292,8 +292,9 @@ describe('the graph scoped to one chain', () => {
     expect(root?.props('recessed')).toBe(false)
     expect(root?.get('.flow-node-root').text()).toBe('root')
     expect(root?.get('button').attributes('aria-label')).toBe('MAIN-1 item 1 · Done · chain root')
+    // Every other card drawn, read one by one: none says root.
     const others = cards.filter((entry) => entry.props('node').reference !== 'MAIN-1')
-    expect(others.every((entry) => !entry.find('.flow-node-root').exists())).toBe(true)
+    expect(others.map((entry) => entry.find('.flow-node-root').exists())).toEqual([false, false])
   })
 
   it('leaves out the origin chip that would only repeat the root, and keeps any other', async () => {
@@ -352,12 +353,12 @@ describe('the graph scoped to one chain', () => {
       'OTH-7',
       null,
     ])
-    // Only the link between two drawn nodes is drawn.
+    // Only the link between two drawn nodes is drawn: from 2 to 4, which was discovered from it.
     const flowEdges = graph.findComponent({ name: 'VueFlow' }).props('edges') as {
       source: string
       target: string
     }[]
-    expect(flowEdges.map((edge) => [edge.source, edge.target])).toEqual([[id(4), id(2)]])
+    expect(flowEdges.map((edge) => [edge.source, edge.target])).toEqual([[id(2), id(4)]])
   })
 
   it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {
@@ -369,8 +370,10 @@ describe('the graph scoped to one chain', () => {
     // Every open member is in the one queued state, so the key says its name,
     // as the board's column and the card's chain section do.
     expect(named()).toEqual(['Ready'])
-    // «Done» is not drawn, so it is not named; its place is kept, unseen, so
-    // throwing the switch moves no word of the key.
+    // «Done» is not drawn, so it is not named; its place is kept, marked held, so
+    // throwing the switch moves no word of the key. The held mark is what this
+    // reads: that it leaves the place unseen is the stylesheet's, which this DOM
+    // does not apply.
     expect(places()).toEqual(['Done', 'Ready'])
     expect(graph.get(`${key}.held`).text()).toBe('Done')
     await graph.get('[role="switch"]').trigger('click')

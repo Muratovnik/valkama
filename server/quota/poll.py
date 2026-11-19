@@ -56,6 +56,7 @@ import re
 import sqlite3
 import ssl
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from email.utils import parsedate_to_datetime
@@ -436,25 +437,16 @@ def _working(conn: sqlite3.Connection, organization: str, now: dt.datetime) -> b
     return row is not None
 
 
-#: The latest status line or mod reading of each session since a moment.
-_FRESH_FEEDS = (
-    "SELECT session_id, MAX(at) FROM quota_samples WHERE source IN (?, ?)"
-    " AND at >= ? GROUP BY session_id"
-)
-
-
 def _fed(conn: sqlite3.Connection, organization: str, now: dt.datetime) -> bool:
-    """Whether a status line or mod reading for a session of the organization is fresh.
+    """Whether a status line or mod reading for the organization is fresh.
 
-    Those readings name a session, so a session counts for the organization its own
-    usage rows say it was working for at its latest reading.
+    Those readings name a session, so a reading counts for the organization of its account,
+    as every read of an account takes it, or, with no account to name, the one the
+    session's usage rows say it worked for (`seats.organizations_read`).
     """
 
     since = samples.instant((now - FEED_FRESH).isoformat())
-    rows = conn.execute(_FRESH_FEEDS, (*FEED_SOURCES, since)).fetchall()
-    return any(
-        seats.organization_at(conn, str(session), str(at)) == organization for session, at in rows
-    )
+    return organization in seats.organizations_read(conn, since, FEED_SOURCES)
 
 
 def _record(conn: sqlite3.Connection, reading: samples.Reading, now: dt.datetime) -> None:
@@ -486,14 +478,32 @@ def status_path(store_path: str) -> str:
     return f"{store_path}.quota-poll.json"
 
 
+#: How long a status write waits for a reader to let the file go. Windows refuses to replace a
+#: file another handle holds open, and the doctor may be reading it at that moment; a write that
+#: gave up at once lost its state, the last one a stopped poll writes among them.
+_REPLACE_SECONDS = 2.0
+
+
 def write_status(store_path: str, status: Status) -> None:
-    """Replace the status file whole, so a reader never sees half of one."""
+    """Replace the status file whole, so a reader never sees half of one.
+
+    A reader holding the file open is waited out for at most `_REPLACE_SECONDS`, then the
+    refusal is raised as it came.
+    """
 
     path = status_path(store_path)
     partial = f"{path}.partial"
     with open(partial, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(asdict(status), handle, sort_keys=True)
-    os.replace(partial, path)
+    deadline = time.monotonic() + _REPLACE_SECONDS
+    while True:
+        try:
+            os.replace(partial, path)
+            return
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
 
 
 def read_status(store_path: str) -> Status | None:

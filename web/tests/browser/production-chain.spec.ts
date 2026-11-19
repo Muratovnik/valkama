@@ -22,6 +22,7 @@ import {
   graphRoute,
   largeChainHere,
   longChainHere,
+  openChainCard,
   pointAtWorkUnderWay,
   rootFramed,
   routeState,
@@ -29,25 +30,10 @@ import {
   showChain,
   smallChain,
 } from './chainFixtures.ts'
-import { drawnColours } from './contrast.ts'
+import { drawnColours, tokenInk } from './contrast.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
-
-async function openCard(page: Page, view?: 'graph') {
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: spaceScope,
-      entity: planningWorkItemEntity(workItemRef),
-      ...(view ? { state: { view } } : {}),
-    }),
-  )
-  await showChain(page)
-  const section = page.locator('.drawer section.chain')
-  await expect(section).toBeVisible()
-  return section
-}
 
 function shot(info: TestInfo, name: string) {
   return { path: info.outputPath(name), animations: 'disabled' as const }
@@ -58,7 +44,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 })
     await installBackend(page)
     await serve(page, largeChainHere())
-    const section = await openCard(page)
+    const section = await openChainCard(page)
     // The map leads; one line of totals and the verdict follow it, and what the
     // verdict rests on is one action away.
     const map = await section.locator('.branch-map').boundingBox()
@@ -74,16 +60,19 @@ for (const width of [1440, 390]) {
     await details.click()
     await expect(section.locator('.chain-pace')).toHaveText('Last 7 days: +53 added, −42 done')
     await expect(section.getByRole('img')).toHaveAttribute('aria-label', /616 now/u)
+    await expect(section.locator('.chain-chart')).toBeVisible()
     // Workable is the norm of its group, so no row prints it. A member that
     // waits on an open blocker names what it waits on, in the danger tone.
-    await expect(section.locator('.chain-members').getByText('Workable')).toHaveCount(0)
-    await expect(section.locator('.chain-row-waiting').first()).toContainText('Waiting on')
-    const tone = (selector: string) =>
-      section
-        .locator(selector)
-        .first()
-        .evaluate((node) => getComputedStyle(node).color)
-    expect(await tone('.chain-row-waiting')).not.toBe(await tone('.chain-row-title'))
+    const members = section.locator('.chain-members')
+    await expect(members.getByText('Workable')).toHaveCount(0)
+    const waiting = members.locator('.chain-row-waiting').first()
+    await expect(waiting).toContainText('Waiting on')
+    // The tone is the glyph's: the words stay in the quiet ink of the row's other details.
+    await expect(waiting).toHaveAttribute('data-tone', 'danger')
+    const glyph = waiting.locator('.chain-row-glyph')
+    expect(await glyph.evaluate((node) => getComputedStyle(node).color)).toBe(
+      await tokenInk(page, '--color-danger'),
+    )
     // At a phone's width a row gives the holder's room to the title; the
     // state word and the waiting mark stay.
     const holder = section.locator('.chain-row-holder').first()
@@ -110,19 +99,28 @@ const mapRoot = {
   title: workItem.title,
 }
 
-/** What a lane's slider and the drawing say in the browser, read at once. */
+/**
+ * What a lane's slider and the drawing say in the browser, read at once: how many label lines
+ * and targets were measured, a head and a lane for each lane, and how many of them stand
+ * outside the map.
+ */
 async function mapReading(page: Page) {
   const section = page.locator('.drawer section.chain')
+  const boxes = await section.locator('.branch-map-canvas').evaluate((canvas) => {
+    const edge = canvas.getBoundingClientRect()
+    const drawn = [...canvas.querySelectorAll('.branch-map-head, .branch-map-lane')].map((node) =>
+      node.getBoundingClientRect(),
+    )
+    return {
+      measured: drawn.length,
+      outside: drawn.filter((box) => box.left < edge.left - 1 || box.right > edge.right + 1).length,
+    }
+  })
   return {
     labels: await section.locator('.branch-map-label').allTextContents(),
     lanes: await section.getByRole('slider').count(),
     // Every label line and target stays inside the map's own width.
-    outside: await section.locator('.branch-map-canvas').evaluate((canvas) => {
-      const edge = canvas.getBoundingClientRect()
-      return [...canvas.querySelectorAll('.branch-map-head, .branch-map-lane')]
-        .map((node) => node.getBoundingClientRect())
-        .filter((box) => box.left < edge.left - 1 || box.right > edge.right + 1).length
-    }),
+    ...boxes,
   }
 }
 
@@ -131,10 +129,11 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1400 })
     await installBackend(page)
     await serve(page, branchedChain(mapRoot, 'MAIN'))
-    const section = await openCard(page)
+    const section = await openChainCard(page)
     expect(await mapReading(page)).toEqual({
       labels: ['MAIN-264', 'MAIN-7001', 'MAIN-4000', 'MAIN-7002', 'MAIN-4001', 'no parent'],
       lanes: 6,
+      measured: 12,
       outside: 0,
     })
     await expect(section.locator('figcaption')).toHaveText(
@@ -203,7 +202,7 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await serve(page, branchedChain(mapRoot, 'MAIN'))
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   const lane = section.getByRole('slider').first()
   // Hovering waits for the card to finish sliding in; then the pointer leaves.
   await lane.hover()
@@ -233,7 +232,7 @@ test('the tip the map shows names a state in ink that reads on its ground', asyn
   await page.setViewportSize({ width: 1440, height: 1400 })
   await installBackend(page)
   await serve(page, branchedChain(mapRoot, 'MAIN'))
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   const word = section.locator('.branch-tip .semantic-state[data-state="active"] .state-label')
   await pointAtWorkUnderWay(page, section, word)
   await expect(word).toBeVisible()
@@ -247,8 +246,8 @@ test('the branch map gives a small chain a segment, a dot and a name per task', 
   await page.setViewportSize({ width: 1440, height: 1000 })
   await installBackend(page)
   await serve(page, smallBranchedChain(mapRoot, 'MAIN'))
-  const section = await openCard(page)
-  const small = { labels: ['MAIN-264', 'no parent'], lanes: 2, outside: 0 }
+  const section = await openChainCard(page)
+  const small = { labels: ['MAIN-264', 'no parent'], lanes: 2, measured: 4, outside: 0 }
   expect(await mapReading(page)).toEqual(small)
   await expect(section.locator('.branch-map-dot')).not.toHaveCount(0)
   await expect(section.locator('.branch-map-reference').first()).toHaveText('MAIN-1013')
@@ -264,7 +263,7 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   await installBackend(page)
   const { chain, items, edges } = smallChain()
   await serve(page, chain, items, edges)
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   // The chip counts the whole chain; the field draws the root and the 9 open members.
@@ -280,7 +279,8 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   // The card made way for the graph it asked for, and the root is in the frame.
   await expect(page.locator('.drawer')).toHaveCount(0)
   expect(await rootFramed(page)).toBe(true)
-  // Its children are filed under the root, which the chip already names.
+  // Its children are filed under the root, which the chip already names. A member filed under
+  // a goal outside the chain draws the mark: `tests/components/graphChainScope.spec.ts`.
   await expect(page.locator('.flow-node-goal')).toHaveCount(0)
   await expect(page.locator('.flow-node-card.recessed')).toHaveCount(0)
   await page.locator('.graph').screenshot(shot(info, 'chain-graph-default.png'))
@@ -311,7 +311,7 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   await installBackend(page)
   const { chain, items, edges } = smallChain()
   await serve(page, chain, items, edges)
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   await expect(chip).toHaveText('Chain MAIN-264 · 17')
@@ -381,7 +381,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await installBackend(page)
   const { chain, items, edges } = smallChain()
   await serve(page, chain, items, edges)
-  const section = await openCard(page)
+  const section = await openChainCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   await expect(chip).toHaveText('Chain MAIN-264 · 17')

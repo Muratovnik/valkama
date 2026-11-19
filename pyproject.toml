@@ -191,8 +191,9 @@ layers = [
 ]
 containers = ["server"]
 
-# Planning's exact-scope routing and the app shell answer from the module list
-# and the module manifest alone: nothing that brings a store up, migrates it,
+# Planning's exact-scope routing and the app shell answer from the module list,
+# the module manifest and the grammar of the route the shell remembers alone
+# (`platform.ui_prefs`): nothing that brings a store up, migrates it,
 # or reaches an external adapter. `test_layering.py` checks the loaded modules
 # at run time as well, because an import graph does not show the edge a
 # package's `__init__` adds.
@@ -316,6 +317,56 @@ forbidden_modules = [
   "server.quota.seats",
   "server.store",
   "server.telemetry",
+]
+
+# Inside Planning the rules sit below the writes that call them: what a transition or
+# one write of several steps calls, and what the read model reads for a card, never
+# reaches the service or what is composed of its writes. Python takes a cycle of
+# `from . import` without a word until an attribute is read at import time, so the
+# direction is held here rather than only in docstrings.
+[[tool.importlinter.contracts]]
+name = "Planning's rules below the service never reach it"
+type = "forbidden"
+source_modules = [
+  "server.planning.closing",
+  "server.planning.decisions",
+  "server.planning.deferral",
+  "server.planning.item_tree",
+  "server.planning.leases",
+  "server.planning.participation",
+  "server.planning.pending",
+  "server.planning.questions",
+  "server.planning.read_model",
+  "server.planning.standing",
+  "server.planning.transitions",
+  "server.planning.triage",
+]
+forbidden_modules = [
+  "server.planning.api",
+  "server.planning.consent",
+  "server.planning.groups",
+  "server.planning.requests",
+  "server.planning.service",
+  "server.planning.split",
+  "server.planning.sweep",
+]
+
+# The Volumes reads count what the store holds and write nothing, so they sit below
+# the service, which calls one of them in its write frame (`baselines`). What they
+# share with the service's reads (a space by its name, whose call closed a request)
+# lives in a module below it. A new Volumes read module joins this list.
+[[tool.importlinter.contracts]]
+name = "The Volumes reads sit below the service"
+type = "forbidden"
+source_modules = [
+  "server.planning.baselines",
+  "server.planning.estimates",
+  "server.planning.goal_volumes",
+  "server.planning.volume_flow",
+  "server.planning.volumes",
+]
+forbidden_modules = [
+  "server.planning.service",
 ]
 
 [tool.mypy]

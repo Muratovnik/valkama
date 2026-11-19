@@ -6,7 +6,9 @@ import InspectorReport from '@/widgets/work-item-inspector/components/InspectorR
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { plainText } from '@/shared/lib/richText.ts'
 import RichText from '@/shared/ui/RichText.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
 
@@ -44,7 +46,10 @@ function viewReport() {
       class="outcome-preview"
     >
       <span class="outcome-preview-label">{{ t('workItem.outcomePreview') }}</span>
-      <p class="outcome-preview-text">
+      <p
+        v-tooltip.clipped="plainText(item.summary.done)"
+        class="outcome-preview-text"
+      >
         <RichText
           :source="item.summary.done"
           inline
@@ -90,6 +95,8 @@ function viewReport() {
   font: var(--font-detail);
 }
 
+/* Two lines of what was done, then an ellipsis; pointed at while cut, its whole words are laid
+   over both lines (`v-tooltip.clipped`), and the report holds it in full. */
 .outcome-preview-text {
   display: -webkit-box;
   margin: 0;

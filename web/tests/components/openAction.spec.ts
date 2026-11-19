@@ -231,6 +231,7 @@ describe('what stands before any press', () => {
     expect(wrapper.text()).toContain('No window · running')
     // The words say nothing more on hover than their own whole words, and that only while a
     // narrow line cuts them: the why is the control beside them.
+    expect(wrapper.findAll('.open-action-still [data-tooltip]').length).toBeGreaterThan(0)
     expect(stillHints(wrapper)).toEqual([])
     expect(wrapper.get('.open-action-why').attributes('aria-label')).toContain(
       'it is stopped from its attempt',

@@ -11,6 +11,7 @@ import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 
 import { chainResponse, emptyChain, largeGoalChain } from '../fixtures/chain.ts'
 import { deferred, showChain, showTab, workItemFixture } from '../fixtures/workItem.ts'
+import { documentOrder } from '../support/documentOrder.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -76,9 +77,9 @@ describe('a card’s chain', () => {
     const relations = wrapper.get('.relations')
     expect(relations.find('section.chain').exists()).toBe(false)
     // The related work, then the evidence.
-    expect([...relations.element.children].map((part) => part.classList[0])).toEqual([
-      'relation-section',
-      'evidence',
+    expect(documentOrder(relations.element, ['.relation-section', '.evidence'])).toEqual([
+      '.relation-section',
+      '.evidence',
     ])
   })
 

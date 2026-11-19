@@ -154,7 +154,7 @@ class PlanningToolCallTests(unittest.TestCase):
             "apply_work_item_changes", id="QA-2", links=[{"other": "QA-1", "kind": "relates-to"}]
         )
         self.call(
-            "apply_work_item_changes", id="QA-2", refs=[{"kind": "commit", "value": "abc1234"}]
+            "apply_work_item_changes", id="QA-2", refs=[{"kind": "memory", "value": "abc1234"}]
         )
         self.call("apply_work_item_changes", id="QA-2", comment={"body": "a note"}, author="one")
         self.call(
@@ -175,6 +175,27 @@ class PlanningToolCallTests(unittest.TestCase):
         self.call("create_work_item", space="QA", title="Unclaimed")
         with self.assertRaisesRegex(Exception, r"\[executor\]"):
             self.call("apply_work_item_changes", id="QA-2", transition={"state": "dev"})
+
+    def test_a_commit_ref_is_refused_with_the_group_that_attaches_one(self) -> None:
+        refs = self.call("get_work_item", id="QA-1", parts="refs")
+        with self.assertRaises(planning_api.PlanningHttpError) as refused:
+            self.call(
+                "apply_work_item_changes", id="QA-1", refs=[{"kind": "commit", "value": "abc1234"}]
+            )
+        self.assertIn(
+            "work_item_ref.kind must be one of memory, session, url:"
+            " commits are attached with the commits group",
+            str(refused.exception),
+        )
+        self.conn.rollback()
+        self.assertEqual(refs, self.call("get_work_item", id="QA-1", parts="refs"))
+        schema = next(
+            tool for tool in planning_tools.TOOLS if tool["name"] == "apply_work_item_changes"
+        )["inputSchema"]["properties"]["refs"]
+        self.assertEqual(
+            ["memory", "session", "url"], schema["items"]["properties"]["kind"]["enum"]
+        )
+        self.assertTrue(schema["description"].startswith("Structured pointers to attach: an"))
 
     def test_claim_ready_answers_with_nothing_when_nothing_is_ready(self) -> None:
         self.call("claim_work_item", id="QA-1", author="one")
@@ -327,7 +348,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         self.call("apply_work_item_changes", id=self.ref, checklist={"items": ["first", "second"]})
         self.call("apply_work_item_changes", id=self.ref, comment={"body": "a note"}, author="one")
         self.call(
-            "apply_work_item_changes", id=self.ref, refs=[{"kind": "commit", "value": "abc1234"}]
+            "apply_work_item_changes", id=self.ref, refs=[{"kind": "session", "value": "abc1234"}]
         )
         self.call(
             "apply_work_item_changes", id=self.ref, links=[{"other": "QA-1", "kind": "relates-to"}]
@@ -538,15 +559,26 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         )
         self.assertEqual("blocked", forced["state"]["key"])
         self.assertIn("blocker", forced["overridden"])
-        # The busy item carries a commit ref; a bare one entering review does not.
+        # The busy item carries a session ref; a bare one entering review does not.
         bare = self.call("create_work_item", space="QA", title="Bare")["reference"]
         warned = self.call(
             "apply_work_item_changes",
             id=bare,
-            transition={"state": "review", "force": True, "acceptance": "assignment"},
+            transition={
+                "state": "review",
+                "force": True,
+                "acceptance": "assignment",
+                "to_check": "The bare item.",
+            },
         )
-        self.assertRegex(warned["warnings"][0], "no session or commit ref")
-        clean = self.call("apply_work_item_changes", id=self.ref, transition={"state": "review"})
+        self.assertRegex(warned["warnings"][0], "no session ref or attached commit")
+        clean = self.call(
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist={"items": [{"text": t, "done": True} for t in ("first", "second")]},
+            summary={"done": "Both steps.", "next": "Nothing."},
+            transition={"state": "review", "to_check": "Both steps."},
+        )
         self.assertNotIn("overridden", clean)
         self.assertNotIn("warnings", clean)
 
@@ -582,7 +614,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         )
         self.assertEqual({"links": 1}, link["applied"])
         ref = self.call(
-            "apply_work_item_changes", id=self.ref, refs=[{"kind": "commit", "value": "def5678"}]
+            "apply_work_item_changes", id=self.ref, refs=[{"kind": "memory", "value": "def5678"}]
         )
         self.assertEqual({"refs": 1}, ref["applied"])
         comment = self.call("apply_work_item_changes", id=self.ref, comment={"body": "again"})
@@ -656,7 +688,10 @@ class PlanningCompactReadTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         service.create_planning_space(self.conn, name="Quality", key="QA")
-        self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="goal")
+        # Filed on the owner's word, so the work under it is accepted and taken.
+        self.epic = self.call(
+            "create_work_item", space="QA", title="Umbrella", kind="goal", acceptance="assignment"
+        )
         self.child = self.call(
             "create_work_item",
             space="QA",
@@ -697,7 +732,7 @@ class PlanningCompactReadTests(unittest.TestCase):
                 # The call carried no identity, so nothing confirms the holder.
                 "claim_state": "unconfirmed",
                 # Why the queue does not give it; a row it gives says its place instead.
-                "withheld": ["not_ready", "held", "ancestor_triage"],
+                "withheld": ["not_ready", "held"],
             },
             rows[self.child["reference"]],
         )

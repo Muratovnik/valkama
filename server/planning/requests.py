@@ -5,7 +5,20 @@ A request asks the owner, or, with an `addressee`, one top-level agent session
 conversation or any of its subagents, and only the session that asked it, or Valkama,
 withdraws it. A session that ended or went quiet past its lease answers nothing: its
 requests read expired with `session_gone` while it stays so, and wait again when it
-resumes. That reason is read, never stored, as `deadline` and `task_closed` are.
+resumes. That reason is read, never stored, as `deadline` is. Closing the item ends
+every request still pending on it, stored as done or cancelled (`questions.end`).
+
+A question with a purpose, such as the one a move into review asks, is the owner's
+to answer, in Valkama; its answer is carried out in the write that gives it
+(`carry_out`), so it is never declined or changed, and only the session that asked
+it withdraws it. A question about a write that waits for the owner (`pending`) carries
+that write out, declines it or drops it, by its point (`CARRIERS`); the answer about a
+triage review's group of findings is carried out by `groups.carry_out`, and its
+withdrawal dissolves the group (`groups.withdrawn`).
+
+A decision recommends an answer in every required field. Where the owner's setting
+leaves decisions to the agent, an agent's decision to the owner is answered by those
+recommendations in the write that asks it (`create`).
 """
 
 from __future__ import annotations
@@ -13,9 +26,30 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 
-from . import calls, leases, model, questions, read_model, request_model, service, words
+from . import (
+    calls,
+    closing,
+    consent,
+    decisions,
+    deferral,
+    groups,
+    leases,
+    model,
+    participation,
+    pending,
+    questions,
+    read_model,
+    request_model,
+    service,
+    split,
+    states,
+    store,
+    waiting,
+    words,
+)
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
@@ -23,6 +57,8 @@ ITEM_QUESTIONS = 5
 MOST_ADDRESSEES = 5
 #: How often one session may ask one other session within the hour.
 MOST_ASKS_PER_HOUR = 3
+#: The most requests one page of a list holds: the person's list reads every page.
+PAGE = 200
 
 #: The requests one session's confirmed calls asked of one other session within the last
 #: hour, counted by their `request_created` events: from the requests asked of that
@@ -76,7 +112,8 @@ def _expired(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> str | None:
     if addressee is not None and not leases.session_live(
         conn.execute(
             "SELECT status, ended_at, last_seen FROM sessions WHERE id=?", (addressee,)
-        ).fetchone()
+        ).fetchone(),
+        settings=participation.load(conn),
     ):
         return "session_gone"
     return None
@@ -130,7 +167,20 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "expired_reason": reason,
         # The comment a list stands under; an attached store from before lists has none.
         "comment_id": row["comment_id"] if "comment_id" in columns else None,
+        # What the owner's answer carries out; an attached store from before has none.
+        "purpose": row["purpose"] if "purpose" in columns else None,
+        # The write waiting for the owner the question is about, only on such a question.
+        **_action_part(conn, row),
     }
+
+
+def _action_part(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    """The `action` of a question about a write that waits for the owner; nothing on any other."""
+
+    action = pending.of_request(row)
+    if action is None:
+        return {}
+    return {"action": pending.part(conn, action, _purpose(row), str(row["author"]))}
 
 
 def get(conn: sqlite3.Connection, identity: object, *, replies: bool = False) -> dict:
@@ -147,71 +197,16 @@ def get(conn: sqlite3.Connection, identity: object, *, replies: bool = False) ->
     # A store older than question threads has no reply to read.
     thread = (
         read_model.request_replies(conn, record["request_id"])
-        if _has_table(conn, "work_item_request_answers")
+        if store.has_table(conn, "work_item_request_answers")
         else []
     )
     return {**record, "replies": thread}
 
 
-def _has_table(conn: sqlite3.Connection, name: str) -> bool:
-    """Whether a store has a table. An attached store is read as it is, and an older
-    one lacks what later schemas added: it has nothing of that to say."""
-
-    return (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
-        ).fetchone()
-        is not None
-    )
-
-
 def _complete(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     """Requests with who closed each one and the answers each current one replaced."""
 
-    return _with_history(conn, _with_by_person(conn, records))
-
-
-def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
-    """Requests with whether the latest call that closed or changed each came through the interface.
-
-    True for a browser write, false for any other call that answered, changed,
-    declined or withdrew it, and null while no call has: still open, run out by
-    itself, or written with no call, as on a comment. The latest such event
-    decides, so a changed answer is the changer's. The `author` beside it is text
-    the caller wrote and says nothing here; the fact stays once, on the call row.
-    One statement for every request of a read.
-    """
-
-    closed = [record["request_id"] for record in records if record["resolved_at"] is not None]
-    sources: dict[str, object] = {}
-    # One from before calls were recorded has no such row to read: nothing there
-    # came through a call anyone proved.
-    if closed and _has_table(conn, "execution_events"):
-        # By the request rather than its item: a merge moves a request and leaves
-        # its history where it was written. A call row that is there always has a
-        # source, so a join that found none means no call.
-        sources = {
-            str(row["detail"]): row["identity_source"]
-            for row in conn.execute(
-                "SELECT e.detail, c.identity_source FROM work_item_events e"
-                " LEFT JOIN execution_events c ON c.id = e.call_id"
-                " WHERE e.id IN (SELECT MAX(id) FROM work_item_events"
-                " WHERE action IN"
-                " ('request_answered','request_changed','request_declined','request_expired')"
-                " AND detail IN (SELECT value FROM json_each(?)) GROUP BY detail)",
-                (json.dumps(closed),),
-            )
-        }
-    return [
-        {**record, "by_person": _through_interface(sources.get(record["request_id"]))}
-        for record in records
-    ]
-
-
-def _through_interface(source: object) -> bool | None:
-    """Whether a call of this source came through the interface; null with no call."""
-
-    return None if source is None else source == calls.BROWSER
+    return _with_history(conn, questions.with_by_person(conn, records))
 
 
 def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
@@ -224,7 +219,7 @@ def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
 
     versions: dict[str, list[dict]] = {}
     changed = [record["request_id"] for record in records if record["answer_version"] >= 2]
-    if changed and _has_table(conn, "work_item_request_answers"):
+    if changed and store.has_table(conn, "work_item_request_answers"):
         for row in conn.execute(
             "SELECT a.request_id, a.version, a.answers_json, a.answered_by, a.answered_at,"
             " a.call_id, c.identity_source FROM work_item_request_answers a"
@@ -256,7 +251,7 @@ def compact_all(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     identities = [record["request_id"] for record in records]
     threads = (
         read_model.request_threads(conn, identities)
-        if identities and _has_table(conn, "work_item_request_answers")
+        if identities and store.has_table(conn, "work_item_request_answers")
         else {}
     )
     shown = []
@@ -372,8 +367,9 @@ def list_page(
     answered_after: object = None,
     lists: bool = True,
     addressed: bool = False,
+    session: str | None = None,
 ) -> dict:
-    """One page of requests, and whether more follow.
+    """One page of requests, at most `PAGE` of them, and whether more follow.
 
     Newest first, or, asked for what was answered after a time, oldest answer first
     by `resolved_at` and then `request_id`, so a reader that keeps the last time it
@@ -385,6 +381,8 @@ def list_page(
     list on a comment as well: a reader of what waits for a person, which nobody waits
     on a list for. `addressed=True` reads instead the open requests asked of the
     session the call in progress proved, and refuses a call that proved none.
+    `session` names that session instead, for a reader with no call of its own, the
+    note a session start gets (`waiting_items`); no surface passes it.
     """
 
     if status is not None:
@@ -396,10 +394,10 @@ def list_page(
             raise model.PlanningError("addressed lists the open requests; leave status out")
         status = "pending"
         clauses.append("r.addressee=?")
-        parameters.append(_own_session())
+        parameters.append(_own_session() if session is None else session)
     if space is not None:
         clauses.append("i.planning_space_id=?")
-        parameters.append(service.space_identity(conn, space))
+        parameters.append(read_model.space_identity(conn, space))
     if reference is not None:
         item = read_model.item_row(conn, reference)
         if space is not None and item["planning_space_id"] != parameters[-1]:
@@ -427,7 +425,7 @@ def list_page(
         if after is not None
         else " ORDER BY r.created_at DESC,r.request_id LIMIT ? OFFSET ?"
     )
-    bounded = max(1, min(int(limit), 201))
+    bounded = max(1, min(int(limit), PAGE))
     start = model.count_field(offset, "offset")
     result: list[dict] = []
     at = request_model.now()
@@ -459,8 +457,27 @@ def list_page(
     }
 
 
+def waiting_items(conn: sqlite3.Connection, session: str) -> list[str]:
+    """The items with an open request asked of `session`, by reference, each once.
+
+    The item of the newest such request comes first. The requests are those
+    `list_page` reads with `addressed`, asked of `session` rather than of a call's
+    proved session, which the hook of a session start does not have.
+    """
+
+    found: dict[str, None] = {}
+    offset = 0
+    while True:
+        page = list_page(conn, addressed=True, session=session, limit=200, offset=offset)
+        for record in page["requests"]:
+            found.setdefault(str(record["reference"]), None)
+        if page["next_offset"] is None:
+            return list(found)
+        offset = int(page["next_offset"])
+
+
 #: The columns a reader of requests names that a store an earlier build wrote may lack.
-_LATER_COLUMNS = ("comment_id", "addressee")
+_LATER_COLUMNS = ("comment_id", "addressee", "purpose")
 
 
 def _requests_table(conn: sqlite3.Connection) -> str:
@@ -552,39 +569,128 @@ def create(
     session_id: object = None,
     expires_at: object = None,
 ) -> dict:
-    identity = model.new_id()
+    """Ask the owner a question or a decision on an item.
+
+    A decision recommends an answer in every required field. Where the owner's
+    setting of the item's space leaves decisions to the agent (`decision`), an
+    agent's decision is answered in the same write by its recommendations, in the
+    asker's name, and the summary of decisions marks the answer.
+    """
+
+    parsed_kind, parsed_prompt, parsed_fields = _request_parts(kind, prompt, fields)
+    deadline = request_model.timestamp(expires_at)
+    live = "a request requires a live work item, live execution and future deadline"
+    with _transaction(conn):
+        item = read_model.item_row(conn, reference)
+        execution, session = _bindings(conn, item, execution_id, session_id)
+        _refuse_closed(conn, item, live)
+        identity = questions.ask(
+            conn,
+            str(item["work_item_id"]),
+            kind=parsed_kind,
+            prompt=parsed_prompt,
+            fields=parsed_fields,
+            author=author,
+            execution_id=execution,
+            session_id=session,
+            expires_at=deadline,
+        )
+        row = _row(conn, identity)
+        if _expired(conn, row, request_model.now()):
+            raise model.PlanningError(live)
+        if parsed_kind == "decision" and _agent_decides(conn, item):
+            _decide_by_recommendation(conn, row, parsed_fields, author)
+    words.bring_current(conn)
+    return get(conn, identity)
+
+
+def _request_parts(kind: object, prompt: object, fields: object) -> tuple[str, str, list[dict]]:
+    """The kind, prompt and fields of a request as given, checked; a decision's fields
+    recommend an answer in every required field."""
+
     parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
     parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
     if not parsed_prompt:
         raise model.PlanningError("prompt is required")
     parsed_fields = request_model.fields(fields)
-    deadline = request_model.timestamp(expires_at)
-    with _transaction(conn):
-        item = read_model.item_row(conn, reference)
-        execution, session = _bindings(conn, item, execution_id, session_id)
-        at = request_model.now()
-        conn.execute(
-            "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,author,execution_id,session_id,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (
-                identity,
-                item["work_item_id"],
-                parsed_kind,
-                parsed_prompt,
-                model.dumps(parsed_fields),
-                model.actor(author),
-                execution,
-                session,
-                deadline,
-                at,
-            ),
-        )
-        if _expired(conn, _row(conn, identity), at):
-            raise model.PlanningError(
-                "a request requires a live work item, live execution and future deadline"
-            )
-        _event(conn, item["work_item_id"], "request_created", identity, author)
-    words.bring_current(conn)
-    return get(conn, identity)
+    if parsed_kind == "decision":
+        request_model.recommends_every_required(parsed_fields)
+    return parsed_kind, parsed_prompt, parsed_fields
+
+
+def _agent_decides(conn: sqlite3.Connection, item: sqlite3.Row) -> bool:
+    """Whether an agent's decision on this item is the agent's to take, by the owner's
+    setting of its space; the owner's and Valkama's own requests ask as they always did."""
+
+    if not calls.from_agent():
+        return False
+    mode = participation.load(conn).mode(str(item["planning_space_id"]), "decision")
+    return mode == participation.AGENT
+
+
+def _decide_by_recommendation(
+    conn: sqlite3.Connection, row: sqlite3.Row, fields: list[dict], author: str | None
+) -> None:
+    """Answer a decision just asked by its recommendations, as the session that asked it,
+    and mark the answer in the summary of decisions with what it chose."""
+
+    given = request_model.recommended_answers(fields)
+    stored = request_model.stored_answers(given, request_model.RECOMMENDED_NOTE)
+    event = _close(
+        conn,
+        row,
+        "answered",
+        stored,
+        answered_by=calls.holder(author),
+        author=author,
+        at=request_model.now(),
+    )
+    chosen = ", ".join(f"«{label}»" for label in request_model.chosen_labels(fields, given))
+    decisions.mark(conn, event, "decision", f"chose {chosen}")
+
+
+def _close(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    status: str,
+    stored: dict | None,
+    *,
+    answered_by: str,
+    author: str | None,
+    at: str,
+) -> int:
+    """Close a pending request at its revision as `status`, with its answer as stored
+    when it is answered, and record the event; answer the event's id.
+
+    Refused when the request is no longer pending or it changed meanwhile.
+    """
+
+    changed = conn.execute(
+        "UPDATE work_item_requests SET status=?,answers_json=?,answered_by=?,resolved_at=?,expired_reason=?,answer_version=?,revision=revision+1 WHERE request_id=? AND revision=? AND status='pending' AND (expires_at IS NULL OR julianday(expires_at)>julianday('now'))",
+        (
+            status,
+            model.dumps(stored) if stored is not None else None,
+            answered_by,
+            at,
+            "withdrawn" if status == "expired" else None,
+            1 if stored is not None else 0,
+            row["request_id"],
+            row["revision"],
+        ),
+    )
+    if changed.rowcount != 1:
+        raise model.WorkflowGuardError("request is no longer pending")
+    return questions.log_event(
+        conn, row["work_item_id"], f"request_{status}", str(row["request_id"]), author
+    )
+
+
+def _refuse_closed(conn: sqlite3.Connection, item: sqlite3.Row, message: str) -> None:
+    """Refuse a request on a closed item: its close ended every one, and a new one
+    would wait for an answer nobody acts on."""
+
+    if read_model.state_by_id(conn, str(item["state_id"]))["is_terminal"]:
+        raise model.PlanningError(message)
 
 
 def ask_sessions(
@@ -606,40 +712,32 @@ def ask_sessions(
     is the caller's own, is a subagent's rather than a top-level one, or is named
     twice; and when none is named. An agent session that asked one session
     `MOST_ASKS_PER_HOUR` times in the last hour is refused with `AskLimitError`;
-    Valkama's own asking counts toward no hour. A refusal writes nothing.
+    Valkama's own asking counts toward no hour. A refusal writes nothing. A decision
+    recommends an answer in every required field, as one asked of the owner does,
+    and waits for the session's answer at any setting.
     """
 
-    parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
-    parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
-    if not parsed_prompt:
-        raise model.PlanningError("prompt is required")
-    parsed_fields = request_model.fields(fields)
+    parsed_kind, parsed_prompt, parsed_fields = _request_parts(kind, prompt, fields)
     deadline = request_model.timestamp(expires_at)
     identities: list[str] = []
     with _transaction(conn):
         asked = _addressees(conn, sessions)
         item = read_model.item_row(conn, reference)
-        at = request_model.now()
+        live = "a request requires a live work item and future deadline"
+        _refuse_closed(conn, item, live)
         for session in asked:
-            identity = model.new_id()
-            conn.execute(
-                "INSERT INTO work_item_requests(request_id,work_item_id,kind,prompt,fields_json,"
-                "author,expires_at,created_at,addressee) VALUES(?,?,?,?,?,?,?,?,?)",
-                (
-                    identity,
-                    item["work_item_id"],
-                    parsed_kind,
-                    parsed_prompt,
-                    model.dumps(parsed_fields),
-                    model.actor(author),
-                    deadline,
-                    at,
-                    session,
-                ),
+            identity = questions.ask(
+                conn,
+                str(item["work_item_id"]),
+                kind=parsed_kind,
+                prompt=parsed_prompt,
+                fields=parsed_fields,
+                author=author,
+                expires_at=deadline,
+                addressee=session,
             )
-            if _expired(conn, _row(conn, identity), at):
-                raise model.PlanningError("a request requires a live work item and future deadline")
-            _event(conn, item["work_item_id"], "request_created", identity, author)
+            if _expired(conn, _row(conn, identity), request_model.now()):
+                raise model.PlanningError(live)
             identities.append(identity)
     words.bring_current(conn)
     return [get(conn, identity) for identity in identities]
@@ -654,6 +752,7 @@ def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
     own = (
         identity.session_id if identity is not None and identity.state == calls.CONFIRMED else None
     )
+    settings = participation.load(conn)
     asked: list[str] = []
     for value in sessions:
         session = model.text_field(value, "sessions", limit=128)
@@ -674,7 +773,7 @@ def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
                 f"session {session} is a subagent's; ask the session it works for,"
                 f" {row['parent_session_id']}"
             )
-        if not leases.session_live(row):
+        if not leases.session_live(row, settings=settings):
             raise model.PlanningError(
                 f"session {session} has ended or gone quiet past its lease, and would not answer"
             )
@@ -768,20 +867,28 @@ def _check_closer(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> No
         return
     if identity is None or identity.source == calls.VALKAMA:
         return
-    if proved is None or proved != _asker(conn, str(row["request_id"])):
+    if proved is None or proved != _asker(conn, row):
         raise model.NotAskerError(
             "only the session that asked this request, or Valkama, withdraws it"
         )
 
 
-def _asker(conn: sqlite3.Connection, request_id: str) -> str | None:
-    """The session whose proved call asked this request; None when Valkama or nobody proved asked it."""
+def _asker(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+    """The session that asked this request; None when Valkama or nobody proved asked it.
 
+    A request about a waiting action was asked by whoever asked the action
+    (`pending.asked_session`), even where a call of Valkama's own wrote the request on
+    that agent's behalf; any other, by the proved call that wrote it.
+    """
+
+    action = pending.of_request(row)
+    if action is not None:
+        return pending.asked_session(conn, pending.get(conn, action))
     found = conn.execute(
         "SELECT c.session_id FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
         " WHERE e.action = 'request_created' AND e.detail = ? AND c.identity_state = ?"
         " ORDER BY e.id LIMIT 1",
-        (request_id, calls.CONFIRMED),
+        (str(row["request_id"]), calls.CONFIRMED),
     ).fetchone()
     return None if found is None or found[0] is None else str(found[0])
 
@@ -828,34 +935,27 @@ def create_list(
     """Put a list under a root comment of its item; the answer is the list's request id.
 
     Written by the call that wrote the comment, inside its transaction, so the two
-    are one write. A closed item takes none: it would read `expired` from the
-    start, and a list there could only be ticked after the item reopened.
+    are one write. A closed item takes none: its close ended every request on
+    it, and a list written now could only be ticked after the item reopened.
     """
 
     prompt, fields = question
-    identity = model.new_id()
     with _transaction(conn):
-        item = read_model.item_by_id(conn, work_item_id)
-        if read_model.state_by_id(conn, item["state_id"])["is_terminal"]:
-            raise model.PlanningError(
-                "a list on a closed item could never be answered; reopen it first,"
-                " or leave the list out"
-            )
-        conn.execute(
-            "INSERT INTO work_item_requests(request_id,work_item_id,comment_id,kind,prompt,"
-            "fields_json,author,created_at) VALUES(?,?,?,?,?,?,?,?)",
-            (
-                identity,
-                work_item_id,
-                comment_id,
-                "question",
-                prompt,
-                model.dumps(fields),
-                model.actor(author),
-                request_model.now(),
-            ),
+        _refuse_closed(
+            conn,
+            read_model.item_by_id(conn, work_item_id),
+            "a list on a closed item could never be answered; reopen it first,"
+            " or leave the list out",
         )
-        _event(conn, work_item_id, "request_created", identity, author)
+        identity = questions.ask(
+            conn,
+            work_item_id,
+            kind="question",
+            prompt=prompt,
+            fields=fields,
+            author=author,
+            comment_id=comment_id,
+        )
     words.bring_current(conn)
     return identity
 
@@ -875,6 +975,9 @@ def resolve(
     """Close a pending request: answer it, decline it or withdraw it, once.
 
     The first answer is version 1 of the answer; declining or withdrawing gives none.
+    A question with a purpose carries its answer, or its withdrawal, out in the same
+    write (`carry_out`), and the record says what it did as `carried_out`; a refusal
+    of that writes neither.
     """
 
     expected_revision = model.count_field(expected_revision, "expected_revision")
@@ -885,28 +988,686 @@ def resolve(
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
         _check_closer(conn, row, status)
+        _check_purpose(conn, row, status)
         at = request_model.now()
         if row["status"] != "pending" or _expired(conn, row, at):
             raise model.WorkflowGuardError("request is no longer pending")
+        if status == "answered" and _purpose(row) == pending.CONSENT:
+            consent.check_answer(conn, row, answers, own)
         parsed = _stored(row, answers, own, field_notes, said) if status == "answered" else None
-        changed = conn.execute(
-            "UPDATE work_item_requests SET status=?,answers_json=?,answered_by=?,resolved_at=?,expired_reason=?,answer_version=?,revision=revision+1 WHERE request_id=? AND revision=? AND status='pending' AND (expires_at IS NULL OR julianday(expires_at)>julianday('now'))",
-            (
-                status,
-                model.dumps(parsed) if parsed is not None else None,
-                model.actor(author),
-                at,
-                "withdrawn" if status == "expired" else None,
-                1 if parsed is not None else 0,
-                identity,
-                expected_revision,
-            ),
-        )
-        if changed.rowcount != 1:
-            raise model.WorkflowGuardError("request is no longer pending")
-        _event(conn, row["work_item_id"], f"request_{status}", identity, author)
+        _close(conn, row, status, parsed, answered_by=model.actor(author), author=author, at=at)
+        carried = carry_out(conn, row, parsed, said, author)
     words.bring_current(conn)
-    return get(conn, identity)
+    record = get(conn, identity)
+    if carried is not None:
+        record["carried_out"] = carried
+    return record
+
+
+def _purpose(row: sqlite3.Row) -> str | None:
+    """What a request row's answer carries out; None for any other, as on a store from before."""
+
+    # `in` on a row reads its values, so its column names are asked for by name.
+    columns = row.keys()
+    purpose: str | None = row["purpose"] if "purpose" in columns else None
+    return purpose
+
+
+def _carries(row: sqlite3.Row) -> str | None:
+    """What a question's answer carries out: its purpose, `action` for one a waiting write
+    carries with none, and None for a question whose answer is only recorded."""
+
+    purpose = _purpose(row)
+    if purpose is None and pending.of_request(row) is not None:
+        return "action"
+    return purpose
+
+
+def _check_purpose(conn: sqlite3.Connection, row: sqlite3.Row, status: str) -> None:
+    """Refuse a caller who may not close a question with a purpose, or one a waiting
+    write carries, this way.
+
+    Its answer is carried out as it is given, so it is never declined. It decides
+    what the owner decides, so only the owner answers it, from Valkama's
+    interface, whatever its purpose where a waiting write stands on its answer: an
+    agent that answered it would accept its own work, or make the write the owner
+    was asked about. The one exception is a session's consent to a cancel of its
+    work, which that session answers. Only the session that asked it withdraws it,
+    from any of its agents (`_asker`): one Valkama asked ends only with the write that
+    ends it, and a question withdrawn by anyone else would take work out of review,
+    or leave the owner without the question that was to reach them.
+    """
+
+    purpose = _carries(row)
+    if purpose is None:
+        return
+    if status == "declined":
+        raise model.PlanningError(
+            f"[purpose] this question carries out its answer ({purpose}): it is answered or"
+            " withdrawn, never declined"
+        )
+    if status == "answered":
+        # A session asked about a cancel of its work answers for itself (`_check_closer`).
+        if purpose != pending.CONSENT and not calls.by_person():
+            raise model.OwnerOnlyError("this is the owner's to answer, in Valkama")
+        return
+    identity = calls.current()
+    proved = (
+        identity.session_id if identity is not None and identity.state == calls.CONFIRMED else None
+    )
+    if proved is None or proved != _asker(conn, row):
+        raise model.NotAskerError("only the session that asked this question withdraws it")
+
+
+def carry_out(
+    conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
+) -> str | dict | None:
+    """What the answer to a question with a purpose does, in the write that gives it.
+
+    `answers` is the answer as stored, None for a withdrawal. Review's answer
+    `accept` moves the work to its first completed state, `return` to its first
+    ready state, started as it was, and so does its asker's withdrawal. The move is
+    the answerer's, held to its guards, so a refusal refuses the answer with it.
+    The owner's note is the move's reason when it fits the event that records the
+    move; the answer keeps it whole either way. The answer to confirm a goal or
+    stage is carried out by `_confirmed`, and the answer about put-off work that came
+    back by `_returned`. Answers what the move did: the category it reached,
+    `deferred` or `left_for_next_session`; None for a question with no purpose.
+    """
+
+    action = pending.of_request(row)
+    if action is not None:
+        return _carry_action(conn, row, pending.get(conn, action), answers, note, author)
+    purpose = _purpose(row)
+    if purpose == closing.CONFIRM:
+        return _confirmed(conn, row, answers, note, author)
+    if purpose == deferral.RETURN:
+        return _returned(conn, row, answers, note, author)
+    if purpose != "review":
+        return None
+    given = None if answers is None else answers.get(request_model.REVIEW_ANSWER)
+    if answers is not None and given not in (
+        request_model.REVIEW_ACCEPT,
+        request_model.REVIEW_RETURN,
+    ):
+        raise model.PlanningError(
+            f"[purpose] answer is {request_model.REVIEW_ACCEPT} or {request_model.REVIEW_RETURN}:"
+            " an own variant carries nothing out; say more in note"
+        )
+    category = "completed" if given == request_model.REVIEW_ACCEPT else "ready"
+    item = read_model.item_by_id(conn, str(row["work_item_id"]))
+    key = _first_state(conn, item, category)
+    reason = _said(note if answers is not None else "review withdrawn", key)
+    service.transition_work_item(
+        conn, read_model.reference(conn, item), key, reason=reason, author=author
+    )
+    return category
+
+
+@dataclass(frozen=True)
+class Carrier:
+    """What carries out the owner's answer at one point.
+
+    `outcomes` gives the outcome of the action by the answer's choice: `carried_out`
+    for the choice that makes the write, `declined` for one that leaves it unmade.
+    `run` does what the choice says, as the person who answered, held to the guards
+    of the write it makes: a refusal refuses the answer with it. It gets the question,
+    the action, the answer as stored and its note. `by_list` is the choice whose write
+    is a cancel by its list: a cancel list that changed since it was asked does not drop
+    the action on that choice, and the list's token decides instead (`cancel_list`).
+    """
+
+    outcomes: Mapping[str, str]
+    run: Callable[[sqlite3.Connection, sqlite3.Row, pending.Action, dict, str, str | None], object]
+    by_list: str | None = None
+
+
+#: The carrier of each point, by the point; a point its gate does not keep back yet has none.
+CARRIERS: dict[str, Carrier] = {}
+
+
+def _carry_action(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict | None,
+    note: str,
+    author: str | None,
+) -> str | dict | None:
+    """The answer to a question about a write that waits for the owner, or its withdrawal.
+
+    A withdrawal withdraws the action, and every other question and request of it
+    ends with it; a group's dissolves the group too (`groups.withdrawn`). An answer to
+    a request asked of a session carries nothing out here, but a session's answer about
+    a cancel of its work may settle that cancel (`consent.settle`).
+    The owner's answer to an action that no longer applies drops it (`pending.inapplicable`),
+    the answer standing as given; to one that still does, the action ends with the
+    outcome its carrier gives the choice, and then the carrier does what the choice
+    says, so the write it makes finds the action already ended; the events that record
+    that write name who asked for it (`service.asked_by`). A cancel whose list
+    alone changed is the owner's to confirm on the list as it stands (`Carrier.by_list`).
+    Answers the outcome.
+    """
+
+    if answers is None:
+        if action.kind == "group":
+            # The group dissolves with its question: its tasks go back to the stack.
+            groups.withdrawn(conn, action, author)
+            return pending.WITHDRAWN
+        pending.end(conn, action, pending.WITHDRAWN, author=author)
+        if action.point == "goal_close":
+            # The confirmation the asker withdrew is the sweep's to ask again.
+            closing.unasked(conn, action.work_item_id, str(row["request_id"]))
+        return pending.WITHDRAWN
+    if _addressee(row) is not None:
+        # A session's answer about a cancel of its work may be the one that decides it.
+        if action.point == "cancel_shared":
+            consent.settle(conn, action)
+        return None
+    if action.kind == "group":
+        # The owner's answer about a group of findings: it moves out the tasks they did
+        # not keep before it decides whether it still applies (`groups.carry_out`).
+        return groups.carry_out(conn, row, action, answers, note, author)
+    carrier = CARRIERS.get(action.point)
+    given = answers.get(request_model.REVIEW_ANSWER)
+    why = pending.inapplicable(conn, action)
+    if why == pending.LIST_CHANGED and carrier is not None and given == carrier.by_list:
+        why = None
+    if why is not None:
+        pending.end(conn, action, pending.DROPPED, author=author, why=why)
+        return pending.DROPPED
+    if carrier is None:
+        raise model.PlanningError(
+            f"[purpose] this build carries out no answer on {action.point}; withdraw the question"
+        )
+    outcome = carrier.outcomes.get(str(given)) if given is not None else None
+    if outcome is None:
+        raise pending.own_variant(carrier.outcomes)
+    pending.end(conn, action, outcome, author=author)
+    # The owner makes the write; its events say who asked for it, as the question does.
+    with service.asked_by(pending.asker(conn, action, str(row["author"]))):
+        carrier.run(conn, row, action, answers, note, author)
+    return outcome
+
+
+#: What a summary the owner's confirmation writes says comes next.
+CONFIRMED_NEXT = "Nothing: the work under it is closed."
+
+
+def _confirmed(
+    conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
+) -> str | None:
+    """The owner's answer to confirm a goal or stage whose work is all closed.
+
+    `confirm` ticks the steps still open, as the owner's, writes the summary
+    (`closing.CONFIRMED`, with the note as its `why`) and moves the goal or stage to
+    its workflow's first completed state; `leave` leaves it to the next session that
+    takes work in its space, and the period of waiting asks the owner nothing again.
+    Valkama asked it, so nobody withdraws it: the write that ends the wait ends it.
+    """
+
+    if answers is None:
+        return None
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if given not in (request_model.CONFIRM_CONFIRM, request_model.CONFIRM_LEAVE):
+        raise model.PlanningError(
+            f"[purpose] answer is {request_model.CONFIRM_CONFIRM} or"
+            f" {request_model.CONFIRM_LEAVE}: an own variant carries nothing out; say more in note"
+        )
+    identity = str(row["work_item_id"])
+    if given == request_model.CONFIRM_LEAVE:
+        _left_to_next(conn, identity)
+        return "left_for_next_session"
+    item = read_model.item_by_id(conn, identity)
+    reference = read_model.reference(conn, item)
+    for step in model.checklist(item["checklist"]):
+        if not step["done"]:
+            service.tick_checklist_item(conn, reference, str(step["id"]), author=author, force=True)
+    summary = {"done": closing.CONFIRMED, "next": CONFIRMED_NEXT}
+    if note:
+        summary["why"] = note[: model.SUMMARY_LIMIT]
+    service.set_summary(conn, reference, summary, author=author)
+    key = _first_state(conn, item, "completed")
+    service.transition_work_item(conn, reference, key, author=author)
+    return "completed"
+
+
+def _left_to_next(conn: sqlite3.Connection, identity: str) -> None:
+    """The owner leaves a goal or stage awaiting confirmation to the next session that takes
+    work in its space, and the period of waiting asks them nothing again."""
+
+    waiting.leave(conn, identity, waiting.SPACE)
+    closing.left(conn, identity)
+
+
+#: What a summary the owner's drop of put-off work writes says comes next.
+DROPPED_NEXT = "Nothing: the owner dropped it when it came back."
+
+
+def _returned(
+    conn: sqlite3.Connection, row: sqlite3.Row, answers: dict | None, note: str, author: str | None
+) -> str | None:
+    """The owner's answer about put-off work whose condition came under accepted goals.
+
+    `do` moves it to its workflow's first ready state, accepted as a move there is;
+    `later` puts it off again until the answer's `until` (`service.defer_again`);
+    `drop` cancels it, with the answer's `cancels` for a goal or stage with open work
+    under it, writing a summary that keeps what it says was done. Valkama asked it,
+    so nobody withdraws it: the write that takes the item out of deferred ends it.
+    """
+
+    if answers is None:
+        return None
+    given = answers.get(request_model.REVIEW_ANSWER)
+    choices = (request_model.RETURN_DO, request_model.RETURN_LATER, request_model.RETURN_DROP)
+    if given not in choices:
+        raise model.PlanningError(
+            f"[purpose] answer is {choices[0]}, {choices[1]} or {choices[2]}: an own variant"
+            " carries nothing out; say more in note"
+        )
+    identity = str(row["work_item_id"])
+    item = read_model.item_by_id(conn, identity)
+    reference = read_model.reference(conn, item)
+    if given == request_model.RETURN_LATER:
+        service.defer_again(conn, identity, answers.get(request_model.RETURN_UNTIL))
+        return "deferred"
+    if given == request_model.RETURN_DO:
+        key = _first_state(conn, item, "ready")
+        service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
+        return "ready"
+    _drop(
+        conn,
+        item,
+        answers,
+        note,
+        author,
+        done="Nothing: it was put off, and dropped when it came back.",
+        then=DROPPED_NEXT,
+    )
+    return "cancelled"
+
+
+def _drop(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    answers: dict,
+    note: str,
+    author: str | None,
+    *,
+    done: str,
+    then: str,
+    reason: str | None = None,
+) -> None:
+    """Cancel the item the owner's answer drops, with the answer's `cancels` for a goal
+    or stage with open work under it, writing a summary that keeps what it says was
+    done, or else says `done`, and what comes next, `then`. The cancel's reason is
+    `reason`, or else the note when it fits."""
+
+    reference = read_model.reference(conn, item)
+    said = model.summary(item["summary"], required=False)
+    kept = "" if said is None else str(said.get("done") or "").strip()
+    summary = {"done": kept or done, "next": then}
+    if note:
+        summary["why"] = note[: model.SUMMARY_LIMIT]
+    service.set_summary(conn, reference, summary, author=author)
+    key = _first_state(conn, item, "cancelled")
+    service.transition_work_item(
+        conn,
+        reference,
+        key,
+        reason=_said(note, key) if reason is None else reason,
+        author=author,
+        cancels=answers.get(request_model.RETURN_CANCELS) or None,
+    )
+
+
+#: What a summary the owner's drop of a goal they were asked about says comes next.
+GOAL_DROPPED_NEXT = "Nothing: the owner dropped it when asked whether to take it on."
+#: The reason a goal the owner's answer puts off records, when the answer's note
+#: does not fit it.
+GOAL_LATER = "the owner put it off when asked whether to take it on"
+
+
+def _goal(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about a goal lying in triage: one an agent proposed, or one
+    that came back from being put off.
+
+    `do` accepts it, as the owner's, with the work in triage under it
+    (`inherited`); `later` puts it off until the answer's `until`, the note its
+    reason when it fits; `drop` cancels it, with the answer's `cancels` for a goal
+    with open work under it.
+    """
+
+    item = read_model.item_by_id(conn, action.work_item_id)
+    reference = read_model.reference(conn, item)
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if given == request_model.RETURN_DO:
+        key = _first_state(conn, item, "ready")
+        service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
+    elif given == request_model.RETURN_LATER:
+        service.defer_work_item(
+            conn,
+            reference,
+            until=answers.get(request_model.RETURN_UNTIL),
+            reason=note if note and len(note) <= service.PUT_OFF_REASON_LIMIT else GOAL_LATER,
+            author=author,
+        )
+    else:
+        _drop(
+            conn,
+            item,
+            answers,
+            note,
+            author,
+            done="Nothing: it was not taken on.",
+            then=GOAL_DROPPED_NEXT,
+        )
+
+
+CARRIERS["proposed_goal"] = Carrier(
+    {
+        request_model.RETURN_DO: pending.CARRIED_OUT,
+        request_model.RETURN_LATER: pending.DECLINED,
+        request_model.RETURN_DROP: pending.DECLINED,
+    },
+    _goal,
+)
+
+
+#: The reason a task the owner's answer drops is cancelled with.
+TASK_DROPPED = "owner: not needed"
+#: The reason a task the owner's answer moves out of its goal leaves with, when the
+#: answer's note does not fit it.
+TASK_OUT = "the owner moved it out when asked whether to take it on"
+#: The most characters of the owner's note a task moved out leaves with as its reason.
+_OUT_REASON_LIMIT = 200
+
+
+def _task(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about a task an agent filed in an accepted goal, lying there in
+    triage, or one it moved there, which stayed where it was (an action of kind `parent`).
+
+    `do` takes it on in the goal: a task lying there moves to its first ready state,
+    `inherited` as filing it there would make it, or, where the agent moved it out of
+    triage to another state (an action of kind `transition`), to that state with the
+    reason and what to check the agent sent; a moved one is moved there now,
+    accepted from triage the same way. `later` puts it off under the goal until the
+    answer's `until`, a moved one moved there first. `out` takes a task lying there out
+    of the goal to triage (`split.move_out`), linked as discovered from the goal, and
+    leaves a moved one where it was. `drop` cancels it, as `owner: not needed`.
+    """
+
+    item = read_model.item_by_id(conn, action.work_item_id)
+    reference = read_model.reference(conn, item)
+    goal = read_model.reference(conn, read_model.item_by_id(conn, str(action.params["parent"])))
+    moving = action.kind == "parent"
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if moving and given in (request_model.RETURN_DO, request_model.RETURN_LATER):
+        service.update_work_item(conn, reference, parent=goal, author=author)
+    if given == request_model.RETURN_DO and action.kind == "transition":
+        service.transition_work_item(
+            conn,
+            reference,
+            str(action.params["state"]),
+            reason=str(action.params.get("reason") or ""),
+            to_check=action.params.get("to_check"),
+            author=author,
+        )
+    elif given == request_model.RETURN_DO and not moving:
+        key = _first_state(conn, item, "ready")
+        service.transition_work_item(conn, reference, key, reason=_said(note, key), author=author)
+    elif given == request_model.RETURN_LATER:
+        service.defer_work_item(
+            conn,
+            reference,
+            until=answers.get(request_model.RETURN_UNTIL),
+            reason=note if note and len(note) <= service.PUT_OFF_REASON_LIMIT else GOAL_LATER,
+            author=author,
+        )
+    elif given == request_model.TASK_OUT and not moving:
+        reason = note if note and len(note) <= _OUT_REASON_LIMIT else TASK_OUT
+        split.move_out(conn, reference, reason=reason, author=author)
+        service.link_work_items(conn, reference, goal, "discovered-from", author=author)
+    elif given == request_model.RETURN_DROP:
+        _drop(
+            conn,
+            item,
+            answers,
+            note,
+            author,
+            done="Nothing: it was not taken on.",
+            then=GOAL_DROPPED_NEXT,
+            reason=TASK_DROPPED,
+        )
+
+
+CARRIERS["task_in_goal"] = Carrier(
+    {
+        request_model.RETURN_DO: pending.CARRIED_OUT,
+        request_model.RETURN_LATER: pending.DECLINED,
+        request_model.TASK_OUT: pending.DECLINED,
+        request_model.RETURN_DROP: pending.DECLINED,
+    },
+    _task,
+)
+
+
+def _cancel(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    _note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about an agent's cancel of an item filed outside its work, or
+    of work other sessions do; the owner's answer ends what the sessions were asked.
+
+    `cancel` makes the cancel the agent asked for, to the state and with the reason it
+    named, as the owner's: a goal or stage with open work under it by the cancel list,
+    whose token is the answer's `cancels`, or, sent without one, the list as it stands
+    while nothing new or changed came into it since the agent asked. A list that did
+    change refuses the answer with the list as it stands now (`cancel_list`), for the
+    owner to confirm it. `keep` leaves the item as it is.
+    """
+
+    if answers.get(request_model.REVIEW_ANSWER) != request_model.CANCEL_CANCEL:
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    cancels = answers.get(request_model.RETURN_CANCELS) or None
+    if (
+        cancels is None
+        and item["kind"] == model.CONTAINER_KIND
+        and not pending.list_changed(conn, action)
+    ):
+        listing = closing.cancel_list(conn, item)
+        cancels = None if listing is None else listing.token
+    service.transition_work_item(
+        conn,
+        read_model.reference(conn, item),
+        str(action.params["state"]),
+        reason=str(action.params.get("reason") or ""),
+        author=author,
+        cancels=cancels,
+    )
+
+
+CARRIERS["cancel_outside"] = CARRIERS["cancel_shared"] = Carrier(
+    {
+        request_model.CANCEL_CANCEL: pending.CARRIED_OUT,
+        request_model.CANCEL_KEEP: pending.DECLINED,
+    },
+    _cancel,
+    by_list=request_model.CANCEL_CANCEL,
+)
+
+
+def _steps(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    _note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about steps of a goal or stage an agent removes or rewords.
+
+    `allow` makes the change on the steps as they stand, as the owner's write with the
+    agent's reason: the steps it removes go and the ones it rewords take the new text,
+    each recorded `checklist_removed` with the text it had. `keep` leaves them.
+    """
+
+    if answers.get(request_model.REVIEW_ANSWER) != request_model.CONDITION_ALLOW:
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    removed = set(action.params.get("remove") or [])
+    rewritten = {entry["id"]: entry["to"] for entry in action.params.get("rewrite") or []}
+    steps = [
+        {"id": step["id"], "text": rewritten.get(step["id"], step["text"]), "done": step["done"]}
+        for step in model.checklist(item["checklist"])
+        if step["id"] not in removed
+    ]
+    service.set_checklist(
+        conn,
+        read_model.reference(conn, item),
+        steps,
+        force=bool(action.params.get("force")),
+        author=author,
+        reason=action.reason,
+    )
+
+
+CARRIERS["condition"] = Carrier(
+    {
+        request_model.CONDITION_ALLOW: pending.CARRIED_OUT,
+        request_model.CONDITION_KEEP: pending.DECLINED,
+    },
+    _steps,
+)
+
+
+def _goal_closed(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    _note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about an agent's confirmation of a goal: `confirm` makes the close
+    the agent asked for, with the steps it ticked and the summary it wrote, as the owner's;
+    `leave` leaves the goal to the next session, as the answer to the question the sweep
+    asks does; a goal with nothing under it has no period of waiting to record that in,
+    and stays as it was. The close runs no net for commits: the agent's write that asked
+    ran it."""
+
+    if answers.get(request_model.REVIEW_ANSWER) == request_model.CONFIRM_LEAVE:
+        if closing.waits(conn, action.work_item_id):
+            _left_to_next(conn, action.work_item_id)
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    service.transition_work_item(
+        conn,
+        read_model.reference(conn, item),
+        str(action.params["state"]),
+        reason=str(action.params.get("reason") or ""),
+        author=author,
+    )
+
+
+CARRIERS["goal_close"] = Carrier(
+    {
+        request_model.CONFIRM_CONFIRM: pending.CARRIED_OUT,
+        request_model.CONFIRM_LEAVE: pending.DECLINED,
+    },
+    _goal_closed,
+)
+
+#: What a summary the owner's drop of a goal or stage an agent put off says comes next.
+PUT_OFF_DROPPED_NEXT = "Nothing: the owner dropped it when asked whether to put it off."
+
+
+def _put_off(
+    conn: sqlite3.Connection,
+    _row: sqlite3.Row,
+    action: pending.Action,
+    answers: dict,
+    note: str,
+    author: str | None,
+) -> None:
+    """The owner's answer about an accepted goal or stage an agent puts off: `do` keeps it
+    accepted as it is; `later` puts it off until the answer's `until`, or the agent's when
+    the answer names none, with the agent's reason; `drop` cancels it, with the answer's
+    `cancels` for one with open work under it."""
+
+    given = answers.get(request_model.REVIEW_ANSWER)
+    if given == request_model.RETURN_DO:
+        return
+    item = read_model.item_by_id(conn, action.work_item_id)
+    reference = read_model.reference(conn, item)
+    if given == request_model.RETURN_LATER:
+        service.defer_work_item(
+            conn,
+            reference,
+            until=answers.get(request_model.RETURN_UNTIL) or action.params["until"],
+            reason=action.params["reason"],
+            author=author,
+        )
+        return
+    _drop(
+        conn,
+        item,
+        answers,
+        note,
+        author,
+        done="Nothing: the owner dropped it when an agent put it off.",
+        then=PUT_OFF_DROPPED_NEXT,
+    )
+
+
+CARRIERS["goal_defer"] = Carrier(
+    {
+        request_model.RETURN_DO: pending.DECLINED,
+        request_model.RETURN_LATER: pending.CARRIED_OUT,
+        request_model.RETURN_DROP: pending.DECLINED,
+    },
+    _put_off,
+)
+
+
+def _said(note: str, key: str) -> str:
+    """The owner's note as a move's reason, when it fits the event that records the move."""
+
+    try:
+        return service.transition_reason(note, key)
+    except model.PlanningError:
+        return ""
+
+
+def _first_state(conn: sqlite3.Connection, item: sqlite3.Row, category: str) -> str:
+    """The key of the first state of `category` in the item's workflow, for an answer to move it to."""
+
+    target = states.first_state(conn, str(item["workflow_id"]), category)
+    if target is None:
+        raise model.WorkflowGuardError(
+            f"[transition] {read_model.reference(conn, item)} has no {category} state in its"
+            " workflow for this answer to move it to"
+        )
+    return str(target["key"])
 
 
 def change(
@@ -922,8 +1683,10 @@ def change(
 ) -> dict:
     """Replace the answer to an answered question, keeping the replaced one as a version.
 
-    Held to the rules of a first answer. Refused for a question that is not
-    answered, on a closed item (nobody is left to act on the change), when nothing
+    Held to the rules of a first answer. Refused for a question with a purpose,
+    whose answer was carried out as it was given (`[purpose]`), for one that is not
+    answered, on a closed item (`[item_closed]`: nobody is left to act on the
+    change, and a goal or stage is closed as a task is), when nothing
     differs from the current answer, and past `MAX_ANSWER_VERSIONS`. The current
     answer stays on the request row and moves `resolved_at`, so a reader of what
     was answered after a time finds the change; the replaced one keeps the call
@@ -937,12 +1700,18 @@ def change(
         if row["revision"] != expected_revision:
             raise model.RevisionConflictError(expected_revision, row["revision"])
         _check_closer(conn, row, "answered")
+        purpose = _carries(row)
+        if purpose is not None:
+            raise model.PlanningError(
+                f"[purpose] this question carried out its answer ({purpose}) when it was"
+                " given: that answer is not changed"
+            )
         if row["status"] != "answered":
             raise model.WorkflowGuardError("only an answered question's answer can be changed")
         item = read_model.item_by_id(conn, row["work_item_id"])
         if read_model.state_by_id(conn, item["state_id"])["is_terminal"]:
             raise model.WorkflowGuardError(
-                "[task_closed] the work item is closed; reopen it to change the answer"
+                "[item_closed] the work item is closed; reopen it to change the answer"
             )
         version = int(row["answer_version"])
         if version >= request_model.MAX_ANSWER_VERSIONS:
@@ -986,7 +1755,7 @@ def change(
         )
         if changed.rowcount != 1:  # pragma: no cover - the row was read under the write lock
             raise model.WorkflowGuardError("only an answered question's answer can be changed")
-        _event(conn, row["work_item_id"], "request_changed", row["request_id"], author)
+        questions.log_event(conn, row["work_item_id"], "request_changed", row["request_id"], author)
     words.bring_current(conn)
     return get(conn, row["request_id"])
 
@@ -1014,19 +1783,4 @@ def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object,
         note,
         own=variants,
         field_notes=comments,
-    )
-
-
-def _event(
-    conn: sqlite3.Connection, work_item_id: str, action: str, request_id: str, author: str | None
-) -> None:
-    conn.execute(
-        "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
-        (
-            work_item_id,
-            model.event_action(action),
-            request_id,
-            model.actor(author),
-            calls.call_id(conn, work_item_id),
-        ),
     )

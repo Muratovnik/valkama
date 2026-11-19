@@ -1,0 +1,165 @@
+{
+  "interface_version": "valkama-planning-api",
+  "goals": [
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000046",
+      "reference": "MAIN-9",
+      "title": "Tree goal",
+      "kind": "goal",
+      "state": null,
+      "container_state": "in_progress",
+      "open": true,
+      "parent_reference": null,
+      "other_space": null,
+      "partial": false,
+      "tasks": {
+        "total": 4,
+        "closed": 2,
+        "completed": 1,
+        "cancelled": 1,
+        "by_category": {
+          "triage": 0,
+          "deferred": 0,
+          "ready": 2,
+          "active": 0,
+          "review": 0,
+          "completed": 1,
+          "blocked": 0,
+          "cancelled": 1
+        }
+      },
+      "baseline": {
+        "tasks": 3,
+        "basis": "started",
+        "taken_at": "2026-01-02T03:04:05Z"
+      },
+      "baseline_absent": null,
+      "spent": {
+        "agent_seconds": 900.0,
+        "tokens": {
+          "input": 120,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 24,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 1.5,
+        "unpriced_tokens": 48,
+        "quality": "observed",
+        "partly_measured": 0
+      },
+      "spent_with_cancelled": {
+        "agent_seconds": 1200.0,
+        "tokens": {
+          "input": 160,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 32,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 1.75,
+        "unpriced_tokens": 48,
+        "quality": "observed",
+        "partly_measured": 0
+      },
+      "sessions": 1,
+      "commits": 0,
+      "commits_unknown_repository": 0,
+      "remaining": {
+        "agent_seconds": 0.0,
+        "tokens": {
+          "input": 0,
+          "cached_read": 0,
+          "cache_write_5m": 0,
+          "cache_write_1h": 0,
+          "output": 0,
+          "reasoning": 0
+        },
+        "estimated_api_cost_usd": 0.0,
+        "basis": 0,
+        "estimated": 0,
+        "unestimated": 2
+      }
+    },
+    {
+      "work_item_id": "00000000-0000-4000-8000-000000000041",
+      "reference": "MAIN-10",
+      "title": "Tree stage",
+      "kind": "stage",
+      "state": null,
+      "container_state": "not_started",
+      "open": true,
+      "parent_reference": "MAIN-9",
+      "other_space": null,
+      "partial": false,
+      "tasks": {
+        "total": 2,
+        "closed": 0,
+        "completed": 0,
+        "cancelled": 0,
+        "by_category": {
+          "triage": 0,
+          "deferred": 0,
+          "ready": 2,
+          "active": 0,
+          "review": 0,
+          "completed": 0,
+          "blocked": 0,
+          "cancelled": 0
+        }
+      },
+      "baseline": null,
+      "baseline_absent": "not_started",
+      "spent": {
+        "agent_seconds": 300.0,
+        "tokens": {
+          "input": 40,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 8,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 48,
+        "quality": "observed",
+        "partly_measured": 0
+      },
+      "spent_with_cancelled": {
+        "agent_seconds": 300.0,
+        "tokens": {
+          "input": 40,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 8,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 48,
+        "quality": "observed",
+        "partly_measured": 0
+      },
+      "sessions": 1,
+      "commits": 0,
+      "commits_unknown_repository": 0,
+      "remaining": {
+        "agent_seconds": 0.0,
+        "tokens": {
+          "input": 0,
+          "cached_read": 0,
+          "cache_write_5m": 0,
+          "cache_write_1h": 0,
+          "output": 0,
+          "reasoning": 0
+        },
+        "estimated_api_cost_usd": 0.0,
+        "basis": 0,
+        "estimated": 0,
+        "unestimated": 2
+      }
+    }
+  ]
+}

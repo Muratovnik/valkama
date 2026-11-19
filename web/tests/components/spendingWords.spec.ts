@@ -172,6 +172,16 @@ const session = (title: string | null) => ({
   title,
 })
 const account = { id: 'f0f0f0f0-1111-4222-8333-444455556666', unknown: false }
+/** An account of that organization, by its id and the time of week its week resets. */
+const seat = (tail: string, weekly_reset: string | null, shared = false) => ({
+  id: `${account.id}/${tail}`,
+  unknown: false,
+  organization: account.id,
+  account_uuid: tail.startsWith('weekly:') || tail === '' ? null : tail,
+  weekly_reset,
+  shared,
+})
+const UUID = 'a1a1a1a1-2222-4333-8444-555566667777'
 
 describe('the name of an executor and an account', () => {
   afterEach(() => localStorage.clear())
@@ -188,14 +198,70 @@ describe('the name of an executor and an account', () => {
     expect(words.valueDetail('executor', session(null))).toBeUndefined()
   })
 
-  it('names an account by the owner’s name for it, with its whole id in the hint', () => {
+  it('names an organization by the owner’s name for it, and leaves its whole id out of any hint', () => {
     const words = wordsIn('ru')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
     useAccountNamesStore().names = { [account.id]: 'Основной' }
     expect(words.valueLabel('account', account)).toBe('Основной')
-    expect(words.valueDetail('account', account)).toBe(account.id)
-    expect(words.accounts([account], [account, { id: 'b7', unknown: false }])).toBe(
-      'Смена аккаунта: Основной → Основной, b7',
+    // The whole id is copied from the account's menu in the quota panel, never read in a hint.
+    expect(words.valueDetail('account', account)).toBeUndefined()
+  })
+
+  it('names an account by its own name, else its weekly reset’s, else its organization and its UUID’s start', () => {
+    const words = wordsIn('en')
+    const known = seat(UUID, '4T09:00Z')
+    expect(words.valueLabel('seat', known)).toBe('a1a1a1a1')
+    useAccountNamesStore().names = { [account.id]: 'Lab' }
+    expect(words.valueLabel('seat', known)).toBe('Lab · a1a1a1a1')
+    // The name its weekly reset was given before its UUID was known carries over to it.
+    useAccountNamesStore().names = {
+      [account.id]: 'Lab',
+      [`${account.id}/weekly:4T09:00Z`]: 'Desk',
+    }
+    expect(words.valueLabel('seat', known)).toBe('Desk')
+    useAccountNamesStore().names = {
+      [`${account.id}/weekly:4T09:00Z`]: 'Desk',
+      [known.id]: 'Own',
+    }
+    expect(words.valueLabel('seat', known)).toBe('Own')
+    expect(words.valueDetail('seat', known)).toBeUndefined()
+  })
+
+  it('names an account known by its weekly reset by its organization and when its week resets, in local time', () => {
+    vi.stubEnv('TZ', 'Europe/Berlin')
+    try {
+      useAccountNamesStore().names = { [account.id]: 'Lab' }
+      const weekly = seat('weekly:4T09:00Z', '4T09:00Z')
+      expect(wordsIn('en').valueLabel('seat', weekly)).toBe('Lab · resets Thu 10:00')
+      expect(wordsIn('ru').valueLabel('seat', weekly)).toBe('Lab · сброс чт 10:00')
+      // Past midnight local time its week resets on the next day.
+      expect(wordsIn('en').valueLabel('seat', seat('weekly:7T23:30Z', '7T23:30Z'))).toBe(
+        'Lab · resets Mon 00:30',
+      )
+      useAccountNamesStore().names = { [weekly.id]: 'Desk' }
+      expect(wordsIn('en').valueLabel('seat', weekly)).toBe('Desk')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('names work on no known account by its organization, and says an account may be two', () => {
+    const words = wordsIn('en')
+    expect(words.valueLabel('seat', seat('', null))).toBe('f0f0f0f0 · account not known')
+    expect(words.valueLabel('seat', { id: null, unknown: true })).toBe('Unknown')
+    useAccountNamesStore().names = { [`${account.id}/weekly:4T09:00Z`]: 'Desk' }
+    expect(words.valueLabel('seat', seat('weekly:4T09:00Z', '4T09:00Z', true))).toBe(
+      'Desk · may be two accounts',
+    )
+  })
+
+  it('says a change of accounts by their names', () => {
+    const words = wordsIn('ru')
+    useAccountNamesStore().names = { [`${account.id}/${UUID}`]: 'Основной' }
+    const known = seat(UUID, '4T09:00Z')
+    const other = seat('b7b7b7b7-0000-4000-8000-000000000000', '1T09:00Z')
+    expect(words.accounts([known], [known, other])).toBe(
+      'Смена аккаунта: Основной → Основной, b7b7b7b7',
     )
   })
 
@@ -203,7 +269,6 @@ describe('the name of an executor and an account', () => {
     useAccountNamesStore().names = { other: 'Other' }
     const words = wordsIn('en')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
-    expect(words.valueDetail('account', account)).toBe(account.id)
-    expect(words.valueDetail('account', { id: 'b7', unknown: false })).toBeUndefined()
+    expect(words.valueDetail('account', account)).toBeUndefined()
   })
 })

@@ -1,26 +1,31 @@
-"""What the tree's news adds to an orchestrator's hook, measured inside the process.
+"""What the tree's news adds to an orchestrator's hook, counted inside the process.
 
-The bound is the time the tree's news adds to `notify.collect`, not the time of the
-hook's process, whose own spread is wider than what is measured here. The tree is
-one goal of 13 stages with 20 tasks each, 274 items; the orchestrator holds one task
-in it, so every item is in its tree. Each figure is the median of 200 runs, the run
-with the tree's news and the run without it taken in turns, so a slower stretch of
-the machine weighs on both alike.
+The tree is one goal of 13 stages with 20 tasks each, 274 items; the orchestrator holds
+one task in it, so every item is in its tree. The cost is counted in what the machine's
+speed and load leave alone: the statements `notify.collect` issues and the plan SQLite
+takes for them. A bound in milliseconds measured the machine as much as the hook: on a
+machine busy with other work the same code took two to five times as long.
 
-- With nothing new anywhere, the hook still answers from its two reads: the tree adds
-  three columns to the second, where each source ends, and at most 0.5 ms.
-- With 100 comments another session wrote across the tree since the hook last read
-  it, 200 rows in two sources, the tree's news is read, climbed to its roots and
-  sorted in at most 2 ms more than the same hook that answers from its two reads.
+- With nothing new anywhere, the hook answers from its two reads with the tree as
+  without it: the tree adds no statement, only three columns to the second, each an
+  uncorrelated subquery SQLite answers by a search of its table, never a scan.
+- The tree's news is read in as many statements whatever it reads: 13 comments on one
+  stage and then one on each of the 13 stages, or 100 comments across the tree and then
+  100 more on 100 other tasks, take the same number. What it reads grows with neither
+  the rows written since nor the items they name.
+- The climb reads each level once: an item and its parent asked about together are
+  one statement whichever row comes first, and what is over them the next.
 """
 
 from __future__ import annotations
 
 import os
-import statistics
+import re
+import sqlite3
 import tempfile
-import time
 import unittest
+from collections.abc import Sequence
+from typing import Any
 from unittest import mock
 
 from server import mcp_surface, store
@@ -29,9 +34,11 @@ from server.planning import calls, service
 
 A = "0a000000-0000-4000-8000-00000000000a"
 B = "0b000000-0000-4000-8000-00000000000b"
-RUNS = 200
 STAGES = 13
 TASKS = 20
+#: How SQLite names the plan of a subquery, numbered, and of a read of one table.
+_SUBQUERY = re.compile(r"(SCALAR SUBQUERY) \d+")
+_READ = re.compile(r"(SEARCH|SCAN) (TABLE )?(\w+)")
 
 
 class TreeCostTests(unittest.TestCase):
@@ -84,70 +91,148 @@ class TreeCostTests(unittest.TestCase):
         finally:
             conn.close()
 
-    def added(self, run, name: str, replacement: object) -> float:
-        """What `run` takes with the tree less what it takes with `notify.<name>` replaced,
-        median against median, in milliseconds. The replacement is made and undone
-        outside the timed part, so neither side pays for it."""
+    def comment(self, refs: list[str]) -> None:
+        """One comment by session B on each of `refs`."""
 
-        conn = notify._connect(self.path)
-        assert conn is not None
-        self.addCleanup(conn.close)
-        original = getattr(notify, name)
-        with_tree: list[int] = []
-        without: list[int] = []
-        for _run in range(RUNS):
-            for runs, value in ((with_tree, original), (without, replacement)):
-                setattr(notify, name, value)
-                try:
-                    started = time.perf_counter_ns()
-                    run(conn, tree=value is original)
-                    runs.append(time.perf_counter_ns() - started)
-                finally:
-                    setattr(notify, name, original)
-        return (statistics.median(with_tree) - statistics.median(without)) / 1e6
-
-    def marks(self) -> bytes:
-        with open(os.path.join(self.state, A + ".marks"), "rb") as handle:
-            return handle.read()
-
-    def test_nothing_new_adds_at_most_half_a_millisecond(self) -> None:
-        self.collect()
-        self.assertFalse(self.collect(), "everything is read")
-        self.assertIn(b"\n@tree ", self.marks())
-
-        def run(conn, *, tree: bool) -> None:
-            del tree  # nothing is new with the tree or without it
-            assert not notify.collect(conn, self.state, A, None)
-
-        added = self.added(run, "_ENDS_COLUMNS", ", 0, 0, 0")
-        self.assertLessEqual(added, 0.5, f"{added:.3f} ms")
-
-    def test_a_hundred_new_comments_add_at_most_two_milliseconds(self) -> None:
-        self.collect()
-        self.assertFalse(self.collect(), "everything is read")
-        before = self.marks()
-        written = [self.stages[n % STAGES] for n in range(48)] + self.tasks[1::5]
-        self.assertEqual(100, len(written))
-        for number, ref in enumerate(written):
+        for number, ref in enumerate(refs):
             self.call(
                 "apply_work_item_changes",
                 {"sessionId": B},
                 id=ref,
                 comment={"body": f"Note {number} under the goal"},
             )
+
+    def statements(self, name: str | None = None, replacement: object = None) -> list[str]:
+        """The statements one `notify.collect` that takes nothing issues, with
+        `notify.<name>` replaced when a name is given; the replacement is undone after."""
+
+        conn = notify._connect(self.path)
+        assert conn is not None
+        self.addCleanup(conn.close)
+        original = getattr(notify, name) if name else None
+        seen: list[str] = []
+        conn.set_trace_callback(seen.append)
+        try:
+            if name:
+                setattr(notify, name, replacement)
+            notify.collect(conn, self.state, A, None, take=False)
+        finally:
+            conn.set_trace_callback(None)
+            if name:
+                setattr(notify, name, original)
+        return seen
+
+    def plan(self, statement: str) -> list[str]:
+        """What SQLite does for `statement`, a step a line, subqueries unnumbered."""
+
+        rows = self.conn.execute("EXPLAIN QUERY PLAN " + statement).fetchall()
+        return [_SUBQUERY.sub(r"\1", row[3]) for row in rows]
+
+    def marks(self) -> bytes:
+        with open(os.path.join(self.state, A + ".marks"), "rb") as handle:
+            return handle.read()
+
+    def test_nothing_new_adds_no_statement_and_three_columns_read_by_a_search(self) -> None:
+        self.collect()
+        self.assertFalse(self.collect(), "everything is read")
+        self.assertIn(b"\n@tree ", self.marks())
+        with_tree = self.statements()
+        without = self.statements("_ENDS_COLUMNS", ", 0, 0, 0")
+        self.assertEqual(2, len(without), without)
+        self.assertEqual(len(without), len(with_tree), "the tree adds no statement")
+        steps = self.plan(with_tree[1])
+        for step in self.plan(without[1]):
+            steps.remove(step)
+        self.assertEqual(3, steps.count("SCALAR SUBQUERY"), steps)
+        read = [found.groups() for step in steps if (found := _READ.match(step))]
+        self.assertEqual(
+            {"work_item_events", "work_item_comments", "execution_events"},
+            {table for _way, _word, table in read},
+            steps,
+        )
+        self.assertEqual(
+            ["SEARCH"] * 3, [way for way, _word, _table in read], "each by a search, no scan"
+        )
+        self.assertEqual(6, len(steps), "and nothing else")
+
+    def test_a_hundred_new_comments_are_read_in_statements_that_do_not_grow_with_them(
+        self,
+    ) -> None:
+        self.collect()
+        self.assertFalse(self.collect(), "everything is read")
+        before = self.marks()
+        self.comment([self.stages[1]] * STAGES)
+        one = self.statements()
+        self.comment(self.stages)
+        every = self.statements()
+        self.assertEqual(
+            len(one),
+            len(every),
+            f"{STAGES} comments on one stage, then one on each of the {STAGES}: no more statements",
+        )
+        written = [self.stages[n % STAGES] for n in range(48)] + self.tasks[1::5]
+        self.assertEqual(100, len(written))
+        self.comment(written)
         self.assertEqual(before, self.marks(), "the hook has not read them yet")
         told = self.collect(take=False)
         self.assertEqual(
             STAGES, len(told), "the comments on its stages, the ones on tasks being no news"
         )
         self.assertEqual(before, self.marks(), "and a read that does not take moves nothing")
+        without = self.statements("_tree_moved", lambda *_: False)
+        self.assertEqual(2, len(without), "the hook's own two reads")
+        first = self.statements()
+        self.assertLess(len(without), len(first), "the tree's news is read")
 
-        def run(conn, *, tree: bool) -> None:
-            told = notify.collect(conn, self.state, A, None, take=False)
-            assert bool(told) is tree
+        others = (self.tasks[2::5] + self.tasks[3::5])[:100]
+        self.assertFalse(set(others) & set(written), "100 items not written on yet")
+        self.comment(others)
+        again = self.statements()
+        self.assertEqual(
+            len(first), len(again), "twice the rows on 100 more items, no more statements"
+        )
 
-        added = self.added(run, "_tree_moved", lambda *_: False)
-        self.assertLessEqual(added, 2.0, f"{added:.3f} ms")
+    def test_the_climb_reads_a_level_once_whatever_order_its_rows_come_in(self) -> None:
+        """A task and its stage asked about together are one level, and the goal over
+        them the next: the stage is not read again when the task's row came first."""
+
+        identities = {
+            f"MAIN-{row[1]}": str(row[0])
+            for row in self.conn.execute("SELECT work_item_id, number FROM work_items")
+        }
+        task, stage = identities[self.tasks[TASKS + 1]], identities[self.stages[1]]
+        for children_first in (True, False):
+            with self.subTest(children_first=children_first):
+                conn = notify._connect(self.path)
+                assert conn is not None
+                self.addCleanup(conn.close)
+                ordered = _Ordered(conn, children_first)
+                tree = notify._Tree(ordered, A)  # type: ignore[arg-type]
+                self.assertTrue(tree.watches(), "the session works on the goal")
+                tree.climb({task, stage})
+                self.assertEqual([2, 1], ordered.levels, "the task and its stage, then the goal")
+                chain = [item for item, _node in tree.chain(task)]
+                self.assertEqual([task, stage], chain[:2])
+                self.assertEqual(3, len(chain), "and the goal over them")
+
+
+class _Ordered:
+    """A connection whose reads of items answer children first, or parents first, and
+    keep how many items each read asked for; any other statement is the connection's own."""
+
+    def __init__(self, conn: sqlite3.Connection, children_first: bool) -> None:
+        self.conn = conn
+        self.children_first = children_first
+        self.levels: list[int] = []
+
+    def execute(self, statement: str, parameters: Sequence[Any] = ()) -> Any:
+        if not statement.startswith(notify._NODES.split("{", 1)[0]):
+            return self.conn.execute(statement, parameters)
+        self.levels.append(len(parameters))
+        rows = self.conn.execute(statement, parameters).fetchall()
+        # The third column says whether the item is a goal or a stage.
+        rows.sort(key=lambda row: bool(row[2]), reverse=not self.children_first)
+        return iter(rows)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
 import { test } from 'vitest'
 
-import { compactCss } from './support/source.ts'
+import { compactCss, declarationsOf, sourceCode } from './support/source.ts'
 
 /**
  * What a control's size and a row's alignment are, once neither is a number a
@@ -18,49 +17,61 @@ import { compactCss } from './support/source.ts'
  *
  * `check:ui-system` owns the first as a ledger over literal heights; what it
  * cannot see is which element the height was set on, or why a row is centred.
- * That is what this file states.
+ * That is what this file states, as declarations of the rule a selector names
+ * whole, in any order and however the file is laid out.
  */
-const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+const button = sourceCode('shared/ui/VButton.vue')
+const segmented = sourceCode('shared/ui/SegmentedControl.vue')
+const choice = sourceCode('shared/ui/ChoiceSelect.vue')
+const badge = sourceCode('shared/ui/CountBadge.vue')
+const nav = sourceCode('widgets/app-nav/components/AppNav.vue')
+const navList = sourceCode('widgets/app-nav/components/NavModuleList.vue')
+const navConnection = sourceCode('widgets/app-nav/components/NavConnectionButton.vue')
+const contextBar = sourceCode('app/components/AppContextBar.vue')
+const lane = sourceCode('widgets/work-item-views/components/WorkItemColumn.vue')
+const stack = sourceCode('widgets/work-item-views/components/WorkItemStack.vue')
+const card = sourceCode('widgets/work-item-views/components/WorkItemTile.vue')
 
-const button = source('../src/shared/ui/VButton.vue')
-const segmented = source('../src/shared/ui/SegmentedControl.vue')
-const choice = source('../src/shared/ui/ChoiceSelect.vue')
-const badge = source('../src/shared/ui/CountBadge.vue')
-const nav = source('../src/widgets/app-nav/components/AppNav.vue')
-const navList = source('../src/widgets/app-nav/components/NavModuleList.vue')
-const navConnection = source('../src/widgets/app-nav/components/NavConnectionButton.vue')
-const contextBar = source('../src/app/components/AppContextBar.vue')
-const lane = source('../src/widgets/work-item-views/components/WorkItemColumn.vue')
-const stack = source('../src/widgets/work-item-views/components/WorkItemStack.vue')
-const card = source('../src/widgets/work-item-views/components/WorkItemTile.vue')
+/** Whether the rule `selector` names declares `declaration`, as compactCss writes it. */
+function declares(css: string, selector: string, declaration: string) {
+  const declarations = declarationsOf(css, selector)
+  assert.ok(declarations.includes(declaration), `${selector}: ${declarations.join(';')}`)
+}
+
+/** A height of the row less the track's inset on both sides, either way the product is written. */
+const insetHeight = (height: string) =>
+  new RegExp(
+    `^min-height:calc\\(var\\(${height}\\)-(?:2\\*var\\(--space-half\\)|var\\(--space-half\\)\\*2)\\)$`,
+  )
 
 test('a track owns the row and derives its segments, so it matches the button beside it', () => {
-  const css = compactCss(segmented)
   // The height is on the outermost box. Set on the segment instead, the track
   // added its 2px inset on top and no toolbar could line up.
-  assert.match(css, /\.segmented\{[^}]*min-height:var\(--size-control-height\)/)
-  assert.match(
-    css,
-    /\.segmented-option\{[^}]*min-height:calc\(var\(--size-control-height\)-2\*var\(--space-half\)\)/,
-  )
-  assert.match(
-    css,
-    /\.segmented\.size-compact\.segmented-option\{[^}]*min-height:calc\(var\(--size-control-height-compact\)-2\*var\(--space-half\)\)/,
-  )
+  declares(segmented, '.segmented', 'min-height:var(--size-control-height)')
+  for (const [selector, height] of [
+    ['.segmented-option', '--size-control-height'],
+    ['.segmented.size-compact .segmented-option', '--size-control-height-compact'],
+  ]) {
+    const declarations = declarationsOf(segmented, selector)
+    assert.ok(
+      declarations.some((each) => insetHeight(height).test(each)),
+      `${selector}: ${declarations.join(';')}`,
+    )
+  }
   // The track's inset and the gap between segments are the same sub-grid step,
   // which is what makes a pressed segment sit inside the track evenly.
-  assert.match(css, /\.segmented\{[^}]*gap:var\(--space-half\)/)
-  assert.match(css, /\.segmented\{[^}]*padding:var\(--space-half\)/)
+  declares(segmented, '.segmented', 'gap:var(--space-half)')
+  declares(segmented, '.segmented', 'padding:var(--space-half)')
   // A segment's label and a button's label are the same type, so they name the
   // same role. Spelled out, they were the same three declarations in two files
   // with no way to know about each other.
-  assert.match(css, /\.segmented-option\{[^}]*font:var\(--font-control\)/)
+  declares(segmented, '.segmented-option', 'font:var(--font-control)')
 })
 
 test('every labelled control in the family names the row, never the pointer target', () => {
-  assert.match(compactCss(button), /\.button\{[^}]*min-height:var\(--size-control-height\)/)
-  assert.match(compactCss(button), /\.button\{[^}]*font:var\(--font-control\)/)
-  assert.match(compactCss(choice), /\.choice-trigger\{[^}]*min-height:var\(--size-control-height\)/)
+  declares(button, '.button', 'min-height:var(--size-control-height)')
+  declares(button, '.button', 'font:var(--font-control)')
+  declares(choice, '.choice-trigger', 'min-height:var(--size-control-height)')
   // The bar gives its choice control the same height inside its own scope.
   assert.match(
     compactCss(contextBar),
@@ -70,15 +81,12 @@ test('every labelled control in the family names the row, never the pointer targ
   // list that renders it, the connection button in its own file. They used to be
   // in `shell.css`, describing two controls from outside the components that own
   // them.
-  assert.match(compactCss(navList), /\.nav-item\{[^}]*min-height:var\(--size-control-height\)/)
-  assert.match(
-    compactCss(navConnection),
-    /\.nav-refresh\{[^}]*min-height:var\(--size-control-height\)/,
-  )
+  declares(navList, '.nav-item', 'min-height:var(--size-control-height)')
+  declares(navConnection, '.nav-refresh', 'min-height:var(--size-control-height)')
 })
 
 test('a count badge uses its surrounding color for the cutout ring', () => {
-  assert.match(badge, /var\(--color-count-badge-ring, var\(--color-navigation\)\)/)
+  assert.match(compactCss(badge), /var\(--color-count-badge-ring,var\(--color-navigation\)\)/)
   assert.doesNotMatch(badge, /surface\?:/)
 })
 
@@ -87,51 +95,54 @@ test('a count stands beside what it counts, not at the far edge of the row', () 
   // used space-between, so both numbers left the words they belong to.
   // The rail's list hands the badge `.nav-item-count`, so the rule names an
   // element that file renders rather than one `CountBadge` does.
-  assert.match(compactCss(navList), /\.nav-item-count\{justify-self:start\}/)
-  assert.match(compactCss(lane), /\.column-head\{[^}]*gap:var\(--space-2\)/)
-  assert.doesNotMatch(compactCss(lane), /\.column-head\{[^}]*justify-content:space-between/)
+  declares(navList, '.nav-item-count', 'justify-self:start')
+  declares(lane, '.work-item-column .column-head', 'gap:var(--space-2)')
+  // Nothing in the lane's stylesheet pushes a row's ends apart.
+  assert.doesNotMatch(compactCss(lane), /justify-content:space-between/)
 })
 
 test('a control states its own subject, so nothing captions it twice', () => {
   // The word survives as the accessible name, which is where a control with a
   // visible value needs it.
   assert.doesNotMatch(contextBar, /class="scope-label"/)
-  assert.match(contextBar, /:label="t\('platform\.scope\.label'\)"/)
+  assert.match(contextBar, /\s:label="\s*t\(\s*'platform\.scope\.label'\s*\)\s*"/)
   // The connection strip is the refresh control; the word under the state was
   // the button's own name printed inside it, and it cost the dot its alignment.
   assert.doesNotMatch(navConnection, /refresh\.label/)
   // Its hint names the refresh, after the lost connection it is there for, and its word
-  // first while the rail cuts it.
-  assert.match(navConnection, /v-tooltip:right.detail="\{ text: hint, words: status \}"/)
-  assert.match(navConnection, /t\('refresh\.title'\)/)
-  assert.match(
-    navConnection,
-    /const status = computed\(\(\) => t\(`status\.\$\{props\.connection\}`\)\)/,
-  )
-  assert.match(navConnection, /<span class="connection-copy one-line">\{\{ status \}\}<\/span>/)
+  // first while the rail cuts it: the state's word, printed on one line.
+  assert.match(navConnection, /v-tooltip\.detail="\{[^"]*\bwords:/)
+  assert.match(navConnection, /t\(\s*'refresh\.title'\s*\)/)
+  assert.match(navConnection, /t\(\s*`status\.\$\{/)
+  assert.match(navConnection, /<span\b[^>]*\sclass="connection-copy one-line"/)
 })
 
 test('settings stands in the foot beside the connection, inside the navigation', () => {
+  // Settings at the rail's floor, in the foot and only there, is
+  // browser/production-nav-foot.spec.ts; the connection stands in the same foot.
   const navigation = /<nav[\s\S]*?<\/nav>/.exec(nav)?.[0] ?? ''
   const utility = /<div\s+class="nav-utility"[\s\S]*?<\/div>/.exec(navigation)?.[0] ?? ''
-  assert.match(utility, /<NavConnectionButton/)
-  assert.match(utility, /systemModules/)
-  // Only the foot holds it: under the last group it moved with the list above it.
-  assert.equal(navigation.match(/systemModules/g)?.length, 2)
+  assert.match(utility, /<NavConnectionButton(?=[\s/>])/)
 })
 
 test('the space between two tiles belongs to the stack, so a column insets evenly', () => {
-  assert.match(compactCss(stack), /\.work-item-stack\{[^}]*gap:var\(--space-2\)/)
-  assert.doesNotMatch(compactCss(card), /\.work-item-tile\{[^}]*margin-bottom/)
+  declares(stack, '.work-item-stack', 'gap:var(--space-2)')
   // One rhythm down the tile, declared once, instead of three regions setting
   // their own margins in two different sizes.
-  assert.match(compactCss(card), /\.work-item-tile\{[^}]*gap:var\(--space-1\)/)
-  assert.doesNotMatch(compactCss(card), /\.tile-line\{[^}]*margin-bottom/)
-  assert.doesNotMatch(compactCss(card), /\.tile-facts\{[^}]*margin-top/)
+  declares(card, '.work-item-tile', 'gap:var(--space-1)')
+  for (const [selector, margin] of [
+    ['.work-item-tile', 'margin-bottom'],
+    ['.tile-line', 'margin-bottom'],
+    ['.tile-facts', 'margin-top'],
+  ])
+    assert.ok(
+      !declarationsOf(card, selector).some((each) => each.startsWith(`${margin}:`)),
+      `${selector} sets its own ${margin}`,
+    )
   // A grid track is min-content wide unless told otherwise, and the min-content
   // of a row of labels is those labels at full length — so the tile laid itself
   // out wider than its own box and clipped the result inside its padding.
-  assert.match(compactCss(card), /\.work-item-tile\{[^}]*grid-template-columns:minmax\(0,1fr\)/)
+  declares(card, '.work-item-tile', 'grid-template-columns:minmax(0,1fr)')
 })
 
 test('a row carrying anything but text aligns by centre', () => {
@@ -139,6 +150,6 @@ test('a row carrying anything but text aligns by centre', () => {
   // box rather than a line of text — dragged the plain text beside it off the
   // row they were meant to share. Both the facts row and the reference row now
   // carry shared semantic primitives, so neither may align by text baseline.
-  assert.match(compactCss(card), /\.tile-facts\{[^}]*align-items:center/)
-  assert.match(compactCss(card), /\.tile-line\{[^}]*align-items:center/)
+  declares(card, '.tile-facts', 'align-items:center')
+  declares(card, '.tile-line', 'align-items:center')
 })

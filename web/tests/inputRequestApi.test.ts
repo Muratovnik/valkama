@@ -47,11 +47,41 @@ describe('input request wire contract', () => {
     ).searchParams
     expect(Object.fromEntries(query)).toEqual({
       scope_kind: 'space',
-      limit: '100',
+      limit: '200',
       data_scope_id: entry.target.space_ref.data_scope_id,
       space_key: 'TASK',
       reference: 'TASK-7',
     })
+  })
+
+  it('takes the line that triage is due from the first page, which alone carries it', async () => {
+    const line = {
+      space: { key: 'TASK', name: 'Tasks' },
+      count: 120,
+      oldest_at: '2026-11-02T09:12:00Z',
+    }
+    const [newer, older] = [requestEntry(), requestEntry()]
+    older.request.request_id = '00000000-0000-4000-8000-000000000002'
+    const pages = [
+      { ...requestList([newer]), limit: 1, total: 2, has_more: true, triage_due: [line] },
+      { ...requestList([older]), limit: 1, total: 2, has_more: false, triage_due: [] },
+    ]
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(
+      withSecurityBootstrap(async (input) => {
+        const query = new URL(requestUrl(input), 'https://test.example').searchParams
+        const page = pages[Number(query.get('offset') ?? 0)]
+        return new Response(JSON.stringify(page))
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchInputRequests()
+
+    expect(result.items).toHaveLength(2)
+    expect(result.triage_due).toEqual([line])
+    expect(() =>
+      validateInputRequestList({ ...requestList(), triage_due: [{ ...line, unknown: true }] }),
+    ).toThrow()
   })
 
   it('uses the request revision and sends a required boolean false without coercion', async () => {

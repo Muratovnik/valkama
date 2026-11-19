@@ -16,6 +16,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { openFacet, openSpace } from './filterPage.ts'
+import { wholeText, wholeTextOnTop } from './hintFramesPage.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -94,8 +95,8 @@ test('the card’s priority menu draws each priority as its button draws the cho
   expectGlyphs(rows, PRIORITIES)
   // The button's glyph is the same drawing as the chosen row's.
   expect(rows[1].glyph).toBe(chosen.glyph)
-  // Each level is its one line: no meaning stands under it.
-  await expect(options.locator('.choice-note')).toHaveCount(0)
+  // Each level is its one line: no meaning stands under it, so an option says its word alone.
+  await expect(options).toHaveText(PRIORITIES.map(({ word }) => word))
 })
 
 test('the card’s state menu draws each state with its dot, as the chip draws the state', async ({
@@ -178,6 +179,8 @@ test('a long state in the card’s state menu ends in an ellipsis inside its row
     }
   })
   expect(drawn).toEqual({ cut: true, ending: 'ellipsis', inside: true })
+  // Under the pointer its whole words are laid over the cut ones, over the menu that holds them.
   await word.hover()
-  await expect(page.getByRole('tooltip')).toContainText(LONG_STATE)
+  await expect(wholeText(page)).toHaveText(LONG_STATE)
+  expect(await wholeTextOnTop(page), 'the whole state over the menu').toBe(true)
 })

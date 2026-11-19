@@ -76,6 +76,7 @@ WEB_REQUEST_KEYS = {
     "revision",
     "expired_reason",
     "comment_id",
+    "purpose",
 }
 #: Every key the web's strict schema must accept on a field, for the same reason:
 #: the five a field may add are on the way back only when they were given.
@@ -148,11 +149,14 @@ class QuestionCase(unittest.TestCase):
         fields: list[dict] | None = None,
         reference: str | None = None,
         prompt: str = "Which way?",
+        kind: str = "question",
     ) -> dict:
+        # The rules of fields and answers are both kinds'; a decision adds its own
+        # rule of recommendations, which the summary of decisions' tests hold.
         return self.tool(
             "create_work_item_request",
             id=reference or self.reference,
-            kind="decision",
+            kind=kind,
             prompt=prompt,
             fields=fields if fields is not None else [CHOICE],
             author="asking-agent",
@@ -733,9 +737,12 @@ class KeptTests(QuestionCase):
         self.conn.commit()
         questions = self.tool("get_work_item", id=self.reference, parts="questions")["questions"]
         self.assertEqual((1, 0), (questions["total"], questions["open"]))
-        self.assertEqual("expired", questions["items"][0]["status"])
         self.assertEqual(
-            "task_closed", requests.get(self.conn, request["request_id"])["expired_reason"]
+            ("expired", "item_cancelled"),
+            (questions["items"][0]["status"], questions["items"][0]["expired_reason"]),
+        )
+        self.assertEqual(
+            "item_cancelled", requests.get(self.conn, request["request_id"])["expired_reason"]
         )
 
     def test_deleting_an_item_takes_its_questions_with_it(self) -> None:

@@ -73,12 +73,17 @@ WORK_ITEM_KINDS = TASK_KINDS | {CONTAINER_KIND}
 PUBLIC_KINDS = ("task", "bug", "improvement", "goal", "stage")
 _CONTAINER_WORDS = frozenset({"goal", "stage"})
 
-#: Why accepted work was accepted: the basis an acceptance records. `migrated` is
-#: the work-model migration's alone: no tool and no HTTP write takes it.
-ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "migrated")
+#: Why accepted work was accepted: the basis an acceptance records. `agent` is an
+#: agent's own decision where the owner's participation setting leaves it to the
+#: agent, as for a goal it proposes. `migrated` is the work-model migration's alone:
+#: no tool and no HTTP write takes it.
+ACCEPTANCE_BASES = ("owner", "assignment", "inherited", "label_rule", "agent", "migrated")
 #: How a project came to an item (`item_projects`), strongest first: named by whoever
 #: filed or edited it, derived from its commits, or its space's former project.
 PROJECT_SOURCES = ("named", "commits", "migrated")
+#: When the tasks under a goal or stage were counted (`planning.baselines`): at its
+#: acceptance, or when work under a goal or stage accepted empty first started.
+BASELINE_BASES = ("accepted", "started")
 #: Where an agent launched from a card works, a setting of its space: the root of the
 #: space's default project, or the root of a project the card names. The first is
 #: what every space starts with; only the owner's settings change it.
@@ -86,6 +91,9 @@ LAUNCH_PLACES = ("space", "item_project")
 #: The one basis a caller names itself: an agent taking on work it was asked to do.
 #: A person's write is the owner's without naming it, and the rest the server gives.
 NAMED_BASIS = "assignment"
+#: The basis of an agent's own decision, which the server gives where the owner's
+#: participation setting leaves the decision to the agent.
+AGENT_BASIS = "agent"
 
 
 class RetiredWord(NamedTuple):
@@ -177,7 +185,10 @@ def updated_fields(arguments: Mapping[str, object]) -> list[str]:
 LINK_KINDS = frozenset({"blocks", "relates-to", "discovered-from", "duplicates"})
 SYMMETRIC_LINK_KINDS = frozenset({"relates-to"})
 
-REF_KINDS = frozenset({"session", "commit", "memory", "url"})
+#: A commit is no ref: it is attached (`planning.commits`) and read as the item's `commits`.
+REF_KINDS = frozenset({"session", "memory", "url"})
+#: What a ref of the kind `commit` is refused with: where a commit goes instead.
+COMMIT_REF_HINT = "commits are attached with the commits group"
 
 # Every audited action, in one tuple, because the schema's CHECK and the code
 # that writes it drifted apart once already in the Board era.
@@ -213,12 +224,42 @@ EVENT_ACTIONS = (
     # Schema 15: an edit changed the item's set of labels, the set before and the
     # set after as the detail (`labels_change`).
     "labels_changed",
-    # Schema 18: an item accepted, its basis as the detail; a container that came
+    # Schema 19: an item accepted, its basis as the detail; a container that came
     # to stand in the service state, a reason or nothing as the detail and never a
     # state's key; a child that left this container, the child's reference.
     "accepted",
     "opened",
     "child_left",
+    # A goal or stage that came to await confirmation, recorded by Valkama in a call
+    # of its own: what was cancelled and moved out under it as the detail.
+    "awaiting_confirmation",
+    # Put-off work that came back, recorded by Valkama beside the move that returned
+    # it, in the same call: why, as `date 2026-12-01` or `completed MAIN-12`.
+    "returned",
+    # A task made a goal or stage, or one made a task again, by the call that converted
+    # it: `task -> stage`, then `; leftover MAIN-15: 2 steps` and `; projects dropped: …`
+    # when so.
+    "converted",
+    # A step a checklist edit left out, or the text a step repeated by its id with
+    # another text had: that text's first 120 characters.
+    "checklist_removed",
+    # A part split off a task, by the call that split it: on the task the part and how
+    # many steps it took, `MAIN-15: 2 steps`, and on the part the task's reference.
+    "split_off",
+    "split_from",
+    # An action that waited for the owner and was dropped without being carried out
+    # (`planning.pending`): `<point>: <why>`, such as `proposed_goal: merged into MAIN-12`.
+    "action_dropped",
+    # A commit attached to the item or detached from it, `<project_id> <hash>` as the
+    # detail, and an attachment a rewrite carried to the new commit, `<project_id>
+    # <old> -> <new>`. No schema raise: the open widens the CHECK (`widen_event_actions`).
+    "commit_attached",
+    "commit_detached",
+    "commit_rewritten",
+    # A triage review's mark on an item it saw and left where it is, set or taken away
+    # by the call that wrote it (`planning.triage`): `seen` or `cleared`. A mark the
+    # store takes away, when the item changes, writes none.
+    "triage_seen",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 #: The actions that say which state an item came to stand in: `created` and
@@ -272,6 +313,24 @@ class WorkflowGuardError(PlanningError):
     """A transition the workflow does not permit, or permits only with force."""
 
 
+class CancelListError(WorkflowGuardError):
+    """A goal or stage cancelled with open work under it, without the list's token or with
+    a stale one: the refusal carries the list of what the cancel would close.
+
+    Its own code and body (`api.error_response`): the caller reads `cancels`, what would
+    be cancelled, and `dependents`, the open work outside that waits on it, and sends the
+    same move with `cancels` set to `list_token` to cancel it all.
+    """
+
+    def __init__(
+        self, message: str, cancels: list[dict], dependents: list[dict], list_token: str
+    ) -> None:
+        super().__init__(message)
+        self.cancels = cancels
+        self.dependents = dependents
+        self.list_token = list_token
+
+
 class MentionLimitError(PlanningError):
     """A session named one item in `mentions` as often as an hour allows.
 
@@ -298,7 +357,24 @@ class NotAddressedError(PlanningError):
 
 class NotAskerError(PlanningError):
     """A request asked of an agent session, withdrawn by neither the session that asked
-    nor Valkama."""
+    nor Valkama; or a question with a purpose withdrawn by any session but the one that
+    asked it."""
+
+
+class OwnerOnlyError(PlanningError):
+    """A question with a purpose, answered by anyone but the owner in Valkama.
+
+    Its own code: the answer may be right, but it decides what the owner decides —
+    accepting work, confirming a goal, taking up work that came back.
+    """
+
+
+class QueueOffError(PlanningError):
+    """The queue of a space whose owner hands out work by hand, asked for its next task.
+
+    Its own code: the call is well formed and nothing is wrong with the work; the
+    owner names the item, and it is taken by its number instead.
+    """
 
 
 class RevisionConflictError(PlanningError):
@@ -478,7 +554,12 @@ def link_kind(value: object) -> str:
 
 
 def ref_kind(value: object) -> str:
-    return enum_field(value, REF_KINDS, "work_item_ref.kind")
+    try:
+        return enum_field(value, REF_KINDS, "work_item_ref.kind")
+    except PlanningError as error:
+        if value == "commit":
+            raise PlanningError(f"{error}: {COMMIT_REF_HINT}") from None
+        raise
 
 
 def event_action(value: object) -> str:
@@ -545,6 +626,17 @@ def edited_labels(
         raise PlanningError(f"{both[0]!r} is named in both labels_add and labels_remove")
     kept = [label for label in current if label not in removing]
     return labels(kept + [label for label in adding if label not in kept])
+
+
+def outward_kind(kind: object, parent_id: object) -> str:
+    """The kind a reader sees: a container is a goal, or a stage under a parent.
+
+    Every place a kind leaves the server from a row reads it through this.
+    """
+
+    if kind == CONTAINER_KIND:
+        return "stage" if parent_id else "goal"
+    return str(kind)
 
 
 def human_id(key: str, number: int) -> str:
@@ -667,6 +759,10 @@ def new_checklist_item(text: object) -> dict:
     }
 
 
+#: The longest each field of a summary may be.
+SUMMARY_LIMIT = 4000
+
+
 def summary(value: object, *, required: bool = True) -> dict | None:
     """What was done, why when the choice is not obvious, and what comes next.
 
@@ -689,17 +785,17 @@ def summary(value: object, *, required: bool = True) -> dict | None:
     if unknown:
         raise PlanningError(f"work_item.summary has unknown field(s): {', '.join(sorted(unknown))}")
     record = {
-        "done": multiline_field(value.get("done"), "work_item.summary.done", limit=4000),
-        "next": multiline_field(value.get("next"), "work_item.summary.next", limit=4000),
+        "done": multiline_field(value.get("done"), "work_item.summary.done", limit=SUMMARY_LIMIT),
+        "next": multiline_field(value.get("next"), "work_item.summary.next", limit=SUMMARY_LIMIT),
     }
     if not record["done"] or not record["next"]:
         raise PlanningError("a summary states what was done and what comes next")
     why = value.get("why")
     if why:
-        record["why"] = multiline_field(why, "work_item.summary.why", limit=4000)
+        record["why"] = multiline_field(why, "work_item.summary.why", limit=SUMMARY_LIMIT)
     friction = value.get("friction")
     if friction is not None:
-        text = multiline_field(friction, "work_item.summary.friction", limit=4000)
+        text = multiline_field(friction, "work_item.summary.friction", limit=SUMMARY_LIMIT)
         if text:
             record["friction"] = text
     return record

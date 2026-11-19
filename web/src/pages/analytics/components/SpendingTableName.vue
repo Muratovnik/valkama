@@ -3,13 +3,14 @@
  * The name that heads a row of a dimension's table, on one line: cut with an ellipsis where the
  * column is narrower than it, a pair's in its first value (`PairName`), and said whole in its
  * hint while it is cut, under the pointer and the keyboard's focus: a name that is a press holds
- * the hint itself, since the focus lands on the press. A value the page names by the start of its
- * id, an account, has the whole id after its name on the same line, and the line holds the hint,
- * which that id may be cut from while the press is not.
+ * the hint itself, since the focus lands on the press. A value with a detail, a session named by
+ * its title, has its client and the start of its id after its name on the same line, and the line
+ * holds the hint, which that detail may be cut from while the press is not.
  *
- * It acts as its value does in the bars (`useLineActions`): a link to a task, or a control that
- * narrows the view to the value, sent out as `narrow`. Either is named by the value, since it
- * heads its row's cells; what pressing it does is its description.
+ * It acts as its value does in the bars (`useLineActions`): a press opens the value's side panel,
+ * sent out as `inspect`, and a task's name is a link to its card as well, which a press with a
+ * modifier or the middle button opens elsewhere. Either is named by the value, since it heads its
+ * row's cells; what pressing it does is its description.
  */
 import { computed } from 'vue'
 
@@ -24,29 +25,27 @@ const props = defineProps<{
   by: UsageDimension
   line: TableLine
 }>()
-/** The value pressed to narrow the view to it: its filter value, and its name. */
-const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
+/** The value pressed to open its side panel: its filter value, and its name. */
+const emit = defineEmits<{ inspect: [value: string | null, label: string] }>()
 
 const actions = useLineActions()
 
 const link = computed(() => actions.taskLink(props.by, props.line.value))
-const narrowsTo = computed(() => actions.narrowsTo(props.by, props.line.value))
-const narrows = computed(() => !link.value && narrowsTo.value !== undefined)
+const inspectsTo = computed(() => actions.inspectsTo(props.by, props.line.value))
+const inspects = computed(() => !link.value && inspectsTo.value !== undefined)
 /** A pair acts as its first value does, and its action says that value alone. */
-const narrowDescription = computed(() =>
-  actions.narrowName(props.by, props.line.value, props.line.valueName),
-)
+const pressDescription = computed(() => actions.inspectName(props.line.valueName))
 /** The name and what it leaves out, as the hint says them while the line is cut. */
 const whole = computed(() =>
   props.line.detail ? `${props.line.name} ${props.line.detail}` : props.line.name,
 )
 /** The hint is the press's where the press is all the line holds, and the line's otherwise. */
-const pressHints = computed(() => (Boolean(link.value) || narrows.value) && !props.line.detail)
+const pressHints = computed(() => (Boolean(link.value) || inspects.value) && !props.line.detail)
 const lineHint = computed(() => (pressHints.value ? '' : whole.value))
 const pressHint = computed(() => (pressHints.value ? whole.value : ''))
 
 function follow(event: MouseEvent) {
-  if (link.value) actions.follow(link.value, event)
+  if (link.value) actions.follow(link.value, event, inspect)
 }
 
 /** A middle press on a link opens it elsewhere, and is a press on it all the same. */
@@ -54,9 +53,9 @@ function followAside(event: MouseEvent) {
   if (event.button === 1) follow(event)
 }
 
-function narrowTo() {
-  const value = narrowsTo.value
-  if (value !== undefined) emit('narrow', value, props.line.valueName)
+function inspect() {
+  const value = inspectsTo.value
+  if (value !== undefined) emit('inspect', value, props.line.valueName)
 }
 </script>
 
@@ -76,6 +75,7 @@ function narrowTo() {
         v-tooltip.clipped="pressHint"
         class="chart-press"
         :href="link.href"
+        :aria-description="pressDescription"
         @click="follow"
         @auxclick="followAside"
       >
@@ -86,12 +86,12 @@ function narrowTo() {
         /></span>
       </a>
       <button
-        v-else-if="narrows"
+        v-else-if="inspects"
         v-tooltip.clipped="pressHint"
         type="button"
         class="chart-press"
-        :aria-description="narrowDescription"
-        @click="narrowTo"
+        :aria-description="pressDescription"
+        @click="inspect"
       >
         <span class="press-words one-line"
           ><PairName
@@ -132,13 +132,12 @@ function narrowTo() {
      line around it, a link's name had no hint under the keyboard. A box that cuts has no
      baseline to give the line, so the press stands on the line's top rather than raising the
      line by the depth under its letters. Brought into view by the focus, it stands clear of the
-     heading row and the total its table keeps at the panel's edges (`--stuck-head`,
-     `--stuck-foot`, declared by `SpendingTable`). */
+     heading row and the total its table holds at its frame's edges, by the room the frame keeps
+     for them (`scroll-padding`, `SpendingTable`). */
   & .chart-press {
     display: inline-block;
     vertical-align: top;
     max-inline-size: 100%;
-    scroll-margin-block: var(--stuck-head, 0) var(--stuck-foot, 0);
   }
 
   & .press-words {

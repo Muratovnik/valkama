@@ -19,7 +19,8 @@ otherwise cascade into them:
 - **history** renames those keys in the history, only where a key stands.
 - **items** rebuilds `work_items`: an epic, or any item with children, becomes a
   container; accepted work gets the basis `migrated`; a task gets the time its work
-  started. The events table takes the new actions. `sessions` is rebuilt to the
+  started. The fresh declaration it takes holds every basis, `agent` among them,
+  though no item gets it here. The events table takes the new actions. `sessions` is rebuilt to the
   fresh declaration when the Board cutover left it another: that cutover renamed
   `card_id` to `work_item_id` and kept its type `INTEGER`.
 - **containers** clears every claim on a container and puts each accepted open one in the
@@ -49,6 +50,60 @@ otherwise cascade into them:
 - **waiting-words** creates the table of the words a person left on a goal or stage that no
   session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
   which of a person's acts before 3.0 nobody heard cannot be known now.
+- **ended-requests** rebuilds `work_item_requests` from the fresh declaration, with the `purpose`
+  a question to the owner may carry, the action waiting for the owner it is about
+  (`action_id`, null on every row it carries) and the reasons a close stores: a request still
+  pending on a closed item, which 2.9 read `task_closed` and left pending, ends
+  `expired` as `item_completed` or `item_cancelled` by the category its item stands
+  in, with no event, as does one that stored `task_closed`. One that had already
+  lapsed, past its deadline or on an execution that ended, ends as it lapsed,
+  `deadline` or `execution_closed`.
+- **confirmations** creates the table of the goals and stages awaiting confirmation
+  (`work_item_confirmations`) and gives a row to each accepted open one that, after
+  the steps above, has nothing open under it: the wait begins at the migration, with
+  no call, no question and no event, and no session follows it. The service's first
+  write under such a container, or its confirmation, takes it from there.
+- **deferred-items** creates the table of the conditions put-off work comes back on
+  (`work_item_deferrals`) and its two indexes, empty: no 2.9 state was deferred. Its
+  postcondition of the same name holds a condition to each item in a deferred state.
+- **history-actions** gives the events table the CHECK of every action this build declares, when
+  `items` left one out: `items` widens it already, so on a 2.9 store the step has nothing to do.
+- **commits** creates the tables of the commits Valkama knows (`commits`) and of the items
+  they are attached to (`work_item_commits`), with their indexes.
+- **commit-refs** carries the commit refs over, as the file's `commit_refs` says: each pair
+  of a record not dropped becomes a commit, attached to the ref's item `migrated`,
+  each record that is a url a `url` ref; then every commit ref leaves. Several refs
+  of one item naming one commit give one attachment.
+- **refs-without-commits** rebuilds `work_item_refs` when its CHECK still takes the
+  kind `commit`, as a store before 3.0 declared it: a commit is attached now, never a
+  ref, and `commit-refs` has left none.
+- **participation** creates the owner's participation setting and the rules of the
+  labels (`participation_settings`, `label_settings`) and their indexes, empty: with no
+  row every space reads the default set. Its postcondition of the same name holds both
+  empty and every space at that set.
+- **agent-decisions** creates the summary of the decisions agents took on their own
+  (`agent_decisions`), empty: the 2.9 history knew no points, so no earlier decision
+  can be marked. Its postcondition of the same name holds it empty.
+- **pending-actions** creates the table of the writes that wait for the owner's answer
+  (`pending_actions`), its index of the open ones and the index of the requests by their
+  action, empty: no 2.9 write waited, and a question asked before keeps asking as it did,
+  its answer acted on by the agent. Its postcondition of the same name holds the table
+  empty, no request naming an action or carrying a purpose of the owner's
+  participation, and no `action_dropped` in the history.
+- **baselines** creates the table of how many tasks stood under a goal or stage when
+  it was accepted (`work_item_baselines`), empty: every acceptance 2.9 left is
+  `migrated`, and that count is not known for one. Its postcondition of the same name
+  holds a row only to a goal or stage accepted on another basis, which from then on
+  every write keeps.
+- **triage-marks** creates the table of the items a triage review saw (`triage_marks`)
+  and the five triggers that take a mark away, empty: no 3.0 review has run. It comes
+  last, since the steps that rebuild the tables the triggers stand on set up again only
+  the triggers that stood before. Its postcondition of the same name holds the table
+  and the triggers to a fresh store's text, no item marked and no `triage_seen` in the
+  history. The action itself is one more in the events' CHECK, which `items` widens.
+
+The postcondition **agent-basis** holds that no item stands accepted on an agent's own
+decision (`agent`): before 3.0 no setting let an agent decide, so nothing was.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -56,10 +111,17 @@ claim cleared, `opened` for a container entering the service state, `transitione
 for a task moved, `child_left` on the container a child left. No `accepted` is
 written: nobody recorded an acceptance before this, and `migrated` says exactly that.
 
-The postconditions `fresh-shape` to `second-run` and `store-identity` to `fresh-tables` are checked after the steps, inside the
+Before oracle, `store` takes schema 18's step, `quota-names`, which renames the key of
+the quota accounts' names on a store a 2.9 build left at 17 and has nothing to do on one
+2.9.0 left at 18: so the steps here read one shape from either.
+
+The postconditions `fresh-shape` to `second-run` and `store-identity` to `commit-projects` are checked after the steps, inside the
 same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
-row counts of the tables `oracle` counted and of the projects `item-projects` fills; `fresh-tables` holds every
-other table to being empty and declared by a fresh store.
+row counts of the tables `oracle` counted, of the projects `item-projects` fills, of the rows `confirmations`
+writes, of the commit tables `commits` creates and `commit-refs` fills and of the baselines, none;
+`fresh-tables` holds every other
+table to being empty and declared by a fresh store. `no-commit-refs` to `commit-projects` hold each item's
+refs, attachments and projects from commits to what `oracle` read of the file and the refs.
 """
 
 from __future__ import annotations
@@ -74,7 +136,19 @@ from typing import Any
 
 from .. import store_steps
 from ..store_steps import Context, Postcondition, Step, UnmetError
-from . import item_tree, model, read_model, words, work_model_probes
+from . import closing as closing_rules
+from . import (
+    item_projects,
+    item_projects_map,
+    item_tree,
+    model,
+    participation,
+    questions,
+    read_model,
+    request_model,
+    words,
+    work_model_probes,
+)
 from . import store as planning_store
 
 #: Who every record the migration writes names as its author.
@@ -268,6 +342,12 @@ class Oracle:
     content: dict[str, dict[str, Any]] = field(default_factory=dict)
     numbers: set[tuple[str, int]] = field(default_factory=set)
     request_ids: frozenset[str] = frozenset()
+    #: Each request's item, kind and status, and the reason `ended-requests` ends it with, by id:
+    #: the close's for one still waiting on a closed item or one that stored
+    #: `task_closed`, and its lapse's for one pending there that had lapsed.
+    requests: dict[str, tuple[str, str, str]] = field(default_factory=dict)
+    ended: dict[str, str] = field(default_factory=dict)
+    lapsed: dict[str, str] = field(default_factory=dict)
     containers: int = 0
     started_from_created: int = 0
     #: The rows `item-projects` leaves in `work_item_projects`, a table the store `oracle`
@@ -286,6 +366,14 @@ class Oracle:
     #: The store's identity and each space as `spaces` keeps it: id, key, name, next number.
     data_scope_id: str = ""
     spaces: set[tuple[str, str, str, int]] = field(default_factory=set)
+    #: What `commit-refs` makes of the commit refs: how many it removes and how many `url` refs
+    #: it adds; each item's refs after it, as (kind, value), and its attachments, as
+    #: (project or '', hash); and the rows of `commits`, one a distinct pair.
+    commit_refs: int = 0
+    url_refs: int = 0
+    refs_after: dict[str, set[tuple[str, str]]] = field(default_factory=dict)
+    attachments: dict[str, set[tuple[str, str]]] = field(default_factory=dict)
+    commit_rows: int = 0
 
 
 def _oracle(context: Context) -> Oracle:
@@ -439,6 +527,36 @@ def _derived(conn: sqlite3.Connection, query: str, containers: Iterable[str]) ->
         str(row[0]): _derive(row[1], row[2], row[3])
         for row in conn.execute(query, (identities, identities))
     }
+
+
+def _read_requests(
+    conn: sqlite3.Connection, oracle: Oracle, states: Mapping[str, sqlite3.Row], at: str
+) -> None:
+    """The oracle's reading of the requests `ended-requests` ends, in Python: every
+    pending one, and every one that stored `task_closed`, on an item standing in a
+    state that closes it. A pending one that has lapsed at `at`, as the service reads a
+    lapse (`questions.lapse`), ends as it lapsed; the others as their item closed."""
+
+    places = {
+        str(row[0]): states.get(str(row[1]))
+        for row in conn.execute("SELECT work_item_id, state_id FROM work_items")
+    }
+    for row in conn.execute(
+        "SELECT r.request_id, r.work_item_id, r.kind, r.status, r.expired_reason,"
+        " r.expires_at, r.execution_id, x.execution_id IS NOT NULL AS execution_found,"
+        " x.ended_at AS execution_ended_at, x.status AS execution_status"
+        " FROM work_item_requests r LEFT JOIN executions x ON x.execution_id = r.execution_id"
+    ):
+        identity = str(row["request_id"])
+        oracle.requests[identity] = (str(row["work_item_id"]), str(row["kind"]), str(row["status"]))
+        state = places.get(str(row["work_item_id"]))
+        if state is None or not state["is_terminal"]:
+            continue
+        lapsed = questions.lapse(row, at) if row["status"] == "pending" else None
+        if lapsed is not None:
+            oracle.lapsed[identity] = lapsed
+        elif row["status"] == "pending" or row["expired_reason"] == "task_closed":
+            oracle.ended[identity] = questions.closed_reason(str(state["category"]))
 
 
 def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
@@ -662,6 +780,7 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         [identity for identity, found in expect.items() if found["category"] == _SERVICE],
     )
     _read_item_projects(conn, context, oracle)
+    _read_commit_refs(conn, context, oracle)
     oracle.ui_prefs = {
         str(key): str(record)
         for key, record in conn.execute("SELECT key, record_json FROM platform_ui_prefs")
@@ -673,6 +792,7 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
     )
     oracle.data_scope_id = _data_scope_id(conn)
     oracle.spaces = _spaces(conn)
+    _read_requests(conn, oracle, states, context.now)
     context.memo["oracle"] = oracle
     context.memo["renames"] = renames
     return {
@@ -689,6 +809,10 @@ def _read_oracle(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any
         "remembered_routes_to_drop": len(oracle.dropped_prefs),
         "item_projects": oracle.item_projects,
         "items_losing_labels": len(oracle.labels_dropped),
+        "commit_refs": oracle.commit_refs,
+        "commits": oracle.commit_rows,
+        "commit_attachments": sum(len(pairs) for pairs in oracle.attachments.values()),
+        "url_refs_added": oracle.url_refs,
     }
 
 
@@ -746,6 +870,48 @@ def _read_item_projects(conn: sqlite3.Connection, context: Context, oracle: Orac
         )
 
 
+def _commit_records(context: Context) -> dict[int, Mapping[str, Any]]:
+    """The file's record of each commit ref, by the ref's id."""
+
+    records = _item_projects_file(context).get(item_projects_map.COMMIT_REFS) or []
+    return {int(record["ref"]): record for record in records}
+
+
+def _read_commit_refs(conn: sqlite3.Connection, context: Context, oracle: Oracle) -> None:
+    """The oracle's reading of what `commit-refs` makes of the commit refs, from the file
+    and the refs.
+
+    A record `commit-refs` carries -- one not dropped -- gives its item each of its pairs as an
+    attachment and, when it is a url, a `url` ref of the same text unless the item
+    holds one already; every commit ref leaves.
+    """
+
+    records = _commit_records(context)
+    texts: dict[int, tuple[str, str]] = {}
+    for ref, identity, kind, value in conn.execute(
+        "SELECT id, work_item_id, kind, value FROM work_item_refs"
+    ):
+        if kind == "commit":
+            texts[int(ref)] = (str(identity), str(value))
+        else:
+            oracle.refs_after.setdefault(str(identity), set()).add((str(kind), str(value)))
+    kept = sum(len(refs) for refs in oracle.refs_after.values())
+    pairs: set[tuple[str, str]] = set()
+    for ref, (identity, value) in sorted(texts.items()):
+        record = records.get(ref)
+        if record is None or record["drop"]:
+            continue
+        for pair in record["pairs"]:
+            key = (str(pair["project"] or ""), str(pair["hash"]))
+            pairs.add(key)
+            oracle.attachments.setdefault(identity, set()).add(key)
+        if record["url"]:
+            oracle.refs_after.setdefault(identity, set()).add(("url", value))
+    oracle.commit_refs = len(texts)
+    oracle.url_refs = sum(len(refs) for refs in oracle.refs_after.values()) - kept
+    oracle.commit_rows = len(pairs)
+
+
 def _project_scoped(record: str) -> bool:
     """Whether a remembered route's scope is a project, read in Python for `oracle`."""
 
@@ -779,8 +945,19 @@ def _oracle_needed(conn: sqlite3.Connection, context: Context) -> bool:
 # -- states --------------------------------------------------------------------
 
 
+def _states_declared_old(conn: sqlite3.Connection) -> bool:
+    """Whether `workflow_states` is still declared with 2.9's categories, rows or none."""
+
+    stored = str(
+        conn.execute("SELECT sql FROM sqlite_master WHERE name = 'workflow_states'").fetchone()[0]
+    )
+    return f"'{_SERVICE}'" not in stored
+
+
 def _states_needed(conn: sqlite3.Connection, context: Context) -> bool:
     del context
+    if _states_declared_old(conn):
+        return True
     old = conn.execute(
         f"SELECT 1 FROM workflow_states WHERE category IN ({_sql_set(_RENAMED_CATEGORIES)})"  # noqa: S608
         " LIMIT 1"
@@ -832,10 +1009,7 @@ def _add_state(
 def _migrate_states(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     """`states`: the eight categories and the service state in every workflow."""
 
-    stored = str(
-        conn.execute("SELECT sql FROM sqlite_master WHERE name = 'workflow_states'").fetchone()[0]
-    )
-    if f"'{_SERVICE}'" not in stored:
+    if _states_declared_old(conn):
         mapped = " ".join(f"WHEN '{old}' THEN '{new}'" for old, new in _RENAMED_CATEGORIES.items())
         planning_store.rebuild_table(
             conn,
@@ -925,7 +1099,8 @@ def _migrate_states(conn: sqlite3.Connection, context: Context) -> Mapping[str, 
 def _check_states(conn: sqlite3.Connection, context: Context) -> None:
     if _states_needed(conn, context):
         raise UnmetError(
-            "a workflow still has an old category or lacks Deferred or the service state"
+            "workflow_states is declared with the old categories, or a workflow still has"
+            " an old category or lacks Deferred or the service state"
         )
 
 
@@ -1070,46 +1245,58 @@ def _table_info(conn: sqlite3.Connection, table: str) -> list[tuple[str, ...]]:
 _SESSIONS = "sessions"
 
 
-def _fresh_sessions(context: Context) -> tuple[str, list[tuple[str, ...]]]:
-    """The `CREATE TABLE` of `sessions` and its columns, as a fresh store of this build
+def _fresh_table(context: Context, table: str) -> tuple[str, list[tuple[str, ...]]]:
+    """The `CREATE TABLE` of one table and its columns, as a fresh store of this build
     holds them; read once a run."""
 
-    found = context.memo.get("fresh_sessions")
+    found = context.memo.get(f"fresh_{table}")
     if found is None:
         if context.reference is None:
             raise UnmetError("no fresh store to compare with")
         with context.reference() as fresh:
             declared = fresh.execute(
-                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_SESSIONS,)
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
             ).fetchone()
-            found = (str(declared[0]), _table_info(fresh, _SESSIONS))
-        context.memo["fresh_sessions"] = found
+            found = (str(declared[0]), _table_info(fresh, table))
+        context.memo[f"fresh_{table}"] = found
     return found
 
 
 def _sessions_needed(conn: sqlite3.Connection, context: Context) -> bool:
-    return _table_info(conn, _SESSIONS) != _fresh_sessions(context)[1]
+    return _table_info(conn, _SESSIONS) != _fresh_table(context, _SESSIONS)[1]
 
 
 def _rebuild_sessions(conn: sqlite3.Connection, context: Context) -> list[str]:
     """`sessions` in the shape a fresh store declares, every value carried as stored."""
 
-    declared, columns = _fresh_sessions(context)
+    definition, names = _fresh_rebuild(conn, context, _SESSIONS)
+    carried = ", ".join(names)
+    rows = f"({carried}) SELECT {carried} FROM {_SESSIONS}"  # noqa: S608 - the pragma's names
+    return planning_store.rebuild_table(conn, _SESSIONS, definition, rows)
+
+
+def _fresh_rebuild(conn: sqlite3.Connection, context: Context, table: str) -> tuple[str, list[str]]:
+    """What rebuilding `table` to a fresh store's declaration takes: that declaration
+    under the replacement's name, and the columns of it the table holds, in its order.
+
+    A column the table holds that this build does not declare is refused: its values
+    would have nowhere to go.
+    """
+
+    declared, columns = _fresh_table(context, table)
     names = [column[0] for column in columns]
-    present = _columns(conn, _SESSIONS)
+    present = _columns(conn, table)
     unknown = present - set(names)
     if unknown:
-        raise RuntimeError(f"sessions holds columns this build does not know: {sorted(unknown)}")
-    carried = ", ".join(name for name in names if name in present)
+        raise RuntimeError(f"{table} holds columns this build does not know: {sorted(unknown)}")
     definition = re.sub(
-        rf'^CREATE TABLE\s+"?{_SESSIONS}"?',
-        f"CREATE TABLE {_SESSIONS}{planning_store.REPLACEMENT}",
+        rf'^CREATE TABLE\s+"?{table}"?',
+        f"CREATE TABLE {table}{planning_store.REPLACEMENT}",
         declared,
         count=1,
         flags=re.IGNORECASE,
     )
-    rows = f"({carried}) SELECT {carried} FROM {_SESSIONS}"  # noqa: S608 - the pragma's names
-    return planning_store.rebuild_table(conn, _SESSIONS, definition, rows)
+    return definition, [name for name in names if name in present]
 
 
 def _items_needed(conn: sqlite3.Connection, context: Context) -> bool:
@@ -1578,6 +1765,719 @@ def _check_waiting(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"{_WAITING} or one of its indexes is missing")
 
 
+# -- how a request on a closed item ended --------------------------------------
+
+_REQUESTS = "work_item_requests"
+#: A request `ended-requests` ends, read from a row `r` of the requests joined to its item's state
+#: `s`: pending, or stored `task_closed`, on an item that stands closed.
+_ENDS = "s.is_terminal = 1 AND (r.status = 'pending' OR r.expired_reason = 'task_closed')"
+#: The reason it ends with, by the category of that state, read apart from
+#: `questions.closed_reason`, which `oracle` reads with.
+_ENDED_REASON = "CASE s.category WHEN 'cancelled' THEN 'item_cancelled' ELSE 'item_completed' END"
+#: The rows with their item's state `s` and their execution `x`.
+_REQUEST_STATES = (
+    " FROM work_item_requests r"
+    " LEFT JOIN work_items w ON w.work_item_id = r.work_item_id"
+    " LEFT JOIN workflow_states s ON s.state_id = w.state_id"
+    " LEFT JOIN executions x ON x.execution_id = r.execution_id"
+)
+
+
+def _lapse(now: str) -> str:
+    """Why a pending row `r` has lapsed at `now`, or null while it waits: past its
+    deadline, or on an execution that is gone, ended or not live, in SQL apart from
+    `questions.lapse`, which `oracle` reads with."""
+
+    return (
+        "CASE WHEN r.status != 'pending' THEN NULL"
+        f" WHEN coalesce(r.expires_at, '') != '' AND r.expires_at <= '{now}' THEN 'deadline'"
+        " WHEN coalesce(r.execution_id, '') != '' AND (x.execution_id IS NULL"
+        " OR coalesce(x.ended_at, '') != ''"
+        " OR coalesce(x.status, '') NOT IN ('starting', 'running')) THEN 'execution_closed'"
+        " END"
+    )
+
+
+def _requests_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    declared = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_REQUESTS,)
+    ).fetchone()
+    columns = _columns(conn, _REQUESTS)
+    return (
+        "purpose" not in columns
+        or "action_id" not in columns
+        or "'task_closed'" in str(declared[0])
+        or conn.execute(f"SELECT 1{_REQUEST_STATES} WHERE {_ENDS} LIMIT 1").fetchone() is not None
+    )
+
+
+def _end_requests(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`ended-requests`: the requests in a fresh store's shape, each that a close ended stored so.
+
+    Every value is carried as stored, but a request still pending on a closed item, or
+    one that stored `task_closed`, which goes as a reason, ends `expired`: as
+    `item_cancelled` on a cancelled item and as `item_completed` on any other closed
+    one, at the moment of the migration if nothing closed it before, with its revision
+    raised as any write of a request raises it, and with no event. A pending one that
+    had lapsed ends as it lapsed, `deadline` or `execution_closed`, resolved when it
+    lapsed where that is known, as the service's close writes it. A request that
+    stored `task_closed` on an item that is open again is refused: which close ended
+    it is not known, and nothing may guess.
+    """
+
+    reopened = [
+        str(row[0])
+        for row in conn.execute(
+            f"SELECT r.request_id{_REQUEST_STATES}"
+            " WHERE r.expired_reason = 'task_closed' AND coalesce(s.is_terminal, 0) = 0"
+        )
+    ]
+    if reopened:
+        raise RuntimeError(
+            f"requests {reopened[:5]} stored task_closed on an item that is open:"
+            " which close ended them is not known"
+        )
+    lapse = _lapse(context.now)
+    reason = f"coalesce({lapse}, {_ENDED_REASON})"
+    ended = Counter(
+        str(row[0]) for row in conn.execute(f"SELECT {reason}{_REQUEST_STATES} WHERE {_ENDS}")
+    )
+    definition, carried = _fresh_rebuild(conn, context, _REQUESTS)
+    lapsed_at = (
+        f"CASE {lapse} WHEN 'deadline' THEN r.expires_at"
+        " WHEN 'execution_closed' THEN nullif(x.ended_at, '') END"
+    )
+    changed = {
+        "status": f"CASE WHEN {_ENDS} THEN 'expired' ELSE r.status END",
+        "expired_reason": f"CASE WHEN {_ENDS} THEN {reason} ELSE r.expired_reason END",
+        "answered_by": f"CASE WHEN {_ENDS} AND r.status = 'pending' AND {lapse} IS NULL"
+        f" THEN '{AUTHOR}' ELSE r.answered_by END",
+        "resolved_at": f"CASE WHEN {_ENDS}"
+        f" THEN coalesce(r.resolved_at, {lapsed_at}, '{context.now}')"
+        " ELSE r.resolved_at END",
+        "revision": f"CASE WHEN {_ENDS} THEN r.revision + 1 ELSE r.revision END",
+    }
+    values = ", ".join(changed.get(name, f"r.{name}") for name in carried)
+    # A trigger of another table that reads this one, as the shape of a thread reads a
+    # question, would name a table that is gone between the drop and the rename, which
+    # SQLite refuses: it goes first and comes back after, from its stored text.
+    readers = conn.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name != ?"
+        " AND sql LIKE ? ORDER BY rowid",
+        (_REQUESTS, f"%{_REQUESTS}%"),
+    ).fetchall()
+    for name, _sql in readers:
+        conn.execute(f'DROP TRIGGER "{name}"')
+    recreated = planning_store.rebuild_table(
+        conn,
+        _REQUESTS,
+        definition,
+        f"({', '.join(carried)}) SELECT {values}{_REQUEST_STATES}",
+    )
+    for name, sql in readers:
+        conn.execute(str(sql))
+        recreated.append(str(name))
+    return {"ended": dict(sorted(ended.items())), "recreated": recreated}
+
+
+def _check_requests(conn: sqlite3.Connection, context: Context) -> None:
+    if _requests_needed(conn, context):
+        raise UnmetError(f"{_REQUESTS} has not taken its new shape, or one waits on a closed item")
+
+
+# -- goals and stages awaiting confirmation ------------------------------------
+
+_CONFIRMATIONS = "work_item_confirmations"
+
+
+def _confirmation_rows(conn: sqlite3.Connection) -> set[str] | None:
+    """The containers that hold a confirmation row, or None while the table is missing."""
+
+    if (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_CONFIRMATIONS,)
+        ).fetchone()
+        is None
+    ):
+        return None
+    return {str(row[0]) for row in conn.execute("SELECT work_item_id FROM work_item_confirmations")}
+
+
+def _confirmations_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    held = _confirmation_rows(conn)
+    return held is None or held != closing_rules.awaiting(conn)
+
+
+def _create_confirmations(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`confirmations`: the table, and a row since the migration for each container that awaits."""
+
+    created = _confirmation_rows(conn) is None
+    conn.execute(planning_store.CONFIRMATIONS)
+    added = sorted(closing_rules.awaiting(conn) - (_confirmation_rows(conn) or set()))
+    conn.executemany(
+        "INSERT INTO work_item_confirmations(work_item_id, since) VALUES(?, ?)",
+        [(identity, context.now) for identity in added],
+    )
+    references = _references(conn)
+    return {
+        "table_created": created,
+        "awaiting": sorted(references.get(identity, identity) for identity in added),
+    }
+
+
+def _check_confirmations(conn: sqlite3.Connection, context: Context) -> None:
+    if _confirmations_needed(conn, context):
+        raise UnmetError(f"{_CONFIRMATIONS} does not hold one row for each container that awaits")
+
+
+# -- deferred-items: the conditions put-off work comes back on ----------------------
+
+_DEFERRALS = "work_item_deferrals"
+#: The step and the postcondition that hold put-off work to its conditions, named by
+#: what they do rather than numbered.
+DEFERRED_ITEMS = "deferred-items"
+#: How many items stand in a deferred state, and how many conditions there are.
+_DEFERRED_COUNT = (
+    "SELECT COUNT(*) FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
+    " WHERE s.category = 'deferred'"
+)
+
+
+def _deferrals_present(conn: sqlite3.Connection) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_DEFERRALS,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _deferrals_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return not _deferrals_present(conn)
+
+
+def _create_deferrals(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table of the conditions put-off work returns on, and its two indexes, empty.
+
+    No 2.9 state was deferred, so no item stands there after the steps above and none
+    has a condition to carry.
+    """
+
+    del context
+    created = not _deferrals_present(conn)
+    for statement in (
+        planning_store.DEFERRALS,
+        planning_store.DEFERRALS_UNTIL_AT_INDEX,
+        planning_store.DEFERRALS_UNTIL_ITEM_INDEX,
+    ):
+        conn.execute(statement)
+    return {"table_created": created}
+
+
+def _check_deferrals(conn: sqlite3.Connection, context: Context) -> None:
+    if _deferrals_needed(conn, context):
+        raise UnmetError(f"{_DEFERRALS} is missing")
+
+
+# -- `history-actions`: the actions the history takes --------------------------------------------
+
+
+def _actions_missing(conn: sqlite3.Connection) -> list[str]:
+    """The declared actions the events table's CHECK does not name."""
+
+    found = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'work_item_events'").fetchone()
+    declared = "" if found is None else str(found[0])
+    return [action for action in model.EVENT_ACTIONS if f"'{action}'" not in declared]
+
+
+def _actions_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_actions_missing(conn))
+
+
+def _widen_actions(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`history-actions`: the CHECK of every declared action, the table rebuilt with its rows."""
+
+    del context
+    missing = _actions_missing(conn)
+    planning_store.widen_event_actions(conn)
+    return {"added": missing}
+
+
+def _check_actions(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _actions_missing(conn)
+    if missing:
+        raise UnmetError(f"the events table refuses the actions {missing}")
+
+
+# -- `commits`: the commits ------------------------------------------------------------
+
+#: The tables of the commits Valkama knows and of their attachments.
+COMMIT_TABLES = ("commits", "work_item_commits")
+_COMMIT_OBJECTS = (
+    *(("table", table) for table in COMMIT_TABLES),
+    ("index", "commits_pair"),
+    ("index", "commits_session"),
+    ("index", "work_item_commits_by_commit"),
+)
+
+
+def _commits_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return any(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?", (kind, name)
+        ).fetchone()
+        is None
+        for kind, name in _COMMIT_OBJECTS
+    )
+
+
+def _create_commits(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`commits`: the commit tables and their indexes, each if missing, from a fresh store's
+    text."""
+
+    del context
+    created = [
+        table
+        for table in COMMIT_TABLES
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+        ).fetchone()
+        is None
+    ]
+    for statement in planning_store.COMMITS:
+        conn.execute(statement)
+    return {"tables_created": created}
+
+
+def _check_commits(conn: sqlite3.Connection, context: Context) -> None:
+    if _commits_needed(conn, context):
+        raise UnmetError("a commit table or one of its indexes is missing")
+
+
+# -- the commit refs become commits --------------------------------------------
+
+_COMMIT_REF = "SELECT 1 FROM work_item_refs WHERE kind = 'commit' LIMIT 1"
+
+
+def _commit_refs_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return conn.execute(_COMMIT_REF).fetchone() is not None
+
+
+def _carry_commit_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`commit-refs`: each commit ref the file carries becomes its commits, attached `migrated`.
+
+    A pair gets a row of `commits` when it has none: the subject and time from the
+    file, no session, reported when its earliest ref was made. Its item gets one
+    attachment however many refs name it, labelled by `item_projects.commit_label`
+    and made by, when and in the call of the first of those refs that gives a label,
+    or of the first. A record that is a url adds a `url` ref of the same text, label,
+    author, time and call. Then every commit ref leaves, carried or dropped.
+    """
+
+    records = _commit_records(context)
+    refs = conn.execute(
+        "SELECT id, work_item_id, value, label, author, created_at, call_id FROM work_item_refs"
+        " WHERE kind = 'commit' ORDER BY id"
+    ).fetchall()
+    commits: dict[tuple[str, str], list[Any]] = {}
+    attached: dict[tuple[str, tuple[str, str]], tuple[str, str, str, int | None]] = {}
+    urls: list[tuple[str, str, str, str, str, int | None]] = []
+    for ref in refs:
+        record = records.get(int(ref["id"]))
+        if record is None:
+            raise UnmetError(
+                f"the item projects file holds no record of the commit ref {ref['id']}"
+            )
+        if record["drop"]:
+            continue
+        identity, made = str(ref["work_item_id"]), str(ref["created_at"])
+        written = (str(ref["author"]), made, ref["call_id"])
+        label = item_projects.commit_label(str(ref["label"]), str(ref["value"]))
+        for pair in record["pairs"]:
+            key = (str(pair["project"] or ""), str(pair["hash"]))
+            row = commits.setdefault(
+                key, [pair["project"], pair["hash"], pair["subject"], pair["committed_at"], made]
+            )
+            row[4] = min(row[4], made)
+            chosen = attached.get((identity, key))
+            if chosen is None or (not chosen[0] and label):
+                attached[(identity, key)] = (label, *written)
+        if record["url"]:
+            urls.append((identity, str(ref["value"]), str(ref["label"]), *written))
+    conn.executemany(
+        "INSERT OR IGNORE INTO commits(project_id, hash, subject, committed_at, reported_at)"
+        " VALUES(?,?,?,?,?)",
+        [tuple(row) for _key, row in sorted(commits.items())],
+    )
+    ids = {
+        (str(project), str(hash_)): int(commit_id)
+        for commit_id, project, hash_ in conn.execute(
+            "SELECT commit_id, COALESCE(project_id, ''), hash FROM commits"
+        )
+    }
+    conn.executemany(
+        "INSERT OR IGNORE INTO work_item_commits(work_item_id, commit_id, attached_by, label,"
+        " author, created_at, call_id) VALUES(?,?,?,?,?,?,?)",
+        [
+            (identity, ids[key], _MIGRATED, *chosen)
+            for (identity, key), chosen in sorted(attached.items())
+        ],
+    )
+    added = conn.executemany(
+        "INSERT OR IGNORE INTO work_item_refs(work_item_id, kind, value, label, author,"
+        " created_at, call_id) VALUES(?,'url',?,?,?,?,?)",
+        urls,
+    ).rowcount
+    removed = conn.execute("DELETE FROM work_item_refs WHERE kind = 'commit'").rowcount
+    return {
+        "commit_refs": removed,
+        "dropped": sum(1 for ref in refs if records[int(ref["id"])]["drop"]),
+        "commits": len(commits),
+        "attachments": len(attached),
+        "url_refs": added,
+    }
+
+
+def _check_commit_refs(conn: sqlite3.Connection, context: Context) -> None:
+    if _commit_refs_needed(conn, context):
+        raise UnmetError("a ref of the kind commit is left")
+
+
+# -- refs-without-commits: the refs stop taking a commit ------------------------------
+
+
+def _ref_kinds_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return _ref_kinds(conn) != sorted(model.REF_KINDS)
+
+
+def _rebuild_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """`work_item_refs` as a fresh store declares it, taking only `model.REF_KINDS`.
+
+    It comes after `commit-refs`, which left no ref of the kind `commit`, so every row is
+    kept as it was; one left would make the rebuild fail rather than vanish.
+    """
+
+    del context
+    before = _ref_kinds(conn)
+    recreated = planning_store.rebuild_table(
+        conn,
+        "work_item_refs",
+        planning_store.table_definition(
+            "work_item_refs", f"work_item_refs{planning_store.REPLACEMENT}"
+        ),
+        "SELECT id, work_item_id, kind, value, label, author, created_at, call_id"
+        " FROM work_item_refs",
+    )
+    refs = int(conn.execute("SELECT COUNT(*) FROM work_item_refs").fetchone()[0])
+    return {"kinds_before": before, "kinds": _ref_kinds(conn), "refs": refs, "recreated": recreated}
+
+
+def _check_ref_kinds(conn: sqlite3.Connection, context: Context) -> None:
+    if _ref_kinds_needed(conn, context):
+        raise UnmetError(f"work_item_refs takes the kinds {_ref_kinds(conn)}")
+
+
+# -- participation: the owner's setting, empty ---------------------------------------
+
+#: The step and the postcondition that give the store the owner's participation setting.
+PARTICIPATION = "participation"
+_PARTICIPATION_TABLES = ("participation_settings", "label_settings")
+
+
+def _participation_missing(conn: sqlite3.Connection) -> list[str]:
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?)",
+            _PARTICIPATION_TABLES,
+        )
+    }
+    return [table for table in _PARTICIPATION_TABLES if table not in present]
+
+
+def _participation_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_participation_missing(conn))
+
+
+def _create_participation(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Both tables and their indexes, empty: the setting starts at the default set."""
+
+    del context
+    missing = _participation_missing(conn)
+    for statement in planning_store.PARTICIPATION:
+        conn.execute(statement)
+    return {"tables_created": missing}
+
+
+def _check_participation(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _participation_missing(conn)
+    if missing:
+        raise UnmetError(f"{', '.join(missing)} missing")
+
+
+def _participation_default(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Both tables are empty, and every space reads each point and switch at the
+    default set and stands at it."""
+
+    del context
+    found = []
+    for table in _PARTICIPATION_TABLES:
+        rows = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])  # noqa: S608 - constant name
+        if rows:
+            found.append(f"{table} holds {rows} rows, not 0")
+    settings = participation.load(conn)
+    default = participation.SETS[participation.DEFAULT]
+    spaces = conn.execute("SELECT planning_space_id, key FROM planning_spaces ORDER BY key")
+    for space, key in spaces.fetchall():
+        chosen = settings.chosen(str(space))
+        apart = [name for name, value in default.items() if chosen[name] != value]
+        if apart or participation.set_of(chosen) != participation.DEFAULT:
+            found.append(f"{key} reads {apart or 'another set'} apart from the default set")
+    _unmet(found, "the owner's participation")
+    return {"set": participation.DEFAULT}
+
+
+# -- agent-decisions: the summary of agent decisions, empty --------------------------
+
+#: The step and the postcondition that give the store the summary of agent decisions.
+AGENT_DECISIONS = "agent-decisions"
+
+
+def _decisions_missing(conn: sqlite3.Connection) -> bool:
+    found = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_decisions'"
+    ).fetchone()
+    return found is None
+
+
+def _decisions_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return _decisions_missing(conn)
+
+
+def _create_decisions(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table, empty: no decision an agent took before it can be told by its point."""
+
+    del context
+    missing = _decisions_missing(conn)
+    conn.execute(planning_store.AGENT_DECISIONS)
+    return {"tables_created": ["agent_decisions"] if missing else []}
+
+
+def _check_decisions(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    if _decisions_missing(conn):
+        raise UnmetError("agent_decisions missing")
+
+
+def _decisions_empty(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The summary holds no decision: the history this store kept marked none."""
+
+    del context
+    rows = int(conn.execute("SELECT COUNT(*) FROM agent_decisions").fetchone()[0])
+    _unmet([f"agent_decisions holds {rows} rows, not 0"] if rows else [], "the summary")
+    return {"rows": rows}
+
+
+# -- pending-actions: the writes that wait for the owner, none -----------------------
+
+#: The step and the postcondition that give the store the writes waiting for the owner.
+PENDING_ACTIONS = "pending-actions"
+_PENDING_OBJECTS = ("pending_actions", "pending_actions_open", "work_item_requests_action")
+
+
+def _pending_missing(conn: sqlite3.Connection) -> list[str]:
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE name IN (?, ?, ?)", _PENDING_OBJECTS
+        )
+    }
+    return [name for name in _PENDING_OBJECTS if name not in present]
+
+
+def _pending_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_pending_missing(conn))
+
+
+def _create_pending(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table and its two indexes, empty: no write of 2.9 waited for the owner."""
+
+    del context
+    missing = _pending_missing(conn)
+    for statement in planning_store.PENDING:
+        conn.execute(statement)
+    return {"created": missing}
+
+
+def _check_pending(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _pending_missing(conn)
+    if missing:
+        raise UnmetError(f"{', '.join(missing)} missing")
+
+
+def _pending_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Nothing waits on an action: no action, no request naming one or carrying a purpose
+    of the owner's participation, and no action dropped in the history."""
+
+    del context
+    actions = int(conn.execute("SELECT COUNT(*) FROM pending_actions").fetchone()[0])
+    named = [
+        str(row[0])
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE action_id IS NOT NULL"
+            " ORDER BY request_id"
+        )
+    ]
+    purposed = [
+        f"{row[0]} ({row[1]})"
+        for row in conn.execute(
+            "SELECT request_id, purpose FROM work_item_requests"
+            " WHERE purpose IN (SELECT value FROM json_each(?)) ORDER BY request_id",
+            (json.dumps(request_model.PARTICIPATION_PURPOSES),),
+        )
+    ]
+    dropped = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE action = 'action_dropped'"
+        ).fetchone()[0]
+    )
+    found = [f"pending_actions holds {actions} rows, not 0"] if actions else []
+    found += [f"the request {request} names an action" for request in named]
+    found += [f"the request {request} carries a purpose of participation" for request in purposed]
+    found += [f"the history holds {dropped} action_dropped, not 0"] if dropped else []
+    _unmet(found, "an action waits")
+    return {"actions": actions, "requests": len(named) + len(purposed), "dropped": dropped}
+
+
+# -- agent-basis: no item accepted on an agent's own decision ------------------------
+
+#: The postcondition that holds no item to the basis of an agent's own decision.
+AGENT_BASIS = "agent-basis"
+
+
+def _agent_basis_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No item is accepted on the basis `agent`: no setting of 2.9 let an agent decide."""
+
+    del context
+    references = _references(conn)
+    found = [
+        f"{references[str(row[0])]} has the basis agent"
+        for row in conn.execute(
+            "SELECT work_item_id FROM work_items WHERE acceptance = 'agent' ORDER BY number"
+        )
+    ]
+    _unmet(found, "an agent's own decision")
+    return {"accepted_by_agent": len(found)}
+
+
+# -- baselines: the tasks under a goal or stage when it was accepted -----------------
+
+_BASELINES = "work_item_baselines"
+#: The step and the postcondition that hold the counts taken at acceptance, named by
+#: what they do rather than numbered.
+BASELINES = "baselines"
+
+
+def _baselines_present(conn: sqlite3.Connection) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (_BASELINES,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _baselines_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return not _baselines_present(conn)
+
+
+def _create_baselines(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table of the tasks under each goal or stage when it was accepted, empty.
+
+    Every goal and stage 2.9 left accepted has the basis `migrated`, and how many
+    tasks stood under it when it was accepted is not known now: none gets a row.
+    """
+
+    del context
+    created = not _baselines_present(conn)
+    conn.execute(planning_store.ITEM_BASELINES)
+    return {"table_created": created}
+
+
+def _check_baselines(conn: sqlite3.Connection, context: Context) -> None:
+    if _baselines_needed(conn, context):
+        raise UnmetError(f"{_BASELINES} is missing")
+    rows = int(conn.execute(f"SELECT COUNT(*) FROM {_BASELINES}").fetchone()[0])  # noqa: S608 - constant name
+    if rows:
+        raise UnmetError(f"{_BASELINES} holds {rows} rows, not 0")
+
+
+# -- triage-marks: the items a triage review saw ------------------------------------
+
+_TRIAGE_MARKS = "triage_marks"
+#: The step and the postcondition that hold the triage marks, named by what they do
+#: rather than numbered.
+TRIAGE_MARKS = "triage-marks"
+
+
+def _triage_marks_missing(conn: sqlite3.Connection) -> list[str]:
+    """The table and the triggers of the triage marks the store lacks, by name."""
+
+    present = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE (type = 'table' AND name = ?)"
+            " OR type = 'trigger'",
+            (_TRIAGE_MARKS,),
+        )
+    }
+    wanted = [_TRIAGE_MARKS, *planning_store.TRIAGE_MARK_TRIGGERS]
+    return [name for name in wanted if name not in present]
+
+
+def _triage_marks_needed(conn: sqlite3.Connection, context: Context) -> bool:
+    del context
+    return bool(_triage_marks_missing(conn))
+
+
+def _create_triage_marks(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table of the items a triage review saw, empty, and the five triggers that
+    take a mark away, as a fresh store declares them.
+
+    "Seen" means a 3.0 review saw the item, and none has run yet: no item gets a mark.
+    The triggers stand on `work_items`, `work_item_comments` and `work_item_requests`,
+    which earlier steps rebuild, and a rebuild sets up again only the triggers that
+    stood before it: the step comes after every one of them.
+    """
+
+    del context
+    created = _triage_marks_missing(conn)
+    for statement in planning_store.TRIAGE_MARKS:
+        conn.execute(statement)
+    return {"created": created}
+
+
+def _check_triage_marks(conn: sqlite3.Connection, context: Context) -> None:
+    del context
+    missing = _triage_marks_missing(conn)
+    if missing:
+        raise UnmetError(f"the triage marks lack {', '.join(missing)}")
+
+
 STEPS = (
     Step("oracle", "read the oracle", _read_oracle, _oracle_needed),
     Step("states", "states", _migrate_states, _states_needed, _check_states),
@@ -1599,6 +2499,89 @@ STEPS = (
     Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
     Step("addressee", "the session a request asks", _add_addressee, _addressee_needed, _check_addressee),
     Step("waiting-words", "words that wait for a session", _create_waiting, _waiting_needed, _check_waiting),
+    Step(
+        "item-projects",
+        "item projects",
+        _create_item_projects,
+        _item_projects_needed,
+        _check_item_projects,
+    ),
+    Step("labels", "labels", _drop_labels, _labels_needed, _check_labels),
+    Step("spaces", "the space", _rebuild_spaces, _space_needed, _check_space),
+    Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
+    Step(
+        "addressee",
+        "the session a request asks",
+        _add_addressee,
+        _addressee_needed,
+        _check_addressee,
+    ),
+    Step(
+        "ended-requests",
+        "how a request on a closed item ended",
+        _end_requests,
+        _requests_needed,
+        _check_requests,
+    ),
+    Step(
+        "confirmations",
+        "goals and stages awaiting confirmation",
+        _create_confirmations,
+        _confirmations_needed,
+        _check_confirmations,
+    ),
+    Step(
+        DEFERRED_ITEMS,
+        "the conditions put-off work comes back on",
+        _create_deferrals,
+        _deferrals_needed,
+        _check_deferrals,
+    ),
+    Step("history-actions", "the actions the history takes", _widen_actions, _actions_needed, _check_actions),
+    Step("commits", "commits", _create_commits, _commits_needed, _check_commits),
+    Step("commit-refs", "commit refs", _carry_commit_refs, _commit_refs_needed, _check_commit_refs),
+    Step(
+        "refs-without-commits",
+        "refs without the kind commit",
+        _rebuild_refs,
+        _ref_kinds_needed,
+        _check_ref_kinds,
+    ),
+    Step(
+        PARTICIPATION,
+        "the owner's participation setting",
+        _create_participation,
+        _participation_needed,
+        _check_participation,
+    ),
+    Step(
+        AGENT_DECISIONS,
+        "the summary of agent decisions",
+        _create_decisions,
+        _decisions_needed,
+        _check_decisions,
+    ),
+    Step(
+        PENDING_ACTIONS,
+        "the writes that wait for the owner",
+        _create_pending,
+        _pending_needed,
+        _check_pending,
+    ),
+    Step(
+        BASELINES,
+        "the tasks under a goal or stage when it was accepted",
+        _create_baselines,
+        _baselines_needed,
+        _check_baselines,
+    ),
+    Step(
+        TRIAGE_MARKS,
+        "the items a triage review saw",
+        _create_triage_marks,
+        _triage_marks_needed,
+        _check_triage_marks,
+    ),
 )
 
 
@@ -1696,13 +2679,27 @@ def _expected_counts(oracle: Oracle) -> dict[str, int]:
     )
     expected["work_item_events"] += sum(oracle.events.values())
     expected["work_item_projects"] = expected.get("work_item_projects", 0) + oracle.item_projects
+    # `commits` creates them and `commit-refs` fills them with the commits the refs carry; the refs
+    # lose every commit ref and gain the `url` refs an item did not hold yet.
+    expected["commits"] = expected.get("commits", 0) + oracle.commit_rows
+    expected["work_item_commits"] = expected.get("work_item_commits", 0) + sum(
+        len(pairs) for pairs in oracle.attachments.values()
+    )
+    expected["work_item_refs"] += oracle.url_refs - oracle.commit_refs
     expected["platform_ui_prefs"] = expected.get("platform_ui_prefs", 0) - len(oracle.dropped_prefs)
+    # `confirmations` gives a row to each accepted open container that awaits confirmation.
+    expected[_CONFIRMATIONS] = sum(
+        1 for state in oracle.derived.values() if state == closing_rules.AWAITING
+    )
+    # The baselines step writes no row: every acceptance 2.9 left is `migrated`.
+    expected[_BASELINES] = 0
     return expected
 
 
-def _p2(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """The tables `oracle` counted and the projects `item-projects` fills hold the rows foreseen; any other
-    table is `fresh-tables`'s."""
+def _holds_row_counts(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The tables `oracle` counted, the projects `item-projects` fills, the rows
+    `confirmations` and `commit-refs` write and the baselines nobody writes hold the rows
+    foreseen; any other table is `fresh-tables`'s."""
 
     oracle = _oracle(context)
     counts = _counts(conn)
@@ -2004,7 +3001,13 @@ def _holds_indexes(conn: sqlite3.Connection, context: Context) -> Mapping[str, A
     objects = _objects(conn)
     expected = {
         "work_items": sorted(
-            set(oracle.objects["work_items"]) | set(planning_store.STATE_FITS_KIND_TRIGGERS)
+            set(oracle.objects["work_items"])
+            | set(planning_store.STATE_FITS_KIND_TRIGGERS)
+            | {
+                name
+                for name, table in planning_store.TRIAGE_MARK_TRIGGERS.items()
+                if table == "work_items"
+            }
         ),
         "workflow_states": sorted(oracle.objects["workflow_states"]),
     }
@@ -2282,6 +3285,336 @@ def _holds_fresh_tables(conn: sqlite3.Connection, context: Context) -> Mapping[s
     return {"added": sorted(added)}
 
 
+def _holds_requests_kept(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every request keeps its item, kind and status, but those `ended-requests` ended. How
+    many there are is `row-counts`'s to compare and which ids `requests-asked`'s, so a lost
+    one is refused there."""
+
+    oracle = _oracle(context)
+    after = {
+        str(row[0]): (str(row[1]), str(row[2]), str(row[3]))
+        for row in conn.execute(
+            "SELECT request_id, work_item_id, kind, status FROM work_item_requests"
+        )
+    }
+    found = []
+    for identity, (item, kind, status) in sorted(oracle.requests.items()):
+        now = after.get(identity)
+        if now is None:
+            continue
+        ended = identity in oracle.ended or identity in oracle.lapsed
+        expected = (item, kind, "expired" if ended else status)
+        if now != expected:
+            found.append(f"the request {identity} reads {now}, not {expected}")
+    _unmet(found, "requests")
+    return {"requests": len(after)}
+
+
+def _holds_no_closed_waits(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No request waits on a closed item, and none says `task_closed`."""
+
+    del context
+    found = [
+        f"the request {row[0]} waits on a closed item"
+        for row in conn.execute(
+            f"SELECT r.request_id{_REQUEST_STATES} WHERE s.is_terminal = 1 AND r.status = 'pending'"
+        )
+    ]
+    found += [
+        f"the request {row[0]} says task_closed"
+        for row in conn.execute(
+            "SELECT request_id FROM work_item_requests WHERE expired_reason = 'task_closed'"
+        )
+    ]
+    _unmet(found, "requests on closed items")
+    return {"pending_on_closed": 0}
+
+
+def _holds_requests_ended(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The requests a close ended are the ones `oracle` foresaw, each with the reason of its
+    item's category, and those that had lapsed say why."""
+
+    oracle = _oracle(context)
+    lapsed = {
+        str(row[0]): str(row[1])
+        for row in conn.execute(
+            "SELECT request_id, expired_reason FROM work_item_requests"
+            " WHERE request_id IN (SELECT value FROM json_each(?))",
+            (json.dumps(sorted(oracle.lapsed)),),
+        )
+    }
+    rows = conn.execute(
+        f"SELECT r.request_id, r.expired_reason, s.category{_REQUEST_STATES}"
+        " WHERE r.expired_reason IN ('item_completed', 'item_cancelled')"
+    ).fetchall()
+    held = {str(row[0]): str(row[1]) for row in rows}
+    found = []
+    if held != oracle.ended:
+        found.append(f"the requests a close ended are {held}, not {oracle.ended}")
+    found += [
+        f"the request {row[0]} says {row[1]} on an item in {row[2]}"
+        for row in rows
+        if row[1] != questions.closed_reason(str(row[2]))
+    ]
+    if lapsed != oracle.lapsed:
+        found.append(f"the requests that had lapsed read {lapsed}, not {oracle.lapsed}")
+    _unmet(found, "requests a close ended")
+    return {
+        "ended": dict(sorted(Counter(held.values()).items())),
+        "lapsed": dict(sorted(Counter(lapsed.values()).items())),
+    }
+
+
+def _holds_awaiting_rows(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """A row stands for each container that awaits confirmation and for no other, each
+    waiting since the migration, with no call, no question and no departure."""
+
+    held = {
+        str(row[0]): (str(row[1]), row[2], row[3], row[4])
+        for row in conn.execute(
+            "SELECT work_item_id, since, call_id, request_id, left_at FROM work_item_confirmations"
+        )
+    }
+    awaiting = closing_rules.awaiting(conn)
+    references = _references(conn)
+    expected = (context.now, None, None, None)
+    found = [
+        f"{references.get(identity, identity)} awaits confirmation with no row"
+        for identity in sorted(awaiting - set(held))
+    ]
+    found += [
+        f"{references.get(identity, identity)} holds a row and does not await confirmation"
+        for identity in sorted(set(held) - awaiting)
+    ]
+    found += [
+        f"the row of {references.get(identity, identity)} reads {values}, not {expected}"
+        for identity, values in sorted(held.items())
+        if values != expected
+    ]
+    _unmet(found, "goals and stages awaiting confirmation")
+    return {"rows": len(held)}
+
+
+def _deferred_items(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """A condition stands for each item in a deferred state and for no other: as many
+    rows as such items, every one of them an item that stands there."""
+
+    del context
+    rows = int(conn.execute(f"SELECT COUNT(*) FROM {_DEFERRALS}").fetchone()[0])  # noqa: S608 - constant name
+    deferred = int(conn.execute(_DEFERRED_COUNT).fetchone()[0])
+    stray = int(
+        conn.execute(
+            f"SELECT COUNT(*) FROM {_DEFERRALS} d JOIN work_items i"  # noqa: S608 - constant name
+            " ON i.work_item_id = d.work_item_id JOIN workflow_states s ON s.state_id = i.state_id"
+            " WHERE s.category <> 'deferred'"
+        ).fetchone()[0]
+    )
+    found = []
+    if rows != deferred:
+        found.append(f"{rows} conditions for {deferred} items in a deferred state")
+    if stray:
+        found.append(f"{stray} conditions on items that are not deferred")
+    _unmet(found, "conditions of put-off work")
+    return {"rows": rows, "deferred": deferred}
+
+
+#: The kinds the CHECK of `work_item_refs` names.
+_REF_KINDS_CHECK = re.compile(r"CHECK\s*\(\s*kind\s+IN\s*\(([^)]*)\)\s*\)", re.IGNORECASE)
+
+
+def _ref_kinds(conn: sqlite3.Connection) -> list[str]:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'work_item_refs'"
+    ).fetchone()
+    found = _REF_KINDS_CHECK.search(str(row[0])) if row is not None else None
+    return sorted(re.findall(r"'([^']*)'", found[1])) if found else []
+
+
+def _holds_no_commit_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No commit ref is left, and the refs take the kinds a fresh store's take."""
+
+    expected = context.memo.get("fresh_ref_kinds")
+    if expected is None:
+        if context.reference is None:
+            raise UnmetError("no fresh store to compare with")
+        with context.reference() as fresh:
+            expected = context.memo["fresh_ref_kinds"] = _ref_kinds(fresh)
+    left = int(
+        conn.execute("SELECT COUNT(*) FROM work_item_refs WHERE kind = 'commit'").fetchone()[0]
+    )
+    kinds = _ref_kinds(conn)
+    found = [f"{left} refs of the kind commit are left"] if left else []
+    if kinds != expected:
+        found.append(f"work_item_refs takes the kinds {kinds}, a fresh store {expected}")
+    _unmet(found, "commit refs")
+    return {"commit_refs_left": left, "kinds": kinds}
+
+
+def _differs(
+    conn: sqlite3.Connection,
+    held: Mapping[str, set[tuple[str, str]]],
+    expected: Mapping[str, set[tuple[str, str]]],
+) -> list[str]:
+    """Each item whose set in `held` is not its set in `expected`, with what differs."""
+
+    references = _references(conn)
+    found = []
+    for identity in sorted(set(held) | set(expected)):
+        has, wants = held.get(identity, set()), expected.get(identity, set())
+        if has != wants:
+            found.append(
+                f"{references.get(identity, identity)} lacks {sorted(wants - has)[:3]}"
+                f" and holds {sorted(has - wants)[:3]} besides"
+            )
+    return found
+
+
+def _holds_other_refs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each item keeps its refs but the commit refs, and holds a `url` ref for each of
+    its records that is a url."""
+
+    oracle = _oracle(context)
+    held: dict[str, set[tuple[str, str]]] = {}
+    for identity, kind, value in conn.execute(
+        "SELECT work_item_id, kind, value FROM work_item_refs"
+    ):
+        held.setdefault(str(identity), set()).add((str(kind), str(value)))
+    _unmet(_differs(conn, held, oracle.refs_after), "refs")
+    return {"items": len(held), "url_refs_added": oracle.url_refs}
+
+
+def _holds_record_pairs(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Each item holds the pairs of its records the file carries, each `migrated`."""
+
+    oracle = _oracle(context)
+    held: dict[str, set[tuple[str, str]]] = {}
+    others: list[str] = []
+    for identity, project, hash_, attached_by in conn.execute(
+        "SELECT a.work_item_id, COALESCE(c.project_id, ''), c.hash, a.attached_by"
+        " FROM work_item_commits a JOIN commits c ON c.commit_id = a.commit_id"
+    ):
+        held.setdefault(str(identity), set()).add((str(project), str(hash_)))
+        if attached_by != _MIGRATED:
+            others.append(f"{identity} holds {project} {hash_} attached by {attached_by}")
+    _unmet(_differs(conn, held, oracle.attachments) + others, "commit attachments")
+    return {"items": len(held), "attachments": sum(len(pairs) for pairs in held.values())}
+
+
+def _holds_commits_attached(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every commit is attached somewhere, reported by no session and rewritten by no
+    record."""
+
+    del context
+    found = [
+        f"the commit {project} {hash_}"
+        + (" is attached to nothing" if not attached else "")
+        + (f" names the session {session}" if session is not None else "")
+        + (f" was rewritten to {rewritten}" if rewritten is not None else "")
+        + (f" carries a rewrite recorded at {recorded}" if recorded is not None else "")
+        for project, hash_, session, rewritten, recorded, attached in conn.execute(
+            "SELECT COALESCE(project_id, ''), hash, session_id, rewritten_to, rewrite_recorded_ns,"
+            " EXISTS (SELECT 1 FROM work_item_commits a WHERE a.commit_id = c.commit_id)"
+            " FROM commits c ORDER BY commit_id"
+        )
+        if not attached or session is not None or rewritten is not None or recorded is not None
+    ]
+    _unmet(found, "commits")
+    return {"commits": int(conn.execute("SELECT COUNT(*) FROM commits").fetchone()[0])}
+
+
+def _holds_commit_projects(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every project an item holds from its commits is one of a commit attached to it."""
+
+    del context
+    references = _references(conn)
+    found = [
+        f"{references.get(str(identity), identity)} holds {project} from commits it has none of"
+        for identity, project in conn.execute(
+            "SELECT p.work_item_id, p.project_id FROM work_item_projects p WHERE p.source = ?"
+            " AND NOT EXISTS (SELECT 1 FROM work_item_commits a JOIN commits c"
+            " ON c.commit_id = a.commit_id WHERE a.work_item_id = p.work_item_id"
+            " AND c.project_id = p.project_id AND c.rewritten_to IS NULL)"
+            " ORDER BY p.work_item_id, p.project_id",
+            (item_projects.COMMITS,),
+        )
+    ]
+    _unmet(found, "projects from commits")
+    held = conn.execute(
+        "SELECT COUNT(*) FROM work_item_projects WHERE source = ?", (item_projects.COMMITS,)
+    ).fetchone()[0]
+    return {"projects_from_commits": int(held)}
+
+
+def _baselines(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """Every count taken at acceptance is a goal's or a stage's whose acceptance stands
+    on a basis other than `migrated`, open or closed: a close keeps the acceptance."""
+
+    del context
+    references = _references(conn)
+    found = [
+        f"{references.get(str(identity), identity)} holds a count at acceptance and"
+        + (
+            " is no goal or stage"
+            if kind != _CONTAINER
+            else " stands unaccepted"
+            if basis is None
+            else f" was accepted {basis}"
+        )
+        for identity, kind, basis in conn.execute(
+            f"SELECT b.work_item_id, i.kind, i.acceptance FROM {_BASELINES} b"  # noqa: S608 - constant name
+            " JOIN work_items i ON i.work_item_id = b.work_item_id"
+            " WHERE i.kind <> ? OR i.acceptance IS NULL OR i.acceptance = ?"
+            " ORDER BY b.work_item_id",
+            (_CONTAINER, _MIGRATED),
+        )
+    ]
+    _unmet(found, "counts taken at acceptance")
+    rows = int(conn.execute(f"SELECT COUNT(*) FROM {_BASELINES}").fetchone()[0])  # noqa: S608 - constant name
+    return {"rows": rows}
+
+
+def _triage_marks_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """The table and the triggers stand as a fresh store declares them, word for word,
+    and no item is marked: no 3.0 review has run, nor written `triage_seen`. `fresh-shape` compares
+    their names and the table's shape, and the text says what a trigger does as well."""
+
+    del context
+    stored = {
+        str(name): str(sql)
+        for name, sql in conn.execute(
+            "SELECT name, sql FROM sqlite_master WHERE name = ? OR name IN"
+            " (SELECT value FROM json_each(?))",
+            (_TRIAGE_MARKS, json.dumps(list(planning_store.TRIAGE_MARK_TRIGGERS))),
+        )
+    }
+    # SQLite keeps a statement's text without its `IF NOT EXISTS`.
+    declared = {
+        name: statement.replace(" IF NOT EXISTS", "", 1)
+        for name, statement in zip(
+            (_TRIAGE_MARKS, *planning_store.TRIAGE_MARK_TRIGGERS),
+            planning_store.TRIAGE_MARKS,
+            strict=True,
+        )
+    }
+    found = [
+        f"{name} is {'missing' if name not in stored else 'declared otherwise'}"
+        for name, sql in declared.items()
+        if stored.get(name) != sql
+    ]
+    marks = int(conn.execute(f"SELECT COUNT(*) FROM {_TRIAGE_MARKS}").fetchone()[0])  # noqa: S608 - constant name
+    if marks:
+        found.append(f"{marks} items are marked")
+    events = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE action = 'triage_seen'"
+        ).fetchone()[0]
+    )
+    if events:
+        found.append(f"{events} triage_seen events are recorded")
+    _unmet(found, "triage marks")
+    return {"marks": marks, "triage_seen_events": events}
+
+
 def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
@@ -2313,6 +3646,39 @@ POSTCONDITIONS = (
     Postcondition("no-old-waiting", "no words wait from before 3.0", _p24),
     Postcondition("request-shapes", "requests and waiting words shaped as a fresh store's", _p25),
     Postcondition("fresh-tables", "a table the store lacked is declared fresh and empty", _p26),
+    Postcondition(
+        "no-closed-waits",
+        "no request waits on a closed item or says task_closed",
+        _holds_no_closed_waits,
+    ),
+    Postcondition(
+        "requests-ended",
+        "a close ended the requests foreseen, each by its item's category",
+        _holds_requests_ended,
+    ),
+    Postcondition("no-closed-waits", "no request waits on a closed item or says task_closed", _p28),
+    Postcondition("requests-ended", "a close ended the requests foreseen, each by its item's category", _p29),
+    Postcondition("awaiting-rows", "a row for each goal or stage awaiting confirmation", _p30),
+    Postcondition(
+        DEFERRED_ITEMS, "a condition for each item put off, and for no other", _deferred_items
+    ),
+    Postcondition("no-commit-refs", "no commit ref is left; the refs take a fresh store's kinds", _p31),
+    Postcondition("other-refs", "each item keeps its other refs and gains its url records", _p32),
+    Postcondition("record-pairs", "each item holds the pairs its records carry, migrated", _p33),
+    Postcondition("commits-attached", "every commit is attached, with no session and no rewrite", _p34),
+    Postcondition("commit-projects", "every project from commits is one of an attached commit", _p35),
+    Postcondition(
+        PARTICIPATION, "no setting stored; every space at the default set", _participation_default
+    ),
+    Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
+    Postcondition(PENDING_ACTIONS, "no request waits on an action", _pending_none),
+    Postcondition(AGENT_BASIS, "no item accepted on an agent's own decision", _agent_basis_none),
+    Postcondition(
+        BASELINES, "a count at acceptance only where an acceptance was not migrated", _baselines
+    ),
+    Postcondition(
+        TRIAGE_MARKS, "the triage marks declared as a fresh store's, none set", _triage_marks_none
+    ),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
 

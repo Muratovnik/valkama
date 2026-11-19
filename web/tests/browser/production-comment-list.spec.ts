@@ -82,7 +82,8 @@ test('a list stands under its comment, ticks only tick, and one press sends them
   await expect(drawer.getByRole('button', { name: 'Waiting for an answer' })).toHaveCount(0)
   await expect(list.getByText(LIST_LABEL, { exact: true })).toBeVisible()
   await expect(boxes(list)).toHaveCount(OPTIONS)
-  // Nobody waits on it, so it is not declined; the comment's own head names who wrote it.
+  // Nobody waits on it, so it is not declined; the comment's own head names who wrote it, a
+  // `.meta-line` the list does not repeat (`production-meta-line-unit.spec.ts` reads the heads).
   await expect(button(list, "Don't answer")).toHaveCount(0)
   await expect(list.locator('.meta-line')).toHaveCount(0)
   await expect(list.locator('.request-option').first()).toContainText('recommended')
@@ -139,14 +140,12 @@ test('a change opens on what was sent, and a closed task freezes the list until 
   expect(requests.writes[2]?.body.answers).toEqual({ items: ['a', 'e'] })
 })
 
-test('a tick not sent when the task closed stays in sight, and is there to send once it reopens', async ({
-  page,
-}) => {
+test('a tick not sent when the task closed stays in sight as not sent', async ({ page }) => {
   const opened = await openList(page)
   const { list, requests } = opened
   const words = WORDS.en
   await tick(list, 'Split the guard').check()
-  await moveItem(opened, true, { status: 'expired', expired_reason: 'task_closed' })
+  await moveItem(opened, true, { status: 'expired', expired_reason: 'item_completed' })
   await expect(list).toContainText(words.frozen)
   await expect(list).toContainText(words.unsent)
   await expect(list).toContainText(`${LIST_LABEL}: Split the guard`)
@@ -201,6 +200,8 @@ test('a cancelled change to a list asks about the marks, not the answer', async 
 
 test('a cancelled change to a question asks about the answer', async ({ page }) => {
   const card = await cancelChangedAnswer(page, WORDS.en)
+  // A question stands among the questions, where the list above draws none.
+  await expect(card).toHaveCount(1)
   await expect(card.getByText(WORDS.en.strip.answer.ask, { exact: true })).toBeVisible()
   await expect(button(card, WORDS.en.strip.answer.confirm)).toBeVisible()
   await expect(card.getByText(WORDS.en.strip.marks.ask, { exact: true })).toHaveCount(0)
@@ -312,6 +313,8 @@ async function expectEdges(page: Page, article: Locator, list: Locator) {
   expect(new Set(at.pair).size, 'the pair on one line').toBeLessThanOrEqual(1)
   if ((page.viewportSize()?.width ?? 0) > 400) return
   const toggles = list.locator('.request-note-toggle, .request-option-toggle')
+  // The list's option with a description folds it, so there is always one to reach.
+  expect(await toggles.count(), 'the toggles measured').toBeGreaterThan(0)
   for (const toggle of await toggles.all())
     expect(await answersTap(toggle), 'a 44 px tap').toBe(true)
 }

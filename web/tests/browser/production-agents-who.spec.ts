@@ -187,6 +187,20 @@ for (const width of [1440, 1024, 390]) {
     }
     for (const row of [...measured.rows, ...measured.changes])
       expect(row.right).toBeLessThanOrEqual(strip.right + 0.5)
+    // The stretch nobody recorded the organization of is the plain neutral, as its swatch in the
+    // list beside «Unknown organization» is: never hatched, since a hatch says a figure not final.
+    const paints = await accounts.evaluate((root) =>
+      [...root.querySelectorAll<HTMLElement>('.account-part, .account-swatch')].map((mark) => ({
+        slot: mark.dataset.slot,
+        paint: getComputedStyle(mark).backgroundColor,
+        mask: getComputedStyle(mark).maskImage,
+      })),
+    )
+    const unknown = paints.filter((mark) => mark.slot === 'apart')
+    expect(unknown, 'the unknown stretch and its swatch').toHaveLength(2)
+    expect(new Set(unknown.map((mark) => mark.paint)).size, 'one neutral').toBe(1)
+    expect(paints.map((mark) => mark.mask)).toEqual(paints.map(() => 'none'))
+    await expect(accounts.locator('.account-row').filter({ hasText: 'Unknown' })).toHaveCount(1)
     info.annotations.push({
       type: 'layout',
       description: `R2 ${width}px: strip ${brief(strip)}, parts ${parts.map((part) => brief(part)).join(' ')}, marks ${marks.map((mark) => tenth(mark.left + mark.width / 2)).join(' ')}, rows end ${measured.rows.map((row) => tenth(row.right)).join(' ')}`,
@@ -250,15 +264,14 @@ for (const width of [1440, 1024, 390]) {
     const section = await openAgents(page)
     const link = section.getByRole('link', { name: 'Open its own work in Analytics' })
     await link.scrollIntoViewIfNeeded()
-    const { box, list, size } = await link.evaluate((element) => {
-      const lists = element.closest('.work-usage')?.querySelector('.work-usage-grid')
-      if (!lists) throw new Error('the tab has no list')
-      return {
-        box: element.getBoundingClientRect().toJSON() as Box,
-        list: lists.getBoundingClientRect().toJSON() as Box,
-        size: Number.parseFloat(getComputedStyle(element).fontSize),
-      }
-    })
+    // The list of who did the work, by its name (`AgentsUsageSummary`).
+    const list = await section
+      .getByRole('list', { name: 'Who did the work' })
+      .evaluate((element) => element.getBoundingClientRect().toJSON() as Box)
+    const { box, size } = await link.evaluate((element) => ({
+      box: element.getBoundingClientRect().toJSON() as Box,
+      size: Number.parseFloat(getComputedStyle(element).fontSize),
+    }))
     expect(Math.abs(box.left - list.left)).toBeLessThanOrEqual(1)
     expect(box.right).toBeLessThanOrEqual(list.right + 0.5)
     const lines = Math.round((box.bottom - box.top) / (size * 1.25))

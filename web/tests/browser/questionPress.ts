@@ -70,6 +70,28 @@ export const pair = (upper: number, lower: number) => [
 
 export const pause = (ms: number) => new Promise((done) => setTimeout(done, ms))
 
+/**
+ * Waits until whatever the page sent for what it was just asked has reached the test's routes:
+ * two of the page's frames, so a press's handlers and what they rendered have run, then one
+ * request of its own that a route answers, then two frames more for what an answer that came
+ * before it drew. The routes hear requests in the order the page sent them, so a write sent
+ * before it is recorded by then. A wait for something not to happen ends on that, not on a
+ * pause a busy machine can outrun. A test that holds the page's frames back asks for no frames:
+ * the press's handlers have run once the request is sent.
+ */
+export async function settledWrites(page: Page, { frames = true } = {}) {
+  await page.route('**/__settled', (route) => route.fulfill({ status: 204 }), { times: 1 })
+  await page.evaluate(async (drawn) => {
+    const twoFrames = () =>
+      drawn
+        ? new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+        : Promise.resolve()
+    await twoFrames()
+    await fetch('/__settled')
+    await twoFrames()
+  }, frames)
+}
+
 export const decline = (scope: Locator) =>
   scope.getByRole('button', { name: "Don't answer", exact: true })
 

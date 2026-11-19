@@ -1,0 +1,142 @@
+/*
+ * The marks of a step line (`StepLine`, `useStepAhead`, `useStepWalk`), read as its own scoped
+ * style: each reading's dot and the box it stands in, the corridor of the forecast past them, the
+ * hatch over the whole field cut to the corridor's outline, and the marks of its places — a
+ * restart of the count on the line, and past the readings «now» and the forecast at the reset —
+ * each a ring in the line's hue around the ground, never a reading's dot. Every mark is painted
+ * only while pointed at or focused, its box kept at rest for its hint. None of them takes the
+ * pointer: one layer over the field does, for all of them (`StepLine`).
+ */
+
+/* A reading: a mark in the line's hue, ringed in the ground, at its step's start and value
+   (`--step-down`); at rest unpainted, its box kept for its hint. It stands over the places past
+   the readings, so a latest reading read a moment before now shows its whole dot over «now»'s
+   ring. */
+.step-mark {
+  --step-down: 0;
+
+  position: absolute;
+  inset-block-start: calc(var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-down));
+  inset-inline-start: 0;
+  z-index: 1;
+  inline-size: var(--space-2);
+  block-size: var(--space-2);
+  background: var(--color-series-1);
+  border-radius: 50%;
+  outline: var(--space-hair) solid var(--color-canvas);
+  opacity: 0;
+  translate: -50% -50%;
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    outline-color: Canvas;
+    forced-color-adjust: none;
+  }
+}
+
+/* Under the pointer, or holding the keyboard's focus whatever the pointer does: painted, larger. */
+.step-mark.step-shown,
+.step-reach:focus-visible > .step-mark {
+  opacity: 1;
+  scale: 1.5;
+}
+
+/* The box of a reading: the whole step it holds, the plot's height, at least a ring's width, but
+   for the last reading where «now» follows it (`StepLine`). It paints nothing and takes no
+   pointer, which the field's one layer takes for it; the keyboard's ring is drawn on it. A place
+   past the readings has its box the same way. */
+.step-reach,
+.step-target {
+  position: absolute;
+  inset-block: 0;
+  min-inline-size: var(--step-reach);
+  border-radius: var(--radius-status);
+  pointer-events: none;
+}
+
+/* The one layer that takes the pointer for every place (`useStepAim`): the whole field and half
+   a mark past each edge, so a ring centred on the field's edge is pointed at whole. It paints
+   nothing. */
+.step-hover {
+  position: absolute;
+  inset-block: 0;
+  inset-inline: calc(-1 * var(--step-hit));
+}
+
+/* The forecast's corridor: the readings' hue under the hatch (`hatch.css`) over the whole field,
+   cut to the corridor's outline; a forced palette's ink, as the readings' line. */
+.step-ahead {
+  position: absolute;
+  inset: 0;
+  background: var(--color-series-1);
+  pointer-events: none;
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
+/* A place past the readings: a ring in the line's hue around the ground, never a reading's dot;
+   at rest unpainted, its box kept for its hint. */
+.step-target-mark {
+  --step-high: 0;
+  --step-low: 0;
+  --step-side: 0%;
+
+  position: absolute;
+  inset-inline-start: var(--step-side);
+  inline-size: var(--space-2);
+  background: var(--color-canvas);
+  outline: var(--space-hair) solid var(--color-canvas);
+  box-shadow: inset 0 0 0 var(--space-half) var(--color-series-1);
+  opacity: 0;
+
+  @media (forced-colors: active) {
+    background: Canvas;
+    outline-color: Canvas;
+    box-shadow: inset 0 0 0 var(--space-half) CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
+/* «Now»: a round ring at the line's end and the share it stands at (`--step-high`). */
+.step-now-mark {
+  inset-block-start: calc(var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-high));
+  block-size: var(--space-2);
+  border-radius: 50%;
+  translate: -50% -50%;
+}
+
+/* The forecast: a ring around the band's end, from its faster edge (`--step-high`) to its slower
+   (`--step-low`), at the plot's end, as tall as a round ring where the two meet. A restart: the
+   same ring around the line's fall at its moment, from the share before it to the share after. */
+.step-reset-mark,
+.step-restart-mark {
+  inset-block-start: calc(
+    var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-high) - var(--space-1)
+  );
+  block-size: calc(
+    (100% - 2 * var(--step-inset)) * (var(--step-low) - var(--step-high)) + var(--space-2)
+  );
+  border-radius: 999px;
+  translate: -50% 0;
+}
+
+/* Under the pointer or holding the keyboard's focus: painted, wider. */
+.step-target-mark.step-shown,
+.step-target:focus-visible > .step-target-mark {
+  opacity: 1;
+}
+
+.step-now-mark.step-shown,
+.step-target:focus-visible > .step-now-mark {
+  scale: 1.5;
+}
+
+.step-reset-mark.step-shown,
+.step-target:focus-visible > .step-reset-mark,
+.step-restart-mark.step-shown,
+.step-target:focus-visible > .step-restart-mark {
+  scale: 1.5 1;
+}

@@ -1,8 +1,11 @@
 # Changelog
 
-Notable changes to Valkama. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Notable changes to Valkama, newest release first. Each release says what changed for
+its users since the release before it: a few highlights, what broke where something did,
+then features, bug fixes and performance improvements, each line linked to the commits
+that made it. The layout is
+[conventional-changelog](https://github.com/conventional-changelog/conventional-changelog)'s,
+and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The MCP server reports itself as `<release>+<build>`, where the build is a digest
 over the modules the running process started with. Two servers from different
@@ -12,13 +15,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
-- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 18.** Run
+- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 23.** Run
   once with every session stopped, it takes a verified `pre3.0` snapshot with the
   pictures beside it, then gives the workflows their eight categories and the service
   state, the history their renamed keys and every item its kind, acceptance and start,
   releases what a container or a task outside work still holds and takes the open
   children out of a closed container, all in one transaction with every postcondition
-  checked before it commits. It prints a JSON report with the time of each step;
+  checked before it commits. A store at 17, from a 2.9 build before 2.9.0, first
+  takes 2.9.0's own step in the same transaction: its quota account names are keyed
+  by account. It prints a JSON report with the time of each step;
   `--dry-run` migrates a copy, kept with `--into`. A store that is not one 2.9 left is
   refused and left as it was.
 - **`valkama projects map-items` gives each work item its projects for the migration.**
@@ -29,16 +34,51 @@ checkouts are therefore distinguishable even at the same version.
   labels a project now carries and refuses to start, before any write, on a registry
   that is not format 4, a space whose project is not bound to it, two spaces of one
   name or a file of another store or state.
+- **The migration carries commit refs over as commits.** `map-items` reads each commit
+  ref's text — a hash, `project@hash`, a commit address, or a note naming several
+  hashes, of which the start of a range and the hash after `base` or `from` are
+  skipped — and records its commits with their projects in the file's `commit_refs`;
+  a task's projects from commits come from the same records. The migration attaches
+  those commits to the ref's item, makes another address a `url` ref, drops a text
+  without a hash and removes every commit ref, refusing first a file whose records do
+  not match the store's refs.
+- **The owner's participation setting is stored and read.** For all spaces and for
+  one, it says at which points an agent's decision waits for the owner (`human`) and
+  at which it goes ahead (`agent`), whether the queue hands out work and the reminder
+  to triage shows, and four numbers beside them; a label may carry a rule and a
+  description. A space overrides single values and inherits the rest; with nothing
+  written every space stands at the default set. `GET /api/planning/participation`
+  reads one scope with the set it stands at; `POST` writes a value, one of the sets
+  `minimal`, `default`, `maximal` and `manual`, or a label's rule, and refuses an
+  agent with `owner_only`.
+- **The decisions an agent takes on its own can be read back.** A decision an agent
+  took without asking, at a point where the owner's setting let it go ahead, is
+  marked on the history event that recorded it, with its point and a short line of
+  what was decided; the mark goes with its event. `GET /api/planning/decisions` lists
+  the marks newest first, by `space`, `project`, `point` (repeatable), `from` and
+  `to` (a UTC day or a timestamp, both ends included), in pages of up to 200
+  (`limit`, `offset`), each with its item, session and time. In an item's full
+  record a marked event carries its `point`. A migrated store starts with no marks.
 
 ### Changed
 
-- **A fresh store holds the work model, at schema 18.** A new space's workflow has a
+- **A fresh store holds the work model, at schema 23.** A new space's workflow has a
   state for each of eight categories — Triage, Deferred, Ready, Dev, Review, Done,
   Blocked and Cancelled — and new work starts in Triage; `backlog` and `queued` are no
   longer categories. A goal or a stage is stored as a container, which the store keeps
   out of ready, active, review and blocked, and a service state beside the eight holds
   an accepted open one. A store Valkama 2.9 left is refused with "run `valkama migrate
-  work-model` once" and left as it was, and a 2.9 build refuses a store at 18.
+  work-model` once" and left as it was, and a 2.9 build refuses a store at 23.
+- **A close ends the questions on its item and says how.** Closing an item writes
+  every question, decision and list still pending on it `expired`, with
+  `expired_reason` `item_completed` or `item_cancelled` in place of `task_closed`,
+  and a `request_expired` event; reopening brings none back. A change of an answer
+  on a closed item is refused with `[item_closed]`, a question or list in the call
+  that closes its item is refused as one that would end unanswered in the same
+  write, and a request record carries `purpose`. The migration ends the requests
+  2.9 left pending on closed items the same way, with no event. A request whose
+  deadline or execution had already ended it keeps that reason, `deadline` or
+  `execution_closed`, and the close tells nobody of it.
 - **The service state stays out of reach.** `get_planning_space` lists the eight category
   states and the moves between them only. `container` named as a state, in a transition
   or a list filter, or as a category is refused with the text that says what replaces
@@ -68,3507 +108,705 @@ checkouts are therefore distinguishable even at the same version.
   the `VALKAMA_CUTOVER` permission and the step that gave an old default workflow its
   Cancelled state.
 
-## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
-
-### Changed
-
-- **The Analytics page is rebuilt as a monitor.** A rail down the side holds a tile for
-  the overview and one for each of the nine dimensions — account, project, task,
-  executor, role, launch class, model, effort and environment — each with its leading
-  value, its share and a small bar of the split, so every breakdown is in view before any
-  is opened. The rail is as wide as its entries need, from 15 to 22rem, and neither a
-  choice nor arriving figures change its width. The overview shows the period's agent
-  time, tokens and cost estimate as cells that choose the measure, the period chart with
-  the period before as a dashed outline, the tasks that grew and fell the most, and the
-  first five tasks, models, roles and projects. A dimension's section shows its values as
-  ranked bars, as small charts on one scale and as a table at its full height, which sorts
-  by any column and downloads as CSV. The panel is the one part that scrolls: the table's
-  heading row and total row stay at the panel's edges while any of its rows is in view,
-  only a table wider than its column scrolls sideways in a frame, and «To the table» over
-  the charts, like the ranked list's «3 more — in the table», brings the table into view
-  and focuses it. A section, its groups and their blocks each keep a spacing and a heading
-  size of their own. The rail's entries, the ranked rows and the table rows show the
-  pointer, the choice and the keyboard focus alike, and none changes size between them; a
-  row of the day table takes the pointer's ground wherever it is pointed, and the keyboard
-  ring stands round the one cell focused. The page fills the window instead of one narrow
-  column, its bar and the rail's entries start on the line of the module's name, and on a
-  narrow screen the rail and a section take turns.
-- **Every chart mark has its hint and its row's action, and nothing on the Analytics page
-  moves under the pointer.** The line of words over the period chart is gone, and the
-  chart takes its height. A period's column and each of its segments, a ranked bar, a
-  small chart, a reading on the quota's step line and a legend entry say themselves in a
-  hint, under the pointer and on keyboard focus, leaving out what the mark already prints:
-  a period its sum against the period before and its values largest first, a segment its
-  value and its share of the period. A mark acts as its row of the table does: a task
-  opens its card over the page, any other value narrows the view to itself, and the folded
-  tail, unknown work and a period that only shows give the hint alone. A period chart is
-  one Tab stop, on the period under way, and the arrows go on into its segments. A text
-  too long for its line ends in an ellipsis and is whole in its hint and in the chart's
-  table, and a name in a table has a hint only where it is cut. Tiles, cells and charts
-  keep their size while figures arrive.
-- **What a section's figures leave out is said once, in the «ⓘ» of its heading.** That a
-  cost is an estimate at API prices, what the tokens count, that times by the minute are
-  estimates, that the period and the filters do not reach the quota, and what «Where the
-  window went» leaves out no longer stand under every block: each is said in the «ⓘ» that
-  ends its section's heading, and the overview, a dimension and the token kinds each now
-  carry a heading with their name for it. A heading names what is shown, so «Estimated
-  cost at API prices» is now «Cost» on the measure and in the table's head. A period still
-  running is hatched, and its hint, its accessible name and its table row say it is
-  running; the time axis no longer writes «so far» under its name.
-- **A task's card opens over Analytics and Settings instead of moving to the board.** A
-  task pressed on the Analytics page, or opened from «Go to a task», from the questions
-  waiting for an answer or from a reference in any text while Analytics or Settings is on
-  show, opens its card over that page, which keeps its view and its scroll under the card;
-  the page's address names the card, and Back closes it. Planning still opens the card on
-  its board, and a press with a modifier key on a task link still follows the link. When a
-  card over a page cannot read its space, it says so in the shell's notice, in the words
-  the board uses, and still edits what needs no space, such as the priority.
-- **A search finds every word, wherever it stands, best match first.** `search_work_items`
-  matched the whole query as one piece of text and listed the newest change first, so a
-  query of several words mostly found nothing. It now reads the query as words: an item
-  matches when it holds every one of them, in any order and across its title, description,
-  labels, summary, comments and questions, each word matched by its first five letters, so
-  `searching` finds `search` and a longer Russian word finds its other cases. The best
-  match comes first, the title weighing three times the rest. A query that is exactly a
-  reference or a number alone is read as one phrase, as before, and answers that item
-  first. The first open after the upgrade fills a word index from the items already there,
-  after a verified recovery point. A store whose SQLite lacks FTS5 still writes every item
-  and searches by phrase, as before.
-- **The first launch opens on the shell itself.** The desktop window used to show a small
-  line of text on a black ground and then cut to the whole shell. It now draws the shell's
-  chrome from its first frame — the rail with the mark and its first entries, the context
-  bar and the empty workspace panel — and `index.html` draws the same chrome until the
-  application mounts, each part where the shell draws it, so nothing moves when the
-  application takes over and a slow bundle no longer shows a bare ground, in the window or
-  in a browser. Once a start lasts a second the panel says what the window waits for, and
-  with reduced motion nothing in it moves. The next start draws the rail at the width you
-  left it; the window used to keep only the language.
-- **Every heading takes the size of its level, and the Analytics headings nest.** A
-  section heading in a drawer no longer stands a step smaller than on a page: a card's
-  sections and a question's title take a section's size, and the groups under them a
-  group's. In the installation checks in Settings, «Needs attention» and «Passed checks»
-  head groups under their section, and a finding's title is the label over its lines.
-  Where the context bar stacks its controls under the module's name, the name keeps its
-  own size instead of a section's. On the Analytics page each heading is one rank under
-  the heading of the part around it, so a screen reader's list of headings reads a chart
-  under its section, not beside it. Settings nests its headings too: its sections stand
-  right under the module's name, and a passed level of the installation checks under
-  «Passed checks», not beside «Needs attention».
-- **The first screen downloads about an eighth less.** The card and the list of questions
-  waiting for an answer are no longer in the code the first screen loads before it can
-  draw. The card downloads once the board stands, so opening one still waits for nothing;
-  the questions download as their dialog opens. Opened before its code has arrived, either
-  says «Loading» in its drawer or dialog after the usual delay rather than standing empty,
-  and the card's drawer shows its bar with Close at once, so nothing moves when the card
-  arrives. Focus that stood in the drawer while it waited goes into the card as it
-  arrives, instead of falling to the page.
-- **A filter on the Analytics page repaints nothing it leaves.** A value's colour, or a
-  pair's, is its place in the period's ranking without the page's filters, so a filter
-  that takes the largest value away leaves every other value the colour it had in its
-  tile, its bar, its small chart and the day columns. Another measure may still repaint.
-- **A chart's time axis counts in one round unit.** Agent time on an axis reads in
-  minutes, hours or days, whichever fits the largest value, instead of mixing days and
-  hours in one tick.
-- **A card's Agents tab says the totals and leads to Analytics.** Under the figures —
-  work, all agents, cost, tokens — now stands the link to the same work on the Analytics
-  page, which breaks it down by kind of token, model and effort; the card no longer
-  repeats those lists. Who did the work is one list by role and launch class, rows that
-  differed only by effort added together, and a row of under a minute with no tokens is
-  left out. What a figure counts is said when you point at it, focus it or tap it, and
-  only a cost missing a price keeps a line of its own under the figures.
-- **A space's stream does not send the space the page has just read.** `GET /api/planning`
-  and each frame of `GET /api/events?view=planning` carry `revision`, a digest of the
-  model, and the page opens the stream after its read with `since=<revision>`. While the
-  model is unchanged the stream says `event: current` instead of sending the whole space
-  again, so the server no longer builds it twice at once and the page no longer parses it
-  twice. A change between the read and the stream still comes as the first frame, and a
-  browser reconnecting on its own (`Last-Event-ID`) is still sent the model.
-- **The usage read gives each step by the pair.** With two dimensions in `group_by`, each
-  point of `series` in `GET /api/analytics/usage` now breaks its step down by the pair of
-  both, and each of its `groups` names both dimensions as a row does, where it used to
-  break the step down by the first dimension alone and name only that one. The groups of a
-  step still add up to the step exactly; with one dimension nothing changes.
-- **Three argument forms agents write are read instead of refused.**
-  `get_work_item_request` reads `request_id` as its `id`, and every tool whose `id` is a
-  work item reads `work_item_id` as it, the field that `id`'s description names. An
-  `apply_work_item_changes` call whose groups came wrapped in one `changes` argument, as
-  an object or as the text of one, is applied as if each group had been an argument of its
-  own, held to the same names and rules. A `changes` that is not one object, or that
-  repeats a group given beside it, is refused with a call in the unwrapped form. None of
-  these names is added to the published schemas.
-- **A checklist group may be the list of steps itself.** The `checklist` of
-  `apply_work_item_changes` and of `create_work_item` now takes
-  `["first step", {"text": "…", "done": true}]` as well as `{"items": [...]}`, where a
-  bare list used to be refused with «checklist must be an object». `force` stays in the
-  object form, `{"items": [...], "force": true}`. The skill shows the list form first, and
-  the tool descriptions say both.
-- **A loading mark appears after half a second and stays at least 200 ms.** A read that
-  answers within half a second now shows no «Loading» at all, where it used to flash the
-  mark after 300 ms. A mark that has appeared stays on screen for at least 200 ms, down
-  from 400 ms.
-- **A question refused for the shape of its fields shows a field to copy.** When
-  `create_work_item_request`, or a batch's `questions`, refuses a field or option id that
-  is not a lowercase identifier, or a field missing one of `id`, `label`, `type`,
-  `required` and `options`, the refusal now ends with one valid `choice` field with two
-  options, written as the JSON to send, and the id refusal says what an identifier may
-  hold: a-z first, then a-z, 0-9, `_` or `-`, at most 64.
-
-### Added
-
-- **The Analytics page shows the subscription quota.** Two tiles, «Five hours» and
-  «Week», stand on the rail after the token kinds and name the tightest account's window
-  with its share and whether it is fresh or silent. Each opens a panel where every
-  account stands on a surface of its own: for every window a bar with a tick where steady
-  use would stand, when it resets, its forecast (a time it runs out at for the five
-  hours; for a week a range, never said past 100 %: a week whose range reaches 100 %
-  says it runs out before its reset and about when, one that crosses it that it may),
-  how old its reading is and which source read it, and its
-  readings as a step line, each with a table view. An account's windows stand side by
-  side where each has 24rem, one under the next where not. A running window's step line
-  opens on its start to now and a third of that span past now, where the forecast
-  carries the steady pace on; «Whole window» shows all of it, and a frame dragged along
-  the line, or stretched from a reading with Shift and an arrow, narrows that line alone.
-  The panel reads the quota again every 30 seconds while the tab is visible and keeps its
-  figures meanwhile; when a read again fails, the figures stay where they stood and the
-  bar says the refresh failed, as for every read of the page, with its retry. No source,
-  a silent window and a fresh 0 % read differently, and no
-  percentage is added to another or shown beside dollars.
-- **The quota panel says where each window went.** Under each window of an account, five
-  hours, the week or a model's week, «Where the window went» ranks the work Valkama
-  recorded on that account since the window started by its API price estimate, each item
-  with its share of that estimate, by task, project or model, the first five and one line
-  for the rest. The quota's «ⓘ» says it is the API price estimate and not quota points,
-  and that work in claude.ai and the desktop app is not in it. It reads
-  `GET /api/analytics/usage` by the account's `seat`, for the windows shown, so no other
-  account's work is counted; work of the organization with no account known is said
-  apart. No work, such work alone, a wait and a failed read with its retry each say so in
-  the block, and the quota's figures stand meanwhile.
-- **Your own period runs between days or moments, and a chart sets it.** The period you
-  choose may now run between two moments to the minute as well as between two days. A
-  frame dragged along a period chart's time axis, or stretched from the focused period
-  with Shift and an arrow, becomes that period and keeps the section: whole days stay
-  days, and hours or minutes become the moments they run between, the running minute
-  included. Pressing an hour of a single day, or a minute of «Now», that has begun narrows
-  the view to it, broken down by task, as a day does; an hour still to come only shows. A
-  span between moments is drawn by the minute up to two hours, by the hour up to three
-  days and by the day past that, and is compared with as long a span right before it. The
-  bar names the span in place of the two day fields, and choosing a preset leaves it. Each
-  span set is a step of the history, so Back returns the view it was set from, and the
-  address holds it; a link with two days opens as before.
-- **A live period, «Now».** The Analytics page shows the last hour by the minute and
-  reads it again every 30 seconds while the tab is visible; a hidden tab asks nothing. Its
-  chart, like that of «Today», opens on the period running and keeps it in view as time
-  moves on, and a past period opens on its start. A refresh keeps what a reader set: the
-  scroll, the section and the sort. The minutes after the newest record are hatched as
-  «no data yet» rather than drawn as a drop: on a working machine records arrive in
-  batches up to a minute and a half apart.
-- **The Analytics bar says how fresh the figures are, and stays within its width.** Beside
-  the periods and the filters it says how old the newest record is, «● 15 s ago», the dot
-  for a live period only and not after a read that failed, in the room of its widest age,
-  so nothing beside it moves as the age grows; the record's moment, and for a live period
-  how often it reads itself again, are its hint and what a screen reader hears. It says the
-  age beside a period with no work as well, and «No records» while the store holds none.
-  Below 50rem, and wherever one line has no room, the bar is two rows: the periods and the
-  filters, then your own period's ends and the freshness with «Refresh» at the end; on a
-  phone it is three rows of one height whatever period is chosen. A failed refresh is said
-  in full words at every width and moves nothing in the bar or under it. Where room is
-  short, the buttons give up their words and a span's name is cut at its end, whole in its
-  hint, so «Refresh» stays inside the bar.
-- **A section splits by a second dimension, and all its charts show the pairs.** «Split
-  by» stands in the heading of a dimension's section and offers «None» and every other
-  dimension. With a split chosen, the ranked bars, the small charts, the day columns and
-  the table show the section's pairs, each named by both values, the section's value
-  first: «claude-opus-5-5 · high». A pair keeps one hue across the charts, the table has a
-  row per pair, and the download writes one row per pair. The split is part of the page's
-  address, so a reload or a link opens it and Back returns the split before. Where a
-  pair's name does not fit its line, in the ranked bars, the small charts' names and the
-  table, its first part gives way, «claude-opus-5-… · medium», and the separator and the
-  second part stand whole; the hint says the whole pair. A pair's bar, small chart and
-  legend entry are named by what pressing them does with its first value, «Show the tasks
-  of claude-opus-5-5», and described by the whole pair before their figures, so a screen
-  reader tells the pairs of one model apart.
-- **The work list finds in every row.** A list of 300 rows or more keeps only the rows
-  about its window in the page, so the browser's find reached those and missed the rest.
-  While the list is what the page shows, Ctrl+F (⌘F) now opens the list's own find bar
-  over its top corner, under the sticky head: it counts a term in the words every row
-  prints, at the list's width and in its language, and says «3 of 12» or «No matches».
-  Enter and Shift+Enter, or F3 and Shift+F3, walk the matches in the list's order and
-  bring each match to the middle of the list under its head; the drawn matches are marked,
-  the current one apart, and a printed list carries neither the marks nor the bar. Case
-  does not count, «ё» finds «е», «cafe» finds «café» and a stress over a Cyrillic vowel is
-  ignored, while «й» stays apart from «и». The current match stays on its row while the
-  stream, a filter or an order changes the list, and Escape closes the bar and gives focus
-  back. With a card, a dialog, a menu or a choice list open, and on every other screen,
-  Ctrl+F is the browser's as before. Ctrl+F is the key that types F on the keyboard's
-  layout, and on a layout with no Latin letter there, such as Russian, the key in F's
-  place.
-- **Creating an item names the open items that read like it.** The answer of
-  `create_work_item` carries `similar`: up to three open items of the same space whose
-  title or description share the new title's words, best first, by reference and title, so
-  an agent that filed the same change twice sees it at once. It is a hint, not a check:
-  nothing is refused on it.
-- **You see when Valkama tells the agent your news.** The notice a hook hands the agent
-  about its work items reaches the model only, so the agent could say in your chat that
-  you answered, or that another agent wrote, with nothing on screen to show why. In Claude
-  Code the orchestrator's hook answer now also carries a `systemMessage`, which the client
-  shows you and does not send to the model: one line per item the notice tells, with the
-  item's reference and title, saying whether it was what you did, what another agent
-  wrote, or both. It is written in the language of owner alerts, Russian or English. A
-  subagent's hook and Codex answer as before, without it.
-- **Analytics names sessions and accounts instead of showing hex ids.** An executor is
-  labelled by the title its client gave the session, the same one the live work list
-  shows, wherever Analytics names it: the rail, the cards, the bars, the table, a split's
-  pairs, the filters and the marks' hints. The client and the start of the session id move
-  to the label's hint, beside the name in the table and under the choice in a filter's
-  list. A session with no title, such as a Codex session, keeps its old label.
-  `GET /api/analytics/usage` now gives an executor a `title`, read from the tail of its
-  transcript and kept nowhere. Each transcript is read once per answer and again only
-  after it changes.
-- **Names for accounts.** The usage records hold only an organization id, so Settings →
-  General → Accounts lists each account the past year saw, with its id and its share of
-  agent time, and lets you name it or clear the name. The name is saved to the store when
-  its field is left or Enter is pressed, and the field says while it saves, when a save
-  failed (with a retry) and when a name was cleared. The Analytics page on every device,
-  and the quota alerts, name the account by it, with the id still in the hint. `GET` and
-  `PUT /api/quota/account-names` read and write the names: one line of at most 80
-  characters per organization, the server refusing a longer name or a bad id and changing
-  nothing.
-- **The usage read answers by the minute.** `GET /api/analytics/usage` takes
-  `step=minute` beside `hour` and `day`, so a client can draw the last hour as it is
-  spent. A minute starts on the caller's full minute, and a period still holds at most
-  2,400 steps, which is forty hours by the minute. A stretch of work is split between its
-  minutes in proportion to its time, as it is between hours, so a minute's tokens and
-  cost are a share of the stretch, not a count of what was sent in that minute.
-- **`GET /api/analytics/quota`: each account's subscription quota windows as they stand
-  now.** One entry per account with a quota sample in the last seven days, by its UUID or
-  the provisional seat a reading without one is on, with its plan and name, and one per
-  organization that worked in that span with no source. A provisional seat whose week has
-  ended is left out, so a machine read across a week's reset is one account. Each window
-  of five hours, the week or a model's week gives its latest percent with that reading's
-  time and source, its reset and start, where steady use would stand now, its readings
-  since its start, and a forecast: the five-hour window's point answer, a week only as a
-  range. A window is `fresh` within the fifteen minutes the quota alerts read, and
-  `silent` after; the usage credits and a gateway's spend limit are their own kinds, with
-  no percent and no money. No field adds percentages, within an account or across
-  accounts.
-- **`GET /api/analytics/usage` breaks work down by `seat`**, the subscription account of
-  its organization a stretch was spent on: the account's UUID where a quota sample names
-  it, else the seat's key for its week, and one unknown group for work no sample speaks
-  for or that names no organization. It groups, filters and compares like the other
-  dimensions, and its groups add up to the total. The seats of a read are worked out in
-  one pass over the samples it needs. The Analytics page offers no breakdown by it; its
-  quota panel reads each account's spend by it.
-- **`valkama statusline`**, Claude Code's status line command, is the first live quota
-  source. It records the five-hour window, the week and a gateway's spend limit from the
-  status line input as samples of the session, straight into the store or through the
-  hook spool, and prints nothing of its own. A status line the user had is passed with
-  `--previous=<base64>` and still shows: it runs with the same input through the same
-  shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
-  working. `valkama capabilities` names the command and its interface version under
-  `interfaces.statusline`, so whatever registers it can tell a release that has it.
-- **The quota source `mod`: Valkama's Claude Code mod `valkama-quota`.** It reads the
-  five-hour window and the week inside every Claude Code session, the VS Code
-  extension's included, which runs no status line: at a session's start, when a window
-  moves during a turn and after each response. It hands the reading to the new
-  `valkama statusline --source=mod` through the managed launcher, as the status line's
-  own JSON fields, so the reading takes the status line's parser, store-or-spool path
-  and refusals. The hand-over runs after the hook answers, one at a time, and is stopped
-  after 10 seconds, so a missing, slow or failing Valkama costs the reading, never a
-  turn. The repository is now a Claude Code marketplace, `valkama`: install the mod with
-  `/plugin install valkama-quota --marketplace Muratovnik/valkama`, or with
-  `claude plugin marketplace add <checkout>` and
-  `claude plugin install valkama-quota@valkama`. `doctor` reports the mod as off
-  (not installed or not enabled), silent (no `mod` reading in three days) or working.
-- **The quota source `poll`, off until the owner switches it on.** Settings carries the
-  switch, with the warning that the usage endpoint is undocumented and that Anthropic's
-  terms do not explicitly permit this use; `GET` and `PUT /api/quota/settings` read and
-  write it, and the listener starts or stops the poll at once. The poll reads Claude
-  Code's sign-in for each request, sends it only to `api.anthropic.com` over HTTPS and
-  keeps it nowhere, and keeps no e-mail address or name from the profile. It asks every
-  five minutes while the organization works and every fifteen otherwise, backs off after
-  a 429, leaves a refused or expired sign-in alone until it changes, and waits while
-  status line or mod readings of the organization are fresh. `valkama doctor` says
-  whether it is off, working, paused or refused, and what to do.
-- **`valkama quota import --source FILE`** imports quota history from JSON lines, one
-  sample a line, all or nothing. Importing the same file again adds nothing.
-- **The store keeps subscription quota samples and accounts, at store schema 17.**
-  `quota_samples` holds one row per reading of one window that changed, from the
-  status line, the mod, the poll or an import, each named by its organization or its
-  session, its seat and its window: five hours, the week, a model's week, extra usage or
-  a gateway's spend limit. `quota_accounts` holds an account by its organization and
-  UUID, with its plan, and no e-mail address or name, so the account holds from week to
-  week; a sample without the UUID belongs to the account whose samples name its seat
-  that week. `quota_account_names` holds the owner's name for an account, one per
-  organization. Samples and names are kept in every store snapshot, and samples for a
-  year. A usage segment's seat is read as a state: the latest sample of each feed
-  at or before it holds until its window resets, its own session's feeds first. The
-  upgrade takes the recovery point `preschema17`, and a build at 16 refuses the store
-  after it.
-
-### Removed
-
-- **Breaking: twelve planning tools that each made one write are removed; make those
-  writes through `apply_work_item_changes`.** The table names the group that replaces each
-  tool. Restart running client sessions after installing this release: a session keeps the
-  tool list it started with. The MCP catalogue falls from 33 tools to 21, one per
-  capability: a write to one item's fields, steps, refs, links, discussion, summary or
-  state is a group of `apply_work_item_changes`, which agents already used for nearly
-  every such write. A call to a removed name is refused with the code `removed_tool` and a
-  message naming the call that does its work, so an agent whose tool list is out of date
-  corrects itself in one call; it is a refusal, not an alias, and writes nothing. The HTTP
-  writes behind these tools are unchanged. Each group of `apply_work_item_changes` now
-  says what the removed tool's description said, and its `update` publishes the values
-  `priority` and `kind` take.
-
-  | Removed tool | Call instead |
-  | --- | --- |
-  | `update_work_item` | `apply_work_item_changes` with `update` |
-  | `transition_work_item` | `apply_work_item_changes` with `transition` |
-  | `set_work_item_checklist` | `apply_work_item_changes` with `checklist` |
-  | `tick_work_item_checklist_item` | `apply_work_item_changes` with `checklist_ticks` |
-  | `link_work_items` | `apply_work_item_changes` with `links` |
-  | `attach_work_item_ref` | `apply_work_item_changes` with `refs` |
-  | `set_work_item_summary` | `apply_work_item_changes` with `summary` |
-  | `comment_work_item` | `apply_work_item_changes` with `comment` or `comments` |
-  | `resolve_work_item_comment` | `apply_work_item_changes` with `resolutions` |
-  | `report_work_item` | `apply_work_item_changes` with `summary`; a report is published in the card |
-  | `select_work_item_summary` | `apply_work_item_changes` with `summary`; a report is selected as the outcome in the card |
-  | `decline_work_item_request` | `expire_work_item_request` to withdraw a question; the owner declines one in the card |
-
-  The argument spellings those tools read besides their own (`from`, `to`, `target`
-  and `type` for a link, `to` and `to_state` for a state, `ref` for a ref's value) went
-  with them.
-
-### Fixed
-
-- **In Claude Code's auto mode a Valkama call no longer makes the calls beside it fail.**
-  A Bash, PowerShell, other MCP or Agent call sent in the same response as a Valkama call
-  used to get no verdict and fail with "another call in this response was changed by a
-  hook", and had to be sent again. Valkama's `PreToolUse` hook no longer adds an
-  `_identity` argument to the call, so auto mode reviews every call as the model wrote it.
-  The hook prints nothing and leaves a small file named by the call's id in `calls/`
-  beside the store; the server reads the session and the agent from that file, and the
-  call is confirmed as before, with the source `claude-pair`. A call that finds no such
-  file is recorded as `claude-no-pair` when Claude Code sent the call's id and as `mcp`
-  when it did not; an `_identity` from the earlier hook is still verified when no file is
-  found. A Valkama server process without the stdio front that started before the update
-  reads only `_identity`, so the calls of its session are unconfirmed until that session
-  restarts. `valkama doctor` now warns when an agent write of the last day found no
-  confirmed session, names the way each such write went and what to do about it, and
-  counts the files no call took. The skill no longer asks for Valkama calls in a response
-  of their own, and says what to do when the failure still shows up because an older
-  release is installed. See [the hook contract](docs/hook-contract.md#the-call-pair).
-- **Reads a page sends at once no longer queue for the store, and Analytics opens in about
-  half the time.** Every read opened the store through its whole bring-up under the lock
-  that serialises migrations, so the reads a page sends at once each waited out the lock
-  for all the ones before it, and the page's wait mark stayed up until the last. A read of
-  a store already at this build's schema now opens it without that lock; any other store
-  is still brought up, migrated or refused first. The usage reads themselves are worked
-  out one at a time, because side by side they only traded the interpreter lock on every
-  row and all finished late; in turn, the first is answered in its own time.
-- **The chrome no longer shows interim values at launch.** Until the module list was read
-  the context bar said the module's id (`planning`), and until the remembered place was
-  restored it said «Global» and marked «Work» as current, whatever the app then came back
-  to. The title and the scope selector now keep their place empty until they can say the
-  final value, and the rail marks no entry until the route is known. The groups under the
-  list of work going on now are drawn once its first frame has come, so «Analytics» no
-  longer drops by the list's height a second after launch, and that frame no longer waits
-  for the space's read, so on a large space the groups no longer stay hidden for the
-  seconds the read takes.
-- **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
-  `apply_work_item_changes` calls as input that "could not be parsed as JSON" when an
-  agent wrote `comment`, `summary` or `transition` as bare text, and most retries failed
-  the same way. Those groups had no description; each now says it is an object, never bare
-  text, and shows the JSON it takes, such as `{"body": "the text"}` or
-  `{"state": "done"}`. The skill says the same beside the batch's groups.
-- **A batch's checklist tick can complete a step another session holds.** Each
-  `checklist_ticks` entry of `apply_work_item_changes` takes `force`, which it used to
-  refuse as an unknown field, so `force: true` completes a step another holder claimed, as
-  the removed `tick_work_item_checklist_item` did. Without `force` the refusal stays,
-  names the step, and the call writes nothing.
-- **A forced write that carries a refusal is recorded as an `overridden` event.** A forced
-  checklist tick, step claim or takeover, a `checklist` group that discards a claimed or
-  completed step or completes one another session holds, and a `claim_work_item` that
-  takes over or releases another session's claim now write the `overridden` event a forced
-  transition has always written, naming the guard, and the answer carries `overridden`. A
-  batch names the overrides of every step in it, where it named only the last one before.
-  A forced call that refused nothing records nothing. `force` permits what it permitted
-  before.
-- **A relation linked from both ends is one link.** `relates-to` written from the
-  other end used to add a second record, so a card listed the relation twice, and
-  removing it from that end left the first record in place. It is now one link
-  whichever end writes it, either end removes it, and a repeated link writes no
-  history. A store that holds such pairs keeps the earlier record of each when it
-  is opened, after a verified recovery point; `blocks`, `discovered-from` and
-  `duplicates` are left as they are.
-- **A hint comes for what a scroll brings under a resting pointer.** A wheel that moved a
-  ranked row, or any element with a hint, under a pointer that stayed still showed no hint
-  until the pointer moved again, and a hint that opened as a scroll was ending, such as at
-  once after another hint, was closed by that scroll and never came back. The element
-  under a resting pointer now shows its hint however it came there, and a hint a scroll
-  closed comes back when the scroll ends.
-- **A cut name and its share keep their space in a hint's text.** A ranked row whose name
-  was cut read «…part 132% of the total» to a screen reader, for «part 1» and «32%». On
-  screen the name still stands on its own line over the detail.
-- **The release check leaves the checkout's `node_modules` alone.** It no longer installs
-  npm packages in the checkout it releases from, where the install emptied the
-  `node_modules` other worktrees link theirs to. It copies
-  the sources Git tracks or would add, never a `node_modules`, into a temporary
-  directory, runs `npm ci` and every npm stage there, puts the web build in `web/dist`
-  as before, and removes the copy when it ends, on a failure too. A `node_modules` in
-  the checkout, a directory or a link, is left as it is and no longer refused.
-
-## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
-
-### Added
-
-- **Add or remove a label without sending the rest.** `update_work_item` and the `update`
-  group of `apply_work_item_changes` take `labels_add` and `labels_remove`, which change
-  the labels the item has: a label already there is kept once, one the item lacks is
-  ignored. `labels` still replaces the whole set, so `labels: ["observation"]` on an item
-  with two labels leaves it with one; `labels` beside either new field is refused, as is
-  one label named in both. The same fields work on `POST /api/planning/work-item/update`
-  and `/apply`.
-
-- **How often each analytics surface is opened, counted on this machine.**
-  `POST /api/analytics/uses` counts one opening of the Analytics page, a panel or a
-  miniature, or a task opened from one of them, on the caller's day, and
-  `GET /api/analytics/uses` reads the counts of a range of days back. A count holds a
-  day, a kind and a number, and nothing else: no text, no item, no session, no time
-  finer than the day, and nothing leaves the machine. The counts live in the store
-  (`analytics_surface_uses`, added with schema 16), so a snapshot keeps them. The
-  Analytics module names the read model `analytics.uses` and the action
-  `module.analytics.report-use`; no MCP tool counts or reads them. The Analytics page
-  counts each time it is opened, once, and a count that cannot be written is dropped
-  without holding the page up.
-
-- **What agent work spent in a period.** `GET /api/analytics/usage` reads the usage rows
-  between two moments: the total, one line per group of up to two of account, project,
-  work item, executor, role (the main agent, a subagent or an adviser), launch class,
-  model, effort and environment, a series by hour or by the caller's day, and on request
-  the preceding period of the same length beside it. It filters on the same dimensions
-  and says how fresh it is. The measures are the item and session reads': seconds,
-  tokens by kind, the API-price estimate with its basis and the tokens it leaves out.
-  Seconds are the sum of each agent's work, so every cut adds up to the total exactly;
-  work across a step or the period's edge is split in proportion to its time, in whole
-  tokens, milliseconds and millionths of a dollar, so a period reads the same by the
-  hour, by the day and beside a comparison. A value the store does not hold is its own
-  group, named unknown; a session's own run has no launch class rather than an unknown
-  one. The Analytics module now names this read model; its page comes later, and no MCP
-  tool reads it.
-
-- **An Analytics module for the usage of agent work.** The module list now declares
-  `analytics` beside Planning, Memory and Settings, and the navigation shows it under
-  «Understand». Its page is where time, tokens and an API-price estimate of agent work
-  are read, as the next entry describes. `GET /api/modules` and `list_platform_modules`
-  name it. The flow-metrics Analytics dashboards an earlier build retired stay retired.
-
-- **The Analytics page says what agent work was spent on.** For a period — this week,
-  the past four weeks, or the first and last day you choose — three figures head the
-  page: agent time, tokens, and the cost estimated at API list prices, which says under
-  itself that it is an estimate and not a bill. Each says how it moved from the period
-  before; this week is held against the same days of the week before, so a Wednesday is
-  not compared with a weekend. Tokens count what was processed anew and name the cache
-  reads apart, and tokens with no price are said in words rather than priced at zero.
-  Pressing a figure chooses what the charts under it draw. The first chart ranks the
-  period by one dimension — account, project, task, executor, role, launch class,
-  model, effort or environment — largest first, with the tail folded into «Other» and
-  work with no task or of unknown origin in rows of their own. The second stands a
-  column per day, stacked by the same dimension: a day still running is hatched and
-  says «so far», and a day the work moved to another account carries a numbered note.
-  Either chart can be read as a table instead, and a narrow window shows the table
-  first. A day's column is never narrower than a pointer can hit: a period too long for
-  the chart scrolls inside it, opened on its last days, with the scale kept in place.
-  A table under the charts lists every value with its time, tokens and cost beside the
-  chosen figure in the period before and its change, and «Download CSV» saves that
-  table with the bounds of both periods, the dimension and the filters on every row; a
-  cell a spreadsheet would run as a formula is written so that it is shown instead.
-  Filters narrow the page by any of the nine dimensions. A task opens in two presses
-  from any bar, row or day: the first narrows the page to that value or day, broken
-  down by task, and the second opens the task; the browser's Back returns to the view
-  before. The period, the breakdown, the filters and the chosen figure live in the
-  address, so a link reopens the view it was copied from; a view whose address has no
-  room for one more filter value says so and stays as it is.
-
-- **A card's «Agents» tab says which organization the work ran under, and in what role.**
-  «By organization» draws the item's work in time order as one strip, a part for each
-  run of work under one organization, with each organization's share of the time; work
-  that names no organization reads «Unknown organization». Where the work moved from
-  one known organization to another, the tab lists the moment and both sides. «By role,
-  launch class and effort» breaks the same work down into the main agent, subagents by
-  the class and effort they were launched with, and advisers. «Open in Analytics» opens
-  the Analytics page on the tasks the tab's figures cover, over the days the work
-  spans. The item usage read carries these as `account_stretches`, `accounts` and
-  `roles`.
-
-- **Prices for Claude Fable 5.2 and Claude Mythos 5.2, and a missing price no longer
-  passes unseen.** Usage of either model is now estimated at the published API prices
-  ($8 input, $0.20 cache reads, $10 and $16 for five-minute and one-hour cache writes,
-  $40 output per million tokens, doubled in fast mode); requests read before this build
-  keep the cost they were read with. `valkama doctor` warns about each model that spent
-  tokens with no known price, with how many usage rows and tokens it has, since those
-  tokens add nothing to any cost. The release check compares the price table with
-  LiteLLM's public price list and fails on any rate that differs; a model that list does
-  not name yet is reported without failing, and a list that cannot be read stops the
-  check instead of passing it. Beside every cost, the usage reads of an item and of a
-  session now carry `unpriced_tokens`, the tokens that cost leaves out because their
-  model has no price, so a screen can say so rather than show the undercount as the cost.
-
-- **Usage read again from the transcripts.** `valkama usage rebuild --session <id>` (with
-  `--agent <id>` for a subagent's run) or `--all` reads runs again from their transcripts,
-  the way the background reader reads them, and replaces their segments in one transaction
-  each. A run the reader moved meanwhile is left to the reader. A run whose transcript is
-  gone or shorter than what was read is left untouched and named, and without the liveness
-  file nothing is rebuilt. `--all` first takes a verified `usagerebuild` snapshot and copies
-  the liveness file beside it; it holds the store's writes off meanwhile, so run it while no
-  agent session is working. The report gives each run's time, tokens and cost before and
-  after and how much of them moved between work items, which shows where writes, holds or
-  liveness arrived after the reader had passed; `--dry-run` reports the same and rebuilds
-  nothing.
-
-- **Stale usage is read again in the background.** Each usage run records which reading
-  wrote its rows. A run goes stale when a newer build reads transcripts differently, when a
-  request it counted moves to another run, or when this build's price table prices a model
-  whose tokens it holds without a cost (checked once per price table, when the reader
-  starts). Once nothing new is left to read, the background reader reads stale runs again
-  through the same path as `valkama usage rebuild`. It reads them newest first, writes each
-  run in one transaction once it has been read to the end, and stops reading when its
-  pass's time is up, so live reading never waits for history. A run too large for one pass
-  is read on across the next ones, kept in memory until it is whole, and read from its
-  start again if the client wrote to it meanwhile or the process restarted. Without the
-  liveness file nothing is read again. Before the first run a process reads again, there is
-  a verified snapshot with the liveness file copied beside it: the schema-16 upgrade's own,
-  or else one `usagerebuild` snapshot. A run that cannot be read again, because its
-  transcript is gone, shorter or unreadable, is tried once each time it goes stale, and the
-  run keeps the reason. A run that something moved meanwhile is tried on a later pass.
-  `usage rebuild` marks the runs it rebuilds current, and the runs it cannot rebuild keep
-  the reason the same way. The upgrade makes every run read before it stale, so the first passes after it
-  read the whole history again, and a turn that started with no item can then move to
-  another item, as the fix below now places it.
-- **`valkama doctor` on usage reading.** One line counts the usage runs that are current,
-  wait to be read again, were read again, and were refused, by reason, and warns when a
-  reading again failed. Another counts the requests met in more than one run, and how many
-  runs left them to the run that counts each. The line on models with no price now says that
-  their runs are read again once the price table has the model.
-
-- **What each stretch of usage ran under.** A usage segment now records, from the
-  transcript alone, the organization its requests were made for, how the client ran
-  (`ide`, `terminal`, `app` or `headless`, with `@wsl:<distribution>` for a transcript
-  written in WSL), the effort the requests ran with and the adviser the turn had
-  configured. At Claude Code the organization is the one the client names before a
-  request whenever it changes, and a segment before the first such record has none; at
-  Codex it is the account that created the thread. An advisor call's tokens are a segment
-  of their own, flagged as an advisor's, even when the advisor runs the executor's model.
-  A segment now also ends where any of these changes, which changes nothing about what its
-  time counts as. A Claude subagent's usage run records the class its launch description
-  declares in front of a colon, as in `review: check the diff`, and keeps the first one
-  recorded. Only ids and short labels are kept, never an e-mail, a name or a path, and
-  whatever a transcript does not say, or says as something other than a short label,
-  stays empty. Every run is read again in the background to fill them in, and
-  `valkama doctor` says what share of the segments, and of their seconds, names its
-  organization, warning when none does.
-
-- **A change of labels is in the history.** An edit that changes an item's label set, by
-  `labels`, `labels_add` or `labels_remove` and through any of those writes, adds one
-  `labels_changed` event whose `detail` is `{"from":[…],"to":[…]}`, the set before and
-  after. An edit that leaves the set as it was, a reorder included, adds none. The event
-  carries the edit's `author`, so an edit that changes the set is refused, before it
-  writes anything, for an `author` over 128 characters or one holding a carriage return or
-  a NUL; an edit of another field still ignores `author`. The card's
-  history says which labels were added and which taken off, in English and Russian. Store
-  schema 15 admits the event: the first open of a schema-14 store takes a `preschema15`
-  snapshot and then rebuilds the event table, keeping every event. A build of the previous
-  release refuses the upgraded store instead of refusing every card whose history holds
-  the new event; going back means restoring the `preschema15` snapshot.
-
-- **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
-  10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
-  is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.
-  The published text shows it inline at a bounded size, and pressing it opens it at full
-  size. Anything else, or a larger file, is refused in the field before it is sent and
-  again by the server. Pictures stay on this machine, in an `images` folder beside the
-  store, one file per content hash; deleting the item deletes the pictures no other item
-  holds, and a merge carries them to the survivor. `get_work_item` lists an item's
-  `images`, and the new read-only tool `read_work_item_image` returns one as an MCP image
-  block. Store schema 14 holds the list, under a `preschema14` snapshot taken before the
-  upgrade; every snapshot now carries the pictures in a `.images` folder beside it, and a
-  build of the previous release refuses the upgraded store.
-
-- **What a session is working on, in one read.** `GET /api/planning/held?session=<id>` lists
-  the open work items an agent session holds, by its claim or by a step not yet done,
-  including what its subagents hold, most recently changed first. Each item carries its
-  state, how it is held, its steps done and in all, its questions waiting for a person and
-  its address. Read-only; no MCP tool.
-- **Project files in the `@` list.** Typing after `@` in a text also offers the Markdown
-  files of the project the work item's space is bound to, by name or by a line they hold,
-  grouped apart from the tasks. A chosen file is written as a Markdown link from the
-  project's root, `[plan.md](docs/plan.md)`, which opens in the document viewer. The list
-  comes from the new `GET /api/documents/search?space=<id>&q=<text>`, the existing
-  document search over that one project. Neither it nor `GET /api/search` offers or
-  reads a file the project's Git ignores.
-- **A gate for commit subjects.** `python tests/commit_subjects.py` reads the subject of
-  every commit reachable from `HEAD`, merge commits included, and fails naming each one
-  that is not a Conventional Commit of the closed type set, such as `merge: …` or Git's
-  default `Merge branch …`. `tests/isolated.py gates` runs it as the step `subjects`. In a
-  directory with no Git history of its own, such as a source snapshot, it reads nothing
-  and says it was skipped and why instead of passing, and `gates` refuses the step there.
-- **`tests/isolated.py serve` says when the bundle is behind.** Before it starts, `serve`
-  warns, naming the files and `npm run build`, when the sources of the web app differ from
-  those `web/dist` was last committed with, uncommitted changes included, or were written
-  after a build that is not committed yet. It compares content through Git rather than file
-  times, so a fresh clone whose bundle matches stays silent.
-
-### Changed
-
-- **A usage request counts once in the whole store, at store schema 16.** `usage_requests`
-  is now keyed by the request alone and names the one run that counts it: a main
-  transcript's run before a subagent's, then the run whose first record is earlier, then
-  the lower run id. A request found in two transcripts is counted by that run. A run reading
-  the request later counts it only when it comes first by the rule and the run holding it
-  can still be read again, and every run that left a request to another records which.
-  A run that, read again, would give up a request it counted is refused as `stranded`
-  while a run that left that request to it can no longer be read: the request stays
-  counted once, where it was, instead of ending up in no run. A run that left a request
-  and loses its transcript after the holder gave it up, before being read again itself,
-  can still leave that request uncounted. Schema 16 also records the client's request id
-  and which reading wrote each run, and adds the columns for what each segment ran under.
-  The upgrade keeps one row per request by the same rule, under a verified `preschema16`
-  snapshot with the liveness file copied beside it (a store at 14 takes this step and the
-  label event's in one open, under `preschema15`), and a build at schema 15 or older then
-  refuses the store.
-
-- **State names read in the interface's language.** A state of the workflow a new space is
-  given that still has its own name — Backlog, Todo, Dev, Review, Done, Blocked, Cancelled —
-  is shown in the words of its category, «В работе» for Dev in Russian, on the board, the
-  tiles, the card, the chain, the graph, the finder and the navigation. A renamed state, or
-  any other, is shown as the workflow writes it. Settings › State names: «As in the
-  workflow» shows every state as written. Agents and the API still read the keys and names.
-
-- **Work's header keeps views, and its presets moved into the filter.** A «View» menu
-  beside «Board / List / Graph» holds the board's grouping, «No grouping» or «By epic»,
-  and «Save view…», which keeps the view, its grouping and the filter under a name for
-  the space; a kept view is chosen there to put its state back, the one the address
-  holds is marked, and it can be deleted. Kept views live in the browser's interface
-  settings, one list per space. The «Workable» and «Assigned» buttons and the «By epic»
-  toggle left the header: the two conditions are the first group of the filter's menu,
-  and «Assigned» now reads «Has an assignee», the card's word for who holds it. On a phone the menu is its sign alone.
-
-- **The card's labels change in the new-task dialog's picker.** «+», or a press on the
-  labels row beside the chips, opens the picker with the item's labels checked: choosing one
-  attaches it, choosing a checked one takes it off, and typed words add a new one. A label
-  chip no longer ends in a ×, and its words stand in its middle.
-
-- **The new-task dialog asks in the card's order.** Title, kind and priority, labels and
-  epic, and the description last, rather than the description between the two pairs.
-
-- **A menu shows each value the way its button shows the chosen one.** The priority, kind
-  and state menus of the card, the new-task dialog and the Work filter draw each option with
-  its glyph or dot and its word, and a priority with what it means; the new task's priorities
-  are listed most pressing first, as everywhere else.
-
-- **Controls of one row stand at one height.** A section heading's actions take one compact
-  size, so the chain's scope switch and «На графе» are equal; a label chip in the card is as
-  tall as the «+» beside it; the new task's labels field stays 40px with a label chosen
-  instead of growing to 52px beside the epic, and its advice «pick one, or type a new one»
-  is the empty field's placeholder rather than a line under it.
-
-- **A tile shows who is working the item, not just that someone holds it.** In place of the
-  person icon a tile draws the sign of the client whose session holds the item — Claude,
-  Codex, or a client for any other — and after it what that session is doing, as the side
-  panel does: running dots while it works on the item, still dots while it works on others, a
-  ring while it waits for a person. A stale claim keeps its sign in the warning colour. A claim
-  no session proved, with no session at work on the item, draws nothing on the tile; the list
-  and the card still name its holder.
-
-- **Settings stands at the foot of the rail.** It moved from under the last group into the
-  rail's foot, under the connection's state when that is lost, so it stays in one place
-  however long the list of work going on now grows. It is still part of the navigation.
-
-- **«Work» in the rail follows running work, items and sessions alike.** Each space lists
-  the items a session is working on or waiting at and, beside them, the sessions that work
-  or wait on no item, each named by the title its client gave it. A row has a second line:
-  what the session does, for how long, and the epic the item is part of or the folder the
-  session runs in. Rows that ask a person stand first, the rest most recent first. Three
-  rows fold what needs no eye and open in place: «N more with working sessions» for items
-  held while their session works on another, «N more waiting for hours» past four hours,
-  and «N more silent for over a day». Sessions bound to no space stand under «Sessions
-  outside any space», and pinned items not at work in a group of their own. A row whose
-  session is known carries «Open session», which comes up under the pointer or the
-  keyboard and takes room from the row's words only then. An epic is no longer a row
-  heading its items.
-  A session's title is read from the end of its transcript when the list is built, and is
-  neither stored nor logged.
-
-- **One sign says what a session does, everywhere.** The rail, the tiles and the graph with
-  its key draw the same ring, and its inside is the state: a turning arc while the session
-  works, a question mark while it asks a person in the middle of a turn, a check when its
-  turn is over and it waits, a pause on an item held while its session works on another, a
-  dashed ring once it is silent for over a day. The dots that ran or stood still and the
-  plain ring are gone.
-
-- **A session works while its turn runs, not from its first write.** A session is at work
-  when a prompt is the last of its events that open or end a turn and its client was seen
-  alive within fifteen minutes: by its transcript, or, where none can be read, by the last
-  the session was heard from. A notice that the client waits for a person stops the turn
-  until the answer is written, and the session asks meanwhile. A session at work moves one
-  item, the one its own write named last among those it holds. Before, a session read as
-  waiting until its first write to Planning, and every item it held moved at once.
-
-- **The live-work frame and the `live_work` map have new shapes.** A waiting state carries
-  `long` and `asks`. A row carries `since`, `long`, `asks`, `updated_at` and the `executor`
-  of the session whose state it shows. Each space lists its `sessions`, `elsewhere` is a
-  list of sessions, and `unplaced` is gone. A client that validates the frame strictly
-  needs the build that ships with this server. See
-  [the connection contract](docs/connection-contract.md#the-live-work-frame).
-
-
-- **Mentions are written with `@`; `#` no longer opens a list.** The list of tasks to
-  mention opens on an `@` that starts a word, and the editor's mention button writes `@`.
-  A `#` opens nothing, since at a line's start it is a Markdown heading. A chosen task is
-  still written as its bare number, and a comment sent from a card's comment field now
-  tells that task in `mentions` while the number stands in the text, so the work on it
-  hears of it; a number typed by hand remains a link that tells nobody.
-
-- **Icons keep their size, and one-line labels end in an ellipsis.** An icon no longer
-  shrinks in a row short of room: the search and questions glyphs of the narrowest
-  navigation were drawn 13 to 18 pixels wide of their 20. The navigation's «Go to a task» and
-  «Needs my answer» no longer wrap onto a second line; like every one-line label they end in
-  an ellipsis, and say their whole words on hover while they are cut.
-- **A cut name is whole on hover even where the hover has more to say.** A one-line name
-  whose hover already says something else — a space with no project in the navigation, a
-  muted row there, a menu's chosen value, a document's path, an epic on the graph, a
-  session's holder — showed that and never the name cut short. Now, while the name is cut,
-  its hover says it whole on a first line and the rest under it; while it is whole, the rest
-  alone. A review's comment line and a folded thread's first line, cut with no hover at all,
-  say their whole words while they are cut.
-- **A hover hint never says what is already on screen.** Every hint now states its kind: a
-  name for a control that shows only a glyph, the whole of a cut text that shows only while
-  the text is cut, or a detail the place does not show, which the UI check accepts only from
-  its register with a reason. A board tile, a label chip and the usage line no longer repeat
-  their own words on hover; a priority's hover says what the level means instead of its name
-  again; a session button hints what a press does, with the session's state on a quieter
-  second line, instead of the holder's name it already shows. The holder's whole name and
-  the session's details stay in what a screen reader hears.
-- **A review reads as a list of decisions, and a comment replaces your own option.** Each
-  point of a review is one row: its label, Accept / Later / Reject and the comment's press on
-  one line in a card's drawer, and one quiet line under the label saying the way chosen, what
-  the agent recommends, or the start of the description. A press on the label opens the point
-  in place, nothing already read moves, and what Accept opens hangs from it behind a rule,
-  read only until Accept. Every field with options has one «Comment» instead of a row «Your
-  own option» and a separate comment: with nothing chosen its words go as your own option,
-  with a choice as a note. The answer sent to the server is unchanged. Accept recommended now
-  also fills a point listed under another before it, and two groups apart with one title
-  fold apart.
-
-- **«Needs my answer» says which question you are on.** The rail of short bars at the start
-  edge is gone. The head of the list says «Question 2 of 5», counting only the blocks still
-  waiting, with arrows to the previous and the next block; the arrow keys, Home and End do the
-  same, and pressing the count takes you to where that block is answered. Blocks you have
-  answered fold where they stand and later gather under «Answered (N)» at the end of the list,
-  never moving while your pointer or keyboard is on them or below them.
-
-- **A card's chain is under «Relations».** The chain section moved from Overview to the
-  Relations tab, after the links and references. Its «Epic | Chain» switch shows only where
-  the two differ. The chain read (`GET /api/planning/work-item/chain`, `get_work_item_chain`)
-  adds `root.totals`, how many members each scope holds; nothing it answered before changed.
-
-- **The pin is in a card's «…».** A «…» menu beside Close holds «Pin to Work», checked while
-  the item is pinned; the pin no longer stands in the line with the reference and the date.
-  The menu works from the keyboard as a menu does: arrows, Home and End, Escape back to «…».
-
-- **«Answer» in a card's facts.** Where a question waits, the facts offer «Answer» with the
-  question's sign, which goes to the question on Overview; it was a «Waiting for an answer»
-  status that acted when pressed.
-
-- **The epic in a card's facts is a link.** It draws the epic's sign, as a tile does, and its
-  number opens the epic, through the card's Back, with the epic's hover card on pointing; the
-  blocker an item waits on is a link the same way.
-
-- **A card's History and Executions open with their records.** The sentences over them saying
-  what the search searches and what an attempt is are gone; a permanent explanation is no
-  longer placed over a section.
-
-- **Settings opens with its settings.** The sentences under each group's heading and under
-  «Installation health», saying what the group is for, are gone. The three facts no control
-  said move onto the control as a hover hint: a type's colour picker says the colour is kept
-  on this device, «If the place is unknown or cannot be opened» says that the place is
-  the one a session was last open in, and the notifications switch says that a notification
-  comes even with the window closed and that a click on it opens the work item.
-
-- For contributors: the browser suite builds the app into
-  `web/test-results/<port>/app`, named by `VALKAMA_BROWSER_PORT`, and serves it from there,
-  so a run no longer rewrites the committed `web/dist` and leaves nothing to restore. That
-  build skips the type check, so a type error in a spec is reported by `npm run typecheck`
-  instead of as a server that would not start. Before the first spec the run checks that the
-  app's port serves the page it has just built, and stops on a page that differs or one an
-  earlier run left behind. Traces and screenshots go to `web/test-results/<port>/results`,
-  so two runs on different ports in one checkout no longer delete each other's.
-  `npm run build` still type-checks and writes `web/dist`, and the `server-` specs, which run
-  against the real server, still use it.
-
-- For contributors: a one-off browser spec kept outside the suite, such as in a worktree's
-  ignored `tmp/<name>/`, runs through the tracked `web/tests/browser/probe.config.ts`: name
-  its directory in `VALKAMA_BROWSER_PROBES` and the ports in `VALKAMA_BROWSER_PORT`, and
-  name the file `ui-` or `production-` for the project it runs in. It needs no configuration
-  of its own, resolves `@playwright/test` and `@/` from `web/`, and builds and serves the app
-  as the suite does.
-
-- For contributors: the browser specs that write the system clipboard or are granted it are
-  named once, in `web/tests/browser/clipboardSpecs.ts`. `npm test` fails when a spec that
-  grants or writes the clipboard, itself or through a suite module it imports, is missing
-  from that list, or when a name on it is no longer a spec.
-
-- For contributors: `npm run test:browser:allowed` in `web/` runs every browser spec but the
-  clipboard ones in one Playwright run. It writes the list to a file Playwright reads with
-  `--test-list`, so no list reaches a command line, and ends with each project's count of
-  tests and how they ended, and the total. `--list` shows what would run; `--specs=<file>`
-  runs the specs a file names, one a line; `--with-clipboard=<file>` lets a named clipboard
-  spec in. It refuses, with exit code 2 and before Playwright starts, an empty list, a
-  missing list file, a name that is no spec and a clipboard spec not named that way.
-
-- For contributors: a bare `npx playwright test` or `npm run test:browser` in `web/` no
-  longer selects the clipboard specs. `web/playwright.config.ts` reads the list in
-  `web/tests/browser/clipboardSpecs.ts` and leaves those specs out of every run, including
-  one that names a spec and `--list`, unless `VALKAMA_BROWSER_CLIPBOARD=1` is set;
-  `npm run test:browser:allowed` sets it only when `--with-clipboard=<file>` names a spec.
-  The suite still runs through `npm run test:browser:allowed`.
-
-### Fixed
-
-- **An advisor running the executor's own model no longer turns usage negative.** A request
-  is written as several records, and the usage reader counts each as its difference from
-  the last. It told a request's parts apart by model, so an advisor call on the executor's
-  model took the executor's place: every later record of the request added the executor's
-  tokens minus the advisor's, which made input and output negative and counted cached reads
-  and cache writes again in full. The executor's part and each advisor's are now kept
-  apart whatever their models. Every run is read again in the background, which corrects
-  the rows already written.
-- **A subagent transcript copied into a forked session no longer counts twice.** Forking a
-  session copies the original's subagent transcripts into the fork's folder, and every
-  record of a copy still names the original session. The usage reader counted a copy's time
-  and tokens again under the fork. It now skips a subagent file's records of another
-  session, as it already did in a session's own transcript. A store that counted a copy
-  gives the copy's time and tokens back to the original once both runs are read again.
-- **A subagent's time stays out of its parent's run after its transcript is deleted.** The
-  usage reader took a subagent whose file the client had deleted for one that never kept a
-  transcript, and counted its time in the parent's run as well as in its own. Valkama's
-  archived copy, or the segments the subagent's own run already holds, now say it kept one.
-- **A turn with no write goes to the same item however the reader's passes fell.** A turn
-  that started with no item, such as a subagent's with no write, step, packet number or label
-  of its own, kept whatever item its parent held at the moment a background pass happened to
-  end. It is now placed again at the end of every pass while it runs and settled by what its
-  parent held at its last moment, so readings that reach the same place agree.
-- **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
-  sign in the side panel and the marks of a chain now centre on the middle of the capitals of
-  the line they stand on — a reference, a number or a capitalized word — on a tile, a list row,
-  a graph node, the hover card, a Ctrl K result, the side panel and the card. They had centred
-  on the lowercase letters and stood 1–2.5px low beside a reference.
-- **The next hint shows when the pointer moves straight onto it.** Moving from a word with a
-  hint onto the one beside it, such as from a suggestion's name to its title, closed the first
-  hint and showed none for the second while the pointer stood between the first word and its
-  hint. A hint is never entered, so that stretch no longer holds the next one back.
-- **A focus ring brought into view keeps all of its room.** When focus moves to why a send or
-  a read failed, to a reply or to a reference in text and scrolls it into view, the scroll now
-  stops a pixel further in, so the ring is never short of the edge by a fraction of a pixel
-  when the text above it ends on a fractional height.
-
-## [2.7.0](https://github.com/Muratovnik/valkama/compare/v2.6.0...v2.7.0) - 2026-11-08
-
-### Added
-
-- **The rail is as wide as you drag it.** Its right edge drags between 200 and 480 px (260 to
-  start), the arrow keys step it by 16 px and Home and End take it to either end; the width
-  is kept on the device. On a window 760 px wide or narrower the rail stays its icons alone.
-- **One hint for everything.** Every hint in the interface is now the same card, shown on
-  hover and on keyboard focus and closed by Escape, in place of the browser's own tooltip; a
-  label cut short shows its whole text only when it is cut. A check refuses a browser
-  tooltip coming back.
-- **A reason beside a recommendation.** A question's option, or a verdict's recommended
-  answer, takes `why` next to `recommended`: the «recommended» mark then shows it on hover,
-  focus or press. `why` without a recommendation is refused, and the Valkama skill asks an
-  agent to give one whenever it recommends.
-- **Process friction in a summary.** `set_work_item_summary`, `report_work_item` and the
-  batch's `summary` take `friction`, up to 4000 characters; the card shows it last, quietly,
-  and hides `none`. *Rolling back:* a 2.6.0 server refuses to read an item whose summary
-  carries `friction` («work_item.summary has unknown field(s): friction»); lists and search
-  still work. Remove the field from such summaries before pinning 2.6.0.
-- **The Work filter in two steps.** Its menu opens on the presets and the facets — state,
-  kind, priority, holder, label — and a facet steps into its values, with the facet's name as
-  the way back; typing on the first step still finds a value of any facet. A chip's «=»
-  turns into «≠», so a value can be kept out («Label: not ui»); old links read as before.
-  Text that matches nothing ends the menu with «Search for "…" in all projects».
-- **Questions you can move through.** In the questions dialog each block's head stays at the
-  top while its questions scroll, with the block's comment button in it, and a rail of bars
-  down the left takes you to any question, from the pointer or the keyboard.
-- **The card's facts each have a row.** State, priority, epic, who works on it, subscribers
-  and labels stand on named rows; the priority changes where it stands, and labels are added
-  with «+» and removed with the «×» on a chip.
-
-### Changed
-
-- **A healthy connection shows nothing.** The rail's refresh button appears only when the
-  connection is lost, with what happened; the board and the activity refresh themselves.
-- **A work item's marks read in one order everywhere:** its kind, its number, then the rest,
-  on the board, in the list, on the graph, on the hover card, in the card's head and in
-  «Go to a task», and each glyph sits centred on the letters beside it. A board tile no
-  longer says who claimed it in words: the holder is a glyph with a hint.
-- **Hovering the graph no longer dims everything else.**
-- **Every empty state is the same component,** a quiet line at the top of a section or a
-  centred block where a whole view is empty, with an action where one exists. An unavailable
-  memory source says why and links to Settings → Diagnostics.
-- **Obvious actions are icons:** refresh, edit, add, remove, close and re-check, each with its
-  words in the hint; an action that sends, commits or carries a count keeps its words.
-- **«Find a task» is now «Go to a task»,** and the board's field hint starts with «Filter:»,
-  so the two no longer read as one.
-- **Clearer questions.** The comment buttons say what they comment on — this question or the
-  block of questions — and the task's number in a block's head is its link, so the separate
-  «Open task» is gone. The dialog speaks of blocks of questions.
-- **A step's row shows where and how a session runs as icons,** beside the name at the row's
-  own weight.
-- **VS Code, Codex and Cursor show their own icons** wherever a place to open in is drawn:
-  in Settings, in a step's row and in «Open» actions. VS Code's is Microsoft's white variant,
-  since its blue falls below 3:1 on the interface's grounds, and every mark takes the colour
-  of the icons beside it. An editor with no mark of its own shows a neutral editor glyph
-  rather than another product's.
-- **Less explanatory text:** the line under Settings' section switch and the memory section's
-  introduction are gone; a discussion's heading counts its threads with a bare number.
-
-### Fixed
-
-- **A field's hint no longer flickers** when the pointer crosses the gap between its label
-  and the field.
-- **Escape on a hint's «?» reaches the dialog around it** while the hint is closed.
-- **Parts that stick to the top of a dialog's list stick at its top,** not 24 px below it,
-  and a control the keyboard reaches is scrolled out from under them.
-
-
-## [2.6.0](https://github.com/Muratovnik/valkama/compare/v2.5.0...v2.6.0) - 2026-11-08
-
-### Added
-
-- **How much work an item actually took, and what it would cost at API prices.** The server
-  now reads the clients' transcripts in the background and tells working time from waiting
-  for a person, for a subagent or for a failed service, and from a machine that was off.
-  `GET /api/planning/work-item/usage` reads an item or its whole chain and
-  `GET /api/planning/session/usage` a session, with what no item took on a line of its own.
-  Store schema 11 holds the rows, under a snapshot taken before the upgrade; no message or
-  command text is kept, and existing transcripts are read too. The cost is an estimate, not
-  a bill. A background command counts as work for three hours from its start at most, so a
-  server left running is not read as a script someone waited for.
-- **A card says how much work its item took.** A quiet line under the card's facts gives
-  the working time, the estimated cost at API prices and the tokens processed anew; an epic's
-  line takes in its items, and each item of its chain shows its share. The «Agents» tab
-  shows the whole with what each number means, the tokens by kind and by model, each
-  agent's share, the session's own run, and each session's total with what it did for no
-  task. Estimates, missing prices and missing data are said as such, never as zero.
-- **Task types have colours, and you can change them.** A type's icon and word are now
-  purple for an epic, rose for a bug, turquoise for an improvement and grey-blue for a
-  task, on the board, in the list, on the card, in search, on the hover card, on the
-  graph and in the filter menu; the colour of a state does not change. Settings →
-  General → Task type colors picks another colour per type, applies it at once, says
-  when one is hard to read and lets you keep it, and resets one type or all. The choice
-  is kept on the device, so a browser and the desktop app each remember their own.
-- **One batch edits an item, writes several comments and asks questions.**
-  `apply_work_item_changes` takes three more groups, each working as its single tool
-  does: `update` (`update_work_item`), `comments`, up to 100 (`comment_work_item`), and
-  `questions`, up to 100 (`create_work_item_request`). They apply in the order `claim,
-  update, checklist, checklist_ticks, refs, links, comment or comments, resolutions,
-  questions, summary, transition`. `applied` names the fields edited and the id of every
-  comment and question written. A call that names both `comment` and `comments` is
-  refused, and so is one that asks a question and closes the item, which would end the
-  question unanswered. A refused entry's shape now names its `step` too.
-- **A list in the discussion becomes steps of the task in one action.** A comment, a reply
-  or a work report that holds a list carries a «Make steps» icon on an open task. It opens
-  the points as boxes, every one ticked but a point the task has as a step already, one that
-  repeats a point above, or one longer than a step can be, each said beside it; the count
-  says how many steps the task will hold of its 100. The chosen points join the checklist
-  through the same write as any change of it, so whoever holds the task hears that its
-  steps changed, and they are ordinary steps from then on.
-- **A question can be a review of many points.** A field of the new type `verdict` is
-  one point the owner accepts, puts off or rejects, with a comment or an own variant like
-  any choice. A field may now add a `description`, a `group` that the fields of one area
-  stand together under, and `under`, which shows and asks it only while an earlier field's
-  answer holds an option: the steps or the way of an accepted point. A verdict may add
-  `recommended`. Each mistake in such a schema or its answer is refused naming the field
-  and how to put it right. A question without the new keys is what it always was. The
-  compact read of a review gives `verdicts` and `undecided` whole before any row, and its
-  `answer` holds only the fields under a point, with `under` and `of`, and the points with
-  a comment or an own variant; a notice sums a review up by its verdicts. See
-  [Questions and decisions](docs/connection-contract.md#questions-and-decisions).
-- **One small frame says where work is going on now, across every space.** A stream
-  opened with `GET /api/events?view=planning` carries it as `event: live` beside the
-  space's read model, and `view=live` is a stream with only that event, for a page that
-  has no space stream. Each row is an item at work, held, waiting or silent for over a
-  day, a pinned item, or the parent of one, with its live subagents counted, its workflow
-  state, and since when a silent one is silent. Agents at work on no item are counted
-  per space by the folder their session was opened in, as a caption that binds nothing.
-  The frame is sent when it changed and no more than every two seconds, and it reads the
-  primary store only. See [the connection contract](docs/connection-contract.md#the-live-work-frame).
-- **A person can pin an item.** `POST /api/planning/work-item/pin` pins an item or
-  removes its pin and answers with the frame. A pin lives in the store, so the browser
-  and the desktop app show the same ones; it is no change to the item, writes no
-  history and is told to no agent. It outlives the item's close, moves to the survivor
-  of a merge, goes with a deleted item, and an export carries it as `planning.pins`.
-- **A review is answered row by row in the thread where it was asked.** A question with
-  verdicts shows each point with «Accept | Later | Reject», none chosen until you choose,
-  its points under their group headings with how many are decided, and the steps or the way
-  of a point right under it once you accept it, filled with what the agent recommends the
-  first time. «Accept recommended» decides every point still undecided as recommended and
-  leaves what you chose. An own variant and a comment stand beside each point. The count
-  and that button stay at the top of the panel and the comment, «Don't answer» and «Send»
-  at its bottom while the form is in view, without covering what has focus. Over «Send» the
-  form says how many points are undecided; the agent reads those as undecided, and a
-  required one stops the send. A question with none of this looks and works as before.
-- **An answered review reads as one line.** «Accepted 14 · put off 1 · rejected 1 · own
-  option 1 · undecided 1», the points not simply accepted by name, and «Show all 18 rows»
-  for every point with its verdict and every step with what was chosen. «Change answer»
-  opens the same form in place, and its previous answers read as what each change changed,
-  row by row, as the agent is told it: «P12 put off → accepted», «P10 · Steps +… −…».
-- **An agent can put a list the owner ticks under its own comment.** `comment_work_item`,
-  `report_work_item`, `set_work_item_summary` and the batch's `comment`, `comments` and
-  `summary` take `list`, a label and up to 20 options, on a root only; the comment and its
-  list are one write, and the answer adds `list_request_id`. The list is a question of one
-  `multi_choice` field that carries `comment_id`, so it is answered, changed, searched and
-  exported as any question, and its answer reaches the agent that wrote it and the item's
-  holders. Nobody waits for it: it raises no Windows notification and takes none back, it
-  is not in the interface's read of open questions without an item, and it does not hold
-  the item open. On a closed item it reads `expired` with `task_closed` until the item
-  reopens; a list on a closed item, or in the call that closes it, is refused. A merge
-  moves a list with its comment, so a report's list stays with the report. A list's
-  compact read carries `undecided`, `["items"]` while nothing on it is ticked, so a list
-  sent with nothing ticked reads as not decided, and its notice says `<label>: not
-  decided`, also when a change unticks everything. See
-  [A list on a comment](docs/connection-contract.md#a-list-on-a-comment).
-- **A list an agent puts under its comment is ticked right there.** The card shows it under
-  the comment's words, inside that comment, and no longer as a question of its own: it adds
-  nothing to «Waiting for an answer» or to the discussion's counts. Ticking only marks a row;
-  «Send marks» sends them once, with a comment on the marks if you want one, also with
-  nothing ticked, which tells the agent you have not decided, and a
-  recommended option says so as in a question. Sent, every row keeps its mark, a line says
-  «You ticked 2 of 5» and when, and «Change» opens the marks again; a change made elsewhere
-  in the meantime is said, not overwritten. On a closed task the list says that marks would
-  reach no one until the task is reopened, keeps what you had ticked and not sent in sight,
-  and offers it again once the task reopens. The rows are as wide as the comment's text and
-  each takes a tap across its whole line on a phone.
-- **A comment can tell the work on other items.** A number in a comment's text stays a
-  link and tells nobody. `POST /api/planning/work-item/comment`, `comment_work_item`,
-  `report_work_item` and the batch's `comment` and `comments` take `mentions`, on a root
-  or a reply: up to 20 items in a person's call over HTTP and 5 from an agent (the card has
-  no control for it yet), and one session names
-  one item at most 3 times an hour, the fourth refused with `mention_limit` (429 over
-  HTTP). Naming the comment's own item, an item twice or a missing one is refused. Each
-  item named keeps a `mentioned` event pointing to the comment, and the answer says per
-  item who holds it and, in `told`, why nobody will hear it. A person's
-  mention is a person's act on the item named: its holders hear it in `from_person` and in
-  the hook's notice («mentioned … from MAIN-12 #61»), an idle holder is woken, and a close
-  is refused with `person_spoke` until an agent writes there. Another agent's mention
-  reaches the holders, never the session that wrote it nor its subagents, in a block of
-  the notice of its own («Valkama notice from agents, not from a person»), and at their
-  next tool call or prompt: it wakes a session or continues a turn at `Stop` only when
-  its comment waits for a reply (`awaits_reply`, below), and is in neither `from_person`
-  nor `person_spoke`. The hook's `.marks` files are now headed `v3`, with a
-  second place per item for agents' mentions; a `v2` or `v1` file is read without telling
-  its news again, and an earlier build reads a `v3` file as empty, which tells the current
-  news once more. Every comment now carries the items it named in `mentions`, and the
-  read of an item carries the comments that named it, the newest 5 for `get_work_item`
-  and 50 over HTTP, with `mentions_total`. See
-  [Mentions](docs/connection-contract.md#mentions) and
-  [who is told](docs/hook-contract.md#who-is-told).
-- **A session hears what other agent sessions do on its work, and can follow an item it
-  does not hold.** The hook's notice now tells a session, beside other agents' mentions,
-  what another agent session wrote on an item it holds: a comment, a reply, a report, a
-  question asked, answered, declined or changed, a status change, a claim, release or
-  take-over, a link, a step change, a selected summary and a thread resolved or reopened.
-  Field edits, rank and the item's creation are not told, nor anything the session's own
-  conversation or its subagents wrote. Each line names the session that wrote it, in the
-  block «Valkama notice from agents, not from a person», and only at the next tool call or
-  prompt, unless it asks for the session, as below. `apply_work_item_changes` takes a
-  `subscribe` group: `true` follows an item the session does not hold and hears it as a
-  holder would, a person's acts there at its next tool call without a wake, `false`
-  stops, and `false` on a held item mutes other sessions there while the session holds
-  it; a person's act and the replies to its own `awaits_reply` comment still reach it. A
-  subscription lapses with its session as a claim does, a merge carries it to the
-  survivor, whose news from the merge on the subscriber then hears, and `get_work_item`
-  lists who follows an item in `subscribers`, each with the `label` a claim of that
-  session would carry. Store schema 13 holds the subscriptions, under a snapshot taken
-  before the upgrade; a build of the previous release refuses the upgraded store. A comment can
-  ask with `awaits_reply: true` (`comment_work_item` and the batch's `comment` and
-  `comments`, beside `mentions` too), and `get_work_item` shows on it whether another
-  session or a person has `answered`. Such a comment wakes the holders of its item and
-  of the items it names, once and within a day of being written; the first reply to it
-  wakes the session that asked, once; and a blocker of an item closed by another session
-  or a person wakes that item's holder, once, while its other state changes, a reopen
-  included, are told at the holder's next tool call. A wake is the watcher waking an
-  idle Claude Code session or a `Stop` notice continuing its turn; a busy session hears
-  the news at its next tool call, or is woken by the watcher when it makes none for 30
-  seconds, with a heading that says it was busy; a subagent's news wakes its
-  orchestrator, a Codex session is never woken, and nothing a session wrote itself
-  wakes it. Other agents wake one session at most 6 times an hour, after which the news
-  waits for the next tool call with a line saying how many such events waited. Past
-  three notices in an hour quoting other agents on one item, that item's news is one
-  line per notice that counts the events, names who wrote them and says to read the
-  item; the reply a session awaited, a question that wakes it, a blocker that closed and
-  a person's acts are always quoted. The hook's `.marks` files are now headed `v4`. The
-  card names the sessions that follow an item under its holder, «Subscribed», as their
-  claims would name them, and a comment that asked says «no reply yet» after its time
-  until another session or you reply in its thread. A resolved thread waits for nothing,
-  neither on the card nor for the hooks: a reply written then wakes nobody, and once the
-  thread is reopened a question still unanswered waits again and its reply wakes the
-  session that asked. See
-  [Subscriptions](docs/connection-contract.md#subscriptions),
-  [another agent session's news](docs/hook-contract.md#another-agent-sessions-news) and
-  [when it wakes](docs/hook-contract.md#when-another-sessions-news-wakes).
-- **The rail lists the work going on now under «Work».** Each space shows its items at
-  work under their epic: three running dots while an agent works on one, still dots while
-  its session holds it and works elsewhere, a ring while it waits for a person, and how
-  many agents are on it. An item silent for over a day and a pinned one with no work stand
-  muted, and a pinned item that has closed says its state. An epic at work shows its sign
-  where its tasks show theirs, and the titles of one level start at one edge however long
-  their numbers are. The order does not jump, a row whose work ended stays muted for 20
-  seconds and longer while the pointer or focus is on it, and the groups you fold stay
-  folded on this device. A row opens its card, in its own space if it is another one,
-  without changing the view. The pin, which comes up at the end of a row without covering
-  its title or its count, or the one beside the link in the card's head, keeps an item in
-  the list until you remove it. On a phone the rail's list button, with the number of
-  items at work, opens the same list in a panel, where every fold is a finger's size. A
-  tab keeps one connection for it, on a board, in Settings and in the portfolio alike.
-
-### Changed
-
-- **No focus ring after you act with the mouse or a finger.** When you send a reply, open a
-  thread's replies, jump to the checklist, fail a send or go back to a link with the mouse or
-  by touch, focus still moves to the reply, the list or the reason, so a screen reader and the
-  next Tab go on from there, but no ring is drawn round it. The same action from the keyboard
-  still rings where focus went. A text field the interface takes you to, such as a thread's
-  decision after Resolve, still turns its edge the focus colour after a click, so you see
-  where typing goes.
-- **An epic's header on the graph is as tall as its title.** A title of one, two or three
-  lines takes that many, and the counts stand right under it, with no empty band between
-  them; the layout leaves each header the room it is drawn at. The chevron leads the
-  reference line, and the title, the counts, what a fold hides and the progress edge start
-  at one left edge, the one the frame's cards start at. The chevron is a 28px target at the
-  scale the graph opens at, 44px under a finger or on a phone, reaching into the air round
-  the frame rather than growing the header, and its focus ring and the epic's each go round
-  their own control only. Zoomed out, a band's grown words stay inside the shorter header,
-  an epic with no room for «3 working» shows «••• 3» instead of nothing, with the whole phrase
-  on hover, and far out the frame's ground still opens its epic.
-- **A question holds up to 40 fields instead of 12.** The 64 KiB the fields of one
-  question fit in are unchanged.
-- **`question_changed` says what changed, row by row,** as `changed: p12 later→accept;
-  p10-steps +lock −glob`, instead of quoting the new answer and the old one, which do not
-  both fit in 300 characters. Rows past the limit are counted, as `; and 4 more`.
-- **A compact question past 2000 characters keeps every field it can.** It now leaves out
-  the replaced answer first, then every label at once, and only then the later fields, so
-  an answer with long labels shows each answered field instead of the first few.
-
-- **A new task's epic and labels are chosen by searching what the space has.** In the
-  «New work» dialog the epic is found by its number or title, with «No epic» as the empty
-  choice, and a reference typed by hand that names no epic is no longer taken. Labels are
-  picked from those the space already uses, most used first, or added by typing a new one
-  and pressing Enter; each chosen label is a chip that its cross or Backspace removes.
-- **The skill keeps Valkama calls apart in Claude Code's auto mode.** It tells the
-  agent to send them in a response of their own: the hook that adds the session to a
-  call makes auto mode withdraw its review of a call that runs after it in that
-  response, and answering `allow` from the hook does not prevent that. See
-  [the hook contract](docs/hook-contract.md).
-
-### Fixed
-
-- **A closed top-level item in the Work list gives its title the room of its empty lead on a
-  phone.** The phone's panel drops that column for a closed item with no sign and no fold, so its
-  title gets 48px more and its number moves one lead to the left; a group's head, an item with a
-  sign and a closed nested item keep their column.
-- Focus stays where you put it while an action waits on the server. A reply sent, then a click
-  into the comment field before the answer came, used to take focus to the new reply, and what
-  was typed next went nowhere; now the field keeps focus and the letters. The same holds for an
-  answered question, where focus you moved to its task number or its reply icon while the answer
-  was out stays there and the list of everything waiting does not move on from it. It holds for
-  the list moving on, a refresh, a mark of a thread and the steps of opening a session too. With
-  focus left where it was, it lands as before. A question's deadline passing no longer takes
-  focus off its reply icon or its task number; from the form it closes, focus still goes to the
-  question, which says the deadline has passed.
-- An agent's session id stays whole in the head of a comment, a reply and a question. On a
-  phone the head of a reply broke it after its hyphen, «worker-b 019a2b3c-» over «4d5e». The head
-  prints the start of the session, as the card's holder and every other place do, in the
-  monospace metadata font: a whole id is wider than a phone's head, and it ran past the head's
-  edge or broke across two lines of its own. The whole id is in the tooltip, and a session
-  Valkama knows is a link that opens it. A head's line with the id stands as tall as one
-  without, where it stood a pixel taller. The name and the session's start now stay together,
-  the start right after the name: where they do not fit beside the date, the date moves to a
-  line of its own under the name, where on a phone the start used to stand alone under the
-  name with the date beside it. Only on the narrowest phones, where the icons leave a head too
-  little room for even the name's last word and the start, does the start take a line of its
-  own under the name, with the date under it.
-- A card's sections on a narrow window say that there are more of them: the row fades
-  out at each end where a section is cut, and only there, so a phone, which shows no
-  scrollbar, no longer ends the row at a cut word. A section picked with the mouse or the
-  keyboard stops clear of the fade, one already in sight stays where it is, and a row that
-  fits draws none. A click or a tap on a section half under the fade chooses it the first
-  time: the row no longer slides away between pressing and letting go, and once the press is
-  over it brings that section clear of the fade, also when it was already the one shown or
-  the press was let go off the row.
-- **Zoomed out, the graph's band for the work under no epic reads cleanly.** «158 inside»
-  no longer runs onto the progress edge under it; pointing at the band or reaching its
-  chevron with the keyboard lights the chevron alone instead of covering the words and
-  the edge, and the chevron, its light and its focus ring grow with the band's words, as
-  the ring round an epic's band does, so the keyboard's place reads at every zoom; and its
-  shortened «••• 3» says «3 working» in full on hover and to a screen reader. The first row
-  of frames opens with room above it, so a finger's 44px target on its chevron is no longer
-  cut by the top of the graph.
-- **A choice made with the mouse leaves no focus ring behind.** Opening a dropdown with a
-  click ringed the option under the pointer, and choosing one ringed the dropdown itself,
-  as if it had been reached with Tab. Focus the interface places after a click now stands
-  unringed everywhere; the keyboard still rings every stop, in the list and after it.
-- Every part of a screen that opens on request — technical details and passed checks in
-  Diagnostics, a task's outcome, the recorded details of an attempt and of a memory
-  search — opens on the same chevron as the rest of the app, beside its words. Passed
-  checks drew the browser's triangle on a line of its own above its name, set in a
-  heavier weight than anything else on the screen.
-- In Diagnostics the time of the check is set in the size of the counts beside it, a
-  finding starts on the same edge as its level, and on a narrow window a passed check's
-  description and a technical value stand under their names instead of a few letters to
-  a line beside them.
-- In Settings, Readiness is named on the line of its state rather than half way down
-  beside the button under it, and a task type's colour swatch stands as tall as its
-  Reset.
-- **Dialogs, the task finder and the new-task fields line up.** A dialog's title and its
-  close button now stand on one line, with no extra space under the title, and the same holds
-  for the Back, action and close buttons of a document's head. In the task finder a result's
-  number stands on the first line of a two-line title instead of between its lines. In the
-  new-task dialog on a phone, Labels and Epic take the dialog's whole width one above the other,
-  so an epic's title is readable in its field and in its list. A press on the Epic field no
-  longer highlights its value: the field empties for the search and shows the chosen epic in
-  grey until you type; an epic chosen with the pointer leaves the caret in the field, as one
-  chosen with the keys does, instead of sending the next Tab to the top of the page. In the
-  filter menu, the number of tasks in hand stands beside «Assigned»
-  instead of at the menu's far edge.
-- **No more capsule-shaped rings round a line of words.** When a question's deadline passed
-  or the list moved on to the next question, focus went to the deadline's line or the next
-  question's title and drew a thin capsule round it. Focus now goes to the question itself,
-  which that line describes or names, and the ring goes round the question. Why a send or a
-  refresh failed still takes focus, so that Tab goes on from there, and its ring, like a
-  reply's and the checklist heading's, stands clear of the words with the corners of a
-  button. Brought into view at the foot of a phone's screen, such a line keeps room for
-  that ring, whose lower side used to be cut off.
-- **The form that marks a thread resolved has its buttons where every form does.** It put
-  «Mark resolved» before «Cancel», at the start of the line on a phone; «Cancel» now comes
-  first and the primary button ends the line.
-  The question asked before written words are dropped, under a reply, in this form or
-  while an answer is changed, now puts its buttons at the end of its line too, keeps them
-  together on a phone, and starts its words on the form's own edge. So does the question
-  asked before a refused move is carried through anyway, which stood inside the refusal on a
-  ground of the same grey, 12px in from its words, and on a phone in Russian put «Перевести
-  принудительно» on a line under «Отмена».
-  «Mark the thread resolved» under a reply takes a press across a line as tall as an
-  action's, not only across its words. The icons at the end of an entry's name and date, a
-  review's point and a field's label stand on its first line when it wraps, not up to 14px
-  under it.
-- **A time inside a sentence no longer breaks in two.** A closed question's line, a thread's
-  mark and a question's deadline could end one line with «05 нояб. 2026 г.,» and start the
-  next with «23:47»; the time now moves to the next line whole.
-- **The buttons of «Make steps» stay at the form's end on a phone.** Wrapped under the count
-  they went to the start, unlike every other form's.
-- **A question's two answers wrap together.** Once «Check status» joined the row after a
-  failed send, Send stood alone on the next line under «Don't answer», and changing an answer
-  on a phone in Russian put Save under Cancel. The two now go to the next line as one pair.
-  On a wide screen the row no longer drops the two to a second line in Russian, after a
-  failed send or past a deadline, while everything fits on one. On a phone «Open task» and
-  «Check status» keep the start of their own line above the buttons, with no empty strip
-  over them, and «Don't answer» asks its question in their place.
-  Changing an answer keeps the comment's icon on the line of its buttons on a phone, so
-  «Сохранить изменение» is now «Сохранить» in Russian. The line kept above the buttons on a
-  phone for the question «Don't answer» asks is one line in English too, which now reads «The
-  agent gets a refusal; no undo.»
-- **A question that has ended is ringed as a whole, not round one line.** After a send or a
-  decline focus went to the line saying how it ended and drew a thin capsule round it, pressed
-  against the words and the rule of the answer. Focus now stays on the question itself,
-  described by that line, and the ring goes round the question as it does round a thread
-  that folds. A question is now named by its author and time, as a comment's thread is.
-- **A review keeps one column of edges.** A group's heading put its chevron a few pixels
-  into the column and its title further in than anything else; the title now starts where
-  the rows do and the chevron ends the line after the count, pointing down while folded and
-  up while open. What a point's answer opens, its steps or its way, stood at a third edge
-  between them; it now starts under the point's words, and an answered review sets it in
-  by the step its reply is set in, the same step every reply and quote in the thread uses. The
-  chevron now sits on the line of the title, also when the title wraps, and in a forced palette
-  it is drawn in the system ink, so it stays visible.
-- **An entry's time stands under its author on a phone, not in the middle of the line.**
-  Where a question's or a comment's icons took the end of its head, the time that no longer
-  fitted beside the name dropped to a line of its own and kept to the end of the words,
-  which is where the icons begin, so it stood mid-row under nothing. On its own line the
-  time now starts where the name starts; beside the name it still ends the line.
-- **A card's lists start at one edge.** A chain's rows stand on the edge their group
-  headings start at, and the names of open groups line up with «Done»; a session in
-  Relations that cannot be opened starts where its label does; a checklist step's box stands
-  under the heading's first letter. A row's highlight under the pointer reaches a little past
-  the column instead of pushing the words in. A disclosure's chevron, in a card and in
-  Settings' diagnostics, starts on its column's edge too, folded or open, where it stood four
-  to six pixels in.
-- **A long title no longer breaks in the middle of a word.** A title such as
-  `loading/empty/error/unavailable` was one word to the browser, and at a phone's width it
-  broke wherever the line ran out, leaving «un» on one line and «available» on the next.
-  A title now also breaks after each `/`, in the list, on the board, on the graph, at the
-  head of a card, on the hover card, in search, among a card's links, in the picker of
-  related work, on the branch map's tip, and in the epic and label lists of the new-task
-  dialog. A single word wider than the line still breaks inside, rather than running past
-  the edge: on the branch map's tip such a word was cut off at the edge with nothing to
-  say it went on. A screen reader reads the title, and a copy takes it, as it was
-  written, with no space after a `/`.
-- **The board keeps its shapes in high-contrast mode, and its targets and edges on a
-  phone.** With a Windows contrast theme on, tiles, columns, the cells of an epic's row,
-  the list, the workspace panel and the settings sheet draw an edge instead of losing it
-  with their background, on every page and on every side; a tile reached with the keyboard
-  keeps that edge and shows its focus ring inside it, in the theme's highlight colour; a
-  toggle such as «By epic» or «Available», a picked filter, the chain chip and the menu's
-  «all / any» read as buttons rather than as plain words; and the connection dot of the
-  narrow sidebar no longer disappears. On a phone, the «+» for new work, the grouping
-  toggle when it shows only its glyph and the other icons in a toolbar, the comment
-  editor's formatting icons included, answer a tap across 44 px; the editor's «Text /
-  Preview» switch, when it moves to a second line, stands at that line's end; and an epic's
-  row that wraps starts its counts under the epic's number instead of left of its arrow. Its
-  card and chain are now two icons, named when pointed at, that come up at the end of the
-  row's last line, beside the title when that line is full and the title stays whole there,
-  or else on a last line with the note or counts they end, so at any width they cover neither
-  the title, the state, the counts nor the note of work out of sight, nothing shifts when they
-  appear, and the title keeps the words it showed. A short title keeps its state beside it
-  and its counts and icons on one line below, rather than leaving the icons a line of their
-  own. A window widened or narrowed to a width, or opened before its font arrived, draws
-  the row the same either way, and resizing it no longer adds an error to the browser's
-  console at each width where a row changes its layout. Where nothing can
-  hover they stay up, far enough apart to tap. Tab or Shift+Tab along an epic's row held
-  at the top of the board no longer scrolls the board back to the lane's start, and the
-  focus ring around the row's arrow and icons shows whole there and at the board's edges,
-  where the row of state names and the edge cut it. A tile brought into view under an
-  epic's row from the keyboard, opened with a press or moved up with Alt+↑, now stands
-  wholly below the row at the lane's usual gap instead of partly under it.
-- A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
-  control character, because the character check also stopped at 512 characters.
-- Moving the pointer from one graph card to the next no longer flashes the whole field
-  back to full brightness in between: the lit lineage passes straight to the next card's,
-  a card lights once the pointer rests on it for 120 ms so a sweep across the field lights
-  nothing it crosses, and leaving for empty ground restores the field after 200 ms. A
-  card's title and a zoomed-out card fade as they recede, as the lines already did. The
-  keyboard's focus still lights at once.
-- **«Loading» no longer flashes when you switch boards or open a card.** A read that answers
-  within 300 ms shows nothing in its place, and once «Loading» appears it stays at least
-  400 ms, so a read that ends just after it does not blink it away. The same rule now holds
-  for every loading panel and for a view whose code is still downloading.
-- A pointer resting on the hint under a field no longer lights the field as hovered, and a
-  press on the hint no longer puts the cursor in it. A field's label now names only the
-  field, and screen readers read the hint as the field's description.
-- The release check runs `npm ci` in `web` and `desktop` before anything else, so it
-  verifies what the lockfiles pin rather than whatever `node_modules` holds, and it
-  refuses a `node_modules` that is a link, because `npm ci` through a link empties its
-  target.
-- `tests/isolated.py gates` refuses an npm step on a `node_modules` that is missing or
-  differs from its lockfile, says in which directory `npm ci` is needed, and no longer
-  reports this as a failed step. Console messages in a step's summary are read in the
-  console's code page instead of coming out garbled.
-- **Priority means how much an item matters, and rank sets the order.** Urgent blocks work
-  or loses data; high is serious and could block work; medium noticeably affects work, with
-  a workaround; low is minor. The definitions show when you hover a priority on a card, a
-  tile, a list row or the chooser, and the tool schema and the agent skill say the same. The
-  values themselves are unchanged.
-- **The filter opens in its own field.** The «Filter» button is gone: a press in the field
-  or `/` opens the menu of values at once, all groups in sight and the picked ones marked,
-  and the empty field says it searches and filters. Tab and focus coming back from a card,
-  a dialog or another window leave the menu closed; ↓ opens it. With no value left to
-  offer, as in a search by number, the menu steps aside and the work stays in sight.
-- **Labels combine as you say.** The label group's head offers «all» and «any»: with «all»
-  each label narrows the work, as before, and with «any» one of them will do. Every view
-  and the counts follow, a word between the chips says which it is, a label pressed on a
-  tile or in a card joins in the reading in force, and Reset takes it out. Only «any» is
-  written into the address, so links made before read as they did.
-- **The way to combine labels is in sight as the filter menu opens.** The menu stands as tall
-  as the window lets it, and the label group, now last as the longest list, keeps its head
-  with «all» and «any» at the menu's lower edge until the list reaches it, so no scrolling is
-  needed on a real space or a short window.
-- **What can be done to an entry of a discussion is a quiet icon on its first line.** Reply,
-  Resolve and its removal, folding a resolved thread, Change answer and Make task outcome
-  stand beside the author and the time instead of as buttons in a row of their own under
-  each entry. They always show, say their name under the pointer and to a screen reader, and
-  grow to a 44px target on a phone and under a finger.
-- **There is one Reply.** A question, a comment, a report and a reply each have the same icon,
-  and it opens the one field under the last reply of that thread. Reply in thread is gone: a
-  thread is one level deep, so the two buttons only ever did the same thing. Leaving the field
-  brings focus back to the icon that opened it.
-- **A card's head reads as three rows with room between them.** The state, a waiting
-  question, the priority and the epic stand on the first; «Held by», the holder and the
-  action about them on the second; the labels on the third, which an item without labels
-  does not have. The holder is a bare link instead of a plate, and the rows stand 12px apart
-  instead of 4px.
-- **The head's one action is bare text.** «Claim», «Take over» and «Release» carry no
-  fill until the pointer is on them. A claim keeps the text ink and a takeover or a release
-  reads in the quieter one, so the claim still comes first.
-- **The identity line over a card's title and its state button align on their letters.** The
-  texts of each line share one baseline, and the dot, the chevron and the icons stand on the
-  middle of the lowercase letters beside them. A monospaced reference no longer sits a pixel
-  above its neighbours.
-- **«What comes next» on a card is now «Next step · 3 of 9».** A quiet line says it is a step
-  and where it stands in the list, the step's words follow it, and «All steps» goes to the
-  checklist with focus on it. The only step has neither the count nor the way to itself.
-- **A card's agents have a tab of their own, «Agents 44», after «Overview».** The block no longer
-  stands on the first screen of an open or a closed item, and a card without agents offers
-  no such tab. Every row stands at once, newest first, with no «Show all», and rows stand
-  under their parent session, whose «Open the parent session» stands once at their head
-  instead of in each row.
-- **An ambiguous link is said once for its group.** Under the group's head, one line gives the
-  coordinator's count, «ambiguous: the coordinator held 13 items», or the range of its rows'
-  counts, «13–19 items». The rows of that group no longer repeat it; each keeps its exact count
-  in its tooltip and its accessible description.
-- **The graph is easier to hit from a distance, and stops where the map still reads.** Below a
-  quarter of full size, a press anywhere on the ground of an open epic's frame opens that epic,
-  as its header does, and the pointer says so. A finger's tap there opens the epic too, though
-  the browser would move it to a card in the finger's reach; a tap centred on a card opens the
-  card. Cards on it open as before, a frame inside a frame opens its own epic, a drag still
-  moves the field and Tab stops where it did. «Zoom out»,
-  the wheel and a pinch now stop at the zoom «Fit whole graph» gives for what is drawn in this
-  window, where the button turns off; a filter, a fold or a larger window that leaves the camera
-  further out brings it up to that zoom.
-
-- **Changing the space keeps the view you were in.** The board, the list or the graph, and the
-  board's grouping by epic, stay as they were when you pick another project, go through all
-  projects or open a project from there. A filter, an open card and a chain stay with the space
-  they were set in, and Back returns to it with all of them. While the next space is read the
-  bar stays where it was, with the view, the grouping, the filter and New work item, and only
-  the place under it says it is loading; it used to give way to a page that said «Loading».
-- **A chain's rows in a card line up, and their titles can be read.** The «Waiting on» mark stood
-  about 2px above the rest of its row and made that row taller, and each row sized its own
-  columns, so a waiting mark or a holder began at a different place in every group. Every cell of
-  a row now stands on one line, rows of one line are one height, and the rows of all groups share
-  one set of columns, with a long holder cut short and its whole name in its tooltip. In a card at
-  its usual width the mark goes under the title, so a title has about 340px instead of 177px and
-  rows without a mark are no longer cut for one; who holds the task keeps its column. A card
-  widened to nearly its full 720px keeps a row on one line.
-- **A compacted context no longer hides that a session is waiting for you.** A session that
-  had finished its turn or asked for attention lost that mark when its context was compacted
-  while idle. The mark now stays until you answer.
-- **A click on a notification about a question goes to the question.** It used to open
-  the card at its top and leave the question to be found further down. The card now
-  brings the waiting question into view with the keyboard on its first field, however it
-  stood when the click came, and opens as usual if the question has been answered by then.
-  The notification's address has changed, so install the new desktop app before the new
-  server: an older app refuses the new address and the click does nothing.
-- A session opens in the folder it was started from, not in the folder its agent's
-  shell had reached. A compaction or `/clear` no longer moves the recorded folder,
-  and sessions already recorded are read right from where their transcript is kept.
-  The window, the terminal and the command to copy all use that one folder, and the
-  copied command now starts with `cd` into it.
-- In the app, a session from VS Code or another editor opens with one press and no
-  dialog: the window, a short pause, then the conversation. If the editor was not
-  running, the conversation follows once its window has had time to appear. In the
-  rare case that the conversation reaches the window too early and starts empty,
-  pressing again opens the right one. The browser still takes two presses.
-- The notice in the corner no longer stays for good after something worked: it goes
-  after five seconds of being seen, and waits while the pointer or the focus is on it
-  or while another window is in front. A refusal stays until it is put away.
-- That notice now says what it is about: a session by its holder and its place, a file
-  or a folder by its name, and a copied command by its session.
-- **The screen no longer blinks as a document opens over a card or the questions.** The
-  layer underneath dropped its dimming at once while the new one faded in from nothing, so
-  what lay under both lit up for a moment, and it went too dark as the document closed. Each
-  layer now keeps its dimming while it stands, so the screen under them only fades one way.
-  This holds for any dialog over a card.
-- **A chain with nothing to tell apart says it once.** With all its work in one state the
-  chain block in a card named that state twice, in the map's key and over the list, and with
-  one lane its name was a filter that narrowed nothing. The key and the filter now appear
-  only when there is a second state or lane, and the map, the figures and the list stand
-  clearly apart.
-- **On a phone a chain's titles keep the whole width.** A row's waiting mark or state word
-  stands under its title, so one row's mark no longer squeezes the title of every row.
-- **A card opens on the first click after a drag.** However a drag ended, in another column,
-  in the same one, back where it began, refused by the server or over nothing that takes a
-  tile, the next click on any tile was lost, and so was Enter on one. A click right after a
-  drop is no longer taken for the drop, and the release itself still opens nothing. A press
-  with a hand's small shake in it is now a click rather than a drag of a pixel or two.
-- **An answered question keeps no empty room before its options.** Their words start at the
-  row's inset, the same with a selection and without one. The selected option is told by its
-  ground and the word «selected», so the tick beside it is gone.
-- **Opening an option's description only adds lines under it.** In the form and in an answered
-  question its first line stays where the excerpt stood, at the same width and in the same type.
-- **Opening something in the list of waiting questions moves nothing above it.** The dialog
-  stands from the top instead of the middle, and the room for its scrollbar is kept from the
-  start, so what is on screen neither jumps nor breaks into other lines.
-- **The presses that open a comment are quiet glyphs.** They used to take a line each on every
-  question. A comment on a field opens from the end of the line naming the field, and a comment
-  on the question from the left end of the row of buttons, above which it opens. A written comment
-  shows a filled glyph and says so in its name. A question with one field offers only the comment
-  on the question; a comment an older answer has on that field stays to read and change.
-- **The field of your own option has no caption over it.** The row right above it says what it
-  is, and a screen reader hears the field named for the question it answers.
-- **An epic's header on the graph no longer moves when it folds or opens.** The two views
-  had two heights, so the text and the progress edge stood in different places in each.
-  The header is now one height, folded or open.
-- **An epic's title has room on the graph.** It stands on up to three lines of its own under the
-  reference and the state, as a card's does, instead of the 80 pixels left beside them.
-- **An epic with no tasks says «No tasks» on the graph,** with no empty progress edge and
-  no chevron, in place of «0 of 0 done». A frame whose work the view hides keeps its
-  counts and edge and offers no chevron until the view can draw that work; a stored
-  «open» for such a frame is ignored and kept for when it can.
-- **A folded epic on the graph says what it hides.** Its header reads «90 open inside»,
-  «90 inside» zoomed out and «+90» far out, counted by the epic and not by a filter, with
-  the sheets of a stack under it; the keyboard and the accessible name say the same.
-- **An epic's header on the graph is easier to hit from far away.** It is taller, and
-  zoomed out the whole band and the air round it are one target, 24 pixels on the
-  screen down to a zoom of 0.104.
-- **Tabbing into the graph no longer moves the camera the operator set.** The keyboard
-  entered on the first target whose centre was in sight, and pressing it centred the
-  camera on it if the edge of the field cut it. It now enters on a target wholly in sight.
-- **A subagent started for no named item moves the one item its coordinator holds.** One
-  launched with a number in its first prompt moves that item, and a coordinator holding
-  several items still moves only what its subagents are seen on.
-- **A Codex session's token totals read its rollouts again.** The counters had moved inside
-  each record, so `GET /api/execution/usage` found none in a real rollout.
-- **A compacted context no longer stops the work on the graph.** A session whose context was
-  compacted reads as it did before: a turn still running stays at work, and so do its
-  subagents, so their cards no longer say «waiting». A client that really restarted still
-  cuts off the subagents it left behind.
-- **A subagent's work moves on the graph for as long as it runs.** An item moves while a
-  live subagent wrote to it since it last started, holds one of its steps or was launched
-  with a description naming its number, however often its coordinator is woken in between.
-  An item a coordinator merely holds stays still, and a step a stopped subagent left moves
-  nothing.
-- **A subagent that fell stops moving the graph.** Its record stays active with no end, so a
-  subagent whose transcript has gone unwritten for two hours no longer counts as running. A
-  page left open learns of it within a minute, even when nothing else is written.
-- **The moving mark on a graph line has one length and one speed.** It used to be a share of
-  the line, so long lines carried long, fast marks and short lines tiny slow ones. A very long
-  line now carries the next mark on the way instead of hurrying one.
-- **The moving mark stays visible on a graph zoomed far out.** Its stroke used to thin below
-  a pixel with the lines it runs on; it now keeps a pixel and a half while its length shrinks
-  with the field.
-- **A card on a graph zoomed far out no longer shows three unexplained dots.** Its number
-  stands whole inside the block at any length, and what an agent is doing on it is in the
-  card's tooltip and accessible name, on its lines and in its frame's count.
-- **The card a number shows copies and can be selected.** It offers the number and a link to
-  the item as a card's head does, with the same icons and the same note when a copy is made or
-  refused, and Tab reaches both from the number. Its text can be selected with the pointer, which
-  a refused press used to prevent, and a selection keeps the card up until you press elsewhere
-  or press Escape, even if the drag ended outside it. A card standing over another number stays
-  as the pointer reaches it, where it used to give way to that number's card.
-- **A frame on a graph zoomed out says what its number counts.** Its header showed three
-  dots and «5» with no word; it now says «5 working» at every zoom, on the reference's line
-  where there is room and on the line under it where a fold leaves that free. Where neither
-  has room the mark gives way whole rather than as dots or a bare number, and the header's
-  hover text and accessible name say it. The number now takes the size and colour of its
-  word close up too.
-- **On a short window the graph's zoom buttons stay in sight and answer a click.** The graph
-  kept a height of its own and ran over them where the window left it less, so «Fit whole
-  graph» was hidden and a click on it opened a card; the graph now takes the room left
-  above them.
-- **On a phone held on its side the graph keeps room to draw.** In a window about 360px tall
-  or shorter the key and the zoom buttons took all of the height, the graph had none and
-  the buttons were cut. The graph now keeps up to a row of cards, as much as the window
-  allows while leaving a finger's room beside it, and the view scrolls down to the zoom
-  buttons; a drag on the graph still moves the graph, and one beside it scrolls the view.
-- An answer given in the interface now reaches the agent: a person answering, changing,
-  declining or withdrawing a question never produced a notice, a `from_person` line or the
-  `person_spoke` refusal, because the interface answers through a route those reads did not
-  count as Planning's.
-- A question's options show code in their labels as code, as their descriptions already
-  did: a label such as «The standard `vue/max-lines-per-block`» showed its backticks. In
-  the form a link in a label reads as its words, since a press there also chooses the option.
-- On a phone, and wherever a finger presses, the pencil that writes your own variant on a
-  review's point answers a tap across 44 px, as the comment icon beside it already did; it
-  answered across 28 px.
-- In a window a phone's width, the comment icon beside a question field's label answers a
-  press across 44 px with a mouse too, as every other icon there does; it answered across
-  28 px unless a finger pressed it.
-- An epic's row held at the top of the board no longer hides the first 4 px of the tile coming
-  out from under it, and in high-contrast mode the tiles passing beside it no longer show as
-  stripes at its sides.
-- The line over a question's answer that says who gave it, «Answered by agent worker-b», keeps
-  that phrase whole: where it does not fit beside the time, the time moves to the line under
-  it, rather than the agent's name breaking off onto a second line beside the time. An answer
-  recorded before Valkama could tell who gave it no longer calls its author an agent: it
-  reads «Answered by user», and a question declined then «Declined by user».
-- A resolved thread's line, «Resolved · you · 13 Aug, 14:00 · Moved to MAIN-14», breaks only
-  between its parts on a phone: a line no longer ends with a dot, the date no longer has the
-  decision's first word beside it, and a decision too long for the date's line starts a line
-  of its own.
-- On a phone, the comment's press on a question no longer adds a line of its own. It stands
-  beside the buttons where it fits there, and on the narrowest phones, where it does not, at the
-  start of the line above them: beside «Open task» in the list of questions waiting for an
-  answer, beside «Check status» past the deadline or after a send that failed, or over the room
-  kept for Don't answer to ask whether it is meant. At 320px the row of a question in its card, and of
-  one waiting in that list, is two lines instead of three, and one past its deadline in that
-  list in Russian three instead of four.
-- The panel that opens a session no longer ends a message with one word alone on a phone:
-  «Now open the session in it.» left «it.» on a line of its own at 390px, and «нём.» in Russian.
-- A task's system events print the session an agent wrote from as every other place does: the
-  start of its id in the metadata font, the whole id in its tooltip, and a link to the session
-  where Valkama knows it, instead of the whole 36-character id in the interface font.
-- The ring a key puts round the start of an agent's session, in an entry's head on a phone,
-  no longer crosses the tops of the time's digits on the line under it, and a start resting on
-  the foot of a card shows that ring whole, its lower side no longer cut off.
-- The Agents tab names each parent session by the start of its id as every other place does,
-  its first two groups: cut to eight characters, two sessions started within a minute of each
-  other read as one.
-- On the Agents tab, the line under an agent that holds its id stands as tall as the line of
-  its times, no longer a pixel taller.
-
-## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
-
-### Added
-
-- **The space's read model says which items an agent is at work on now.** `live_work` in
-  `GET /api/planning` and its event stream maps each such item to `working` (a session
-  in a turn wrote to it since its last prompt or a subagent of it holds one of its steps,
-  or an attempt is running), `held` (a session in a turn holds it but is not seen working
-  on it), `waiting` (the session is live and its turn ended or has not begun) or `quiet`
-  (silent for over a day, with `quiet_since`). It is read from the sessions behind the
-  item's claim and its open steps and from what sessions in a turn wrote, in five reads
-  whatever the size of the space, and no MCP tool answer carries it. See [Work-item context](docs/product-model.md#work-item-context).
-- **The graph shows the work an agent is doing now.** A card says «working» with the
-  pulsing working dots while a session's turn writes to its item, whether or not the
-  session holds it, while the session's subagent holds a step of it, or while an attempt
-  runs on it. A card whose item a live session holds says «held» with still dots while
-  the turn is about other work, «waiting» with still dots once the turn is over, and
-  «silent since» the session's last sign of life after a day of quiet; the key names held
-  work while a card shows it.
-  A line that reaches work being done now carries a short comet running to
-  its arrow, and a frame says how many items under it are being worked on, so a folded one
-  still shows the work moving inside it. «Stop the motion» in the strip above the field
-  stops all of it at once and is remembered in this browser for every space; stopped, or
-  under reduced motion, a live line is held still and wider. In a forced palette a live
-  line takes the palette's colour for what is picked out. The switch and the key's live
-  line are offered only while something on the field moves, so work a filter or a chain
-  leaves out brings neither, and a refresh that makes a line live or still changes it at
-  once. A card's live word is never cut: a long holder's name beside it gives way, and the
-  card's accessible name says the holder whole. Beside live work the foot drops «Claimed
-  by», so some of the holder's name always stays, and «silent since» names the day alone. The switch answers a pointer across 44px.
-- **The graph draws an epic as a frame round its work.** The frame's header names the epic,
-  its state once it has moved, and how its work stands in words — «8 of 21 done · 2 in
-  progress · 1 blocked» — over a 3px edge of the same counts in the board's hues. The
-  chevron folds a frame to its header alone, the rest of the header opens the epic, and the
-  work under no epic stands in a frame of its own. Lines run over the frames and end on a
-  frame where the work they reach is folded inside it. Zoomed out, a header keeps the epic's
-  reference and its edge; in a forced palette the frame is outlined and its edge fills what
-  is finished and dashes what has begun.
-- **A work item's number in a text shows its card.** Rest the pointer on the number for half
-  a second, or reach it with Tab, to see its state, title, holder and steps without leaving
-  what you are reading. A press still opens the item, Escape closes only the card, and a tap
-  opens the item with no card. A number in the open space costs no request; any other reads
-  the item's brief record once, which the card's read gives with `brief=true`.
-- **Comments form threads.** A reply stands under the comment, report or question it
-  answers, one level deep. In a card a question has replies of its own, with the field for
-  the next one in the same place, and threads open by their latest activity and hold still
-  while the card is open: a thread with news says «New reply» rather than moving. An agent
-  replies with `reply_to`, a comment's id, or `reply_to_request`, a question's id, on
-  `comment_work_item`, the `comment` group of `apply_work_item_changes` and
-  `POST /api/planning/work-item/comment`; a reply to a reply stands under its root, and the
-  answer names the root it joined. `get_work_item` takes `thread` to read one thread whole,
-  every comment in every read names its parent and carries `by_person` and `resolution`, and
-  `get_work_item_request` carries a question's replies. An export carries the new keys under
-  the same `interface_version`. See
-  [Threads and the resolved mark](docs/connection-contract.md#threads-and-the-resolved-mark).
-- **A thread can be marked resolved.** A mark holds who, when and a one-line decision; in a
-  card it folds the thread to one line and can be taken back, the heading counts what is
-  still open, and a filter shows only that. `resolve_work_item_comment`,
-  `POST /api/planning/work-item/comment/resolve` and the `resolutions` group of
-  `apply_work_item_changes`, up to 100 roots in one call, set it, and `reopen` takes it off.
-  The history records both as `comment_resolved` and `comment_reopened`, and no revision
-  changes. `get_work_item` with `unresolved: true` reads the roots without a mark, 20 at a
-  time, continuing with `comments_after`, and its counted reads add `unresolved_total`. A
-  search also finds an item by a mark's decision.
-- **An answer can carry an own option and comments, and be changed.** Every field with
-  options has «Your own option» as its last row, and a comment on a field or on the question
-  goes beside the choice; an agent sends them as `own` and `field_notes` beside `note` on
-  `answer_work_item_request`. An answered question shows every option of every field with
-  the chosen one set apart, and while its task is open it offers «Change answer»: the same
-  form on the answer in force, Save off until it differs, and Cancel asking before it
-  discards anything. An agent changes an answer with `change: true`, and the interface
-  through `POST /api/modules/planning/request/change`; a change that alters nothing and a
-  51st version are refused. The replaced answers are kept, behind «Previous answers» in the
-  card: the reads add `answer_version`, the compact form `previous` and the whole form
-  `history`, a changed answer comes again to a reader that passes `answered_after`, and a
-  person's change reaches the agent as `question_changed`. An export carries the new keys.
-  See [Questions and decisions](docs/connection-contract.md#questions-and-decisions).
-- **A path in a text opens what it names.** A path to a project's file or folder in a card or
-  a question, written in the text, in a code span or as a Markdown link, can be pressed: a
-  Markdown file opens in Valkama, another file in the editor Settings names at its line, and a
-  folder in that editor. A path that is surely one but opens nothing copies itself instead,
-  with a dotted underline; one that only looks like a path stays text until the server
-  confirms it. The page asks `GET /api/documents/resolve` what each path is, from the space's
-  root and then from the projects registered inside it, and nothing outside a registered
-  project's root is opened. See [Project documents](README.md#project-documents).
-- **A Markdown file named in a text opens in Valkama.** A press on a path to a `.md` file in
-  a card or a question opens the document over them, read-only: headings, lists, tables and
-  code drawn, at the `#kb:…`, heading or `:42` the path names, with a link to another document
-  opening in the same place and Back returning to where it was read. Escape comes back to the
-  link, and a draft under it stays. The file is read again when the window returns.
-  `GET /api/documents/read` serves it, up to 512 KiB, from inside one registered project.
-- **A document stands beside what it was opened from.** Where the window holds both, a
-  Markdown file opened from a card or from the panel of open questions stands in a pane to
-  their right rather than over them: from 1460 px beside a card at its opening width, 1200 px
-  beside the narrowest card and 1160 px beside the questions. Below that it stands over them
-  as before, and a window that crosses the width moves it across with the reader's place. The
-  two panes are one dialog: Tab goes through both, F6 and Shift+F6 move between them, the
-  first Escape closes the document and gives focus back to its link, and the next closes the
-  card or the questions, whose draft stays all along. The edge between them sizes the
-  document, which keeps a width of its own, and Enter on it folds the document away and back.
-- **A document can have a window of its own.** The new-window button in the viewer's head
-  opens the document at `/doc?project=<id>&path=<relative>#<anchor>`, alone in the window
-  with nothing of the shell, and closes it where it was, so focus goes back to its link. A
-  link followed there writes over the address, so a reload stands where the reader stood; a
-  refused read is said on the page, and a work item's number or a session is plain text,
-  having no card to open in. A browser opens the page in a new tab cut off from the first by
-  `noopener`. The desktop app opens it in a second window with the main window's settings,
-  which closes with the main window; any other address a page opens still goes to the system
-  browser.
-- **A document's file opens in the editor from its head.** A button in the viewer's head, over
-  a card, beside it and on `/doc`, opens the Markdown file in the editor Settings names, by
-  the same open plan as a file named in a text: at the line a link named while the reader is
-  still there, otherwise at the first line of the block at the top of the view. A file too
-  large, not UTF-8 or not text, which the viewer does not show, still opens there. A plan that
-  refuses copies the path and the shell's notice says why. A path pressed in a text that the
-  plan refuses now says why as well, where it said only that it could not be opened.
-- **An item's plan anchor opens in Valkama.** The mark beside a card's source and its row in
-  Relations open the plan in the document viewer at the anchor, in a browser and in the desktop
-  app alike. A source Valkama cannot find is copied as written, and the notice says why.
-- **A session opens where it was last open.** The session-start hook records where each
-  session is open — an IDE extension, its terminal, a terminal, Claude Desktop or the Codex
-  app — from a few named environment variables and, on Windows, the names of the programs
-  above it, and keeps none of their values. The holder in a card's head, a step's holder, an
-  agent, an attempt and a link name that place before the click, and a press opens the session
-  there: the Claude Code extension in its folder's window, Claude Desktop, the Codex app, or a
-  terminal that resumes it. Where only a program can start it, a browser offers the command to
-  copy. A session recorded before places opens where its transcript says, and one with no
-  place in the owner's fallback and then VS Code; a Codex session from the IDE extension opens
-  in the Codex app. A subagent opens through its parent. A session live in a terminal is not
-  started a second time: the button says where it runs, and once it has been silent for a day
-  offers, on a press of its own, to resume it if its window is closed. A session its client no
-  longer keeps says so instead of opening an empty one. `GET /api/open-plan` answers the steps
-  a press takes and `GET /api/open-places` what this machine can open; the desktop app runs the
-  steps, a browser takes one press for each.
-- **A card's read says who each holder is.** `GET /api/modules/planning/work-item` gives
-  the claim, each step and each agent an `executor`: the session a click would open, the
-  agent inside it, where that session was last opened, its client `family`, and whether it is
-  live, ended, gone, headless or none. The record adds `last_claim_executor` for whoever held
-  a closed item last. It costs the read one more statement, however many holders the card has,
-  and no MCP answer carries it.
-- **The agent working an item hears what a person did there.** Any write to an item
-  answers with `from_person` when a person acted on it in the interface since an agent
-  last wrote there: a comment or a reply, an answer or a changed one, a resolved mark set or
-  removed, a status change, an edit, a cancel. Each event is told once, the newest 20 with a
-  count of the rest.
-- **Client hooks bring the same news on their own.** Claude Code's `post-tool-use`,
-  `user-prompt-submit` and `stop` answer with a short "Valkama notice" when there is
-  news on the work the session holds: the orchestrator hears about all of it, a subagent
-  about the items where it holds the claim or a step. `claude watch`, registered with
-  `asyncRewake`, wakes an orchestrator that is idle, for example while it waits for a
-  background subagent. Codex is told at its next prompt or tool call. The `notify`
-  setting (`VALKAMA_NOTIFY=off`) switches this off. Beside the holders, whoever started
-  a thread hears the replies in it and whoever asked a question hears its answer, a
-  changed one too, and so does their orchestrator, even on an item they hold nothing of;
-  a resolved mark reaches only the holders. A notice that fails costs its hook's
-  lifecycle event nothing.
-- **Work item numbers show as links in Claude Code without the agent writing the address.**
-  `POST /api/hooks/message-display` answers Claude Code's `MessageDisplay` hook: a number
-  whose `/open` address leads to a card comes back as a link, on the screen only, and code,
-  existing links and URLs stay as they were. Nothing is logged or stored, and any failure
-  shows the original text. `valkama capabilities` names the address to register, under
-  `interfaces.http`.
-- **Windows notifications when an agent needs you.** A question or decision from an agent
-  and work moved to review show a Windows notification from the process that wrote them,
-  with Valkama's window closed too; a failed launch can as well. A question already on your
-  screen stays silent, several items within a few seconds become one notification, and one
-  that stops being true is taken away. A click opens the item, or the panel of open
-  questions for a notification about several, through the `valkama:` scheme the desktop
-  installer now registers. Settings → Windows notifications chooses the events and the
-  text, says whether Windows will show them, and sends a trial. They need the desktop app;
-  `doctor` reports the shortcut, the helper and autostart in one line. See
-  [Windows notifications](README.md#windows-notifications).
-- **The panel of open questions has an address.** `/open/questions` opens it in the desktop
-  app or the browser, as `/open/<number>` opens a card.
-- **A card copies the link to its item.** The link button beside the reference in the
-  card's head puts the item's short address, `/open/<number>` on the address Valkama is
-  served from, on the clipboard and says in the same line whether the copy happened. The address
-  opens the same card wherever it is followed, and the desktop app, which has no address
-  bar, now has a way to give it.
-- **The desktop app has a context menu.** A right click offers "Copy link address" on a
-  link, "Copy" on selected text, and Cut, Copy, Paste and Select all in a field, in the
-  language of the interface.
-
-### Changed
-
-- **The card's Execution tab is off by default.** Turn it on under Settings → General →
-  Interface. With it off, a card does not offer launching an agent; launching itself is
-  unchanged.
-- **The graph's open-or-all switch counts what the counts line counts.** Over the whole
-  space every item is on the field, as a card or as the frame it heads, so «Open» and «All»
-  now count epics and parent items too, and agree with «N open of M» above them rather
-  than counting cards alone.
-- **The space's graph is laid out by epic.** Each epic, and each item that grew children,
-  holds its work in a block of its own, and the work under no epic holds the rest, so every
-  open item is on the field and the «Unlinked» switch is gone. A block with no open work or
-  more than twenty open items starts folded to its heading, except that the work under no
-  epic with nothing open folds only past twenty drawn items, so «All» shows a few finished
-  ones without a press. A link to an epic is drawn to that epic's block rather than dropped,
-  and several links running the same way between two blocks or cards are one line, solid
-  when any of them blocks. Blocks that hold open work, with the blocks linked to them, come
-  first as the field is read, and blocks of finished work after them. In a space with five
-  or more unlinked blocks of open work, those blocks are stacked to fill the field's rows
-  rather than strung out in one strip over empty field. A chain's graph is drawn as before.
-- **The graph is laid out again only when what it draws changes.** A refresh that changes
-  a state, a holder or a title is laid on the drawn graph without a new layout, and a line
-  lit by the pointer or the keyboard stays lit while its item is drawn. A block the operator
-  folds or opens is remembered per space in this browser (`valkama-graph-frames`); outside a
-  filter, a choice that matches the block's default is forgotten. Under a filter a block
-  still counts all of its epic's work.
-- **The graph's camera and keyboard know the epic blocks.** The field opens on its first
-  heading or card as it is read — or, when that first screen holds only finished blocks, on
-  its first open work, so a phone never opens on finished work alone. Every framing
-  measures the blocks as drawn, and folding or
-  opening a block moves the camera only across, so its heading stays where it was pressed.
-  A resize brings the drawing back when no heading or card is left in sight, a block's
-  empty middle not counting.
-  The arrows also reach each heading's two buttons, fold or open on its left and the epic
-  across the rest (the work under no epic has only the first), and once a fold hides the item
-  the keyboard stood on, the field's Tab stop is that block's fold button. Otherwise Tab
-  enters the field where the camera looks: on the first heading or card in sight as the
-  field is read, so the field does not jump to a block out of sight. Right from a heading's
-  fold button is its epic's button, and Left goes back. Zoomed out past reading, where the
-  fold buttons are hidden, Tab still enters the field on a heading or card it draws; the
-  work under no epic keeps its fold button there, its heading's one button. Focus on a fold
-  button the zoom hides moves to its epic's button instead of dropping to the page.
-- **The graph's first layout no longer waits for its worker to load.** The worker starts
-  when the page knows the graph is coming — the address names it, or the pointer or focus
-  rests on the switch to it — and loads ELK while the space is read. A worker nobody takes
-  within a minute is ended.
-- **The graph keeps one layout worker while it is open.** Every layout started a worker of
-  its own, which loaded ELK again before it could begin: about a tenth of a second on each
-  change of filter, scope or data on an idle machine, and seconds on a busy one. The graph
-  now lays out on one worker for as long as it is drawn and ends it when the view closes. A
-  layout asked for while a superseded one still runs ends that worker and starts on a fresh
-  one at once, so the new drawing never waits behind the old; a layout that fails or does
-  not answer within 30 seconds ends its worker too, and Retry starts a fresh one.
-- **The history names the question an event is about.** A question asked, answered,
-  changed, declined or expired is named by its title — «Question “Where do the comments
-  go”» — from the questions the card has already read for its discussion, so the history
-  sends no read of its own. A question older than the newest the card reads stays unnamed.
-- **What opens more of a text is lighter than what acts on it.** «Show all» under a long
-  text, «Show N more replies» and a resolved thread's Expand stood as chips of the same
-  height and fill as Reply and Resolve, three rows of them between a thread's root and its
-  replies. They now rest bare, as a chain's and a lane's «show more» do, with their words in
-  line with the text they open; the actions keep their fill.
-- **A segmented choice takes one Tab stop and the arrow keys.** The work view switch, the
-  graph filter, a chain's scope and the discussion's thread filter are radio groups: Tab
-  reaches the chosen segment, and the arrows, Home and End move the choice. A card's
-  sections, Settings' sections and an editor's Write and Preview are tabs over the panel
-  they show, and a screen reader hears the panel named by its tab: Left, Right, Home and
-  End walk them, showing a card's section or the preview as they go, while in Settings they
-  only move focus and Enter or Space opens the section, since Diagnostics runs the
-  installation's checks when it opens. Each segment was its own Tab stop before, and the
-  arrows did nothing.
-- **The history says what a record id stood for.** A thread's mark names the thread by its
-  first words and its decision instead of the comment's id, a link reads from the card's
-  side («Led to MAIN-7» rather than «discovered-from from MAIN-7»), and a question's id no
-  longer stands in the row. The search still finds the recorded line.
-- **Breaking for every running client: store schema 10.** The first open by this build
-  takes a verified snapshot labelled `preschema10` beside the store, then, in one
-  transaction, gives every comment an empty parent and resolve mark (`reply_to`,
-  `reply_to_request`, `resolved_at`, `resolved_by`, `resolution`, `resolved_call_id`),
-  numbers each question's answer (`answer_version`, 1 for one already answered), adds
-  the table of replaced answers (`work_item_request_answers`), widens the history's
-  actions with `comment_resolved`, `comment_reopened` and `request_changed`, gives
-  every session an empty place (`opened_in`, `opened_host`, `opened_folder`,
-  `host_session_id`), and adds the owner's notification settings
-  (`owner_alert_settings`, empty until saved). Every existing row keeps its values.
-  Triggers refuse a comment with two parents, a reply whose parent is itself a reply, a
-  reply on another item than its parent, and a resolve mark on a reply; the tools place
-  a reply to a reply under its root before they write. A store older than 9 takes the
-  schema-9 and schema-10 steps in one open under its `preschema9` or `preproductmodel`
-  snapshot. A schema-9 build refuses the upgraded store with `StoreTooNewError` and
-  leaves the file unchanged, so restart every agent client after pinning this release
-  with `launcher install`. To go back, stop every process that holds the store, delete
-  the `-wal` and `-shm` files beside it, put the `preschema10` snapshot in its place, and
-  only then pin the earlier release; everything written since the upgrade is lost.
-  Pinned first, the earlier release reaches every running session within seconds and
-  refuses the store still at 10. The README's "Migrating an older store" has the
-  details.
-- **Breaking for an agent that answers a question: a note no longer stands in for a
-  required field.** `answer_work_item_request` and the interface's answer refuse an
-  answer that leaves a required field without a value or an own variant, naming the
-  field: `answer <field> is required; give an option or your own variant in own; a note
-  no longer stands in for a field`. The note is a comment on the whole question. An
-  answer given earlier with a note in place of a field stays as it was written and
-  reads as that field unanswered with a comment on the question.
-- **`get_work_item` reads the threads with the newest activity.** Its default read gives
-  the roots of the 5 threads with the latest activity, each with `replies` and
-  `last_reply`, where it gave the 5 newest comments, so a reply in an old thread lifts
-  that thread into the read. `comments_after` still gives every comment after an id,
-  roots and replies flat, and `full` every one. The counted reads add `threads_total`
-  and `unresolved_total`. `merge_work_items` moves a comment with its thread and leaves a
-  report's thread with the report on the merged item. The HTTP read of a card stays
-  flat, each comment naming its parent.
-- **An attached store another build wrote says why its card cannot be read.** An
-  attached store is never migrated, so one a schema-9 build wrote lacks what this build
-  reads on a card. That card's read answers 409 `store_schema_mismatch`, the page says
-  what that means in both languages with no retry to press, and `/open/<reference>`
-  still leads to the card. A store old enough that its whole space cannot be read
-  answers the same code where it used to drop the connection.
-- **The hook spool writes a session start as version 2.** The line carries where the
-  session is open; every other event keeps version 1, and this build reads both. An
-  earlier build sets a version-2 file aside as `*.rejected`, which `doctor` counts until
-  the file is deleted, so after going back a session start still waiting in the spool
-  is not recorded. It belonged to the upgraded store that going back discards, so
-  nothing more is lost.
-- **Opening a session follows the server's plan.** Settings → Opening sessions and files
-  replaces the one opener per client family with a place to fall back to, an optional
-  place to always open in, and the editor files and folders open in. A stored opener
-  becomes the fallback it named, so VS Code and Cursor now open the session in their
-  extension rather than its folder; Codex's stored terminal, which earlier builds saved
-  by default, gives way to VS Code, and an own command becomes the place to always open
-  in. The desktop app takes only the target and the owner's settings from the page and
-  fetches the plan itself, and a session no longer needs its space bound to a project to
-  be opened.
-- **An agent cannot close past what a person said.** Its move to a completed or
-  cancelled state is refused with `person_spoke` while a person acted on the item since
-  an agent last wrote there, and the refusal quotes what they did. A comment sent in the
-  same call does not lift it; `force` still does and is recorded.
-- **A client hook starts faster.** The launcher starts it without importing `runpy` and
-  `pathlib`, which took about as long as the rest of the hook. Every other command starts
-  as before.
-- **A new mark: a spark.** A long stroke, a triangle under its short arm and a
-  four-pointed star replace the gradient V everywhere the product shows its mark. In the
-  navigation it is one ink, as before. The browser tab, the taskbar, the tray, the
-  installer and a notification show it in two flat colours, light grey and teal, on its
-  own dark rounded tile; no version of the mark uses a gradient any more. The Windows
-  icon now holds a frame drawn at each size Windows shows it (16, 20, 24, 32, 40, 48, 64
-  and 256 pixels) instead of one 256-pixel image Windows shrank, and the tray takes the
-  small frame, so the star stays apart at 16 pixels. The installed desktop app shows the
-  new icon once it is rebuilt and reinstalled.
-
-### Fixed
-
-- **The working dots stay drawn in a forced palette.** They are a fill in the text's colour,
-  which a forced palette clears to its ground, so a loading panel, a card's live mark, a
-  frame's count and the graph's key all lost them; they now keep the palette's text colour.
-- **A name over a changed answer reads whole on a phone.** «changed · time» took most of a
-  narrow card's line, and the agent's name beside it stood in what was left, a word fragment
-  to a line, broken inside its words. The time stays at the end of the name's first line
-  while the name keeps at least 14 characters' width there; with less, the time takes a line
-  of its own under the name, still at the end, and the name the whole width. A name shorter
-  than that still shares the line with a time that fits beside it, and wider cards change
-  nothing.
-- **A long name over a question or its answer leaves the time at the end of the line.** The
-  agent that asked and the one that answered still pushed the time under a name too long for
-  the line, to its start, as threads and earlier answers no longer do. Both now keep the time
-  at the end of the first line and wrap the name whole beside it.
-- **What shows more of something reads apart from what acts.** «Previous answers», a
-  question's «Comment on this field» and «Comment on the question», a card's «Show all» under
-  its agents and «Show all» under the threads a view hides still wore the filled weight of
-  an action, level with Send and Change answer beside them. They are now bare at rest, with
-  their words where the lines they open start, as a thread's and a text's own toggles are;
-  an option's chevron takes the same weight.
-- **A refused choice in a question is marked, not only red.** «Choose one of the options.»,
-  «Tick at least one option.» and «Choose Yes or No.» under a question's field differed from
-  the text around them by colour alone, which a forced palette paints over. They now carry
-  the alert mark a refused text field already has. A text answer and your own option's words
-  keep the doubled edge they already showed; the choices themselves have no edge to double.
-- **The interface check sees a tab role passed as an object.** `check:ui-system` kept tab,
-  tablist and tabpanel roles to the shared segmented control and tab panel only where the
-  role was written on an element; one handed over through `v-bind`, from a script, a
-  composable or a variable a `:role` reads, went through. It now refuses those as well.
-- **Memory stands whole on the frame it is chosen.** A card read Memory's knowledge source
-  only once the section was shown, so the section appeared with a line saying it was being
-  checked and then grew by the provider and its path; on a phone the card's sections, stuck
-  above it, settled a frame later. The card now reads the source as it opens, as it reads
-  its attempts.
-- **A label stays a chip in a forced palette.** High-contrast modes clear the ground that
-  was a label chip's only boundary, so a card's and a tile's labels read as plain words, a
-  filter to press with nothing showing it could be pressed. A chip now draws its edge there.
-- **A step's holder stands as far from its dot as the words before it.** «завершил ·» put a
-  word's space before the dot and twelve pixels after it; the dot now has the same room on
-  both sides, as the dots of a card's identity line do. On finished work «Ранее отвечал:» is
-  followed by a word's space to the holder, not the wider gap that parts two facts.
-- **«What comes next» is set as the text under a heading.** The step's words took the page's
-  16px, larger than the 15px heading over them; they now take the size and leading of a
-  description.
-- **A long name leaves an entry's time where it stands.** Above a thread's root, a reply and
-  an answer a change replaced, a name too long for the line pushed the time under it, to the
-  line's start, while the entry beside it showed the time at the end. The time now keeps the
-  end of the first line, and the name wraps whole in the room left to it.
-- **A card's unresolved count is what the unresolved view shows.** «Unresolved N» and the
-  heading counted comment threads only, while the view also kept a question still waiting
-  for its answer, so the number stood one short of the rows under it. A waiting question
-  now counts, and the line under the view says what it hides in threads: «1 resolved thread
-  hidden», «Скрыто 5 разобранных веток».
-- **Escape keeps a thread's decision until you say to drop it.** In a card, Escape or Cancel
-  in the line that marks a thread resolved closed it and dropped what was typed in it. With
-  words in it they now ask «Discard this draft decision?», as a reply's field does, and a
-  second Escape keeps them; an empty line still closes at once and gives focus back to
-  Resolve.
-- **A reference in text wraps with the text.** A work item's number, a path or a file was
-  drawn as a box that moved to the next line whole, so a long path left the line before it
-  half empty and could leave the comma after it alone on a line, worst in a question or a
-  thread on a phone. It is now a link in the line like any other: it breaks with the words,
-  a path also after each `/`, and what is written against it stays on its last line. A
-  number or a document that opens is a link to its address, `/open/<number>` or the
-  document's own page, so in a browser Ctrl+click and the middle button open it in a new
-  tab; the desktop app opens every press in place. What only copies, opens a file in the
-  editor or shows a record stays a button, with Enter and Space.
-- **A long card and a large space open.** The interface refused a card with more than
-  500 comments or 1000 history events, and any module answer of more than 16384 values
-  or 1 MiB of JSON, which took the Planning directory of a space past about 1170 items
-  with it. It now reads an answer of any size the server sends, and holds each list and
-  text only to a bound the server itself keeps.
-- **A launch from Valkama that ended is recorded.** The listener's reaper held a
-  transaction open around each pass, inside which recording an ending could not start
-  its own, so an ended launch got a closed attempt and a warning but no session status,
-  no comment and no move to review. It now gets all three, and the reaper no longer
-  takes the store's write lock every two seconds with nothing to write.
-- **Tab goes on from where a card was pressed.** A press on plain text in a card or a
-  dialog left Tab starting from the top of what held it: Shift+Tab after a press in the
-  bar went to the comment field and scrolled the card to its end, and Tab after a press
-  far down went back to the first fact at the top. Tab and Shift+Tab now go on from the
-  place pressed, as on a page, and still come round at the ends of the card.
-- **A link Tab reaches in a long text stays in sight.** Tab to a link below the cut of a
-  folded text opens the text, which moved the link away from where the browser had
-  scrolled, so focus sat on a link below the window. The link is brought back into view.
-- **A forced palette keeps controls legible and what is chosen.** Windows' contrast
-  themes, or any forced colour palette, cleared the fills controls are drawn with: a
-  switch showed nothing of which way it was thrown, a button read as text, and the
-  pressed segment of a segmented control, the current page in the navigation and the
-  suggestion Enter takes could not be told apart, while a button waiting on its answer
-  looked ready to press. Each now keeps an outline and a switch its own colours; the
-  pressed segment and the current page take the palette's colours for a selection, the
-  suggestion an edge, and the waiting button the palette's colour for unavailable text.
-- **A state word on the branch map's tip reads.** The active group's blue stood at
-  4.10:1 on the tip's ground; the word now takes the muted ink, at 5.41:1, and the dot
-  keeps the tone.
-- **A transition's reason is checked before the item moves.** A reason long enough to
-  overflow the history entry, which reads `<state key>: <reason>`, used to move the item
-  and then fail on that entry, naming `event.detail`, a field the caller never sent. The
-  reason is now refused by its own name, `reason must be at most N characters`, where N
-  leaves room for the state key, and nothing is written. The same applies to a `transition`
-  inside `apply_work_item_changes`, which refuses the whole batch. A reason is never cut to
-  fit.
-- **An answer no call gave no longer reads as an agent's.** A question answered outside
-  any call, by a launch or before calls were recorded, said `by_person: false`, as if a
-  tool had answered it. It says `null` now, as a comment and a replaced answer do.
-- **A notice can be seen and heard from inside a card or a dialog.** The notice at the
-  window's corner lay under every open card and dialog, so what a press there said reached
-  nobody. It now lies above them, and its status region is always in the page, so a screen
-  reader announces a notice instead of meeting it with its region, a repeated one too.
-- **A press no longer lands on what the card's bar is fading in or out.** Scrolling a
-  card fades the reference line or the action out of its bar and the title or the action
-  into it, and for the length of a fade they took a press: a press could go down on
-  something already leaving and lose its click when the fade ended, or a tap on an
-  empty-looking place could start a takeover. What has begun to fade out takes no press
-  now, what fades in takes one once it is half there, and a part a press went down on
-  stays until the press ends.
-- **A write that names no revision is no longer refused for one.** Agents writing to one
-  item at once got `revision_conflict` ("work item is at revision 30, not 0") on ordinary
-  reports, summaries, edits, transitions, claims and checklist writes that passed no
-  `expected_revision`: each read the item before it took the write lock, and the guarded
-  write compared what it had read. The read now happens under that lock, so a revision
-  is compared only when the caller names one. A merge read the same way could drop a
-  checklist step added to the surviving item in between; it no longer can. Deleting an
-  item while another agent gave it a child answered with a raw `FOREIGN KEY constraint
-  failed`; the child is now counted under that lock and the delete is refused naming it.
-- **A press in the instant a question's buttons move no longer declines it.** The step of
-  "Don't answer" ended when its buttons moved, but that was seen only at the next frame, so
-  a press landing between a question folding above and that frame still confirmed the
-  refusal. The buttons are now compared when the press goes down as well: one that finds
-  them moved ends the step, and if it went down on them it reaches neither, so it writes
-  nothing, not even what Send would. Keys on a button in focus work as before.
-- **A click no longer rings what it lands on.** A question's heading, how it ended, the
-  question itself and the comment field took a focus ring from a plain mouse press. The
-  ring now shows only where the keyboard put focus or where the interface moved it — to
-  how a question ended, to the next question, to why a send failed — whatever was used
-  before. A text field shows focus by turning its own edge blue, for a click as for Tab,
-  with no ring around it.
-- **A note in a card's head is never cut.** What copying the reference, the link or the
-  plan anchor did is shown as a check, or a mark when it failed, with its words beside it
-  where they fit whole; the date shortens first to make room. A phone-wide card used to
-  show «Ссылка скопиров…». Screen readers hear the whole sentence either way.
-- **A document beside a card keeps its title.** Its four icons stood 16 px apart on the
-  title's row and left a pane of 480 px about 220 px of title and the last letters of the
-  path. Its actions now stand 4 px apart as one group, the way out apart from them, and
-  under 560 px of head they take a row of their own under the way out, so the title and the
-  path have the row.
-- **What a dialog is about reads as a note under its title.** The line under the title of
-  the session panel and of other dialogs, a session's client and id or a task's number,
-  stood flush under it in bold; it now stands a step lower in the weight of ordinary text.
-- **A document's page keeps its lines to a reading length.** On a wide window a paragraph
-  ran to the page's whole column, over a hundred characters a line. Text now keeps to about
-  seventy, while a table or a block of code still takes the column.
-- **A failed read stands out from what it failed in.** In a card or a document the panel
-  that says a read failed was the ground's own tone, so only its red edge showed, bent by
-  the corners into a bracket. The panel now lies a step above the ground
-  with a straight edge, and the dots of a read under way start where the content will.
-- **A long identifier in a document's table stays whole.** A word longer than a column's
-  measure, plain or written as code, was broken in the middle; it now widens its column, and
-  the table scrolls in its frame as a wide table already did.
-- **Escape closes a refused document, not the card.** A document opened beside a card that
-  could not be shown — over 512 KiB, a read the server failed, a file no longer there — left
-  focus on the card's link, so Escape closed the card and dropped focus on the page. Focus
-  now goes into the document whatever its read comes to, and Escape closes the document
-  alone and gives focus back to the link. Focus moved during the read stays where it was
-  moved, and a read begun by the window's return never takes it, so typing in the card is
-  not cut off when a refused file turns readable.
-- **The folded document strip answers to what it says.** Folded beside a card, the strip
-  shows «Document: <title>» but was named «Document width», so a voice command naming what
-  is on it found nothing. It is now named by those words, with «Document width» as its
-  description.
-- **Code in a document's list widens as other code does.** A block of code inside a list item
-  was held to the text's end and scrolled there, while a table beside it took the wider
-  column. It now reaches past the text as far as that column, from the item's own start, and
-  only as far as its longest line asks.
-- **A phone-wide table shows the columns after its labels.** A column of labels took the
-  measure a line of prose reads at, which on a phone is the whole frame, so a table of
-  counts showed its labels and nothing else. Beside other columns a column now takes at
-  most part of the text's width; a long identifier still widens it.
-- **A table with an empty head is named without it.** A table whose head over its labels is
-  empty was announced as «Table: , MAIN, OTHER»; empty heads are now left out, and a table
-  with no words in its head is announced as «Table».
-- **A frame of code says its language.** A block of code too wide for the document, which
-  the keyboard can reach and scroll, is announced as «Code block: ts» when its fence names a
-  language, rather than only «Code block».
-- **A path before a tag is a path again.** A path with a tag written against it, as
-  `docs/a.md<br>` where a table cell breaks its line, was read as a template and stayed
-  text. A name in angle brackets is still a template where the path goes on around it —
-  `tmp/<task>/`, `docs/<name>.md` — and anywhere else a tag only ends the path.
-- **No space before a comma after code.** A code span stands on a ground inset from its
-  words, and beside a comma, a bracket or a quote written against it that inset read as a
-  space: «`App.vue` , both». On a side something touches, the inset narrows to 2 px.
-- **The waiting list no longer says there are no questions above questions.** A question
-  that closed while this window held something in it stays in «Needs my answer» to say how
-  it ended, and the line above it read «No questions need your answer». It reads «Waiting
-  for an answer: 0 — the questions below have closed» now.
-- **A choice not sent is said when its question closes elsewhere.** A question answered in
-  another window while this one had an option chosen in it folded as if nothing had been
-  chosen; only words were kept and shown. It now says «Not sent. This is what you had
-  chosen:» with a line per field, and the words of a text answer join the words kept, which
-  a closing used to drop.
-- **A dialog on a phone takes the whole width.** A dialog kept a 20px gutter from the window
-  and a 24px inset inside it at every width, so on a phone the questions waiting for an
-  answer gave an option's text 184px of 390. In a window 620px wide or narrower, where the
-  card already takes the whole width, a dialog does too, with no corners and a 16px inset
-  shared by its head, body and foot; the finder still stands just under the top.
-- **A question's own comment stands apart from its fields.** «Comment on the question» was the
-  same press, the same step away, as the comment on the field above it, and read as one more
-  comment on that field. A rule now sets it off with the buttons under it. With that comment
-  open, the room kept for «Don't answer» to ask in stood as an empty band of about 45px above
-  the buttons; it now stands in the buttons' row beside the two answers, and on a row of its
-  own only where that row has no room.
-- **How long ago stays on one line.** A span of two units, such as «2 дн. 23 ч», broke
-  between its units on a phone-wide card, in an agent's row and in a silent session's
-  panel. The space between the units no longer breaks, as the one inside each unit never
-  did.
-- **Settings tells an editor from an app.** The places a session or a file opens in drew
-  one monitor for VS Code, Claude Desktop and Codex alike. An editor now draws code
-  brackets, and Claude Desktop and Codex a glyph each of their own.
-- **A setting over several controls is named at their top.** «Claude Code», «Codex»,
-  «Other clients» and the notification events stood half way down the places and
-  checkboxes they name; each now stands on the line of the first of them.
-- **An error reads as one without colour.** Under a field, in a text editor's foot and in
-  Settings, an error differed from the hint beside it only by its red, which a forced
-  palette paints like any other text. It now carries a warning mark, and a refused field
-  or text doubles its edge, which a forced palette keeps.
-- **A program this computer lacks is said once on a card.** Where every session would open
-  in VS Code and VS Code is not installed, «VS Code is not installed» stood beside the
-  holder, every agent and every step, in the ink of the name before it. The card now says
-  it once under its facts, with where to choose another place; each of those sessions keeps
-  a mark whose name gives the reason, and an agent's row says what a press would have done.
-  What a session alone is, such as gone or running without a window, is still said on its
-  row, its holder's name now in its own ink and the mark right after the last word.
-- **A card's holder has the line under its facts to itself.** Beside the action a holder
-  too long for what was left wrapped its place onto a second line, and its plate kept the
-  width of the first. The holder and the epic now take the whole width under the state,
-  priority and action, where most holders read on one line.
-- **A failed read of the Windows notifications stands apart in its group.** Once the panel
-  took the sheet's tone it lay flush under the group's head, in the same tone, and ran into
-  it, and its round corners stood out of the group's edge. It now stands inside the group
-  with the rows' inset on every side.
-- **A failed read on the workspace lies one step above it.** Where the panel that says a
-  read failed stands on the workspace panel itself — the Work module, every project's work,
-  installation health, the shell's recovery and a task's link — it took the sheet's tone,
-  two steps up, and stood off the page at 1.41 instead of lying on it at 1.16. Those hosts
-  now give it the ground's tone; in a card, a document and a settings group it keeps the
-  sheet.
-- **A failed read keeps its disc in a forced palette.** With Windows contrast themes on, the
-  palette cleared the red disc beside «Could not load this view» to the ground, and only the
-  edge was left to say something failed. The disc now takes the palette's text colour.
-- **A document's page is one column in the middle of the window.** On a wide window the
-  text kept to its reading measure at the start of a 56rem column while the head ran the
-  whole column, so its actions stood about 300px past the end of every line. The head and
-  the text now stand in one column as wide as a line, in the middle; a table or a block of
-  code wider than that grows by the same on both sides, as far as the old column. A
-  document beside a card or over it is set as before.
-
-### Removed
-
-- **The graph's «Unlinked» switch, and the line that said how many parent tasks it drew as
-  groups.** Every open item now stands in its epic's frame, or in the frame of the work under
-  no epic, so the whole space leaves nothing out: an item linked only to its epic is no longer
-  hidden, and the line promised groups the graph never drew. The key names the parts of the
-  frames' edges that are drawn.
-- **The desktop app's own way to open a plan anchor in VS Code.** The `valkama:open-source`
-  bridge, its path check and the desktop app's reader of the project projection are gone; the
-  anchor opens in the document viewer, and a file in the editor through the open plan.
-- **The notification settings no code obeyed.** The browser-stored `notify` and
-  `notifyEnabled` fields, their seven events and their strings in both languages are gone,
-  and a stored value drops them when it is next read. Settings → Windows notifications
-  replaces them, and keeps its choices in the store.
-
-### Security
-
-- **A session id or a folder can no longer put a flag or a command on a terminal's command
-  line.** The desktop app passed a session id that began with `-`, such as
-  `--dangerously-skip-permissions`, to `claude --resume` and `codex resume` as a flag, and
-  gave Windows Terminal a folder holding a `;`, which it reads as the start of another
-  command. An id now starts with a letter or a digit, as every Claude Code and Codex id does,
-  and a resume whose folder holds a semicolon is refused with the rest of its plan.
-- **A folder named like a project in another case is no longer read as that project.**
-  Windows can keep a folder case-sensitive, and WSL makes its folders so; there `proj` beside
-  a registered `Proj` is a sibling, but the document routes and the opener compared paths with
-  case folded and read, resolved and opened files in it as the project's own. The path a link
-  leads to is now compared with the root as the disk spells both, and the sibling is
-  `outside_root`.
-- **A document is read only from the file the check passed.** `GET /api/documents/read`
-  checked where a path leads and then opened it by name, so a folder on the way swapped for a
-  junction in that moment had a file outside every project read. The path of the open file
-  is now checked again before anything is read, and one outside is `outside_root`.
-- **A click no longer fails whole on a folder the app would not take.** The server offered a
-  folder rooted on no drive (`\work\repo`), a resume in Windows Terminal from a folder
-  holding a `;`, and a file in a project on a network share, and the desktop app refused each
-  plan entire as `invalid-plan`. The server now applies the app's own rule: such a session
-  explains `no-folder` or resumes another way, and such a file is `invalid_path`.
-- **The owner's own command gets no folder holding a `;` either.** A resume in Windows
-  Terminal already refused one, but `{cwd}` in the owner's command took it, and that
-  command may start Windows Terminal itself, which would run what follows the `;` as another
-  command. Such a folder is now passed over, and a command that needs `{cwd}` with no other
-  folder is refused as `no-folder`.
-- **A resume in a terminal no longer runs a program the repository holds.** The desktop app
-  started Windows Terminal in the session's folder with `cmd.exe /k claude --resume <id>`,
-  and `cmd` looks for a bare name in its current folder first, so a `claude.cmd` committed to
-  that repository ran in the client's place. `cmd.exe` and the client's CLI now go by their
-  full paths, the CLI as the app finds it (`claude.exe`, or `codex.exe` beside the Codex app),
-  and only the tab starts in the folder. Without the CLI the resume is refused as not
-  installed.
-- **The owner's own command runs the program on the PATH, not one in the repository.** A
-  command such as `wt -d "{cwd}" …` started in the session's folder with its program named
-  alone, and Windows looks for such a name in the current folder first, so a `wt.exe`
-  committed to that repository ran instead. A program named without a folder is now looked up
-  on the `PATH` alone, and one that is not there starts nothing; a path the owner wrote runs
-  as written.
-- **A window of the desktop app hands the system only a web or mail address.** A link a
-  window opened or followed off Valkama's origin went to the system whatever its scheme, so
-  a `file:` or `ms-settings:` address asked Windows to start the program that claims it. Only
-  `http:`, `https:` and `mailto:`, the schemes the page links, now leave the app; the rest
-  open nowhere. The links of an open plan go through the session opener as before.
-- **No page of Valkama can be shown in a frame.** The app's pages, the document page and the
-  page a click on a card answers carried no framing policy, so another site could frame one
-  and lay its own page over a click on Valkama. Each now carries
-  `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`.
-
-## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
-
-### Added
-
-- **A question is answered in the task's discussion.** It reads as a comment: one still
-  waiting stands right under the comment form however old it is, and one that has ended
-  takes its place by time, folded to its prompt with the reply under it. Selecting only
-  selects and Send sends, the same for every kind of field; nothing is chosen for you,
-  and a recommended option only says so. "Your own answer" is always there and stands in
-  for what is required. A reply says "You" only for an answer given through this interface,
-  and otherwise names the agent.
-- **Options with long descriptions keep the choices in sight.** A description of one line
-  stands under its label, a longer one shows its first words, past six described options
-  only the labels stand, and each opens on its own press without selecting anything. What
-  is chosen stands whole under the options and above Send, so nothing folded is sent
-  unread, and choosing moves no row.
-- **No press on a question holding nothing writes,** whatever comes to stand under the
-  pointer, as when an agent answers the question above or asks a new one. "Don't answer" takes
-  two steps: the first press writes nothing and asks on the spot, with "Back" in the very box
-  of that press and the way on in the box of Send, so pressing again without moving only goes
-  back. The step lasts only while attention is on its question: a press or focus elsewhere, or
-  its buttons moving for any reason, such as a question folding above or a scroll, takes it
-  back, so a page holds one at most. With focus in the question Escape goes back too without
-  closing the card or the list, and choosing or writing anything takes the step back. An own
-  answer left open is never covered by what is asked. Send with nothing chosen or written
-  writes nothing on any question, required fields or not, and says at the first field what it
-  wants. A deadline passing takes focus to the line that says so.
-- **A mark in the card's facts** says a question is waiting and brings it into view from
-  any section.
-- **An agent reads an answer without reading the discussion.** `get_work_item` carries
-  `questions`: `total`, `open`, up to 5 items with the open ones first and the newest
-  closed after them, and `truncated`. An item names the question's start, its status and
-  the answer with the labels chosen, with no options or descriptions.
-  `list_work_item_requests` filters by item (`id`) and `answered_after`, and takes `full`.
-- A question's options can carry a markdown `description` and be `recommended`. The fields
-  of one question fit in 64 KiB.
-- `answer_work_item_request` and the HTTP answer take a `note` of up to 8000 characters,
-  which stands in for required fields, so a person can answer in their own words.
-- `by_person` says whether the call that closed a question came through Valkama's interface:
-  true for one, false for any other call that answered, declined or withdrew it, and null
-  while none has. It is read from the call that wrote the row, so no argument sets it and
-  `author` does not count. It means "through the interface": a process holding the
-  interface's credentials counts as the interface.
-- `search_work_items` finds an item by a question's text, answers and note, and a row found
-  that way carries `question_hit`.
-- An export carries every question in `planning.requests`, with its `by_person`.
-- **A link to a work item opens in the desktop app.** On Windows with the app
-  installed, `GET /open/MAIN-12` followed from outside a browser page, such as a link
-  in an agent client's chat, starts the app on that card and answers a page that closes
-  its own tab where the browser allows it, with a link to open the item in the browser
-  instead (`?in=browser`). The app takes `--open-path=<card route>` at first start and
-  on a second launch, and ignores any other shape; a window already showing Valkama
-  moves without a reload, and asks first if a draft would be lost. Every other request keeps the
-  redirect: a request made by any page, a prerender, a machine without the app, a
-  listener on another port, a launch that fails. Reinstall the desktop app along with
-  the server: an older build opens without moving to the card.
-- **The editor's toolbar:** link a task, bold, italic, inline code, link and a
-  bulleted list, on the selection or at the caret. Ctrl+B and Ctrl+I work on any
-  keyboard layout, and Ctrl+Z takes back a toolbar action as it takes back typing.
-  The link button writes a `#`, which opens the same list a typed one does; a `#`
-  with nothing after it now offers what is being worked on in the space.
-
-### Changed
-
-- **A card's head scrolls with its content.** A slim bar stays above it with the
-  item's identity, Back and Close, and the tabs stick to the top of the content.
-  Once the big title has passed under the bar the bar shows the title in one line,
-  and once the facts have gone the card's action stands beside Close. Reading down
-  no longer moves anything but the text: the head had two layouts, flipped at the
-  first scrolled pixel, and elements left and came back at once.
-- **Going from a card to a card keeps the panel.** A link and Back change what the
-  panel shows; the slide belongs to the first open and to the close. The new card's
-  head waits for its read, so no half of it shows and then moves.
-- **Closing plays.** A card slides out and its scrim fades, whichever way it closes,
-  and a dialog toggled by its host closes the same way. Under reduced motion it goes
-  at once.
-- The facts stand in rows of one height, with the action level with the first row
-  however they wrap. A takeover asks in the band under the bar, where a refusal
-  stands, wherever its button was pressed.
-- **A section with nothing in it is absent.** A card with no steps has no Checklist
-  section until a step arrives. A failed read of the questions shows as a line over the
-  discussion, because not knowing is not having none.
-- "Needs my answer" shows the same form as the card, with "Send" and "Don't answer", and an
-  answer given in a card lowers the count in the navigation at once.
-- `list_work_item_requests` answers in a compact form by default; pass `full: true` for
-  whole records. `get_work_item_request`, the HTTP request reads and the answers of request
-  writes add `note` and `by_person`, and `answers` no longer shows a note among them.
-- The compact form of a question stays cheap: a note, a written answer and a label are cut
-  at 500 characters, and one question is at most 2000 characters of JSON, keeping its first
-  fields and saying `clipped: true`. The whole text is in `get_work_item_request` and in the
-  list with `full: true`.
-- `list_work_item_requests` takes `offset` and says `truncated` and `next_offset`. With
-  `answered_after` the oldest answer comes first, and a page runs past `limit` rather than
-  part two answers of one time, so a reader that keeps the last `answered_at` loses none.
-- `merge_work_items` moves a merged item's questions to the survivor, where a pending one
-  stays open, instead of closing them with the merged item. The warning now says they wait
-  on the survivor.
-- The store stays at schema 9. An earlier build opens it and its tools work, but its web
-  interface reports it could not update the questions on a card holding a note or a
-  described option, and for the waiting list while a pending question has a described
-  option. Install the server and the web interface of this release together.
-- **The board reads by its titles.** A title on a tile or a list row no longer stands
-  in a heavier weight than everything around it, and a label is a quiet word instead
-  of a chip. Short titles no longer sit in a taller box than they need, and a closed
-  tile steps back.
-- **An epic's row is one line** on the board, with its state only once it has moved.
-- **«By epics» is a toggle like its neighbours,** beside the view switch. It keeps its
-  word down to a phone, and pressing a toggle moves nothing beside it: the pressed
-  state is a fill and a bar under the word, where a check used to widen the chip.
-- **The work bar takes the phone's form earlier,** and a form between the two below
-  a window of 996 px with the sidebar, so the search field stays wide enough to use.
-- **A chain's section reaches its list sooner.** The groups are named once, the map's
-  key gives their counts, a forecast shows only with a verdict, and the chart and the
-  pace stand one action away.
-- **The editor is one object.** A comment, a description, a new task's description
-  and a text answer are written in one frame holding a toolbar, the text and, where
-  the host has its own action, a foot with the hint or the reason a write was
-  refused at its start and that action at its end. The switch between writing and
-  preview moved into the toolbar, and a label a heading already says is gone from
-  the eye and stays for a screen reader.
-- **`rows` means something again.** A field starts at the lines it asks for (a
-  comment at five), grows with its text to 60% of the window or 30 lines, and then
-  scrolls inside. Fitting the box to its content had made the browser ignore
-  `rows`, so every field started at two lines. The preview keeps the field's height,
-  and coming back from it keeps the caret and the undo history.
-- **A person writes comments.** The composer no longer offers a work report as a
-  second kind of entry; reports are what agents publish, and they show in the
-  discussion as before, with their action to make one the outcome. Closing a task
-  with no outcome opens a form of its own, from the refusal that asks for it, with
-  the two fields the server needs and a way back to the comment. Saving it carries
-  the refused move on, and once that move is over the form only saves.
-
-### Removed
-
-- The card's "Questions and decisions" section. A question stands in the discussion.
-
-### Fixed
-
-- **Creating work items from several agents at once no longer fails** with a raw
-  `UNIQUE constraint failed` on the item number: the counter is taken under the write lock.
-  Two planning spaces whose names derive the same key, created at once, get two keys instead
-  of a constraint error, and a project naming a second space alike is refused in words.
-  Recording a summary or report while another writer commits no longer fails with
-  `database is locked`.
-- **A press on the board no longer crashes the tab.** Chromium 156 crashes the renderer on
-  a press that takes focus out of a `content-visibility: auto` element just back in view,
-  in Chrome and in the desktop app. A tile out of sight is now laid out like any other, and
-  a press on one just back in view reaches it. A lane still skips its layout, which a space
-  of many lanes needs, and keeps the focus of a press inside it.
-- **A second press reaches nothing it was not meant for.** A press at the point of the one
-  before, with no move between, reaches nothing inside a question or anywhere in a card's
-  thread unless it lands on the same control, however long after it comes, and the scrim
-  follows the same rule. So a double click cannot choose or send in the next question, and on
-  a tile it leaves the card open with its reading keys alive. Moving more than 3 px or turning
-  the wheel ends that, and keys are never held back.
-- **The keys that read work as soon as a card opens.** PageDown, PageUp, Home, End and the
-  arrows scroll a card just opened, by address or from the board, and from its top bar; they
-  did nothing until focus reached a control inside it. No ring appears on Close, and the
-  dialog's name is still read.
-- **Walking a card's stuck sections from the keyboard keeps the place.** Tab and Shift+Tab
-  along the sections moved the card up half a window at each step, and four steps unfolded
-  the head again.
-- **Back does not wait long for a slow chain.** A chain that was slow or never answered left
-  an empty panel with no sign of waiting. The card now shows after about what a normal read
-  takes, as far down as it can go, and a chain that answers later moves it once to its place,
-  unless the reader has scrolled, pressed or typed by then.
-- **Back lands once.** The place landed and then moved 20 px, because the chain's map first
-  laid out at a guessed width.
-- **A press while a drawer or dialog leaves lands on nothing.** A double click on Close opened
-  whatever stood under it, and one on the scrim over a tile opened that tile's card. The first
-  press after the leave reaches the page.
-- Retrying a failed read keeps focus in the card, while it waits and whatever the answer. It
-  fell to the page, and Tab then left the card.
-- A pressed chip is plain in forced colors, in light and dark palettes. Its bar kept the
-  theme's ink, nearly invisible in a light palette; the chip now takes the palette's highlight
-  pair.
-- Escape from a card opened by a press on a tile's mark leaves no ring around the whole board.
-- A task whose description is longer than 8192 characters opens again. The service
-  stores 20,000, and the web client refused to read anything over 8192, so such a
-  task showed a message about this build instead of its card.
-- A task with a long discussion opens again, up to 1 MiB of card. The web client
-  refused any answer over 256 KiB, and the service does not limit a discussion.
-- Going back to Overview from another section, and Shift+Tab into the tabs, keep the
-  reader's place. A section went to the top with the tabs leaving from under the pointer.
-- A card opened by its address draws no focus ring on Close: the dialog holds focus
-  until the first input, and the first Tab reaches its first control.
-- A card with no epic no longer keeps an empty row for it among the facts.
-- A checklist step's text stands level with its box and the line naming who holds or
-  closed it right under that text. The box stayed 40 px tall in a row of 28.
-- A holder signed as `name session <id>` with no brackets is shortened as a holder
-  signed `name (session <id>)` is, on the card, the board and the chain, with the
-  whole value in the card's tooltip.
-- The list of tasks closes when focus leaves the field.
-- Choosing a task from the list no longer clears the field's undo history.
-- Editing a long description opens with the toolbar and the start of the text in
-  view, where the card's own scroller used to run to the end of the text.
-- The editor's marks go after a list item's marker, so the line stays a list. A mark around
-  a whole selection, on one line or several, comes off as one, and a mark over words that
-  already carry it replaces it.
-- An outcome stepped back from is kept and asked about before it goes, where closing
-  the card dropped it with no question.
-- Focus stays in the card after a takeover, after an outcome is sent and after sending
-  or saving from the editor by its button, where it used to fall to the page.
-- A comment and a new task's description reach the server as they were typed; the
-  web client no longer trims them first.
-- «Go to the checklist» from another section brings the checklist into view.
-- On a phone the list's sort choice shows its whole name, and the Memory section's
-  search button stands level with its field.
-
-## [2.3.0](https://github.com/Muratovnik/valkama/compare/v2.2.0...v2.3.0) - 2026-11-02
-
-### Added
-
-- **Agents on the card.** The Overview of a work item lists the Claude Code agents
-  on it: what each was started for, the step it holds, when it started, its last
-  sign of activity and the time between, and how it is known to be there. An agent
-  is on the item when it wrote there or holds a step, or when the session that
-  started it held the item at that moment; a session holding several items puts it
-  on each and the row says how many, unless the agent wrote to some item, which
-  places it there alone. An agent whose parent held nothing and that wrote nothing
-  is on no card. The list updates on its own through the existing event stream.
-  While an agent has no recorded end, its last activity also takes the time its
-  transcript file was last written, read when the card is read; the file's content
-  is never read. The section is absent while no agent is on the item, and a long
-  list folds to the three most recent.
-- **`valkama hook claude post-tool-use`** names an agent from the call that started
-  it, reading only the short description of that call and the agent's id from one
-  hook input, never its prompt. Register it for `PostToolUse` with the matcher
-  `^(Agent|Task)$`. Without it, and for every agent recorded earlier, a row shows the
-  agent's type and short id. The label stays out of the append-only history, the
-  installation export, `doctor` and logs, and MCP tool answers do not change.
-- **A work item has a short address**: `GET /open/MAIN-12` opens its card in the
-  web UI, in any case and from any space a project binds, by redirecting to the
-  card's own route, so the address bar, Reload and Back behave as usual. A number
-  nobody filed, a key no project binds, an address that names no number and a store
-  that cannot answer each get a page saying so in the interface's language, with
-  the next step; a retry that fails again leaves keyboard focus on Retry. The route
-  obeys the loopback rules of every other, and only ever redirects to a card on this
-  origin.
-- **`url` in MCP answers.** A work item's full record and every write
-  acknowledgement carry the address as `url`. This is an addition: list and search
-  rows, tool schemas and the HTTP records are unchanged.
-- **`serve --on-demand` and `launcher autostart`.** A listener can hold the port from
-  login with no part of the server loaded, which costs about 15 MB instead of about
-  40 MB, and become the server on the first connection, in the same process and on
-  the same socket, so the address of a work item works without starting anything. On
-  Windows `launcher autostart enable|disable|status` keeps it in the current user's
-  Run key; it is off until enabled and `doctor` shows it. A busy port is retried
-  every 30 seconds, a server that cannot load answers with a page and logs why, and
-  `launcher install` restarts such a listener from the new release.
-- **`valkama released --space KEY --repo PATH --range A..B`** lists the open
-  work items whose commit refs went into a release range, so work that shipped
-  can be found while it still reads as open. A ref holds the hash from the branch
-  the work was done on, and integrating that branch rewrites it, so each ref is
-  compared in steps and the answer names the step: `hash`, `patch-id` for the
-  same change under another hash, and two weak matches, `changed-patch` for a
-  commit outside the range whose subject a commit in the range has with another
-  patch, and `subject` for an object that is gone but whose label has the subject
-  of a commit in the range. Each item says how many of its commit refs match, so
-  partly released work reads as such. It is a hint to check by hand: it opens the
-  store read-only and changes no state, and an item with no commit ref cannot show.
-  The server's tools are unchanged.
-- **`get_work_item` takes `comments_after`**, and the HTTP read the same parameter:
-  every comment after that id and none before it. An item with a long history
-  offered only the newest five comments or everything at once, and everything
-  could be too long for a tool answer to carry.
-
-### Changed
-
-- **A client restart no longer costs a session its claims.** A restart ends the
-  session and resumes it under the same id seconds later, and any server started
-  in between released all of its claims and put its work back in the queue. Now
-  an ended session keeps its claims for 12 hours after its end. A server start
-  and `claim_ready_work_item` leave them alone until then, and the session coming
-  back makes them `live` again with no write. The claim reads `stale` meanwhile,
-  so the board marks it and `claim_work_item` from anyone else still takes it at
-  once without `force`. A `failed` session, and an end with no time recorded, get
-  no such wait. The price is that work of a session that really is gone reaches
-  the take-next queue up to 12 hours later.
-- **The history says why a claim was released.** A release by Valkama now reads
-  `session-ended: <holder>`, `session-missing: <holder>` or, for a session quiet
-  for 14 days, `lease-expired: <holder>`, and the move back to the queue carries
-  the same reason (`todo: session-ended`). All three used to read
-  `lease-expired`, and the records already written stay as they are. See
-  [Claims are leases](docs/connection-contract.md#claims-are-leases).
-- **Agents link the numbers they write to the owner.** The skill and the server's
-  instructions say to write a number as a markdown link in a message to the owner,
-  and not in a Valkama comment or description, where the UI links numbers itself.
-- The server's instructions are tightened from 4397 to about 4040 characters
-  without dropping a rule. Claude Code 2.1.314 cuts them at 4096, so their last
-  rules were not reaching its sessions; a test now holds them under that limit.
-
-### Fixed
-
-- A tile dragged quickly and let go over a column or a lane's cell lands there.
-  The drop library reads the pointer every 50ms, so a release between two
-  readings put the tile in the column the pointer had only passed. Let go over a
-  column's header, it lands on top of that column.
-- `launcher install` reaches the tray icon too. It is a process of one release,
-  and it stayed on the release its session started from, so a click ran the old
-  script until the client restarted. The session now restarts it from the release
-  it has switched to, once the switch has succeeded; if the new tray will not
-  start, the working icon stays, and an icon hidden from its menu stays hidden.
-  This needs a session started on this release or later, so sessions already open
-  keep their icon until they restart.
-- Adopting a store written under an earlier product name, and `launcher install`
-  pinning a release, wait about a second when Windows refuses a rename with access
-  denied or a sharing violation, which is what it answers while a scanner or an
-  indexer has just opened a file there. Adoption used to refuse at once and ask the
-  operator to close something they had no way to find, and an install could fail
-  and have to be repeated. A holder that does not let go gets that refusal, and any
-  other failure gets it straight away.
-- A state panel with its buttons in a narrow column no longer squeezes its message
-  into a few letters wide: on a phone the buttons take their own row.
-
-## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
-
-The bold entries at the top of **Changed** alter what existing MCP and HTTP
-calls return; an agent or integration written for 2.1.0 should read them first.
-The store is unchanged at schema 9, so the upgrade runs no migration, and the
-server lists the same 31 tools with the same schemas.
-
-### Added
-
-- **One Work filter** above the board, the list and the graph, in one row of
-  controls with the view switch, the board's «By epic» switch and «New work
-  item». One field matches a reference or a title and, as it is typed,
-  searches the «Filter» menu of facet values: state, kind, priority, label and
-  holder. The «Workable» and «Assigned» quick filters stand beside it, and the
-  picked values show as removable chips on the line beneath, beside counts
-  that answer the filter («12 of 42 open · Reset»), on the board by epic also
-  how many epics stand as rows, and closed matches only when no open work
-  matches. Facets combine with AND and
-  the values of one facet with OR, except labels, which an item must all carry.
-  `/` focuses the field; Escape closes the menu, then clears the text, then
-  leaves, one step per press. It replaces the queue (All, Ready, Assigned, Blocked,
-  Review) and the search field, neither of which reached the address. The
-  filter does, through the Planning route keys `ready`, `held`, `cat`, `kind`,
-  `pri`, `labels` and `holder` beside the text in `query`, which the Planning
-  manifest (`GET /api/modules`, `list_platform_modules`) now admits: a reload
-  or Back keeps it, an address too short for the whole filter says so, and
-  switching space clears it.
-- **Markdown in free text.** Descriptions, comments, work reports, summaries,
-  questions and their answers, attempt results, activity details, ref labels
-  and checklist steps are drawn as markdown — paragraphs, lists, code, links,
-  emphasis, quotes and tables — and a single line break stays one. Raw HTML
-  stays the text it was, an image becomes a link to it, and a link keeps only
-  an `http`, `https` or `mailto` address and opens outside the app. A reference
-  in the text links where it resolves: a task of the open space or of another
-  known space, a session the server knows, a commit or memory id the card
-  carries as a ref; anything else stays text. Pressing a checklist step's text
-  still ticks it, and pressing a reference in it opens that card instead. A long
-  text ends on its last whole line and opens when a link below the cut takes
-  focus.
-- **A markdown editor** writes a card's description, a comment or work report,
-  a new task's description and a text answer to a question: one Write | Preview
-  switch, `#` and a number or a word to link a task of the space, and
-  Ctrl+Enter to send. A question's answer offers no `#` suggestions; in the
-  new-task dialog Ctrl+Enter is Create, held back until there is a title.
-
-### Changed
-
-- **A close ends the claims on the item.** A transition into a completed or
-  cancelled state releases the item's claim and every step claim in the same
-  write, through `transition_work_item`, the `transition` of
-  `apply_work_item_changes`, the HTTP transition, the board and the card alike.
-  The history records `released` (and `checklist_released`) after
-  `transitioned`, and the answer names the holder it released as `released`, in
-  `applied.transition` for a batch. Reopening restores no claim. A closed item
-  still says who held it: item records, the view's items and the nodes of
-  `GET /api/planning/graph` add `closed_at` and `last_claim_ref`, both `null`
-  for open work, and the board, the list, the graph and the card print that
-  holder as the previous one. A release sent after the close,
-  as agents used to send one, still succeeds and leaves that holder named.
-  See [A close ends the claims](docs/connection-contract.md#a-close-ends-the-claims).
-- **A work item's links name the state of their other end.** Every link in the
-  full record (`get_work_item`, `GET /api/planning/work-item`) adds
-  `state_name`, `state_category` and `is_terminal` of the item at its other
-  end, whichever space that item is in, so a finished blocker can be told from
-  an open one without another read. When the store cannot resolve that state,
-  the three are `null` and `state_unavailable` is `state_missing`: that end is
-  unknown, never open. A record's links are read in one query, where each link
-  cost two. See
-  [What a link says about its other end](docs/connection-contract.md#what-a-link-says-about-its-other-end).
-- **A space's view carries the blocks into it from other spaces.** Beside the
-  links leaving the space, `links` in `GET /api/planning` and its live stream
-  (`/api/events?view=planning`), and `edges` in `GET /api/planning/graph`, now
-  hold every `blocks` link from another space into it, so a link's `from` can
-  name an item that the view's `work_items` or `nodes` do not hold. Every link
-  in the view, and every graph edge but `parent`, names its source: `reference`,
-  `state_name`, `state_category`, `is_terminal` and `state_unavailable`, read as
-  above. A reader that looked `from` up among the space's items reads these
-  instead. A graph node's `depth` counts an open blocker in another space, and
-  no blocker whose state is finished or unknown. See
-  [What a link says about its other end](docs/connection-contract.md#what-a-link-says-about-its-other-end).
-- **A chain's edges include the blocks from outside the chain.** `edges` in
-  `GET /api/planning/work-item/chain` now hold every `blocks` link into the
-  root or a member wherever its source lives, in another space or in the same
-  space outside the chain, so `from` need not be a member; `discovered-from`
-  edges still join two members. Every edge names its source as a space view's
-  link does, and a source whose state cannot be read blocks nothing. See
-  [Reading a chain of work](docs/connection-contract.md#reading-a-chain-of-work).
-- **The cross-project search marks its results.** Each result's `item` in
-  `GET /api/modules/planning/search` adds `kind` and `priority`, and its
-  `state` adds `category` and `is_terminal`, as described in
-  [What a link says about its other end](docs/connection-contract.md#what-a-link-says-about-its-other-end).
-- **`GET /api/ref` looks a commit up in every registered project.** It asks, in
-  order, the registered project a value names (`name@abc1234` or
-  `name abc1234`, the name matched against a project's id or directory name,
-  ignoring case), the project the registry binds the card's planning space to
-  (the new optional `space`, that space's exact identity; any other value is
-  refused with `400`), the configured document roots, then every other
-  registered project, and shows the commit from the first that has it. It used
-  to ask the document roots alone and hand a named value to git whole, so most
-  commits read as not found. Git's own `@{…}` stays part of the revision, a
-  linked worktree counts as a repository, and every directory still comes from
-  the owner's configuration. See also **Security**.
-- A work item's facts read one way on the board, the list, the graph, the card
-  and the task finder, and only the exceptions print: a priority glyph when the
-  priority is not medium (on the graph and in the finder, only high and
-  urgent), a kind glyph when the item is not a plain task, and of readiness
-  only the open blocker an item waits on, «Waiting on MAIN-12». The word
-  «workable» no longer stands on nearly every tile and chain member; the list's
-  Assignee column says «—» for nobody where it said workable, and the graph
-  says workable quietly in place of the state. The list leads each reference with
-  the priority and kind glyphs in two fixed slots, so references align, keeps
-  medium as a quiet word in its Priority column and, from 900px, shows labels
-  under the title. A graph node shows its state as a dot and a name. A finder
-  result reads its glyphs, reference, title, state and project on one line, on
-  two on a phone. The list's glyphs and the label chips of the board and the
-  list are filter buttons outside the Tab order, and a second press takes the
-  value out again; the card's label chips filter too. The glyphs of a board tile
-  and a graph node are read, and a press on them opens the card, as a press on
-  the rest of the tile or node does. The finder's marks are read, not pressed.
-- A board tile's first line holds those glyphs, the reference and, at its end,
-  only what stops the work: the blocker it waits on, as the waiting glyph and
-  that blocker's reference with «Waiting on MAIN-12» as its name and hover
-  text, or a stale claim. The line never wraps; a mark short of room keeps its
-  glyph and gives its words on hover. The title holds at most three lines, the
-  whole of it on hover. The labels keep one line, as many whole chips as fit up
-  to three, then «+N», which opens the card, and a chip stays visible on a
-  hovered tile or list row. The holder and the steps print only when there are
-  any.
-- The board's Done column stands the most recently closed work first. Its order
-  is no longer arranged by hand: a tile does not move within Done, by drag or
-  by Alt+arrow, and a tile dropped on Done from another column closes and
-  stands on top. The Cancelled column keeps its manual order.
-- The card's head reads who the item is, what holds for it, then what to do.
-  Above the title, one line names the kind, the reference (pressing it copies
-  it), when the item last changed and its plan anchor as an icon, whose full
-  path moves to Relations. Under the title, one line of facts: the state, whose
-  chip is the menu that moves the item, so the state is said once and a refused
-  move leaves it naming where the item is; the priority with its glyph; the
-  holder, with the lease on hover and a warning dot once it is stale; and the
-  epic. One action ends that line, or stands under the labels on a narrow
-  drawer — «Claim», «Release» on the browser's own claim, «Take over» on
-  another's — and where the facts argue against taking the item, the reason
-  stands there instead: «Waiting on MAIN-12», or «Epic — take a task from it».
-  The labels follow as chips. Each relation row shows the other end's state as
-  a dot and a name.
-- The card's head gives its room to the text at the first scroll of its body,
-  where it used to wait until the text had been read past the head's height,
-  and it comes back whole only at the very top. The text glides up into that
-  room, or moves at once with reduced motion, and a card that scrolls only a
-  little condenses too. This withdraws 2.1.0's rule that the text under the eye
-  moved only by the distance scrolled.
-- The graph's camera is the operator's. A refresh never moves it, and a filter
-  change, a switch or a resize no longer reframes it, which withdraws 2.1.0's
-  rule that a new queue or search framed the field afresh. It moves when
-  another scope opens, on «Fit whole graph», and, when a narrowing or a resize
-  leaves no drawn node in sight, only across, at the zoom the operator chose.
-  Leaving the graph and coming back to the same scope finds the camera where
-  it was left.
-- The workspace's tones are measured as contrast: every pair of grounds that
-  stand side by side is at least 1.15:1 apart, where seams stood at 1.08–1.13:1,
-  and the secondary text tones and the red hold 4.5:1 on a hovered card. The
-  frame around the workspace sinks to near-black so the panel reads as a panel;
-  a pointed-at card, a control and its hover, and the rail's pointed-at and
-  chosen rows each stand a visible step apart. Each hue
-  on a work item means one thing on the board, the list, the graph and the
-  chain map: in progress and held work are blue, where in progress was the
-  green of done; done is green; the queue and workable carry no colour. A
-  switch that is on, a checked box and a chosen option are neutral rather than
-  green; a done checklist step keeps its green.
-- The context bar no longer prints a sentence describing each module under its
-  name, so the header is one row.
-- The desktop app opens its window at once, on a starting page in the
-  workspace's palette and language, and finds or starts the server behind it;
-  when it cannot, the same window says why, with the remedy and «Try again». A
-  managed server that is out of date is no longer restarted unasked: the window
-  says whether the front end or the server code changed and offers «Restart the
-  server». A listener the launcher cannot prove its own is never stopped. Each
-  step of opening the window is logged, with its time, to
-  `%TEMP%\valkama-desktop.log`.
-- With the desktop app installed, a click on the tray icon starts the app and
-  leaves every decision to it, so the tray no longer offers to restart the
-  server the app has just started. Without the app, the tray decides off the
-  icon's thread, takes a double click or a click queued behind a dialog as one
-  click, and logs each click to `%TEMP%\valkama-tray.log`.
-- The launcher answers `runtime`, `launcher status` and `launcher listener
-  status` without loading the whole command line, and on Windows reads who
-  listens on a port from the system instead of through PowerShell, so the tray
-  and the app reach a window sooner. What the commands print is unchanged.
-- A long list shows its first screen at once and fills in the rest right after,
-  with its columns already at their final width; until the rest arrive, a scroll
-  stops at the last row drawn. The whole list of about 1,200 rows finishes
-  painting later than in 2.1.0, by about 1.4 to 2 times.
-- A board tile out of sight is not laid out until it is reached. A tile and a list
-  row draw about twice the elements they did in 2.1.0, and the board's first tile
-  comes some 20 to 130 ms later.
-- For contributors: `npm run typecheck`, and with it `npm run build`, now
-  type-check every file under `web/tests/`, so a spec that calls a helper that
-  does not exist, or builds a fixture of the wrong shape, fails the gate rather
-  than only the run that reaches it.
-
-### Fixed
-
-- The card lists only blockers that are still open. An item whose blocker had
-  finished, in any space, read as blocked there while its tile said it could be
-  taken; a blocker whose state is unknown stays listed.
-- An item blocked by open work in another space, and a chain member blocked by
-  work outside its chain, now name that blocker on the board, the list, the
-  graph and the card's chain, where nothing said why the item was not
-  workable; a finished one makes nothing wait.
-- The graph no longer jumps when it is laid out again: its status took a line
-  above the drawing on every refresh. It now stands in the strip above the
-  field and, over a drawing, says nothing until a layout has run for 600ms. The
-  card's attempts and the project directory keep what they show while they
-  read it again, instead of a loading line.
-- A Work read that failed with no error envelope (an empty 500, a 502 page, a
-  body that is not JSON) reads «The local service did not complete the
-  request.» instead of printing `unavailable` as the technical code; an
-  `unavailable` answer with no UI state reads as a missing record on 404 and as
-  an unavailable dependency otherwise.
-- A hovered primary button no longer turns the base grey under its dark label,
-  the look of a disabled one: each variant keeps its own fill and label when
-  hovered, one step further from the ground, and every variant is disabled the
-  same way. Controls whose hover drew nothing now step up, and a hovered danger
-  label stays legible.
-- On the board grouped by epic, an empty cell no longer draws a grey box for
-  each state its lane has no work in; it keeps its place and draws its ground
-  only while a tile of its lane is dragged.
-- A checklist step's «Discuss step» button is named by the step's words rather
-  than its markdown, so a screen reader no longer reads out its backticks.
-- On Windows a second server could bind a port another one was listening on,
-  so two answered on one port and the desktop app or the tray took the other's
-  identity for its own child's. A server that cannot own its port now exits,
-  and a port whose listener closed can still be bound at once.
-- A number alone puts the item with that number first, as a whole reference
-  already did: `search_work_items` and `GET /api/planning/search` with a space
-  answer `12` with that space's item 12 ahead of every item that only mentions
-  it, and without a space each space's item 12 leads; the task finder and
-  `GET /api/search` lift them across sources. A page cut short no longer drops
-  the item named.
-- Losing the local service no longer pushes the board, the list or the graph
-  down with a notice above them. The rail's connection control says it
-  instead, and that Valkama reconnects by itself and shows what it last
-  received meanwhile; on a narrow rail, where only its dot shows, pressing the
-  dot opens that sentence with «Refresh», and Escape closes it. A card or a view read while the service is down says
-  there is no connection rather than that it could not be loaded.
-
-### Security
-
-- `GET /api/ref` hands git a commit revision and nothing else. A value that
-  begins with `-` is answered `resolved: false` without running git — one such
-  as `--output=<path>` was read as an option and made git write a file — the
-  options end before the revision, and the lookup is held to commits, so
-  `rev:path` no longer prints a file out of a repository.
-
-## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-11-01
-
-The bold entries at the top of **Changed** alter what existing MCP and HTTP
-calls do; an agent or integration written for 2.0.0 should read them first. The
-store is unchanged at schema 9, so the upgrade runs no migration.
-
-### Added
-
-- **A chain of work**: what one item's work grew into, and whether it
-  converges. Scope `epic` is the root's children; scope `chain`, the default,
-  adds every item linked `discovered-from` the root or a member and every child
-  of a member, walking downward only. `GET /api/planning/work-item/chain` and
-  the MCP tool `get_work_item_chain` answer with the counts (total, closed,
-  open, ready, per category), the members grouped by parent, a per-day series
-  of created and closed members, and whether the last seven UTC days were
-  `growing`, `converging` or `steady`. The HTTP read adds every member, with
-  its `rank` in the order of work, and the `blocks` and `discovered-from` links
-  among them; the tool adds the open members as paged rows, active first. See
-  [Reading a chain of work](docs/connection-contract.md#reading-a-chain-of-work).
-- `list_work_items` and `GET /api/planning/work-items` take `parent`, and then
-  list only that item's children.
-- The work item card shows the item's chain. A branch map leads it: one lane
-  per origin of the work (the root's own children, each other epic, the work
-  under no epic), branching off the task it was discovered from, one segment
-  per member, coloured by progress. A segment names and opens its task, a lane
-  label narrows the member list to that lane, and each lane is one keyboard
-  stop. Below it, one line counts the work under the root, and the next turns
-  the last seven days into a forecast: «At this pace the open work closes in
-  about 9 days (by Nov 9)», or how much must close a day to converge. A chart
-  of scope against done work and the members by state follow, the finished
-  ones folded. The key, the counts and the headings name a group alike: by the
-  state all its members share, as the board's column does, or by its own word.
-- A chain narrows every view. «Show on graph» closes the card and moves focus to
-  the graph, opened on the chain's open part (the root, marked «root», the open
-  members and every member that is the parent of another), framed on any branch
-  the map chose, with a «Closed · N» switch for the rest; an epic lane's Chain
-  action narrows Kanban and List to it. Chips leave the chain and the branch; a
-  reload or a shared link keeps both, through the Planning route keys `chain`,
-  `chain_scope`, `closed` and `branch`. A link to a chain this space cannot show
-  is answered with the whole space and a notice; a chain whose read fails stays
-  in the address and offers Retry, unless the item does not exist.
-- An order of work that agents and the board share. `update_work_item`,
-  `transition_work_item`, the `transition` group of `apply_work_item_changes`
-  and their HTTP writes take `rank`: `first`, `last`, `before:<item>` or
-  `after:<item>`, a place among the items of the state. Lists follow that
-  order, and so does `claim_ready_work_item` (see Changed). On the board, drag
-  a tile within its column, or press Alt+↑ or Alt+↓ on it. The order is the
-  existing `position`, so an earlier build reads it too. See
-  [The order of work](docs/connection-contract.md#the-order-of-work).
-- The board can be grouped by epic (route key `group`): one lane per epic, with
-  its counts, a fold and actions to open its card or narrow the board to its
-  chain, and work under no epic last. A lane's heading stays in view while its
-  lane is, and names its open work in columns scrolled out of sight; a cell
-  shows three tiles and «Show all · N». A lane with nothing open starts folded,
-  and its Done and Cancelled cells show only a count until opened. A reorder in
-  a lane says for a moment that the order is the whole board's, one per state.
-- `merge_work_items` (`POST /api/planning/work-item/merge`) folds 1 to 20 items
-  that are one change into the one that survives, all or nothing: their steps
-  (with ids, ticks and step claims), discussion, refs and links move to it, and
-  each merged item is linked `duplicates`, summarized and closed as cancelled.
-  An item another session holds needs `force`. See
-  [Merging items that are one change](docs/connection-contract.md#merging-items-that-are-one-change).
-- `create_work_item` and `POST /api/planning/work-items` take `claim`,
-  `checklist` and `links`, applied in the creation's transaction; a refused
-  step creates nothing. `apply_work_item_changes` takes a `checklist` group too.
-  A step sent as `{text, done: true}`, there or to `set_work_item_checklist`,
-  is recorded as the caller's tick, so one call can set done steps, the summary
-  and the closing transition. See
-  [Creating an item with its claim, steps and links](docs/connection-contract.md#creating-an-item-with-its-claim-steps-and-links).
-- A write that names a state reads a category (`active`, `review`, `blocked`,
-  `completed`, `cancelled`, `queued`, `backlog`) as the one state that has it;
-  a key still wins. A name the workflow lacks is refused listing every state as
-  `key (category)`. See
-  [Naming a state](docs/connection-contract.md#naming-a-state).
-- A Valkama skill, `server/skill/valkama`: the procedure an agent follows
-  around the planning tools. `valkama skill install | status | uninstall`
-  (`--client claude|codex`, `--force`) writes it where Claude Code
-  (`~/.claude/skills/valkama`, or under `$CLAUDE_CONFIG_DIR`) and Codex
-  (`~/.agents/skills/valkama`) find a user's skills, from the pinned release,
-  without touching either client's configuration; an edited or foreign copy
-  needs `--force`. `launcher install` refreshes the unedited copies Valkama
-  manages but installs none, and `valkama doctor` reports each one. See
-  [Install the skill](SERVICE.md#install-the-skill).
-
-### Changed
-
-- **A claim starts the work it takes.** Claiming an item in a `backlog` or
-  `queued` state, by any route (`claim_work_item`, `claim_ready_work_item`, the
-  `claim` of `create_work_item` and `apply_work_item_changes`, HTTP, the
-  browser, a launch), also moves it to the first reachable `active` state: one
-  more `transitioned` event (`dev: claimed`) and one more revision. The answer
-  adds `started: {from, to}`. Review, blocked, active and finished items stay
-  where they are, and an item that can reach no active state is claimed in
-  place with a warning; a launch used to fail on such an item. An agent no
-  longer needs its own transition to the active state after a claim (one sent
-  anyway is a move within one state, with one more event), and takes the next
-  `expected_revision` from the claim's answer. See
-  [A claim starts the work](docs/connection-contract.md#a-claim-starts-the-work).
-- **A release puts work under way back in the queue.** Releasing an `active`
-  item, by its holder, with `force` or by lease expiry, moves it to the first
-  reachable `queued` state, or else the backlog (`todo: released`,
-  `todo: lease-expired`), unless one of its steps is still claimed. The answer
-  adds `requeued: {from, to}`.
-- **A confirmed session holds its claims and steps.** When the client proved
-  the call's session, `claim_ref`, `claimed_by` and `done_by` read
-  `codex (session <id>)` or `claude (session <id>)`, and
-  `claude agent <id> (session <id>)` (or `codex agent …`) in a subagent,
-  whatever `author` the call signs with, so two sessions signing with one name
-  hold separately; other calls still hold by `author`. `list_work_items` with
-  `owner` matches the holder exactly, so pass the `claim_ref` the claim
-  returned. The web prints such a holder as `codex · 019a3c2e-5b7d`. See
-  [Who holds a claim or a step](docs/connection-contract.md#who-holds-a-claim-or-a-step).
-- **A checklist write keeps the steps it repeats.** A step sent with the text
-  (or `id`) of an existing one keeps its `item_id`, claim and tick, where it
-  used to get a new `item_id` and lose its state; steps are appended without
-  `force`. Leaving out a claimed or completed step is refused, naming it, and
-  `force` discards only the steps left out.
-- **A work item that does not exist is `not_found` (404)**, where it was
-  `invalid_request` (400): the item named, a `parent`, the other end of a link,
-  or a step of a batch, which keeps its `step`. A malformed reference is still
-  `invalid_request`.
-- **Acknowledgements carry more.** `claim_work_item` adds `started`,
-  `requeued` and `warnings` when there are any; `create_work_item` and
-  `apply_work_item_changes` add `started` and their claim's `warnings`;
-  `create_work_item` adds `applied` when it took `claim`, `checklist` or
-  `links`; the `checklist` of `set_work_item_checklist` gives each step's
-  `done`. See [Tool results](docs/connection-contract.md#tool-results).
-- **The server lists 31 tools, up from 29**: `get_work_item_chain` and
-  `merge_work_items` are new.
-- **`claim_ready_work_item` takes the first ready item in the order of work**,
-  a `queued` state before a `backlog` one. Priority only breaks a tie, so an
-  urgent item nobody placed waits its turn.
-- **A source the search skipped names why.** The coverage `reason` of
-  `GET /api/modules/planning/search` is `store_not_attached`,
-  `store_unreadable`, `attached_list_unreadable`, `space_missing`,
-  `binding_conflict` or `search_failed`, where it was `source_unavailable`; the
-  request list across projects (`GET /api/modules/planning/requests`) names the
-  same reasons for a source it skips.
-- `launcher install` reaches running sessions. The launcher's `mcp` is now a
-  stdio front that keeps the client's pipe and, seconds after an install,
-  switches the server behind it to the new release between two requests. It
-  tells a client that can hear it when the tool list changed: Claude Code's CLI
-  (2.1.304) lists the tools again; Codex does so only with its
-  `mcp_tool_list_changed` feature, off by default, though its calls reach the
-  new release either way. A release that does not start leaves the session on
-  its old one, with a warning. An install that raises the store schema
-  therefore migrates the store through the first session that switches, or,
-  with none running, when the next session opens it. A session started before
-  the front still warns until restarted. See
-  [A release switch under a running session](docs/connection-contract.md#a-release-switch-under-a-running-session).
-- The desktop app is built on Electron 45 (Chromium 156), up from Electron 43.
-- The board: finished columns stand last, so Blocked reads before Done; the
-  columns that fit share the width; a large space regroups without stalling.
-  The list gives titles the spare width and, on a narrow window, folds State,
-  Priority and Assignee, then Steps and Updated, under the title, whose heading
-  keeps their sort; at phone width the heading stays one line. A click anywhere
-  in a list row opens its card. A board column and the list's rows are each one
-  Tab stop, walked with the arrow keys, Home and End; Page Up and Page Down move
-  through the list a screen at a time.
-- The bar above the board, list and graph is two compact rows, its queue
-  folding into a menu when the row is full. Every count above the stage counts
-  the same items, the chain with its root or the whole space, and a view that
-  leaves items out of its counts says so on a line of its own.
-- The whole-space graph leaves out items no drawn link touches, with an
-  «Unlinked · N» switch. The key and the camera controls stand in strips above
-  and below the drawing, never over a node, and on a chain the key names groups
-  as the card does. The graph opens with its work in view — whole where it
-  reads, else from its first item at the top-left — and a new queue or search
-  frames it afresh; the «Focus work» control is gone. The nodes are one Tab
-  stop, walked by the arrow keys with the camera following. Zoomed out, a node
-  is a block of its state's colour; at phone width the bar and the camera
-  controls are one row each.
-- The card's head pins only the title and the sections and condenses while the
-  body is read, with Back beside Close; the sections wrap on a phone. Back
-  reopens the parent card where it was read, with focus on the entry opened.
-- The questions dialog keeps focus after an answer, a refused answer or a
-  failed refresh, and counts only questions still waiting, as the rail does
-  («2+» when the count is incomplete, «?» when it could not be read). Yes/No
-  and short choices are radio buttons, a refused field says why at the field,
-  and projects are named by title.
-- The graph and Settings download on demand, and the libraries ship as a
-  `vendor` chunk that keeps its hash across releases. A failed download shows
-  «Could not load this view» with Retry.
-- A shell notice can be dismissed; the Settings subtitle names only its
-  sections; a text action rests on the control fill, so it reads as a control.
-
-### Fixed
-
-- A search whose query is exactly a work-item reference, such as `MAIN-12`,
-  answers that item first in `search_work_items`, `GET /api/planning/search`,
-  the task finder's search and `GET /api/search`. It used to come after every
-  newer item that mentioned it, and a full page could leave it out.
-- The task finder opens the first result on Enter as soon as results show, or
-  says a typed task reference was not found rather than open a task that
-  mentions it; it names each skipped project and space with the reason above
-  the results and stays at the top of the window as results arrive.
-- A board move the server refused no longer leaves the tile where it was
-  dropped, and a move sends the revision it read, so one made after an agent
-  changed the item is refused with `409` instead of overwriting it. A search on
-  the board no longer hides that an item is blocked.
-- The rail names each entry by what it shows, so a screen reader hears a
-  module's count and the questions waiting. The finder shortcut prints as
-  «Ctrl K»; its «⌘» made every first screen download a fallback font.
-- An address that names no page opens the app with «Section not found» and
-  status 404, marks no section current and is not reopened next time; a card
-  for an item that does not exist or was deleted says only that, with no Retry.
-  Unreadable view settings in an address are reset with a notice, a missing
-  project is named in the scope selector and lists the projects that exist, and
-  a route a module cannot open says so naming the module once.
-- Escape closes the top dialog, finder or card even after focus fell out of it.
-- An unexplained error no longer ends in «technical code: » with no code.
-- The fallback font, the licence notice and the licence text are sent with
-  their own content types instead of `application/octet-stream`.
-- On POSIX, stopping a child process no longer kills the caller's process
-  group; a launch and an adapter run in a session of their own.
-- The release check runs every Python tool from its own interpreter, and stops
-  with one message when a `requirements-dev.txt` pin is missing or at another
-  version there.
-
-## [2.0.0](https://github.com/Muratovnik/valkama/compare/v1.0.2...v2.0.0) - 2026-10-31
-
-### Added
-
-- The MCP tool `apply_work_item_changes` applies several writes to one work
-  item in one call: a claim, checklist ticks, refs, links, a comment, the
-  summary and a transition, in that order, so a closing transition sees the
-  ticks and the summary sent with it. Each step is the write its single tool
-  makes, with the same guards, events and revision bumps. The call is all or
-  nothing: a refused step writes nothing, and the error keeps the refusal's
-  code and names the step (`step: {group, index}`). The batch is recorded as one
-  call with its identity. It answers with the usual acknowledgement plus
-  `applied`, what each group changed; `verbose: true` returns the full item.
-  The HTTP write `POST /api/planning/work-item/apply` takes the same body. The
-  single tools are unchanged.
-- `valkama hook <client> <event>`, the command Claude Code and Codex hooks run.
-  It records a session lifecycle event from stdin straight into the store, with
-  no `serve` or MCP session running. It covers session start and end, subagent
-  start and stop, turn end, prompt submission, compaction and, for Claude Code,
-  notifications. The event becomes one `execution_events` row, confirmed with
-  source `hook`, and updates the session rows that every session reader uses.
-  A subagent gets its own row, `<session>:<agent>`, under its parent.
-  - The write is a light open of a store that already exists at the current
-    schema. A busy, missing or other-version store, or a failed insert, sends
-    the event to `spool/` beside the store instead. A hook never creates the
-    store's own directory, because its existence is what stops the first open
-    from adopting a store written under an earlier product name. Spool files are delivered
-    later by the next successful hook write, or by `housekeeping.drain_spool`.
-    Delivery is idempotent on the event's uid. An event older than what the
-    store already knows is kept as history and changes no session, so a late
-    drain cannot revive an ended session. A spool file that fails validation,
-    including a list or an object where a string belongs, is set aside as
-    `*.rejected`; no file content stops a drain, and a failure in start-up
-    maintenance is reported on stderr without stopping the server.
-  - The command always exits 0 and prints nothing, whatever its input. It keeps
-    an allowlist of fields and never the prompt, tool arguments, assistant text
-    or Codex turn metadata.
-  - `valkama hook claude pre-tool-use` prints the `PreToolUse` output that adds
-    `_identity` (session, tool use, and agent inside a subagent) to a Valkama
-    tool call. It does not open the store, and it makes no permission decision.
-  - `doctor` reports spool files still waiting, with the oldest event time;
-    rejected spool files; events delivered through the spool in the last 14
-    days; Planning writes in the last 14 days by identity state and source; and
-    the last hook event per client.
-
-  The contract is in `docs/hook-contract.md`, which replaces the superseded
-  session event contract. `POST /api/ingest` is unchanged.
-- A local transcript archive. When a session ends, `valkama hook` copies its
-  transcript, and a subagent's own transcript when the client reports one, into
-  `transcripts/` beside the store. The copy survives the client deleting the
-  original.
-  - Each copy is written through a `*.partial` file and renamed to a name made
-    from the session, the agent and the content's sha256. A
-    `transcript_archived` row in `execution_events` records the source path,
-    the archive path and the sha256. The content never enters the store.
-  - In the hook, a copy is made only for a source of at most 8 MiB that copies
-    within 1.2 seconds, which keeps the hook inside Codex's three-second
-    `SessionEnd` budget. Anything else stays owed. `transcripts.sweep` makes
-    owed copies, records a source that no longer exists, and purges copies by
-    the retention rule. The start-up of an MCP server or `serve` runs it after
-    the spool drain and the lease expiry, in a background thread, so the first
-    request never waits for a copy. The drain and the lease expiry before it
-    share a budget of about three seconds and give up quickly on a store
-    another writer holds.
-  - Retention: copies are kept while a non-terminal work item refers to the
-    session (by a session ref, a write call, its current claim, an execution
-    linked to the session, or as the item the session was launched for), and
-    for at least 90 days after the later of the session's last activity and
-    the newest terminal transition of a referring item. A purge
-    appends `transcript_purged` before it deletes the file, and the next sweep
-    removes a file a crash left behind. A sweep deletes nothing else but an
-    abandoned `*.partial`: a copy no row names, as after restoring the store
-    from a snapshot, is kept and reported by `doctor`.
-  - `valkama transcripts purge` deletes copies on request, whatever retention
-    says: `--session <id>` (repeatable), `--before <date>` (sessions whose last
-    activity is earlier) and `--dry-run`. Each copy gets a `transcript_purged`
-    row with `reason` `on-request` before its file is deleted, a copy still
-    owed for those sessions is never made, and the command prints counts only,
-    including how many open work items refer to the sessions.
-  - The export lists "transcript archive" among what it excludes and never
-    reads it. `doctor` reports copies kept and their size, copies owed, files
-    no row names and recorded copies missing from disk.
-- The store gains what session identity and claim leases need, still at schema
-  9. A new append-only table `execution_events` records the execution tree:
-  client lifecycle events and every Planning write call with the identity it
-  carried. Its triggers refuse UPDATE and DELETE.
-  - `work_item_events`, `work_item_comments` and `work_item_refs` gain a
-    `call_id` link to the call that wrote them.
-  - `work_items` gains `claim_call_id`, the call that took the current claim.
-  - `sessions` gains `parent_session_id`, `agent_id`, `transcript_path` and
-    `client_version`.
-
-  The first open of an existing store by this build takes a verified snapshot
-  labelled `preidentity` and adds these columns once. Every existing row keeps
-  its values, and its new link is empty, which reads as "not confirmed".
-  The step itself writes nothing into them, and the MCP tools are unchanged.
-  An earlier schema-9 build still opens the store and writes to it. A
-  `claim_ref` write that does not name its call, which is how such a build
-  claims, clears the claim's link.
-- Every Planning write call records who made it. Each MCP tool call and each
-  browser write that changes Planning adds one `planning_write` row to
-  `execution_events`, inside the call's own transaction, and every event,
-  comment and ref the call writes points to it. A refused call leaves no row.
-  The row is `confirmed` when the client proved the session: Codex through
-  `_meta.sessionId`, Claude Code through an `_identity` argument whose
-  `tool_use_id` matches `_meta["claudecode/toolUseId"]`, the browser through
-  its session credential. Anything else is accepted and recorded as
-  `unconfirmed`. The `author` text and the server's environment are never
-  identity. See `docs/connection-contract.md#call-identity`.
-  - Every tool accepts and removes an `_identity` argument before checking its
-    schema, so a `PreToolUse` hook that adds one breaks no call. A malformed
-    one is dropped, never refused. `tools/list` is unchanged.
-  - History events in `get_work_item`, a `verbose` write and the HTTP item
-    read carry `identity`: `state`, `source`, `session_id` and `agent_id`. An
-    event recorded before this reads as `unconfirmed` with the rest `null`.
-    The web reads records strictly, so a `web/dist` built before this change
-    refuses every item; serve the one built with it.
-  - A write made by the execution runner outside any call records no call row
-    and reads as `unconfirmed`.
-- A claim is a lease held by the session that took it. Its state, `live`,
-  `stale` or `unconfirmed`, is computed at every read: `unconfirmed` when no
-  confirmed session took it, `stale` when that session ended, failed, has no
-  row or showed no sign of life for 14 days, otherwise `live`. See
-  `docs/connection-contract.md#claims-are-leases`.
-  - `get_work_item`, a `verbose` write and the HTTP item read carry `claim`:
-    `holder`, `state`, `session_id`, `agent_id`, `source`, `acquired_at`,
-    `last_seen` and `expires_at`, or `null`. Every item record, the compact
-    list and search rows and the short write acknowledgements carry
-    `claim_state`. `claim_ref` and `ready` keep their meaning, and `tools/list`
-    is unchanged. The web reads records strictly, so a `web/dist` built before
-    this change refuses every item; serve the one built with it.
-  - A confirmed write call counts as a sign of life of its top-level session,
-    so a session whose hooks are silent stays live while it writes. One that
-    arrives after the session ended makes it `active` again, because a client
-    can resume an ended session without a new session start; its claims then
-    stay live. A drained or replayed hook event never does.
-  - A stale lease is released by the first write that meets it:
-    `claim_work_item` on that item, `claim_ready_work_item` in its space, and
-    the start-up of an MCP server or `serve`, which now also drains the hook
-    spool. The release is a `released` event with the detail
-    `lease-expired: <holder>`, written by `valkama` under its own call row
-    (source `valkama`, tool `lease-expiry`). Taking a stale claim over needs no
-    `force`.
-  - The board marks a stale claim on its tile, and the inspector shows the
-    lease and its expiry. The owner takes a stale claim over without being
-    asked to confirm a takeover; the owner's own claim shows no lease.
-  - `doctor`'s hook and identity findings have their texts in the web's
-    Settings, in English and Russian.
-
-- `valkama export --space KEY` (repeatable) exports only those Planning spaces
-  and names them in the file as `space_filter`; an unknown space exits non-zero.
-  `valkama export --output PATH` writes the export through a temporary file in
-  the same directory and replaces the target in one rename, then prints one
-  line with the path, the spaces and the item count. Without `--output` the
-  export still goes to stdout.
-- `list_work_items` and `search_work_items` take an optional `offset`, and so do
-  `GET /api/planning/work-items` and `GET /api/planning/search`. Their answers
-  carry `next_offset`, the offset of the next page, or `null` on the last one.
-  The `tools/list` change is additive only: one new optional `offset` property
-  on each of the two tools, and longer descriptions that explain paging. The
-  HTTP answers gain `truncated` and `next_offset`, and so does a `verbose`
-  tool answer, which is the HTTP answer; no existing field changes.
-
-### Changed
-
-- The MCP tool `get_work_item` answers by default with the item's current
-  fields and only the newest part of its history: the 5 most recent comments
-  and 10 most recent events, with `comments_total`, `events_total` and
-  `history_truncated`. The new boolean argument `full: true` returns the
-  complete history, as the tool did before. The HTTP read
-  `GET /api/planning/work-item` is unchanged and takes the same cut as opt-in
-  `comments`, `events` and `sessions` parameters.
-- `get_work_item` also carries `sessions`: each agent session whose confirmed
-  calls wrote to the item, with its `client`, `identity_source`, `first_at`,
-  `last_at` and number of `writes`. Valkama records this itself, so the MCP
-  server's instructions and the `attach_work_item_ref` description no longer
-  ask an agent to attach its session id as a ref, and they point to
-  `apply_work_item_changes` for several writes to one item.
-- Moving an item to Review no longer warns about missing evidence when a
-  confirmed session has written to it: such a write names its session as a
-  session ref does. Before, an agent that stopped attaching session refs got
-  the warning on every move to Review without a commit ref.
-- Two sessions that sign with the same `author` no longer release or take
-  over each other's claim. A confirmed session holds its claim whatever author
-  it signs with, and any other caller needs `force` against a live lease. A
-  claim without a confirmed session is still compared by author.
-- The space's abandoned claims (`stale_claims`) follow the lease: a stale lease
-  is listed at once and a live one never, whatever its quiet. The three-day
-  quiet rule stays for unconfirmed claims, except the owner's own claim made
-  in the browser; a claim a launch took for its runner is still listed.
-  Each entry carries `claim_state`.
-- Starting an item under an unconfirmed or stale claim answers with a warning.
-  The claim still counts as the executor, and a claim taken in the browser
-  gets no warning.
-
-- **Breaking for every running client: store schema 9.** The first open by this
-  build takes a verified snapshot labelled `preschema9` beside the store, then
-  drops the extension registry's tables, `platform_modules` with
-  `platform_registry_audit`, and `integration_settings`; every other row is kept
-  as it was. A store older than schema 8 goes through the same historical
-  migrations as before, under its `preproductmodel` snapshot, and ends at 9. A
-  build at schema 8 refuses the upgraded store with `StoreTooNewError` and
-  leaves the store file unchanged, so restart every agent client after pinning
-  this release with `launcher install`. Going back to a schema-8 build is described in the README under
-  "Migrating an older store".
-  A fresh store is created at 9 without those tables, and a store stamped 9 that
-  still holds one of them is refused.
-- **Breaking for `export`:** an export carries only the `planning` section. The
-  `relations` section (the registry's adapter links) and the `settings` section
-  (the integration switches) went with their tables; `--section relations` and
-  `--section settings` are refused as unknown.
-- A store that is already current opens without the full `PRAGMA
-  integrity_check`. The check still runs whenever an open migrates the store,
-  and on every snapshot and restore.
-- **Breaking for MCP clients:** the work-item write tools (`create_work_item`,
-  `update_work_item`, `transition_work_item`, `claim_work_item`,
-  `set_work_item_checklist`, `claim_work_item_checklist_item`,
-  `tick_work_item_checklist_item`, `set_work_item_summary`) answer with a short
-  acknowledgement (reference, revision, state, holder and what the call changed)
-  instead of the whole item. Pass `verbose: true` for the full item. Every MCP
-  tool result is now serialized on one line without indentation. The HTTP API
-  and the read tools are unchanged.
-- **Breaking for MCP clients:** `list_work_items` and `search_work_items` answer
-  one compact row per item and, without a `limit`, at most 50 rows, with a
-  `truncated` flag. Pass `verbose: true` for the full items as before. Planning
-  tools now refuse an argument their schema does not have, and a missing required
-  one, naming the tool and the arguments it takes. They also read the spellings
-  agents tend to reach for when a schema is out of view (`reference` for `id`,
-  `to` for `state`, `planning_space_id` for `space`, and the few others listed in
-  the connection contract); the published schemas are unchanged apart from the
-  optional `verbose`.
-- Focus the workspace on projects, work items, claims, blockers, execution,
-  results, and review. Navigation contains Work and Settings; board, list, and
-  graph share the Planning read model. Memory refs and exact session context
-  remain inside work-item context.
-- Keep session lifecycle ingestion in Planning, accepting `session_start`,
-  `session_end`, `attention`, and `turn_end`. `/api/session` resolves compact
-  stored context rather than an event feed.
-- **Breaking for adapter authors:** the external adapter manifest has exactly
-  four fields (`contract_version`, `adapter_id`, `version`, `capabilities`), and
-  any other field is refused by name, including a record installed with the
-  earlier, longer manifest. Capabilities are an open set of dotted lowercase
-  ids. Check and install such an adapter again.
-- The module list (Planning, Memory, Settings) is declared in code.
-  `GET /api/modules` and the MCP tool `list_platform_modules` keep their shape
-  and answer from it without reading the store: every module is `enabled`, none
-  is `mutable`, every `revision` is 1 and `updated_at` is when the list last
-  changed. Settings no longer declares the registry's read models, and the
-  entity kinds `service`, `connection` and `registry` left the reference
-  vocabulary.
-- `launcher install` pins a release: it copies one commit of the checkout
-  (`--revision`, default `HEAD`) with `git archive` into the releases directory,
-  and the stable command runs that copy instead of the working tree. Uncommitted
-  edits no longer reach new client sessions or the store they open; newer
-  commits reach clients at the next `launcher install`, and an earlier
-  `--revision` is the rollback. The launcher manifest gains `revision` and
-  `checkout`, keeping its schema version. A running MCP server warns once the
-  launcher has been pinned to another release, and `doctor` reports how far the
-  checkout has moved past the pinned commit. Run `launcher install` once after
-  updating so the stable command stops running the checkout directly.
-- The default workflow has a terminal **Cancelled** state for work closed as not
-  needed, duplicated or superseded, so it is no longer counted as done. Moving
-  an item there needs a closing summary but leaves its undone checklist steps
-  open; Done still needs every step ticked. A workflow still shaped like the
-  earlier six-state default gains Cancelled, with every move to and from it,
-  the first time a store is opened; a workflow shaped differently is left
-  alone. No existing row changes meaning, so this needs no store schema change.
-
-### Fixed
-
-- An MCP server whose launcher had moved on to another build appended the
-  stale-build warning to every tool result, so a long session carried dozens of
-  copies and paid for each on every later request. The first result after the
-  drift carries it; a reminder follows only after at least 30 minutes, three in
-  all per process.
-- The desktop app refused to start or reuse the server on Windows builds that
-  report a listening socket's TCP state as `Closed` or as no state at all:
-  `launcher listener status` looked only for `Listen` sockets, found none and
-  called a port that the managed server held `free`. A listener is now any
-  socket on the port with no remote end, whatever state Windows reports.
-- Any local process could obtain the browser session token, because
-  `GET /api/security/bootstrap` without an `Origin` returned it, and could
-  then write as the owner (`browser`, signed `user`) with a forged `Origin`.
-  The bootstrap and every write with the browser credential now also require
-  `Sec-Fetch-Site: same-origin`, the fetch metadata a browser sets on its own
-  requests; a request without it is refused with `403`
-  `fetch_metadata_refused`. The web client and the desktop app send it
-  already. The adapter endpoint is unchanged.
-- An MCP tool call refused for its arguments -- an unknown argument, a `limit`
-  that is not an integer -- answered only with the text
-  `PlanningHttpError: ...`. It now answers like every other refusal, with
-  `structuredContent.error.code` (`invalid_request`) and the message.
-- `valkama export` wrote at most 1000 work items per Planning space and said
-  nothing about the rest; the items lost were those in the last workflow
-  states. It now reads every item page by page and checks the count against
-  the space's own. A count that does not add up stops the export, and nothing
-  is printed or written.
-- `list_work_items` cut its answer at 1000 items and `search_work_items` at
-  200 without saying so; at a `limit` of 1000 or more (200 for a search) the
-  compact answer reported `truncated: false` while it was cut. A page still
-  holds at most 1000 (200) items, but `truncated` is now correct at every
-  limit and `next_offset` says where the rest starts. The list order now ends
-  on the work item id, so paging cannot repeat or skip an item that ties with
-  one from another space.
-- Rolling the launcher back with `launcher install --revision` to a release
-  from before `valkama hook`, while the client hooks were still registered,
-  would have blocked every prompt and tool call in Claude Code: that release's
-  argument parser exits 2 on the unknown command. The shim now answers
-  `valkama hook` with exit 0 and no output when the pinned release has no hook
-  entry point.
-- A half-written migration snapshot, left by a process killed while writing it,
-  was found as reusable at every later open and stopped each one. A reusable
-  snapshot that cannot be read is now renamed to `*.unverified`, kept, and a
-  fresh snapshot is taken.
-- Search across attached scopes (`/api/search?scope=all`) failed as a whole when
-  one attached store was written by an earlier build: reading a claim there
-  needed a column that store does not have. Such a claim now reads
-  `unconfirmed`, and a scope that cannot be opened or searched for any reason
-  costs only its own hits and is named, with the reason, in the new `skipped`
-  list of the answer.
-- A claim, checklist claim or checklist tick made in the browser was signed
-  `agent`, while a comment made there was signed `user`. A browser write that
-  names no author, or an empty one, is now signed `user`.
-- Load the global Work directory from project and space counts, keeping large
-  work histories within the bounded UI response. The full directory API remains
-  available without the optional `directory_only=true` query.
-- Wrap work-queue filters and Settings controls in narrow windows.
-- Keep every work item in a space's board, list, graph, and work queues, including
-  spaces with more than 1000 items. Bounded item searches retain their limits.
-- Decode Git reference context after byte capture while preserving its timeout.
-- Check subprocess byte capture and explicit decoding policy, write ownership,
-  and document lifecycle without pinning private expressions or release-note text.
-
-### Removed
-
-- Standalone Analytics dashboard and export/read model; Improvements signals,
-  analysis, evaluation, monitoring, jobs, API, and MCP tools; Skills catalogue
-  and activation UI/API; standalone Sessions fleet, inbox, and tool event feed.
-- `/api/sessions`, `/api/session-seen`, and the Sessions SSE view. Installed
-  skill files and existing client enablement settings are unchanged.
-- Unused desktop inbox notification wiring, frontend remnants of the retired
-  Analytics and Skills screens, and the unused usage client with its test fixtures.
-- The extension registry: services, connections, assignments, grants, actions,
-  packages, relations and capability resolution, with `/api/platform/registry`,
-  `/api/platform/relations`, `/api/platform/actions`,
-  `/api/platform/assignments` and `/api/platform/grants`, which now answer 404.
-  Nothing seeds or reads the registry's rows, and store schema 9 drops their
-  tables. The work-item read no longer carries a `relations` key.
-- **Breaking for HTTP clients:** turning a module on or off. `POST
-  /api/modules/state` answers 404, the Settings Workspace section that held the
-  switches is gone, and a disabled module row in an existing store no longer
-  hides or refuses anything. Store schema 9 drops the `platform_modules` and
-  `platform_registry_audit` tables.
-
-## [1.0.2] - 2026-09-27
-
-The first public release. There is no earlier public version to compare
-against, so this entry describes what the repository contains rather than what
-changed in it.
-
-### Added
-
-- **A local modular control surface for agent work.** Planning, Sessions,
-  Analytics, Improvements, Skills, Memory, and Settings share one Kernel vocabulary,
-  persisted module registry, and normalized integration records.
-- **A Planning module agents use over MCP.** Its Kanban view has six fixed
-  columns, competing claims are refused by `claim_work_item`, epics are parent
-  work items, and transition guards refuse a move the Planning workflow could
-  not honestly report.
-- **An activity trace on every Planning card** — creations, moves, claims,
-  takeovers, releases, checklist completions and link changes, each with its
-  author, beside typed refs for commits, sessions and memory entries.
-- **Checklists with stable ids** that agents claim and complete individually, so
-  two agents can split one card without either of them inventing a percentage.
-- **A live Planning UI** in Vue 3, served from a committed build, updating over
-  Server-Sent Events rather than polling, in English and Russian. Concurrent
-  moves are resolved with a `409` naming who moved the card where, not silently
-  undone.
-- **Agent session launching from a Planning card**, with an explicit delivery
-  contract and an enforced JSON result schema. A process exit code is not
-  treated as delivery, and resume works only against the client's own stored
-  session identity.
-- **An analytics dashboard** over the same events — flow, throughput, cycle,
-  reopen and blocked KPIs — that reports coverage as `confirmed`, `inferred`,
-  `partial` or `unknown` and never fabricates a duration across missing history.
-- **An improvements module** for working through recurring failures: a sidecar
-  domain with its own database scope, a job supervisor, and evaluation runs
-  bound to canonical pack snapshots.
-- **A skills inventory** over registered projects, and normalized registry
-  views for Modules, Adapters, Services, Connections, and Assignments.
-- **Local project registration owned by Valkama.** The `projects` CLI adds
-  existing roots, binds Planning spaces, checks and publishes a fixed schema-v3
-  projection, and can restore the preceding inventory and projection bytes.
-  An explicit import accepts an existing schema-1 TOML inventory.
-- **An Electron desktop window and a Windows tray icon.** The tray appears while
-  an agent holds a session and disappears when the last one ends; a click always
-  produces a visible outcome, including a refusal when the listener cannot prove
-  it is this checkout.
-- **A dual-era MCP surface**: one process serves revision 2026-07-28 and the
-  `initialize` handshake it replaced, choosing from how the client opens. See
-  [`docs/connection-contract.md`](docs/connection-contract.md).
-- **Two guards against version skew** — `static_assets.SourceWatch` for a
-  process that went stale while it ran, `store.STORE_SCHEMA_VERSION` for a build
-  that was already old when it started.
-- **A CLI** covering the current Planning lifecycle and product diagnostics:
-  `serve`, `mcp`, `summary`, `runtime`, `export`, `migrate`, `attach`, `detach`,
-  `scopes`, `purge-stream`, `config`, `setup`, `doctor`, `adapter`, `capabilities`,
-  `status`, `launcher`, and `projects`.
-- **Migration recovery points.** Store migrations take clean SQLite snapshots
-  before changing existing data. The Board-to-Planning conversion is explicit;
-  `migrate planning-model --dry-run` converts a temporary copy first. Tests
-  restore a pre-migration product-model snapshot into a separate store and
-  replay the migration.
-
-### Notes
-
-This is the first public release. The source archive contains the Python service
-and the built web UI. The Windows installer contains the desktop window; it uses
-the Python service and managed launcher installed from the source archive.
+## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) (2026-11-16)
+
+### Highlights
+
+- The Analytics page is rebuilt as a monitor: a rail of tiles for the overview and each
+  dimension beside one panel, a live hour «Now», periods set between moments, a split by
+  a second dimension, and the subscription quota of each account.
+- The quota comes from three sources — Claude Code's status line, the `valkama-quota`
+  mod and an opt-in poll of the usage endpoint — and quota alerts warn before a window
+  runs out.
+- The MCP catalogue falls from 33 tools to 21, one per capability; see Breaking Changes.
+- Search reads a query as words, best match first, and a task's card opens over
+  Analytics and Settings instead of moving to the board.
+- From 2.9.0 Valkama is licensed under the Apache License 2.0 with the Commons Clause
+  condition; releases up to 2.8.0 stay under the MIT License
+  ([0cb735b](https://github.com/Muratovnik/valkama/commit/0cb735bdb68d9d1b5d9195b0feb0db3a92918098)).
+  The README is now an entry page, and the user guides live under `docs/guides`
+  ([1caf2b0](https://github.com/Muratovnik/valkama/commit/1caf2b0e33b2804fc7ec2ff4d8bf420a0a80a5db),
+  [757899a](https://github.com/Muratovnik/valkama/commit/757899ae690aaaba180cccf458729e0ebbad5773)).
+- Upgrading: the store moves to schema 18 behind the recovery point `preschema17`, and a
+  2.8 build refuses it afterwards. The same first open fills the search index and folds
+  duplicate `relates-to` links, after a verified recovery point.
+
+### Breaking Changes
+
+Twelve planning tools that each made one write are removed: make those writes through
+`apply_work_item_changes`, which agents already used for nearly every such write
+([ad5cff6](https://github.com/Muratovnik/valkama/commit/ad5cff6fa1c54881d8a14b501c487522643df027)).
+Restart running client sessions after installing this release, because a session keeps
+the tool list it started with. A call to a removed name is refused with the code
+`removed_tool` and a message naming the call that does its work; it is a refusal, not an
+alias, and writes nothing. The HTTP writes behind these tools are unchanged.
+
+| Removed tool | Call instead |
+| --- | --- |
+| `update_work_item` | `apply_work_item_changes` with `update` |
+| `transition_work_item` | `apply_work_item_changes` with `transition` |
+| `set_work_item_checklist` | `apply_work_item_changes` with `checklist` |
+| `tick_work_item_checklist_item` | `apply_work_item_changes` with `checklist_ticks` |
+| `link_work_items` | `apply_work_item_changes` with `links` |
+| `attach_work_item_ref` | `apply_work_item_changes` with `refs` |
+| `set_work_item_summary` | `apply_work_item_changes` with `summary` |
+| `comment_work_item` | `apply_work_item_changes` with `comment` or `comments` |
+| `resolve_work_item_comment` | `apply_work_item_changes` with `resolutions` |
+| `report_work_item` | `apply_work_item_changes` with `summary`; a report is published in the card |
+| `select_work_item_summary` | `apply_work_item_changes` with `summary`; a report is selected as the outcome in the card |
+| `decline_work_item_request` | `expire_work_item_request` to withdraw a question; the owner declines one in the card |
+
+The argument spellings those tools read besides their own (`from`, `to`, `target` and
+`type` for a link, `to` and `to_state` for a state, `ref` for a ref's value) went with
+them.
+
+### Features
+
+- **analytics:** rebuild the page as a monitor: a rail with a tile for the overview and for each of ten dimensions, and a panel with the overview's period chart against the period before, ranked bars, small charts and a sortable table that downloads as CSV ([4a3c4dd](https://github.com/Muratovnik/valkama/commit/4a3c4dd0581beed69fbaee1f6a3d1d364f432683), [dc3059c](https://github.com/Muratovnik/valkama/commit/dc3059ceb4ec28e7e57ef1edeaebf8b0bf7479ff), [382d041](https://github.com/Muratovnik/valkama/commit/382d0414ef83f3c5661075b838b672a65be85ad3))
+- **analytics:** add the token kinds section, and break work with no task down by project and launch class ([b3d69a2](https://github.com/Muratovnik/valkama/commit/b3d69a274452229ba4a0497a5fd75ed50918f0eb), [7cfe9a2](https://github.com/Muratovnik/valkama/commit/7cfe9a2c76766b4634392a9f2953d14be0c160fd))
+- **analytics:** show the tokens and the cost an hour of agent time took, and each figure's trend beside it ([c776b94](https://github.com/Muratovnik/valkama/commit/c776b9439cd3d354a15e350625294585077eaa23), [0b90308](https://github.com/Muratovnik/valkama/commit/0b90308f64afc591b9ad8f52ed8846248f67cc9c))
+- **analytics:** give every chart mark a hint and its table row's action: a task opens its card, any other value narrows the view, and let a cut table heading say its words whole ([80c9538](https://github.com/Muratovnik/valkama/commit/80c95388814f2893a838f9472e049e9fe38cf44c), [ee4d654](https://github.com/Muratovnik/valkama/commit/ee4d654e4168b7ebfebb8b6a37ddafaef5268fff))
+- **analytics:** say what a section's figures leave out once, in the «ⓘ» of its heading, and name the cost «Cost» ([9e33190](https://github.com/Muratovnik/valkama/commit/9e331901e85f15e11f43ebea2d514c61e76d6d99))
+- **analytics:** add the live period «Now», the last hour by the minute, read again every 30 seconds while the tab is visible ([24c658d](https://github.com/Muratovnik/valkama/commit/24c658d7f13c615373b6b9f399ab1d630810272e), [43e540e](https://github.com/Muratovnik/valkama/commit/43e540e4aac09dc2c8b7d493e1ddcfd963b9a4b3))
+- **analytics:** add «Today» by the hour against the same hours of yesterday ([e97b92d](https://github.com/Muratovnik/valkama/commit/e97b92dfef7059f475e1a7bffd427244d7078d85))
+- **analytics:** let your own period run between two moments, and set it by dragging a frame on a chart or pressing an hour or a minute ([05570cc](https://github.com/Muratovnik/valkama/commit/05570cc40e4c0640774a7cafc41815e62126a41a), [1f77c8c](https://github.com/Muratovnik/valkama/commit/1f77c8c0a3e73362ac5c902bcff8490398b723f3))
+- **analytics:** say how fresh the figures are in the bar, «● 15 s ago», and keep the bar within its width at every size, the retry of a failed refresh and the buttons whose words it hides still there and named ([608aaac](https://github.com/Muratovnik/valkama/commit/608aaac39e83d6e695471d1eb1927a59a9f8fe53), [070e3c2](https://github.com/Muratovnik/valkama/commit/070e3c21d3567b06863ecb9c4982634a8803d7be), [eafbacd](https://github.com/Muratovnik/valkama/commit/eafbacd7a400123b8211308e4f2d266c44dd4f35), [cbd1811](https://github.com/Muratovnik/valkama/commit/cbd1811e413e1017dc0ec22814eb93fa0e7573ea))
+- **analytics:** split a section by a second dimension from its heading, with every chart, the table and the download showing the pairs ([692101f](https://github.com/Muratovnik/valkama/commit/692101f1ffe7f6d22dbc39394c0ad1ce9a803b35), [61c597d](https://github.com/Muratovnik/valkama/commit/61c597d8bd4a05465fcf358231a931cd4019ebfa))
+- **analytics:** keep each value's colour when a filter takes another value away ([56cb77b](https://github.com/Muratovnik/valkama/commit/56cb77baf556d7085b335384fbf6f9c8b44fd912))
+- **analytics:** open a task's card over Analytics and Settings, and from «Go to a task», the questions and any reference, keeping the page under it ([e171f18](https://github.com/Muratovnik/valkama/commit/e171f18bdd4f5854489902694041402406883302), [33bb7fa](https://github.com/Muratovnik/valkama/commit/33bb7fa1d94010ec01dc6bac80774d374a5c6382))
+- **analytics:** name executors by their session title and accounts by the owner's names, instead of hex ids ([927e1b9](https://github.com/Muratovnik/valkama/commit/927e1b97c5174d18f9a4fc5ed33506a121a43922), [10a8abc](https://github.com/Muratovnik/valkama/commit/10a8abcaac08800bf42e4ca0cccd341703519888))
+- **analytics:** show each account's subscription quota: the five-hour, week and model windows with forecast, reset, readings as a step line and a table ([7262625](https://github.com/Muratovnik/valkama/commit/7262625c837728e763ee87ad6760f3f2ef9ca1ca), [57cfe60](https://github.com/Muratovnik/valkama/commit/57cfe6005b3a9340022f064130120fe9a7ff0bc7), [ef7d7d1](https://github.com/Muratovnik/valkama/commit/ef7d7d1fda41ab2326f578559a1ff30c059e09d4))
+- **analytics:** break work down by account and by organization apart, each with its tile, section and filter, and say an account by the owner's name for it or by its organization and what tells it apart; the day chart marks a change of account and the quota panel adds an account to the filter by account ([ef247b3](https://github.com/Muratovnik/valkama/commit/ef247b37c80aaca3f62133a00eeb11d70c957213))
+- **analytics:** say where each quota window went, ranking the work on that account by its API price estimate ([bc105c8](https://github.com/Muratovnik/valkama/commit/bc105c816c56908055be328f0f92d037039748b5))
+- **api:** add `GET /api/analytics/quota`, each account's quota windows as they stand now, with a forecast; a week's forecast is a range, and each entry is keyed by its account ([ef247b3](https://github.com/Muratovnik/valkama/commit/ef247b37c80aaca3f62133a00eeb11d70c957213), [33fd536](https://github.com/Muratovnik/valkama/commit/33fd53676cebf0ea3c0e542890ae355e5f3819d0), [ce15ac8](https://github.com/Muratovnik/valkama/commit/ce15ac8067b35b594a55bfb48fc80e3835fdf78b))
+- **api:** break `GET /api/analytics/usage` down by `seat`, the account a stretch of work was spent on: by its UUID, or by when its week resets where no reading names one, the same account from week to week, with an organization's work on no known account apart ([ef247b3](https://github.com/Muratovnik/valkama/commit/ef247b37c80aaca3f62133a00eeb11d70c957213), [0a64f61](https://github.com/Muratovnik/valkama/commit/0a64f6166bc0c43ec39d55fea4eea8e3bc6f93db))
+- **api:** answer `GET /api/analytics/usage` by the minute with `step=minute`, up to 2,400 steps a period ([3903717](https://github.com/Muratovnik/valkama/commit/3903717fd5e15c67d50749ee71d9eed7016699f5))
+- **api:** break each step of a two-dimension `group_by` down by the pair of both ([0efae2f](https://github.com/Muratovnik/valkama/commit/0efae2fc1586d1b2dc24db1a6f9ea6d02cd3e609))
+- **quota:** record Claude Code's status line as a quota source with `valkama statusline`, keeping a status line you had through `--previous`, and name it in `valkama capabilities` ([5752fcc](https://github.com/Muratovnik/valkama/commit/5752fccc39b8b2eb90ac7abaacd1d45ff49783e9), [cecd8bb](https://github.com/Muratovnik/valkama/commit/cecd8bbcfdb157dec49ae164b7126388a6d6facc))
+- **quota:** add the Claude Code mod `valkama-quota`, which reads the quota in every session, the VS Code extension's included; the repository is now the marketplace `valkama` ([99ba9e5](https://github.com/Muratovnik/valkama/commit/99ba9e5ec7ebed5ffc59b21ea20e34ab54b2d981), [9a62f67](https://github.com/Muratovnik/valkama/commit/9a62f673cf72732f5576b2c9a76a0bc09b6b21da))
+- **quota:** add the quota source `poll`, off until the owner switches it on in Settings, with a warning that the usage endpoint is undocumented; it sends Claude Code's sign-in only to `api.anthropic.com` and keeps it nowhere ([8cbac76](https://github.com/Muratovnik/valkama/commit/8cbac7664a4bec1750fb47ea47507011c3d23723), [49c72cf](https://github.com/Muratovnik/valkama/commit/49c72cf6d4053c4155bda3cfaa9c763f732b4281))
+- **quota:** warn before a window runs out: a week at 75 and 90 percent, five hours when its forecast runs out before the reset, as a new alert event on by default ([c8fa6d8](https://github.com/Muratovnik/valkama/commit/c8fa6d8b52db250c97a117ae59413728c88d955b), [c8d586d](https://github.com/Muratovnik/valkama/commit/c8d586d1e7e5db81a4301bcbbe72557280215321))
+- **quota:** keep quota samples and accounts in the store at schema 17, the owner's names by account at schema 18, and import history with `valkama quota import --source FILE` ([14a1e46](https://github.com/Muratovnik/valkama/commit/14a1e4649b1fbcdea54d85e5155962360ba2aa05), [e8157c1](https://github.com/Muratovnik/valkama/commit/e8157c14c8988fd16db78d81b7924fa4ccd4ca6b))
+- **doctor:** report each quota source as off, silent or working ([53dbb0f](https://github.com/Muratovnik/valkama/commit/53dbb0ffa09556c7ba3a0756ab01ef5ed3616bf1))
+- **settings:** name each organization and each of its accounts the past year or the quota saw, in Settings → General → Accounts and `GET`/`PUT /api/quota/account-names` ([5fce3cc](https://github.com/Muratovnik/valkama/commit/5fce3cc85f3e699cfe529cbcd9dd05d774cdb706), [f33d191](https://github.com/Muratovnik/valkama/commit/f33d19135a7991ee8103217d9b079acfcd2a8c5c), [d2681f5](https://github.com/Muratovnik/valkama/commit/d2681f5777b3cb53b7a63fd6195677d4c913bb75), [8fcc08a](https://github.com/Muratovnik/valkama/commit/8fcc08ab2442945adeda10a0fe452cd1f1790161), [28fab94](https://github.com/Muratovnik/valkama/commit/28fab9459927aab94b82b93f37a4d819a0a299a4))
+- **planning:** find work items by every word of a query, in any order, best match first, through a word index; a store without FTS5 searches by phrase as before ([2389a9d](https://github.com/Muratovnik/valkama/commit/2389a9d8a851879668fdb3a478e9b8f11ad9267f))
+- **planning:** name up to three open items that read like a new one in the answer of `create_work_item` ([0253c2f](https://github.com/Muratovnik/valkama/commit/0253c2f4a32311caa6104c9dac53820ddaf805fb))
+- **planning:** take a checklist group as the bare list of steps as well as `{"items": [...]}` ([52459a8](https://github.com/Muratovnik/valkama/commit/52459a82be90fd43856621b7866061a03ff43cb0))
+- **web:** find in every row of the work list with Ctrl+F, the rows the list does not draw included ([1b76599](https://github.com/Muratovnik/valkama/commit/1b765995da4eadad951a9d9230099f77e998f7ab))
+- **web:** give a card's chain a tab of its own and fold groups of more than five links in Relations ([1058933](https://github.com/Muratovnik/valkama/commit/105893380bdad3bc9846f0ab16779b289d483fc3))
+- **web:** shorten a card's Agents tab to its totals and a link to the same work on Analytics ([f727f39](https://github.com/Muratovnik/valkama/commit/f727f39b14ad8d63df4b38b199f5fb7e1cff352a))
+- **web:** show every hint and a reference's card through one hint manager, so they come and go by one rule: one at a time and none outside an open menu or a pinned help, fading in on the first show alone, held while the pointer heads for one, and saying their words once ([66cfc2b](https://github.com/Muratovnik/valkama/commit/66cfc2ba08675369ed769bf2786a82d4817e07e2), [4564342](https://github.com/Muratovnik/valkama/commit/45643426a1f09c716403623f9c7c852a73926149), [718d64b](https://github.com/Muratovnik/valkama/commit/718d64b49913ed74c28830102416df53afe12d9e), [f5a4859](https://github.com/Muratovnik/valkama/commit/f5a485962fb8b1b553618418c9deda10d8c62fd2), [6a539da](https://github.com/Muratovnik/valkama/commit/6a539da720202a9087c50e821319f3b599b73a34), [93bfbb6](https://github.com/Muratovnik/valkama/commit/93bfbb6cc75ff0a51d37c92303d73b4ece4fa1a0), [2d3337b](https://github.com/Muratovnik/valkama/commit/2d3337bd8c3f5d8c20d0932f7d9b6aa1eee87916), [3b648f9](https://github.com/Muratovnik/valkama/commit/3b648f9c996e34a6fabaccf789646c04e0a1e202), [7392a28](https://github.com/Muratovnik/valkama/commit/7392a28f5236f7b9c78a7484097aca467fe71f84))
+- **web:** stand a hint by its list: past the rails, a ranking or the list view's table, clear of their rows; beside a setting or a checklist step inside its own row; on one side along a period chart; and inside its own small chart ([b13534b](https://github.com/Muratovnik/valkama/commit/b13534bcb4f2dbdb2b2d279370b3d8b6c0c0ffc0), [d537a71](https://github.com/Muratovnik/valkama/commit/d537a71b6b1753478d32430f180ba0e74ed0c080), [d485301](https://github.com/Muratovnik/valkama/commit/d485301c9f941d6771855b021af8cd2356ada324), [f81ef2a](https://github.com/Muratovnik/valkama/commit/f81ef2aeb8eacd8f5c910dadaad4d6395965089f), [9cda049](https://github.com/Muratovnik/valkama/commit/9cda049d53187034efc5539708a83b121c3557d0))
+- **web:** lay a cut text's whole words over it, from the same point and in the same font, over every line a clamp shows and moving with the graph's camera, instead of a hint above it, a board tile's title, an outcome preview and a task finder row among them, the tile's only while the pointer rests on the title; a control whose label is hidden is named by its hint instead, and the chain's branch map names the task under the pointer whole ([f4fd484](https://github.com/Muratovnik/valkama/commit/f4fd4849625143fe7982342db0bc9e7299f327c0), [6bf04a4](https://github.com/Muratovnik/valkama/commit/6bf04a4d85a0890aedd635da18404bcf361865de), [e8418d1](https://github.com/Muratovnik/valkama/commit/e8418d172d99c20d4e817fcb16d013b662a24506), [5737d9d](https://github.com/Muratovnik/valkama/commit/5737d9d66b65b9c80af8fab67f1cf3ebd7c380eb), [5fd961f](https://github.com/Muratovnik/valkama/commit/5fd961f9e6cdc298048fc1826a371ed26faf03f4), [e6cb46e](https://github.com/Muratovnik/valkama/commit/e6cb46e5d54ac5802613070feaee7661248d1078), [3aa6c45](https://github.com/Muratovnik/valkama/commit/3aa6c451ee4b4486defb7ac14beb12cad8047f8c))
+- **web:** show a loading mark after half a second and keep it at least 200 ms, in every read wait ([e2068b2](https://github.com/Muratovnik/valkama/commit/e2068b207bd07ac5b3449c7f4c1428b90aad4646), [1bcbb5d](https://github.com/Muratovnik/valkama/commit/1bcbb5db5064bcf687cb149148c2665e23b3bb10))
+- **desktop:** open on the shell's own skeleton instead of a line of text on black, and keep the rail's width for the next start ([179edca](https://github.com/Muratovnik/valkama/commit/179edcaf30c3e3bcd58d1f3be7dd305c1ed5cb30), [0c5596a](https://github.com/Muratovnik/valkama/commit/0c5596a246cba229c7998370eb0939fcf0d6aa23))
+- **hooks:** show you a line in Claude Code when the agent was told your news about its work items ([f033b38](https://github.com/Muratovnik/valkama/commit/f033b3860745c320f3fd46529b2b6d5b8613a127))
+
+### Bug Fixes
+
+- **hooks:** stop a Valkama call in Claude Code's auto mode from failing the calls sent beside it, and warn in `valkama doctor` when agent writes found no confirmed session ([811c916](https://github.com/Muratovnik/valkama/commit/811c9169aa5208f97c9b6a74670ed207422ecc15), [1cbae28](https://github.com/Muratovnik/valkama/commit/1cbae28a1b026467f5005f5123e3d0d08b1455af))
+- **mcp:** read `request_id`, `work_item_id` and a `changes` wrapper as the arguments they mean instead of refusing them ([a367e22](https://github.com/Muratovnik/valkama/commit/a367e22402126ae0085d9b8ebda81ba450092d5d))
+- **planning:** describe the object groups of `apply_work_item_changes` with their JSON, so a client stops refusing a bare-text `comment`, `summary` or `transition` ([12b6845](https://github.com/Muratovnik/valkama/commit/12b68455358da4f3b21b8a57ba9d3c438c4f0329))
+- **planning:** let a batch's checklist tick take `force` to complete a step another session holds ([ed2c129](https://github.com/Muratovnik/valkama/commit/ed2c12992568786bb53ccdec239556d306d8a756))
+- **planning:** release a checklist step's claim when its session lapses, and send an item nobody holds any more back to the queue; the take-next queue keeps the caller's own claim ([867b2b0](https://github.com/Muratovnik/valkama/commit/867b2b0e63d1f38ea7248c4dcaf5a3756057f0c0), [e9b0411](https://github.com/Muratovnik/valkama/commit/e9b041139a42860095b521adc6acfbfa921e0b21))
+- **planning:** record a forced write that overrode a refusal as an `overridden` event ([ff5e3fb](https://github.com/Muratovnik/valkama/commit/ff5e3fb090a3fc63c0170f202a773016631e1a6a))
+- **planning:** keep a `relates-to` link as one record whichever end writes it, and fold existing pairs after a verified recovery point ([0b332a9](https://github.com/Muratovnik/valkama/commit/0b332a91268ca4c96f914883e6afd30fb548629e))
+- **planning:** show one valid field to copy when a question's field shape is refused ([79e2bf0](https://github.com/Muratovnik/valkama/commit/79e2bf08d0370c61cf2f8dc075de61dba265d19e))
+- **web:** keep the chrome empty at launch until it can show its final values, instead of the module id and «Global» ([a5d9fe3](https://github.com/Muratovnik/valkama/commit/a5d9fe3cc200274cbf574bf3a6d08582859c0129), [65597dd](https://github.com/Muratovnik/valkama/commit/65597dd12abceed16cbd7e110cf3ece357bb3a23))
+- **web:** show the hint of what a scroll brings under a resting pointer ([b4e3bbb](https://github.com/Muratovnik/valkama/commit/b4e3bbb171712b88626c13fc5af3ba8b42e3b21d))
+- **web:** keep the space between a cut name and its share in a hint's text ([3bcdfd4](https://github.com/Muratovnik/valkama/commit/3bcdfd458840d9036a1d93330ffc5f5449700d9c))
+- **web:** start no selection from a press on a reference card's ground, so a drag from its edge no longer holds the card up ([5128bd9](https://github.com/Muratovnik/valkama/commit/5128bd983c25cb36cf6c6c47d694d3c8e3424fd3))
+- **graph:** draw a discovery from the work it was found in to the work that grew out of it, so a chain's root stands before what was found from it and the arrow lands on the new work ([1fb8717](https://github.com/Muratovnik/valkama/commit/1fb8717c800b139189d5f3bdbb2f211498316003))
+- **web:** give every heading its level's size, and nest the headings of Analytics and Settings ([82ab1f4](https://github.com/Muratovnik/valkama/commit/82ab1f42b5a0b918d8f5523a8437cf95a2f58459), [35e639a](https://github.com/Muratovnik/valkama/commit/35e639a44213d55c5ac13fa7e3ecd4c5fc175e30), [3f07613](https://github.com/Muratovnik/valkama/commit/3f076132a7b709435a88490ae33d892b394de910))
+- **quota:** decide which account a seat is from every sample of it, so the readings of a session that changed its login go to the account that made them ([98e2938](https://github.com/Muratovnik/valkama/commit/98e29383121d18e815dd6e462613253f4086e505))
+- **analytics:** count the agent-time axis in one round unit ([4b11dca](https://github.com/Muratovnik/valkama/commit/4b11dcaf3a49a2e90ed2c4a3580d055f3ae38f90))
+- **settings:** accept a doctor report with fractional values in the installation checks ([19be15e](https://github.com/Muratovnik/valkama/commit/19be15e7aa802dbc848e2a0c4348e49c42062f52))
+- **doctor:** name the client hooks guide in the advice about the quota mod ([13c1522](https://github.com/Muratovnik/valkama/commit/13c15228e73216d20f9ac3de047e670a6288e785))
+- **store:** wait up to a minute for a long first open of the store, so open sessions still move to the new release ([9fe737a](https://github.com/Muratovnik/valkama/commit/9fe737abe9ebecc2668431b074ae9f31870c4f0f))
+
+### Performance Improvements
+
+- **server:** answer the reads a page sends at once without queueing on the store's bring-up, opening Analytics in about half the time ([9f57b78](https://github.com/Muratovnik/valkama/commit/9f57b7814f714bb87ba2d7393e821601f96c2d41), [5c4f51f](https://github.com/Muratovnik/valkama/commit/5c4f51f1d9391c8df92a6c8d4368a637ea94c75a))
+- **planning:** open a space's stream after its read with `since=<revision>`, so it does not send the space just read ([26ecd5a](https://github.com/Muratovnik/valkama/commit/26ecd5a1b5d78e12bf60ac20f8ab3553dec9341e))
+- **web:** download the card and the questions list on demand, about an eighth less for the first screen ([3862b4c](https://github.com/Muratovnik/valkama/commit/3862b4c94cbbed289542957f7ab015f48a7f25fa))
+- **web:** draw only the window of a work list from 300 rows ([396d0e0](https://github.com/Muratovnik/valkama/commit/396d0e0ba3313cfeae3fcc443e32abe3beaab500))
+
+## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) (2026-11-11)
+
+### Highlights
+
+- A new Analytics module says what agent work spent in a period — agent time, tokens and
+  a cost estimated at API prices — by account, project, task, executor, role, launch
+  class, model, effort and environment, with a CSV download.
+- Usage is counted more exactly: a request counts once in the whole store, each stretch
+  records the organization, client, effort and adviser it ran under, and stale runs are
+  read again in the background.
+- «Work» in the rail follows running work, items and sessions alike, with one session
+  sign everywhere; a session works while its turn runs.
+- Screenshots can be pasted into a card's text, and `@` mentions offer the project's
+  Markdown files.
+- Upgrading: the store moves through schemas 14, 15 and 16 behind the verified snapshots
+  `preschema14`, `preschema15` and `preschema16`, and a 2.7 build refuses it afterwards;
+  going back means restoring the snapshot. The first passes after the upgrade read the
+  whole usage history again.
+
+### Breaking Changes
+
+- **planning:** the live-work frame and the `live_work` map have new shapes: a waiting state carries `long` and `asks`, a row carries `since`, `long`, `asks`, `updated_at` and `executor`, each space lists its `sessions`, `elsewhere` is a list of sessions and `unplaced` is gone; a client that validates the frame strictly needs the build that ships with this server ([53cdae1](https://github.com/Muratovnik/valkama/commit/53cdae172eb06e16f3fc79f3c4fc202509f4bee0))
+
+### Features
+
+- **analytics:** add the Analytics module, under «Understand» in the navigation and named by `GET /api/modules` and `list_platform_modules` ([1bdda44](https://github.com/Muratovnik/valkama/commit/1bdda44a3c6f611a1e99088e82404a3a5606cbd6))
+- **analytics:** show agent time, tokens and the API-price cost estimate of a period against the period before, ranked by a dimension and day by day, with filters on every dimension kept in the address ([e119ad9](https://github.com/Muratovnik/valkama/commit/e119ad96f99e9b122108500630aa1ae242044ffa), [461c029](https://github.com/Muratovnik/valkama/commit/461c0293a2e37700aa92518d32846aefb846ee05), [c731160](https://github.com/Muratovnik/valkama/commit/c731160107539b0fc28de7278657df8014930a57), [f33fc1a](https://github.com/Muratovnik/valkama/commit/f33fc1a5fdf285e1b8c7e9ca241785daadaa08ff))
+- **analytics:** table every value of the breakdown beside the period before and download it as CSV, writing a cell a spreadsheet would run as a formula so that it is shown instead ([64001a6](https://github.com/Muratovnik/valkama/commit/64001a6f0018f718e14e9ea63e022c2f9dd517b9), [f504d75](https://github.com/Muratovnik/valkama/commit/f504d75dc1666ead49e255e818b0e1933372cb79))
+- **analytics:** open a task in two presses from any bar, row or day, with Back returning the view before ([b4f39c2](https://github.com/Muratovnik/valkama/commit/b4f39c26510b6a09ad9f2eae2a0f04fad3972966))
+- **analytics:** count each opening of an analytics surface by day and kind on this machine, through `POST` and `GET /api/analytics/uses` ([5b2588e](https://github.com/Muratovnik/valkama/commit/5b2588e8488ab4bd30a719e5f6f25598a1a65edc), [7ea0017](https://github.com/Muratovnik/valkama/commit/7ea0017a2eed450fbab2dea2dc1987b2d135ced9), [57500b6](https://github.com/Muratovnik/valkama/commit/57500b6d0891446a541e7e44456e5d0bb85bb08e))
+- **api:** read what agent work spent between two moments with `GET /api/analytics/usage`, by up to two dimensions, with the period before beside it ([5aef433](https://github.com/Muratovnik/valkama/commit/5aef4330f7e0e106fd03de5588ff3eba49d657e6), [45548ee](https://github.com/Muratovnik/valkama/commit/45548eec1e1192e26e185816a09d2f9484727fac), [b6cba56](https://github.com/Muratovnik/valkama/commit/b6cba562f29d93da2d9fdd777df50f2eebc66bbb))
+- **planning:** say in a card's Agents tab which organization the work ran under and in what role, with a link to Analytics ([107bb08](https://github.com/Muratovnik/valkama/commit/107bb08d77fb0f72eca3f6cd3a8594fba3ee9909), [4c30be9](https://github.com/Muratovnik/valkama/commit/4c30be9c4948ba933597f9c59507e47a2ba21b6a), [41bfe74](https://github.com/Muratovnik/valkama/commit/41bfe7430429a50c15fdab15785a027ea6cb8582), [183999c](https://github.com/Muratovnik/valkama/commit/183999ce4bead3fe48cdb98435994fe74933b859))
+- **telemetry:** price Claude Fable 5.2 and Claude Mythos 5.2, and carry `unpriced_tokens` beside every cost; `valkama doctor` names each model that spent tokens with no price ([d993691](https://github.com/Muratovnik/valkama/commit/d9936916b90ab25b171fc7664521e7944bd480d9), [3fb925c](https://github.com/Muratovnik/valkama/commit/3fb925c7bd8fd14a082262dc23683c4948bbfb51), [a195299](https://github.com/Muratovnik/valkama/commit/a1952997794828b25a67fcd6aaed3b337868b33d), [8b24e58](https://github.com/Muratovnik/valkama/commit/8b24e58f67213e6c646e48f125f7459607b783d5))
+- **telemetry:** record the organization, client, effort and adviser of each usage segment, and a subagent's launch class, keeping only ids and short labels ([8bbe2d2](https://github.com/Muratovnik/valkama/commit/8bbe2d2ab4afbd46ba695e1a3d1f1f47306f87ff), [e23649b](https://github.com/Muratovnik/valkama/commit/e23649b69b0ccaac6489471ead8881433a99cd0d), [29d3d85](https://github.com/Muratovnik/valkama/commit/29d3d85950023796138f994494fbedf28d3c1ead))
+- **telemetry:** read stale usage runs again in the background, behind a verified snapshot, and report the reading in `valkama doctor` ([98181f9](https://github.com/Muratovnik/valkama/commit/98181f9d81116b25886681f28e91a2a8afd87b0e), [c910fcc](https://github.com/Muratovnik/valkama/commit/c910fcc02e4c24ee7110e37ff2c3737a613df2eb))
+- **cli:** add `valkama usage rebuild`, which reads runs again from their transcripts; `--all` first takes a verified `usagerebuild` snapshot and `--dry-run` rebuilds nothing ([20ab47f](https://github.com/Muratovnik/valkama/commit/20ab47f62ced21ef89013d53d904735b7bb63b30), [51ca2ef](https://github.com/Muratovnik/valkama/commit/51ca2efa5273bd48065661e9fe4233a56004b641))
+- **store:** count a usage request once in the whole store, at schema 16 ([23934dc](https://github.com/Muratovnik/valkama/commit/23934dcc244862b11aedc2214584e879801b9afc))
+- **planning:** add or remove a label with `labels_add` and `labels_remove` without sending the rest ([dd667fc](https://github.com/Muratovnik/valkama/commit/dd667fc711c4c5262f90033f01b142163e617f0c))
+- **planning:** record a change of an item's labels in its history as a `labels_changed` event, at store schema 15 ([c15e3ea](https://github.com/Muratovnik/valkama/commit/c15e3eac28586c8c487c7927ef3dfa4289032021), [ea6778d](https://github.com/Muratovnik/valkama/commit/ea6778d614dd061c579f07dfe031408642b1d5bf), [046fa04](https://github.com/Muratovnik/valkama/commit/046fa04290e51a0a57b9ca6dee7f024d7e4be66d))
+- **planning:** paste or drop a picture of up to 10 MB into a card's text, kept beside the store at schema 14, listed in `images` and read by the new tool `read_work_item_image` ([81e5244](https://github.com/Muratovnik/valkama/commit/81e52445d3c7920111d13f74347198be54da931e), [826af2c](https://github.com/Muratovnik/valkama/commit/826af2c95bcba8eb27519c74412b31d83e59858f))
+- **planning:** list the open work items an agent session holds with `GET /api/planning/held?session=<id>` ([dfb16aa](https://github.com/Muratovnik/valkama/commit/dfb16aa3055cdfa0959369eeed12131f90420d9f))
+- **planning:** mention with `@` instead of `#`, offer the project's Markdown files there, and tell the tasks a comment, reply, description or outcome mentions ([d52c80a](https://github.com/Muratovnik/valkama/commit/d52c80a850606bf49de24a4f27208bb89d13a217), [f76850d](https://github.com/Muratovnik/valkama/commit/f76850dbbca539ff96e58d000a70fa3de3174586), [fbfa409](https://github.com/Muratovnik/valkama/commit/fbfa409ad455660abee72cc7d0ae219d0e8daaae), [20f40f1](https://github.com/Muratovnik/valkama/commit/20f40f1d14958d9900f97a07bf72a05f39eed66d), [c3d476d](https://github.com/Muratovnik/valkama/commit/c3d476debe908046181e4b25e2f8ee4e54261b71))
+- **planning:** show where an item was mentioned in its discussion and its history ([aecf5a0](https://github.com/Muratovnik/valkama/commit/aecf5a0d17b4e105b7ae40b2c166aec2b26076fb), [ff3a20c](https://github.com/Muratovnik/valkama/commit/ff3a20ce3552c5ac34d6909a405130d9b90ca74d))
+- **planning:** read a session at work while its turn runs, moving only the item it named last, instead of from its first write ([53cdae1](https://github.com/Muratovnik/valkama/commit/53cdae172eb06e16f3fc79f3c4fc202509f4bee0))
+- **web:** let «Work» in the rail follow running work, items and sessions alike, on two lines, with quiet work folded and «Open session» on each row ([a62fd5e](https://github.com/Muratovnik/valkama/commit/a62fd5ebce510686359ab9914e2f320f9d60e84a), [758560b](https://github.com/Muratovnik/valkama/commit/758560b973406b563c7e81dfd6d82669b92bdf88), [0ff4c00](https://github.com/Muratovnik/valkama/commit/0ff4c006536a8ee9c84f73a2371e08ebbb73b824))
+- **web:** draw one sign for what a session does on the rail, the tiles and the graph ([2c536f5](https://github.com/Muratovnik/valkama/commit/2c536f5e4a14b50893effa87ebecb23970d5405c), [1e068b7](https://github.com/Muratovnik/valkama/commit/1e068b79c49a526cc51d4cf4db3afeaa7e588965), [cd724e4](https://github.com/Muratovnik/valkama/commit/cd724e44cdfd4e7d8162fa628799e7cc03768968))
+- **web:** name a tile's executor by its client's sign and its session's state ([22f84b6](https://github.com/Muratovnik/valkama/commit/22f84b67f9bfffd5201609d9399eb50a510ed648))
+- **web:** show workflow state names in the interface's language, with «As in the workflow» in Settings ([7caec4b](https://github.com/Muratovnik/valkama/commit/7caec4b433b4ab5573720ac66eb0279a077f4ae1))
+- **web:** keep named views in Work's header and move «Workable» and «Assigned» into the filter, «Assigned» as «Has an assignee» ([c00ef8c](https://github.com/Muratovnik/valkama/commit/c00ef8c264f0fa3f13996f500a1f1dde547bb03c))
+- **web:** read a review as a list of decisions, with one «Comment» in place of «Your own option» ([35c3421](https://github.com/Muratovnik/valkama/commit/35c342138fc17385951225783af1a96718756fd8), [2db5249](https://github.com/Muratovnik/valkama/commit/2db5249f79d8a7d9b2298514e58d3ecae3bf2d9c), [eb57605](https://github.com/Muratovnik/valkama/commit/eb57605a83f769c6905830949ecf34b74ca3c7c3))
+- **web:** say «Question N of M» in «Needs my answer», step between questions and gather answered blocks at the end ([630bd7a](https://github.com/Muratovnik/valkama/commit/630bd7a25f408d3c31cd3328c76d63e45ccb764b), [42d83b3](https://github.com/Muratovnik/valkama/commit/42d83b32f3e622d07117eea81ed150fcadef5f97), [bb1b2e9](https://github.com/Muratovnik/valkama/commit/bb1b2e9ed005d8c3e91a30b41a85edd3539bdbb2))
+- **web:** change a card's labels in the new-task dialog's picker, and ask in the card's order in that dialog ([92c71bf](https://github.com/Muratovnik/valkama/commit/92c71bf52c4ed76da422bb8274eae933c8ba4f04), [ed92295](https://github.com/Muratovnik/valkama/commit/ed922956c3c2aea955f15eb727bf1728c72d0b64))
+- **web:** draw each menu value as its button draws the chosen one ([888734c](https://github.com/Muratovnik/valkama/commit/888734c448f02489a0c176ea85abda17c8b2aaab))
+- **web:** move a card's chain to Relations, the pin into a «…» menu, and show «Answer» and the epic as links in its facts ([6ccca12](https://github.com/Muratovnik/valkama/commit/6ccca1243cad6ad7f856ee0b8dd7c31993d3c398), [1d0ba47](https://github.com/Muratovnik/valkama/commit/1d0ba4735d2cac0f8c0d16d285eb1d3771433c0b), [f0f8081](https://github.com/Muratovnik/valkama/commit/f0f80817a9bf943152a46f5e503cbb902f5043db), [e68ce26](https://github.com/Muratovnik/valkama/commit/e68ce2610ad4d1ad2b2e772068cf8177b747663d))
+- **web:** name the parent «Parent» on the card, the board, the branch map and the graph ([08a7571](https://github.com/Muratovnik/valkama/commit/08a7571978ba6c5820096db1021838f4476608d9), [b0e280c](https://github.com/Muratovnik/valkama/commit/b0e280c009ab70d7c76609817ed85e9de0016d01))
+- **web:** stand Settings at the foot of the rail ([a3d4bf2](https://github.com/Muratovnik/valkama/commit/a3d4bf294584bf32c6327a3c5e619e9843d82739))
+- **web:** state each hint's kind, so a hint never says what is already on screen ([aa9f2af](https://github.com/Muratovnik/valkama/commit/aa9f2af40cf3616e51d9cd3833c9f4264bfe9d4e))
+
+### Bug Fixes
+
+- **telemetry:** keep an advisor's usage apart from the executor's of the same model, which turned input and output negative ([37519a2](https://github.com/Muratovnik/valkama/commit/37519a2417f9d5e3a79442c464f664995bccee1e))
+- **telemetry:** stop counting a subagent transcript copied into a forked session twice ([4f7bd81](https://github.com/Muratovnik/valkama/commit/4f7bd811dd3f207c98623c6cede45e9d49131539))
+- **telemetry:** keep a subagent's time out of its parent's run after its transcript is deleted ([1506a64](https://github.com/Muratovnik/valkama/commit/1506a64533a2fabf6f7b68cfa406f5f190f986f8))
+- **telemetry:** place a turn with no item on the same item however the reader's passes fell ([5bbe261](https://github.com/Muratovnik/valkama/commit/5bbe2619ac80cb8c0dae4e3a605a4f42c2b66dc1))
+- **web:** keep icons at their size and end one-line labels in an ellipsis, whole on hover while cut ([d49533f](https://github.com/Muratovnik/valkama/commit/d49533f782b48412350837ee3297d0ebd006db10), [4408368](https://github.com/Muratovnik/valkama/commit/440836873ccc03d50f9240de41f161971f263274), [65975ed](https://github.com/Muratovnik/valkama/commit/65975edcd0ed31449f2b5aa789e364823197af1c))
+- **web:** keep controls of one row at one height ([4b54472](https://github.com/Muratovnik/valkama/commit/4b54472b57d89ceb8036723fb593906cae0ed1b4))
+- **web:** stand every sign on the middle of its line's capitals ([260a4ef](https://github.com/Muratovnik/valkama/commit/260a4efe5c83e5e7ac18def477d99edc44eba9b1))
+- **web:** show the next hint when the pointer moves straight onto it ([495fc66](https://github.com/Muratovnik/valkama/commit/495fc6680149b34792e67d1134eab27747f99185))
+- **web:** keep all of a focus ring's room when it is scrolled into view ([6f89ebc](https://github.com/Muratovnik/valkama/commit/6f89ebce7faa63aaccc1964411c9352264faed77))
+- **web:** open a card's History, Executions and Settings without a standing explanation over them ([60c6852](https://github.com/Muratovnik/valkama/commit/60c685222915580702f88837af793ad1086bf5eb), [bec6442](https://github.com/Muratovnik/valkama/commit/bec644205295d06254adf6f927a8b72758a6a46f), [a168deb](https://github.com/Muratovnik/valkama/commit/a168deb0116b0b1357c1a3c02eadfbf00495019d))
+
+## [2.7.0](https://github.com/Muratovnik/valkama/compare/v2.6.0...v2.7.0) (2026-11-08)
+
+### Highlights
+
+- Every hint in the interface is one card, shown on hover and on keyboard focus, in place
+  of the browser's tooltip.
+- The rail is as wide as you drag it, and the Work filter steps from a facet into its
+  values, with «is not» on a chip.
+- A recommendation carries its reason, and a summary its process friction.
+- Rolling back: a 2.6.0 server refuses to read an item whose summary carries `friction`
+  («work_item.summary has unknown field(s): friction»), while lists and search still work.
+  Remove the field from such summaries before pinning 2.6.0.
+
+### Features
+
+- **web:** drag the rail's edge between 200 and 480 px, or step it with the arrow keys, Home and End; the width is kept on the device, and the refresh button shows only when the connection is lost ([d17bcce](https://github.com/Muratovnik/valkama/commit/d17bcceb5d35f4b24a401f7bc3147086c068ca75))
+- **web:** show every hint as one card on hover and keyboard focus, closed by Escape, in place of the browser's tooltip ([56c84c7](https://github.com/Muratovnik/valkama/commit/56c84c71c1d3128e90877c6776769f3f407f4077))
+- **planning:** take `why` beside `recommended`, shown on the «recommended» mark, and `friction` in a summary, up to 4000 characters, shown last in the card ([aed4b4e](https://github.com/Muratovnik/valkama/commit/aed4b4e01f2f158b111e67a34d49a196fe519b10), [1c67ef9](https://github.com/Muratovnik/valkama/commit/1c67ef9b18680f62f831fed13efc0af35110ae4c))
+- **web:** open the Work filter on presets and facets that step into their values, keep a value out with «≠», and offer «Search for "…" in all projects»; «Find a task» is now «Go to a task» ([0e7231a](https://github.com/Muratovnik/valkama/commit/0e7231aa5daf27401236d85bb38ffed15dde5b1b), [29a584c](https://github.com/Muratovnik/valkama/commit/29a584c218047052f9aa382c8b2b19480eb2e4d3))
+- **web:** keep each block's head in view in the questions dialog, with a rail of bars to any question ([446b2ad](https://github.com/Muratovnik/valkama/commit/446b2ad471830a4b33caf040e11d3dddcee01e74))
+- **web:** stand the card's facts on named rows, changing the priority and labels where they stand ([457431e](https://github.com/Muratovnik/valkama/commit/457431ef5a82f8891b4666ed88269b1181fc17cc))
+- **web:** draw every empty state as one component, and say why a memory source is unavailable with a link to Settings → Diagnostics ([b3247ef](https://github.com/Muratovnik/valkama/commit/b3247ef36ef3b39d35c8f815878a19f9a70cf3b1), [dc9ec5b](https://github.com/Muratovnik/valkama/commit/dc9ec5b436e07cc0cfa92f87bea1e0e4b1108460))
+- **web:** draw obvious actions as icons with their words in the hint ([88fdac4](https://github.com/Muratovnik/valkama/commit/88fdac42a46ed17a62922aa2cca7ce122be5889e))
+- **web:** draw VS Code's, Codex's and Cursor's own icons wherever a place to open in is drawn ([926c772](https://github.com/Muratovnik/valkama/commit/926c772f9f2fb72c6e77f749b88a151192feae51), [01f25e3](https://github.com/Muratovnik/valkama/commit/01f25e36284aa3cefbbaf94dcacaf134e36b02d0))
+
+### Bug Fixes
+
+- **graph:** stop dimming everything else under a hovered node ([490254b](https://github.com/Muratovnik/valkama/commit/490254b1dd16aaaf3bf74094d8d59c11cacd860e))
+- **web:** read a work item's marks in one order everywhere, its kind, its number, then the rest, with a tile's holder as a glyph ([341f1f2](https://github.com/Muratovnik/valkama/commit/341f1f2aa6913eec5e4cccbbe246ca72099c3c5d), [ddb1f21](https://github.com/Muratovnik/valkama/commit/ddb1f2167f0154c7163d4fe0e3911210f697ca1d))
+- **web:** say what each comment button of the questions dialog comments on, and link the task's number in a block's head ([3ebfc84](https://github.com/Muratovnik/valkama/commit/3ebfc84d7b601725538622a37787cd7542a63181))
+- **web:** show where and how a step's session runs as glyphs beside its name ([eb727d5](https://github.com/Muratovnik/valkama/commit/eb727d555fe6c03757b4e82b5456fa8a3d8aa065))
+- **web:** keep a field's hint from flickering as the pointer crosses from its label ([c2c5959](https://github.com/Muratovnik/valkama/commit/c2c59597bb04f35802d0a9fa7b2c12eab079289b))
+- **web:** drop the explanatory lines under Settings' section switch, and count a discussion's threads once ([5788e1e](https://github.com/Muratovnik/valkama/commit/5788e1e8f2abbc3aea5cd0ac5cfb4d16b350d998), [8218dba](https://github.com/Muratovnik/valkama/commit/8218dba64528c0f678e3e877658573111d24d4cb))
+
+## [2.6.0](https://github.com/Muratovnik/valkama/compare/v2.5.0...v2.6.0) (2026-11-08)
+
+### Highlights
+
+- Valkama reads the clients' transcripts and says how much work an item, a chain or a
+  session took, with its cost estimated at API prices.
+- Agent sessions hear each other: mentions, another session's writes on held or
+  followed work, comments that wait for a reply, and wakes bounded per hour.
+- A question can be a review of many points answered row by row, and an agent can put a
+  list under its comment for the owner to tick.
+- The rail lists the work going on now under «Work», across every space, and a person can
+  pin an item.
+- Upgrading: the store moves through schemas 11, 12 and 13, each under a snapshot taken
+  before it, and a build of the previous release refuses the upgraded store. The hook's
+  `.marks` files are now headed `v4`; an earlier build reads them as empty and tells the
+  current news once more.
+
+### Breaking Changes
+
+- **alerts:** the address of a question's notification changed: install the new desktop app before the new server, because an older app refuses the new address and the click does nothing ([839b01b](https://github.com/Muratovnik/valkama/commit/839b01b6ae0394635f540d50f694766508b0bf7e))
+
+### Features
+
+- **telemetry:** read the clients' transcripts into usage rows in the background, telling work from waiting for a person, a subagent, a failed service or a machine that was off; schema 11 holds the rows and no message or command text is kept ([3c50855](https://github.com/Muratovnik/valkama/commit/3c50855afb78b0956abc82d7240e6a8caf4b1358), [9382c9a](https://github.com/Muratovnik/valkama/commit/9382c9a2be9d09e4619cc55c7abfbfbb190ceb3c), [ca2f3f6](https://github.com/Muratovnik/valkama/commit/ca2f3f63f22a60fafadbe2fdf0ee39914d246230))
+- **telemetry:** estimate a request's cost at published API prices, and count a background command as work for three hours at most ([1b39050](https://github.com/Muratovnik/valkama/commit/1b39050feb62ccaf40ee329f226d5d8d6d42bd69), [a2c9866](https://github.com/Muratovnik/valkama/commit/a2c986653368d799529455bf2c7ede3b64438761))
+- **api:** read what work took with `GET /api/planning/work-item/usage`, for an item or its whole chain, and `GET /api/planning/session/usage` ([040d477](https://github.com/Muratovnik/valkama/commit/040d4779a39658a8e8329f7df125574d0fe399ab))
+- **web:** say on a card how much work its item took, and break it down by kind, model, agent and session on the card's «Agents» tab ([3e0afe6](https://github.com/Muratovnik/valkama/commit/3e0afe68d2f850dbe3723202d01b5b72ecb44ad2), [963b2fc](https://github.com/Muratovnik/valkama/commit/963b2fce31356e9b3d8656f3be90ea839085b625), [fa258b4](https://github.com/Muratovnik/valkama/commit/fa258b42c0a3000d018265bb94fc1de3ac0c2c24), [90c3211](https://github.com/Muratovnik/valkama/commit/90c32115c895daeffe89355a15017c0c97465981))
+- **planning:** edit an item, write up to 100 comments and ask up to 100 questions in one `apply_work_item_changes` call, through the groups `update`, `comments` and `questions` ([002ac68](https://github.com/Muratovnik/valkama/commit/002ac681a2d5bf7a0232e2d9edb446956f043c9d))
+- **planning:** ask a review as `verdict` fields the owner accepts, puts off or rejects, with groups, descriptions and fields shown `under` an answer; a question holds up to 40 fields ([d57c3b2](https://github.com/Muratovnik/valkama/commit/d57c3b281fd0c306a807e04ec843f7f71b540133))
+- **planning:** tell a changed answer as what it changed, row by row, and keep every field a compact question can past 2000 characters ([1c21509](https://github.com/Muratovnik/valkama/commit/1c215099fb22be929a96e3c83a4f9ebc8eb4d363))
+- **web:** answer a review row by row in its thread, with «Accept recommended», and read an answered review as one line of counts ([9db93ce](https://github.com/Muratovnik/valkama/commit/9db93ce6bf5081260d7f433c925e4a0514c234c3), [c11b688](https://github.com/Muratovnik/valkama/commit/c11b6882b70128b84d9f8c74f85f3004ed011adb), [e4fe069](https://github.com/Muratovnik/valkama/commit/e4fe069b3452d7cc684dfab2065bdb442d137ca5))
+- **planning:** let an agent put a list the owner ticks under its own comment, ticked right under the comment and sent with «Send marks» ([67eb826](https://github.com/Muratovnik/valkama/commit/67eb826137f2d59279a1f6ee8c66840da35e746a), [cab841b](https://github.com/Muratovnik/valkama/commit/cab841bc2743f157517f36cf2337e930d5906ac3))
+- **web:** make the points of a list in the discussion steps of the task in one action ([e97e4ba](https://github.com/Muratovnik/valkama/commit/e97e4ba76c5cc558542ec9f22367a97951bc90b6))
+- **planning:** take `mentions` on a comment, telling the holders of the items it names, with limits per session and hour ([2520fd8](https://github.com/Muratovnik/valkama/commit/2520fd82417aee6136591480aba9180f9b0615e2), [1a54122](https://github.com/Muratovnik/valkama/commit/1a54122801492f31f138d48f4d422ebff200afec))
+- **hooks:** tell a session what other agent sessions write on work it holds, and let it follow an item it does not hold with `subscribe`, at store schema 13 ([907c443](https://github.com/Muratovnik/valkama/commit/907c443391fe97785456852d5fed6edc61748f3f), [2b925b2](https://github.com/Muratovnik/valkama/commit/2b925b2373ad19ee773b15c0c9dab990141e4a31), [4532ef6](https://github.com/Muratovnik/valkama/commit/4532ef67b4636606811e7ee1b1f7409b0b2e4333))
+- **planning:** let a comment ask with `awaits_reply: true`, and wake the holders and the asker once for it and its first reply ([7af06f1](https://github.com/Muratovnik/valkama/commit/7af06f1c3a0b4e69d7a2194fb01fce4e5aa6667a), [e7e78c3](https://github.com/Muratovnik/valkama/commit/e7e78c30036b778d63ec04cabbc6d4806637f4da), [8a4be52](https://github.com/Muratovnik/valkama/commit/8a4be5209a49721e29fda7a52da47c95a805f843))
+- **hooks:** wake a holder once when another session or a person closes a blocker of its item ([d792b87](https://github.com/Muratovnik/valkama/commit/d792b8723c7670bfda7bf09c812f22162211a6a3))
+- **hooks:** let other agents wake a session at most six times an hour, and fold an item's news into one line after three notices an hour ([247a23e](https://github.com/Muratovnik/valkama/commit/247a23ee84188d573126dfe50745364f48e94435), [205250b](https://github.com/Muratovnik/valkama/commit/205250bb8a324defcb10f4d54d30a79d3d07926c))
+- **web:** name the sessions that follow an item under the card's holder, and say on a comment that it still waits for a reply ([ea27520](https://github.com/Muratovnik/valkama/commit/ea2752093f3d2e288fc142d8aef2aa2af48268b3), [0e8ec85](https://github.com/Muratovnik/valkama/commit/0e8ec85a1fe64982cf03b32d4108ac2414046a21))
+- **planning:** carry one live-work frame across every space as `event: live` in the stream a page already has, or alone with `view=live` ([1508562](https://github.com/Muratovnik/valkama/commit/150856268ee953d24e961ef906ec2f49f5a0d117), [e6069e7](https://github.com/Muratovnik/valkama/commit/e6069e777dd64e1483c3920c93240f11a998d2ff))
+- **web:** list the work going on now under «Work» on the rail, and pin an item from its card to keep it there ([5695210](https://github.com/Muratovnik/valkama/commit/5695210e9b11ccd8a4c5020c90cf001b79eb4893), [6165709](https://github.com/Muratovnik/valkama/commit/6165709b2c292e84e40596584c1d6950009d4df3), [98ee02d](https://github.com/Muratovnik/valkama/commit/98ee02d958643f38fde8f2e1735587fb27789fc4))
+- **web:** colour task types, and change a type's colour in Settings → General → Task type colors ([a3bea6c](https://github.com/Muratovnik/valkama/commit/a3bea6c92526aee514795a70203d5373745fbb7c))
+- **planning:** say what each priority level means, on hover and in the tool schema and the skill ([fa5c9b0](https://github.com/Muratovnik/valkama/commit/fa5c9b07fc3aeca4d8c12f7544161a46877407bf))
+- **web:** open the filter's menu in its field or with `/`, and combine labels with «all» or «any» ([3c75457](https://github.com/Muratovnik/valkama/commit/3c7545761f95d10ffdadb811ecf7b3d69fb2aee0), [b035623](https://github.com/Muratovnik/valkama/commit/b035623410e612c9785c8825af4229ba030c2dc5))
+- **web:** choose a new task's epic and labels by searching what the space has ([4dd4b7a](https://github.com/Muratovnik/valkama/commit/4dd4b7a65aedf07e8fcbdaec52d1a6a4804a781a))
+- **web:** act on a discussion's entries through icons on their first line, with one Reply for every thread ([e117139](https://github.com/Muratovnik/valkama/commit/e11713992ccd87f41bd4a3a910aa0a928fddd8c8))
+- **web:** set a card's head out as three rows, with its one action as bare text, and say «Next step · 3 of 9» ([2fba764](https://github.com/Muratovnik/valkama/commit/2fba764e712a62f0519f1d6a8db0928a70754ddf), [1c28349](https://github.com/Muratovnik/valkama/commit/1c283499d383b5d3b5245fb4911face944019688), [fb0fd01](https://github.com/Muratovnik/valkama/commit/fb0fd011fff491db0a887c4f0311fab0dd1c39d9))
+- **graph:** open an epic by pressing its frame's ground from afar, and stop zooming out where the whole graph fits ([e236013](https://github.com/Muratovnik/valkama/commit/e236013a9588e2aba30f1e058f4af86913abecf5), [44e4b4b](https://github.com/Muratovnik/valkama/commit/44e4b4b45ceaf5d4c56b7ea0d69b373e1bf0b2d2))
+- **web:** let the card a number shows copy the number and a link, and be selected ([68a4629](https://github.com/Muratovnik/valkama/commit/68a46290b70cf47a2fe7403e1243e719c55c1f54))
+- **skill:** ask agents to send Valkama calls in a response of their own in Claude Code's auto mode ([a9e949b](https://github.com/Muratovnik/valkama/commit/a9e949b1c81d18fbf9ef6f0ca0619e822680fca5))
+
+### Bug Fixes
+
+- **planning:** let an answer given in the interface reach the agent as a notice, `from_person` and the `person_spoke` refusal ([e68e3d8](https://github.com/Muratovnik/valkama/commit/e68e3d87666fe53b8eba9809092fbb8e22b99aea))
+- **planning:** accept a checklist step of 513 to 1000 characters, which was refused as a control character ([4a039a3](https://github.com/Muratovnik/valkama/commit/4a039a32024a68b2c790bd292293fe927bdc2b50))
+- **planning:** stop reading a compacted context as a client restart, so a running turn and its subagents stay at work ([d25d3e5](https://github.com/Muratovnik/valkama/commit/d25d3e5d875e7ba4b6208f0e480e4bb0d9bc2a45))
+- **sessions:** keep what a session waits for across a compaction ([165ab6d](https://github.com/Muratovnik/valkama/commit/165ab6d4148c69f6242a0930969dc4057ff98f1f))
+- **planning:** move an item a live subagent is seen working on for as long as it runs, or the one item its coordinator holds when it names none, and stop counting a subagent whose transcript went silent for two hours ([953f261](https://github.com/Muratovnik/valkama/commit/953f26173916d692486aee5ffcc039ca91a1260c), [17192d1](https://github.com/Muratovnik/valkama/commit/17192d1d487ccff73c653e156f3bb7234287da57), [65d46e4](https://github.com/Muratovnik/valkama/commit/65d46e4ffd4f8f3137bfd9adb44fd2211ad1ef11))
+- **telemetry:** read Codex token counts where a rollout actually puts them ([100409f](https://github.com/Muratovnik/valkama/commit/100409f2d7d40e3785be67705a007aff8982a4ce))
+- **sessions:** open a session in the folder it was started from, not the one its shell had reached ([b3c3e9e](https://github.com/Muratovnik/valkama/commit/b3c3e9e23817bd51d781dab0fbad7d60d124c2b0))
+- **open:** open a session from VS Code or another editor with one press in the app ([04c1557](https://github.com/Muratovnik/valkama/commit/04c1557ca33e9a1c706fce3e128f4a4b226aeec8))
+- **notice:** let a notice of what worked go after five seconds, and say what it is about ([ae5eab9](https://github.com/Muratovnik/valkama/commit/ae5eab902a330e0d36e411daa628df8437d66486))
+- **board:** open a card on the first click after a drag ([51e2318](https://github.com/Muratovnik/valkama/commit/51e23182cbd5e1dd6597dba76ac9e77dbe497d7b), [07167c1](https://github.com/Muratovnik/valkama/commit/07167c14d54d11182bfebaabf0b4f39e11509956))
+- **web:** keep the view and the board's grouping when the space changes, with the bar in place while the next space is read ([9c77203](https://github.com/Muratovnik/valkama/commit/9c77203a117a07a0dca89f607e26234d4a576074), [400b706](https://github.com/Muratovnik/valkama/commit/400b706b011c9bb5a849b6c0e2438a398ec24741))
+- **web:** leave focus where you put it while an action waits on the server, and draw no focus ring where focus moves after a mouse or touch action ([d924870](https://github.com/Muratovnik/valkama/commit/d924870a198c4fbb388b4f59dfb7353556b5cc1c), [ae626df](https://github.com/Muratovnik/valkama/commit/ae626dfa1e73f97d9fb65331517588a4c5751490), [3df73ff](https://github.com/Muratovnik/valkama/commit/3df73ff6c8bee7907dac5a7c88b52288ce8a8167), [32c6794](https://github.com/Muratovnik/valkama/commit/32c6794cc18148b4912ca97a275886b7015aba78))
+- **web:** stop «Loading» flashing: a read that answers within 300 ms shows nothing, and a mark stays at least 400 ms ([c726bd6](https://github.com/Muratovnik/valkama/commit/c726bd6fe2b32e7c22b115ab466377ee8e309a12))
+- **web:** keep the screen from blinking as a document opens over a card or the questions ([9b49e5f](https://github.com/Muratovnik/valkama/commit/9b49e5f04709459a456ab0484375d195b0f41ff3))
+- **web:** break a long title after a `/` instead of in the middle of a word ([c42b8c8](https://github.com/Muratovnik/valkama/commit/c42b8c8cb6b582fd229bab825c519e87aa146fe1))
+- **web:** keep a time whole inside a sentence ([f793007](https://github.com/Muratovnik/valkama/commit/f793007d7aa82dbad489a866cfb5d2df50c8fc50))
+- **web:** keep tiles, columns, chips and the connection dot visible in a Windows contrast theme, and give phone toolbar icons 44 px targets ([2123f68](https://github.com/Muratovnik/valkama/commit/2123f688cd187eb07528e3017f92b74b4fd471fd), [6cdb16a](https://github.com/Muratovnik/valkama/commit/6cdb16a2c2ac769a024ead518238d5e06abb9f21), [3f82134](https://github.com/Muratovnik/valkama/commit/3f82134dac2cf23872e770760e099c9f782bedd0), [6065d99](https://github.com/Muratovnik/valkama/commit/6065d996124b4b7f152e0f3988caf0b67f9451bf))
+- **board:** draw a held epic row's card and chain as two icons that cover neither its title nor its counts ([7edd06f](https://github.com/Muratovnik/valkama/commit/7edd06f0f2e92a1bce752de0dd5981ee39f42555), [237ff28](https://github.com/Muratovnik/valkama/commit/237ff28f0820bff3fe2147022daadfec36fad128))
+- **web:** line up dialogs' titles, the task finder's results, a card's lists, chain rows and disclosures on their edges ([2f3df86](https://github.com/Muratovnik/valkama/commit/2f3df86955dba69a2e51aa4d0631189d4beffc91), [a1ca14c](https://github.com/Muratovnik/valkama/commit/a1ca14c68361d3c51f7c4e6991143aa9b23f7c35), [7792939](https://github.com/Muratovnik/valkama/commit/77929396eea8128366558f658952f4e07c45dcd6), [7c05918](https://github.com/Muratovnik/valkama/commit/7c0591820d33b9f49bf839ab01a9afbf03862ae7), [6e50dc2](https://github.com/Muratovnik/valkama/commit/6e50dc2d71c6f4b0615994cdee8e335ca8b0dd58))
+- **web:** fade a card's section row only where a section is cut, and let a press there choose the section the first time ([f378816](https://github.com/Muratovnik/valkama/commit/f3788161c71b607dfca19ea0cb4f333327bfe31a), [96101d5](https://github.com/Muratovnik/valkama/commit/96101d5095bc858519daa98439abcda39ea0794d))
+- **web:** print the start of an agent's session in an entry's head and in system events, with the whole id in the hint ([fa47154](https://github.com/Muratovnik/valkama/commit/fa47154d89229da88425312fe034e66c8e5b1df7), [69463e1](https://github.com/Muratovnik/valkama/commit/69463e1d11f126b1b6c24ebb34cda9d7b6b9b954))
+- **web:** keep the questions' buttons, comment presses and own-option field to their lines, and ring a question as a whole ([d57a563](https://github.com/Muratovnik/valkama/commit/d57a56350626513e2da416b6044ec205df016a47), [77b647f](https://github.com/Muratovnik/valkama/commit/77b647fa8adb43d96c11820c1dcd160447184e16), [eb4ee25](https://github.com/Muratovnik/valkama/commit/eb4ee250d4344d737b80c4606d8603798dd61f1f), [13e6e6d](https://github.com/Muratovnik/valkama/commit/13e6e6df37a2f59d4884a10b8bb5a20fb06116ee))
+- **web:** show code in a question's option labels as code ([f750cc7](https://github.com/Muratovnik/valkama/commit/f750cc737b413d4efa7ebc50d840f5634067ca83))
+- **web:** set Diagnostics, Settings' Readiness and the mark-resolved form on the page's grid, with the primary button last ([cbf912f](https://github.com/Muratovnik/valkama/commit/cbf912fd8a564da8c1a2d81418be396b25bf12ad), [0054a94](https://github.com/Muratovnik/valkama/commit/0054a94e85c7394eff8ec43bdfdf9cdb324fc5a0), [92aa73e](https://github.com/Muratovnik/valkama/commit/92aa73e40ec6ab50ed28cff2db44b3b1addc0fa1))
+- **web:** keep entry heads, answered questions, option descriptions and the list of waiting questions from moving or wasting room, and give a phone's icons 44 px targets ([6bc964f](https://github.com/Muratovnik/valkama/commit/6bc964ffffa1a53158851326586ec030c297b5b0), [7f2c3cb](https://github.com/Muratovnik/valkama/commit/7f2c3cb0ff7d508434adb8aa96300ac239424a3f), [1ae1cab](https://github.com/Muratovnik/valkama/commit/1ae1cabc7e1bb37341a75abd63310b63e75031be), [1374ca9](https://github.com/Muratovnik/valkama/commit/1374ca908ccc029e636cff48a54b0f8322f75e1c), [460f5cc](https://github.com/Muratovnik/valkama/commit/460f5cc6a6a11824e42746caf9b3aff1337cf933), [43ae2eb](https://github.com/Muratovnik/valkama/commit/43ae2eb5bdcb1e1430573d3ae5f9d95893b497de), [01ed023](https://github.com/Muratovnik/valkama/commit/01ed023a20c9cb284f7bb5126f7cc3f6f76ff5b8), [9339e41](https://github.com/Muratovnik/valkama/commit/9339e4120bc0754296e8f4aad2121737e1f7ca8b))
+- **web:** say an ambiguous agent link once for its group, and drop a chain's key and filter when there is nothing to tell apart ([6bf451e](https://github.com/Muratovnik/valkama/commit/6bf451e0ff6bf561f3cebfff2bb590b3275cfc80), [ff071bb](https://github.com/Muratovnik/valkama/commit/ff071bbe6331b4e902f3d8cc77dbb56a8da62d8a))
+- **web:** keep a field's hint out of its label, so pointing at the hint lights nothing ([8a29806](https://github.com/Muratovnik/valkama/commit/8a29806a1ff787d7cc5597321533dec9acb3be2e))
+- **web:** say «Answered by user» of an answer recorded before Valkama told who gave it ([c54c3ec](https://github.com/Muratovnik/valkama/commit/c54c3ecc22f3e9d3388ae8069076828ab264d989))
+- **graph:** stop flashing the field as the pointer passes from card to card, and enter it by keyboard on a target wholly in sight ([e52ae40](https://github.com/Muratovnik/valkama/commit/e52ae406fdf9d6c88dc9065128d4aa7bf491f00d), [38c4603](https://github.com/Muratovnik/valkama/commit/38c460341e36ed225743b5a16d30e88322cba53f))
+- **graph:** read cleanly zoomed out: epic headers of one height that say what a fold hides, «No tasks», «5 working», a card's number whole, and a moving mark of one length and speed ([e5671e7](https://github.com/Muratovnik/valkama/commit/e5671e7cf96c369c3aa506bb7ce4c17cf5e1961b), [cc1dcc2](https://github.com/Muratovnik/valkama/commit/cc1dcc21b8f69301cb6356b52262a16dc6a349d5), [4f3ff95](https://github.com/Muratovnik/valkama/commit/4f3ff95a163b497222674491ded02d44783f33e7), [f47a905](https://github.com/Muratovnik/valkama/commit/f47a9050a4badfc9565c944ffcd76d36bd42016e), [87201ce](https://github.com/Muratovnik/valkama/commit/87201cecb0683ec84c529a17e9fbb8e044ec7283), [97239a6](https://github.com/Muratovnik/valkama/commit/97239a6dbf6d84078a50681d3ed50d1d2c4d2651), [a46f7e3](https://github.com/Muratovnik/valkama/commit/a46f7e3986ad51865809d8ec092ee3f2215ba1f8))
+- **graph:** give an epic's header the height of its title, up to three lines, and its chevron a 28 px target, 44 px under a finger ([f0844ee](https://github.com/Muratovnik/valkama/commit/f0844ee7d6c4c061bd2767399a9516c1aedc3b21), [bef4b9a](https://github.com/Muratovnik/valkama/commit/bef4b9acb68015702573070d45f3c1e20bae736e))
+- **graph:** keep the zoom buttons in sight on a short window and a phone held on its side ([ea71064](https://github.com/Muratovnik/valkama/commit/ea71064e866306e3c9f736a862d8ad08ae90e61d), [73f72c9](https://github.com/Muratovnik/valkama/commit/73f72c90cf9694aa831ca02307fb38717baa253a))
+
+## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) (2026-11-05)
+
+### Highlights
+
+- Comments form threads that can be marked resolved, and an answer can carry an own
+  option and comments, and be changed.
+- A path or a work item's number in a text opens what it names: a Markdown file in
+  Valkama's document viewer, beside a card or in a window of its own, another file in
+  the editor, an item's card on hover.
+- A session opens where it was last open, by a plan the server makes, and Windows
+  notifications say when an agent needs you.
+- The graph draws each epic as a frame round its work and shows the work an agent is
+  doing now.
+- Security: nine fixes harden how the desktop app starts terminals and programs, how
+  documents are read from a project, and how pages may be framed.
+- Upgrading: see Breaking Changes for store schema 10, its `preschema10` snapshot and
+  the way back. The hook spool now writes a session start as version 2; an earlier build
+  sets such a file aside as `*.rejected`, which `doctor` counts until it is deleted.
+
+### Breaking Changes
+
+- **store:** the first open by this build migrates the store to schema 10 after a verified snapshot labelled `preschema10`, and every existing row keeps its values; a schema-9 build then refuses the store with `StoreTooNewError`, so restart every agent client after pinning this release with `launcher install` ([4d46dde](https://github.com/Muratovnik/valkama/commit/4d46ddee732262626fdd4625a179490dd6444f04))
+
+  To go back, stop every process that holds the store, delete the `-wal` and `-shm` files
+  beside it, put the `preschema10` snapshot in its place, and only then pin the earlier
+  release; everything written since the upgrade is lost. Pinned first, the earlier
+  release reaches every running session within seconds and refuses the store still at 10.
+  [Upgrading the store and going back](docs/guides/store-upgrades.md#migrating-an-older-store)
+  has the details.
+
+- **requests:** a note no longer stands in for a required field: `answer_work_item_request` and the interface refuse an answer that leaves a required field without a value or an own variant, naming the field; an earlier answer stays as written ([3b9bf97](https://github.com/Muratovnik/valkama/commit/3b9bf973e083f574e3c06ce9581f6c28eebcbabc))
+- **planning:** `get_work_item` reads by default the roots of the 5 threads with the latest activity, each with `replies` and `last_reply`, where it gave the 5 newest comments; `comments_after` and `full` still read every comment flat ([d344d20](https://github.com/Muratovnik/valkama/commit/d344d203ca5f0644ba51e6fd572f077669408755))
+
+### Features
+
+- **planning:** thread comments one level deep with `reply_to` and `reply_to_request`, read one thread whole with `thread`, and move a comment with its thread on a merge ([d344d20](https://github.com/Muratovnik/valkama/commit/d344d203ca5f0644ba51e6fd572f077669408755), [0d53af4](https://github.com/Muratovnik/valkama/commit/0d53af4d7f49ddf1b65fd3fa9d84763e6bc7b149), [bb42a7e](https://github.com/Muratovnik/valkama/commit/bb42a7eb0742a74b1fb8b0158122e5810002b380))
+- **planning:** mark a thread resolved with a one-line decision through `resolve_work_item_comment` or the `resolutions` group, and read the threads still open with `unresolved: true` ([c538d0a](https://github.com/Muratovnik/valkama/commit/c538d0af2bb013e4fbe6da58820691ca03390dc2))
+- **requests:** take `own` and `field_notes` in an answer, and change an answer with `change: true` or «Change answer», keeping the replaced ones ([3b9bf97](https://github.com/Muratovnik/valkama/commit/3b9bf973e083f574e3c06ce9581f6c28eebcbabc), [13755b2](https://github.com/Muratovnik/valkama/commit/13755b25484f4c7dfa2f431a7ca65fa4675a68a0))
+- **documents:** make a path in a text a link that opens a Markdown file in Valkama, another file in the editor Settings names and a folder there, inside a registered project only ([ea770e1](https://github.com/Muratovnik/valkama/commit/ea770e1b49fc7d1cd3b5f4b8f18276841bdf64dd), [56ead08](https://github.com/Muratovnik/valkama/commit/56ead086b070f60c1815af021be0ba984ab728f7), [4063e61](https://github.com/Muratovnik/valkama/commit/4063e6124d0c3c3f2691f5cd1fa651abe27748b6), [dc18ea2](https://github.com/Muratovnik/valkama/commit/dc18ea237e88e20b0e902ad0c75817a829ff26cc))
+- **documents:** read a project's Markdown file in a read-only viewer at the anchor, heading or line a path names, up to 512 KiB ([67703fd](https://github.com/Muratovnik/valkama/commit/67703fd8b063b0b825ceb994f1110695f5387750))
+- **documents:** stand a document beside the card or questions it was opened from where the window holds both ([9b6d508](https://github.com/Muratovnik/valkama/commit/9b6d5088282a35b0e5bb68874181b3c70a9d20db), [eaf5c27](https://github.com/Muratovnik/valkama/commit/eaf5c27c9e330f085888ff37d9b0b51b42509bc8))
+- **documents:** give a document a window of its own at `/doc`, in a browser tab or a second window of the desktop app ([425694a](https://github.com/Muratovnik/valkama/commit/425694af887d1c4b58f9b09ae8161fb566116185), [6e0c027](https://github.com/Muratovnik/valkama/commit/6e0c02721362de98c1e328ed50a12f8fbec733b4), [751d8ab](https://github.com/Muratovnik/valkama/commit/751d8ab6032c256856e4235a5a3b6c2e67ce5f17))
+- **documents:** open a document's file in the editor from its head, and an item's plan anchor in the viewer ([70ab517](https://github.com/Muratovnik/valkama/commit/70ab517f20900a179c9542c25d6f12c2b539229a), [75359c9](https://github.com/Muratovnik/valkama/commit/75359c99fc8762ef07153e9baffafa0d8ff31465))
+- **web:** show a work item's card when the pointer rests on its number in a text, or Tab reaches it ([898504e](https://github.com/Muratovnik/valkama/commit/898504e976750d0e74247e50d015b43920b661bb), [a024912](https://github.com/Muratovnik/valkama/commit/a0249129a21ed2633485ac796ce981fdbc3b6575), [9471f23](https://github.com/Muratovnik/valkama/commit/9471f23b53b2222f47a4dfd76bee6ce553f0af3a))
+- **sessions:** record where a session is open and open it there with one press: the Claude Code extension, Claude Desktop, the Codex app or a terminal that resumes it ([bc238a3](https://github.com/Muratovnik/valkama/commit/bc238a3009695028879ae2ec4bfbb7e8f4b20830), [f11570f](https://github.com/Muratovnik/valkama/commit/f11570f786baef66d365e575d1d8018b3a9ac132), [95c3aed](https://github.com/Muratovnik/valkama/commit/95c3aed3f56fda1686d3e1941b037c8e3e5a0f67), [bc1722b](https://github.com/Muratovnik/valkama/commit/bc1722bbb6c505c3babc5dbaad749fefd8ad48d9), [386a166](https://github.com/Muratovnik/valkama/commit/386a1661e6e858c8ba33e0191a2119057d49e520))
+- **sessions:** offer to resume a terminal session silent for more than a day ([efdc561](https://github.com/Muratovnik/valkama/commit/efdc5614d7b53cb22ddbffae305560268c234e86))
+- **web:** follow the server's open plan from Settings → Opening sessions and files; VS Code and Cursor now open a session in their extension, and Codex's stored terminal gives way to VS Code ([4664e08](https://github.com/Muratovnik/valkama/commit/4664e086b0266e3b8ebd0de8e2e81177994aa704), [89c4154](https://github.com/Muratovnik/valkama/commit/89c41547566ea793a68edca10064bee71411f96b), [fa0becb](https://github.com/Muratovnik/valkama/commit/fa0becbddd82d9cc9fd7efe6313b08575ea30793))
+- **planning:** name each holder on a card with the session a click would open, where it was opened and whether it is live, as `executor` ([939c42f](https://github.com/Muratovnik/valkama/commit/939c42feecce5fe9413bc6b4dd081cb33333d9e5), [31ce58b](https://github.com/Muratovnik/valkama/commit/31ce58b5bf0dcd6a1d6870463b1ed9362ce66d93))
+- **planning:** tell the agent working an item what a person did there in `from_person`, and refuse its close with `person_spoke` until an agent writes there ([48b8fe7](https://github.com/Muratovnik/valkama/commit/48b8fe7ea22ca67a042f23ab0e3514ccc9f6dfcd))
+- **hooks:** bring that news through Claude Code's and Codex's hooks, wake an idle orchestrator with `claude watch`, and tell a thread's author and a question's asker too; `VALKAMA_NOTIFY=off` switches it off ([813481b](https://github.com/Muratovnik/valkama/commit/813481b18680ff0387266de7e8532d2c6ddf7427), [d01dd69](https://github.com/Muratovnik/valkama/commit/d01dd69c7a197f25aaba70be6fe7121cd4b51380))
+- **hooks:** show work item numbers as links in Claude Code through its `MessageDisplay` hook ([6682604](https://github.com/Muratovnik/valkama/commit/668260411ddfdf530b2959e81cbd42800ceb31c4))
+- **alerts:** show a Windows notification when an agent asks a question, moves work to review or a launch fails, with Valkama's window closed too ([1946475](https://github.com/Muratovnik/valkama/commit/1946475d1cc786923ef31ed76f0361d709945225), [68b4378](https://github.com/Muratovnik/valkama/commit/68b43784ecbd6b2592d8c36860ac203879c77f15), [5f5739a](https://github.com/Muratovnik/valkama/commit/5f5739a7599a3698d4202bbc6d78f70f69f4c3c3), [db877d6](https://github.com/Muratovnik/valkama/commit/db877d627eba54051ab8f3fb7b35a6a521b078d5))
+- **settings:** choose the Windows notifications' events and text in Settings and keep them in the store, replacing the browser-stored settings no code obeyed ([213e6b0](https://github.com/Muratovnik/valkama/commit/213e6b0942c25f744017049773252c733584e975))
+- **alerts:** open the panel of open questions at `/open/questions`, and the app from a notification through the `valkama:` scheme ([08df5ae](https://github.com/Muratovnik/valkama/commit/08df5ae89b85fe1100435741f7a6727a8961ae44))
+- **planning:** say in the space's read model which items an agent is at work on now, as `live_work` ([e76c795](https://github.com/Muratovnik/valkama/commit/e76c7951359c9714c8ac1cd3e0aed6dce2604f76), [6d8f2f9](https://github.com/Muratovnik/valkama/commit/6d8f2f98555778eba731cba0671fd6300ee9ac5b), [09aaaeb](https://github.com/Muratovnik/valkama/commit/09aaaeb1d94e1f26a6227abfd12ecaaae5a85f40))
+- **graph:** draw an epic as a frame round its work, with its counts over an edge in the board's hues, and lay the whole space out by epic ([5dc0e56](https://github.com/Muratovnik/valkama/commit/5dc0e56427658e1359f3b25ba8f258ea5f860c13), [d769cb1](https://github.com/Muratovnik/valkama/commit/d769cb12a6a512ec667546e6cf1130531767b875), [749e2c8](https://github.com/Muratovnik/valkama/commit/749e2c8db61a4fd837c53bc20881639418fb74b5), [e9f539a](https://github.com/Muratovnik/valkama/commit/e9f539afff68823fc518d396eace8b554c5c6df9), [abf5fb3](https://github.com/Muratovnik/valkama/commit/abf5fb3e95239928291792cadcf015e365ea9b6a))
+- **graph:** show the work an agent is doing now: a card's «working», «held» or «waiting», a comet on a live line, and «Stop the motion» ([3cf5e84](https://github.com/Muratovnik/valkama/commit/3cf5e843044a679d035d0f2a08bdc0a74567151c), [bf589ee](https://github.com/Muratovnik/valkama/commit/bf589eebeaa5a3093e5c4b6f866d04502470f7cd), [9c5eb38](https://github.com/Muratovnik/valkama/commit/9c5eb3859bfacc8698fe7fdb7476f2d87595af2a))
+- **graph:** remove the «Unlinked» switch, since every open item now stands in a frame, and count epics in «Open» and «All» ([cba689e](https://github.com/Muratovnik/valkama/commit/cba689eb4dec22aaee2590ec1f4afc584d5160c5))
+- **graph:** lay the graph out again only when what it draws changes, and walk and frame it by its frames from the keyboard ([a85a9fe](https://github.com/Muratovnik/valkama/commit/a85a9fe79e1b9d03fd8457913dd0082a50a88056), [7386020](https://github.com/Muratovnik/valkama/commit/7386020c5933e376ecbb3e434bd09c5c6c877639))
+- **web:** copy an item's short address `/open/<number>` from the card's head ([e3edfe1](https://github.com/Muratovnik/valkama/commit/e3edfe1a3d243a584f0d74625170c74953180cd0))
+- **desktop:** offer a context menu for links, selected text and fields ([d06cd81](https://github.com/Muratovnik/valkama/commit/d06cd81b449de93f3b4620d1e2d6c75bbc281de9))
+- **desktop:** remove the app's own way to open a plan anchor in VS Code, the `valkama:open-source` bridge ([8f41d80](https://github.com/Muratovnik/valkama/commit/8f41d80c9c80083e7ec134b001897c8f558d79e0))
+- **web:** turn the card's Execution tab off by default, with a switch under Settings → General → Interface ([56c8271](https://github.com/Muratovnik/valkama/commit/56c8271f12a1b04847530a82026776560ba898da))
+- **web:** name the question a history event is about, and say in words what a record id stood for ([bbb4d9f](https://github.com/Muratovnik/valkama/commit/bbb4d9fe58e38a6ed6ec9a17425ce3910b6f275e), [33ed81c](https://github.com/Muratovnik/valkama/commit/33ed81c7c4c20280bbdaab6e81c00f2d51f5a300))
+- **web:** make segmented choices radio groups and panel switches tabs, one Tab stop walked by the arrow keys ([fdb0032](https://github.com/Muratovnik/valkama/commit/fdb0032d18b79476a90f00f8da8e99b0d2712575), [e257d5d](https://github.com/Muratovnik/valkama/commit/e257d5db3a2e6907ff5094239a869a7f41434f0e))
+- **brand:** replace the mark with the spark in two flat colours, with a Windows icon frame for every size ([07302fa](https://github.com/Muratovnik/valkama/commit/07302fa8b2f639d219dd2c59b926b95c0af04989), [b532918](https://github.com/Muratovnik/valkama/commit/b532918822d5f2b3af7aff3d548767fc6fa979bc))
+
+### Bug Fixes
+
+- **desktop:** refuse a session id led by a dash, which reached `claude --resume` as a flag, and a terminal folder holding a `;` ([c38f52b](https://github.com/Muratovnik/valkama/commit/c38f52b2029f5343e11a336b0a64bb451e5dc18d), [09118ee](https://github.com/Muratovnik/valkama/commit/09118eefe41636b210bd37a965824de9399a9d3a))
+- **desktop:** resume in a terminal by the full paths of `cmd.exe` and the client's CLI, so a `claude.cmd` in the repository no longer runs ([23f30d2](https://github.com/Muratovnik/valkama/commit/23f30d23a280096dbb087b13d088ee49564835fa))
+- **desktop:** find the owner's command's program on the `PATH`, never in the session's folder, and give it no folder holding a `;` ([efb4824](https://github.com/Muratovnik/valkama/commit/efb482441c72cfec8f66d5d2d6ce487cfe0b8810), [72d4d98](https://github.com/Muratovnik/valkama/commit/72d4d985ae6c3fae1eb45aaa29a0021512a29274))
+- **desktop:** hand the system only `http:`, `https:` and `mailto:` addresses from a window ([a14bbee](https://github.com/Muratovnik/valkama/commit/a14bbee7fe5468ab1c32dd8b0521a1d4b385f3f7))
+- **http:** forbid framing every page the listener answers, with `frame-ancestors 'none'` and `X-Frame-Options: DENY` ([72355dc](https://github.com/Muratovnik/valkama/commit/72355dc793fa21be34f38731fe60dbc8cb6fdec3))
+- **documents:** compare a path with its project's root as the disk spells both, so a folder named in another case is not read as the project ([d87b9db](https://github.com/Muratovnik/valkama/commit/d87b9db1a61ba1851ff87ef8e0c3477191cee931))
+- **documents:** check the opened file again before reading it, so a junction swapped in on the way reads nothing outside the project ([56685ed](https://github.com/Muratovnik/valkama/commit/56685ed4fcea61184a3504a6d6da3d781ad7aabd))
+- **sessions:** offer only a folder the desktop app takes, instead of failing a whole click ([3a7edee](https://github.com/Muratovnik/valkama/commit/3a7edeecbdd9e6ab8e527438788cd6a2a3ca7367))
+- **planning:** read an item under the write lock its write takes, so a write that names no revision is no longer refused for one and a merge no longer drops a step ([8993a50](https://github.com/Muratovnik/valkama/commit/8993a50e6653deeb40ccf7796d05ef723f192d78), [ad3dcff](https://github.com/Muratovnik/valkama/commit/ad3dcff3353912228f1e50ced35b7752eb006bbd))
+- **planning:** check a transition's reason before the item moves, refusing it by its own name ([e912101](https://github.com/Muratovnik/valkama/commit/e912101eddd57df7adf59bba18922f586a686939))
+- **web:** let a press in the instant a question's buttons move write nothing, instead of declining the question ([85cf2d2](https://github.com/Muratovnik/valkama/commit/85cf2d2a5a251794ae9ef8b6a47f1dc05a3db549))
+- **web:** say what a choice not sent was when its question closes elsewhere ([3cbb34b](https://github.com/Muratovnik/valkama/commit/3cbb34b61aa26ae9bbd28c25aae4e7699d6f1a67), [83b8cd6](https://github.com/Muratovnik/valkama/commit/83b8cd6cb5067866ec5efa7fb508abee280c3050))
+- **web:** read a long card and a large space past 500 comments, 1000 events or 1 MiB of answer ([44c0ec7](https://github.com/Muratovnik/valkama/commit/44c0ec7a1c7090f58fbe1bc8b9bbe4e1240a5a0e), [dc094cf](https://github.com/Muratovnik/valkama/commit/dc094cf2afcc7d904dfedfaf22b3f4b7472da105))
+- **launches:** record a launch from Valkama that ended, with its status, comment and move to review ([83f9df1](https://github.com/Muratovnik/valkama/commit/83f9df1f1b5d162ebc4a39a41f97a4ee6a5c66ad))
+- **requests:** read an answer no call gave as `by_person: null`, not an agent's ([0e06b86](https://github.com/Muratovnik/valkama/commit/0e06b86516745b860930d2c8f0e137a4b20f26bb))
+- **planning:** say why a card of an attached store another build wrote cannot be read, as 409 `store_schema_mismatch` ([1dd6abc](https://github.com/Muratovnik/valkama/commit/1dd6abc282f06452f72f31233804d8d72e9f070c))
+- **web:** read a card's Memory source as the card opens ([e2482dc](https://github.com/Muratovnik/valkama/commit/e2482dc57148c228c4f17c363bb45ebbf9ea3b44))
+- **web:** draw a reference in text as an inline link that wraps with the words ([014caab](https://github.com/Muratovnik/valkama/commit/014caab70daef461a915f6ea010b5deb07c9e672))
+- **web:** show the notice in the corner over cards and dialogs, and announce it ([57ce93b](https://github.com/Muratovnik/valkama/commit/57ce93b8c49431bb631786313b9a14e9d20964c4))
+- **web:** let Tab go on from where a card was pressed, and keep a link Tab reaches in a folded text in sight ([ab37e87](https://github.com/Muratovnik/valkama/commit/ab37e87b5fd8860c8c4b5a2fe4c84a2d20d85836), [c2b2129](https://github.com/Muratovnik/valkama/commit/c2b2129dbbfb016ee66faeade82eda8367ede544))
+- **web:** ring focus only where the keyboard or the app put it, and take no press on what the card's bar fades ([de6949b](https://github.com/Muratovnik/valkama/commit/de6949b0443a3b8f0fa567016bb4147d7a5f632d), [07f649d](https://github.com/Muratovnik/valkama/commit/07f649da3535a7cabd05a230ac7e730b270aff19), [7862e47](https://github.com/Muratovnik/valkama/commit/7862e474796a61f306b420cbd14026833ec1b4dd))
+- **web:** keep a switch, a button, a chip, the current page and a failed read's disc legible in a forced palette ([4e2ebc9](https://github.com/Muratovnik/valkama/commit/4e2ebc9f6966c40a53db7a80f9f21f1622159b0d), [30adf32](https://github.com/Muratovnik/valkama/commit/30adf3296bd3c6996257fb702c61c90883456bed), [f2fcd0c](https://github.com/Muratovnik/valkama/commit/f2fcd0c887c5ac5f16698fa08839a6dba427d5ac), [f0d24bd](https://github.com/Muratovnik/valkama/commit/f0d24bd8c6a24e386b09872f376e81e4a154235c), [68b7ce4](https://github.com/Muratovnik/valkama/commit/68b7ce4531178212229afbfa6c51c07a8e2fd369))
+- **web:** mark an error and a refused choice with a glyph and a doubled edge, not colour alone ([55b378e](https://github.com/Muratovnik/valkama/commit/55b378e4c36464273669eb5d5ba5b168957f625d), [1ce7264](https://github.com/Muratovnik/valkama/commit/1ce72645f43ccb176ff3c605147971b9112dbace))
+- **web:** give disclosures the bare weight apart from actions, and lift a failed read a step above its ground ([d0cc862](https://github.com/Muratovnik/valkama/commit/d0cc8623543d5f332cb47d47a4330f07b93e7383), [ae76bd6](https://github.com/Muratovnik/valkama/commit/ae76bd60f63f67f63700ce85290ba6ba88cadc71), [ef7d11d](https://github.com/Muratovnik/valkama/commit/ef7d11d13ae025428e7ca7c909c4eb9f3cd08fd4), [766a44a](https://github.com/Muratovnik/valkama/commit/766a44a536ca61a65db6f296b856d66303bbbdb0))
+- **web:** keep a name, a time, a span of two units and a card head's note whole on their lines ([a72c098](https://github.com/Muratovnik/valkama/commit/a72c098ddb9054273b903da7b54d35b76b78e904), [094bb60](https://github.com/Muratovnik/valkama/commit/094bb6095fc780005f6ed779df625f8bc1e594ae), [13cfc6b](https://github.com/Muratovnik/valkama/commit/13cfc6bb23f50aab7678dc6884fa63c40a77c4f7), [7386136](https://github.com/Muratovnik/valkama/commit/7386136c51648dc2755a22b801ea0809b5294534), [4fdc7d0](https://github.com/Muratovnik/valkama/commit/4fdc7d0a352da5eb7d188266cf3b8cdb7aca91a3), [74b7e0c](https://github.com/Muratovnik/valkama/commit/74b7e0c6405cd898a43d0fee79e109bbb9895168))
+- **web:** let a dialog take a phone's whole width ([f140fdd](https://github.com/Muratovnik/valkama/commit/f140fdd5fa902e6ccdd71b29f7da570501eea4e7))
+- **web:** say a missing program once on a card, draw editors and apps apart in Settings and name a setting at its controls' top ([524d4de](https://github.com/Muratovnik/valkama/commit/524d4de1b1b2d21c1cbc98b22a11ebd247209dcf), [f3b9538](https://github.com/Muratovnik/valkama/commit/f3b95387c53fb5007f24c9c2747e65abbf96aeaa), [776c2dd](https://github.com/Muratovnik/valkama/commit/776c2dd2513c66bc775babdae4658cd90011e3f9))
+- **web:** keep a state word on the branch map's tip readable ([f1bd37a](https://github.com/Muratovnik/valkama/commit/f1bd37a9a063d35c4b303ea0388c3d731f014e22))
+- **web:** say no question waits without saying there are none above closed questions ([4b47f6b](https://github.com/Muratovnik/valkama/commit/4b47f6bc83f402f92d1a5fbf343f49f62a5588cb))
+
+### Performance Improvements
+
+- **web:** keep one ELK layout worker while the graph is open, and start it before the space is read ([f8f5fb2](https://github.com/Muratovnik/valkama/commit/f8f5fb2f8515d454e76edc6b74f5fce21184713e), [6fd1c18](https://github.com/Muratovnik/valkama/commit/6fd1c18b11e10578efaa4ef1402ffe942567c4f9))
+- **launcher:** start a client hook without `runpy` and `pathlib` ([96f9540](https://github.com/Muratovnik/valkama/commit/96f95406c75bab90b6d8d7cf219cf20c5f3f455f))
+
+## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) (2026-11-03)
+
+### Highlights
+
+- A question is answered in the task's discussion, in one form for every kind of field,
+  and the card's «Questions and decisions» section is gone.
+- An agent reads a question's answer from `get_work_item` without reading the
+  discussion, and a person can answer in a note of their own words.
+- A link to a work item followed from an agent client's chat opens the card in the
+  desktop app.
+- The editor is one frame with a toolbar, and a card's head scrolls with its content.
+- Upgrading: the store stays at schema 9, but install the server and the web interface of
+  this release together, and reinstall the desktop app with them: an earlier web interface
+  cannot update the questions on a card holding a note or a described option, and an
+  older desktop app opens without moving to the card.
+
+### Features
+
+- **card:** answer a question in the discussion, where it reads as a comment, and remove the card's «Questions and decisions» section; «Needs my answer» shows the same form ([4b767bd](https://github.com/Muratovnik/valkama/commit/4b767bd36d2cc0e90bac61c0d2c12e541c9c9482))
+- **planning:** let an option carry a markdown `description` and be `recommended`, and an answer a `note` of up to 8000 characters that stands in for required fields; carry an item's `questions` in `get_work_item`, record `by_person` from the call that closed a question, find items by a question's text, export every question and keep a merged item's questions open on the survivor ([cc7915f](https://github.com/Muratovnik/valkama/commit/cc7915f12c2d9d2e8b626e13f0fb1babff5a64e3))
+- **planning:** answer `list_work_item_requests` in a compact form by default, `full: true` for whole records, with `offset`, `truncated` and `next_offset` ([27238d4](https://github.com/Muratovnik/valkama/commit/27238d4197c58ff5fc4376d687853e5231830f8c))
+- **card:** let «Don't answer» take two steps and no press on a question holding nothing write, whatever comes to stand under the pointer ([a8ed598](https://github.com/Muratovnik/valkama/commit/a8ed598d79b573645456ce51fc793e95cd189a9d), [d2f9269](https://github.com/Muratovnik/valkama/commit/d2f926989ead43a3814a796dec396732b212501b))
+- **card:** keep the choices in sight when options have long descriptions, and show a chosen option's description whole before Send ([4072fb2](https://github.com/Muratovnik/valkama/commit/4072fb21dbf9540f40efc0559849b4d51dfc08ac))
+- **server:** open a work item link followed from outside a browser page in the desktop app, on that card ([3b0ffb2](https://github.com/Muratovnik/valkama/commit/3b0ffb2272f28a55e98384bdafd2cd7bf49fd228), [9fc7eab](https://github.com/Muratovnik/valkama/commit/9fc7eab664fc45c92029361cc116ad2f56429288), [7079261](https://github.com/Muratovnik/valkama/commit/707926172f4a67947a7dbda465da85ea83bddd22))
+- **web:** draw the editor as one frame with a toolbar for a task link, bold, italic, inline code, a link and a list; `rows` sets a field's height again, and a person writes comments while reports stay the agents'; a comment and a description reach the server as typed, untrimmed ([3d200bf](https://github.com/Muratovnik/valkama/commit/3d200bf5ad2a6e0c759aceb135aad172816cf74f))
+- **card:** let a card's head scroll with its content under a slim bar, keep the panel from card to card, and play the close ([32b0a65](https://github.com/Muratovnik/valkama/commit/32b0a65107516920d16917c555c027fba5a69186), [6ad545e](https://github.com/Muratovnik/valkama/commit/6ad545e6e481b2263c1bc99b02b1eaa0a4403e15), [ebb0f95](https://github.com/Muratovnik/valkama/commit/ebb0f9521e97bd9cd0bb534c94d49a94687e267c))
+- **card:** leave out a section with nothing in it, and let a chain's section reach its list sooner ([ce55975](https://github.com/Muratovnik/valkama/commit/ce55975124843146845a62980073b8d24a228fc7), [2482223](https://github.com/Muratovnik/valkama/commit/2482223750715312b9223ad81ef1d6d8606759cd))
+- **board:** let the title lead a tile with the labels as quiet words, make an epic's row one line, and «By epics» a toggle like its neighbours that keeps its word down to a phone ([bdc94ba](https://github.com/Muratovnik/valkama/commit/bdc94ba5a474c525d0313be00a4d5546ef4528ca), [d9b6f5a](https://github.com/Muratovnik/valkama/commit/d9b6f5aa8c5d4e77efab709ef2401f801a2f3ef9), [e522de9](https://github.com/Muratovnik/valkama/commit/e522de9c12ddd0e2830df3fe48a6df931d23208e), [57d5a3f](https://github.com/Muratovnik/valkama/commit/57d5a3f52809e0fa43f70dac68c6fbb2f11ab9eb))
+
+### Bug Fixes
+
+- **planning:** take the write lock before deciding an item's number, a space's key or a call row, so agents creating items at once no longer fail on `UNIQUE constraint failed` or `database is locked` ([cd638de](https://github.com/Muratovnik/valkama/commit/cd638ded068be051d79509aa4a1ee1640f63e28d))
+- **web:** keep a press on the board from crashing the tab in Chromium 156 ([2736abe](https://github.com/Muratovnik/valkama/commit/2736abe4d2c5527d330a9e57b20749ce3ae1f8e7))
+- **web:** open a task whose description is longer than 8192 characters, and one whose discussion outgrew 256 KiB ([66c96ca](https://github.com/Muratovnik/valkama/commit/66c96ca6775985c8951d9fb7c851cdab236be53d), [2a3bd8d](https://github.com/Muratovnik/valkama/commit/2a3bd8dc3402d443a92d14bfabfae7b30c12d5a1))
+- **web:** keep a second press from reaching what rose under a still pointer, or what a closing drawer leaves under it ([a73909e](https://github.com/Muratovnik/valkama/commit/a73909ef392490ab8d1b353d0431bf472cffa7e4), [a9c9cd2](https://github.com/Muratovnik/valkama/commit/a9c9cd289d642d2e37d0f24bb19a4f06c41ac9ac), [7b5e94b](https://github.com/Muratovnik/valkama/commit/7b5e94b2a7c8b3a7bba0957396cac744e314a2b1))
+- **web:** let the reading keys scroll a card as soon as it opens, and keep the place along its stuck sections and back on Overview ([977a3e7](https://github.com/Muratovnik/valkama/commit/977a3e7add9b7853291b1816cbc74b84dfb39b93), [19caf59](https://github.com/Muratovnik/valkama/commit/19caf598b8e0765293596cd2c715d7cd3651514f), [f32befe](https://github.com/Muratovnik/valkama/commit/f32befe292d1bc02efab402b2a5071adb0dc22a8), [d113034](https://github.com/Muratovnik/valkama/commit/d113034bd82460a2b081cf8e999faad21d2fe9db))
+- **web:** show a card soon when its chain is slow, and land Back once ([4d0b927](https://github.com/Muratovnik/valkama/commit/4d0b927d5aa3643e5d3c64f024e13fe773868f2e), [b7f28ad](https://github.com/Muratovnik/valkama/commit/b7f28adffa7ea2765df3111c96ffb067742efb60))
+- **web:** keep focus in the card through a takeover, a write, a retried read and an outcome sent ([450f06f](https://github.com/Muratovnik/valkama/commit/450f06fb46716fe8e2316384da92a3ddf7de0141), [3e22e51](https://github.com/Muratovnik/valkama/commit/3e22e51c1cd416076e4f714fc4f66984ae4d24be), [fc37358](https://github.com/Muratovnik/valkama/commit/fc37358304fa54dc401de2b73c4d317d01bc5493))
+- **web:** ask before an outcome stepped back from is lost ([9b8bd3e](https://github.com/Muratovnik/valkama/commit/9b8bd3eea952ce4b1fe0f3122ca0c0fc9b718dbb))
+- **web:** draw no ring on Close of a card opened by its address ([27c8c50](https://github.com/Muratovnik/valkama/commit/27c8c50b6e7ef9a6262888d29007317873378f3c))
+- **web:** give a fact the item does not have no place among the facts, and stand a checklist step's text level with its box ([3a030b5](https://github.com/Muratovnik/valkama/commit/3a030b5200b8537dc0ac27fe9e7da592aaf85f65), [b3b7acf](https://github.com/Muratovnik/valkama/commit/b3b7acf9a95d62b4c270c1f2ea96f66b2aeb3050))
+- **web:** shorten a holder signed with no brackets as one signed with them ([9487aa8](https://github.com/Muratovnik/valkama/commit/9487aa869c91b8cf8ef432849d2c359d0a26db44))
+- **editor:** keep marks inside a list item's marker and take a mark around a selection off as one, and show the start of a long text opened for editing ([d3ecff0](https://github.com/Muratovnik/valkama/commit/d3ecff015a65ad1ac893cfbf1ebaef6ec32f96da), [16c95ad](https://github.com/Muratovnik/valkama/commit/16c95adf6c0a127444abfcf609728c6be3fe5c10), [7402c3b](https://github.com/Muratovnik/valkama/commit/7402c3b35b4854dd0bdb40859cc7868225352557))
+- **web:** bring the checklist into view from another section's «Go to the checklist» ([550f8d4](https://github.com/Muratovnik/valkama/commit/550f8d4f140f23e8ca37950ca7951c98b8a09b51))
+- **web:** make a pressed chip plain in a forced palette ([afc463c](https://github.com/Muratovnik/valkama/commit/afc463cee8b164959a8689c368600349b187f663))
+- **list:** give a phone's sort choice its whole name, and stand the Memory search level with its field ([c5a5c3a](https://github.com/Muratovnik/valkama/commit/c5a5c3ab8c45551441f5e8810a8f0876f64d3482), [78e968f](https://github.com/Muratovnik/valkama/commit/78e968f59861f90cb827c1bddc79cd4aea980548))
+
+## [2.3.0](https://github.com/Muratovnik/valkama/compare/v2.2.0...v2.3.0) (2026-11-02)
+
+### Highlights
+
+- A work item has a short address, `/open/MAIN-12`, which MCP answers carry as `url`,
+  and a listener can hold the port from login so the address works without starting
+  anything.
+- A card lists the Claude Code agents working on its item.
+- A client restart no longer costs a session its claims: an ended session keeps them for
+  12 hours.
+- `valkama released` finds open work whose commits already went into a release range.
+
+### Features
+
+- **planning:** give a work item the short address `GET /open/MAIN-12`, carry it as `url` in the full record and every write acknowledgement, and say why an address led nowhere; the skill and the server's instructions ask agents to link the numbers they write to the owner, and the instructions now fit the 4096 characters Claude Code reads ([a934da0](https://github.com/Muratovnik/valkama/commit/a934da0d4cf19efd4ebab02dfe4915e7213b01b6), [8e8ca87](https://github.com/Muratovnik/valkama/commit/8e8ca877a0770aafaf2520833c88bf2806e33dc1))
+- **launcher:** add `serve --on-demand`, which holds the port at about 15 MB and becomes the server on the first connection, and `launcher autostart enable|disable|status` to start it at login ([cf08fbc](https://github.com/Muratovnik/valkama/commit/cf08fbc8009d3dcb6e75319af68b9ec94fb8a4e1))
+- **planning:** list the Claude Code agents on a work item's card, with what each was started for, its step and its last activity ([5b0a0a0](https://github.com/Muratovnik/valkama/commit/5b0a0a05a979915f97650fb38991078469f30011), [65c7c77](https://github.com/Muratovnik/valkama/commit/65c7c775ea7e2f988a6e36e9a9f9fe840d386ecc), [72434aa](https://github.com/Muratovnik/valkama/commit/72434aa93576f9cf04cde669d4aed3b5bb09a6eb))
+- **hooks:** name an agent from the call that started it with `valkama hook claude post-tool-use`, registered for `PostToolUse` with the matcher `^(Agent|Task)$` ([91d7fff](https://github.com/Muratovnik/valkama/commit/91d7fff663b53d5958052c52e079c9e76c779216))
+- **cli:** add `valkama released --space KEY --repo PATH --range A..B`, which lists the open items whose commit refs went into a release range, matched by hash, patch-id or subject ([943558e](https://github.com/Muratovnik/valkama/commit/943558e4d7df97c6321e3d88fc9b4087f1d034c5), [f6bb12c](https://github.com/Muratovnik/valkama/commit/f6bb12c86b448bf2b94a54c981bc278cfe99254f))
+- **planning:** read a work item's comments after a given id with `comments_after` ([45cdc42](https://github.com/Muratovnik/valkama/commit/45cdc42d56b5b0d6ee4ddef64b4271808027883d))
+
+### Bug Fixes
+
+- **planning:** give an ended session 12 hours before its claims are released, and say in the history why a claim was released: `session-ended`, `session-missing` or `lease-expired` ([92f6687](https://github.com/Muratovnik/valkama/commit/92f66871307ef726f6a4dc1e543840a61fc8fc71))
+- **board:** land a tile dragged quickly where it is let go, and on top of a column let go over its header ([617cff4](https://github.com/Muratovnik/valkama/commit/617cff4dece6fdf873b2ef46e6d7fa2d84ff32f6), [f814444](https://github.com/Muratovnik/valkama/commit/f81444429dad39647321b8dcecb31a5dba0484b3))
+- **tray:** move the icon to the release its session switched to after `launcher install` ([8c90644](https://github.com/Muratovnik/valkama/commit/8c906447a80b094db7d9aa05ce65f2d5e38f44b8))
+- **store:** wait out a scanner or an indexer that holds a file when adopting an older store or pinning a release ([bf5e406](https://github.com/Muratovnik/valkama/commit/bf5e406a745ae0e4687a7ef5a0eb64a3981869fc), [f9780a3](https://github.com/Muratovnik/valkama/commit/f9780a30e9ab06a5045382f52f6f9ed3502a910e))
+- **web:** give a state panel's buttons their own row on a phone, so its message stays readable ([503cd32](https://github.com/Muratovnik/valkama/commit/503cd32255fb577566618f9e5c4e5616650fd28a))
+
+## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) (2026-11-02)
+
+### Highlights
+
+- One Work filter stands above the board, the list and the graph, and is kept in the
+  address.
+- Free text is drawn as Markdown and written in a Markdown editor.
+- A close ends the claims on the item, and every link names the state of its other end.
+- The store is unchanged at schema 9, so the upgrade runs no migration, and the server
+  lists the same 31 tools with the same schemas. Several existing MCP and HTTP calls
+  return more than before: an agent or integration written for 2.1.0 should read
+  Breaking Changes first.
+
+### Breaking Changes
+
+- **planning:** a space's view and its live stream now carry every `blocks` link into the space from another space, so a link's `from` can name an item the view's `work_items` or `nodes` do not hold; every link names its source's `reference`, `state_name`, `state_category`, `is_terminal` and `state_unavailable`, and a reader that looked `from` up among the space's items reads these instead ([81f118e](https://github.com/Muratovnik/valkama/commit/81f118e5afe022e23450d58b7568e5a733bfe8b8))
+- **planning:** a chain's `edges` now hold every `blocks` link into the root or a member wherever its source lives, so `from` need not be a member ([bf3de39](https://github.com/Muratovnik/valkama/commit/bf3de39bac7f5fd94b9015fdf2d4f81f202d00da))
+
+### Features
+
+- **planning:** filter the board, the list and the graph through one Work filter of state, kind, priority, label and holder, kept in the address, in place of the queue and the search field ([4cf5514](https://github.com/Muratovnik/valkama/commit/4cf5514dcf3751476d6c9688dfb0fafcf7b6291c), [a98e4d7](https://github.com/Muratovnik/valkama/commit/a98e4d769beb7e08d54969791cdf596db83b7c7a), [3a2efee](https://github.com/Muratovnik/valkama/commit/3a2efee31ca74b65dc66bf85eb28b778005f2c75), [fefcbe4](https://github.com/Muratovnik/valkama/commit/fefcbe4ade5d631cf66db117d310a616c343bdc5), [fc1eb3e](https://github.com/Muratovnik/valkama/commit/fc1eb3e8bc6564fb31893ad4f09a91a6106c8187))
+- **web:** draw free text as Markdown with its references linked, keeping raw HTML as text and links to `http`, `https` and `mailto` only, and write it in a Markdown editor ([afd1b0a](https://github.com/Muratovnik/valkama/commit/afd1b0a975a149a48f78cd886874437d8ae7a64b), [846c9c2](https://github.com/Muratovnik/valkama/commit/846c9c2bf25e38f5dbbc7c851f3438900b6736e0), [5bed232](https://github.com/Muratovnik/valkama/commit/5bed2327772d2e938b095eb1264ae336fd40bf5a), [2054d39](https://github.com/Muratovnik/valkama/commit/2054d39f70ba6af89a821cd65cc01b983f35bc2e))
+- **planning:** end the claims on an item in the write that closes it, and name who held a closed item as `last_claim_ref` with `closed_at` ([7f86420](https://github.com/Muratovnik/valkama/commit/7f86420890a39c69f72f9248ca3db875b951c769), [aaaa407](https://github.com/Muratovnik/valkama/commit/aaaa4075d9226b460a5793d0dd0d483a8e978257))
+- **planning:** name the other end's state on every link of a full record, and mark cross-project search results with kind, priority and state ([8cb8b9c](https://github.com/Muratovnik/valkama/commit/8cb8b9c2870ce362880cf17cb0b0d23841da531b), [329c79d](https://github.com/Muratovnik/valkama/commit/329c79d1d237044d838f3be53244db944313c462))
+- **work-item:** print a work item's exceptions, not its defaults, the same way on the board, the list, the graph, the card and the finder, with marks that filter ([853fa59](https://github.com/Muratovnik/valkama/commit/853fa5905cdd36db1812999c3fe2b90b53fc0639), [92372fe](https://github.com/Muratovnik/valkama/commit/92372fed6f349a2f17122f9963a8173a50c2eed3), [8484cb4](https://github.com/Muratovnik/valkama/commit/8484cb4f6f5cbbd2008829cb4a61df824e84df52), [f9a25ca](https://github.com/Muratovnik/valkama/commit/f9a25ca9fa88d685174bbf0b68cc86e52d6a7a65), [da1da44](https://github.com/Muratovnik/valkama/commit/da1da440ffb648eca9be687731accc70bf134d04))
+- **board:** keep a tile's labels on one line and count the rest, and stand the Done column newest closed first ([179108b](https://github.com/Muratovnik/valkama/commit/179108b1adb8c60fa7109628fb97dad4deca3803), [f29518e](https://github.com/Muratovnik/valkama/commit/f29518e6980a830a069e0960e7529991e93f068d))
+- **card:** lead the card's head with who the item is, its facts and one action ([4a669aa](https://github.com/Muratovnik/valkama/commit/4a669aa248b8d6587d258998c5e449247d41f3e1))
+- **graph:** leave the camera to the operator: a refresh, a filter, a switch or a resize no longer moves it ([7d0f905](https://github.com/Muratovnik/valkama/commit/7d0f9059c6a58eb0e3ea117a4f163749ab13e497))
+- **desktop:** open the window at once on a starting page and start the server behind it, offering «Restart the server» instead of restarting it unasked ([6776c74](https://github.com/Muratovnik/valkama/commit/6776c749efb6e3cbf402597227d991c2d5cb605b))
+- **nav:** say a lost connection in the rail instead of pushing the views down, with «Refresh» on a narrow rail's dot ([b4a6697](https://github.com/Muratovnik/valkama/commit/b4a66971971cd5b976f604652a93b5185ca3a1ba), [3e4973e](https://github.com/Muratovnik/valkama/commit/3e4973ee4da9e6080b2a967933e13a5519d4d6ff))
+
+### Bug Fixes
+
+- **server:** hand git only a commit revision when resolving a commit ref, so a value such as `--output=<path>` no longer makes git write a file and `rev:path` no longer prints one ([9649d5e](https://github.com/Muratovnik/valkama/commit/9649d5e755bbf763fbba8bfd6617325247bcb346))
+- **server:** look a commit up in every registered project and by the project a value names, where most commits read as not found ([63e06a7](https://github.com/Muratovnik/valkama/commit/63e06a7bbc717749248f430837964fdd2ea9527a), [49340f9](https://github.com/Muratovnik/valkama/commit/49340f92056765d4e18702cc28eb969f3b029b30))
+- **server:** refuse a second listener on a port another server holds on Windows ([df4a4aa](https://github.com/Muratovnik/valkama/commit/df4a4aadb1a1f444bb6fbcde7cf5fe6ff763d0d1))
+- **card:** list only the blockers that are still open, and name a blocker in another space or outside the chain ([39c0239](https://github.com/Muratovnik/valkama/commit/39c0239569158bc8f9d43f93d02f7bcffc1e6c2f), [9467588](https://github.com/Muratovnik/valkama/commit/9467588d04fc7dc3ea6e2f8bf1cf8d550eb7c115))
+- **planning:** rank the item a bare number names first in a search ([77851c3](https://github.com/Muratovnik/valkama/commit/77851c330593e7a5da42ff9c0931cb59f257d262))
+- **palette:** separate card, lane and panel by contrast, and give each hue one meaning: in progress and held work blue, done green ([1ae1ffe](https://github.com/Muratovnik/valkama/commit/1ae1ffe3af168d92220115f5a0656d13647a630e))
+- **ui:** let a button's variant keep its own hover colours, so a hovered primary button no longer looks disabled ([2fdeb07](https://github.com/Muratovnik/valkama/commit/2fdeb07d9d229913f839046df6b838838b56b789))
+- **card:** condense the card's head at the first scroll of its body ([286f6ce](https://github.com/Muratovnik/valkama/commit/286f6ce39bda79cb23064e39b7edf9170ec82781), [ca5fd29](https://github.com/Muratovnik/valkama/commit/ca5fd29adab4843e212f28c0288970155423f16f))
+- **tray:** start the installed app at once and leave the startup decision to it ([5413c24](https://github.com/Muratovnik/valkama/commit/5413c2450b6fc7b935489f06fa509e0c6ae5569a))
+- **graph:** keep background work from taking a line above the drawing ([f2a1e20](https://github.com/Muratovnik/valkama/commit/f2a1e209bc9348c08bd63fb5c723b9b88bc30f3e))
+- **planning:** name a failed Work read by its cause, not a raw code ([65d8e87](https://github.com/Muratovnik/valkama/commit/65d8e87fe8fc42bc62664fca32a5d23a294ce180))
+- **board:** draw an empty lane cell's ground only while a tile can land there ([5ba14e4](https://github.com/Muratovnik/valkama/commit/5ba14e40426dd263f5a216d66dc08a4167494961))
+- **card:** name a checklist step's discuss button by its words ([9d548f1](https://github.com/Muratovnik/valkama/commit/9d548f16ab8fa4271fafccb38d5a5baf6127dcd3))
+- **shell:** drop the sentence describing each module under its name ([ef4b1d2](https://github.com/Muratovnik/valkama/commit/ef4b1d2a86a2e3a81fc15c2a148fd7d374ed5ec0))
+
+### Performance Improvements
+
+- **launcher:** answer `runtime` and the launcher's status questions before loading the command line, and read listener ownership from Windows directly ([7482044](https://github.com/Muratovnik/valkama/commit/7482044d5b66ad3ca6c892c0756fb57ad734e083), [4102b6d](https://github.com/Muratovnik/valkama/commit/4102b6d7b07abb4f7d8f67f230672a62940a5b1a))
+- **planning:** paint a long list's first screen at once and the rest right after; the whole list of about 1,200 rows finishes painting 1.4 to 2 times later than in 2.1.0 ([1f57252](https://github.com/Muratovnik/valkama/commit/1f57252637495fc00086ac0b9c3603bc42f7df27))
+- **board:** leave a tile out of sight unlaid until it is reached; the board's first tile comes some 20 to 130 ms later ([1393c6d](https://github.com/Muratovnik/valkama/commit/1393c6d106241f63751a388824d70fa08eaa3a3e))
+
+## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) (2026-11-01)
+
+### Highlights
+
+- A chain of work says what one item's work grew into and whether it converges, in a
+  tool, a branch map on the card and a scope for every view.
+- Agents and the board share one order of work, and the board can be grouped by epic.
+- Items that are one change can be merged, and an item can be created with its claim,
+  steps and links in one call.
+- A Valkama skill ships with the server, and `launcher install` reaches running
+  sessions through a stdio front. The server lists 31 tools, up from 29:
+  `get_work_item_chain` and `merge_work_items` are new.
+- The store is unchanged at schema 9, so the upgrade runs no migration. Existing MCP and
+  HTTP calls behave differently in the ways Breaking Changes lists: an agent or
+  integration written for 2.0.0 should read them first.
+
+### Breaking Changes
+
+- **planning:** a claim starts the work it takes, moving a `backlog` or `queued` item to the first reachable `active` state, and a release puts work under way back in the queue; the answers add `started` and `requeued`, and an agent takes the next `expected_revision` from the claim's answer ([029c008](https://github.com/Muratovnik/valkama/commit/029c00877bd8f1f0a5590f50acf52d5357e62ca6))
+- **planning:** a confirmed session holds its claims and steps as `codex (session <id>)` or `claude (session <id>)` whatever `author` the call signs with, and `list_work_items` with `owner` matches the holder exactly ([48c5715](https://github.com/Muratovnik/valkama/commit/48c5715e2fd4c1253c7e360dfdcd023caeaf9592))
+- **planning:** a checklist write keeps the `item_id`, claim and tick of a step it repeats, and refuses to leave out a claimed or completed step without `force` ([6a8e8e3](https://github.com/Muratovnik/valkama/commit/6a8e8e3131e5c62ec6d48b9aedcc098464a22950))
+- **planning:** a work item that does not exist is `not_found` (404), where it was `invalid_request` (400) ([d107776](https://github.com/Muratovnik/valkama/commit/d10777610c12184b268639ca3edfccef3b19910b))
+- **planning:** `claim_ready_work_item` takes the first ready item in the order of work, a `queued` state before a `backlog` one, and priority only breaks a tie ([7e6ba1e](https://github.com/Muratovnik/valkama/commit/7e6ba1e1f707ff21bfc0a5fe73800d0049409a81))
+
+### Features
+
+- **planning:** read a work item's chain, what it grew into and whether it converges, with `get_work_item_chain` and `GET /api/planning/work-item/chain`, and filter lists by `parent` ([40557b2](https://github.com/Muratovnik/valkama/commit/40557b2fb4a04384319412e975e3ec8a2a8058ca))
+- **card:** show a work item's chain as a branch map coloured by progress, with a forecast of when its open part closes ([9f460e3](https://github.com/Muratovnik/valkama/commit/9f460e32b897283136e7ef06ec09c401e791fd89), [22b3765](https://github.com/Muratovnik/valkama/commit/22b3765f87dff0eeec5ea32783a37558f5647cfc), [56f672c](https://github.com/Muratovnik/valkama/commit/56f672c44cce03a6a4c4b2fa9bec85c52d7b39ae))
+- **graph:** narrow every view to a chain kept in the address, opening the graph on its open part or the branch chosen on the map; the whole-space graph leaves out items no drawn link touches behind an «Unlinked · N» switch ([52bc999](https://github.com/Muratovnik/valkama/commit/52bc99914ccd8bceb52dee88738beeba601909de), [4372fa2](https://github.com/Muratovnik/valkama/commit/4372fa27beed36c990719688ca9e9db9d381492f))
+- **planning:** order work by a placement agents and the board share, through `rank` on updates and transitions, and by drag or Alt+↑ and Alt+↓ on the board ([7e6ba1e](https://github.com/Muratovnik/valkama/commit/7e6ba1e1f707ff21bfc0a5fe73800d0049409a81))
+- **board:** group the board by epic, one lane per epic with its counts and fold, and work under no epic last; a board move sends the revision it read, so one made after an agent changed the item is refused with `409` instead of overwriting it ([c1e6e39](https://github.com/Muratovnik/valkama/commit/c1e6e39b90ca41a0268915873ba81ff3db2e3d09), [c897fd6](https://github.com/Muratovnik/valkama/commit/c897fd6d5278ec70488dab26ccca955652fdafc7))
+- **planning:** merge 1 to 20 items that are one change into the one that survives with `merge_work_items` ([0719392](https://github.com/Muratovnik/valkama/commit/07193927f9712f48462b265da35d26c54296d5d2))
+- **planning:** create an item with its `claim`, `checklist` and `links` in one transaction, and set checklist steps in a batch, a done step as the caller's tick ([292f168](https://github.com/Muratovnik/valkama/commit/292f16897395167c49c17c065f483b91a13cb751), [253cc1b](https://github.com/Muratovnik/valkama/commit/253cc1bb6c49a9300348bc5c0b273d94b6d0c69f))
+- **planning:** read a state category such as `active` or `completed` as the one state that has it ([1012856](https://github.com/Muratovnik/valkama/commit/10128568d8fa6f53aea93f269beb4a847e377c18))
+- **skill:** ship the Valkama skill and install it where Claude Code and Codex find it with `valkama skill install | status | uninstall` ([a22481b](https://github.com/Muratovnik/valkama/commit/a22481bd1adf8cca5d49aaa04ed9bc2277dfbe35), [5a5395b](https://github.com/Muratovnik/valkama/commit/5a5395b560dfa0c69dd6b9329ef6471e27adf18b))
+- **mcp:** follow a `launcher install` in a running session through a stdio front that switches the server behind the client's pipe ([116893e](https://github.com/Muratovnik/valkama/commit/116893ee75ea8b55160cc8daa22db414d3cf000b), [6984795](https://github.com/Muratovnik/valkama/commit/6984795e429bf052bcdce1243d788ddb8198628a))
+- **graph:** make the field one Tab stop walked by the arrows, and draw a zoomed-out field as a state overview ([71cf0e6](https://github.com/Muratovnik/valkama/commit/71cf0e6293fde60bd2a77bdc73ecdd1fcc1235eb), [6d7159a](https://github.com/Muratovnik/valkama/commit/6d7159adae607559ad0949d257c9ff874ce4a438))
+- **shell:** let a notice carry an action and be dismissed, name only the Settings sections in its subtitle, and rest a text action on the control fill ([863eac1](https://github.com/Muratovnik/valkama/commit/863eac198dbcd28ea09d4d7cc390e1fa301ef874), [d63cda3](https://github.com/Muratovnik/valkama/commit/d63cda34e343c4361a87af1376eb3bd8a0cbb898), [d062c46](https://github.com/Muratovnik/valkama/commit/d062c4607d95964c39b5860a521e9f9ae53d56c7))
+- **desktop:** build the desktop app on Electron 45 (Chromium 156), up from Electron 43 ([cf48b93](https://github.com/Muratovnik/valkama/commit/cf48b938285a37f89dbe1ba5460afb800ef2896a))
+
+### Bug Fixes
+
+- **planning:** answer a search whose query is a work-item reference with that item first, and say why a search skipped a source ([e560556](https://github.com/Muratovnik/valkama/commit/e5605563c7f7fbaa4408f829982281dfacb7b551), [2d1ffd1](https://github.com/Muratovnik/valkama/commit/2d1ffd17ee06a4fc9ca45883fed02d61fddc9042))
+- **web:** open the finder's first result on Enter, or say a typed reference was not found ([9c57163](https://github.com/Muratovnik/valkama/commit/9c57163ee2c4d20726d8b307fe4e1b858f35586e), [f4e13b4](https://github.com/Muratovnik/valkama/commit/f4e13b4de0cd4bc2767b3572d5eaa7136b8bf676))
+- **planning:** refuse a checklist write that completes a step someone else holds ([4a698eb](https://github.com/Muratovnik/valkama/commit/4a698ebd52420dc94bf719c8f3e3c758e8d5bc7f))
+- **board:** fit the board to its width with finished columns last, and walk a column and the list's rows as one Tab stop each ([f5d4b18](https://github.com/Muratovnik/valkama/commit/f5d4b18021accbda9e4eee823592562228c93cbf), [3294b6d](https://github.com/Muratovnik/valkama/commit/3294b6d33f933c5898648ee6bee8d815bc48b825))
+- **list:** open a card from anywhere in its row ([f9cf9a1](https://github.com/Muratovnik/valkama/commit/f9cf9a1aa6413d6d096096337456261d5715f2ee))
+- **planning:** put the work bar on two compact rows, and count one population above the stage in every view ([a204180](https://github.com/Muratovnik/valkama/commit/a204180d21f47c5cb7397d0fb46ff9ff31786d11), [566f91a](https://github.com/Muratovnik/valkama/commit/566f91af9ce50bff515d21ecbbb3248549ad476d))
+- **card:** pin only the title and the sections in the card's head, and bring Back to where the parent was read ([2bc7e37](https://github.com/Muratovnik/valkama/commit/2bc7e37faf99f773ecaa08821312ead99512bdf3), [2fdde4d](https://github.com/Muratovnik/valkama/commit/2fdde4df35a77a0e69cc12b3a2a10a5b7c653f3e))
+- **requests:** keep focus, place and count after an answer, and answer short choices with radio buttons ([03f1867](https://github.com/Muratovnik/valkama/commit/03f186728cde205cfd660cea96b49039ce2de847), [05c84d0](https://github.com/Muratovnik/valkama/commit/05c84d03b27ec2c4e5d91d95f624a50a2ae347cc))
+- **nav:** name the rail's entries by what they show, and mark a questions count that could not be read ([e52fd55](https://github.com/Muratovnik/valkama/commit/e52fd5573268445a5eeb49c522931430e00dc73d), [d6b5e86](https://github.com/Muratovnik/valkama/commit/d6b5e860acb55d0f2105079a7c068043b9f385a4))
+- **server:** answer an address that names no page with the app shell and 404, and say a missing record is not there with no Retry ([2fa2daf](https://github.com/Muratovnik/valkama/commit/2fa2daf673fcaba8379fb99760fe4b9e75af7969), [f56a3c0](https://github.com/Muratovnik/valkama/commit/f56a3c0d5793443d797523d9d606d85f9eb78b58))
+- **overlay:** close the top overlay on Escape even when focus fell out of it ([16e5306](https://github.com/Muratovnik/valkama/commit/16e5306305f034d032e78ba73d861fe5deaf98e5))
+- **web:** never print the unknown-failure sentence with its code left empty ([d1f01b0](https://github.com/Muratovnik/valkama/commit/d1f01b0d441986c7987b91f3ec4c4255dc09b5b7))
+- **server:** send every file type the web build ships with its own content type ([d143e2b](https://github.com/Muratovnik/valkama/commit/d143e2b8c8fd6828116daeca869d6173b3670a3f))
+- **processes:** never kill the caller's own process group on POSIX, and start a launch and an adapter in a session of their own ([a49a9cf](https://github.com/Muratovnik/valkama/commit/a49a9cf520b5f8ddf4646d5db50c49958f573b42), [8455426](https://github.com/Muratovnik/valkama/commit/845542678772e3bcb560f6696b9e301be13de425))
+
+### Performance Improvements
+
+- **web:** download the graph and Settings on demand, with the libraries in a `vendor` chunk that keeps its hash across releases ([67d9b08](https://github.com/Muratovnik/valkama/commit/67d9b088aa883e3125f25757dbb175aa7c07c72a))
+- **web:** print the finder shortcut as «Ctrl K» without the glyph that fetched a fallback font ([59efc60](https://github.com/Muratovnik/valkama/commit/59efc60670a0e3bf6ba3c6cc7685d23435478795))
+
+## [2.0.0](https://github.com/Muratovnik/valkama/compare/v1.0.2...v2.0.0) (2026-10-31)
+
+### Highlights
+
+- The workspace focuses on agent work: Work and Settings remain, and the Analytics,
+  Improvements, Skills and Sessions screens and the extension registry are removed.
+- Every Planning write records who made it, and a claim is a lease held by the session
+  that took it; client hooks record session lifecycle events straight into the store.
+- `apply_work_item_changes` applies several writes to one item in one call, and the
+  write tools answer with a short acknowledgement.
+- `launcher install` pins a release instead of running the working tree: run it once
+  after updating.
+- Upgrading: see Breaking Changes for store schema 9 and its `preschema9` snapshot. The
+  first open also takes a `preidentity` snapshot before it adds the identity columns.
+  The web reads records strictly, so serve the `web/dist` built with this release; an
+  earlier one refuses every item.
+
+### Breaking Changes
+
+- **store:** the first open by this build takes a verified snapshot labelled `preschema9`, then drops the extension registry's tables, `platform_modules` with `platform_registry_audit`, and `integration_settings`; a schema-8 build refuses the upgraded store with `StoreTooNewError`, so restart every agent client after pinning this release with `launcher install` ([7dab0c6](https://github.com/Muratovnik/valkama/commit/7dab0c65f0b44d6676ebaec1351fa8191e5fcf18))
+
+  Going back to a schema-8 build is described in
+  [Upgrading the store and going back](docs/guides/store-upgrades.md#going-back-to-a-build-at-schema-8).
+
+- **mcp:** the work-item write tools answer with a short acknowledgement — reference, revision, state, holder and what changed — instead of the whole item; pass `verbose: true` for the full item, and every tool result is one line of JSON ([bf92e95](https://github.com/Muratovnik/valkama/commit/bf92e952e2a0019c88da16ce5610fce2df0b5780))
+- **mcp:** `list_work_items` and `search_work_items` answer one compact row per item, at most 50 without a `limit`, with `truncated`; Planning tools refuse an argument their schema lacks and read the stand-in names agents reach for ([c47abe6](https://github.com/Muratovnik/valkama/commit/c47abe60221b2cb77c42ebd29e2951fa801affa8))
+- **export:** an export carries only the `planning` section; `--section relations` and `--section settings` are refused as unknown ([9bfd82d](https://github.com/Muratovnik/valkama/commit/9bfd82d797e93ad2687dcc825a474c52b128a10d))
+- **platform:** the extension registry is gone, and `/api/platform/registry`, `/relations`, `/actions`, `/assignments` and `/grants` answer 404; an external adapter's manifest has exactly four fields, so check and install such an adapter again ([9bfd82d](https://github.com/Muratovnik/valkama/commit/9bfd82d797e93ad2687dcc825a474c52b128a10d))
+- **platform:** the module list is declared in code, and turning a module on or off is gone: `POST /api/modules/state` answers 404 ([5e39356](https://github.com/Muratovnik/valkama/commit/5e393566bcdfb8fd88419a22ba465aef17d4b97c))
+- **web:** the Analytics dashboard, Improvements, the Skills catalogue and the Sessions fleet are removed with their APIs and MCP tools, and `/api/sessions` and `/api/session-seen` answer 404; `/api/session` answers stored context rather than an event feed, and installed skill files and client settings are unchanged ([5a68928](https://github.com/Muratovnik/valkama/commit/5a689282d8fbd58f499df2da342a1f88a71696a2))
+- **launcher:** `launcher install` copies one commit of the checkout into the releases directory and the stable command runs that copy, so uncommitted edits no longer reach new client sessions; an earlier `--revision` is the rollback ([7d40c92](https://github.com/Muratovnik/valkama/commit/7d40c9296f1862085b597331fb2ab4e70c0cee5b))
+
+### Features
+
+- **planning:** apply a claim, ticks, refs, links, a comment, the summary and a transition to one item in one call with `apply_work_item_changes`, all or nothing; `get_work_item` answers with the newest part of the history unless `full: true` ([aa5497c](https://github.com/Muratovnik/valkama/commit/aa5497c6e819eaf707df191658be8091f571712c))
+- **planning:** record who made every Planning write call, `confirmed` when the client proved the session, and carry it as `identity` on history events; `valkama hook claude pre-tool-use` adds the `_identity` that confirms a Claude Code call, and `get_work_item` lists the `sessions` that wrote to the item, so agents no longer attach their session id as a ref ([5214204](https://github.com/Muratovnik/valkama/commit/521420431d63cdb3a4c4667f9173898c940e2e25), [218b252](https://github.com/Muratovnik/valkama/commit/218b252ececf545a1a6877e2183c6610ccb842e7))
+- **planning:** hold a claim as a lease on the session that took it, `live`, `stale` or `unconfirmed`, so a stale claim is taken over without `force` and two sessions signing with one `author` no longer take each other's claims; `stale_claims` follow the lease, and starting an item under an unconfirmed or stale claim warns ([2d69b8c](https://github.com/Muratovnik/valkama/commit/2d69b8c3eeb3783c433e391d7663bca6c3d44da6), [fc9377f](https://github.com/Muratovnik/valkama/commit/fc9377f3d7c4a524183424bbbae40ba315ef6f84), [e1da308](https://github.com/Muratovnik/valkama/commit/e1da308abef802c8d57a55ecd4a596fecbc5c3cf))
+- **hooks:** record client hook events from stdin straight into the store with `valkama hook <client> <event>`, spooling them when the store is busy, and report the spool and the last events in `doctor` ([f97a3fe](https://github.com/Muratovnik/valkama/commit/f97a3fe0e9a3945fc7c5d3589eff40a12bc7c7b8))
+- **hooks:** archive session transcripts beside the store, keep them while an open item refers to the session and for 90 days after, and delete them on request with `valkama transcripts purge` ([c9552ad](https://github.com/Muratovnik/valkama/commit/c9552adacfe260949f5283ccdb023ae439d914bc), [6b83649](https://github.com/Muratovnik/valkama/commit/6b83649346cf4d5c9bf27f135dee8d71483eed03), [2a39072](https://github.com/Muratovnik/valkama/commit/2a3907283f31cf036c55d197ddd3676bd4298cb7))
+- **planning:** add a task's discussion and grouped relations to the card ([2396304](https://github.com/Muratovnik/valkama/commit/2396304b118b1578cec346f031055aeeb88dc72c))
+- **planning:** add the task finder and human input requests, the questions agents ask a person ([527ca4d](https://github.com/Muratovnik/valkama/commit/527ca4df400485bf9b63daafa49ef46938025d17))
+- **planning:** close work that is not needed, duplicated or superseded in a terminal Cancelled state, which a workflow still shaped like the earlier default gains ([07bd226](https://github.com/Muratovnik/valkama/commit/07bd226cfe0db12d5a092b356a71a10a419f60f3))
+- **planning:** accept a confirmed session's write as evidence when an item moves to Review ([d09233f](https://github.com/Muratovnik/valkama/commit/d09233f73ac9ebebd3a9d02537d663b06e1bb92f))
+
+### Bug Fixes
+
+- **http:** give the browser session token only to a same-origin browser fetch, so another local process can no longer obtain it and write as the owner ([5dfeef3](https://github.com/Muratovnik/valkama/commit/5dfeef31155f15ef26a7ff26a870bf03cefa3a63))
+- **export:** export every work item, where it stopped at 1000 per space, and write the export to a file or for chosen spaces with `--output` and `--space` ([f909713](https://github.com/Muratovnik/valkama/commit/f9097133a801d0d26d41ac9e719c38bb3a70bb89))
+- **planning:** page work item lists with `offset` and `next_offset` instead of cutting them silently at 1000, or 200 for a search ([2cfba45](https://github.com/Muratovnik/valkama/commit/2cfba450c66fcc172957ba3c22877d877b2ab252))
+- **planning:** keep every work item of a space with more than 1000 items in the board, the list, the graph and the queues ([9ff41d3](https://github.com/Muratovnik/valkama/commit/9ff41d304c6088a16e76cf6cbc5abc35d1de9459))
+- **launcher:** answer a hook with silence when the pinned release has no hooks, so a rollback cannot block every prompt in Claude Code ([8b09bbc](https://github.com/Muratovnik/valkama/commit/8b09bbcc11c84ed6d646a74196830088e7ae2180))
+- **store:** set aside an unreadable reusable snapshot as `*.unverified` instead of failing every open ([94f0b41](https://github.com/Muratovnik/valkama/commit/94f0b410e1f9ee497214bbec4bb306cc3238f0b7))
+- **federation:** skip an attached scope that cannot be searched and name it, instead of failing the whole search ([ecf7888](https://github.com/Muratovnik/valkama/commit/ecf7888fd413c862ba5a5d486ff178d8a17279c5))
+- **launcher:** find a listener by its empty remote end, not its TCP state, so the desktop app starts on Windows builds that report `Closed` ([1546aa0](https://github.com/Muratovnik/valkama/commit/1546aa07a37cb16d974892058171fd724d09e175))
+- **mcp:** warn about a stale build a few times, not on every tool result ([d73aff4](https://github.com/Muratovnik/valkama/commit/d73aff4bbb80f1242024d62ef717c19e16c00db1))
+- **mcp:** answer a refused tool argument with its error code in `structuredContent` ([b8a8ee7](https://github.com/Muratovnik/valkama/commit/b8a8ee7ad45857406bb8d994c3dbd11f5a682f85))
+- **planning:** sign a browser write that names no author as `user`, and check parents on a reparent ([5eacfba](https://github.com/Muratovnik/valkama/commit/5eacfba15e9a17d096bb6d351c04a591ee1de0a0))
+- **store:** name the two ways out when a build older than the store refuses it: restart the client for the release the launcher pins, or pin a newer one ([2e772b1](https://github.com/Muratovnik/valkama/commit/2e772b1f1abd8800dea61d97dc7a62937e5dbcc6))
+- **ui:** improve work discovery, planning updates and the graph's usability, and wrap filters and Settings controls in narrow windows ([c45fe2a](https://github.com/Muratovnik/valkama/commit/c45fe2a0e8566c9b7f1e6c35144b9c01d8548c69), [0af6a4f](https://github.com/Muratovnik/valkama/commit/0af6a4f3009821fd6cc7b55e303b46d9855f886d))
+
+### Performance Improvements
+
+- **store:** open a store that is already current without the full `PRAGMA integrity_check`, which still runs whenever an open migrates and on every snapshot and restore ([5a68928](https://github.com/Muratovnik/valkama/commit/5a689282d8fbd58f499df2da342a1f88a71696a2))
+
+## [1.0.2](https://github.com/Muratovnik/valkama/releases/tag/v1.0.2) (2026-09-27)
+
+### Highlights
+
+- The first public release. There is no earlier public version to compare against, so
+  this entry describes what the repository contains rather than what changed in it, and
+  its lines link the commit that brought the product into this repository.
+- The source archive contains the Python service and the built web UI. The Windows
+  installer contains the desktop window; it uses the Python service and managed launcher
+  installed from the source archive.
+
+### Features
+
+- **platform:** a local modular control surface for agent work, where Planning, Sessions, Analytics, Improvements, Skills, Memory and Settings share one Kernel vocabulary, a persisted module registry and normalized integration records ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **planning:** a Planning module agents use over MCP, with a Kanban view of six fixed columns, competing claims refused by `claim_work_item`, epics as parent work items and transition guards that refuse a move the workflow could not honestly report ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **planning:** an activity trace on every card — creations, moves, claims, takeovers, releases, checklist completions and link changes, each with its author — beside typed refs for commits, sessions and memory entries ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **planning:** checklists with stable ids that agents claim and complete one step at a time ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **web:** a live Planning UI in Vue 3, served from a committed build and updated over Server-Sent Events, in English and Russian, where a concurrent move is refused with a `409` naming who moved the card where ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **executions:** agent sessions launched from a Planning card, with an explicit delivery contract and an enforced JSON result schema; a process exit code is not taken as delivery, and resume works only against the client's own stored session identity ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **analytics:** a dashboard of flow, throughput, cycle, reopen and blocked figures that reports its coverage as `confirmed`, `inferred`, `partial` or `unknown` and never fabricates a duration across missing history ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **improvements:** a module for working through recurring failures, with its own database scope, a job supervisor and evaluation runs bound to canonical pack snapshots ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **platform:** a skills inventory over registered projects, and registry views for Modules, Adapters, Services, Connections and Assignments ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **projects:** local project registration owned by Valkama: the `projects` command adds existing roots, binds Planning spaces, publishes a fixed schema-v3 projection, can restore the preceding inventory and projection bytes, and imports an existing schema-1 TOML inventory on request ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **desktop:** an Electron desktop window and a Windows tray icon that appears while an agent holds a session, where a click always produces a visible outcome ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **mcp:** a dual-era MCP surface: one process serves revision 2026-07-28 and the `initialize` handshake it replaced, choosing from how the client opens ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **server:** two guards against version skew, `static_assets.SourceWatch` for a process that went stale while it ran and `store.STORE_SCHEMA_VERSION` for a build that was already old when it started ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **cli:** a CLI for the Planning lifecycle and product diagnostics: `serve`, `mcp`, `summary`, `runtime`, `export`, `migrate`, `attach`, `detach`, `scopes`, `purge-stream`, `config`, `setup`, `doctor`, `adapter`, `capabilities`, `status`, `launcher` and `projects` ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))
+- **store:** migration recovery points: migrations take clean SQLite snapshots before changing existing data, and the Board-to-Planning conversion is explicit, with `migrate planning-model --dry-run` converting a temporary copy first ([3816056](https://github.com/Muratovnik/valkama/commit/3816056d39c5a4e7f105647dc43133af9b0da3ad))

@@ -2,6 +2,9 @@
  * The panel of the tokens by kind on an answer as the read gives it. The oracle is the summary's
  * rule: the counted kinds add up to the «Tokens» figure, the cache reads and the reasoning stand
  * apart from that sum, and an answer without its period before has no column for it and says so.
+ * Its chart is a ring of the counted kinds alone, each in its kind's hue, the kinds apart named
+ * with their figures beside it and no part of its whole; switched to ranked bars, the same kinds
+ * in the same hues, each bar's share a share of the counted kinds alone.
  */
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -10,6 +13,8 @@ import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 
 import { serveUsage, task } from '../fixtures/analytics.ts'
 import { analyticsI18n } from '../support/analyticsReads.ts'
+import { showView, viewsOf } from '../support/chartViews.ts'
+import { seriesNames } from '../support/legend.ts'
 
 /** A week of three days, a task a day, compared with the week before when `compare` is set. */
 function usageOf(compare: boolean) {
@@ -75,5 +80,67 @@ describe('the panel of the tokens by kind', () => {
       'Чтение кэша',
       'Рассуждения',
     ])
+  })
+})
+
+describe('the ring of the tokens by kind', () => {
+  it('draws the counted kinds as its sectors and lists the kinds apart under its legend', () => {
+    const panel = mountPanel(true)
+    const ring = panel.get('.kinds-bars .donut-chart')
+
+    // Each counted kind in its own hue, wherever the page draws it (`KIND_SLOTS`).
+    expect(
+      ring
+        .findAll('.donut-sector')
+        .map((one) => [one.attributes('data-key'), one.attributes('data-slot')]),
+    ).toEqual([
+      ['input', '1'],
+      ['output', '4'],
+      ['cache_write_5m', '2'],
+    ])
+    expect(seriesNames(ring)).toEqual(['Input', 'Output', 'Cache write, 5 min'])
+    // The cache reads and the reasoning are no part of the ring's whole: notes under its legend.
+    expect(ring.findAll('.donut-note').map((one) => one.text())).toEqual([
+      'Cache read60M',
+      'Reasoning600K',
+    ])
+  })
+
+  it('opens on the ring, and as bars ranks the same kinds, their shares of the counted tokens', async () => {
+    const panel = mountPanel(true)
+    expect(viewsOf(panel, '.kinds-bars')).toEqual({
+      offered: ['Ring', 'Bars', 'Table'],
+      shown: 'Ring',
+    })
+    const shares = panel
+      .findAll('.kinds-bars .chart-figure')
+      .map((one) => one.text().split(' · ')[1])
+
+    await showView(panel, '.kinds-bars', 'Bars')
+    const bars = panel.get('.kinds-bars .ranked-bars')
+    expect(
+      bars
+        .findAll('.ranked-list:not(.ranked-rest) .ranked-row')
+        .map((row) => [
+          row.get('.ranked-label').text(),
+          row.get('.ranked-bar').attributes('data-slot'),
+        ]),
+    ).toEqual([
+      ['Input', '1'],
+      ['Output', '4'],
+      ['Cache write, 5 min', '2'],
+    ])
+    // The kinds apart close the bars by name and figure, with no bar and in no share.
+    expect(bars.findAll('.ranked-rest .ranked-row').map((row) => row.text())).toEqual([
+      'Cache read60M',
+      'Reasoning600K',
+    ])
+    // Each counted kind prints the ring's share after its figure, as no strip stands over the bars
+    // (DESIGN.md, Charts); the kinds apart, above, print none.
+    const printed = bars
+      .findAll('.ranked-list:not(.ranked-rest) .ranked-value')
+      .map((value) => value.text().split(' · ')[1])
+    expect(shares).toHaveLength(3)
+    expect(printed).toEqual(shares)
   })
 })

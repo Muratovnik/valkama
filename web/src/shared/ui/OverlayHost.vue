@@ -247,12 +247,17 @@ onUnmounted(release)
  *
  * Escape reaches the top host through the overlay stack, which hears it on the document:
  * focus that fell out of the surface still closes it. The focusable surface is the section.
+ * Either side of it stands a stop where a Tab that has run out of controls lands and is sent
+ * round to the far end, past every pane; each says which end it guards (`data-focus-guard`:
+ * `start`, `end`), so a check finds it wherever it stands.
  *
  * The scrim is a pointer affordance by definition: clicking outside a dialog dismisses it.
  * The keyboard equivalent is Escape. A press leaves focus in the surface until it closes,
  * for the keys that read it. At 42% of a near-black it dimmed the canvas by about a step of
  * the grey ramp, which is the distance between two ordinary surfaces, so a dialog looked
- * like one more panel: it has to read as out of reach, not merely tinted.
+ * like one more panel: it has to read as out of reach, not merely tinted. It carries
+ * `data-overlay-scrim`, so whatever asks where a press lands names it by what it is rather
+ * than by the classes it is drawn with.
  *
  * Every host keeps its scrim for as long as it stands, covered or not, so each layer dims
  * what is under it and a layer arriving or leaving only moves that by its own fade. Only the
@@ -294,6 +299,7 @@ onUnmounted(release)
         <div
           v-if="interactive"
           class="overlay-scrim"
+          data-overlay-scrim
           @click="pressOnScrim"
           @mousedown.prevent
         />
@@ -303,6 +309,7 @@ onUnmounted(release)
           v-if="active"
           class="visually-hidden"
           tabindex="0"
+          data-focus-guard="start"
           @focus="roundToLast"
         />
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
@@ -365,6 +372,7 @@ onUnmounted(release)
           v-if="active"
           class="visually-hidden"
           tabindex="0"
+          data-focus-guard="end"
           @focus="roundToFirst"
         />
       </div>

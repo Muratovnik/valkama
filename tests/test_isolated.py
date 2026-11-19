@@ -72,7 +72,15 @@ for name in ("home", "local", "roaming"):
     Path(paths[name], "marker").write_text("written", encoding="utf-8")
 Path(paths["registry"]).parent.mkdir(parents=True, exist_ok=True)
 Path(paths["registry"]).write_text("written", encoding="utf-8")
-keys = ("HOME", "USERPROFILE", "LOCALAPPDATA", "VALKAMA_DB", "VALKAMA_NO_TRAY", "TEMP")
+keys = (
+    "HOME",
+    "USERPROFILE",
+    "LOCALAPPDATA",
+    "VALKAMA_DB",
+    "VALKAMA_NO_TRAY",
+    "TEMP",
+    "GIT_CONFIG_GLOBAL",
+)
 report = {"paths": paths, "env": {key: os.environ.get(key) for key in keys}}
 Path(sys.argv[1]).write_text(json.dumps(report), encoding="utf-8")
 """
@@ -133,7 +141,14 @@ class EnvironmentTests(Workspace):
         temp = os.environ.get("TEMP")
         environment = isolated.isolated_environment(self.home)
 
-        for name in ("HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "VALKAMA_DB"):
+        for name in (
+            "HOME",
+            "USERPROFILE",
+            "LOCALAPPDATA",
+            "APPDATA",
+            "VALKAMA_DB",
+            "GIT_CONFIG_GLOBAL",
+        ):
             self.assertTrue(
                 Path(environment[name]).is_relative_to(self.home),
                 f"{name} stayed at {environment[name]}",
@@ -174,6 +189,7 @@ class EnvironmentTests(Workspace):
         self.assertEqual(str(isolated.store_path(self.home)), report["env"]["VALKAMA_DB"])
         self.assertEqual("1", report["env"]["VALKAMA_NO_TRAY"])
         self.assertEqual(os.environ.get("TEMP"), report["env"]["TEMP"])
+        self.assertEqual(str(self.home / ".gitconfig"), report["env"]["GIT_CONFIG_GLOBAL"])
         self.assertEqual(before, files_under(self.real), "a child wrote into the real profile")
         self.assertTrue((self.home / "marker").is_file())
         self.assertTrue((self.home / "AppData" / "Local" / "marker").is_file())
@@ -209,7 +225,30 @@ class EnvironmentTests(Workspace):
     def test_a_config_named_by_the_caller_does_not_reach_the_child(self) -> None:
         with mock.patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(self.real / ".gitconfig")}):
             environment = isolated.isolated_environment(self.home)
-        self.assertNotIn("GIT_CONFIG_GLOBAL", environment)
+        self.assertEqual(str(self.home / ".gitconfig"), environment["GIT_CONFIG_GLOBAL"])
+
+    def test_a_child_s_global_git_writes_land_in_the_profile_s_file(self) -> None:
+        """`git config --global`, which `git-hook install` runs, writes in a gate's child
+        the throwaway profile's file: `GIT_CONFIG_GLOBAL` names it, so no `HOME` Git might
+        take instead decides where."""
+
+        caller = self.real / ".gitconfig"
+        caller.write_bytes(b"[user]\n\tname = Somebody Real\n")
+        isolated.prepare_home(self.home)
+        environment = isolated.isolated_environment(self.home)
+        self.assertEqual(str(self.home / ".gitconfig"), environment["GIT_CONFIG_GLOBAL"])
+        written = subprocess.run(
+            ["git", "config", "--global", "hook.valkama-commit.event", "post-commit"],
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, written.returncode, written.stderr)
+        self.assertEqual(b"[user]\n\tname = Somebody Real\n", caller.read_bytes())
+        self.assertIn(
+            b"valkama-commit", (self.home / ".gitconfig").read_bytes(), "the child wrote elsewhere"
+        )
 
 
 class GateTests(Workspace):

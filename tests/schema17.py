@@ -6,7 +6,9 @@ under test: a migration proven against a catalog the same module wrote proves on
 that it agrees with itself.
 
 `build` writes such a store holding its identity row. Rows come from
-`schema9.populate`, whose plain SQL lands in this catalog unchanged.
+`schema9.populate`, whose plain SQL lands in this catalog unchanged. `raise_to_18`
+carries a store at 17 to schema 18 as Valkama 2.9.0 does as it opens one, with that
+release's own step, so a store 2.9.0 left is built from this catalog too.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from server.planning import words
+from server.quota import store as quota_store
 from tests import schema8
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "store-schema-17.sql"
@@ -79,6 +82,23 @@ def build_2_9(path: str, *, data_scope_id: str = "00000000-0000-4000-8000-000000
         conn.execute("PRAGMA journal_mode=WAL")
         with words_as_2_9():
             words.migrate(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def raise_to_18(path: str) -> None:
+    """Carry a store at 17 to 18 as Valkama 2.9.0 does as it opens one: schema 18's step,
+    which keys the names of the quota accounts by `account`, and the stamp. The step is
+    the one that release runs (`quota.store.migrate`), and it is the whole of schema 18."""
+
+    conn = sqlite3.connect(path)
+    try:
+        if int(conn.execute("PRAGMA user_version").fetchone()[0]) != 17:
+            raise RuntimeError("only a store at 17 is carried to 18")
+        quota_store.migrate(conn)
+        quota_store.assert_current(conn)
+        conn.execute("PRAGMA user_version=18")
         conn.commit()
     finally:
         conn.close()

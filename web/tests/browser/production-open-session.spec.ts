@@ -108,9 +108,7 @@ test('a session with one action opens on Enter or Space, and the result is said'
   await desktop.focus()
   await page.keyboard.press('Enter')
   await expect.poll(() => openedLinks(page)).toEqual([DESKTOP_LINK])
-  await expect(
-    page.locator('.app-notice, [role="status"]').getByText(/opened in Claude Desktop$/),
-  ).toBeVisible()
+  await expect(page.getByRole('status').getByText(/opened in Claude Desktop$/)).toBeVisible()
   await expect(desktop).toBeFocused()
 
   await page.keyboard.press('Space')

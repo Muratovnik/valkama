@@ -1,11 +1,13 @@
 /**
- * Analytics names a session by the title its client gave it and an account by the name the owner
- * gave it in Settings, with the id in the hint, so no label made only of hex characters stands for
+ * Analytics names a session by the title its client gave it, with its id in the hint, and an
+ * organization or an account by the name the owner gave it in Settings, with no hint of its id,
+ * which the quota panel's menu copies instead; so no label made only of hex characters stands for
  * a value whose name is known: in the rail, the overview's cards, a section's bars and its table.
- * A session with no title, and an account with no name, keep the labels they had. The name is the
- * one the owner types in Settings → General → Accounts, kept in Valkama, which this follows from the
- * field through the server to the page; and the names a device kept before move there once, never
- * over a name Valkama has, and leave the device.
+ * A session with no title, and an organization with no name, keep the labels they had; an account
+ * with none is said by its organization's name and the start of its UUID. The name is the one the
+ * owner types in Settings → General → Accounts, kept in Valkama, which this follows from the field
+ * through the server to the page; and the names a device kept before, by organization, move there
+ * once, never over a name Valkama has, and leave the device.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -16,8 +18,9 @@ import { serveUsage } from '../fixtures/analytics.ts'
 import { quotaAt } from '../fixtures/quota.ts'
 import { pageAt, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
+import { drawLined } from './drawnViews.ts'
 import { globalScope } from './planningFixtures.ts'
-import { MAIN_ID, SIDE_ID, WORLD } from './served/analyticsNames.ts'
+import { MAIN_ACCOUNT, MAIN_ID, SIDE_ACCOUNT, SIDE_ID, WORLD } from './served/analyticsNames.ts'
 import { test } from './test.ts'
 
 const NOW = new Date(2026, 10, 11, 14, 30)
@@ -43,6 +46,8 @@ async function open(page: Page, state: Record<string, string> = {}) {
   await page.goto(pageAt(state))
   const analytics = page.locator('.analytics-page')
   await expect(analytics.locator('.tile-figure[data-measure="time"]')).toBeVisible()
+  // A section's names are read in its bars, whichever drawing it opens on.
+  if (state.by) await drawLined(analytics.locator('.spending-bars'))
   return analytics
 }
 
@@ -54,17 +59,20 @@ async function texts(labels: Locator) {
   return said.map((text) => text.trim()).filter(Boolean)
 }
 
-test('a session is named by its title and an account by the owner’s name, the ids in the hint', async ({
+test('a session is named by its title, its id in the hint, and an account by the owner’s name', async ({
   page,
 }) => {
   await serve(page, { [MAIN_ID]: 'Main account' })
   const analytics = await open(page)
 
-  // The rail: the first value of each, by its name, its id in the hint.
+  // The rail: the first value of each, by its name; a session's id in the hint, an account's not.
   await expect(lead(analytics, 'executor')).toHaveText('Fix the rail')
   await expect(lead(analytics, 'executor')).toHaveAttribute('data-tooltip', /claude · 1a2b3c4d/u)
   await expect(lead(analytics, 'account')).toHaveText('Main account')
-  await expect(lead(analytics, 'account')).toHaveAttribute('data-tooltip', new RegExp(MAIN_ID, 'u'))
+  await expect(lead(analytics, 'account')).not.toHaveAttribute(
+    'data-tooltip',
+    new RegExp(MAIN_ID, 'u'),
+  )
 
   // The overview's cards hold no hex-only label either.
   for (const label of await texts(analytics.locator('.ranked-label')))
@@ -84,39 +92,57 @@ test('a session is named by its title and an account by the owner’s name, the 
   expect(names[0]).toContain('claude · 1a2b3c4d')
   for (const name of names) expect(name.split(' ')[0]).not.toMatch(HEX_ONLY)
 
-  // The account's section: the named one by its name, the other by the start of its id.
-  const accounts = await open(page, { by: 'account' })
-  expect(await texts(accounts.locator('.ranked-label'))).toEqual(['Main account', '9c0de5b1'])
+  // The organizations' section: the named one by its name, the other by the start of its id, and
+  // no row's hint says a whole id.
+  const organizations = await open(page, { by: 'account' })
+  expect(await texts(organizations.locator('.ranked-label'))).toEqual(['Main account', '9c0de5b1'])
+  for (const [index, id] of [MAIN_ID, SIDE_ID].entries())
+    await expect(organizations.locator('.ranked-line').nth(index)).not.toHaveAttribute(
+      'data-tooltip',
+      new RegExp(id, 'u'),
+    )
+  // The accounts' section: each by its organization's name, or its start, and its UUID's start.
+  const accounts = await open(page, { by: 'seat' })
+  expect(await texts(accounts.locator('.ranked-label'))).toEqual([
+    'Main account · a1a1a1a1',
+    'b2b2b2b2',
+  ])
+  for (const [index, id] of [MAIN_ACCOUNT, SIDE_ACCOUNT].entries())
+    await expect(accounts.locator('.ranked-line').nth(index)).not.toHaveAttribute(
+      'data-tooltip',
+      new RegExp(id, 'u'),
+    )
 })
 
 test('a name typed in Settings is the name Analytics gives the account', async ({ page }) => {
   const backend = await serve(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))
-  const field = page.getByRole('textbox', { name: `Name of account ${SIDE_ID}` })
+  const field = page.getByRole('textbox', { name: `Name of account ${SIDE_ACCOUNT}` })
   const status = page.locator('.accounts-status [role="status"]')
-  await expect(field).toHaveAttribute('placeholder', 'No name: Analytics shows 9c0de5b1')
+  await expect(field).toHaveAttribute('placeholder', 'No name: Analytics shows b2b2b2b2')
   await field.fill('Night shift')
   await field.blur()
-  await expect(status).toHaveText('Saved the name of account 9c0de5b1.')
-  expect(backend.accountNames).toEqual({ [SIDE_ID]: 'Night shift' })
+  await expect(status).toHaveText('Saved the name of account b2b2b2b2.')
+  expect(backend.accountNames).toEqual({ [SIDE_ACCOUNT]: 'Night shift' })
 
-  const accounts = await open(page, { by: 'account' })
+  const accounts = await open(page, { by: 'seat' })
   const labels = accounts.locator('.ranked-label')
   await expect(labels.nth(1)).toHaveText('Night shift')
-  await expect(accounts.locator('.ranked-line').nth(1)).toHaveAttribute(
-    'data-tooltip',
-    new RegExp(SIDE_ID, 'u'),
-  )
 
-  // Cleared, the account reads as before.
+  // Cleared, the account reads as before; its organization named, it says that name first.
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))
-  await page.getByRole('button', { name: `Clear the name of account ${SIDE_ID}` }).click()
+  await page.getByRole('button', { name: `Clear the name of account ${SIDE_ACCOUNT}` }).click()
   await expect(field).toHaveValue('')
-  await expect(status).toHaveText('Cleared the name of account 9c0de5b1.')
+  await expect(status).toHaveText('Cleared the name of account b2b2b2b2.')
   expect(backend.accountNames).toEqual({})
-  const again = await open(page, { by: 'account' })
-  await expect(again.locator('.ranked-label').nth(1)).toHaveText('9c0de5b1')
+  const organization = page.getByRole('textbox', { name: `Name of organization ${SIDE_ID}` })
+  await expect(organization).toHaveAttribute('placeholder', 'No name: Analytics shows 9c0de5b1')
+  await organization.fill('Side')
+  await organization.press('Enter')
+  await expect(status).toHaveText('Saved the name of organization 9c0de5b1.')
+  const again = await open(page, { by: 'seat' })
+  await expect(again.locator('.ranked-label').nth(1)).toHaveText('Side · b2b2b2b2')
 })
 
 test('names a device kept move to Valkama once, never over a name it has, and leave the device', async ({

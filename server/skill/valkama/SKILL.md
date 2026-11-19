@@ -19,11 +19,11 @@ owner something; where they differ from this skill, follow them.
 
 An item is one change: it can be integrated and reverted on its own, usually
 as one branch or pull request, takes hours to a couple of days, and closes when
-a test-based "done when" holds, checked by a verify command the item names. A
-finding is evidence attached to an item, not an item of its own. Work that
-shares a cause, a fix or one mechanical rule is one item. Read
+a test-based "done when" holds, checked by a verify command the item names.
+Work that shares a cause, a fix or one mechanical rule is one item; a finding
+outside it is an item of its own (see Findings). Read
 [the work model](references/work-model.md) before filing several items,
-splitting one, or handing items to other agents.
+splitting one or a part off it, or handing items to other agents.
 
 ## Start
 
@@ -40,14 +40,15 @@ splitting one, or handing items to other agents.
 3. **File it only when none does.** `create_work_item` with a `title` and a
    `description` that is the brief: goal, context, constraints, the "done when"
    and its verify command. Name the projects the change touches (`projects`).
-   Leave `space` out unless the projects live in two spaces: the server puts the
-   item under its parent's space, else in its projects' home space. A finding in
-   another project's code goes to that project, and so to its space. A plan in
-   the repository is referenced by `source` (`docs/plan.md#kb:a7f3`), not
-   copied, and a file the description names is written as Naming a file says.
-   Umbrella work is
-   `kind: goal`, or `stage` under a parent at any depth; children name it as
-   `parent`, and nobody claims it. Work filed outside accepted open goals and
+   Leave `space` out unless the projects live in two spaces or the item names no
+   project (a goal, a triage review item): give `space` then. Otherwise the
+   server puts the item under its parent's space, else in its projects' home
+   space. A finding in another project's code goes to that project, and so to
+   its space. A plan in the repository is referenced by `source`
+   (`docs/plan.md#kb:a7f3`), not copied, and a file the description names is
+   written as Naming a file says. Umbrella work is `kind: goal`, or `stage`
+   under a parent at any depth; children name it as `parent`, and nobody
+   claims it. Work filed outside accepted open goals and
    stages starts in triage: send `acceptance: "assignment"` only on the owner's word.
    Pass `claim: true` and `checklist` when you take a task at once. Link the
    related items your search found (`relates-to`, `blocks`) and name the goal or
@@ -73,11 +74,15 @@ for your call, and the holder only when no session is confirmed. Sign every
 call with the same `author`.
 
 A claim is a lease: `live` while its session is active, `stale` once it ended
-or was quiet 3 days, `unconfirmed` when no session was proved, lapsing after 3
+or was quiet for the owner's `lease_quiet_days` (3 days unless they changed it
+for the space), `unconfirmed` when no session was proved, lapsing after as many
 days without an event on the item. An open question to the owner there stops
 the count; your steps lapse with your claim. Take a stale claim over without
 `force`, a live one only on an instruction that says so. An ended session keeps
 its claims 12 hours: resuming makes them `live`, and the queue leaves them.
+A launch claims for the session it starts (`source: launch`): the agent's own,
+or the launch's when the client names its session only once it runs, as Codex
+does. What the agent left at work goes back to the queue 12 hours after it ends.
 An item's `lapsed_claim` names whose claim lapsed, why and when, until the next claim.
 `release: true` gives an item back and returns it from the active state to a
 ready one, unless a checklist step of it is still claimed; a blocked one stays.
@@ -100,20 +105,23 @@ claimed or completed step is refused unless `force`, which discards its state.
 **Shared items.** When agents split one item, each claims its step with
 `claim_work_item_checklist_item` before working on it and ticks it when done.
 Item and step claims are independent: a step's holder need not hold the item.
+A step's claim lapses with its session as a claim does, and Valkama releases it.
 
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, applied in this order and all or nothing:
-`claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`
-or `comments`, `resolutions`, `questions`, `summary`, `transition`. Every write
-to an item's fields, steps, refs, links, discussion, summary and state goes
+`claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `commits`, `links`,
+`comment` or `comments`, `resolutions`, `questions`, `summary`, `triage_seen`,
+`transition`.
+Every write to an item's fields, steps, refs, commits, links, discussion,
+summary and state goes
 through these groups; `questions` takes what `create_work_item_request` does.
 Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
 `{"body": "…"}`, `summary` `{"done": "…", "next": "…"}`, `transition`
 `{"state": "…"}`. Bare text fails in the client, as input not parsed as JSON. A
 refused step writes nothing and names the group and index to correct. Pass the
 `revision` of the last acknowledgement as `expected_revision` to refuse a stale
-write. A question cannot go in the call that closes its item, which would end it
-unanswered: move the item to review instead. A reply can name only a comment
+write. A question cannot go in the call that closes its item: the close would end
+it unanswered in the same write. A reply can name only a comment
 that existed before the call; `applied` lists the ids of the comments and
 questions the call wrote.
 
@@ -121,7 +129,10 @@ questions the call wrote.
 tool. A call that failed with "another call in this response was changed by a
 hook": see [the tool reference](references/tools.md#claude-codes-auto-mode).
 
-**Refs.** The `refs` group records a `commit`, a `memory` record id materially
+**Commits and refs.** Valkama attaches each commit your session makes to the
+task you hold and says so in the hook answer after the command; when it cannot
+tell which task, the answer names the candidates. Attach or move one with the
+`commits` group. The `refs` group records a `memory` record id materially
 used, or a `url`. Your own session needs no ref: Valkama records every write's.
 
 **What a person said.** A write's answer carries `from_person` when the owner
@@ -203,10 +214,8 @@ replies in its thread rather than as new roots. A worker writes its report as
 the root of its own thread, posts what follows as replies there, and hands the
 root's `comment_id` back to the agent that delegated.
 
-**A list under a comment.** When a report or a comment offers several findings
-for the owner to choose from, put them under it as `list`, on a root only; the
-owner ticks the ones to take on ([its form and answer](references/tools.md#comments-and-threads)).
-Nobody waits for it: it raises no alert and is not among the questions waiting for the owner.
+**A list under a comment** lets the owner tick several options of a report with
+one button: see [the tool reference](references/tools.md#comments-and-threads).
 
 **Telling another item.** A number in a text is a link and tells nobody. To tell
 the work on another item, name it in `mentions`: the batch's `comment`,
@@ -223,20 +232,15 @@ session. Naming the item written on, or an item twice, is refused. Tell an item
 only with news for the work there.
 
 **Asking another session.** When you need another session's answer before you go
-on — a choice, a yes or no — ask it: `create_work_item_request` with `addressees`
-(its session id, from `participants`, `subscribers` or the holder) and fields. The
-request wakes that session, and its answer wakes you. Ask only a session that is
-working: an ended one is refused, and so are your own session and a subagent. A
-session is asked at most 3 times an hour by yours (`ask_limit`): ask once with
-every field you need. For a free exchange, write a comment with `awaits_reply`
-instead.
+on — a choice, a yes or no — ask it with `addressees`, as
+[the tool reference](references/tools.md#asking-another-session) says.
 
 **Resolved threads.** The batch's `resolutions` mark a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark, up to 100 roots in
-one call. Mark a thread only on the owner's decision, for example while reviewing
-a digest with them, and write that decision in `resolution`. A reply leaves the
-mark in place, so reopen the discussion of a resolved root by writing a new root
-that names it. A reply and a question's thread take no mark.
+one call. Mark a thread only on the owner's decision, and write that decision in
+`resolution`. A reply leaves the mark in place, so reopen the discussion of a
+resolved root by writing a new root that names it. A reply and a question's
+thread take no mark.
 
 **Links.** The batch's `links` take `kind`:
 
@@ -251,13 +255,8 @@ that names it. A reply and a question's thread take no mark.
 
 Steps of the same change stay on the checklist; a link is for separate work.
 
-**Order.** The order of work is computed, and nothing sets it: urgent first,
-then work already started, then tasks of a goal or stage already under way,
-then priority, then age. A list row the queue gives says its `queue_order`, 1
-being what `claim_ready_work_item` gives next; any other row says `withheld`.
-The queue is one space's: `space`, or that of `within`, a goal or stage whose
-work it keeps at any depth, or else your session's space; `label` keeps the
-tasks carrying that label, `project` those naming that project.
+**Order.** The order of work is computed, and nothing sets it: what comes first
+and which queue `claim_ready_work_item` reads is in [the tool reference](references/tools.md#the-order-of-work).
 
 **Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
 work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label
@@ -274,7 +273,9 @@ condition's id, the summary, and `parts`, which lists every other part the item
 has with its count and size. Read a part by name in
 `parts` when the work needs it: `comments` for the discussion, `events` for who
 did what, `claim` for the lease and when it lapses, `links`, `refs`,
-`questions`, `mentions`, `sessions`, `images`, `subscribers`. `unresolved`,
+`questions` (its `addressed_open` counts the open requests asked of agent
+sessions), `mentions`, `sessions`, `images`, `subscribers`, and on a goal or
+stage `participants`, the sessions working on it. `unresolved`,
 `thread` and `comments_after` read the comments alone, and `events: <n>` the
 newest n events. To refresh part of a long description, read `parts: sections`
 for its keys and sizes, then `section` with the keys you need. After a resume or
@@ -282,7 +283,10 @@ a compaction the session start may bring a Valkama note: what you hold, each
 item's state, its next condition and the root of its project. A step a lapsed
 holder ticked stands there `(to confirm)`, not as ticked, and the line
 `No longer held by you` names the items whose claim or step the sweep released
-since your last call: claim one again before working it.
+since your last call: claim one again before working it. To your conversation,
+not a subagent, the line `Waiting for your answer` names the items with a
+request asked of your session still open: `list_work_item_requests` with
+`addressed: true` reads them.
 
 How the comments part pages and what each comment carries is in
 [every mode](references/tools.md#reading-an-item). A reply to a
@@ -316,11 +320,11 @@ it, and how to write an absolute path or one with spaces, is in
 
 ## Blocked work
 
-When another item blocks the work, link it: `blocks` from the blocking item to
-this one (the `links` group on the blocker, `other` this item). When the
-blocker is outside Valkama, transition to the blocked state with a `reason` and
-say what would unblock it in a comment. A transition to a blocked state is
-refused without a linked blocker or a reason.
+When the work waits on another item, link it: `blocks` from the blocking item to
+this one (the `links` group on the blocker, `other` this item); it stays where it
+is and its `waits_for` names the blocker. Only a cause outside Valkama takes the
+blocked state: transition there with a `reason` and say what would unblock it in
+a comment. A transition to a blocked state is refused without a reason.
 
 ## Asking the owner
 
@@ -335,9 +339,8 @@ Whenever you recommend an option or a verdict, give `why` beside it: markdown on
 why that one, which the owner reads by pointing at the recommendation. It is
 taken only beside `recommended` (true on an option).
 
-**A review of many points** is one `verdict` field per proposal, the steps or ways
-of a point a field `under` it and a `group` per area; how to write one, with an
-example, is in [the tool reference](references/tools.md#a-review-of-many-points).
+A review of many points is one `verdict` field per proposal: see
+[the tool reference](references/tools.md#a-review-of-many-points).
 
 The owner answers it in Valkama. In a field with options the answer is an option
 or an own variant (`own`): in a `choice` or `boolean` instead of an option, in a
@@ -348,60 +351,68 @@ open question is not an answer; to ask about a question, reply in its thread
 (the batch's `comment` with `reply_to_request`).
 
 An answer can change after it was given: a person changes it in Valkama, and an
-agent changes it with `answer_work_item_request` and `change: true`, only when the
-owner asks for that. A change is refused when nothing differs, once the item is
-closed, and past 50 versions. A changed answer has `answer_version` 2 or more,
-the compact form shows the answer it replaced as `previous`, and the whole
-question keeps every replaced one in `history`. When you are told
-`question_changed`, read the question again: the answer you acted on is no longer
-the current one. There are three ways to read one:
+agent only when the owner asks for that, as
+[the tool reference](references/tools.md#answering-and-reading-a-question) says.
+When you are told `question_changed`, read the question again: the answer you
+acted on is no longer the current one.
 
-- `get_work_item` reads them as its `questions` part: `total`, how many are
-  `open`, and up to 5 `items` with the open ones first and then the newest closed,
-  and `truncated` when there are more. The card's `parts` counts them; read the
-  part when you come back to an item that has open ones.
-- `list_work_item_requests` finds them on an item (`id`) or in a space, by
-  `status` and `answered_after`. To read answers in portions, keep the last
-  `answered_at` you read and pass it as `answered_after`, and ask again while
-  `truncated` is true: the oldest comes first, no two answers of one time are
-  parted, and a changed answer comes again.
-- `get_work_item_request` gives one question whole, with its options and their
-  descriptions, its `history` and its thread as `replies`, and
-  `list_work_item_requests` gives each question whole with `full: true`.
-
-The first two answer in a compact form, whose fields are in
-[the tool reference](references/tools.md#requests). A long note or written answer
-is cut there with `clipped: true`; `get_work_item_request` has the whole text.
-
-A review adds `verdicts`, each verdict field under the word it was given, and
-`undecided`, the shown points given neither a verdict nor an own variant. Treat
-an undecided point as not decided, never as accepted. Its `answer` holds only
-what says more than a verdict: the fields under a point, with `under` and, for
-steps, `of` (how many were offered), and a point with a comment or an own
-variant. A point with its own variant is decided and in neither list.
+Read questions in the `questions` part of `get_work_item`, which the card's
+`parts` counts (read it when you come back to an item with open ones), with
+`list_work_item_requests` on an item or a space, in portions by `answered_after`,
+or one whole with `get_work_item_request`; their forms are in
+[the tool reference](references/tools.md#requests). What a review leaves
+`undecided`, and a list's `undecided: ["items"]`, is not decided: never read it
+as accepted, or as every option refused.
 
 A request suits a question the work can go on without. No session waits for it:
 the answer arrives with the next read of the item, so go on with what does not
 depend on it. A question the work cannot go on without belongs in the client,
 where the person answers now. A request bound to an `execution_id` expires when
-that execution ends, and any pending request expires when its item closes, so an
-item holding an open request stays open. A list under a comment does not hold it:
-the item closes with a list unticked, and the list then freezes, `expired` with
-`task_closed`, until the item reopens. To get the ticks, keep the item open, in
-review for instance; a call that writes a list and closes its item is refused. A
-list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
-once the person sent it with none ticked. Treat that as not decided, never as every
-option refused; `status` tells a list not sent yet (`pending`) from one sent empty
-(`answered`). The owner's own rules on where to ask come first.
+that execution ends. Closing an item ends every request pending on it, a list under
+a comment too, `expired` with `item_completed` or `item_cancelled`, and reopening
+brings none back: keep the item open, in review for instance, while the answer or
+the ticks are still needed. A call that writes a list and closes its item is
+refused. The owner's own rules on where to ask come first.
+
+## When the owner decides
+
+Some writes are the owner's to make, by a setting in Valkama that only the server
+reads. Act the same at any setting; the answer says what happened. A write that
+waits answers `waits_for_owner` with its `question`: nothing of it is written,
+and the server makes it when the owner answers, if it still applies. You hear the
+answer on the item, and `action_dropped` when it no longer applied. Go on with
+what does not depend on it; expiring the question takes the write back. A cancel
+of work other sessions hold may answer `waits_for_sessions`: each is asked to
+agree, and a day of silence passes it to the owner. Asked yourself, answer
+`agree`, `object` with a reason, or `moved_out` once `move_out` took your task
+out of what is being cancelled. A call that closes the item while another of its
+writes waits is refused whole.
+
+A decision is a choice between ways of doing accepted work that changes what the
+owner gets (scope, visible behaviour or interface, data, cost or time, public
+text) and that the item's steps, the project's rules or an earlier answer do not
+settle. Ask it as a `decision` with a recommended answer in every required
+field; it may come back answered by that recommendation, and then you act on it.
+A reversible technical choice that does not show in the result is yours: make it
+and say so in the summary. Removing or rewriting a step of a goal or stage needs
+`checklist_reason`; a step whose wording you only clarify goes by its id with
+`clarifies: true` and is written at once. A cancel that follows an owner's
+answer names it in `following`; that answer does not count against the cancel.
+
+## Findings
+
+A finding is work met on the way that nobody asked for. Unless it is a step of
+your item, file it as a task without a parent, with a topic label and
+`discovered-from` your item: it waits in triage. A goal takes only work its
+conditions need. More evidence for an open finding is a comment on it; a closed
+one gets a new item linked `relates-to`. The owner starts a triage review: run it
+by [the triage procedure](references/triage.md).
 
 ## Merging items that are one change
 
 When two items turn out to be one change — the same finding filed twice, one
-cause found from two places — `merge_work_items` folds them into the item that
-survives (`id`), with `items` the ones that fold in and a `reason`. Each merged
-item is linked `duplicates` to it and closes in its cancelled state; what moves,
-what stays and when it is refused is in [the tool reference](references/tools.md#merging).
-Merge before handing the work to anyone.
+cause found from two places — fold them into one with `merge_work_items`, as
+[the tool reference](references/tools.md#merging) says.
 
 ## Close
 
@@ -415,13 +426,15 @@ Merge before handing the work to anyone.
    `why` only when the choice is not obvious. When your instructions ask a
    closing summary for flow friction, give it in `friction` (`none`, or a line
    per hindrance), never at the end of `done` or `why`, in the `summary` group.
-3. Transition to the completed state, or to review when someone must check the
-   result first. A state is named by its key or by a category that one state
-   has (`completed`, `review`, `cancelled`); a name the workflow lacks is
-   refused listing its states.
+3. Transition to the completed state, or to review when the owner must check the
+   result first. Review needs the same ticks and summary and `to_check`, what the
+   owner is to check; the owner's answer completes the item or returns it to work.
+   A state is named by its key or by a category that one state has (`completed`,
+   `review`, `cancelled`); a name the workflow lacks is refused listing its
+   states.
 
-Steps 1 to 3 go in one `apply_work_item_changes` call, often with the last
-commit as a ref. The transition to a completed or cancelled state also ends
+Steps 1 to 3 go in one `apply_work_item_changes` call. The transition to a
+completed or cancelled state also ends
 your claim and any step claims in that write, so the item stops reading as
 held; `applied.transition.released` names the holder, and the item's
 `last_claim_ref` keeps it. Reopening the item restores no claim: claim it again
@@ -432,17 +445,24 @@ you did about it (a comment is enough), then close; a comment in the same call
 as the close does not count. `force: true` carries a refusal through and records
 it as `overridden`: use it only when the record would still be true.
 
-**Closing a release.** Before closing the release's goal, run
-`valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
-lists the open items whose commit refs went into that range, including a change
-that arrived under another hash, and it changes nothing. Check each one and close
-what is finished: partly released work shows as well, a `changed-patch` or
-`subject` match is weak, and an item with no commit ref cannot show.
+**A goal or stage** completes only with nothing open under it (`children`). When
+the last item under one closes, it awaits confirmation and you hear it (the
+answer's `awaiting_confirmation`): read its `confirmation` part, check its steps or
+description against what was done, tick them, write the summary and complete it;
+if something is missing, file a task under it. Unconfirmed, the owner is asked
+([work model](references/work-model.md#goals-and-stages)).
+Converting, dividing, moving out and putting off work: [work model](references/work-model.md#goals-and-stages).
+
+**Closing a release.** Before closing the release's goal, check its open items
+with `valkama released`, as
+[the tool reference](references/tools.md#closing-a-release) says.
 
 **Not done.** Work that is not needed, duplicated or superseded closes in the
 cancelled state. It needs the summary, which starts with why (`Not needed:`,
 `Duplicate of MAIN-12`, `Superseded by MAIN-12`), and leaves undone steps open,
-because ticking them would claim work that did not happen. For a duplicate,
+because ticking them would claim work that did not happen. Cancelling a goal or
+stage with open work is two calls: the first answers with the list and a token,
+the second sends it in `cancels`. For a duplicate,
 prefer `merge_work_items`; otherwise link `duplicates` to the survivor and copy
 anything unique there first. `delete_work_item` is only for an item that should
 never have existed, and it refuses while the item has children.
@@ -461,7 +481,8 @@ the delegating agent to record:
 
 - the item reference it worked on and the steps it finished, by `item_id` or
   text;
-- the commits it made and anything else worth a ref;
+- the commits it made, which Valkama attaches to the item its session holds,
+  and anything else worth a ref;
 - each finding with its evidence (command, error text, versions), its cause,
   and where it belongs: a step of this item, a new item linked
   `discovered-from` this one, or the same change as an existing item;

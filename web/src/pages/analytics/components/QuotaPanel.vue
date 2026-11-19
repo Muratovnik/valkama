@@ -4,7 +4,7 @@
  * quota read knows, in the answer's order, with every window of the section (`QuotaAccount`).
  *
  * It reads the quota (`useQuotaRead`), not the page's usage: the period and the filters do not
- * apply to it, which the «ⓘ» of its heading says once, with what «Where the window went» is and
+ * apply to it, which the «ⓘ» of its heading says once, with what «Breakdown» is and
  * leaves out (`useSectionCaveats`); no line of the panel says either again. Its windows are drawn
  * or read as their tables, as every chart of the page is (`ChartSection`). No figure here is added to another: each is one
  * account's share of one window, and no money stands beside one.
@@ -14,8 +14,8 @@
  * keeps it as it stood, and the bar says the read failed, as it does for every read of the page
  * (`useQuota`): a line here moved the heading and every account under it.
  *
- * What used each window is read by the window's own block, to the answer's moment; the panel
- * holds those reads for its chart and its table alike (`provideWindowSpend`).
+ * What used each window opens from the window's block in the side panel over the page
+ * (`WindowDetail`), which reads it to the answer's moment.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -26,8 +26,7 @@ import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.t
 import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
-import { provideWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
-import { accountKey } from '@/pages/analytics/utils/quotaFigures.ts'
+import { accountKey, answerMoment } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
@@ -41,7 +40,7 @@ const props = defineProps<{
   read: QuotaRead
   section: QuotaSection
 }>()
-/** Read the quota again. */
+/** Read the quota again: asked, or after an account's name was saved, which its answer says. */
 const emit = defineEmits<{ retry: [] }>()
 
 const { t } = useI18n()
@@ -55,8 +54,6 @@ const state = computed<PlatformUiState<Quota>>(() => {
   if (!quota.accounts.length) return uiEmpty('analytics.quota.panel.none')
   return read.refreshing ? uiDegraded(quota, quota.now) : uiReady(quota)
 })
-
-provideWindowSpend(() => (props.read.status === 'ready' ? props.read.quota : null))
 
 const title = computed(() => words.sectionName(props.section))
 /** What does not reach the quota and what used each window, which the heading's «ⓘ» says. */
@@ -91,8 +88,10 @@ const narrow = useNarrowCharts(root)
               shown="chart"
               :account="account"
               :section="section"
-              :today="payload.now"
+              :today="answerMoment(payload)"
               :now="now"
+              :fresh-for="payload.fresh_for_seconds"
+              @renamed="emit('retry')"
             />
           </template>
           <template #table>
@@ -102,8 +101,10 @@ const narrow = useNarrowCharts(root)
               shown="table"
               :account="account"
               :section="section"
-              :today="payload.now"
+              :today="answerMoment(payload)"
               :now="now"
+              :fresh-for="payload.fresh_for_seconds"
+              @renamed="emit('retry')"
             />
           </template>
         </ChartSection>

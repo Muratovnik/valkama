@@ -3,7 +3,8 @@
  * scrolls in, its tracks — the scale's figures in a column as wide as the widest, the periods
  * beside them and the periods' names under — what keeps the
  * scale in view while the periods scroll, and what a period's slot holds besides its stack: the
- * mark of the period before, the ground of a period with no data yet and the line of a change.
+ * column the pointer and a press take, the tick of the period before, the ground of a period with
+ * no data yet and the line of a change.
  */
 
 /* A plot wider than the chart scrolls here, and the page never does. A period scrolled to
@@ -32,7 +33,14 @@
      end, a live one opened on its running period says it at the scale, and one scrolled between
      says it at both; the scale and its ground never fade. A mask
      paints no colour and moves nothing. The keyboard's period keeps its ring whole: while one has
-     it, nothing fades, and the period it walks to is brought into view anyway. */
+     it, nothing fades, and the period it walks to is brought into view anyway.
+
+     The frame is what scrolls, and a mask on it takes its scrollbar too: drawn over the whole
+     frame, the fade ate the thumb wherever it ran under an edge. So the fade stops over the
+     scrollbar's strip, as tall as the bar is drawn (`--size-scrollbar`), and the strip is laid
+     under the mask whole. Clipped to the padding box instead, it still took the bar: Chromium
+     masks a frame's scrollbar with the box it scrolls in. A frame fades only while periods lie
+     past it, which is while it scrolls and draws the bar. */
   &[data-hidden-start] {
     --period-fade-start: transparent;
   }
@@ -43,14 +51,21 @@
 
   &[data-hidden-start],
   &[data-hidden-end] {
-    mask-image: linear-gradient(
-      to right,
-      black var(--period-gutter),
-      var(--period-fade-start) var(--period-gutter),
-      black calc(var(--period-gutter) + var(--period-fade)),
-      black calc(100% - var(--period-fade)),
-      var(--period-fade-end)
-    );
+    mask-image:
+      linear-gradient(
+        to right,
+        black var(--period-gutter),
+        var(--period-fade-start) var(--period-gutter),
+        black calc(var(--period-gutter) + var(--period-fade)),
+        black calc(100% - var(--period-fade)),
+        var(--period-fade-end)
+      ),
+      linear-gradient(black, black);
+    mask-repeat: no-repeat;
+    mask-position: top, bottom;
+    mask-size:
+      100% calc(100% - var(--size-scrollbar)),
+      100% var(--size-scrollbar);
   }
 
   &:has(:focus-visible) {
@@ -130,18 +145,66 @@
   padding-block: var(--space-2) var(--space-half);
 }
 
-/* The period compared with: a short line at the height it reached, as wide as the stack and
-   over it, never under, ringed in the ground where it crosses the stack. It says higher or lower
-   without a hue of its own, and without a box up the plot that outweighs this period's columns
-   when the period before was the larger. Drawn as an edge in the text's colour, it takes the
-   forced palette's ink with the text. */
+/* The whole height of its period is what a pointer points at and presses, never only the painted
+   part: above its stack and in the gaps between its segments, and its half of the gap to each
+   neighbour, so no strip between two periods points at nothing. The first and the last period
+   have no neighbour past the plot's edge, and their zone stops at it: half a gap past the edge
+   stood outside the frame, which scrolled by that pixel and drew a scrollbar for it. A period that
+   acts is a line of the chart, not a control standing in it. */
+.period-column {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-status);
+
+  &[type='button'] {
+    cursor: pointer;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline: calc(-0.5 * var(--space-half));
+  }
+
+  .period-slot:first-child > &::after {
+    inset-inline-start: 0;
+  }
+
+  .period-slot:last-child > &::after {
+    inset-inline-end: 0;
+  }
+}
+
+/* The period compared with: a tick at the height it reached, across the stack and over it, never
+   under, in the text's main ink and ringed in the ground. It says higher or lower without a hue
+   of its own, and without a box up the plot that outweighs this period's columns when the period
+   before was the larger. It reaches `--period-overhang` past each side of its column, which no
+   border between two segments does, so its shape tells it from such a gap on a grey segment as
+   on a hue, and under a forced palette, which drops the ring and inks the edge with the text.
+   As wide as its column in the quiet ink, it vanished into the grey of «no task» and its ring
+   read as two more gaps.
+
+   Where the period's room leaves less than that beside its column, the tick reaches what it can
+   and stays a hair inside the room, so it never meets a neighbour's column or tick; with no room
+   at all it is as wide as its column. */
 .period-before {
+  --period-overhang: var(--space-1);
+
   position: absolute;
   inset-inline: 0;
-  inline-size: min(100%, var(--period-column));
+  inline-size: max(
+    min(100%, var(--period-column)),
+    min(100% - 2 * var(--space-hair), var(--period-column) + 2 * var(--period-overhang))
+  );
   margin-inline: auto;
   border-block-start: var(--space-half) solid currentcolor;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   box-shadow: 0 0 0 var(--space-hair) var(--color-canvas);
   transform: translateY(50%);
   pointer-events: none;

@@ -6,11 +6,14 @@
     "fresh_for_seconds": 900,
     "accounts": [
       {
+        "account": "00000000-0000-4000-8000-000000000023/00000000-0000-4000-8000-000000000024",
         "organization": "00000000-0000-4000-8000-000000000023",
         "account_uuid": "00000000-0000-4000-8000-000000000024",
-        "seat": null,
+        "weekly_reset": "5T10:00Z",
+        "shared": false,
         "plan": "Max",
         "name": null,
+        "organization_name": null,
         "no_source": false,
         "windows": [
           {
@@ -37,9 +40,11 @@
                 "source": "poll"
               }
             ],
+            "restarts": [],
             "forecast": {
               "outcome": "runs_out",
               "runs_out_at": "2026-01-02T03:04:05.000+03:00",
+              "at_reset_percent": null,
               "basis": "blend"
             }
           },
@@ -62,6 +67,7 @@
                 "source": "poll"
               }
             ],
+            "restarts": [],
             "forecast": {
               "low_percent": 71.75,
               "high_percent": 71.75
@@ -86,6 +92,7 @@
                 "source": "poll"
               }
             ],
+            "restarts": [],
             "forecast": {
               "low_percent": 21.88,
               "high_percent": 21.88
@@ -104,20 +111,26 @@
         ]
       },
       {
+        "account": "00000000-0000-4000-8000-000000000025/",
         "organization": "00000000-0000-4000-8000-000000000025",
         "account_uuid": null,
-        "seat": null,
+        "weekly_reset": null,
+        "shared": false,
         "plan": null,
         "name": null,
+        "organization_name": null,
         "no_source": true,
         "windows": []
       },
       {
+        "account": "00000000-0000-4000-8000-000000000026/weekly:7T10:00Z",
         "organization": "00000000-0000-4000-8000-000000000026",
         "account_uuid": null,
-        "seat": "week:2026-11-15T10:00Z",
+        "weekly_reset": "7T10:00Z",
+        "shared": false,
         "plan": null,
         "name": null,
+        "organization_name": null,
         "no_source": false,
         "windows": [
           {
@@ -139,6 +152,7 @@
                 "source": "statusline"
               }
             ],
+            "restarts": [],
             "forecast": {
               "low_percent": 224.0,
               "high_percent": 224.0

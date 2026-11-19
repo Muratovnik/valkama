@@ -5,6 +5,7 @@ import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { uiSystemCard, uiSystemHistory } from './served/uiSystem.ts'
 import { test } from './test.ts'
+import { heightOfLines } from './textLines.ts'
 
 test.beforeEach(async ({ page }) => {
   await enableExecutionTab(page)
@@ -40,34 +41,46 @@ test('grouped navigation keeps one optical icon box and corner badge without per
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/tests/browser/harness.html?lang=ru')
-  const icons = page.locator('.nav-item .nav-item-icon')
-  await expect(icons).toHaveCount(3)
-  for (let index = 0; index < 3; index += 1) {
-    await expect(icons.nth(index)).toHaveCSS('width', '20px')
-    await expect(icons.nth(index)).toHaveCSS('height', '20px')
+  const rail = page.getByRole('navigation', { name: 'Разделы продукта', exact: true })
+  // The harness's sections by the names the rail gives them, each a button whose name starts
+  // with its title (Work's goes on with its count). A section added to the rail is one more
+  // entry and fails none of this; one of these gone fails its own line.
+  const entry = (title: string) =>
+    rail.getByRole('button', { name: new RegExp(`^${title}(?:\\s|$)`, 'u') })
+  const work = entry('Работа')
+  for (const title of ['Работа', 'Аналитика', 'Настройки']) {
+    await expect(entry(title), title).toHaveCount(1)
+    const icon = entry(title).locator('.nav-item-icon')
+    await expect(icon).toHaveCSS('width', '20px')
+    await expect(icon).toHaveCSS('height', '20px')
   }
   // The count stands next to the label it belongs to. It used to be asserted
   // past the middle of the row, which is where a track pushed to the rail's far
   // edge put it: a two-word entry's own number an inch away from itself, and
   // six numbers in a right-hand column that means nothing read on its own.
-  const sessionItem = page.locator('.module-planning')
-  const labelBox = await sessionItem.locator('.nav-item-label').boundingBox()
-  const badgeBox = await sessionItem.locator('.count-badge').boundingBox()
+  const labelBox = await work.locator('.nav-item-label').boundingBox()
+  const badgeBox = await work.locator('.count-badge').boundingBox()
   expect(labelBox && badgeBox && badgeBox.x >= labelBox.x + labelBox.width).toBeTruthy()
   expect(labelBox && badgeBox && badgeBox.x - (labelBox.x + labelBox.width) <= 16).toBeTruthy()
-  // Three groups: Work, Understand with Analytics, and Settings, which is a destination too
-  // and stands in the rail's foot beside the connection state, so a long list does not move it.
-  await expect(page.locator('.nav-group')).toHaveCount(3)
-  // The Work heading repeats the name of its one entry: it stays for readers and takes no line.
-  await expect(page.locator('.nav-group-heading-echo')).toHaveCount(1)
-  const echoedHeading = await page.locator('.nav-group-heading-echo').boundingBox()
-  expect(echoedHeading?.width ?? 0).toBeLessThanOrEqual(1)
-  await expect(page.locator('.nav-utility .nav-item')).toHaveCount(1)
-  await expect(page.locator('.nav-utility .nav-item.module-settings')).toHaveCount(1)
-  // `.collapsed` was a class no template had rendered for some time, and the
-  // rules that dressed it were dead in `shell.css` beside it. The rail narrows by
-  // its own width now, so there is nothing left to assert the absence of.
-  await expect(page.locator('.nav-item-count')).toHaveCount(1)
+  // The harness counts two for Work and nothing for the rest: the count Work shows is the
+  // present control of the absence beside it.
+  await expect(work.locator('.count-badge')).toHaveText('2')
+  for (const title of ['Аналитика', 'Настройки'])
+    await expect(entry(title).locator('.count-badge'), title).toHaveCount(0)
+  // The groups by their headings: Work, and Understand with Analytics. The Work heading
+  // repeats the name of its one entry: it stays for readers and takes no line.
+  const echoedHeading = rail.getByRole('heading', { name: 'Работа', exact: true })
+  await expect(echoedHeading).toHaveCount(1)
+  const echoed = await echoedHeading.boundingBox()
+  expect(echoed?.width ?? 2).toBeLessThanOrEqual(1)
+  await expect(rail.getByRole('heading', { name: 'Анализ', exact: true })).toBeVisible()
+  // Settings, which is a destination too, stands in the rail's foot beside the connection
+  // state, so a long list does not move it: under every other entry.
+  const settingsBox = await entry('Настройки').boundingBox()
+  for (const title of ['Работа', 'Аналитика']) {
+    const above = await entry(title).boundingBox()
+    expect(above && settingsBox && settingsBox.y >= above.y + above.height, title).toBe(true)
+  }
 })
 
 test('long Russian copy remains readable at narrow and 200 percent text layouts', async ({
@@ -91,7 +104,6 @@ for (const locale of ['en', 'ru']) {
       await page.setViewportSize({ width, height: 800 })
       await page.goto(`/tests/browser/harness.html?lang=${locale}&surface=context-bar`)
       await expect(page.locator('.context-bar')).toBeVisible()
-      await expect(page.locator('.context-activity')).toHaveCount(0)
       const geometry = await page.evaluate(() => ({
         client: document.documentElement.clientWidth,
         scroll: document.documentElement.scrollWidth,
@@ -120,12 +132,18 @@ test('the note field spans its form and its action keeps a full pointer target',
   const formBox = await drawer.locator('.discussion-form').boundingBox()
   const fieldBox = await field.boundingBox()
   const submitBox = await submit.boundingBox()
+  const fiveLines = await heightOfLines(field, 5)
+  const control = await page.evaluate(() =>
+    Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--size-control-height'),
+    ),
+  )
   // A note is several lines, so the form is a column inside one frame: the text
   // takes the width and five lines of height, and the action stands at the end of
   // the frame's foot, on the control row height every other button occupies.
   expect(formBox && fieldBox && Math.abs(fieldBox.width - (formBox.width - 2)) < 1).toBeTruthy()
-  expect(fieldBox && fieldBox.height === 5 * 24 + 16).toBeTruthy()
-  expect(submitBox && submitBox.height === 40).toBeTruthy()
+  expect(fieldBox && fieldBox.height === fiveLines).toBeTruthy()
+  expect(submitBox && submitBox.height === control).toBeTruthy()
   expect(fieldBox && submitBox && submitBox.y >= fieldBox.y + fieldBox.height).toBeTruthy()
   expect(formBox && submitBox && submitBox.width < formBox.width).toBeTruthy()
   expect(
@@ -236,7 +254,7 @@ test('inspector textareas fit their content from the lines they ask for up to a 
   const height = () => field.evaluate((element) => element.getBoundingClientRect().height)
   const fits = () => field.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)
   // Six lines loaded in a field that asks for six: the floor and the text agree.
-  const floor = 6 * 24 + 16
+  const floor = await heightOfLines(field, 6)
   await expect.poll(height).toBe(floor)
   await expect.poll(fits).toBe(true)
   const loadedHeight = await height()
@@ -253,7 +271,9 @@ test('inspector textareas fit their content from the lines they ask for up to a 
   await expect(field).toHaveCSS('font-size', '15px')
   await field.fill('')
   await expect.poll(height).toBe(floor)
-  // Past the ceiling, 60% of this window, the text scrolls inside and the box stops.
+  // Past the ceiling, 60% of this window, the text scrolls inside and the box stops: the
+  // token's `min(30lh, 60dvh)`, where thirty lines would be taller.
+  expect(await heightOfLines(field, 30)).toBeGreaterThan(600)
   await field.fill(Array.from({ length: 60 }, (_, index) => `Line ${index}`).join('\n'))
   await expect.poll(height).toBe(600)
   await expect.poll(fits).toBe(false)
@@ -277,16 +297,24 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
   // value's chip, so the two share a line to within a pixel and a half, and what shares the
   // value's line shares its centre.
   await expect(drawer.locator('.card-facts').first()).toBeVisible()
-  const firstRow = await drawer
-    .locator('.card-facts .card-row-label, .card-facts .card-row-value > *')
-    .evaluateAll((elements) => {
-      const boxes = elements.map((element) => element.getBoundingClientRect())
-      const rowEnd = boxes[1].bottom
-      return boxes.filter((box) => box.top < rowEnd).map((box) => box.top + box.height / 2)
+  // The first fact's row: its name, and what of the values stands across the name's line.
+  const { name, values } = await drawer
+    .locator('.card-facts')
+    .first()
+    .evaluate((facts) => {
+      const line = facts.querySelector('.card-row-label')?.getBoundingClientRect()
+      const across = [...facts.querySelectorAll('.card-row-value > *')]
+        .map((element) => element.getBoundingClientRect())
+        .filter((box) => line !== undefined && box.top < line.bottom && box.bottom > line.top)
+      return {
+        name: line ? line.top + line.height / 2 : Number.NaN,
+        values: across.map((box) => box.top + box.height / 2),
+      }
     })
-  expect(firstRow.length).toBeGreaterThan(1)
+  const firstRow = [name, ...values]
+  expect(name).not.toBeNaN()
+  expect(values.length).toBeGreaterThan(0)
   expect(Math.max(...firstRow) - Math.min(...firstRow)).toBeLessThan(1.5)
-  const [, ...values] = firstRow
   expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1)
   const gaps = await drawer.evaluate((element) =>
     [

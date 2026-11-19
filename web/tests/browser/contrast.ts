@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test'
+
 /**
  * An element's text and fill as they are drawn, and the WCAG 2 contrast
  * between the two.
@@ -99,3 +101,17 @@ export interface DrawnColours {
   ink: number[]
   inkLab: number[]
 }
+
+/**
+ * A token's colour in the form a computed style reports it, read through a probe, so a drawn
+ * colour can be held to the token a rule names rather than to another element's ink.
+ */
+export const tokenInk = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement('span')
+    probe.style.color = `var(${name})`
+    document.body.append(probe)
+    const ink = getComputedStyle(probe).color
+    probe.remove()
+    return ink
+  }, token)

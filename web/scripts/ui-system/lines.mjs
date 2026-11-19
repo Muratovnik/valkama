@@ -54,6 +54,7 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/MarkdownSuggestions.vue', 1], // Overlay edge of the # list floating over the text.
   ['shared/ui/CountBadge.vue', 1],
   ['shared/ui/SmallMultiples.vue', 1], // The floor each small chart stands on, as a baseline.
+  ['shared/ui/RankedBars.vue', 1], // The rule a list of free text sets its rows apart under.
   ['shared/ui/DialogFrame.vue', 2],
   ['shared/ui/DrawerFrame.vue', 1],
   ['shared/ui/PlatformStatePanel.vue', 2],
@@ -68,8 +69,8 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/ReferencePreview.vue', 1], // Overlay edge of the card a reference shows on hover.
   ['shared/ui/SearchCombobox.vue', 2], // The field's edge, and the overlay edge of its list.
   ['shared/ui/SemanticState.vue', 1],
-  // A chart's outline of the period it is compared with, and its key in the legend: an open
-  // dashed edge told from the stack by its drawing, not a hue. The border is the drawing itself.
+  // A chart's tick of the period it is compared with, and its key in the legend: an edge in the
+  // text's ink told from the stack by its drawing, not a hue. The border is the drawing itself.
   ['shared/ui/periodPlot.css', 1],
   ['shared/ui/ChartLegend.vue', 1],
   ['shared/ui/TooltipHost.vue', 1], // Overlay edge of the window's one hint.
@@ -98,6 +99,9 @@ export const LINE_BUDGET = new Map([
   ['pages/settings/components/installation-health.css', 5],
   // The status edge of the note that the period before could not be read, as the degraded banner's.
   ['pages/analytics/components/SpendingUnread.vue', 1],
+  // The divider between two quota windows of one account side by side: air alone left the moments
+  // ending one window's axis and starting the next reading as one axis.
+  ['pages/analytics/components/QuotaAccount.vue', 1],
   // Planning's own surfaces. Overview divides the facts from the record; the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 1], // Frozen step quote.

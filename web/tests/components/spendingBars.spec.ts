@@ -3,7 +3,10 @@
  * every value is a row, none folded, and work on no task and unknown work are rows of their own
  * after them, each with its own words, never merged; the adviser and each launch class are rows
  * of their own; each bar is handed its amount in the measure's units and the hue its value has on
- * the page, the neutral when it has none; and the bars shown add up to the tile's total.
+ * the page, the neutral when it has none; and the bars shown add up to the tile's total. The values
+ * split one whole, so the section draws them as a ring or as bars, opening on the ring, and on the
+ * bars alone where a second dimension splits it; values named by free text, tasks and sessions on
+ * either side of a pair, are a list only, the first ten named and the rest folded into one row.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -14,12 +17,15 @@ import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
+import DonutChart from '@/shared/ui/DonutChart.vue'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 
 import { noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { showView, viewsOf } from '../support/chartViews.ts'
+import { seriesEntries, seriesNames } from '../support/legend.ts'
 
 const MONDAY = new Date(2026, 10, 9)
 
@@ -76,8 +82,22 @@ function mountBars(
   })
 }
 
+/** The section by a dimension that opens on its ring, turned to its bars as a reader turns it. */
+async function mountShownBars(...given: Parameters<typeof mountBars>) {
+  const wrapper = mountBars(...given)
+  await showView(wrapper, '.spending-bars', 'Bars')
+  return wrapper
+}
+
 const barsOf = (wrapper: ReturnType<typeof mountBars>) =>
   wrapper.getComponent(RankedBars).props('rows') as RankedRow[]
+
+/**
+ * The rows the bars draw for the values they name, by the kind each row declares (`data-kind`),
+ * apart from the rest, work on no task and unknown work.
+ */
+const namedRows = (wrapper: ReturnType<typeof mountBars>) =>
+  wrapper.getComponent(RankedBars).findAll('[data-kind="category"]')
 
 const sum = (rows: readonly RankedRow[]) => rows.reduce((total, row) => total + row.value, 0)
 
@@ -137,7 +157,7 @@ describe('the bars', () => {
     expect(unpriced?.value).toBe(0)
   })
 
-  it('keep the adviser and every launch class as rows of their own, however small', () => {
+  it('keep the adviser and every launch class as rows of their own, however small', async () => {
     const roles = answer(
       ['role'],
       [
@@ -146,7 +166,7 @@ describe('the bars', () => {
         { day: 0, group: { role: value('advisor') }, spend: { seconds: 60 } },
       ],
     )
-    const byRole = mountBars(roles.usage.rows, 'role')
+    const byRole = await mountShownBars(roles.usage.rows, 'role')
     expect(byRole.findAll('.ranked-label').map((label) => label.text())).toEqual([
       'Main agent',
       'Subagent',
@@ -160,12 +180,12 @@ describe('the bars', () => {
         spend: { seconds: (index + 1) * 60 },
       })),
     )
-    const byClass = mountBars(classes.usage.rows, 'launch_class')
-    expect(byClass.findAll('.ranked-row')).toHaveLength(12)
+    const byClass = await mountShownBars(classes.usage.rows, 'launch_class')
+    expect(namedRows(byClass)).toHaveLength(12)
     expect(byClass.find('[data-kind="other"]').exists()).toBe(false)
   })
 
-  it('name the first twelve values and leave the rest to the table, in one line that asks for it', async () => {
+  it('name the first ten tasks, fold the rest into one row, and count every task in one line that opens them all', async () => {
     const many = (count: number) =>
       answer(
         ['work_item'],
@@ -175,21 +195,29 @@ describe('the bars', () => {
           spend: { seconds: (count - index) * 600 },
         })),
       ).usage.rows
-    const twelve = mountBars(many(12), 'work_item')
-    expect(twelve.findAll('.ranked-row')).toHaveLength(12)
-    expect(twelve.find('.spending-bars-more').exists()).toBe(false)
+    const ten = mountBars(many(10), 'work_item')
+    expect(namedRows(ten)).toHaveLength(10)
+    expect(ten.find('[data-kind="other"]').exists()).toBe(false)
+    expect(ten.find('[data-all]').exists()).toBe(false)
 
     const thirty = mountBars(many(30), 'work_item')
-    expect(thirty.findAll('.ranked-row .ranked-label').map((label) => label.text())).toEqual(
-      Array.from({ length: 12 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
+    const labels = thirty.findAll('.ranked-row .ranked-label').map((label) => label.text())
+    expect(labels).toEqual([
+      ...Array.from({ length: 10 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
+      'Other, 20 more',
+    ])
+    // The twenty folded add up to the rest's figure: 20 tasks of 10 down to 1 times ten minutes.
+    expect(barsOf(thirty).find((row) => row.kind === 'other')?.value).toBeCloseTo(
+      (210 * 600) / 3600,
     )
-    const more = thirty.get('.spending-bars-more')
-    expect(more.text()).toBe('18 more — in the table')
-    await more.trigger('click')
-    expect(thirty.emitted('more')).toHaveLength(1)
-    expect(
-      mountBars(many(30), 'work_item', { locale: 'ru' }).get('.spending-bars-more').text(),
-    ).toBe('ещё 18 — в таблице')
+    // The line counts every task of the period, the ten named and the twenty folded.
+    const all = thirty.get('[data-all]')
+    expect(all.text()).toBe('All 30')
+    await all.trigger('click')
+    expect(thirty.emitted('all')).toHaveLength(1)
+    expect(mountBars(many(30), 'work_item', { locale: 'ru' }).get('[data-all]').text()).toBe(
+      'Все 30',
+    )
   })
 
   const CATEGORY = { work_item: task(1, 'One'), launch_class: value('general') }
@@ -202,42 +230,52 @@ describe('the bars', () => {
     { by: 'work_item', locale: 'ru', none: 'Без задачи', unknown: 'Неизвестно' },
     { by: 'launch_class', locale: 'en', none: 'The session itself', unknown: 'Unknown' },
     { by: 'launch_class', locale: 'ru', none: 'Сама сессия', unknown: 'Неизвестно' },
-  ] as const)('name no value and unknown by $by in $locale', ({ by, locale, none, unknown }) => {
-    const rows = answer(
-      [by],
-      [
-        { day: 0, group: { [by]: CATEGORY[by] }, spend: { seconds: 7200 } },
-        { day: 0, group: { [by]: noTask }, spend: { seconds: 3600 } },
-        { day: 0, group: { [by]: unknownTask }, spend: { seconds: 1800 } },
-      ],
-    ).usage.rows
-    const shown = mountBars(rows, by, { locale })
-      .findAll('.ranked-row')
-      .map((row) => [row.attributes('data-kind'), row.get('.ranked-label').text()])
-    expect(shown).toEqual([
-      ['category', by === 'work_item' ? 'MAIN-1 One' : 'general'],
-      ['none', none],
-      ['unknown', unknown],
-    ])
-  })
+  ] as const)(
+    'name no value and unknown by $by in $locale',
+    async ({ by, locale, none, unknown }) => {
+      const rows = answer(
+        [by],
+        [
+          { day: 0, group: { [by]: CATEGORY[by] }, spend: { seconds: 7200 } },
+          { day: 0, group: { [by]: noTask }, spend: { seconds: 3600 } },
+          { day: 0, group: { [by]: unknownTask }, spend: { seconds: 1800 } },
+        ],
+      ).usage.rows
+      const bars = mountBars(rows, by, { locale })
+      if (by !== 'work_item')
+        await showView(bars, '.spending-bars', locale === 'en' ? 'Bars' : 'Полосы')
+      const shown = bars
+        .findAll('.ranked-row')
+        .map((row) => [row.attributes('data-kind'), row.get('.ranked-label').text()])
+      expect(shown).toEqual([
+        ['category', by === 'work_item' ? 'MAIN-1 One' : 'general'],
+        ['none', none],
+        ['unknown', unknown],
+      ])
+    },
+  )
 
-  it.each(['en', 'ru'] as const)('name every role by its name in %s, none unknown', (locale) => {
-    const rows = answer(
-      ['role'],
-      ['main', 'subagent', 'advisor'].map((role) => ({
-        day: 0,
-        group: { role: value(role) },
-        spend: { seconds: 60 },
-      })),
-    ).usage.rows
-    const bars = mountBars(rows, 'role', { locale })
-    expect(bars.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
-      'category',
-      'category',
-      'category',
-    ])
-    expect(bars.text()).not.toMatch(/Unknown|Неизвестно|No task|Без задачи/u)
-  })
+  it.each(['en', 'ru'] as const)(
+    'name every role by its name in %s, none unknown',
+    async (locale) => {
+      const rows = answer(
+        ['role'],
+        ['main', 'subagent', 'advisor'].map((role) => ({
+          day: 0,
+          group: { role: value(role) },
+          spend: { seconds: 60 },
+        })),
+      ).usage.rows
+      const bars = mountBars(rows, 'role', { locale })
+      await showView(bars, '.spending-bars', locale === 'en' ? 'Bars' : 'Полосы')
+      expect(bars.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
+        'category',
+        'category',
+        'category',
+      ])
+      expect(bars.text()).not.toMatch(/Unknown|Неизвестно|No task|Без задачи/u)
+    },
+  )
 
   it('read as a table on a narrow page, with the same rows', () => {
     const rows = answer(['work_item']).usage.rows
@@ -252,14 +290,14 @@ describe('the bars', () => {
   it('say a period that spent nothing spent nothing, in every measure and as a table', () => {
     for (const measure of ['time', 'tokens', 'cost'] as const) {
       expect(mountBars([], 'work_item', { measure }).text()).toContain(
-        'This period spent nothing to break down.',
+        'Nothing to break down: nothing was spent in this period.',
       )
       expect(mountBars([], 'work_item', { measure, narrow: true }).text()).toContain(
-        'This period spent nothing to break down.',
+        'Nothing to break down: nothing was spent in this period.',
       )
     }
     expect(mountBars([], 'work_item', { locale: 'ru' }).text()).toContain(
-      'В этом периоде нечего разбивать: ничего не потрачено.',
+      'Нет данных для разбивки: за этот период ничего не потрачено.',
     )
   })
 })
@@ -278,8 +316,9 @@ describe('the bars on the page', () => {
 
 /**
  * An account is an organization's id, which no store names: the page names it by the start of
- * the id, as an item's card does, so the same account reads the same everywhere, and keeps the
- * whole id for its hint and its table. Work no organization was recorded for stays unknown.
+ * the id, as an item's card does, so the same account reads the same everywhere. The whole id is
+ * in no hint and no table: the quota panel's menu copies it. Work no organization was recorded
+ * for stays unknown.
  */
 describe('the bars by account', () => {
   const FIRST = '3f9a1b2c-5d6e-4f70-8a9b-0c1d2e3f4a5b'
@@ -293,18 +332,18 @@ describe('the bars by account', () => {
     ],
   )
 
-  it('name each by the start of its id and keep the whole id for its hint and its table', () => {
-    const bars = mountBars(accounts.usage.rows, 'account')
+  it('name each by the start of its id and say the whole id nowhere', async () => {
+    const bars = await mountShownBars(accounts.usage.rows, 'account')
 
     expect(barsOf(bars).map((row) => [row.label, row.detail])).toEqual([
-      ['3f9a1b2c', FIRST],
-      ['77de0a1c', SECOND],
+      ['3f9a1b2c', undefined],
+      ['77de0a1c', undefined],
       ['Unknown', undefined],
     ])
     expect(bars.text()).not.toContain(FIRST)
   })
 
-  it('say the whole id under the name in the table', () => {
+  it('say no whole id under the name in the table', () => {
     const table = mountBars(accounts.usage.rows, 'account', { narrow: true })
 
     expect(
@@ -312,6 +351,115 @@ describe('the bars by account', () => {
         .getComponent(RankedBarsTable)
         .findAll('th[scope="row"]')
         .map((name) => name.text()),
-    ).toEqual([`3f9a1b2c${FIRST}`, `77de0a1c${SECOND}`, 'Unknown'])
+    ).toEqual(['3f9a1b2c', '77de0a1c', 'Unknown'])
+  })
+})
+
+/**
+ * The two drawings of the split and the table, switched in the section's heading. The oracle is
+ * the rule of `firstSplitView` as the owner set it: a ring, except where the parts are as many as
+ * the tasks, which open on their bars; a section split by a second dimension draws bars alone; a
+ * narrow page starts on the table; and every view reads the same figures.
+ */
+/** Text as it reads, the narrow spaces in a figure as plain ones. */
+const spaced = (text: string) => text.replaceAll(/\s+/gu, ' ')
+
+describe('the drawings of the split', () => {
+  const MODELS = answer(
+    ['model'],
+    [
+      { day: 0, group: { model: value('model-a') }, spend: { seconds: 3 * 3600 } },
+      { day: 1, group: { model: value('model-b') }, spend: { seconds: 2 * 3600 } },
+      { day: 2, group: { model: value('model-c') }, spend: { seconds: 3600 } },
+    ],
+  ).usage.rows
+  /** Each model's hue on the page, as the page hands them to the section. */
+  const slots = new Map<string, SeriesSlot>([
+    ['v:model-a', 1],
+    ['v:model-b', 2],
+    ['v:model-c', 3],
+  ])
+
+  it('opens a dimension named by identifiers on its ring', () => {
+    const byModel = mountBars(MODELS, 'model')
+    expect(viewsOf(byModel, '.spending-bars')).toEqual({
+      offered: ['Ring', 'Bars', 'Table'],
+      shown: 'Ring',
+    })
+    expect(byModel.findComponent(DonutChart).exists()).toBe(true)
+    expect(byModel.findComponent(RankedBars).exists()).toBe(false)
+  })
+
+  it('reads the same figures as a ring, as bars and as a table', async () => {
+    const section = mountBars(MODELS, 'model', { slots })
+    const ring = seriesEntries(section).map((one) => spaced(one.text()))
+    // Each part its name, then its figure and its bare share at the end of its line.
+    expect(ring).toEqual(['model-a3 h · 50%', 'model-b2 h · 33%', 'model-c1 h · 17%'])
+
+    // The bars print the same share after the figure, as no strip of the whole stands over them
+    // (DESIGN.md, Charts).
+    await showView(section, '.spending-bars', 'Bars')
+    expect(barsOf(section).map((row) => [row.label, spaced(row.valueText)])).toEqual([
+      ['model-a', '3 h · 50%'],
+      ['model-b', '2 h · 33%'],
+      ['model-c', '1 h · 17%'],
+    ])
+    await showView(section, '.spending-bars', 'Table')
+    expect(
+      section
+        .getComponent(RankedBarsTable)
+        .findAll('tbody tr')
+        .map((row) => spaced(row.text())),
+    ).toEqual(['model-a3 h · 50%', 'model-b2 h · 33%', 'model-c1 h · 17%'])
+    // Back to the ring, which the reader chose last: the choice stands.
+    await showView(section, '.spending-bars', 'Ring')
+    expect(viewsOf(section, '.spending-bars').shown).toBe('Ring')
+  })
+
+  it('draws a section split by a second dimension as bars alone, and starts a narrow page on the table', async () => {
+    const split = mount(SpendingBars, {
+      props: {
+        rows: answer(
+          ['model', 'effort'],
+          [
+            {
+              day: 0,
+              group: { model: value('model-a'), effort: value('high') },
+              spend: { seconds: 60 },
+            },
+          ],
+        ).usage.rows,
+        by: 'model',
+        across: 'effort',
+        measure: 'time',
+        narrow: false,
+        slots: new Map<string, SeriesSlot>(),
+      },
+      global: { plugins: [analyticsI18n('en')] },
+    })
+    expect(viewsOf(split, '.spending-bars')).toEqual({ offered: ['Bars', 'Table'], shown: 'Bars' })
+    expect(split.findComponent(DonutChart).exists()).toBe(false)
+
+    const narrow = mountBars(MODELS, 'model', { narrow: true })
+    expect(viewsOf(narrow, '.spending-bars').shown).toBe('Table')
+    expect(narrow.findComponent(DonutChart).exists()).toBe(false)
+  })
+
+  it('leaves no value out under the ring, and the first twelve to the bars with a line to all', async () => {
+    const many = answer(
+      ['model'],
+      Array.from({ length: 14 }, (_, index) => ({
+        day: 0,
+        group: { model: value(`model-${String(index).padStart(2, '0')}`) },
+        spend: { seconds: (14 - index) * 60 },
+      })),
+    ).usage.rows
+    const section = mountBars(many, 'model')
+    // The ring folds its own rest: no line asks for every value; the bars' does, the control.
+    expect(section.find('[data-all]').exists()).toBe(false)
+    expect(seriesNames(section).at(-1)).toMatch(/^Other, \d+ more$/u)
+    await showView(section, '.spending-bars', 'Bars')
+    expect(namedRows(section)).toHaveLength(12)
+    expect(section.get('[data-all]').text()).toBe('All 14')
   })
 })

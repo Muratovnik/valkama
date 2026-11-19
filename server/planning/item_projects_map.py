@@ -8,7 +8,8 @@ again (`preconditions`) before it takes its recovery point.
 
 For each task the first trace of a project decides, in this order:
 
-- its commits, through `item_projects.commit_projects`: those projects, `commits`;
+- its commits, the projects `item_projects.commit_projects` reads off the pairs of
+  its commit refs: those projects, `commits`;
 - else its labels the label table maps: those projects, `named`;
 - else the file holds nothing for it, and the migration gives it the former
   project of its space, `migrated`.
@@ -25,15 +26,25 @@ commits name another project stays, and the task is listed as a discrepancy; one
 naming a project bound to another space is not mapped, and a task holding it with
 no commit is listed for a person to decide.
 
-`items_digest` is the SHA-256 of every item id of the store, sorted, one a line:
-a file read from another state of the store is refused rather than half applied.
+`commit_refs` says what becomes of each commit ref, one record a ref: the commits
+its text names (`item_projects.commit_pairs`), each as a project and a hash with the
+subject and time Git gave, the hex words it skipped, `url` when it is an address
+that names no commit and becomes a `url` ref, and `drop` when nothing is carried. A
+person may set `drop` on any record or take a pair out of one.
+
+`items_digest` is the SHA-256 of every item id of the store, sorted, one a line,
+followed by every commit ref's id, item and text, one a line in the order of the
+ids: a file read from another state of the store is refused rather than half
+applied.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
+import time
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -45,8 +56,17 @@ from . import item_projects, words
 FORMAT = "valkama-item-projects"
 VERSION = 1
 _KEYS = {"data_scope_id", "format", "items", "items_digest", "labels", "version"}
+#: The part a store without commit refs may leave out.
+COMMIT_REFS = "commit_refs"
 _ENTRY_KEYS = {"drop_labels", "projects"}
 _PROJECT_KEYS = {"project_id", "source"}
+_RECORD_KEYS = {"drop", "item", "pairs", "ref", "skipped", "url"}
+_PAIR_KEYS = {"committed_at", "hash", "project", "subject"}
+#: A hash as a commit row holds it.
+_HASH = re.compile(r"[0-9a-f]{7,64}")
+_COMMIT_REFS_SQL = (
+    "SELECT id, work_item_id, value, label FROM work_item_refs WHERE kind = 'commit' ORDER BY id"
+)
 
 #: The items a 2.9 store holds that the migration makes goals or stages.
 CONTAINERS_2_9 = (
@@ -62,10 +82,16 @@ class RefusedError(ValueError):
 
 
 def digest(conn: sqlite3.Connection) -> str:
-    """The fingerprint of the store's items: SHA-256 of their ids, sorted, one a line."""
+    """The fingerprint of the store's items and commit refs: SHA-256 of the item ids,
+    sorted, one a line, then of each commit ref's id, item and text as a JSON list."""
 
     identities = sorted(str(row[0]) for row in conn.execute("SELECT work_item_id FROM work_items"))
-    return hashlib.sha256("".join(f"{identity}\n" for identity in identities).encode()).hexdigest()
+    lines = [f"{identity}\n" for identity in identities]
+    lines += [
+        json.dumps([int(row[0]), str(row[1]), str(row[2])], ensure_ascii=False) + "\n"
+        for row in conn.execute(_COMMIT_REFS_SQL)
+    ]
+    return hashlib.sha256("".join(lines).encode()).hexdigest()
 
 
 def label_refusal(label: str, project_id: str) -> str | None:
@@ -108,8 +134,9 @@ def build(
     """The file for the store `conn` reads, and what a person checks it by.
 
     `chosen` is the labels mapped by `--label`, each held to `label_refusal` and to
-    a registered project here. The summary counts the tasks by space and by source
-    and lists the discrepancies and the labels of other spaces' projects.
+    a registered project here. The summary counts the tasks by space and by source,
+    lists the discrepancies and the labels of other spaces' projects, and says what
+    becomes of the commit refs (`_commit_summary`).
     """
 
     conn.row_factory = sqlite3.Row
@@ -132,14 +159,15 @@ def build(
         for project_id in _bound(projects, data_scope_id, str(space["key"])):
             home[project_id] = str(space["key"])
     containers = {str(row[0]) for row in conn.execute(CONTAINERS_2_9)}
-    commits: dict[str, list[str]] = {}
-    for identity, value in conn.execute(
-        "SELECT work_item_id, value FROM work_item_refs WHERE kind = 'commit' ORDER BY id"
-    ):
-        commits.setdefault(str(identity), []).append(str(value))
-    owners = item_projects.commit_projects(
-        [value for values in commits.values() for value in values], projects
-    )
+    refs = conn.execute(_COMMIT_REFS_SQL).fetchall()
+    started = time.perf_counter()
+    found = item_projects.commit_pairs([str(ref["value"]) for ref in refs], projects)
+    seconds = round(time.perf_counter() - started, 6)
+    records = [_record(ref, found[str(ref["value"])]) for ref in refs]
+    pairs_of: dict[str, list[item_projects.CommitPair]] = {}
+    for record in records:
+        pairs_of.setdefault(record["item"], []).extend(record["pairs"])
+    references: dict[str, str] = {}
     entries: dict[str, dict[str, Any]] = {}
     used: dict[str, str] = dict(chosen)
     counts: dict[str, Counter[str]] = {key: Counter() for key in sorted(keys.values())}
@@ -151,6 +179,7 @@ def build(
     ):
         identity, key = str(row["work_item_id"]), keys[str(row["planning_space_id"])]
         reference = f"{key}-{row['number']}"
+        references[identity] = reference
         if identity in containers:
             counts[key]["containers"] += 1
             continue
@@ -161,9 +190,7 @@ def build(
         }
         mapped = {label: project for label, project in table.items() if project is not None}
         used.update(mapped)
-        from_commits = sorted(
-            {owners[value] for value in commits.get(identity, []) if value in owners}
-        )
+        from_commits = item_projects.commit_projects(pairs_of.get(identity, []))
         if from_commits:
             chosen_projects, source = from_commits, item_projects.SOURCES[1]
             for label, project in mapped.items():
@@ -193,6 +220,7 @@ def build(
             "projects": [{"project_id": project, "source": source} for project in chosen_projects],
         }
     document = {
+        "commit_refs": records,
         "data_scope_id": data_scope_id,
         "format": FORMAT,
         "items": entries,
@@ -212,8 +240,78 @@ def build(
         "labels": document["labels"],
         "discrepancies": discrepancies,
         "foreign_labels": foreign,
+        COMMIT_REFS: _commit_summary(refs, records, references, seconds),
     }
     return document, summary
+
+
+def _record(ref: sqlite3.Row, found: item_projects.CommitRefPairs) -> dict[str, Any]:
+    """The file's record of one commit ref: dropped when it carries nothing."""
+
+    return {
+        "drop": not found["pairs"] and not found["url"],
+        "item": str(ref["work_item_id"]),
+        "pairs": [dict(pair) for pair in found["pairs"]],
+        "ref": int(ref["id"]),
+        "skipped": list(found["skipped"]),
+        "url": found["url"],
+    }
+
+
+def _commit_summary(
+    refs: Sequence[sqlite3.Row],
+    records: Sequence[Mapping[str, Any]],
+    references: Mapping[str, str],
+    seconds: float,
+) -> dict[str, Any]:
+    """What a person checks the commit refs' records by.
+
+    The distinct pairs by project and those without one; the refs that become `url`
+    refs, the ones dropped and the ones whose text skipped a hex word; and each
+    commit two refs of one item name with labels that differ, the first of which the
+    attachment keeps. `seconds` is how long Git took.
+    """
+
+    texts = {int(ref["id"]): ref for ref in refs}
+    carried = [record for record in records if not record["drop"]]
+    pairs = {(pair["project"], pair["hash"]) for record in carried for pair in record["pairs"]}
+    labels: dict[tuple[str, str | None, str], list[str]] = {}
+    for record in carried:
+        ref = texts[record["ref"]]
+        label = item_projects.commit_label(str(ref["label"]), str(ref["value"]))
+        for pair in record["pairs"]:
+            found = labels.setdefault((record["item"], pair["project"], pair["hash"]), [])
+            if label and label not in found:
+                found.append(label)
+
+    def shown(record: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "ref": record["ref"],
+            "reference": references[record["item"]],
+            "value": str(texts[record["ref"]]["value"]),
+        }
+
+    return {
+        "refs": len(records),
+        "pairs_by_project": dict(
+            sorted(Counter(project for project, _ in pairs if project is not None).items())
+        ),
+        "pairs_without_repository": sum(1 for project, _ in pairs if project is None),
+        "attachments": len(labels),
+        "urls": [shown(record) for record in carried if record["url"]],
+        "dropped": [shown(record) for record in records if record["drop"]],
+        "skipped": [
+            {**shown(record), "skipped": record["skipped"]}
+            for record in records
+            if record["skipped"]
+        ],
+        "diverging_labels": [
+            {"reference": references[item], "project": project, "hash": hash_, "labels": found}
+            for (item, project, hash_), found in labels.items()
+            if len(found) > 1
+        ],
+        "seconds": seconds,
+    }
 
 
 def dumps(document: Mapping[str, Any]) -> str:
@@ -235,7 +333,11 @@ def parse(raw: bytes) -> dict[str, Any]:
         document = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RefusedError(f"the item projects file is not JSON: {error}") from error
-    document = _exact(document, _KEYS, "the file")
+    if not isinstance(document, dict) or not _KEYS <= set(document) <= {*_KEYS, COMMIT_REFS}:
+        raise RefusedError(
+            f"the item projects file is malformed: the file must hold {sorted(_KEYS)},"
+            f" and {COMMIT_REFS} beside them when the store holds commit refs"
+        )
     if document["format"] != FORMAT or document["version"] != VERSION:
         raise RefusedError(f"the item projects file is not {FORMAT} version {VERSION}")
     if not isinstance(document["data_scope_id"], str) or not isinstance(
@@ -276,13 +378,63 @@ def parse(raw: bytes) -> dict[str, Any]:
             seen.add(project["project_id"])
         if len(seen) > item_projects.MAX_PROJECTS:
             raise RefusedError(f"{where} names more than {item_projects.MAX_PROJECTS} projects")
+    if COMMIT_REFS in document:
+        _parse_commit_refs(document[COMMIT_REFS])
     return document
+
+
+def _malformed(where: str, what: str) -> RefusedError:
+    return RefusedError(f"the item projects file is malformed: {where} {what}")
+
+
+def _hashes(value: object) -> bool:
+    """Whether `value` is a hash as a commit row holds it: 7 to 64 lower-case hex digits."""
+
+    return isinstance(value, str) and _HASH.fullmatch(value) is not None
+
+
+def _parse_commit_refs(records: object) -> None:
+    """Hold `commit_refs` to its shape: one record a ref, each pair a project or null
+    and a hash, a record without pairs only when it is a url or dropped."""
+
+    if not isinstance(records, list):
+        raise _malformed(COMMIT_REFS, "must list one record for each commit ref")
+    seen: set[int] = set()
+    for index, record in enumerate(records):
+        where = f"{COMMIT_REFS}[{index}]"
+        record = _exact(record, _RECORD_KEYS, where)
+        if type(record["ref"]) is not int or not isinstance(record["item"], str):
+            raise _malformed(where, "must name its ref by id and its item by id")
+        if record["ref"] in seen:
+            raise _malformed(where, f"repeats the ref {record['ref']}")
+        seen.add(record["ref"])
+        if not isinstance(record["url"], bool) or not isinstance(record["drop"], bool):
+            raise _malformed(where, "must say true or false for url and drop")
+        skipped = record["skipped"]
+        if not isinstance(skipped, list) or not all(_hashes(word) for word in skipped):
+            raise _malformed(f"{where}.skipped", "must list hex words of 7 to 64 lower-case digits")
+        if not isinstance(record["pairs"], list):
+            raise _malformed(f"{where}.pairs", "must be a list")
+        for number, pair in enumerate(record["pairs"]):
+            at = f"{where}.pairs[{number}]"
+            pair = _exact(pair, _PAIR_KEYS, at)
+            if pair["project"] is not None and not isinstance(pair["project"], str):
+                raise _malformed(f"{at}.project", "must be a project id or null")
+            if not _hashes(pair["hash"]):
+                raise _malformed(f"{at}.hash", "must be 7 to 64 lower-case hex digits")
+            if not isinstance(pair["subject"], str) or not (
+                pair["committed_at"] is None or isinstance(pair["committed_at"], str)
+            ):
+                raise _malformed(at, "must give its subject as text and its time as text or null")
+        if not record["pairs"] and not record["url"] and not record["drop"]:
+            raise _malformed(where, "carries nothing: give it a pair, or set url or drop")
 
 
 def empty(conn: sqlite3.Connection) -> dict[str, Any]:
     """The file of a store that holds no item: nothing to carry."""
 
     return {
+        COMMIT_REFS: [],
         "data_scope_id": str(read_store_metadata(conn)["data_scope_id"]),
         "format": FORMAT,
         "items": {},
@@ -329,6 +481,57 @@ def _check_file(
                     f"{identity} drops the label {label}, but does not name its project"
                     f" {labels[label]}"
                 )
+    return found + _check_commit_refs(conn, document, registered)
+
+
+def _listed_refs(refs: Sequence[int]) -> str:
+    more = f" and {len(refs) - 5} more" if len(refs) > 5 else ""
+    return ", ".join(str(ref) for ref in refs[:5]) + more
+
+
+def _check_commit_refs(
+    conn: sqlite3.Connection, document: Mapping[str, Any], registered: set[str]
+) -> list[str]:
+    """The file's records are of this store's commit refs, each on its own item,
+    naming registered projects; and every project an entry derives from commits is
+    the project of a pair it carries."""
+
+    stored = {int(row[0]): str(row[1]) for row in conn.execute(_COMMIT_REFS_SQL)}
+    records: Sequence[Mapping[str, Any]] = document.get(COMMIT_REFS) or []
+    found: list[str] = []
+    if COMMIT_REFS not in document and stored:
+        found.append(
+            f"the store holds {len(stored)} commit refs and the item projects file has no"
+            f" {COMMIT_REFS}: {_AGAIN}"
+        )
+    named = {int(record["ref"]): record for record in records}
+    if COMMIT_REFS in document and set(named) != set(stored):
+        missing, extra = sorted(set(stored) - set(named)), sorted(set(named) - set(stored))
+        if missing:
+            found.append(f"{COMMIT_REFS} leaves out the commit refs {_listed_refs(missing)}")
+        if extra:
+            found.append(f"{COMMIT_REFS} names {_listed_refs(extra)}, which are no commit refs")
+    carried: dict[str, set[str]] = {}
+    for ref, record in sorted(named.items()):
+        if ref in stored and record["item"] != stored[ref]:
+            found.append(
+                f"{COMMIT_REFS} gives the ref {ref} to {record['item']}, but it is on {stored[ref]}"
+            )
+        projects = [pair["project"] for pair in record["pairs"] if pair["project"] is not None]
+        found += [
+            f"commit ref {ref} names project {project}, which is not registered"
+            for project in projects
+            if project not in registered
+        ]
+        if not record["drop"]:
+            carried.setdefault(str(record["item"]), set()).update(projects)
+    for identity, entry in sorted(document["items"].items()):
+        found += [
+            f"the file derives project {project['project_id']} from commits it drops for {identity}"
+            for project in entry["projects"]
+            if project["source"] == item_projects.COMMITS
+            and project["project_id"] not in carried.get(identity, set())
+        ]
     return found
 
 
@@ -338,7 +541,9 @@ def preconditions(conn: sqlite3.Connection, raw: bytes | None) -> dict[str, Any]
     The registry is read, in format 4; every space's project is bound to it there;
     no two spaces share a name; and the file `raw` holds belongs to this store, in
     this state, naming registered projects only, with each label it drops mapped to
-    a project the same entry names. A store holding items needs the file; one
+    a project the same entry names; it holds a record of each commit ref, and a
+    project an entry derives from commits is one of a pair it carries
+    (`_check_commit_refs`). A store holding items needs the file; one
     holding none takes an empty one. Answers the parsed file and the registry read,
     for the steps to take from `Context.memo`; raises `RefusedError` with every reason.
     """

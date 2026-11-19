@@ -12,6 +12,8 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
+import type { Leg } from './hintFramesPage.ts'
+import { clear, pacedStroke } from './hintFramesPage.ts'
 import { now, spaceScope } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { SPACE, spaceModel } from './served/preview.ts'
@@ -74,16 +76,68 @@ export async function rest(page: Page, link: Locator) {
   await page.mouse.move(x, y, { steps: 3 })
 }
 
-export const pause = (ms: number) => new Promise((done) => setTimeout(done, ms))
+/** A point at the window's corner, on nothing with a hint or a card. */
+const AWAY = { x: 5, y: 5 }
 
-/** How many cards show once the delay a card would take has passed: what never came. */
+/**
+ * Moves the pointer from `link`, resting there with its card up, onto `to` in its steps, as a hand
+ * on its way to the card does. A stroke that stood still on the way as long as the hint manager's
+ * grace is done again (`pacedStroke`): the pointer goes away until the card has gone and rests on
+ * `link` again, and once its card is up `ready` runs.
+ */
+export async function ontoCard(
+  page: Page,
+  link: Locator,
+  to: Leg,
+  ready: () => Promise<unknown> = () => Promise.resolve(),
+) {
+  await pacedStroke(page, 'onto the card', {
+    again: async () => {
+      await clear(page, AWAY)
+      await rest(page, link)
+      await expect(card(page)).toBeVisible()
+      await ready()
+    },
+    from: await middle(link),
+    to,
+  })
+}
+
+/**
+ * Past the half second a card waits on a resting pointer, and the 120 ms it then waits for a
+ * read before it says it is reading, with room to spare.
+ */
+const PAST_THE_DELAY_MS = 800
+/** Past the 300 ms after a card goes in which the next one still opens at once. */
+const PAST_THE_WARM_MS = 350
+
+/**
+ * A wheel over what scrolls, awaited to the end of the scroll it starts. The browser scrolls on
+ * its own clock, not the page's, so the page's clock run past a delay would not wait for it.
+ */
+export async function wheelToItsEnd(page: Page, by: number) {
+  const ended = page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        addEventListener('scrollend', () => resolve(), { capture: true, once: true })
+      }),
+  )
+  await page.mouse.wheel(0, by)
+  await ended
+}
+
+/**
+ * How many cards show once the delay a card would take has passed: what never came, or what
+ * stayed. The delay runs on the page's clock, which the spec installs before the page opens, so
+ * a slow machine neither shortens it nor stretches it.
+ */
 export async function cardsAfterTheDelay(page: Page) {
-  await pause(800)
+  await page.clock.runFor(PAST_THE_DELAY_MS)
   return card(page).count()
 }
 
-/** Long enough off a reference that the next one waits its delay again. */
-export const coolDown = () => pause(350)
+/** Long enough off a reference that the next one waits its delay again, on the page's clock. */
+export const coolDown = (page: Page) => page.clock.runFor(PAST_THE_WARM_MS)
 
 /**
  * Milliseconds from now until a card is on the page, as the page itself counts them,

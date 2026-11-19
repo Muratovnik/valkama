@@ -103,6 +103,14 @@ describe('the scope choice in the context bar', () => {
     expect(project?.value).toBe(project?.options[0]?.value)
   })
 
+  it('names each choice by what it chooses, so the two are not read as one', () => {
+    const wrapper = mountBar(inMain)
+    const names = (['space', 'project'] as const).map((which) =>
+      choice(wrapper, which)?.box.get('.choice-trigger').attributes('aria-label'),
+    )
+    expect(names).toEqual(['Space', 'Project'])
+  })
+
   it('hides the project choice in a space with one project to choose', () => {
     const wrapper = mountBar({
       kind: 'space',

@@ -54,6 +54,7 @@ export function noUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
     reference: 'MAIN-12',
     title: 'An item',
     scope: 'item',
+    sessions: 0,
     elapsed_seconds: 0,
     agent_seconds: 0,
     tokens: NO_TOKENS,
@@ -70,6 +71,7 @@ export function noUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
     accounts: [],
     roles: [],
     by_item: [usageLine()],
+    quota: { weeks: [], unknown_share: null },
     ...overrides,
   }
 }
@@ -186,7 +188,7 @@ export function whoUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
     roles: [
       {
         role: 'subagent',
-        launch_class: { id: 'bero', unknown: false },
+        launch_class: { id: 'build', unknown: false },
         effort: { id: 'high', unknown: false },
         seconds: 30_000,
         tokens: roleTokens[0],

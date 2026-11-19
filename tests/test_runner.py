@@ -284,6 +284,25 @@ class RunnerLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(runner.LaunchError, "already has a running launch"):
             self.runner.launch("QA-12", self.packet())
 
+    def test_a_launch_runs_under_the_session_its_caller_assigned_before_it(self) -> None:
+        # A caller that names the session before the process exists, to claim for it,
+        # must get a client that runs under that one and no other.
+        assigned = runner.session_identity(runner.validate_packet(self.packet()))
+        started = self.runner.launch("QA-17", self.packet(), session_id=assigned)
+        self.assertEqual(assigned, started["client_session_id"])
+        self.assertIn(assigned, self.spawned[0][0])
+
+    def test_no_session_is_assigned_to_a_client_that_announces_its_own(self) -> None:
+        codex = runner.validate_packet(self.packet(client="codex"))
+        self.assertEqual("", runner.session_identity(codex))
+        with self.assertRaisesRegex(runner.LaunchError, "announces its own session"):
+            self.runner.launch("QA-18", self.packet(client="codex"), session_id="chosen")
+        with self.assertRaisesRegex(runner.LaunchError, "runs under the session it resumes"):
+            self.runner.launch(
+                "QA-19", self.packet(resume=True), resume_session_id="earlier", session_id="another"
+            )
+        self.assertEqual([], self.spawned)
+
     def test_a_finished_launch_can_be_relaunched(self) -> None:
         self.runner.launch("QA-13", self.packet())
         self.process._code = 0

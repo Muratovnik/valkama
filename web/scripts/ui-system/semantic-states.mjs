@@ -4,7 +4,11 @@
  *
  * The scanner composes three syntax-owned analyses: exact uiSystem provenance,
  * every Vue selector/style carrier, and the component's CSS dependency graph.
- * It deliberately has no component, file, state-name, or value allowlist.
+ * It deliberately has no state-name or value allowlist. One register names the
+ * components whose bound style copies paint the page already shows, read back
+ * from it, rather than authoring any (`COPIED_PAINT`): they map no state to a
+ * tone, so the presentation API has none to give them. Their selectors and
+ * stylesheet are held to the rule as every other component's are.
  */
 
 import { parser as typescriptParser } from 'typescript-eslint'
@@ -69,10 +73,24 @@ function violation(file, detail) {
   return `${file}: ${detail}; use SemanticState or a tone returned by the canonical uiSystem presentation API, and keep state-to-tone mapping in uiSystem.ts`
 }
 
+/**
+ * `file` → why its bound style copies paint the page shows rather than authoring it. A
+ * registered file that is gone is refused, so the register says what the tree holds. Only the
+ * product tree is scanned with it (`scanUiTree`); any other sources are scanned with none.
+ */
+export const COPIED_PAINT = new Map([
+  [
+    'shared/ui/WholeText.vue',
+    'lays a cut text whole over itself in the ink of its first letter and on the ground under it, both read back from the page as it is drawn',
+  ],
+])
+
 /** Reject any component-local route from operational state to semantic paint. */
-export function scanSemanticStateOwnership(sources) {
+export function scanSemanticStateOwnership(sources, copied = new Map()) {
   const violations = []
   const sourceByFile = new Map(sources.map(({ file, source }) => [file, source]))
+  for (const file of copied.keys())
+    if (!sourceByFile.has(file)) violations.push(`${file}: registered as copying paint, and gone`)
   for (const { file, source } of sources) {
     if (!file.endsWith('.vue')) continue
     const ast = parse(source, { parser: typescriptParser, sourceType: 'module' })
@@ -82,7 +100,7 @@ export function scanSemanticStateOwnership(sources) {
       violations.push(violation(file, 'a stylesheet v-bind authors a dynamic paint value'))
       continue
     }
-    if (inlineStyleViolates(ast.templateBody, provenance, styles)) {
+    if (!copied.has(file) && inlineStyleViolates(ast.templateBody, provenance, styles)) {
       violations.push(violation(file, 'a bound style authors a dynamic paint value'))
       continue
     }

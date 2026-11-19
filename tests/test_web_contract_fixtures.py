@@ -40,7 +40,7 @@ from urllib.parse import urlencode
 from server import http_surface, mcp_surface, session_open, sessions, store
 from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
-from server.ops import doctor, url_schemes
+from server.ops import doctor, git_hook, url_schemes
 from server.planning import calls, read_model, requests, service, subscriptions
 from server.projects import project_registry
 from server.quota import samples
@@ -105,6 +105,8 @@ class _Scenario:
 
     def __init__(self, root: Path) -> None:
         self.root = root
+        #: The goal, the stage and the task done under the goal that `tree` files.
+        self.tree_refs: dict[str, str] = {}
         conn = store.connect()
         try:
             service.create_planning_space(conn, name="Contract", key=SPACE)
@@ -257,9 +259,14 @@ class _Scenario:
         conn = store.connect()
         try:
             with calls.bind(who(creator, "a7c3e9f1d2b4a608"), "create_work_item"):
+                # Filed on the owner's word, so the work under it is accepted and taken.
                 goal = str(
                     service.create_work_item(
-                        conn, space=SPACE, title="Goal with participants", kind="goal"
+                        conn,
+                        space=SPACE,
+                        title="Goal with participants",
+                        kind="goal",
+                        acceptance="assignment",
                     )["reference"]
                 )
             stage = service.create_work_item(
@@ -306,6 +313,94 @@ class _Scenario:
         finally:
             conn.close()
         return self.http(f"/api/modules/planning/request?{self.scope(id=request['request_id'])}")
+
+    def proposed_goal(self) -> dict:
+        """The question about a goal an agent proposes, with the write that waits for the
+        owner's answer."""
+
+        agent = calls.Identity(
+            state=calls.CONFIRMED,
+            source=calls.CLAUDE_HOOK,
+            session_id="6f1c2a8e-0000-4000-8000-0000000000b1",
+            tool_use_id="t",
+            client="claude",
+        )
+        conn = store.connect()
+        try:
+            with calls.bind(agent, "create_work_item"):
+                answer = service.create_work_item(
+                    conn, space=SPACE, title="Goal an agent proposes", kind="goal"
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        question = answer["waits_for_owner"]["question"]
+        return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
+
+    def triage_group(self) -> dict:
+        """The question about a group of findings an agent proposes as one goal, with the
+        write that waits for the owner's answer."""
+
+        findings = [
+            str(self.tool("create_work_item", space=SPACE, title=title)["reference"])
+            for title in ("Finding in the export", "Another finding in the export")
+        ]
+        answer = self.tool(
+            "create_work_item",
+            space=SPACE,
+            title="Group of export findings",
+            kind="goal",
+            checklist=["The export writes every field"],
+            group={"items": findings, "answer": "later", "until": "2026-12-01", "why": "One fix"},
+        )
+        question = answer["waits_for_owner"]["question"]
+        return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
+
+    def put_off(self) -> dict[str, dict]:
+        """A card put off until another item, and one that came back when the item it
+        waited on was deleted."""
+
+        made = [
+            str(self.tool("create_work_item", space=SPACE, title=title)["reference"])
+            for title in ("Put off card", "Awaited card", "Came back card", "Dropped card")
+        ]
+        waiting, awaited, back, dropped = made
+        for ref, until in ((waiting, awaited), (back, dropped)):
+            self.http(
+                "/api/planning/work-item/apply",
+                {"id": ref, "defer": {"until": until, "reason": "Waits for the other card."}},
+            )
+        self.http("/api/planning/work-item/delete", {"id": dropped})
+        return {
+            "card-deferred": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=waiting)}"
+            ),
+            "card-returned": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=back)}"
+            ),
+        }
+
+    def converted(self) -> dict[str, dict]:
+        """A bug at work converted into a goal, read as the card reads the goal it became.
+
+        The goal keeps the bug's steps and its kind as a label, and the work under way
+        goes on in the task it left under it.
+        """
+
+        bug = str(
+            self.tool(
+                "create_work_item", space=SPACE, title="Converted card", kind="bug", claim=True
+            )["reference"]
+        )
+        self.tool(
+            "apply_work_item_changes", id=bug, checklist=[{"text": "Found", "done": True}, "Fix"]
+        )
+        self.tool("apply_work_item_changes", id=bug, convert={"to": "goal"})
+        return {
+            "card-converted": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=bug)}"
+            )
+        }
 
     def executor_card(self) -> dict:
         """A card whose claim, steps and agents each name an executor."""
@@ -430,7 +525,7 @@ class _Scenario:
                         None if cost is None else "2026-11-10",
                     ),
                 )
-            self.seats(conn)
+            self.seats(conn, item)
             conn.commit()
         finally:
             conn.close()
@@ -455,7 +550,8 @@ class _Scenario:
                     }
                 )
             ),
-            # The day after, by the seat: an account, a seat no account names, unknown.
+            # The day after, by the seat: an account, one known by its weekly reset, an
+            # organization's work no sample places, unknown.
             "analytics-usage-seat": self.http(
                 "/api/analytics/usage?"
                 + urlencode(
@@ -470,10 +566,14 @@ class _Scenario:
         }
 
     @staticmethod
-    def seats(conn: sqlite3.Connection) -> None:
+    def seats(conn: sqlite3.Connection, item: str) -> None:
         """A session's work on 2026-11-12, after the days the reads above cover: on the seat
-        an account's poll names, then on one no account names, then for no organization.
-        Its run's last record is the card's, so the reads above say the same."""
+        an account's poll names, then on one no account names, then for no organization,
+        then for an organization no sample reads. Its run's last record is the card's, so
+        the reads above say the same. Its stretch on the account's seat is the card's, so
+        the card's read has a week of quota; the stretch before the day has no reading
+        before it and takes the seat of the session's next, so the card's is half that
+        seat's cost."""
 
         session, organization = "sess-seat", "org-fixture"
         run = conn.execute(
@@ -481,20 +581,21 @@ class _Scenario:
             " read_at) VALUES (?, '', 'claude', 'seat.jsonl', ?, ?, ?)",
             (session, *("2026-11-10T10:00:00.000Z",) * 2, "2026-11-10T11:00:00.000Z"),
         ).lastrowid
-        for start, end, held in (
+        for start, end, held, work_item in (
             # What the session worked for, before the day read.
-            ("2026-11-11T20:00:00.000Z", "2026-11-11T20:00:00.000Z", organization),
-            ("2026-11-12T09:00:00.000Z", "2026-11-12T09:10:00.000Z", organization),
-            ("2026-11-12T09:20:00.000Z", "2026-11-12T09:30:00.000Z", organization),
-            ("2026-11-12T09:40:00.000Z", "2026-11-12T09:50:00.000Z", None),
+            ("2026-11-11T20:00:00.000Z", "2026-11-11T20:00:00.000Z", organization, None),
+            ("2026-11-12T09:00:00.000Z", "2026-11-12T09:10:00.000Z", organization, item),
+            ("2026-11-12T09:20:00.000Z", "2026-11-12T09:30:00.000Z", organization, None),
+            ("2026-11-12T09:40:00.000Z", "2026-11-12T09:50:00.000Z", None, None),
+            ("2026-11-12T10:00:00.000Z", "2026-11-12T10:10:00.000Z", "org-unread", None),
         ):
             conn.execute(
                 "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
-                " ended_at, seconds, input_tokens, output_tokens, estimated_api_cost_usd,"
-                " price_book, quality, organization)"
-                " VALUES (?, ?, '', 'claude-opus-5-5', ?, ?, 600, 10, 1, 0.01, '2026-11-10',"
+                " ended_at, seconds, work_item_id, input_tokens, output_tokens,"
+                " estimated_api_cost_usd, price_book, quality, organization)"
+                " VALUES (?, ?, '', 'claude-opus-5-5', ?, ?, 600, ?, 10, 1, 0.01, '2026-11-10',"
                 " 'observed', ?)",
-                (run, session, start, end, held),
+                (run, session, start, end, work_item, held),
             )
         for at, source, owner, account, seat in (
             ("2026-11-12T08:00:00.000Z", "poll", organization, "acct-fixture", "week:2026-11-16T09:00Z"),
@@ -674,9 +775,13 @@ class _Scenario:
             finished = item("Tree work finished under the goal", parent=goal)
             service.set_summary(conn, finished, {"done": "Finished.", "next": "Nothing."})
             service.transition_work_item(conn, finished, "done", acceptance="assignment")
+            self.tree_refs = {"goal": goal, "stage": stage, "finished": finished}
             waiting = item("Tree goal not accepted yet", kind="goal")
             loose = item("Tree stage not accepted yet", kind="stage", parent=waiting)
             item("Tree work under the stage not accepted", parent=loose)
+            # A review saw the goal and left it waiting: the board reads its mark, and the
+            # items of the stack nobody marked read theirs as empty.
+            service.mark_triage(conn, waiting, True, author="worker-a")
             conn.commit()
         finally:
             conn.close()
@@ -699,6 +804,99 @@ class _Scenario:
                 f"/api/planning/work-item/chain?{urlencode({'id': goal, 'scope': 'tree'})}"
             ),
             "planning-search": found,
+        }
+
+    def volumes(self) -> dict[str, object]:
+        """What stands in the space, in its project and in the space filtered to its tasks
+        with a label, over the days around today, and what the tree's goal and stage took:
+        work on the goal, on a task done and on one cancelled under it, and on a task under
+        the stage, labelled, one of its rows of no known price."""
+
+        conn = store.connect()
+        try:
+            goal = self.tree_refs["goal"]
+            cancelled = str(
+                service.create_work_item(
+                    conn, space=SPACE, title="Tree work cancelled under the goal", parent=goal
+                )["reference"]
+            )
+            service.set_summary(conn, cancelled, {"done": "Not needed.", "next": "Nothing."})
+            service.transition_work_item(conn, cancelled, "cancelled", acceptance="assignment")
+            # Outside goals, a task of the project with a label; and a commit on no card, made
+            # now, so the flow's period around today holds it whatever the day.
+            service.create_work_item(
+                conn,
+                space=SPACE,
+                title="Work of the project outside goals",
+                labels=["ui"],
+                projects=[PROJECT],
+            )
+            made = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, committed_at, session_id, client,"
+                " reported_at) VALUES (?, ?, 'feat: on no card', ?, 'sess-goal', 'claude', ?)",
+                (PROJECT, "c" * 40, made, made),
+            )
+            under_stage = conn.execute(
+                "SELECT work_item_id FROM work_items WHERE title = 'Tree work under the stage'"
+            ).fetchone()[0]
+            # The filtered read keeps it, so its goal and stage add up its work alone.
+            conn.execute(
+                "UPDATE work_items SET labels = '[\"ui\"]' WHERE work_item_id = ?", (under_stage,)
+            )
+            run = conn.execute(
+                "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+                " read_at) VALUES ('sess-goal', '', 'claude', 'goal.jsonl', ?, ?, ?)",
+                ("2026-11-14T10:00:00.000Z",) * 3,
+            ).lastrowid
+            for start, work_item, cost in (
+                ("10:00", read_model.item_row(conn, goal)["work_item_id"], 0.5),
+                (
+                    "10:10",
+                    read_model.item_row(conn, self.tree_refs["finished"])["work_item_id"],
+                    1.0,
+                ),
+                ("10:20", read_model.item_row(conn, cancelled)["work_item_id"], 0.25),
+                ("10:30", under_stage, None),
+            ):
+                conn.execute(
+                    "INSERT INTO usage_segments(run_id, session_id, model, started_at, ended_at,"
+                    " seconds, work_item_id, input_tokens, output_tokens, estimated_api_cost_usd,"
+                    " quality) VALUES (?, 'sess-goal', 'claude-opus-5-5', ?, ?, 300, ?, 40, 8, ?,"
+                    " 'observed')",
+                    (
+                        run,
+                        f"2026-11-14T{start}:00.000Z",
+                        f"2026-11-14T{start[:3]}{int(start[3:]) + 5:02d}:00.000Z",
+                        work_item,
+                        cost,
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        # Today on the caller's clock, so the work made now falls on the same day of the flow
+        # whatever the hour.
+        today = (datetime.now(UTC) + timedelta(minutes=180)).date()
+        period = {
+            "from": (today - timedelta(days=7)).isoformat(),
+            "to": (today + timedelta(days=2)).isoformat(),
+            "utc_offset": "180",
+        }
+        return {
+            "volumes-space": self.http(f"/api/planning/volumes?{self.scope(**period)}"),
+            "volumes-project": self.http(
+                f"/api/planning/volumes?{self.scope(project_id=PROJECT, **period)}"
+            ),
+            # The space's tasks with the label `ui`, of either of two kinds.
+            "volumes-filtered": self.http(
+                f"/api/planning/volumes?{self.scope(**period)}&"
+                + urlencode([("kind", "task"), ("kind", "bug"), ("label", "ui")])
+            ),
+            "goal-volumes": self.http(
+                "/api/planning/goal-volumes?"
+                + urlencode([("id", self.tree_refs["goal"]), ("id", self.tree_refs["stage"])])
+            ),
         }
 
     def open_plans(self) -> dict[str, object]:
@@ -896,11 +1094,22 @@ class _Scenario:
             **self.open_plans(),
             "live-frame": self.live_frame(),
             **self.usage(),
-            "doctor-vocabulary": {"quota": _doctor_quota_codes()},
+            "doctor-vocabulary": {"quota": _doctor_quota_codes(), "commit": _doctor_commit_codes()},
             "analytics-quota": self.quota(),
             # Last, so the references the answers above name stay theirs.
             **self.tree(),
             "request-session-gone": self.session_gone(),
+            **self.put_off(),
+            **self.converted(),
+            "request-proposed-goal": self.proposed_goal(),
+            # After every item above, so it counts the space as the answers left it.
+            **self.volumes(),
+            # The directory «All spaces» reads, with the four numbers of the space's card.
+            "planning-portfolio": self.http(
+                "/api/platform/planning?scope_kind=global&directory_only=true"
+            ),
+            # After the counts above, which the group's goal and findings would change.
+            "request-triage-group": self.triage_group(),
         }
 
 
@@ -931,6 +1140,30 @@ def _doctor_quota_codes() -> list[str]:
     if built:
         raise ValueError(f"doctor.py builds a quota presentation code at run time: {built}")
     return sorted(text for text in texts if _QUOTA_CODE.fullmatch(text))
+
+
+_RECORDS_CODE = re.compile(r"commit-records-[a-z]+(?:-[a-z]+)*")
+
+
+def _doctor_commit_codes() -> list[str]:
+    """Every presentation code the commit-hook and commit-records checks of `valkama doctor` report.
+
+    The records' codes are written out whole in `server/ops/doctor.py`, and read from it. The
+    hook's is built from the state the hook reads as, `commit-hook-{state}`, and every such
+    state is one of `git_hook.STATES`, so those are the hook's codes.
+    """
+
+    tree = ast.parse(Path(doctor.__file__).read_text(encoding="utf-8"))
+    records = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and _RECORDS_CODE.fullmatch(node.value)
+    }
+    if not records:
+        raise ValueError("doctor.py writes no commit-records presentation code")
+    return sorted([*(f"commit-hook-{state}" for state in git_hook.STATES), *records])
 
 
 def _everything_but_cursor() -> url_schemes.Installed:

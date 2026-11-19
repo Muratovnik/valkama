@@ -393,6 +393,8 @@ class OnePassTests(ReadCase):
 
         Each item costs the board the statements of its own record; the containers
         cost one read of the space's tree, however many there are and however deep.
+        A board with work in triage reads its stack once, so every board measured
+        here holds a finding from the start.
         """
 
         def board_statements(goals: int) -> tuple[int, int]:
@@ -413,6 +415,7 @@ class OnePassTests(ReadCase):
         self.goal()
         self.stage()
         self.tree.add("a", state="dev", parent="S", started=True)
+        self.tree.add("f", kind="task")
         self.conn.commit()
         few_items, few = board_statements(2)
         for index in range(20):

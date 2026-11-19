@@ -15,14 +15,50 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping
 
-from . import calls, leases, model, person_events
+from . import (
+    calls,
+    item_tree,
+    leases,
+    model,
+    participation,
+    person_events,
+    questions,
+)
 
 Finding = tuple[str, str]
 
 #: The guards `force` does not carry: past them the store would hold what the work
 #: model has no place for — a container at work, accepted work with no basis, a
-#: task at work with nobody holding it, or a deferral with no condition to end it.
-UNFORCED = frozenset({"goal_or_stage", "container_state", "deferred", "acceptance", "executor"})
+#: task at work with nobody holding it, a deferral with no condition to end it, a
+#: new item standing where only a move with its reason or summary leads, open work
+#: under a goal or stage that is done, or work in review with nothing for the owner
+#: to answer — or an agent would go over the owner's open question, where
+#: withdrawing its own question is its way out, or decide for the owner whether work
+#: in triage or put off is to be done (`acceptance_question`), or cancel work under a goal or stage
+#: it was never shown (`cancel_list`, which the service refuses with the list).
+UNFORCED = frozenset(
+    {
+        "goal_or_stage",
+        "container_state",
+        "deferred",
+        "acceptance",
+        "executor",
+        "new_item",
+        "children",
+        "question",
+        "review_question",
+        "cancel_list",
+        "acceptance_question",
+    }
+)
+#: How many of the open items under a goal or stage its `children` refusal names.
+NAMED_OPEN = 5
+#: The category whose entry asks the owner what to check, and which the answer leaves.
+REVIEW = "review"
+
+#: Where a new item is never created: the move there carries what entering asks for
+#: — what the owner is to check, the reason, the summary — and a creation has none.
+MOVED_INTO_ONLY = ("review", "blocked", "completed", "cancelled")
 
 
 def refuse(refusals: list[Finding], force: bool) -> None:
@@ -46,13 +82,24 @@ def placement(
 
     `current` is None for an item being created. `basis` is the acceptance the item
     has or the write gives it. These refusals hold however the item gets there —
-    created, moved or started by a claim — and none of them is forced.
+    created, moved or started by a claim — and none of them is forced. A new item
+    asked to stand in review, blocked or a closed state is refused that alone: the
+    move it is told to make there meets the rest.
     """
 
     found: list[Finding] = []
     container = item["kind"] == model.CONTAINER_KIND
     category = str(target["category"])
     was = None if current is None else str(current["category"])
+    if was is None and category in MOVED_INTO_ONLY:
+        return [
+            (
+                "new_item",
+                f"{reference} cannot be created in {target['name']}: create it, then move it"
+                " there with transition, which carries what that move needs (to_check,"
+                " reason, summary)",
+            )
+        ]
     if container and category in model.TASK_ONLY_CATEGORIES:
         found.append(
             (
@@ -65,8 +112,8 @@ def placement(
         found.append(
             (
                 "deferred",
-                f"{reference} is deferred by the deferral action, with the condition it"
-                " comes back on, not by a move",
+                f"{reference} is put off with defer, which names the day or item it comes"
+                " back on, not by a move",
             )
         )
     if container and category == "triage" and was == model.SERVICE_CATEGORY:
@@ -104,12 +151,20 @@ def findings(
     reason: str = "",
     basis: object = None,
     held: bool | None = None,
+    to_check: str = "",
+    following: str | None = None,
+    settings: participation.Settings,
 ) -> tuple[list[Finding], list[str]]:
     """Hard refusals and soft warnings for moving `item` to `target` state.
 
     `basis` is the acceptance the item has or the move gives it. `held` says
     whether a holder stands on the item after the write, for a write that takes
-    the claim itself; left out, it is read from the item.
+    the claim itself; left out, it is read from the item. `to_check` is what the
+    owner is to check, which a move into review needs: it becomes the owner's
+    question there, and review asks what a close asks besides. `following` is the
+    owner's answered question a cancel follows from, whose answer does not count
+    as a person's act (`person_spoke`). `settings` is the write's snapshot of the
+    participation setting, which the lease is read by.
     """
 
     current = conn.execute(
@@ -161,17 +216,20 @@ def findings(
                     " checklist steps before starting it",
                 )
             )
-        warning = lease_warning(conn, item, reference)
+        warning = lease_warning(conn, item, reference, settings=settings)
         if warning:
             warnings.append(warning)
     if target["category"] == "review" and entering:
         # A confirmed write names its session as well as a session ref does, and
-        # agents no longer attach one by hand now that Valkama records it.
+        # agents no longer attach one by hand now that Valkama records it. A commit
+        # counts while it is attached as the card shows it, not rewritten.
         evidence = (
             conn.execute(
-                "SELECT 1 FROM work_item_refs WHERE work_item_id = ?"
-                " AND kind IN ('session','commit') LIMIT 1",
-                (item["work_item_id"],),
+                "SELECT 1 FROM work_item_refs WHERE work_item_id = ? AND kind = 'session'"
+                " UNION ALL SELECT 1 FROM work_item_commits a"
+                " JOIN commits c ON c.commit_id = a.commit_id"
+                " WHERE a.work_item_id = ? AND c.rewritten_to IS NULL LIMIT 1",
+                (item["work_item_id"], item["work_item_id"]),
             ).fetchone()
             or conn.execute(
                 "SELECT 1 FROM execution_events WHERE work_item_id = ? AND kind = 'planning_write'"
@@ -180,12 +238,19 @@ def findings(
             ).fetchone()
         )
         if evidence is None:
-            warnings.append(f"{reference} enters {target['name']} with no session or commit ref")
+            warnings.append(
+                f"{reference} enters {target['name']} with no session ref or attached commit"
+            )
     if target["category"] in ("review", "completed") and entering:
         unconfirmed = previous_holder(reference, checklist)
         if unconfirmed:
             refusals.append(("previous_holder", unconfirmed))
-    if target["is_terminal"] and entering:
+    closing = bool(target["is_terminal"]) and entering
+    # Work offered for the owner's check is offered as done: review asks what a
+    # completed close asks, and what the owner is to check besides.
+    into_review = target["category"] == REVIEW and current["category"] != REVIEW
+    if closing or into_review:
+        doing = "closing it" if closing else f"moving it to {target['name']}"
         # Cancelled work closes with the steps it never did still open: ticking
         # them would claim work that did not happen. The summary still has to
         # say why it stopped.
@@ -195,7 +260,7 @@ def findings(
                 (
                     "checklist",
                     f"{reference} has {len(open_steps)} open checklist step(s); tick or"
-                    " reopen them honestly before closing it",
+                    f" reopen them honestly before {doing}",
                 )
             )
         if not item["summary"]:
@@ -203,29 +268,63 @@ def findings(
                 (
                     "summary",
                     f"{reference} has no closing summary; record what was done and what"
-                    " comes next before closing it",
+                    f" comes next before {doing}",
                 )
             )
-        spoke = person_spoke(conn, item, reference)
+    if into_review and not to_check.strip():
+        refusals.append(
+            (
+                "review_question",
+                f"{reference} enters {target['name']} only with to_check, what the owner is to"
+                " check: it becomes the owner's question on the item, whose answer completes"
+                " it or returns it to work",
+            )
+        )
+    asked = owner_question(conn, item, current, target, reference)
+    if asked:
+        refusals.append(("question", asked))
+    undecided = acceptance_question(conn, item, current, target, reference)
+    if undecided:
+        refusals.append(("acceptance_question", undecided))
+    if closing:
+        spoke = person_spoke(conn, item, reference, following=following)
         if spoke:
             refusals.append(("person_spoke", spoke))
-    if target["category"] == "blocked" and entering:
-        blocker = conn.execute(
-            "SELECT 1 FROM work_item_links l"
-            " JOIN work_items i ON i.work_item_id = l.from_id"
-            " JOIN workflow_states s ON s.state_id = i.state_id"
-            " WHERE l.to_id = ? AND l.kind = 'blocks' AND s.is_terminal = 0 LIMIT 1",
-            (item["work_item_id"],),
-        ).fetchone()
-        if blocker is None and not reason.strip():
-            refusals.append(
-                (
-                    "blocker",
-                    f"{reference} cannot be blocked without a cause: link the blocking"
-                    " item, or state a reason for an external blocker",
-                )
+    if target["category"] == "completed" and entering and item["kind"] == model.CONTAINER_KIND:
+        under = children(conn, item, reference)
+        if under:
+            refusals.append(("children", under))
+    if target["category"] == "blocked" and entering and not reason.strip():
+        # Blocked is set by hand for a cause outside Valkama. Work that waits on
+        # another item is linked `blocks` and stays where it is, showing waits_for.
+        refusals.append(
+            (
+                "blocker",
+                f"{reference} needs a stated reason to be blocked: blocking by hand is for a"
+                " cause outside Valkama; an item that waits on another is linked blocks and"
+                " stays where it is",
             )
+        )
     return refusals, warnings
+
+
+def children(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+    """What stops a goal or stage from completing: the open work under it, at any depth.
+
+    Done means nothing under it is open, an item in triage or deferred included: when
+    the last item closes it comes to await confirmation, and completing it then is
+    the confirmation. Forcing it would leave open work under work that is done.
+    """
+
+    found = item_tree.open_under(conn, str(item["work_item_id"]))
+    if not found:
+        return ""
+    named = ", ".join(found[:NAMED_OPEN])
+    more = f" and {len(found) - NAMED_OPEN} more" if len(found) > NAMED_OPEN else ""
+    return (
+        f"{reference} has {len(found)} open item(s) under it: {named}{more}; close, cancel or"
+        " move out what is open under it, and it awaits confirmation once nothing is"
+    )
 
 
 def previous_holder(reference: str, checklist: list[dict]) -> str:
@@ -245,12 +344,107 @@ def previous_holder(reference: str, checklist: list[dict]) -> str:
     )
 
 
-def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def owner_question(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    current: sqlite3.Row,
+    target: sqlite3.Row,
+    reference: str,
+) -> str:
+    """What stops an agent's move over a question to the owner still open on the item.
+
+    An agent does not complete an item, or take it out of review anywhere but a
+    cancel, while the owner has a question on it to answer: the answer is the
+    owner's decision, and moving past it decides for them. A cancel stays open and
+    ends the questions as it closes. A person is not held to it: closing an item
+    they were asked about is their answer. The question that a goal or stage awaits
+    its confirmation by does not stop that confirmation, which completes it.
+    """
+
+    category = str(target["category"])
+    completing = category == "completed" and current["category"] != "completed"
+    leaving = current["category"] == REVIEW and category not in (REVIEW, "cancelled")
+    if not (completing or leaving) or not calls.from_agent():
+        return ""
+    spared = {"confirm"} if completing else set()
+    found = [
+        row
+        for row in questions.open_rows(conn, str(item["work_item_id"]))
+        if row["purpose"] not in spared
+    ]
+    if not found:
+        return ""
+    doing = "complete it" if completing else f"move it out of {current['name']}"
+    return (
+        f"{reference} has {len(found)} open question(s) to the owner, and an agent does not"
+        f" {doing} over them: wait for the owner's answer, or withdraw a question you asked"
+    )
+
+
+def converting_question(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+    """What stops an agent's conversion of an item while a question to the owner is open on it.
+
+    The question was asked of the item as it is, and converting it changes what it is.
+    A person is not held to it, as with a close. The question a goal or stage awaits
+    its confirmation by does not stop it: made a task, it awaits nothing, and the
+    question ends with the wait.
+    """
+
+    if not calls.from_agent():
+        return ""
+    found = [
+        row
+        for row in questions.open_rows(conn, str(item["work_item_id"]))
+        if row["purpose"] != "confirm"
+    ]
+    if not found:
+        return ""
+    return (
+        f"{reference} has {len(found)} open question(s) to the owner, and an agent does not"
+        " convert it over them: wait for the owner's answer, or withdraw a question you asked"
+    )
+
+
+def acceptance_question(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    current: sqlite3.Row,
+    target: sqlite3.Row,
+    reference: str,
+) -> str:
+    """What stops an agent's move of work the owner is asked whether to do.
+
+    Whether work in triage or put off is to be done is the owner's question while it
+    is open on the item, or over an item with no basis (`questions.acceptance_asked`):
+    a move out, or putting it off again, would answer it for them, and so would a move
+    that names an assignment. Only a cancel goes before the answer, and ends the
+    question as it closes; a person's move is their answer.
+    """
+
+    if current["category"] not in model.UNACCEPTED_CATEGORIES:
+        return ""
+    if target["category"] == "cancelled" or not calls.from_agent():
+        return ""
+    asked = questions.acceptance_asked(conn, item)
+    if asked is None:
+        return ""
+    return (
+        f"the owner has not decided whether {reference} is to be done"
+        f" (question {asked['request_id']}): wait for the answer; only a cancel moves it"
+        " before then"
+    )
+
+
+def person_spoke(
+    conn: sqlite3.Connection, item: sqlite3.Row, reference: str, *, following: str | None = None
+) -> str:
     """What a person did that the agent closing this item has not been told.
 
     Only an agent answers to this: a person closes as they see fit, and the runner
     is not deciding anything. What this call itself wrote is left out, so a batch's
-    comment does not clear the way for its own transition.
+    comment does not clear the way for its own transition. `following` is the owner's
+    answered question a cancel follows from: the agent named that answer, so it is
+    left out; any other act of a person still refuses.
     """
 
     if not calls.from_agent():
@@ -259,25 +453,41 @@ def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) ->
     events = person_events.since_last_agent_write(
         conn, str(item["work_item_id"]), own_call=None if own is None else own[0]
     )
+    if following is not None:
+        events = [
+            event
+            for event in events
+            if not (event["kind"] == "question_answered" and event.get("request_id") == following)
+        ]
     if not events:
         return ""
+    named = (
+        " The answer that `following` names does not count here." if following is not None else ""
+    )
     return (
         f"a person acted on {reference} through the interface since an agent last wrote to it:"
         f" {person_events.describe(events)}. Read the item with get_work_item and take that"
         " into account; once you have written what you did about it, close again, or pass"
-        " force to close over it"
+        f" force to close over it.{named}"
     )
 
 
-def lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def lease_warning(
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    reference: str,
+    *,
+    settings: participation.Settings,
+) -> str:
     """What to say when the executor the guard accepted may not be there.
 
     A claim still counts as an executor: refusing an unconfirmed one would
     refuse every claim made before identity existed and every client without
-    it. A claim the owner took in the browser needs no such remark.
+    it. A claim the owner took in the browser needs no such remark. `settings`
+    is the snapshot of the write that asks.
     """
 
-    lease = leases.lease(conn, item)
+    lease = leases.lease(conn, item, settings=settings)
     if lease is None or lease.source == calls.BROWSER:
         return ""
     if lease.state == leases.UNCONFIRMED:

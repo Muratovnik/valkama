@@ -99,6 +99,7 @@ describe('the rail of sections', () => {
       'Five hours',
       'Week',
       'Account',
+      'Organization',
       'Project',
       'Task',
       'Executor',
@@ -232,7 +233,7 @@ describe('a narrow screen', () => {
     expect(written(page).at(-1)).toEqual([{}, 'push'])
   })
 
-  it('keeps a section open while a press narrows it', async () => {
+  it('keeps a section open while a press opens a value’s side panel over it', async () => {
     pageWidth()
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model', open: 'section' } })
@@ -241,7 +242,11 @@ describe('a narrow screen', () => {
     await bar.trigger('click')
     const [state, mode] = written(page).at(-1) ?? []
     expect(mode).toBe('push')
-    expect(state).toEqual({ by: 'work_item', open: 'section', filters: '{"model":["model-a"]}' })
+    expect(state).toEqual({
+      by: 'model',
+      open: 'section',
+      detail: '{"by":"model","value":"model-a"}',
+    })
   })
 })
 

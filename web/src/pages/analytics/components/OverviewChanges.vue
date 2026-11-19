@@ -12,9 +12,11 @@
  * A name cut at the card's edge is whole in the line's hint, under the pointer and in the keyboard's
  * focus, and a name the card holds whole has none.
  *
- * A task is a link to its card, as a bar of the breakdown by task is; the rest are lines. With no
- * period before read, the block says so with the page's own way to read it again, and with
- * nothing moved, that nothing did.
+ * An entry acts as a bar of the breakdown by task does (`useLineActions`): pressed, it opens the
+ * value's side panel, sent out as `inspect` — a task's is a link to its card as well, which a
+ * press with a modifier or the middle button opens elsewhere, and work with no task a control —
+ * and work nobody can place is a line. With no period before read, the block says so with the
+ * page's own way to read it again, and with nothing moved, that nothing did.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -39,8 +41,8 @@ const props = defineProps<{
   /** An answer by task, beside the period before. */
   usage: Usage
 }>()
-/** Read the answer again, for a period before that could not be read. */
-const emit = defineEmits<{ retry: [] }>()
+/** Read the answer again, for a period before that could not be read; a value pressed. */
+const emit = defineEmits<{ inspect: [value: string | null, label: string]; retry: [] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -96,6 +98,7 @@ function said(one: MovedLine) {
   if (before === 0) note = t('analytics.overview.changes.newly')
   else if (now === 0) note = t('analytics.overview.changes.gone')
   const href = actions.taskLink('work_item', one.line.value)?.href
+  const inspects = actions.inspectsTo('work_item', one.line.value) !== undefined
   return {
     key: one.line.key,
     name,
@@ -103,8 +106,16 @@ function said(one: MovedLine) {
     note,
     icon: one.by > 0 ? 'arrow-up' : 'arrow-down',
     href,
-    tag: href ? 'a' : 'div',
+    tag: tagOf(href, inspects),
+    type: href || !inspects ? undefined : 'button',
+    action: inspects ? actions.inspectName(name) : undefined,
   }
+}
+
+/** A task with a card is its link, a value with a panel its button, and unknown work neither. */
+function tagOf(href: string | undefined, inspects: boolean) {
+  if (href) return 'a'
+  return inspects ? 'button' : 'div'
 }
 
 const groups = computed(() =>
@@ -117,10 +128,28 @@ const groups = computed(() =>
     .filter((group) => group.lines.length),
 )
 
-function follow(key: string, event: MouseEvent) {
-  const line = [...moved.value.up, ...moved.value.down].find((one) => one.line.key === key)
-  const link = actions.taskLink('work_item', line?.line.value ?? null)
-  if (link) actions.follow(link, event)
+const lineOf = (key: string) =>
+  [...moved.value.up, ...moved.value.down].find((one) => one.line.key === key)?.line ?? null
+
+/** An entry pressed to open its value's side panel. */
+function inspect(key: string) {
+  const line = lineOf(key)
+  const value = actions.inspectsTo('work_item', line?.value ?? null)
+  if (line?.value && value !== undefined)
+    emit('inspect', value, words.valueLabel('work_item', line.value))
+}
+
+/** An entry pressed: a task's link opens its panel, or its card elsewhere (`follow`). */
+function press(key: string, event: MouseEvent) {
+  const link = actions.taskLink('work_item', lineOf(key)?.value ?? null)
+  if (link) actions.follow(link, event, () => inspect(key))
+  else inspect(key)
+}
+
+/** A middle press on a task's link opens its card elsewhere, and is a press on it all the same. */
+function pressAside(key: string, event: MouseEvent) {
+  const link = actions.taskLink('work_item', lineOf(key)?.value ?? null)
+  if (link && event.button === 1) actions.follow(link, event, () => inspect(key))
 }
 </script>
 
@@ -179,8 +208,11 @@ function follow(key: string, event: MouseEvent) {
               v-tooltip.clipped="line.name"
               class="overview-changes-line"
               :href="line.href"
+              :type="line.type"
+              :aria-description="line.action"
               :data-way="group.way"
-              @click="(event: MouseEvent) => line.href && follow(line.key, event)"
+              @click="(event: MouseEvent) => line.action && press(line.key, event)"
+              @auxclick="(event: MouseEvent) => pressAside(line.key, event)"
             >
               <span class="overview-changes-name one-line">{{ line.name }}</span>
               <span class="overview-changes-by">
@@ -240,16 +272,24 @@ function follow(key: string, event: MouseEvent) {
 }
 
 /* An entry: the name on its line, cut to it, and under it the arrow, the amount in tabular
-   figures and the words for a side with nothing, which give way before the amount does. */
+   figures and the words for a side with nothing, which give way before the amount does. A control
+   is the line it stands for, across the card's width and as tall as its two lines: a button's
+   floor of a control's row made work with no task a pixel taller than a task's link, and the card
+   taller than a card of five rows. */
 .overview-changes-line {
   display: grid;
+  inline-size: 100%;
+  min-block-size: 0;
   padding: 0 var(--space-2);
+  border: 0;
   color: var(--color-text);
   font: var(--font-detail);
+  text-align: start;
   text-decoration: none;
+  background: none;
   border-radius: var(--radius-control);
 
-  &[href] {
+  &:is([href], [type='button']) {
     cursor: pointer;
 
     & .overview-changes-name {

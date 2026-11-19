@@ -20,6 +20,7 @@ import { ASKING_HEAD, openHead, PICTURE } from './cardHeadPage.ts'
 import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
 import { openMentionList } from './editorPage.ts'
+import { hintsFadedIn } from './hintFramesPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { heldCard, openPlanFor } from './openSessionFixtures.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
@@ -95,10 +96,10 @@ interface Shown {
  * The hint showing under the pointer at `x, y`, its anchor's kind and the words the anchor
  * shows. A word inside a box cut to nothing, a hidden or a transparent one is not shown. The
  * anchor's own words, said whole over a detail while they are cut, are read apart: a cut
- * word is not on screen.
+ * word is not on screen. A cut text's words laid whole over it are its hint as well.
  */
 function readShown([x, y]: [number, number]): Shown | null {
-  const hint = document.querySelector('.tooltip-hint')
+  const hint = document.querySelector('.tooltip-hint, .whole-text')
   const anchor = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-tooltip]')
   if (!hint || !anchor) return null
   // The hint's own words, without the state under them or the copy read to assistive technology.
@@ -209,26 +210,16 @@ for (const locale of ['en', 'ru'] as const) {
     expect(said).toEqual([])
   })
 
-  test(`no hint in a card's «…» menu, its Relations or its Chain says what its anchor shows, ${locale}`, async ({
+  // The card's «…» menu is not swept: `VMenu` gives a hint to its trigger alone and none to a
+  // row, so no row can say again what it shows. That a popup's own rows still speak while it
+  // silences the rest is production-hint-under-popup.spec.ts's.
+  test(`no hint in a card's Relations or its Chain says what its anchor shows, ${locale}`, async ({
     page,
   }) => {
     const small = smallChain()
-    const live: { streams?: Awaited<ReturnType<typeof installLiveStreams>> } = {}
     const drawer = await card(page, locale, 1280, async () => {
       await serveChain(page, small.chain, small.items)
-      live.streams = await installLiveStreams(page)
     })
-    // The menu holds the pin, which a live frame says.
-    // The frame first: a space's stream is sent it as it opens, and the stream the
-    // shell started with closes then.
-    await live.streams?.live(busyFrame())
-    await expect.poll(() => live.streams?.open()).toHaveLength(1)
-    await drawer.locator('.menu-trigger').click()
-    const menu = page.locator('.menu-popup')
-    await expect(menu.locator('.menu-item').first()).toBeVisible()
-    const inMenu = await sweep(page, menu)
-    await page.keyboard.press('Escape')
-    await expect(menu).toHaveCount(0)
     await drawer.getByRole('tab', { name: /^(Relations|Связи)$/u }).click()
     await expect(drawer.locator('.relations .link-row').first()).toBeVisible()
     const inRelations = await sweep(page, drawer)
@@ -237,7 +228,7 @@ for (const locale of ['en', 'ru'] as const) {
     const inChain = await sweep(page, drawer)
     expect(inRelations.pointed).toBeGreaterThan(2)
     expect(inChain.pointed).toBeGreaterThan(2)
-    expect([...inMenu.said, ...inRelations.said, ...inChain.said]).toEqual([])
+    expect([...inRelations.said, ...inChain.said]).toEqual([])
   })
 
   test(`no hint in the \`@\` list says what its anchor shows, and a cut path says itself whole, ${locale}`, async ({
@@ -349,6 +340,7 @@ for (const width of [1280, 390] as const)
         hint(page).evaluate((node) => getComputedStyle(node).color),
       ])
       expect(quiet).not.toBe(main)
+      await hintsFadedIn(page)
       const drawn = await note.evaluate(drawnColours, 'own' as const)
       expect(drawn.contrast).toBeGreaterThanOrEqual(4.5)
 

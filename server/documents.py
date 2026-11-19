@@ -105,7 +105,7 @@ class Located(NamedTuple):
 
 
 class DocumentRefused(NamedTuple):
-    """Why a path opens nothing: one code from the closed list in `README.md`."""
+    """Why a path opens nothing: one code from the closed list of the project documents guide."""
 
     code: str
 
@@ -258,7 +258,7 @@ def locate(
 
 
 class DocumentError(Exception):
-    """A refused request: one code from the closed list in `README.md`, never an OS error."""
+    """A refused request: one code from the closed list of the project documents guide, never an OS error."""
 
     def __init__(self, code: str, **details: int) -> None:
         super().__init__(code)
@@ -305,11 +305,11 @@ def resolve_paths(
 ) -> list[dict[str, object]]:
     """What each written path is, from `stat` alone: no file is opened.
 
-    `space` is the exact identity of a planning space, as `GET /api/ref` takes it,
-    and only the base of a relative path: the boundary is every registered root
-    whatever the space. One that does not parse is refused, so a crafted value
-    reaches no directory at all; one the registry does not bind leaves relative
-    paths unbound and absolute ones answered.
+    `space` is the exact identity of a planning space and only the base of a
+    relative path: the boundary is every registered root whatever the space. One
+    that does not parse is refused, so a crafted value reaches no directory at all;
+    one the registry does not bind leaves relative paths unbound and absolute ones
+    answered.
 
     `project` names the other base a page has: the project of a document it shows,
     whose links the page has already read from the document's folder into paths

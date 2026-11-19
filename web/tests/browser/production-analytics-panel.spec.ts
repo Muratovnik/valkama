@@ -1,8 +1,8 @@
 /**
  * The panel of a dimension in the real app, measured. Beside the rail its parts stand whole, one
- * under the next, and the table stands at its full height in the panel's one scroll: a wheel over
- * it scrolls the panel, the document standing still, and at the end of that scroll its heading
- * row, its names and its total row are still in view. On a phone the names stay in view
+ * under the next, and a table shorter than the window stands at its own height, its frame no
+ * taller: a wheel over it scrolls the panel or the table, the document standing still, and at the
+ * end of both scrolls its heading row, its names and its total row are still in view. On a phone the names stay in view
  * while the table scrolls sideways. A second dimension chosen in the section's heading splits the
  * table into pairs, is the address and outlives a reload, and the file downloaded is a row per
  * pair; with the measure
@@ -10,8 +10,8 @@
  * small charts beside it are titled in one line each, and so is the line over the table that
  * counts its rows, in Russian as in English; on a phone no name in a chart's table breaks inside a
  * word. The section of the tokens by kind is such a panel too: its counted kinds add up to the
- * summary's «Tokens» figure, the cache reads stand apart from them, and its address gives it
- * back. Each run prints what it measured.
+ * summary's «Tokens» figure and are the sectors of its ring, the cache reads stand apart from
+ * them, and its address gives it back. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -23,12 +23,26 @@ import { shot } from './boardPage.ts'
 import { brokenWords } from './brokenWords.ts'
 import { test } from './test.ts'
 
-/** Whether each part of the charts and of the table stands whole, above the next one. */
-async function parts(page: Page) {
-  return page.evaluate(() => {
+/** The areas a section's panel draws its parts in: a dimension's charts, and its table. */
+const DIMENSION = ['.dimension-charts', '.dimension-panel', '.spending-table']
+/**
+ * The areas the tokens by kind stack their parts in, and their table. Their pair of charts stands
+ * side by side on a wide panel (`TokenKindsPanel`), so it is no stack to hold to this.
+ */
+const KINDS = ['.kinds-panel', '.kinds-table']
+
+/**
+ * Whether each part of the charts and of the table stands whole, above the next one, in each of
+ * the `areas` the panel draws; an area not drawn is refused, since nothing in it could be found
+ * spilling.
+ */
+async function parts(page: Page, areas: readonly string[] = DIMENSION) {
+  return page.evaluate((drawn) => {
     const spilled: string[] = []
-    for (const area of ['.dimension-charts', '.dimension-panel', '.spending-table']) {
-      const children = [...(document.querySelector(area)?.children ?? [])] as HTMLElement[]
+    for (const area of drawn) {
+      const found = document.querySelector(area)
+      if (!found) throw new Error(`${area} is not drawn`)
+      const children = [...found.children] as HTMLElement[]
       for (const [index, child] of children.entries()) {
         const name = `${area} > ${child.className || child.tagName}`
         // A scroller is meant to hold more than it shows; anything else shows all it holds.
@@ -40,7 +54,7 @@ async function parts(page: Page) {
       }
     }
     return spilled
-  })
+  }, areas)
 }
 
 /** Puts the pointer over an element, `down` pixels below its top or at its middle. */
@@ -62,8 +76,11 @@ async function scrolled(page: Page) {
       panelEnd: panel ? panel.scrollHeight - panel.clientHeight : 0,
       // How far the charts could scroll sideways: never, whatever a chart reaches past.
       chartsWide: charts ? charts.scrollWidth - charts.clientWidth : -1,
-      // How far the table's frame could scroll up and down: never, it stands at its full height.
+      // How far the table's frame could scroll up and down, and how much taller it is than its table.
       tableEnd: frame ? frame.scrollHeight - frame.clientHeight : -1,
+      frameRoom: frame
+        ? frame.clientHeight - (frame.querySelector('table')?.offsetHeight ?? 0)
+        : -1,
       tableLeft: frame?.scrollLeft ?? 0,
     }
   })
@@ -113,7 +130,7 @@ for (const [width, height] of [
   [1440, 900],
   [1280, 768],
 ] as const)
-  test(`at ${width}×${height} the table stands whole in the panel’s scroll and keeps its heading, names and total in view`, async ({
+  test(`at ${width}×${height} the table stands at its own height and keeps its heading, names and total in view`, async ({
     page,
   }, info) => {
     await serve(page)
@@ -125,7 +142,9 @@ for (const [width, height] of [
 
     expect(await parts(page), 'parts that spill or overlap').toEqual([])
     const before = await scrolled(page)
-    expect(before.tableEnd, 'a table that scrolls up and down on its own').toBe(0)
+    // Fourteen rows are shorter than the window: the frame is as tall as its table, no taller.
+    expect(before.tableEnd, 'a short table that scrolls up and down on its own').toBe(0)
+    expect(before.frameRoom, 'room in the frame past its table').toBe(0)
     expect(before.panelEnd, 'a panel taller than its window').toBeGreaterThan(0)
     expect(before.chartsWide, 'charts that scroll sideways').toBe(0)
 
@@ -159,7 +178,8 @@ test('at 1440 pixels the ranked list and the small charts beside it are titled i
 }, info) => {
   await serve(page)
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(TASK_REPORT)
+  // A section named by identifiers: the tasks, named by free text, draw no small charts.
+  await page.goto(pageAt({ by: 'model' }))
   await expect(page.locator('.spending-multiples h3')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
 
@@ -173,7 +193,7 @@ test('at 1440 pixels the ranked list and the small charts beside it are titled i
         part,
         text: heading.textContent.trim(),
         lines: Math.round(height / line),
-        header: Math.round(heading.parentElement?.getBoundingClientRect().height ?? 0),
+        header: Math.round(heading.closest('.level-head')?.getBoundingClientRect().height ?? 0),
       }
     }),
   )
@@ -255,34 +275,29 @@ test.describe('in Russian', () => {
   }, info) => {
     await serve(page)
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto(TASK_REPORT)
-    await expect(page.locator('.spending-table-summary')).toBeVisible()
+    const fit = (selector: string) =>
+      page.locator(selector).evaluate((element) => ({
+        text: element.textContent.trim(),
+        height: Math.round(element.getBoundingClientRect().height),
+        cut: element.scrollWidth > element.clientWidth,
+      }))
+    // The small charts stand in a section named by identifiers; the tasks draw none.
+    await page.goto(pageAt({ by: 'model' }))
+    await expect(page.locator('.spending-multiples h3')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
-    const seen = await page.evaluate(() => {
-      // This body runs in the page, so a helper at the module's own scope would not be there.
-      // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
-      const fit = (selector: string) => {
-        const element = document.querySelector<HTMLElement>(selector)
-        if (!element) throw new Error(`${selector} is missing`)
-        return {
-          text: element.textContent.trim(),
-          height: Math.round(element.getBoundingClientRect().height),
-          cut: element.scrollWidth > element.clientWidth,
-        }
-      }
-      return {
-        bars: fit('.spending-bars h3'),
-        multiples: fit('.spending-multiples h3'),
-        count: fit('.spending-table-summary'),
-      }
-    })
-    await record(info, 'analytics panel one line ru 1440x900', seen)
-    expect(seen.multiples.text).toBe('По дням, по задачам')
+    const seen = {
+      bars: await fit('.spending-bars h3'),
+      multiples: await fit('.spending-multiples h3'),
+    }
+    await page.goto(TASK_REPORT)
+    const count = await fit('.spending-table-summary')
+    await record(info, 'analytics panel one line ru 1440x900', { ...seen, count })
+    expect(seen.multiples.text).toBe('По дням, по моделям')
     expect(seen.multiples.cut).toBe(false)
     expect(seen.multiples.height).toBe(seen.bars.height)
     // Twelve tasks spent this week, and none only in the week before.
-    expect(seen.count.text).toBe('12 задач')
-    expect(seen.count.cut).toBe(false)
+    expect(count.text).toBe('12 задач')
+    expect(count.cut).toBe(false)
   })
 
   test('on a phone no name or heading in a chart’s table breaks inside a word', async ({
@@ -292,7 +307,7 @@ test.describe('in Russian', () => {
     const analytics = await openReport(page, 390)
     await expect(analytics.locator('.spending-days table')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
-    const broken = await brokenWords(page, '.analytics-panel .chart-cell')
+    const broken = await brokenWords(page, '.analytics-panel :is(th, td)')
     const days = await analytics.locator('.spending-days tbody th').allInnerTexts()
     await record(info, 'analytics panel words 390 ru', { broken, days })
     expect(days.some((day) => day.startsWith('понедельник'))).toBe(true)
@@ -446,18 +461,17 @@ test('the tokens by kind are a panel whose counted kinds add up to the «Tokens�
   await expect(about).toContainText(/reasoning is part of output/u)
   await panel.locator('.level-about-press').click()
 
-  // Ranked with a bar: the counted kinds; after them, with no bar, the two the figure leaves out.
-  const bars = panel.locator('.kinds-bars')
-  await expect(bars.locator('ol .ranked-label')).toHaveText([
-    'Input',
-    'Output',
-    'Cache write, 5 min',
-  ])
-  await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText(['Cache read', 'Reasoning'])
-  await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
+  // A ring of the counted kinds, named by its legend; beside it, no part of it, the two the
+  // figure leaves out.
+  const ring = panel.locator('.kinds-bars .donut-chart')
+  await expect(
+    ring.locator('[data-hint-list="legend"] [data-series] [data-part="name"]'),
+  ).toHaveText(['Input', 'Output', 'Cache write, 5 min'])
+  await expect(ring.locator('.donut-sector')).toHaveCount(3)
+  await expect(ring.locator('.donut-note-name')).toHaveText(['Cache read', 'Reasoning'])
   // A small chart of each counted kind on one scale, the cache reads apart by their figure.
   await expect(panel.locator('.kinds-multiples h3')).toHaveText('Per day, by kind')
-  expect(await parts(page), 'parts that spill or overlap').toEqual([])
+  expect(await parts(page, KINDS), 'parts that spill or overlap').toEqual([])
 
   // The address gives the section back.
   await page.reload()

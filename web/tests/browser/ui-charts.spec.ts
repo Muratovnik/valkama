@@ -9,6 +9,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { expectNoSilentClipping } from './overflow.ts'
+import { expectNoLineOverPlot, STEP_WORDS } from './plotWords.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [1920, 1440, 1024, 390] as const
@@ -105,10 +106,12 @@ function measure(page: Page) {
         scale: all('[data-harness="days"] .period-scale .chart-tick').map((element) =>
           box(element),
         ),
-        legend: all('[data-harness="days"] .chart-key').map((element) => box(element)),
-        // No line of words stands over the plot: each mark says itself in its hint.
-        readouts: all('.period-readout, .step-readout').length,
-        stacks: all('[data-harness="days"] .period-stack').map((element) => box(element)),
+        // Every key of the legend, the series' and the marks'.
+        legend: all(
+          '[data-harness="days"] [data-hint-list="legend"] :is([data-series], [data-mark])',
+        ).map((element) => box(element)),
+        // Each day's stack, the mark its hint speaks for.
+        stacks: all('[data-harness="days"] [data-hint-mark]').map((element) => box(element)),
         incomplete: all('[data-harness="days"] .period-incomplete').length,
       },
       hours: {
@@ -118,12 +121,12 @@ function measure(page: Page) {
       // How wide each thing a pointer presses in the two charts of periods is: a day's segments
       // where segments act, an hour's column where columns do.
       pressed: {
-        segments: all('[data-harness="days"] .period-segment').map(
-          (element) => element.getBoundingClientRect().width,
-        ),
-        columns: all('[data-harness="hours"] .period-column').map(
-          (element) => element.getBoundingClientRect().width,
-        ),
+        segments: all(
+          '[data-harness="days"] [data-region="field"] :is(button, a)[data-series]',
+        ).map((element) => element.getBoundingClientRect().width),
+        columns: all(
+          '[data-harness="hours"] [data-tooltip-area] :is(button, a):not([data-series])',
+        ).map((element) => element.getBoundingClientRect().width),
       },
       // Each chart of periods: what its frame has to scroll up and down, and each name on its
       // time axis against the middle of the column it names and the ends of its plot.
@@ -148,10 +151,10 @@ function measure(page: Page) {
           ),
         }
       }),
-      tables: all('[data-harness$="-table"] table').map((table) => ({
-        frame: box(table.parentElement ?? table),
-        table: box(table),
-      })),
+      // Each chart's table, by the frame it scrolls in.
+      tables: all('[data-harness$="-table"] [data-region="table-frame"]').map((frame) =>
+        box(frame),
+      ),
     }
   })
 }
@@ -209,15 +212,22 @@ for (const width of WIDTHS) {
     }
     for (const tick of [...seen.days.axis, ...seen.days.scale])
       expect(inside(tick, scrolled), 'a label outside its chart').toBe(true)
+    // Three accounts and the hatch of the running day.
+    expect(seen.days.legend, 'the keys of the legend').toHaveLength(4)
     for (const key of seen.days.legend)
       expect(inside(key, seen.days.frame), 'a legend key outside its chart').toBe(true)
-    expect(seen.days.readouts, 'a line over a plot').toBe(0)
+    // No line of words stands over a plot: each mark says itself in its hint.
+    await expectNoLineOverPlot(page, '[data-harness="days"] [data-chart="periods"]')
+    await expectNoLineOverPlot(page, '[data-harness="hours"] [data-chart="periods"]')
+    await expectNoLineOverPlot(page, '[data-harness="step"] [data-chart="steps"]', STEP_WORDS)
     // The running day is named as any other: its hatching and its hint say it is under way.
     expect(seen.days.axis.at(-1)?.text).toBe('Oct 30')
     expect(seen.days.axis.length).toBeLessThanOrEqual(8)
     expect(seen.days.incomplete).toBe(1)
     expect(seen.days.zeroFromFloor, 'the scale names zero').not.toBeNull()
     expect(Math.abs(seen.days.zeroFromFloor ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(1)
+    // A stack a day of the thirty.
+    expect(seen.days.stacks, 'the days drawn').toHaveLength(30)
     for (const stack of seen.days.stacks) {
       expect(stack.bottom).toBeCloseTo(seen.days.field.bottom, 0)
       expect(stack.top).toBeGreaterThanOrEqual(seen.days.field.top - HALF_PIXEL)
@@ -245,12 +255,18 @@ for (const width of WIDTHS) {
       }
     }
 
-    // A table wider than its column scrolls inside its own frame instead of the page.
-    for (const table of seen.tables) expect(table.frame.right).toBeLessThanOrEqual(seen.viewport)
+    // A table wider than its column scrolls inside its own frame instead of the page: the
+    // ranked, the days', the windows', the readings' and the small charts' tables.
+    expect(seen.tables, 'the tables drawn').toHaveLength(5)
+    for (const table of seen.tables) expect(table.right).toBeLessThanOrEqual(seen.viewport)
     // A period that acts keeps a width a pointer can hit, however many the chart holds: its
     // column, and a segment the stack drawn inside that column, at least the smallest target the
     // product allows.
     const narrowest = (widths: number[]) => Math.round(Math.min(...widths) * 10) / 10
+    // The segments that act are each day's own account's and each weekday's work account's,
+    // 30 and 22; the hours each act, 24.
+    expect(seen.pressed.segments, 'the segments that act').toHaveLength(52)
+    expect(seen.pressed.columns, 'the hours that act').toHaveLength(24)
     expect(narrowest(seen.pressed.columns), 'the narrowest pressed column').toBeGreaterThanOrEqual(
       SMALLEST_TARGET,
     )
@@ -300,7 +316,7 @@ function ring(page: Page) {
       bottom: own.bottom + reach,
     }
     // What the chart itself holds the ring in; the page's own scrolling pane is the page's.
-    const chart = focused.closest('figure, .chart-table-frame')
+    const chart = focused.closest('figure, [data-region="table-frame"]')
     let cutBy: string | null = null
     for (
       let node = focused.parentElement;

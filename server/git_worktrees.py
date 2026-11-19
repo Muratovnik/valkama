@@ -15,14 +15,15 @@ values that route work rather than inform a reader.
 from __future__ import annotations
 
 import os
-import re
 import stat
-import tempfile
 
 from . import processes
 
+# `re` and `tempfile` load where they are used: the Git commit hook runs `git_text`
+# after every commit an agent makes, and those two are a third of what it imports.
+
 #: A ref is one token with no whitespace and no control characters.
-_REF = re.compile(r"^[^\x00\r\n\t ]+$")
+_REF = r"^[^\x00\r\n\t ]+$"
 
 
 class WorktreeListError(RuntimeError):
@@ -45,9 +46,24 @@ def canonical(path: str | os.PathLike[str]) -> str:
     return os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path))))
 
 
-def git_text(repo: str, *args: str, timeout: float | None = None) -> processes.TextResult:
-    """Run git in `repo` and decode its output as the UTF-8 it declares."""
-    return processes.run_text(["git", "-C", repo, *args], timeout=timeout)
+def git_text(
+    repo: str, *args: str, timeout: float | None = None, errors: str = "strict"
+) -> processes.TextResult:
+    """Run git in `repo` and decode its output as the UTF-8 it declares, by `errors`."""
+    return processes.run_text(["git", "-C", repo, *args], timeout=timeout, errors=errors)
+
+
+def committer_address(repo: str, timeout: float | None = None) -> str | None:
+    """The address Git makes a commit with in `repo`, or None when it names none.
+
+    `git var GIT_COMMITTER_IDENT` reads it as a commit does: the environment
+    (`GIT_COMMITTER_EMAIL`) first, then the configuration. `git config user.email`
+    sees no environment, so it can name an address no commit here carries.
+    """
+
+    ident = git_text(repo, "var", "GIT_COMMITTER_IDENT", timeout=timeout, errors="replace")
+    own = ident.stdout.rpartition("<")[2].partition(">")[0]
+    return own if ident.returncode == 0 and own else None
 
 
 def is_reparse_point(path: str) -> bool:
@@ -129,6 +145,8 @@ def safe_temp_root(path: str | os.PathLike[str], *, require_empty: bool) -> tupl
     empty or defaulted setting.
     """
 
+    import tempfile
+
     raw = lexical_path(path)
     normalized = os.path.normcase(os.path.normpath(raw))
     broad = {
@@ -153,7 +171,14 @@ def safe_temp_root(path: str | os.PathLike[str], *, require_empty: bool) -> tupl
 def safe_ref(value: str) -> str:
     """One exact ref that cannot be read as an option."""
 
-    if not isinstance(value, str) or not value or value.startswith("-") or not _REF.match(value):
+    import re
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or value.startswith("-")
+        or not re.match(_REF, value)
+    ):
         raise PathSafetyError("git_ref must be one exact non-option ref")
     return value
 

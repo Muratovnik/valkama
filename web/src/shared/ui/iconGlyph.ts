@@ -207,6 +207,8 @@ const ICONS: Record<string, Component> = {
   'improvements': Wrench,
   'layout-dashboard': SquareKanban,
   'chart-no-axes-combined': BarChart3,
+  // Volumes: the work that stands in each state, layer on layer.
+  'layers': Layers,
   'key-round': LibraryBig,
   'settings-2': Settings,
   'language': Languages,

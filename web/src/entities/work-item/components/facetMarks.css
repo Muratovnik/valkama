@@ -272,8 +272,9 @@
 
 /* The card is where an item is read in full, and a word there is read whole: a long
    holder wraps under its glyph instead of ending in an ellipsis that only a screen
-   reader could see past. The glyph stays with the first line, by the baseline every
-   mark lines up on. */
+   reader could see past, and between its words alone (`drawMarks.ts`), so an id or a
+   session's start is never cut across two lines. The glyph stays with the first line,
+   by the baseline every mark lines up on. */
 .facet-marks[data-surface='preview'] .facet-word:not(.facet-word-hidden) {
   overflow-wrap: anywhere;
   white-space: normal;

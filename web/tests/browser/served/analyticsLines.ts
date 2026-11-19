@@ -1,7 +1,7 @@
 /**
  * The work production-analytics-lines.spec.ts serves as usage.
  */
-import { task, value } from '../../fixtures/analytics.ts'
+import { seatValue, task, value } from '../../fixtures/analytics.ts'
 import type { TimedStretch } from '../../fixtures/analytics.ts'
 import type { Served } from '../servedContracts.ts'
 import { usageServed } from '../servedUsage.ts'
@@ -14,7 +14,8 @@ export const EVERY_DIMENSION: TimedStretch[] = Array.from({ length: 12 }, (_, in
   at: new Date(2026, 10, 9 + (index % 3), 10),
   group: {
     work_item: task(index + 1, `Задача ${index + 1}`),
-    account: value(`account-${index % 2}`),
+    seat: seatValue(`organization-${index % 2}/account-${index % 4}`),
+    account: value(`organization-${index % 2}`),
     project: value(`project-${index % 3}`),
     executor: value(`executor-${index % 4}`),
     role: value(index % 2 ? 'main' : 'subagent'),

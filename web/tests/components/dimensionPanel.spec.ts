@@ -15,6 +15,7 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { showView } from '../support/chartViews.ts'
 
 /** Wednesday afternoon; the week read by default runs from Monday the 9th to now. */
 const NOW = new Date(2026, 10, 11, 14, 30)
@@ -88,7 +89,7 @@ function huesIn(page: VueWrapper, row: string, name: string, hue: string) {
 }
 
 describe('the panel of a dimension', () => {
-  it('draws a value in one hue in its small chart, its bar and the day chart’s key', async () => {
+  it('draws a value in one hue in its small chart, its sector, its bar and the day chart’s key', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model' } })
 
@@ -98,10 +99,14 @@ describe('the panel of a dimension', () => {
       '.multiple-name',
       '.multiple-column',
     )
-    const bars = huesIn(page, '.spending-bars .ranked-row', '.ranked-label', '[data-slot]')
+    // By model the section opens on its ring: a sector and its legend's swatch a value.
+    const sectors = huesIn(page, '.spending-bars .chart-key', '.chart-key-name', '.chart-swatch')
     const days = huesIn(page, '.spending-days .chart-key', '.chart-key-name', '.chart-swatch')
     const names = ['model-a', 'model-b', 'model-c']
     const hues = names.map((name) => multiples.get(name))
+    expect(names.map((name) => sectors.get(name))).toEqual(hues)
+    await showView(page, '.spending-bars', 'Bars')
+    const bars = huesIn(page, '.spending-bars .ranked-row', '.ranked-label', '[data-slot]')
     expect(names.map((name) => bars.get(name))).toEqual(hues)
     expect(names.map((name) => days.get(name))).toEqual(hues)
     // Three hues, none of them the neutral the unplaced work is drawn in.
@@ -112,8 +117,10 @@ describe('the panel of a dimension', () => {
     // Work under no known model is no value of the dimension: it is ranked by its figure, with a
     // small chart and a bar of its own on the values' scale, in the neutral of what is not a
     // value, never the lighter one of the folded rest.
-    expect(text(page, '.spending-multiples .multiples-apart .multiple-name')).toEqual([])
+    // Every name the section shows is a small chart's, so none stands in a list apart.
+    expect(text(page, '.spending-multiples .multiple-name')).toEqual([...multiples.keys()])
     expect(multiples.get('Unknown')).toBe('apart')
+    expect(sectors.get('Unknown')).toBe('apart')
     expect(bars.get('Unknown')).toBe('apart')
   })
 

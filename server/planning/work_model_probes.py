@@ -59,7 +59,10 @@ _NEW = _New()
 #: are new in each probe, and a fixed key such as a singleton's is replaced, since
 #: the write is `INSERT OR REPLACE`, so no row a store already holds collides.
 _ROWS: dict[str, dict[str, object]] = {
+    # The event it marks is the new rowid each probe takes.
+    "agent_decisions": {"point": "decision", "what": "probe"},
     "analytics_surface_uses": {"day": "0001-01-01", "kind": "page_open", "count": 1},
+    "commits": {"project_id": _NEW, "hash": "0" * 40, "reported_at": "probe"},
     "execution_sessions": {"execution_id": _NEW, "session_id": _NEW, "relation": "launched"},
     "executions": {
         "execution_id": _NEW,
@@ -70,7 +73,27 @@ _ROWS: dict[str, dict[str, object]] = {
         "expected_effect": "probe",
         "status": "starting",
     },
+    "label_settings": {
+        "planning_space_id": _NEW,
+        "label": "probe",
+        "ready": 1,
+        "updated_at": "probe",
+    },
     "owner_alert_settings": {"key": "settings", "record_json": "{}", "updated_at": "probe"},
+    "participation_settings": {
+        "planning_space_id": _NEW,
+        "key": "queue",
+        "value": "on",
+        "updated_at": "probe",
+    },
+    "pending_actions": {
+        "action_id": _NEW,
+        "work_item_id": _NEW,
+        "point": "finding",
+        "action_json": "{}",
+        "asked_call": 0,
+        "created_at": "probe",
+    },
     "planning_spaces": {
         "planning_space_id": _NEW,
         "name": _NEW,
@@ -85,7 +108,7 @@ _ROWS: dict[str, dict[str, object]] = {
         "created_at": "probe",
     },
     "platform_ui_prefs": {"key": "last-route", "record_json": "{}", "updated_at": "probe"},
-    "quota_account_names": {"organization": _NEW, "name": "probe", "updated_at": "probe"},
+    "quota_account_names": {"account": _NEW, "name": "probe", "updated_at": "probe"},
     "quota_alerts": {
         "organization": _NEW,
         "seat": "probe",
@@ -115,7 +138,20 @@ _ROWS: dict[str, dict[str, object]] = {
         "seconds": 0.0,
         "quality": "observed",
     },
+    "work_item_baselines": {
+        "work_item_id": _NEW,
+        "tasks": 0,
+        "basis": "accepted",
+        "taken_at": "probe",
+    },
     "work_item_comments": {"work_item_id": _NEW, "body": "probe"},
+    "work_item_commits": {"work_item_id": _NEW, "commit_id": 0, "attached_by": "server"},
+    "work_item_deferrals": {
+        "work_item_id": _NEW,
+        "until_at": "2026-12-01T00:00:00Z",
+        "reason": "probe",
+        "since": "probe",
+    },
     "work_item_events": {"work_item_id": _NEW, "action": "created"},
     "work_item_images": {
         "work_item_id": _NEW,
@@ -125,7 +161,7 @@ _ROWS: dict[str, dict[str, object]] = {
     },
     "work_item_links": {"from_id": _NEW, "to_id": _NEW, "kind": "blocks"},
     "work_item_projects": {"work_item_id": _NEW, "project_id": _NEW, "source": "named"},
-    "work_item_refs": {"work_item_id": _NEW, "kind": "commit", "value": "probe"},
+    "work_item_refs": {"work_item_id": _NEW, "kind": "url", "value": "probe"},
     "work_item_request_answers": {
         "request_id": _NEW,
         "version": 1,
@@ -188,10 +224,22 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"count": 0}, {"count": 1.5}),
         (),
     ),
+    ("commits", "length(hash) BETWEEN 7 AND 64 AND hash NOT GLOB '*[^0-9a-f]*'"): (
+        ({"hash": "0" * 6}, {"hash": "0" * 65}, {"hash": "A" * 40}),
+        ({"hash": "0" * 7}, {"hash": "f" * 64}),
+    ),
+    ("label_settings", "ready IS NOT NULL OR description IS NOT NULL"): (
+        ({"ready": None},),
+        ({"ready": None, "description": "probe"},),
+    ),
+    ("pending_actions", "(outcome IS NULL) = (ended_at IS NULL)"): (
+        ({"outcome": "dropped"}, {"ended_at": "probe"}),
+        ({"outcome": "dropped", "ended_at": "probe"},),
+    ),
     ("planning_spaces", "next_number >= 1"): (({"next_number": 0},), ({"next_number": 1},)),
-    ("quota_account_names", "length(organization) BETWEEN 1 AND 512"): (
-        ({"organization": ""}, {"organization": "o" * 513}),
-        ({"organization": "o" * 512},),
+    ("quota_account_names", "length(account) BETWEEN 1 AND 512"): (
+        ({"account": ""}, {"account": "o" * 513}),
+        ({"account": "o" * 512},),
     ),
     ("quota_account_names", "length(name) BETWEEN 1 AND 80"): (
         ({"name": ""}, {"name": "n" * 81}),
@@ -238,6 +286,11 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
         ({"size": 10485760},),
     ),
     ("work_items", "number >= 1"): (({"number": 0},), ()),
+    ("work_item_baselines", "tasks >= 0"): (({"tasks": -1},), ({"tasks": 3},)),
+    ("work_item_deferrals", "(until_at IS NULL) <> (until_item_id IS NULL)"): (
+        ({"until_at": None}, {"until_item_id": "probe"}),
+        ({"until_at": None, "until_item_id": "probe"},),
+    ),
     ("work_item_waiting_notices", "(delivered_call IS NULL) = (delivered_at IS NULL)"): (
         ({"delivered_call": 1}, {"delivered_at": "probe"}),
         ({"delivered_call": 1, "delivered_at": "probe"},),
@@ -247,6 +300,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
 #: A listed value another clause of the row ties to a second column, with the
 #: change that lets the row take it.
 _TAKEN_WITH: dict[tuple[str, str, object], dict[str, object]] = {
+    **{
+        ("pending_actions", "outcome", outcome): {"ended_at": "probe"}
+        for outcome in ("carried_out", "declined", "dropped", "withdrawn")
+    },
     ("quota_alerts", "kind", "week_model"): {"model": "probe"},
     ("quota_samples", "kind", "week_model"): {"model": "probe"},
     ("quota_samples", "source", "poll"): _POLLED,
@@ -257,6 +314,8 @@ _TAKEN_WITH: dict[tuple[str, str, object], dict[str, object]] = {
 _RETIRED: dict[tuple[str, str], tuple[object, ...]] = {
     ("workflow_states", "category"): ("backlog", "queued"),
     ("work_items", "kind"): ("epic",),
+    ("work_item_refs", "kind"): ("commit",),
+    ("work_item_requests", "expired_reason"): ("task_closed",),
 }
 
 _LITERAL = r"'(?:[^']|'')*'|-?\d+"

@@ -4,11 +4,11 @@
  *
  * - «Work», named by the owner and read by the poll: five hours at 62 % and fresh, the week at
  *   41 % and fresh, a model's week at 12.5 % and silent, and its usage credits.
- * - An account with no name, read by the status line: five hours at a fresh 0 %, the week at
- *   88 % and silent, the tightest week.
+ * - An account with no name, read by the status line: five hours at a fresh 0 % that last to the
+ *   reset, 35 % spent by then, the week at 88 % and silent, the tightest week.
  * - An organization that worked and that no source read.
- * - A provisional seat, known for its week alone: five hours at 74 % and fresh, the tightest five
- *   hours, and its week at 20 %.
+ * - An account known by its weekly reset alone, under which two accounts' readings may run: five
+ *   hours at 74 % and fresh, the tightest five hours, and its week at 20 %.
  *
  * The tightest window of each kind is therefore never the first account, so a tile that named the
  * first account rather than the tightest would say the wrong one.
@@ -50,6 +50,8 @@ function share(
     readings: Reading[]
     source: QuotaShareWindow['latest']['source']
     model?: string
+    /** Where its count restarted, as many ms before `now` as one of its readings. */
+    restarts?: number[]
   },
 ): QuotaShareWindow {
   const at = (ms: number) => momentAt(ms, offset)
@@ -73,6 +75,7 @@ function share(
     started_at: at(started),
     even_percent: Math.round(((now - started) / length) * 10_000) / 100,
     readings,
+    restarts: (window.restarts ?? []).map((ago) => at(now - ago)),
     forecast: window.forecast,
   }
 }
@@ -85,9 +88,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
   const accounts: QuotaAccount[] = [
     {
       ...WORK,
-      seat: null,
+      account: `${WORK.organization}/${WORK.account_uuid}`,
+      weekly_reset: '1T09:00Z',
+      shared: false,
       plan: 'Max',
       name: 'Work',
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -99,7 +105,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
             [HOUR, 35],
             [2 * MINUTE, 62],
           ],
-          forecast: { outcome: 'runs_out', runs_out_at: at(moment + 70 * MINUTE), basis: 'blend' },
+          forecast: {
+            outcome: 'runs_out',
+            runs_out_at: at(moment + 70 * MINUTE),
+            at_reset_percent: null,
+            basis: 'blend',
+          },
         }),
         window({
           kind: 'week',
@@ -132,9 +143,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
     },
     {
       ...NIGHT,
-      seat: null,
+      account: `${NIGHT.organization}/${NIGHT.account_uuid}`,
+      weekly_reset: '3T23:00Z',
+      shared: false,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -142,7 +156,7 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
           left: 4 * HOUR,
           source: 'statusline',
           readings: [[3 * MINUTE, 0]],
-          forecast: { outcome: 'lasts', runs_out_at: null, basis: 'window' },
+          forecast: { outcome: 'lasts', runs_out_at: null, at_reset_percent: 35, basis: 'window' },
         }),
         window({
           kind: 'week',
@@ -159,19 +173,25 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
     },
     {
       ...UNREAD,
+      account: `${UNREAD.organization}/`,
       account_uuid: null,
-      seat: null,
+      weekly_reset: null,
+      shared: false,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: true,
       windows: [],
     },
     {
       ...SEATED,
+      account: `${SEATED.organization}/weekly:7T09:00Z`,
       account_uuid: null,
-      seat: 'week:2026-11-15T09:00Z',
+      weekly_reset: '7T09:00Z',
+      shared: true,
       plan: null,
       name: null,
+      organization_name: null,
       no_source: false,
       windows: [
         window({
@@ -182,7 +202,12 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
             [3 * HOUR, 30],
             [5 * MINUTE, 74],
           ],
-          forecast: { outcome: 'runs_out', runs_out_at: at(moment + 40 * MINUTE), basis: 'recent' },
+          forecast: {
+            outcome: 'runs_out',
+            runs_out_at: at(moment + 40 * MINUTE),
+            at_reset_percent: null,
+            basis: 'recent',
+          },
         }),
         window({
           kind: 'week',
@@ -199,6 +224,29 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
 
 /** The answer as the server sends it. */
 export const quotaAnswer = (quota: Quota) => ({ interface_version: 'valkama-analytics-api', quota })
+
+/** The short names of the days of the week from Sunday, as each language writes them. */
+const WEEKDAYS = {
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  ru: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
+}
+
+/**
+ * What the page calls the account known by its weekly reset alone, which falls on Sunday at 09:00
+ * UTC, in the reader's own time and language: «a1b2c3d4 · resets Sun 12:00» at +03:00 in English.
+ */
+export function seatedName(locale: 'en' | 'ru' = 'en') {
+  // 7 January 2024 was a Sunday.
+  const reset = new Date(Date.UTC(2024, 0, 7, 9))
+  const time = [reset.getHours(), reset.getMinutes()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':')
+  const resets = locale === 'ru' ? 'сброс' : 'resets'
+  return `a1b2c3d4 · ${resets} ${WEEKDAYS[locale][reset.getDay()] ?? ''} ${time}`
+}
+export const SEATED_NAME = seatedName()
+/** What the page calls the organization that worked and that no source read. */
+export const UNREAD_NAME = '9f8e7d6c · account not known'
 
 /** Two more accounts like «Work», each a week and a model's week, by these names and ids. */
 const MORE = [
@@ -222,6 +270,70 @@ export function quotaOfSix(now: Date | number, offset = -new Date(now).getTimezo
   const quota = quotaAt(now, offset)
   const [work] = quota.accounts
   if (!work) throw new Error('the four accounts start with «Work»')
-  const more = MORE.map((account) => ({ ...work, ...account }))
+  const more = MORE.map((account) => ({
+    ...work,
+    ...account,
+    account: `${account.organization}/${account.account_uuid}`,
+  }))
   return { ...quota, accounts: [...quota.accounts, ...more] }
+}
+
+/** An account at the edges a forecast is drawn at, by this name and ids. */
+const EDGE = {
+  name: 'Edge',
+  organization: '4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a',
+  account_uuid: '5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b',
+}
+
+/**
+ * The four accounts as of `now`, and a fifth, «Edge», at the edges a forecast is drawn at: five
+ * hours spent, a week read past 100 %, and a model's week at a fresh 0 % with a range ahead.
+ */
+export function quotaOfEdges(
+  now: Date | number,
+  offset = -new Date(now).getTimezoneOffset(),
+): Quota {
+  const quota = quotaAt(now, offset)
+  const moment = new Date(now).getTime()
+  const window = (shape: Parameters<typeof share>[2]) => share(moment, offset, shape)
+  const edge: QuotaAccount = {
+    ...EDGE,
+    account: `${EDGE.organization}/${EDGE.account_uuid}`,
+    weekly_reset: '2T15:00Z',
+    shared: false,
+    organization_name: null,
+    plan: 'Max',
+    no_source: false,
+    windows: [
+      window({
+        kind: 'five_hour',
+        left: HOUR,
+        source: 'poll',
+        readings: [
+          [2 * HOUR, 60],
+          [10 * MINUTE, 100],
+        ],
+        forecast: { outcome: 'spent', runs_out_at: null, at_reset_percent: null, basis: 'recent' },
+      }),
+      window({
+        kind: 'week',
+        left: DAY,
+        source: 'poll',
+        readings: [
+          [2 * DAY, 80],
+          [5 * MINUTE, 104],
+        ],
+        forecast: { low_percent: 104, high_percent: 110 },
+      }),
+      window({
+        kind: 'week_model',
+        model: 'model-b',
+        left: 3 * DAY,
+        source: 'poll',
+        readings: [[5 * MINUTE, 0]],
+        forecast: { low_percent: 4, high_percent: 9 },
+      }),
+    ],
+  }
+  return { ...quota, accounts: [...quota.accounts, edge] }
 }

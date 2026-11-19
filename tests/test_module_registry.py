@@ -10,6 +10,8 @@ from unittest import mock
 
 from server import app_shell, mcp_surface, store, watchers
 from server.analytics import api as analytics_api
+from server.planning import api as planning_api
+from server.planning import goal_volumes, model
 from server.platform import modules as platform_modules
 from server.ui_state import PlatformHttpError
 
@@ -19,6 +21,8 @@ _EXPECTED_SECONDARY_CONTEXTS = {
         "space": ["planning-space", "work-item"],
     },
     "analytics": {"global": ["work-item"], "space": ["work-item"]},
+    "decisions": {"global": ["work-item"], "space": ["work-item"]},
+    "volumes": {"global": ["work-item"], "space": ["work-item"]},
     "memory": {"global": ["memory-resource"], "space": ["memory-resource", "work-item"]},
     "settings": {"global": ["work-item"], "space": ["work-item"]},
 }
@@ -161,7 +165,8 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertIsNotNone(writer)
         written = re.findall(r"\bstate\.(\w+) =", writer.group(0))
         self.assertEqual(
-            ["period", "from", "to", "by", "measure", "filters", "open", "across"], written
+            ["period", "from", "to", "by", "measure", "filters", "open", "across", "detail"],
+            written,
         )
         analytics = next(
             item for item in platform_modules.module_manifests() if item["module_id"] == "analytics"
@@ -189,13 +194,48 @@ class ModuleRegistryTests(unittest.TestCase):
             [f"/api/analytics/{name.removeprefix('analytics.')}" for name in declared], served
         )
 
+    def test_each_volumes_read_model_is_a_read_planning_serves(self) -> None:
+        """Volumes stands among the reading modules and declares its one read, and Planning
+        the goal rows, at both levels.
+
+        A read model `planning.<name>` is the route `/api/planning/<name>`, and that route
+        answers: the volumes of the whole store come back for an empty one, and the goal
+        rows refuse a call that names no goal with their own words, not as an unknown path.
+        """
+
+        manifests = {item["module_id"]: item for item in platform_modules.module_manifests()}
+        self.assertEqual("understand", manifests["volumes"]["navigation_group"])
+        for scope in ("global", "space"):
+            with self.subTest(scope=scope):
+                self.assertEqual(
+                    ["planning.volumes"], manifests["volumes"]["semantics"][scope]["read_models"]
+                )
+                self.assertIn(
+                    "planning.goal-volumes",
+                    manifests["planning"]["semantics"][scope]["read_models"],
+                )
+        status, answer = planning_api.handle_get(
+            self.conn,
+            "/api/planning/volumes",
+            {
+                "scope_kind": ["global"],
+                "from": ["2026-11-10"],
+                "to": ["2026-11-17"],
+                "utc_offset": ["0"],
+            },
+        )
+        self.assertEqual(200, status)
+        self.assertIn("volumes", answer)
+        with self.assertRaisesRegex(model.PlanningError, goal_volumes.TOO_MANY):
+            planning_api.handle_get(self.conn, "/api/planning/goal-volumes", {})
+
     def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
-        """The four modules, enabled and fixed, the same from every door."""
+        """The six modules, enabled and fixed, the same from every door."""
 
         payload = platform_modules.modules_payload()
         self.assertEqual("valkama-modules", payload["interface_version"])
         self.assertEqual(
-            ["analytics", "memory", "planning", "settings"],
+            ["analytics", "decisions", "memory", "planning", "settings", "volumes"],
             [item["manifest"]["module_id"] for item in payload["modules"]],
         )
         for item in payload["modules"]:
@@ -221,7 +261,7 @@ class ModuleRegistryTests(unittest.TestCase):
         # A caller holding the answer cannot change the list behind it.
         payload["modules"][0]["manifest"]["title_key"] = "changed"
         payload["modules"].clear()
-        self.assertEqual(4, len(platform_modules.modules_payload()["modules"]))
+        self.assertEqual(6, len(platform_modules.modules_payload()["modules"]))
         self.assertNotEqual(
             "changed", platform_modules.modules_payload()["modules"][0]["manifest"]["title_key"]
         )

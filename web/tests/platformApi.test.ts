@@ -159,6 +159,8 @@ test('planning accepts only sparse exact work-item summaries', () => {
             space_ref: spaceRef,
             title: 'Main',
             work_item_count: 1,
+            numbers: { triage: 1, ready: 0, active: 0, waiting_owner: 0 },
+            numbers_absent: null,
             default_project: 'example-project',
             projects: [{ project_id: 'example-project', display_name: 'Example Project' }],
           },

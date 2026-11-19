@@ -182,7 +182,7 @@ describe('the reads', () => {
       query.get('group_by') === 'model' ? { status: 500 } : serveUsage(WORLD, query),
     )
     const page = await mountAnalytics()
-    expect(lead(page, 'model')).toBe('Could not be read')
+    expect(lead(page, 'model')).toBe('Could not be loaded')
     expect(tile(page, 'model').get('.rail-tile').attributes('data-state')).toBe('failed')
     expect(lead(page, 'work_item')).toBe('MAIN-1 One')
     expect(lead(page, 'overview')).toBe('4\u{A0}h')
@@ -281,7 +281,7 @@ describe('the reads', () => {
     await page.get('.analytics-refresh').trigger('click')
     await flushPromises()
     for (const section of ['overview', ...USAGE_DIMENSIONS]) {
-      expect(lead(page, section), section).not.toBe('Could not be read')
+      expect(lead(page, section), section).not.toBe('Could not be loaded')
       expect(tile(page, section).get('.rail-tile').attributes('data-state'), section).toBe('ready')
       expect(tile(page, section).get('.rail-tile').attributes('aria-busy'), section).toBeUndefined()
     }
@@ -312,7 +312,7 @@ describe('the reads', () => {
     failing = true
     await page.setProps({ routeState: { period: 'weeks4' } })
     await flushPromises()
-    expect(lead(page, 'model')).toBe('Could not be read')
+    expect(lead(page, 'model')).toBe('Could not be loaded')
     expect(page.find('.refresh-failed').exists()).toBe(false)
   })
 
@@ -422,8 +422,9 @@ describe('a value', () => {
       'Shares of Agent time: MAIN-3 Task 3 29%, MAIN-1 Task 1 18%, MAIN-2 Task 2 12%, MAIN-4 Task 4 6%, No task 35%',
     )
     const none = bar.get('[data-key="none"]')
-    expect(none.classes()).toContain('mini-share-apart')
+    // The plain neutral, never hatched: a hatch says a figure not final yet, and the words name it.
     expect(none.attributes('data-slot')).toBe('apart')
+    expect(bar.findAll('.hatched')).toHaveLength(0)
     // The lead stays the first real value.
     expect(lead(page, 'work_item')).toBe('MAIN-3 Task 3')
   })

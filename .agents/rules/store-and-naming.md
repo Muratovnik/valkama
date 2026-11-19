@@ -36,7 +36,8 @@ registry's former interface ids inside them. No store this build opens reaches
 any of them: `store.connect()` refuses a store older than the one Valkama 2.9
 leaves with "open it with Valkama 2.9 first" and leaves it as it was, because 2.9
 carries a store of any earlier schema, the former name and the schema-9 drop
-included, to schema 17 with its word index. A store 2.9 left is refused too, by
+included, to schema 18 with its word index (a 2.9 build before 2.9.0 left 17 with
+it). A store 2.9 left, at either, is refused too, by
 `WorkModelMigrationRequiredError`, until `valkama migrate work-model` carries it
 to this build once, after a verified recovery point labelled `pre3.0`.
 

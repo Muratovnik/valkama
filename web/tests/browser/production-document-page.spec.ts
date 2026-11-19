@@ -37,6 +37,9 @@ test.describe('the page at its address', () => {
     await expect(target(page)).toBeInViewport()
     await expect(page).toHaveTitle('The migration plan')
 
+    // The page, and none of the shell: each of these is shown present in this file, the shell
+    // and its skip link where an address names no document, the drawer where a link opens it.
+    await expect(page.locator('.document-page')).toBeVisible()
     await expect(page.locator('.app-shell')).toHaveCount(0)
     await expect(page.locator('.skip-link')).toHaveCount(0)
     await expect(page.locator('.document-drawer')).toHaveCount(0)
@@ -93,6 +96,8 @@ test.describe('the page at its address', () => {
     await expect(paragraph.getByRole('link', { name: /MAIN-12|session/iu })).toHaveCount(0)
     // The one link is the document's: a document opens at an address of its own.
     await expect(paragraph.getByRole('link')).toHaveCount(1)
+    // A number that is a link is a `.rich-reference`, as the viewer's table shows in
+    // production-document-viewer.spec.ts.
     await expect(paragraph.locator('.rich-reference', { hasText: 'MAIN-12' })).toHaveCount(0)
 
     await linkIn(paragraph, 'notes.md').click()
@@ -159,6 +164,7 @@ test.describe('the page at its address', () => {
     await installDocuments(page)
     await page.goto('/doc?project=demo')
     await expect(page.locator('.app-shell')).toBeVisible()
+    await expect(page.locator('.skip-link')).toBeAttached()
     await expect(page.locator('.document-page')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /home|work/iu }).first()).toBeVisible()
   })

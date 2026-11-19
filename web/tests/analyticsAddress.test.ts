@@ -18,14 +18,8 @@ import {
 } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { usageParameters } from '@/shared/api/analyticsApi.ts'
-import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
-import {
-  isPlatformRouteUnavailable,
-  resolvePlatformRoute,
-  serializePlatformRoute,
-  validateManifestRouteState,
-} from '@/shared/api/platformRoute.ts'
-import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+
+import { throughTheAddress } from './support/analyticsAddress.ts'
 
 const ITEM = '00000000-0000-4000-8000-000000000012'
 
@@ -44,21 +38,7 @@ const EVERY_PART: AnalyticsView = {
   },
   open: true,
   across: 'role',
-}
-
-const analytics = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'analytics')
-
-/** Through the whole address: the module's state, the URL the shell writes, and back. */
-function throughTheAddress(view: AnalyticsView): AnalyticsView {
-  const route: PlatformRoute = {
-    module_id: 'analytics',
-    scope: { kind: 'global' },
-    state: writeAddress(view),
-  }
-  const back = resolvePlatformRoute(new URL(serializePlatformRoute(route), 'http://127.0.0.1'))
-  if (isPlatformRouteUnavailable(back)) throw new Error('the address did not resolve')
-  if (!analytics) throw new Error('no analytics manifest')
-  return readAddress(validateManifestRouteState(analytics, back.state ?? {}))
+  detail: { kind: 'value', by: 'work_item', value: ITEM },
 }
 
 /** The default view with a filter of models chosen in the order given. */

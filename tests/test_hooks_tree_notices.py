@@ -19,12 +19,14 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from server import mcp_surface, store
@@ -33,10 +35,13 @@ from server.planning import (
     api,
     calls,
     item_tree,
+    leases,
     participants,
+    participation,
     person_events,
     read_model,
     service,
+    sweep,
 )
 
 A = "0a000000-0000-4000-8000-00000000000a"
@@ -50,10 +55,14 @@ A2 = "0a000000-0000-4000-8000-0000000000a2"
 AS_A = {"sessionId": A}
 AS_A1 = {"sessionId": A, "threadId": A1}
 AS_A2 = {"sessionId": A, "threadId": A2}
+B1 = "0b000000-0000-4000-8000-0000000000b1"
+AS_B1 = {"sessionId": B, "threadId": B1}
 AS_B = {"sessionId": B}
 AS_C = {"sessionId": C}
 AS_D = {"sessionId": D}
 AS_E = {"sessionId": E}
+E1 = "0e000000-0000-4000-8000-0000000000e1"
+AS_E1 = {"sessionId": E, "threadId": E1}
 AS_F = {"sessionId": F}
 CREATE = "/api/planning/work-items"
 COMMENT = "/api/planning/work-item/comment"
@@ -355,6 +364,130 @@ class PersonOnTheTreeTests(Harness):
                 self.assertIsNone(self.hook(session))
 
 
+class DeferredGoalTests(Harness):
+    """G is put off and comes back; everyone working under it hears both once.
+
+    A holds `a` under G, a subagent of B holds a step of T1 under S1, C follows G and D holds
+    U under H; E, or E's subagent e1, puts G off. Valkama brings it back at the time as its own call: an hour
+    on, well inside the quiet period, so every claim under G still holds when it comes.
+    """
+
+    WHY = "the budget comes in January"
+
+    def setUp(self) -> None:
+        super().setUp()
+        at = datetime.now(UTC).replace(second=30, microsecond=0) + timedelta(hours=1)
+        self.until = at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.come = at + timedelta(minutes=1)
+        self.a = self.made("a", parent=self.goal)
+        self.person("/api/planning/work-item/apply", id=self.t1, checklist=["Look"])
+        step = service.get_work_item(self.conn, self.t1)["checklist"][0]["id"]
+        self.agent("claim_work_item", AS_A, id=self.a)
+        self.agent("claim_work_item_checklist_item", AS_B1, id=self.t1, item_id=step)
+        self.agent("apply_work_item_changes", AS_C, id=self.goal, subscribe=True)
+        self.agent("claim_work_item", AS_D, id=self.u)
+        self.settle(A, B, C, D, E)
+
+    def put_off(self, by_person: bool, meta: object = AS_E) -> None:
+        defer = {"until": self.until, "reason": self.WHY}
+        if by_person:
+            self.person("/api/planning/work-item/apply", id=self.goal, defer=defer)
+        else:
+            self.agent("apply_work_item_changes", meta, id=self.goal, defer=defer)
+
+    def bring_back(self) -> None:
+        with mock.patch.object(leases, "utc_now", lambda: self.come):
+            done = sweep.run_pass(self.conn)
+        self.assertEqual({sweep.RETURNS: 1}, done.changed)
+
+    def test_a_subagent_putting_the_goal_off_is_its_coordinators_short_line(self) -> None:
+        """The work under G hears the subagent as another session's agent; its own
+        coordinator hears it as its agent's write, in one line with no quote, and the
+        subagent nothing. Neither works on G, so neither hears it come back."""
+
+        self.put_off(by_person=False, meta=AS_E1)
+        line = (
+            rf"\n- status at \S+ by agent {E1} of session {E}: «deferred: until {self.until}:"
+            rf" {self.WHY}\. {re.escape(person_events.DEFERRED_WORK)}»\n"
+        )
+        for session in (A, B, C):
+            with self.subTest(session=session):
+                self.assertEqual((0, ""), self.watch(session, alive=1.0), "no wake")
+                self.assertRegex(self.hook(session) or "", line)
+                self.assertIsNone(self.hook(session), "once")
+        self.assertIsNone(self.hook(D), "D works under H")
+        self.assertIsNone(self.subagent(E, E1), "the subagent's own write")
+        self.assertIsNone(self.hook(E, "stop"), "its agent's write continues no turn")
+        told = self.hook(E)
+        assert told is not None, "the coordinator hears its agent's write"
+        self.assertIn(f"\n{self.line(self.goal)}\n- status at ", told)
+        self.assertRegex(told, rf"\n- status at \S+ by your agent {E1}\n")
+        self.assertNotIn(self.WHY, told, "no quote: the agent's report carries it")
+        self.assertIsNone(self.hook(E), "once")
+        self.bring_back()
+        back = rf"\n- status at \S+ by Valkama: «triage: returned, date {self.until}»"
+        for session in (A, B, C):
+            with self.subTest(returned=session):
+                self.assertRegex(self.hook(session) or "", back)
+        for session, agent in ((D, None), (E, None), (E, E1)):
+            with self.subTest(after_return=(session, agent)):
+                self.assertIsNone(self.subagent(session, agent))
+
+    def subagent(self, session: str, agent: str | None) -> str | None:
+        """What the hook tells `agent` of `session`, or the session itself without one."""
+
+        payload = (
+            {"session_id": session}
+            if agent is None
+            else {
+                "session_id": session,
+                "agent_id": agent,
+            }
+        )
+        answer = notify.deliver("claude", "post-tool-use", payload, self.environ)
+        if answer is None:
+            return None
+        return str(json.loads(answer)["hookSpecificOutput"]["additionalContext"])
+
+    def test_an_agent_putting_the_goal_off_tells_everyone_under_it_once_without_a_wake(
+        self,
+    ) -> None:
+        self.put_off(by_person=False)
+        line = (
+            rf"\n- status at \S+ by session {E}: «deferred: until {self.until}:"
+            rf" {self.WHY}\. {re.escape(person_events.DEFERRED_WORK)}»\n"
+        )
+        for session in (A, B, C):
+            with self.subTest(session=session):
+                self.assertEqual((0, ""), self.watch(session, alive=1.0), "no wake")
+                told = self.hook(session)
+                assert told is not None, f"{session} works under G"
+                self.assertIn(f"\n{self.line(self.goal)}\n", told)
+                self.assertRegex(told, line)
+                self.assertIsNone(self.hook(session), "once")
+        self.assertIsNone(self.hook(D), "D works under H")
+        self.assertIsNone(self.hook(E), "E's own write")
+        self.bring_back()
+        back = rf"\n- status at \S+ by Valkama: «triage: returned, date {self.until}»"
+        for session in (A, B, C):
+            with self.subTest(returned=session):
+                self.assertEqual((0, ""), self.watch(session, alive=1.0), "no wake")
+                told = self.hook(session)
+                assert told is not None, f"{session} hears it came back"
+                self.assertRegex(told, back)
+                self.assertIsNone(self.hook(session), "once")
+        self.assertIsNone(self.hook(D))
+
+    def test_a_person_putting_the_goal_off_wakes_everyone_under_it(self) -> None:
+        self.put_off(by_person=True)
+        for session in (A, B, C):
+            with self.subTest(session=session):
+                status, text = self.watch(session)
+                self.assertEqual(notify.WAKE_STATUS, status, f"{session} is woken")
+                self.assertEqual(1, text.count(person_events.DEFERRED_WORK), text)
+        self.assertIsNone(self.hook(D))
+
+
 class MutedGoalTests(Harness):
     """A holds T1 under S1 and muted the goal G; B writes beside it."""
 
@@ -509,6 +642,30 @@ class WatchedTests(Harness):
             {ref: who for ref, who in listed.items() if who},
             "the fixture covers each way in and out",
         )
+
+    def test_a_session_works_on_its_tree_for_the_common_quiet_period_the_owner_sets(self) -> None:
+        self.agent("claim_work_item", AS_A2, id=self.t3)
+        self.conn.execute(
+            "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 days')"
+            " WHERE id = ?",
+            (A,),
+        )
+        self.conn.commit()
+        row = read_model.item_row(self.conn, self.goal)
+        space = str(row["planning_space_id"])
+
+        def tree() -> tuple[frozenset[str], list[str]]:
+            listed = [entry["session"] for entry in participants.of_container(self.conn, row)]
+            return notify.watched(self.conn, A), listed
+
+        self.assertEqual((frozenset(), []), tree(), "silent past the three days of no setting")
+        # A session works in several spaces: one space's period is not its own.
+        participation.write_value(self.conn, space, "lease_quiet_days", 5)
+        self.conn.commit()
+        self.assertEqual((frozenset(), []), tree())
+        participation.write_value(self.conn, None, "lease_quiet_days", 5)
+        self.conn.commit()
+        self.assertEqual((frozenset({row["work_item_id"]}), [A]), tree(), "within the common five")
 
     def test_the_roots_are_found_without_reading_every_root_of_the_store(self) -> None:
         """A climb from a session's tasks reads the roots above them, not every root."""

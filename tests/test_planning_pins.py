@@ -156,7 +156,7 @@ class LifetimeTests(PinCase):
         answer = service.merge_work_items(self.conn, survivor, [merged, other])
         self.assertEqual({self.identity(survivor): "2026-01-01T00:00:00Z"}, self.pins())
         self.assertEqual(
-            [{"steps": 0, "comments": 0, "refs": 0, "links": 0, "projects": 0}] * 2,
+            [{"steps": 0, "comments": 0, "refs": 0, "commits": 0, "links": 0, "projects": 0}] * 2,
             [entry["moved"] for entry in answer["merged"]],
             "a pin is no part of what a merge reports moved",
         )

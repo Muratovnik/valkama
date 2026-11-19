@@ -29,6 +29,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -37,9 +38,10 @@ from urllib import error, request
 from .. import launcher, runner, static_assets, store, transcripts
 from ..alerts import readiness as alert_readiness
 from ..executions import drivers as execution_drivers
-from ..hooks import ingest, pairs, spool
+from ..hooks import commit_records, ingest, pairs, spool
 from ..memory import service as memory_service
 from ..planning import calls as planning_calls
+from ..planning import commits as planning_commits
 from ..platform import installed
 from ..projects import project_registry, scopes
 from ..quota import poll as quota_poll
@@ -47,7 +49,7 @@ from ..quota import settings as quota_settings
 from ..telemetry import journal as telemetry_journal
 from ..telemetry import usage_store
 from ..telemetry.projections import JOURNAL_ADAPTERS
-from . import configuration, desktop_app, skills, toast
+from . import configuration, desktop_app, git_hook, skills, toast
 
 #: What a check can conclude. `warn` is a real answer, not a soft failure: a
 #: store with no recent snapshot works perfectly until the day it matters.
@@ -98,7 +100,7 @@ def _check(
 #: a level and wrong across them, because across them it invites somebody to
 #: start at the end.
 LEVELS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
-    ("installation", "Installation", ("configuration", "store", "runtime", "skills")),
+    ("installation", "Installation", ("configuration", "store", "runtime", "skills", "commits")),
     ("projects", "Projects", ("projects",)),
     ("capabilities", "Capabilities", ("drivers", "quota", "quota-poll")),
     ("connections", "Connections", ("adapters",)),
@@ -117,6 +119,7 @@ def diagnose(*, port: int = 8642, probe: bool = True) -> dict:
         "store": _guarded("store", "Store", _store_checks),
         "runtime": _guarded("runtime", "Runtime", lambda: _runtime_checks(port, probe=probe)),
         "skills": _guarded("skills", "Valkama skill", _skill_checks),
+        "commits": _guarded("commits", "Git commit hook", _commit_checks),
         "drivers": _guarded("drivers", "Execution drivers", _driver_checks),
         "quota": _guarded("quota", "Quota sources", _quota_source_checks),
         "quota-poll": _guarded("quota-poll", "Quota poll", _quota_poll_checks),
@@ -1172,7 +1175,7 @@ def _mod_source_check() -> dict:
             "warn",
             f"off: Valkama's Claude Code mod `{MOD_NAME}` is {how}, so no quota is read"
             f" from it.{scope}",
-            "Install and enable it as the README's section on the mod says; the mod reads"
+            "Install and enable it as docs/guides/client-hooks.md says; the mod reads"
             " the quota in every session, the VS Code extension's too.",
             presentation_code="quota-mod-off",
             parameters=parameters,
@@ -1200,6 +1203,117 @@ def _mod_source_check() -> dict:
         "ok",
         f"working: Valkama's Claude Code mod is {how}; last reading {last}.{scope}",
         presentation_code="quota-mod-working",
+        parameters=parameters,
+    )
+
+
+#: What to do about each state of the Git hook but `installed`, by the state the three read as.
+_COMMIT_HOOK_FIXES = {
+    "missing": "Run `valkama git-hook install` (or `valkama setup --apply`): Valkama then"
+    " attaches each commit an agent's shell makes to the task its session holds.",
+    "stale": "Run `valkama git-hook install`: the hooks then run the launcher installed now."
+    " `valkama launcher install` does the same for every hook that is there.",
+    "disabled": "Git skips a hook whose `hook.<name>.enabled` is false. To run it again:"
+    " `git config --global --unset hook.<name>.enabled`.",
+    "unsupported": "This Git runs no hooks from its configuration (`git hook list` does not"
+    " show them). Install a Git that does; until then the closing check still names the"
+    " commits no hook reported.",
+}
+
+
+def _commit_checks() -> list[dict]:
+    """Valkama's Git hook in the global configuration, and the commit records it left."""
+
+    return [_commit_hook_check(), _commit_records_check()]
+
+
+def _commit_hook_check() -> dict:
+    reading = git_hook.hook_states()
+    state = git_hook.overall(reading["hooks"])
+    names = ", ".join(entry["name"] for entry in reading["hooks"] if entry["state"] == state)
+    parameters = {"state": state, "names": names, "path": reading["global_file"]}
+    if state == "installed":
+        return _check(
+            "commit-hook",
+            "Git commit hook",
+            "ok",
+            f"Git runs {names} from {reading['global_file']}",
+            presentation_code="commit-hook-installed",
+            parameters=parameters,
+        )
+    return _check(
+        "commit-hook",
+        "Git commit hook",
+        "warn",
+        f"{state}: {names} in {reading['global_file']}",
+        _COMMIT_HOOK_FIXES[state],
+        presentation_code=f"commit-hook-{state}",
+        parameters=parameters,
+    )
+
+
+def _commit_records_check() -> dict:
+    """Records no client hook took for an hour, and the files set aside as unreadable.
+
+    The planning sweep takes a record after an hour (`planning.commits.SWEEP_AGE_NS`),
+    so one older than that waits for a process to run the sweep. A file it could not
+    read for a week is in `commits/rejected/` and is never retried.
+    """
+
+    found = git_hook.waiting()
+    now = time.time_ns()
+    old = [at for at, _key, _path in found["files"] if at <= now - planning_commits.SWEEP_AGE_NS]
+    rejected = found["rejected"]
+    parameters = {
+        "waiting": len(found["files"]),
+        "count": len(old),
+        "oldest": commit_records.timestamp(old[0]) if old else "",
+        "rejected": sum(rejected.values()),
+        "paths": ", ".join(rejected),
+    }
+    if not old and not rejected:
+        return _check(
+            "commit-records",
+            "Commit records",
+            "ok",
+            f"{parameters['waiting']} commit record(s) waiting, none for over an hour",
+            presentation_code="commit-records-current",
+            parameters=parameters,
+        )
+    parts = []
+    fixes = []
+    if old:
+        parts.append(
+            f"{len(old)} commit record(s) waited over an hour, the oldest from"
+            f" {parameters['oldest']}"
+        )
+        fixes.append(
+            "Start any MCP session or `serve`: its sweep takes the records older than an"
+            " hour every ten minutes."
+        )
+    if rejected:
+        parts.append(
+            f"{parameters['rejected']} unreadable record(s) set aside in {parameters['paths']}"
+        )
+        fixes.append(
+            "Read the files in `commits/rejected/`; they are never retried. Delete each once"
+            " it is understood."
+        )
+    # Each state has its own code with the words for its counts: a check that waits and
+    # sets records aside must not show the one and hide the other.
+    if old and rejected:
+        code = "commit-records-waiting-rejected"
+    elif old:
+        code = "commit-records-waiting"
+    else:
+        code = "commit-records-rejected"
+    return _check(
+        "commit-records",
+        "Commit records",
+        "warn",
+        "; ".join(parts),
+        " ".join(fixes),
+        presentation_code=code,
         parameters=parameters,
     )
 
@@ -1271,6 +1385,7 @@ def _runtime_checks(port: int, *, probe: bool) -> list[dict]:
     ]
     checks.extend(_autostart_check())
     checks.extend(_alerts_check())
+    checks.extend(_desktop_app_check())
     if not probe:
         return checks
     checks.append(_listener_check(port, snapshot.identity))
@@ -1341,6 +1456,83 @@ def _alerts_check() -> list[dict]:
             f"shortcut found, helper can be built, listener at login {found['autostart']}",
             presentation_code="alerts-ready",
             parameters={"autostart": found["autostart"]},
+        )
+    ]
+
+
+def _desktop_app_check() -> list[dict]:
+    """One line: whether the desktop app packs the desktop sources of the pinned release.
+
+    `launcher install` leaves the app as it was, and the app's version does not move
+    with its sources, so an app built from an older commit runs on, looking current,
+    until something says so. The reading is `launcher status`'s own, which reads only.
+    """
+
+    try:
+        reading = launcher.report()["desktop_app"]
+    except launcher.LauncherError:
+        return []
+    if not isinstance(reading, dict) or reading.get("state") == "unsupported":
+        return []
+    title = "Desktop app"
+    state = reading["state"]
+    release = reading.get("release")
+    revision = Path(release).name[:12] if isinstance(release, str) else ""
+    fix = str(reading.get("fix", ""))
+    if state == "absent":
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "ok",
+                "not installed",
+                presentation_code="desktop-app-absent",
+            )
+        ]
+    if state == "no-release":
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "unknown",
+                "the launcher pins no release to compare the installed app with",
+                fix,
+                presentation_code="desktop-app-no-release",
+            )
+        ]
+    if state == "current":
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "ok",
+                f"packs the desktop sources of release {revision}",
+                presentation_code="desktop-app-current",
+                parameters={"revision": revision},
+            )
+        ]
+    if state == "differs":
+        differs = [str(path) for path in reading.get("differs", [])]
+        return [
+            _check(
+                "desktop-app",
+                title,
+                "warn",
+                f"packs other desktop sources than release {revision}: {', '.join(differs)}",
+                fix,
+                presentation_code="desktop-app-differs",
+                parameters={"revision": revision, "count": len(differs)},
+            )
+        ]
+    return [
+        _check(
+            "desktop-app",
+            title,
+            "warn",
+            f"cannot be compared with release {revision}: {reading.get('detail')}",
+            fix,
+            presentation_code="desktop-app-unreadable",
+            parameters={"revision": revision},
         )
     ]
 

@@ -5,9 +5,9 @@
  * its id, and an account by the name the owner gave it in Settings, as Valkama keeps it, else by
  * the start of its id as an item's card does. What a name leaves out is its `valueDetail`, which
  * the page says in the hint or beside the name: a titled session's client and the start of its
- * id, so two of one title can be told apart, and an account's whole id. Work with no value — no task, a session's own
- * run — and a value nobody can place say so in words of their own, per dimension: «unknown» is
- * said only of what nobody can place.
+ * id, so two of one title can be told apart; an account's whole id is never a hint. Work with no
+ * value — no task, a session's own run — and a value nobody can place say so in words of their
+ * own, per dimension: «unknown» is said only of what nobody can place.
  */
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -15,7 +15,7 @@ import { useI18n } from 'vue-i18n'
 import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
-import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { figureOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { isSeveral, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
@@ -26,6 +26,8 @@ import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import { aliasOf } from '@/shared/lib/accountAliases.ts'
+import { accountLabel } from '@/shared/lib/accountLabel.ts'
+import type { AnsweredNames } from '@/shared/lib/accountLabel.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
@@ -66,26 +68,61 @@ const SHARE_STEP = 0.01
 const sessionPlace = (value: UsageGroupValue & { id: string }) =>
   [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
 
+/**
+ * What a value's name leaves out, for its hint and its table: the client and the start of the id
+ * of a session named by its title; nothing for any other value. An account's whole id is no
+ * hint: it is the owner's to copy where the account's menu offers it, never a line to read.
+ */
+function valueDetail(name: UsageDimension, value: UsageGroupValue | null): string | undefined {
+  const id = value?.id
+  if (!value || !id) return
+  if (name === 'executor') return value.title ? sessionPlace({ ...value, id }) : undefined
+}
+
+/**
+ * A figure as a line says it, with what it leaves out apart: the tokens a cost has no price for,
+ * «40 тыс. токенов без цены», empty where it leaves none out. A table lays the remark under the
+ * figure; everything else says the two as one (`besides`).
+ */
+export interface FigureWords {
+  remark: string
+  text: string
+}
+
+/** What stands between a figure and its remark where they are said as one. */
+export const REMARK_JOINT = ', '
+
+/** A figure and its remark as one: «≈ 1 109,00 $, 40 тыс. токенов без цены». */
+const besides = ({ text, remark }: FigureWords) => [text, remark].filter(Boolean).join(REMARK_JOINT)
+
 export function useSpendingWords() {
   const i18n = useI18n()
   const { t } = i18n
   const usage = useUsageWords()
   const { names } = storeToRefs(useAccountNamesStore())
 
-  /** The owner's name for an account, or null where it has none. */
+  /** The owner's name for an account or an organization, by its id, or null where it has none. */
   const accountName = (id: string) => aliasOf(names.value, id)
 
   /**
-   * What a value's name leaves out, for its hint and its table: the client and the start of the id
-   * of a session named by its title; the whole id of an account named by the owner's name or by the
-   * start of its id; nothing where the name is the whole of what it says.
+   * An account by its id, as the app says one (`accountLabel.ts`); `answered` is what the quota's
+   * answer named it, until the names are read.
    */
-  function valueDetail(name: UsageDimension, value: UsageGroupValue | null): string | undefined {
-    const id = value?.id
-    if (!value || !id) return
-    if (name === 'executor') return value.title ? sessionPlace({ ...value, id }) : undefined
-    if (name === 'account' && (accountName(id) !== null || agentIdStart(id) !== id)) return id
-  }
+  const seatLabel = (
+    id: string,
+    weeklyReset: string | null = null,
+    answered: AnsweredNames | null = null,
+  ) =>
+    accountLabel(
+      names.value,
+      { id, weeklyReset },
+      {
+        locale: i18n.locale.value,
+        unplaced: (organization) => t('analytics.values.seat.unplaced', { organization }),
+        weekly: (organization, reset) => t('analytics.values.seat.weekly', { organization, reset }),
+      },
+      answered,
+    )
 
   const compact = (value: number) =>
     new Intl.NumberFormat(i18n.locale.value, {
@@ -146,11 +183,13 @@ export function useSpendingWords() {
   const unpriced = (spent: Spent) => unpricedTokens(spent.unpriced)
 
   /**
-   * What is said of a measure with the tokens a cost leaves out beside it — `count` of them —
+   * What is said of a measure with the tokens a cost leaves out as its remark — `count` of them —
    * so a cost that misses some never reads as whole; a figure of any other measure as it is.
    */
-  const leavingOut = (name: Measure, said: string, count: number) =>
-    [said, name === 'cost' ? unpricedTokens(count) : ''].filter(Boolean).join(', ')
+  const leavingOut = (name: Measure, text: string, count: number): FigureWords => ({
+    text,
+    remark: name === 'cost' ? unpricedTokens(count) : '',
+  })
 
   /**
    * What the tokens figure counts, by kind — input, output, cache writes, what was processed
@@ -252,6 +291,10 @@ export function useSpendingWords() {
     if (name === 'role' && i18n.te(`analytics.roles.${value.id}`))
       return t(`analytics.roles.${value.id}`)
     if (name === 'account') return accountName(value.id) ?? agentIdStart(value.id)
+    if (name === 'seat') {
+      const said = seatLabel(value.id, value.weekly_reset ?? null)
+      return value.shared ? `${said} · ${t('analytics.values.seat.shared')}` : said
+    }
     return value.id
   }
 
@@ -289,26 +332,52 @@ export function useSpendingWords() {
   const lineEnd = (line: SpendingLine) => (line.value && pairEnd(line.second)) || undefined
 
   /**
-   * A line's figure in a measure; a cost says beside it the tokens it leaves out, so a line
-   * with no price reads as that and never as a zero.
+   * A line's figure in a measure and its remark: a cost's remark is the tokens it leaves out, and
+   * a line with no price at all says them as its figure, never a zero.
    */
-  function lineFigure(name: Measure, spent: Spent) {
+  function lineFigureWords(name: Measure, spent: Spent): FigureWords {
     return name === 'cost' && spent.cost === null && spent.unpriced
-      ? unpriced(spent)
+      ? { text: unpriced(spent), remark: '' }
       : leavingOut(name, figure(name, spent), spent.unpriced)
   }
 
+  /** A line's figure with its remark beside it (`lineFigureWords`), as one line says them. */
+  const lineFigure = (name: Measure, spent: Spent) => besides(lineFigureWords(name, spent))
+
   /**
-   * How a line's measure moved, as a table cell says it (`changeCell`); a change of a cost that
-   * compares two figures says beside it the tokens they leave out, by the rule `lineFigure`
-   * says them for one figure, so a change of incomplete costs never reads as whole.
+   * A figure with its share of a whole after it, «4 дн. 1 ч · 78 %», as a ranked row prints it
+   * where its bar alone would leave the reader to guess how much of the whole it is; the figure
+   * alone where there is no share to say (`null`).
    */
-  function lineChange(name: Measure, moved: Change, now: Spent, before: Spent) {
+  const withShare = (figure: string, ratio: number | null) =>
+    ratio === null ? figure : t('analytics.figures.withShare', { figure, share: share(ratio) })
+
+  /**
+   * A line's figure (`lineFigure`) with its share of what every line of its breakdown adds up to
+   * (`whole`): none for a line the measure has no amount for — no price, no token counted — and
+   * none of a whole of nothing.
+   */
+  function lineShare(name: Measure, spent: Spent, whole: number) {
+    const amount = measureOf(name, spent)
+    return withShare(lineFigure(name, spent), amount === null || whole <= 0 ? null : amount / whole)
+  }
+
+  /**
+   * How a line's measure moved, as a table cell says it (`changeCell`), and its remark: a change
+   * of a cost that compares two figures has the tokens they leave out, by the rule
+   * `lineFigureWords` says them for one figure, so a change of incomplete costs never reads as
+   * whole.
+   */
+  function lineChangeWords(name: Measure, moved: Change, now: Spent, before: Spent): FigureWords {
     const said = changeCell(name, moved)
     return moved.direction === 'absent' || moved.direction === 'none'
-      ? said
+      ? { text: said, remark: '' }
       : leavingOut(name, said, now.unpriced + before.unpriced)
   }
+
+  /** How a line's measure moved with its remark beside it (`lineChangeWords`), as one line. */
+  const lineChange = (name: Measure, moved: Change, now: Spent, before: Spent) =>
+    besides(lineChangeWords(name, moved, now, before))
 
   /**
    * What a breakdown is by: «by task», or by its pairs with a second dimension, «by model and by
@@ -400,8 +469,8 @@ export function useSpendingWords() {
   /** What changed in the accounts that worked: «Account change: a → a, b». */
   const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
     t('analytics.days.accounts', {
-      before: before.map((value) => valueLabel('account', value)).join(', '),
-      after: after.map((value) => valueLabel('account', value)).join(', '),
+      before: before.map((value) => valueLabel('seat', value)).join(', '),
+      after: after.map((value) => valueLabel('seat', value)).join(', '),
     })
 
   /**
@@ -487,6 +556,8 @@ export function useSpendingWords() {
   const markShare = (ratio: number) => t('analytics.marks.share', { share: share(ratio) })
 
   return {
+    accountName,
+    seatLabel,
     accounts,
     axis,
     breakdownBy,
@@ -509,9 +580,12 @@ export function useSpendingWords() {
     dimension,
     figure,
     lineChange,
+    lineChangeWords,
     lineFigure,
+    lineFigureWords,
     lineEnd,
     lineLabel,
+    lineShare,
     measure,
     noneLabel,
     pairEnd,
@@ -520,5 +594,6 @@ export function useSpendingWords() {
     unpriced,
     valueDetail,
     valueLabel,
+    withShare,
   }
 }

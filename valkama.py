@@ -22,6 +22,14 @@ if __name__ == "__main__":
 
         sys.exit(hook_main(sys.argv[2:]))
 
+    # Git runs `git-hook run` after every commit an agent's shell makes, so it
+    # takes the same early way out; the other `git-hook` actions reach the
+    # command line below.
+    if sys.argv[1:3] == ["git-hook", "run"]:
+        from server.hooks.git_hook import main as git_hook_main
+
+        sys.exit(git_hook_main(sys.argv[3:]))
+
     # Claude Code runs its status line command on every refresh of the status
     # line, so it takes the same early way out.
     if sys.argv[1:2] == ["statusline"]:

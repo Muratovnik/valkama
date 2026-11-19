@@ -14,6 +14,8 @@ import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
+import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 import {
   figuresAnswer,
@@ -181,7 +183,7 @@ describe('the overview on the page', () => {
       query.get('group_by') === 'model' ? { status: 500 } : serveUsage(WORLD, query),
     )
     const page = await mountAnalytics()
-    expect(words(card(page, 'model').text())).toContain('The values could not be read.')
+    expect(words(card(page, 'model').text())).toContain('The values could not be loaded.')
     expect(card(page, 'project').findAll('.ranked-row')).toHaveLength(2)
   })
 
@@ -221,7 +223,7 @@ describe('the overview on the page', () => {
     const page = await mountAnalytics()
     const changes = page.get('.overview-changes')
     expect(words(changes.text())).toContain(
-      'The period before could not be read, so nothing is compared.',
+      'The period before could not be loaded, so nothing is compared.',
     )
     expect(changes.findAll('.overview-changes-line')).toHaveLength(0)
 
@@ -238,10 +240,13 @@ describe('the overview on the page', () => {
     const page = await mountAnalytics()
     const days = page.get('.spending-days')
     expect(words(days.text())).toContain(
-      'The period before could not be read, so it is not outlined.',
+      'The period before could not be loaded, so it is not outlined.',
     )
-    expect(days.findAll('.period-before')).toHaveLength(0)
-    expect(days.findAll('.period-column')).toHaveLength(3)
+    // The chart is handed its three periods with no figure of a period before to outline; the
+    // test of the period before below shows the same figures handed over where it was read.
+    const drawn = page.getComponent(PeriodColumns).props('columns')
+    expect(drawn).toHaveLength(3)
+    expect(drawn.filter((column) => column.before !== undefined)).toEqual([])
   })
 })
 
@@ -296,6 +301,10 @@ describe('the period before on the overview', () => {
       const steps = Array.isArray(outlined) ? outlined : []
       const seconds = steps.reduce((sum, step) => sum + step.agent_seconds, 0)
       expect(seconds).toBe(cells.total.agent_seconds)
+      // The chart is handed it to outline, a figure of the period before at each period.
+      const drawn = page.getComponent(PeriodColumns).props('columns')
+      expect(drawn.length).toBeGreaterThan(0)
+      expect(drawn.filter((column) => column.before === undefined)).toEqual([])
     })
 })
 
@@ -391,10 +400,15 @@ describe('the figures of the overview', () => {
 
   it('mark the measure chosen by more than its colour', () => {
     const tiles = mountTiles(3000, 120)
-    const chosen = tiles
-      .findAll('[role="radio"]')
-      .filter((one) => one.find('.tile-chosen').exists())
-    expect(chosen).toHaveLength(1)
-    expect(chosen[0]?.attributes('aria-checked')).toBe('true')
+    // Marked by a check beside its name as well as by its ground (SpendingTiles' docstring).
+    const radios = tiles.findAll('[role="radio"]')
+    expect(radios.length).toBeGreaterThan(1)
+    const checked = radios.map((one) =>
+      one
+        .findAllComponents(VIcon)
+        .some((icon: VueWrapper<InstanceType<typeof VIcon>>) => icon.props('name') === 'check'),
+    )
+    expect(checked).toEqual(radios.map((one) => one.attributes('aria-checked') === 'true'))
+    expect(checked.filter(Boolean)).toHaveLength(1)
   })
 })

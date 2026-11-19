@@ -179,7 +179,6 @@ STALE_SECONDS = 86400.0
 _LOCK_ATTEMPTS = 25
 _LOCK_PAUSE = 0.02
 _PLAIN = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-")
-_FILE_SAFE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
 
 
 # --- input and output ---------------------------------------------------------
@@ -376,17 +375,16 @@ def holder_suffix(session_id: str, agent_id: str | None) -> str:
     return f" agent {label_id(agent_id)} {suffix}" if agent_id else suffix
 
 
-def _file_key(value: str) -> str:
-    if 0 < len(value) <= 128 and all(ch in _FILE_SAFE for ch in value):
-        return value
-    import hashlib
-
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
-
-
 def recipient_key(session_id: str, agent_id: str | None) -> str:
-    key = _file_key(session_id)
-    return f"{key}--{_file_key(agent_id)}" if agent_id else key
+    """The name of a recipient's place files; a session's commit records start with its key.
+
+    Imported here: the call pair loads this module and needs no record.
+    """
+
+    from .commit_records import file_key
+
+    key = file_key(session_id)
+    return f"{key}--{file_key(agent_id)}" if agent_id else key
 
 
 # --- what is new ----------------------------------------------------------------
@@ -412,13 +410,19 @@ _STANDS = (
     " AND substr(v.last_seen, 1, 19) >= ?) OR (v.status = 'ended'"
     " AND substr(v.ended_at, 1, 19) > ?)))"
 )
-#: `subscriptions.QUIET_PERIOD`, `leases.ENDED_GRACE` and `leases.QUIET_PERIOD` in seconds,
-#: held equal by a test: the hook does not import the planning package to read three numbers.
+#: `subscriptions.QUIET_PERIOD` and `leases.ENDED_GRACE` in seconds, held equal by a
+#: test: the hook does not import the planning package to read two numbers.
 SUBSCRIPTION_QUIET_SECONDS = 14 * 24 * 3600
 ENDED_GRACE_SECONDS = 12 * 3600
 #: How long a session may be silent and still work on its tree (`watched`), as a
-#: participant may (`planning.leases.session_live`).
-LEASE_QUIET_SECONDS = 3 * 24 * 3600
+#: participant may (`planning.leases.session_live`): the common `lease_quiet_days` of
+#: the owner's participation setting (`lease_quiet_seconds`). Its default, least and
+#: most, held equal to `planning.participation.NUMBERS` by a test.
+LEASE_QUIET_DAYS = (3, 1, 60)
+_LEASE_QUIET = (
+    "SELECT value FROM participation_settings"
+    " WHERE planning_space_id IS NULL AND key = 'lease_quiet_days'"
+)
 _ITEMS = (
     "SELECT w.work_item_id, s.key, w.number, w.title, w.claim_ref, w.checklist, w.revision,"
     " (SELECT MAX(e.id) FROM work_item_events e WHERE e.work_item_id = w.work_item_id),"
@@ -642,13 +646,34 @@ def watched(conn: sqlite3.Connection, session_id: str) -> frozenset[str]:
     package, which it does not load to answer a tool call.
     """
 
-    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - LEASE_QUIET_SECONDS))
+    quiet = lease_quiet_seconds(conn)
+    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - quiet))
     if conn.execute(_LIVE, (session_id, since)).fetchone() is None:
         return frozenset()
     suffix = holder_suffix(session_id, None)
     return frozenset(
         str(row[0]) for row in conn.execute(_WATCHED, (session_id, suffix, MOST_DEPTH))
     )
+
+
+def lease_quiet_seconds(conn: sqlite3.Connection) -> int:
+    """The common quiet period of a lease in seconds, as `planning.participation` reads it.
+
+    A stored value its bounds refuse reads as no row, as there; so does a store
+    without the table.
+    """
+
+    import _sqlite3
+
+    try:
+        row = conn.execute(_LEASE_QUIET).fetchone()
+    except _sqlite3.OperationalError:
+        row = None
+    days, least, most = LEASE_QUIET_DAYS
+    text = "" if row is None else str(row[0])
+    if text.isdigit() and least <= int(text) <= most:
+        days = int(text)
+    return days * 24 * 3600
 
 
 class _Tree:
@@ -667,7 +692,11 @@ class _Tree:
         return bool(self.roots)
 
     def climb(self, items: set[str]) -> None:
-        """Read `items` and every item over them not read yet, a statement a level."""
+        """Read `items` and every item over them not read yet, a statement a level.
+
+        The next level is what the whole level read names and nothing read holds: a
+        parent among the rows of the same statement is read already, whichever row
+        came first."""
 
         wanted = {item for item in items if item not in self.nodes}
         if not wanted or not self.watches():
@@ -675,12 +704,13 @@ class _Tree:
         for _level in range(MOST_DEPTH):
             listed = sorted(wanted)
             rows = self.conn.execute(_NODES.format(items=",".join("?" * len(listed))), listed)
-            wanted = set()
+            parents = set()
             for row in rows:
                 parent = None if row[1] is None else str(row[1])
                 self.nodes[str(row[0])] = (parent, bool(row[2]), str(row[3]), str(row[4]))
-                if parent is not None and parent not in self.nodes:
-                    wanted.add(parent)
+                if parent is not None:
+                    parents.add(parent)
+            wanted = parents - self.nodes.keys()
             if not wanted:
                 return
 
@@ -729,26 +759,32 @@ def _handed(
     conn: sqlite3.Connection, session_id: str, after: int
 ) -> tuple[list[tuple[str, bool, list[tuple[int, dict]]]], int]:
     """The words left waiting that claims of this session took after the claim call `after`:
-    per row, the goal or stage, whether a subagent took them, and the words up to the claim,
-    with their calls; and the last claim call read.
+    per claim and goal or stage, whether a subagent took them, and the words it handed over,
+    with their calls (`waiting.containers_left`: a goal or stage with nothing left for the
+    session is not listed); and the last claim call read.
 
     The place is a claim's call, not a row's number: a row is numbered when it is left and
-    handed over later, so a row left before another can be handed after it. A store
-    without the rows yet hands nothing.
+    handed over later, so a row left before another can be handed after it. A claim that
+    took both rows of a goal or stage hands its words over once. A store without the rows
+    yet hands nothing.
     """
 
     import _sqlite3
 
-    from ..planning import person_events
+    from ..planning import waiting
 
     try:
         rows = conn.execute(_HANDED, (session_id, after)).fetchall()
     except _sqlite3.OperationalError:
         return [], after
-    found = []
+    claims: dict[tuple[str, int], list] = {}
     for item, start, call, agent in rows:
-        words = person_events.unheard(conn, str(item), int(start) - 1)
-        found.append((str(item), bool(agent), [pair for pair in words if pair[0] < int(call)]))
+        claim = claims.setdefault((str(item), int(call)), [int(start), bool(agent)])
+        claim[0] = min(claim[0], int(start))
+    found = []
+    for (item, call), (start, agent) in claims.items():
+        for _container, words in waiting.containers_left(conn, session_id, [(item, start)], call):
+            found.append((item, agent, words))
     return found, max([after, *(int(row[2]) for row in rows)])
 
 
@@ -910,7 +946,8 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
 
     A list on a comment asked or withdrawn is no question (`_no_lists`). A request asked
     of a session is told on an item's own path only to the session that asked it, and
-    only what another session or a person made of it; the session asked hears it through
+    only what another session or a person made of it, so not its asking where Valkama's
+    call asked for this session's agent (a waiting action's); the session asked hears it through
     the tree's news (`_feed`), and nobody else hears it, its holders and those who follow
     the item included. Its asking by this session's own subagent is no question to the
     owner, so the orchestrator gets no line of it either. Its answer is the one the
@@ -929,6 +966,9 @@ def _owed(conn: sqlite3.Connection, item: str, entries: list[dict], session_id: 
                 continue
             asker = person_events.author_of(conn, item, found)
             if asker is None or asker[0] != session_id:
+                continue
+            if found["kind"] == "question_asked":
+                # Valkama's call asked it for this session's agent: its own asking.
                 continue
             if found["kind"] == "question_answered":
                 found["answers"] = found["answered_you"] = True
@@ -1404,11 +1444,11 @@ def _read(
         ]
         spoken += _owed(conn, item, recorded, session_id)
     if holds and signature[3]:
-        # A blocker's state, a person's or another session's, is read from the one place
-        # other sessions' news is: a close reads as a change once a later transition
-        # undoes it, so a close read from another place would be told again then. Only
-        # a close wakes; a person's is the person's news in the notice, and through a
-        # mute too.
+        # A blocker's state, a person's, another session's or Valkama's, is read from the
+        # one place other sessions' news is: a close reads as a change once a later
+        # transition undoes it, so a close read from another place would be told again
+        # then. Only a close wakes; a person's is the person's news in the notice, and
+        # through a mute too, as Valkama's is.
         for call, entry in person_events.blocker_changes(conn, item, heard):
             if call > newest:
                 continue
@@ -1563,12 +1603,14 @@ def _own_agents(entries: list[dict], session_id: str, agent_id: str | None) -> l
 
     Its subagent's report reaches the orchestrator anyway, so a quote would say it
     twice, and with no quote nothing is cut. Without a quote, two events of one kind by
-    one agent at one time read the same, as a claim that started the item and the close
-    in one call do: the line is told once. It never wakes: nothing here says `asks` or
-    `answers`, so at `Stop` and in the watcher it waits for the next tool call as any
-    news that does not ask. A list on a comment, asked or withdrawn, and a request asked
-    of another session are no line: `_owed` took them out before, since the work never
-    comes to wait for the owner on one. A subagent hears none of this.
+    one agent at one time read the same, and so do two of one kind in one call, as a
+    claim that started the item and the close do: the line is told once. A call is
+    known by its row, not by its time: each event takes the second it is written in,
+    so the events of one call can stand a second apart. It never wakes: nothing here
+    says `asks` or `answers`, so at `Stop` and in the watcher it waits for the next tool
+    call as any news that does not ask. A list on a comment, asked or withdrawn, and a
+    request asked of another session are no line: `_owed` took them out before, since
+    the work never comes to wait for the owner on one. A subagent hears none of this.
     """
 
     from ..planning import person_events
@@ -1583,12 +1625,15 @@ def _own_agents(entries: list[dict], session_id: str, agent_id: str | None) -> l
         and entry["kind"] in person_events.WORK_KINDS
     ]
     ours = []
-    lines = set()
+    times: set[tuple] = set()
+    calls: set[tuple] = set()
     for entry in candidates:
-        line = (entry["kind"], entry["at"], entry["agent"])
-        if line in lines:
+        at = (entry["kind"], entry["agent"], entry["at"])
+        call = (entry["kind"], entry["agent"], entry["call"])
+        if at in times or call in calls:
             continue
-        lines.add(line)
+        times.add(at)
+        calls.add(call)
         entry.pop("text", None)
         entry.pop("cut", None)
         entry["yours"] = True
@@ -2149,7 +2194,11 @@ def shown_language(conn: sqlite3.Connection) -> str:
 
 
 def deliver(
-    client: str, event: str, payload: dict, environ: Mapping[str, str] | None = None
+    client: str,
+    event: str,
+    payload: dict,
+    environ: Mapping[str, str] | None = None,
+    lead: str = "",
 ) -> bytes | None:
     """The answer to one delivery hook, or None when there is nothing to tell.
 
@@ -2160,22 +2209,28 @@ def deliver(
 
     An orchestrator also gets the lines of `shown`, in the owner's alert language,
     read from the connection already open and only when there is news. A Codex
-    input with any `agent_id` is a subagent's and gets nothing, read or moved.
+    input with any `agent_id` is a subagent's and gets no notice, read or moved.
+
+    `lead` is text that goes before the notice in the same answer, whether there
+    is news or not: the lines about the commits this call made. The notice then
+    keeps to what is left of the client's bound.
     """
 
     hook_event = DELIVERY_EVENTS.get(client, {}).get(event)
+    if hook_event is None:
+        return None
     session_id = _text(payload.get("session_id"))
     named = payload.get("hook_event_name")
-    if hook_event is None or session_id is None or named not in (None, hook_event):
-        return None
+    if session_id is None or named not in (None, hook_event):
+        return _lead(hook_event, lead)
     if client == "codex" and payload.get("agent_id") not in (None, ""):
         # Even one too long to be a name: taken for the orchestrator, it would be
         # handed the session's news and move the session's places past it.
-        return None
+        return _lead(hook_event, lead)
     agent_id = _text(payload.get("agent_id"))
     store, enabled = settings(environ)
     if store is None:
-        return None
+        return _lead(hook_event, lead)
     state = state_directory(store, create=enabled)
     idle = (
         os.path.join(state, recipient_key(session_id, None) + ".idle")
@@ -2210,10 +2265,24 @@ def deliver(
     if idle and hook_event == "Stop" and not news:
         _touch(idle)
     if not news:
-        return None
+        return _lead(hook_event, lead)
     characters = CLIENT_CHARACTERS.get(client, MOST_CHARACTERS)
+    if lead:
+        characters -= len(lead) + len(_LEAD_BREAK)
     text, told = notice(news, orchestrator=agent_id is None, wake=False, characters=characters)
+    if lead:
+        text = lead + _LEAD_BREAK + text
     return output(hook_event, text, shown(told, language) if language else None)
+
+
+#: What stands between the lead and the notice after it.
+_LEAD_BREAK = "\n\n"
+
+
+def _lead(hook_event: str, lead: str) -> bytes | None:
+    """The answer that carries the lead alone, or None without one."""
+
+    return output(hook_event, lead) if lead else None
 
 
 def _touch(path: str) -> None:

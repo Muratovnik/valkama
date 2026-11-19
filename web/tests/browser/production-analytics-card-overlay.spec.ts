@@ -1,10 +1,11 @@
 /**
- * A task pressed on the Analytics page opens its card over the page, in the real app. The oracle
- * is the requirement: the module stays Analytics, its address keeps the view and names the card
- * as the board's address does, so Back closes it; the card is the board's card, whose field edit
- * reaches the store; closing it gives the page back as it was left — its section, its period and
- * where its panel was scrolled to. A modified press is still a link's. Each run prints what it
- * measured.
+ * A task pressed on the Analytics page opens its side panel, and the panel's «Open the card» opens
+ * the task's card over the page, in the real app. The oracle is the requirement: the module stays
+ * Analytics, its address keeps the view with the panel and names the card as the board's address
+ * does, so Back closes it; the card is the board's card, whose field edit reaches the store;
+ * closing it gives back the panel, and closing that the page as it was left — its section, its
+ * period and where its panel was scrolled to. A modified press is still a link's. Each run prints
+ * what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -14,11 +15,21 @@ import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { pageAt, record, serve, serveTask } from './analyticsPage.ts'
 import { workItem, workItemRef } from './planningFixtures.ts'
-import { WORLD } from './served/analyticsCardOverlay.ts'
+import { HELD, WORLD } from './served/analyticsCardOverlay.ts'
 import { test } from './test.ts'
 /** A period other than the page's own default, so that keeping it says something. */
 const VIEW = { period: 'weeks4' }
 const PAGE = pageAt(VIEW)
+/** The task's side panel over the view, which the card is opened from. */
+const DETAIL = JSON.stringify({ by: 'work_item', value: HELD.id })
+const DETAILS = `Details: MAIN-264 ${workItem.title}`
+
+/** Opens the task's card from its side panel, which a press on its row opened. */
+async function openCard(page: Page) {
+  const details = page.getByRole('dialog', { name: DETAILS })
+  await details.getByRole('link', { name: 'Open the card' }).click()
+  return details
+}
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
 
@@ -77,6 +88,7 @@ test('a task pressed on the overview opens its card over the page, which edits a
   expect(before.scrollTop).toBeGreaterThan(0)
 
   await row.click()
+  const details = await openCard(page)
   const drawer = page.locator('.drawer')
   await expect(drawer).toContainText(workItem.title)
   await expect(drawer.locator('.card-priority')).toBeVisible()
@@ -84,7 +96,7 @@ test('a task pressed on the overview opens its card over the page, which edits a
   expect(new URL(page.url()).pathname.startsWith('/modules/analytics/')).toBe(true)
   const opened = parsePlatformRoute(new URL(page.url()))
   expect(opened.module_id).toBe('analytics')
-  expect(opened.state).toEqual(VIEW)
+  expect(opened.state).toEqual({ ...VIEW, detail: DETAIL })
   expect(planningWorkItemRef(opened.entity)).toEqual(workItemRef)
   // The page stands under the card as it was left.
   await expect(page.locator('.analytics-panel .overview-panel')).toBeVisible()
@@ -103,6 +115,10 @@ test('a task pressed on the overview opens its card over the page, which edits a
 
   await drawer.locator('.drawer-frame-close').click()
   await expect(drawer).toBeHidden()
+  // The panel the card was opened from stands again, and closing it gives the page back.
+  await expect(details).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(details).toBeHidden()
   await expect.poll(() => path(page)).toBe(PAGE)
   const after = await viewShown(page)
   await record(info, 'analytics card overlay', { before, after, writes: store.writes })
@@ -123,6 +139,7 @@ for (const width of [1440, 390])
     const row = page.locator('[data-card="work_item"] a.ranked-line[href="/open/MAIN-264"]')
     await expect(row).toBeVisible()
     await row.click()
+    await openCard(page)
     const drawer = page.locator('.drawer')
     await expect(drawer).toContainText(workItem.title)
     await expect(drawer.locator('.card-priority')).toBeVisible()
@@ -173,9 +190,14 @@ test('Back closes the card over the page, and a modified press stays a link', as
   await expect(page.locator('.drawer')).toBeHidden()
 
   await row.click()
+  const details = await openCard(page)
   await expect(page.locator('.drawer')).toContainText(workItem.title)
   await page.goBack()
   await expect(page.locator('.drawer')).toBeHidden()
+  await expect(details).toBeVisible()
+  await expect.poll(() => path(page)).toBe(pageAt({ ...VIEW, detail: DETAIL }))
+  await page.goBack()
+  await expect(details).toBeHidden()
   await expect.poll(() => path(page)).toBe(PAGE)
   expect(await viewShown(page)).toEqual(before)
 })

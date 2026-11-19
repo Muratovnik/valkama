@@ -14,12 +14,12 @@ import { useI18n } from 'vue-i18n'
  * - Under it one row of cards: what changed most from the period before, task by task, then the
  *   first five values of each dimension a person asks about most — tasks, models and projects;
  *   no project at a project's scope, where every figure is that project's — each asked of the
- *   same read (`useTopValues`). A card's heading opens its section and a row narrows the view,
- *   as a bar of that section does. The roles have no card: there are two of them, and the rail's
+ *   same read (`useTopValues`). A card's heading opens its section and a row opens its value's
+ *   side panel, as a bar of that section does. The roles have no card: there are two of them, and the rail's
  *   tile says both.
  *
- * Its own answer is the read by task, beside the period before; a press that could not narrow
- * the view says why where it was pressed. Its heading names it, and the heading's «ⓘ» says the
+ * Its own answer is the read by task, beside the period before; a press that could not do what
+ * it asked says why where it was pressed. Its heading names it, and the heading's «ⓘ» says the
  * caveats of its figures once (`useSectionCaveats`).
  */
 import { useResizeObserver } from '@vueuse/core'
@@ -59,19 +59,19 @@ const props = defineProps<{
   projectScoped: boolean
   /** When the answer was asked for, which says which step is not over yet. */
   readAt: Date
-  /** Why the last press in a part of the overview did not narrow the view; null otherwise. */
+  /** Why the last press in a part of the overview did not do what it asked; null otherwise. */
   refused: Refusal | null
   usage: Usage
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
 }>()
 /**
- * Read the answer again; open a dimension's section; narrow the view to a value of a dimension,
- * to a period pressed or to the periods framed in the overview's chart.
+ * Read the answer again; open a dimension's section; open the side panel of a value of a
+ * dimension; narrow the view to a period pressed or to the periods framed in the overview's chart.
  */
 const emit = defineEmits<{
   frame: [span: OwnPeriod, label: string]
-  narrow: [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
+  inspect: [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
   open: [dimension: UsageDimension]
   retry: []
   step: [span: OwnPeriod, label: string]
@@ -194,7 +194,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
           brief
           @frame="(span, label) => emit('frame', span, label)"
           @step="(span, label) => emit('step', span, label)"
-          @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
+          @inspect="(value, label) => emit('inspect', by, value, label, 'days')"
         />
       </div>
       <FieldError
@@ -213,6 +213,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
         <OverviewChanges
           :measure="measure"
           :usage="usage"
+          @inspect="(value, label) => emit('inspect', 'work_item', value, label, 'bars')"
           @retry="emit('retry')"
         />
         <OverviewTop
@@ -222,7 +223,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
           :measure="measure"
           :read="top.reads.value[card] ?? 'loading'"
           @open="emit('open', card)"
-          @narrow="(value, label) => emit('narrow', card, value, label, 'bars')"
+          @inspect="(value, label) => emit('inspect', card, value, label, 'bars')"
         />
       </PanelLevel>
     </PanelLevel>

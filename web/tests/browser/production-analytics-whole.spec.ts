@@ -170,7 +170,7 @@ for (const locale of ['ru-RU', 'en-US'] as const) {
         await openReport(page, width, pageAt({ by: 'work_item', measure: 'tokens' }))
         await page.evaluate(() => document.fonts.ready)
         const frame = await tableFrame(page)
-        const broken = await brokenWords(page, '.spending-table-frame .chart-heading')
+        const broken = await brokenWords(page, '[data-region="table-frame"] th[scope="col"]')
         await record(info, `tokens table ${locale} ${width}`, { frame, broken })
         // The name, the three measures, the period before and the change, then the six kinds.
         expect(frame.headings).toHaveLength(12)

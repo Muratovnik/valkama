@@ -3,7 +3,8 @@
 The commits here are made by git, and carried and pruned the way an integration
 does it, because each step is a claim about what git keeps: a hash that a rebase
 replaced, a patch-id that survives it, an object that a deleted branch takes with
-it. A stub would only repeat what the code assumes.
+it. A stub would only repeat what the code assumes. Each is attached to an item
+as a registered project and a hash, the way a card holds it.
 
 The expected step of every case comes from how its commit was made in the test,
 not from anything the command computes.
@@ -22,11 +23,13 @@ import unittest
 from unittest import mock
 
 from server import cli, processes, released, store
-from server.planning import service
+from server.planning import commits, service
 from server.projects import project_registry
 from tests.registry_fixtures import project_entry, registry_bytes
 
-SPACE = "COM"
+SPACE = "MAIN"
+#: The registered project whose root is the release checkout.
+PROJECT = "alpha"
 
 
 class ReleasedTestCase(unittest.TestCase):
@@ -52,6 +55,17 @@ class ReleasedTestCase(unittest.TestCase):
         service.create_planning_space(self.conn, name="Command Line", key=SPACE)
         self.conn.commit()
         self.repo = self.repository("product")
+        # The registry as each read finds it: a test may register more, or less.
+        self.projects = {PROJECT: self.repo}
+        registry = mock.patch.object(
+            project_registry,
+            "_read_registry_bytes",
+            side_effect=lambda: registry_bytes(
+                [project_entry(name, root) for name, root in self.projects.items()]
+            ),
+        )
+        registry.start()
+        self.addCleanup(registry.stop)
         # The release is everything after `start` on `main`.
         self.commit(self.repo, "chore: before the release")
         self.git(self.repo, "tag", "start")
@@ -109,11 +123,29 @@ class ReleasedTestCase(unittest.TestCase):
         gone = processes.run_text(["git", "-C", self.repo, "cat-file", "-e", commit])
         self.assertNotEqual(0, gone.returncode, "the object survived; the case proves nothing")
 
-    def item(self, title: str, *refs: tuple[str, str]) -> str:
+    def item(self, title: str, *attached: str | tuple[str | None, str, str]) -> str:
+        """An open item with these commits attached: a hash of the release checkout's
+        project, attached by hand as a person would, or `(project, hash, subject)`
+        recorded as the migration records a commit, with no repository when `project`
+        is None."""
+
         created = service.create_work_item(self.conn, space=SPACE, title=title)
         reference = str(created["reference"])
-        for value, label in refs:
-            service.attach_ref(self.conn, reference, "commit", value, label=label)
+        for entry in attached:
+            if isinstance(entry, str):
+                commits.attach(self.conn, reference, PROJECT, entry)
+                continue
+            project, recorded, subject = entry
+            commit_id = self.conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, reported_at)"
+                " VALUES (?,?,?,'2026-01-02T03:04:05Z')",
+                (project, recorded, subject),
+            ).lastrowid
+            self.conn.execute(
+                "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+                " VALUES ((SELECT work_item_id FROM work_items WHERE title = ?), ?, 'migrated')",
+                (title, commit_id),
+            )
         self.conn.commit()
         return reference
 
@@ -123,8 +155,8 @@ class ReleasedTestCase(unittest.TestCase):
         )
         self.conn.commit()
 
-    def report(self, *extra: str, revisions: str = "start..main") -> dict:
-        arguments = ["--space", SPACE, "--repo", self.repo, "--range", revisions, *extra]
+    def report(self, *extra: str, revisions: str = "start..main", repo: str = "") -> dict:
+        arguments = ["--space", SPACE, "--repo", repo or self.repo, "--range", revisions, *extra]
         stream = io.StringIO()
         with contextlib.redirect_stdout(stream):
             cli.main(["released", *arguments, "--json"])
@@ -140,8 +172,8 @@ class ReleasedTestCase(unittest.TestCase):
         items = (report or self.report())["items"]
         return next((item for item in items if item["reference"] == reference), None)
 
-    def only_match(self, reference: str) -> dict:
-        item = self.found(reference)
+    def only_match(self, reference: str, report: dict | None = None) -> dict:
+        item = self.found(reference, report)
         self.assertIsNotNone(item, f"{reference} is not on the list")
         assert item is not None
         self.assertEqual(1, len(item["matched"]), item)
@@ -151,17 +183,19 @@ class ReleasedTestCase(unittest.TestCase):
 class StepTests(ReleasedTestCase):
     def test_a_commit_in_the_range_is_found_by_its_hash(self) -> None:
         commit = self.commit(self.repo, "feat: in the range")
-        reference = self.item("direct", (commit[:7], ""))
+        reference = self.item("direct", commit[:7])
         match = self.only_match(reference)
-        self.assertEqual("hash", match["step"])
+        self.assertEqual(
+            {"repository": PROJECT, "hash": commit, "step": "hash", "weak": False},
+            {key: match[key] for key in ("repository", "hash", "step", "weak")},
+        )
         self.assertEqual(commit, match["release_commit"])
-        self.assertFalse(match["weak"])
 
     def test_a_commit_carried_under_another_hash_is_found_by_its_patch_id(self) -> None:
-        # The case an exact hash misses: the ref names the branch's hash, and the
+        # The case an exact hash misses: the item holds the branch's hash, and the
         # release holds the same change under the hash the integration gave it.
         branch_commit, integrated = self.carried("feat: carried over")
-        reference = self.item("carried", (branch_commit[:7], ""))
+        reference = self.item("carried", branch_commit[:7])
         match = self.only_match(reference)
         self.assertEqual("patch-id", match["step"])
         self.assertEqual(integrated, match["release_commit"])
@@ -172,7 +206,7 @@ class StepTests(ReleasedTestCase):
         branch_commit, integrated = self.carried(
             "feat: legacy text", "кодировка\n".encode("cp1251")
         )
-        match = self.only_match(self.item("legacy", (branch_commit, "")))
+        match = self.only_match(self.item("legacy", branch_commit))
         self.assertEqual(("patch-id", integrated), (match["step"], match["release_commit"]))
 
     def test_two_different_legacy_texts_are_not_the_same_change(self) -> None:
@@ -182,7 +216,7 @@ class StepTests(ReleasedTestCase):
         self.git(self.repo, "switch", "-c", "elsewhere", "start")
         unreleased = self.commit(self.repo, "feat: legacy text", "другой\n".encode("cp1251"))
         self.git(self.repo, "switch", "main")
-        self.assertEqual("changed-patch", self.only_match(self.item("t", (unreleased, "")))["step"])
+        self.assertEqual("changed-patch", self.only_match(self.item("t", unreleased))["step"])
 
     def test_a_carried_commit_with_a_changed_patch_is_found_and_called_weak(self) -> None:
         # An integration that resolved a conflict: the subject stays, the patch does not.
@@ -190,7 +224,7 @@ class StepTests(ReleasedTestCase):
         branch_commit = self.commit(self.repo, "feat: carried with a conflict", b"as written\n")
         self.git(self.repo, "switch", "main")
         integrated = self.commit(self.repo, "feat: carried with a conflict", b"as resolved\n")
-        match = self.only_match(self.item("rewritten", (branch_commit[:7], "")))
+        match = self.only_match(self.item("rewritten", branch_commit[:7]))
         self.assertEqual("changed-patch", match["step"])
         self.assertEqual(integrated, match["release_commit"])
         self.assertTrue(match["weak"])
@@ -202,7 +236,7 @@ class StepTests(ReleasedTestCase):
         earlier = self.commit(self.repo, "build(web): rebuild the bundled UI", b"old bundle\n")
         self.git(self.repo, "tag", "second")
         self.commit(self.repo, "build(web): rebuild the bundled UI", b"new bundle\n")
-        reference = self.item("rebuilt earlier", (earlier, ""))
+        reference = self.item("rebuilt earlier", earlier)
         self.assertIsNone(self.found(reference, self.report(revisions="second..main")))
 
     def test_a_common_subject_elsewhere_shows_as_weak_for_a_person_to_judge(self) -> None:
@@ -211,26 +245,31 @@ class StepTests(ReleasedTestCase):
         self.git(self.repo, "switch", "-c", "elsewhere", "start")
         unreleased = self.commit(self.repo, "build(web): rebuild the bundled UI", b"other\n")
         self.git(self.repo, "switch", "main")
-        match = self.only_match(self.item("rebuilt elsewhere", (unreleased, "")))
+        match = self.only_match(self.item("rebuilt elsewhere", unreleased))
         self.assertEqual("changed-patch", match["step"])
         self.assertTrue(match["weak"])
 
-    def test_a_deleted_branch_is_found_by_the_subject_in_the_label_and_called_weak(self) -> None:
+    def test_a_deleted_branch_is_found_by_the_subject_recorded_and_called_weak(self) -> None:
+        # Attached while it was there, so the subject was recorded then; the label is
+        # free text and says nothing the step reads.
         branch_commit, integrated = self.carried("fix: gone with its branch")
+        reference = self.item("gone", branch_commit[:7])
+        self.conn.execute("UPDATE work_item_commits SET label = 'unrelated words'")
+        self.conn.commit()
         self.remove_the_branch(branch_commit)
-        reference = self.item(
-            "gone", (branch_commit[:7], "product work: fix: gone with its branch (the note)")
-        )
         match = self.only_match(reference)
         self.assertEqual("subject", match["step"])
         self.assertEqual(integrated, match["release_commit"])
         self.assertTrue(match["weak"])
-        self.assertIn("WEAK MATCH", self.text())
+        self.assertIn("WEAK MATCH: the object is gone", self.text())
 
-    def test_a_subject_inside_a_longer_sentence_is_no_match(self) -> None:
-        branch_commit, _integrated = self.carried("fix")
-        self.remove_the_branch(branch_commit)
-        reference = self.item("sentence", (branch_commit[:7], "not the fix anyone asked for"))
+    def test_a_gone_commit_whose_subject_the_range_lacks_is_no_match(self) -> None:
+        self.commit(self.repo, "fix: what the release holds")
+        self.git(self.repo, "switch", "-c", "topic", "start")
+        unmerged = self.commit(self.repo, "fix: what nobody merged")
+        self.git(self.repo, "switch", "main")
+        reference = self.item("unmerged", unmerged)
+        self.remove_the_branch(unmerged)
         self.assertIsNone(self.found(reference))
 
     def test_a_commit_outside_the_range_is_not_shown(self) -> None:
@@ -239,8 +278,8 @@ class StepTests(ReleasedTestCase):
         self.git(self.repo, "switch", "-c", "elsewhere", "start")
         unreleased = self.commit(self.repo, "feat: on a branch nobody merged")
         self.git(self.repo, "switch", "main")
-        earlier = self.item("released earlier", (before, ""))
-        branch = self.item("not released", (unreleased, ""))
+        earlier = self.item("released earlier", before)
+        branch = self.item("not released", unreleased)
         answer = self.report()
         self.assertIsNone(self.found(earlier, answer))
         self.assertIsNone(self.found(branch, answer))
@@ -249,14 +288,68 @@ class StepTests(ReleasedTestCase):
         self.commit(self.repo, "feat: in the range")
         self.git(self.repo, "tag", "end")
         later = self.commit(self.repo, "feat: after the tag")
-        reference = self.item("later", (later, ""))
+        reference = self.item("later", later)
         self.assertIsNone(self.found(reference, self.report(revisions="start..end")))
+
+
+class RepositoryTests(ReleasedTestCase):
+    """Which attached commits are the checkout's to compare."""
+
+    def test_a_commit_with_no_repository_is_compared_by_its_hash_and_its_subject(self) -> None:
+        commit = self.commit(self.repo, "feat: in the range")
+        branch_commit, integrated = self.carried("fix: gone with its branch")
+        self.remove_the_branch(branch_commit)
+        by_hash = self.item("no repository", (None, commit[:7], ""))
+        by_subject = self.item(
+            "no repository, gone", (None, branch_commit[:7], "fix: gone with its branch")
+        )
+        answer = self.report()
+        match = self.only_match(by_hash, answer)
+        self.assertEqual(
+            (None, commit[:7], "hash"), (match["repository"], match["hash"], match["step"])
+        )
+        match = self.only_match(by_subject, answer)
+        self.assertEqual(("subject", integrated), (match["step"], match["release_commit"]))
+        self.assertIn(f"  {commit[:7]}  hash: in the range", self.text())
+
+    def test_a_commit_of_another_project_is_never_compared(self) -> None:
+        # A clone shares every hash, so only the project the commit is attached as
+        # keeps it out: the same hash and subject of the checkout's project match.
+        clone = os.path.join(self.home.name, "clone")
+        commit = self.commit(self.repo, "feat: in the range")
+        self.git(self.home.name, "clone", "--quiet", self.repo, clone)
+        self.projects["beta"] = clone
+        elsewhere = self.item("elsewhere", ("beta", commit, "feat: in the range"))
+        here = self.item("here", ("alpha", commit, "feat: in the range"))
+        answer = self.report()
+        self.assertIsNone(self.found(elsewhere, answer))
+        self.assertEqual("hash", self.only_match(here, answer)["step"])
+
+    def test_a_linked_worktree_is_the_repository_of_its_checkout(self) -> None:
+        commit = self.commit(self.repo, "feat: in the range")
+        linked = os.path.join(self.home.name, "linked")
+        self.git(self.repo, "worktree", "add", "--detach", linked, "main")
+        reference = self.item("linked", commit)
+        answer = self.report(repo=linked)
+        self.assertEqual(PROJECT, answer["project"])
+        self.assertEqual("hash", self.only_match(reference, answer)["step"])
+
+    def test_a_checkout_no_project_is_registered_at_compares_no_project_commit(self) -> None:
+        commit = self.commit(self.repo, "feat: in the range")
+        attached = self.item("attached as alpha", commit)
+        unplaced = self.item("no repository", (None, commit, ""))
+        del self.projects[PROJECT]
+        answer = self.report()
+        self.assertIsNone(answer["project"])
+        self.assertIsNone(self.found(attached, answer))
+        self.assertEqual("hash", self.only_match(unplaced, answer)["step"])
+        self.assertIn("is no registered project's root", self.text())
 
 
 class ListTests(ReleasedTestCase):
     def test_a_closed_item_is_not_shown(self) -> None:
         commit = self.commit(self.repo, "feat: in the range")
-        reference = self.item("finished", (commit, ""))
+        reference = self.item("finished", commit)
         self.close_item(reference)
         self.assertEqual([], self.report()["items"])
 
@@ -265,18 +358,21 @@ class ListTests(ReleasedTestCase):
         self.git(self.repo, "switch", "-c", "rest", "start")
         unreleased = self.commit(self.repo, "feat: second half")
         self.git(self.repo, "switch", "main")
-        partly = self.item("partly", (released_commit, ""), (unreleased[:7], ""))
-        whole = self.item("whole", (released_commit, ""))
+        partly = self.item("partly", released_commit, unreleased[:7])
+        whole = self.item("whole", released_commit)
         answer = self.report()
         self.assertEqual([whole, partly], [item["reference"] for item in answer["items"]])
-        self.assertEqual([unreleased[:7]], answer["items"][1]["not_matched"])
+        self.assertEqual(
+            [{"repository": PROJECT, "hash": unreleased}], answer["items"][1]["not_matched"]
+        )
         text = self.text()
-        self.assertIn("partly released? 1 of 2 commit refs", text)
-        self.assertIn("  check: 1 of 1 commit refs", text)
+        self.assertIn("partly released? 1 of 2 attached commits", text)
+        self.assertIn("  check: 1 of 1 attached commits", text)
+        self.assertIn(f"  no match: {PROJECT}@{unreleased[:9]}", text)
 
     def test_the_answer_says_to_check_and_never_that_work_is_done(self) -> None:
         commit = self.commit(self.repo, "feat: in the range")
-        self.item("anything", (commit, ""))
+        self.item("anything", commit)
         text = self.text()
         self.assertIn("Check these open work items", text)
         self.assertNotIn("done", text.lower())
@@ -284,71 +380,8 @@ class ListTests(ReleasedTestCase):
 
     def test_an_empty_answer_names_the_gap_it_cannot_see(self) -> None:
         self.commit(self.repo, "feat: in the range")
-        self.item("no refs at all")
-        self.assertIn("no commit ref", self.text())
-
-    def test_a_ref_that_is_no_recorded_hash_is_never_handed_to_git(self) -> None:
-        # `HEAD` would resolve into the range and put the item on the list.
-        self.commit(self.repo, "feat: in the range")
-        values = ("HEAD", "main", "a..b", "https://example.invalid/x", "--output=x", "x:abcd1234")
-        reference = self.item("odd forms", *((value, "") for value in values))
-        self.assertIsNone(self.found(reference))
-
-    def test_a_ref_may_name_this_repository(self) -> None:
-        commit = self.commit(self.repo, "feat: in the range")
-        for value in (f"product@{commit[:7]}", f"product {commit[:7]}"):
-            with self.subTest(value=value):
-                self.assertEqual("hash", self.only_match(self.item("named", (value, "")))["step"])
-
-    def test_a_linked_worktree_answers_to_its_checkouts_name(self) -> None:
-        branch_commit, _integrated = self.carried("fix: gone with its branch")
-        self.remove_the_branch(branch_commit)
-        linked = os.path.join(self.home.name, "linked")
-        self.git(self.repo, "worktree", "add", "--detach", linked, "main")
-        reference = self.item(
-            "named", (f"product@{branch_commit[:7]}", "fix: gone with its branch")
-        )
-        stream = io.StringIO()
-        with contextlib.redirect_stdout(stream):
-            cli.main(
-                ["released", "--space", SPACE, "--repo", linked, "--range", "start..main", "--json"]
-            )
-        item = self.found(reference, json.loads(stream.getvalue()))
-        self.assertIsNotNone(item)
-
-    def test_a_label_does_not_match_for_a_ref_naming_another_repository(self) -> None:
-        branch_commit, _integrated = self.carried("fix: same words elsewhere")
-        self.remove_the_branch(branch_commit)
-        reference = self.item(
-            "elsewhere", (f"other-repo@{branch_commit[:7]}", "fix: same words elsewhere")
-        )
-        self.assertIsNone(self.found(reference))
-
-    def test_a_label_does_not_match_for_a_commit_another_registered_repository_has(self) -> None:
-        # The ref names no repository, and `resolve_ref` is what says where it lives.
-        other = self.repository("other")
-        foreign = self.commit(other, "fix: same words elsewhere")
-        self.commit(self.repo, "fix: same words elsewhere")
-        reference = self.item("foreign", (foreign[:7], "fix: same words elsewhere"))
-        entries = [project_entry("other", other), project_entry("product", self.repo)]
-        with mock.patch.object(
-            project_registry, "_read_registry_bytes", return_value=registry_bytes(entries)
-        ):
-            self.assertIsNone(self.found(reference))
-        # The registry is the only difference, so it is what kept the label out.
-        self.assertEqual("subject", self.only_match(reference)["step"])
-
-    def test_a_registered_project_id_names_this_repository(self) -> None:
-        branch_commit, _integrated = self.carried("fix: gone with its branch")
-        self.remove_the_branch(branch_commit)
-        reference = self.item(
-            "by id", (f"registered-id@{branch_commit[:7]}", "fix: gone with its branch")
-        )
-        entries = [project_entry("registered-id", self.repo)]
-        with mock.patch.object(
-            project_registry, "_read_registry_bytes", return_value=registry_bytes(entries)
-        ):
-            self.assertEqual("subject", self.only_match(reference)["step"])
+        self.item("no commits at all")
+        self.assertIn("no attached commit", self.text())
 
 
 class ReadOnlyTests(ReleasedTestCase):
@@ -366,7 +399,7 @@ class ReadOnlyTests(ReleasedTestCase):
     def test_no_write_reaches_the_store_or_the_repository(self) -> None:
         commit = self.commit(self.repo, "feat: in the range")
         branch_commit, _integrated = self.carried("feat: carried over")
-        reference = self.item("hinted", (commit, ""), (branch_commit, ""))
+        reference = self.item("hinted", commit, branch_commit)
         self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         before = self.fingerprint()
         head_before = self.git(self.repo, "rev-parse", "main", "topic")

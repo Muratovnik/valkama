@@ -7,6 +7,8 @@ import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
+import { doctorCommitMessages } from '@/shared/i18n/doctorCommitMessages.ts'
+import { doctorDesktopMessages } from '@/shared/i18n/doctorDesktopMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { doctorProjectMessages } from '@/shared/i18n/doctorProjectMessages.ts'
 import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
@@ -79,6 +81,8 @@ export const ru = {
       planning: 'Работа',
       sessions: 'Сессии',
       analytics: 'Аналитика',
+      decisions: 'Решения агентов',
+      volumes: 'Объёмы',
       improvements: 'Улучшения',
       skills: 'Навыки',
       memory: 'Память',
@@ -483,7 +487,9 @@ export const ru = {
         title: 'Навык Valkama',
         detail: 'Ни Claude Code, ни Codex не настроены для этого пользователя.',
       },
+      ...doctorCommitMessages.ru,
       ...doctorLoginMessages.ru,
+      ...doctorDesktopMessages.ru,
       ...doctorQuotaMessages.ru,
       ...doctorProjectMessages.ru,
       'listener-offline': {

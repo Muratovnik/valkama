@@ -53,7 +53,16 @@ from dataclasses import dataclass
 
 from ..projects import project_registry
 from ..store_identity.metadata import read_store_metadata
-from . import executors, item_tree, live_sessions, live_work, model, read_model, states
+from . import (
+    executors,
+    item_tree,
+    live_sessions,
+    live_work,
+    model,
+    participation,
+    read_model,
+    states,
+)
 
 #: Every open item and every pinned one, with all their ancestors, in one read. Only a
 #: checklist a session's holder could stand in is parsed; the rest reads as no steps.
@@ -119,7 +128,7 @@ def _item(row: sqlite3.Row) -> _Item:
         key=key,
         reference=f"{key}-{number}",
         title=str(row["title"]),
-        kind=read_model.outward_kind(row["kind"], row["parent_id"]),
+        kind=model.outward_kind(row["kind"], row["parent_id"]),
         parent=None if row["parent_id"] is None else str(row["parent_id"]),
         pinned=bool(row["pinned"]),
         state_name="" if shown is None else str(shown["name"]),
@@ -260,7 +269,7 @@ def frame(conn: sqlite3.Connection) -> dict:
         for step in steps if not item.is_terminal else ():
             if step["claimed_by"] and not step["done"]:
                 held[step["claimed_by"]] = item.identity
-    placement = live_work.placed(conn, records, held_steps=held)
+    placement = live_work.placed(conn, records, settings=participation.load(conn), held_steps=held)
     shown = _shown(items, placement.live)
     # An unreadable registry places no session and names no project.
     listing = project_registry.read_registry()

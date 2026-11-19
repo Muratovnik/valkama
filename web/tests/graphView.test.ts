@@ -167,23 +167,60 @@ function assertClearGeometry(graph: GraphLayout) {
   }
 }
 
-test('blockers and context preserve source/target direction with routed geometry', async () => {
-  const placed = await layout({
-    nodes: [node(1), node(2), node(3)],
-    edges: [edge(1, 2), edge(2, 3, 'discovered-from')],
+/**
+ * 1 blocks 2, and 3 was discovered from 2. A block is drawn blocker first; a discovery
+ * from the work it was found in to the work it grew into, so 2 stands before 3 and the
+ * arrow lands on 3, while the line keeps the link as stored. Over the whole space and in
+ * a chain alike: the two lay out through different paths.
+ */
+const DIRECTED = {
+  nodes: [node(1), node(2), node(3)],
+  edges: [edge(1, 2), edge(3, 2, 'discovered-from')],
+}
+const DIRECTED_SCOPES = [
+  ['the whole space', UNFOLDED],
+  [
+    'a chain',
+    {
+      kind: 'chain' as const,
+      scopeRootId: null,
+      members: DIRECTED.nodes.map((n) => n.work_item_id),
+    },
+  ],
+] as const
+
+/** A line by its kind, the numbers it is drawn between and the links it stands for. */
+function drawnLine(line: GraphLayout['edges'][number]) {
+  return {
+    kind: line.kind,
+    drawn: [numberFor(line.source), numberFor(line.target)],
+    stored: line.links.map((link) => [numberFor(link.from), numberFor(link.to)]),
+  }
+}
+
+for (const [name, scope] of DIRECTED_SCOPES) {
+  test(`in ${name} a block runs blocker first and a discovery from its source to the work found`, async () => {
+    const placed = await layout(DIRECTED, false, scope)
+    const byId = placedById(placed)
+    assert.ok(byId(1).x < byId(2).x && byId(2).x < byId(3).x)
+    assert.equal(new Set(placed.nodes.map((item) => item.x)).size, 3)
+    assert.deepEqual(
+      placed.edges
+        .map((line) => drawnLine(line))
+        .sort((left, right) => left.drawn[0] - right.drawn[0]),
+      [
+        { kind: 'blocks', drawn: [1, 2], stored: [[1, 2]] },
+        { kind: 'discovered-from', drawn: [2, 3], stored: [[3, 2]] },
+      ],
+    )
+    // The route ends where the arrow is drawn: on the left side of the target.
+    for (const line of placed.edges) {
+      const target = placed.nodes.find((item) => item.work_item_id === line.target)
+      assert.equal(line.points.at(-1)?.x, target?.x)
+    }
+    assertClearGeometry(placed)
   })
-  const byId = placedById(placed)
-  assert.ok(byId(1).x < byId(2).x && byId(2).x < byId(3).x)
-  assert.equal(new Set(placed.nodes.map((item) => item.x)).size, 3)
-  assert.deepEqual(
-    placed.edges.map(({ source, target }) => [numberFor(source), numberFor(target)]),
-    [
-      [1, 2],
-      [2, 3],
-    ],
-  )
-  assertClearGeometry(placed)
-})
+}
 
 test('cycles, parallel context and long links route around unrelated cards', async () => {
   const nodes = Array.from({ length: 38 }, (_, index) =>
@@ -193,7 +230,8 @@ test('cycles, parallel context and long links route around unrelated cards', asy
   )
   const edges = [
     ...Array.from({ length: 16 }, (_, index) => edge(index + 1, index + 2)),
-    edge(1, 9, 'discovered-from'),
+    // Drawn from 1 to 9, beside the block from 1 to 9: two lines one way round.
+    edge(9, 1, 'discovered-from'),
     edge(2, 12),
     edge(9, 1),
     edge(1, 9),
@@ -377,7 +415,8 @@ test('frontier uses the server workable flag and focus retains transitive cycles
       node(3, { workable: false }),
       node(4),
     ],
-    edges: [edge(1, 2), edge(2, 3), edge(3, 2, 'discovered-from')],
+    // 2 was discovered from 3: drawn from 3 back to 2, a cycle with the block 2 → 3.
+    edges: [edge(1, 2), edge(2, 3), edge(2, 3, 'discovered-from')],
   }
   assert.deepEqual(
     frontier(source).map((item) => numberOf(item)),

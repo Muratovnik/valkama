@@ -7,8 +7,22 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { card, cardsAfterTheDelay, middle, openReported, reference, rest } from './previewPage.ts'
+import {
+  card,
+  cardsAfterTheDelay,
+  middle,
+  ontoCard,
+  openReported,
+  reference,
+  rest,
+} from './previewPage.ts'
 import { test } from './test.ts'
+
+test.beforeEach(async ({ page }) => {
+  // A card's delay runs on this clock (`cardsAfterTheDelay`), so a loaded machine moves no
+  // verdict; until a test moves it, it keeps the wall clock's pace.
+  await page.clock.install()
+})
 
 const WORDS = {
   en: {
@@ -32,9 +46,10 @@ async function shown(page: Page, locale: 'en' | 'ru' = 'en', width = 1440) {
   await page.setViewportSize({ width, height: 900 })
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   const opened = await openReported(page)
-  await rest(page, reference(opened.entry, 'MAIN-12'))
+  const link = reference(opened.entry, 'MAIN-12')
+  await rest(page, link)
   await expect(card(page)).toBeVisible()
-  return opened
+  return { ...opened, link }
 }
 
 const clipboard = (page: Page) => page.evaluate(() => navigator.clipboard.readText())
@@ -46,10 +61,13 @@ async function boxOf(locator: Locator) {
   return box
 }
 
-/** Press in the title's first words and drag to `to`, or along them; the press stays down. */
-async function dragOverTitle(page: Page, title: Locator, to?: { x: number; y: number }) {
-  const box = await boxOf(title)
-  await page.mouse.move(box.x + 2, box.y + 8, { steps: 6 })
+/**
+ * From `link`, whose card is up, press in the card title's first words and drag to `to`, or along
+ * them; the press stays down.
+ */
+async function dragOverTitle(page: Page, link: Locator, to?: { x: number; y: number }) {
+  const box = await boxOf(card(page).locator('.preview-title'))
+  await ontoCard(page, link, { x: box.x + 2, y: box.y + 8, steps: 6 })
   await page.mouse.down()
   await page.mouse.move(to?.x ?? box.x + 120, to?.y ?? box.y + 8, { steps: 8 })
 }
@@ -142,9 +160,9 @@ test('the keyboard reaches both controls from the reference, and goes on from th
 })
 
 test('its text can be selected with the pointer, in a colour that shows', async ({ page }) => {
-  await shown(page)
+  const { link } = await shown(page)
   const title = card(page).locator('.preview-title')
-  await dragOverTitle(page, title)
+  await dragOverTitle(page, link)
   await page.mouse.up()
   expect(await selected(page)).toMatch(/\S{3}/u)
   await expect(card(page)).toBeVisible()
@@ -159,11 +177,10 @@ test('its text can be selected with the pointer, in a colour that shows', async 
 test('a drag that ends outside keeps the card and the selection until a press elsewhere', async ({
   page,
 }) => {
-  const { drawer } = await shown(page)
-  const title = card(page).locator('.preview-title')
+  const { drawer, link } = await shown(page)
   const box = await boxOf(card(page))
   const outside = { x: box.x + box.width + 60, y: box.y + box.height + 60 }
-  await dragOverTitle(page, title, outside)
+  await dragOverTitle(page, link, outside)
   expect(await cardsAfterTheDelay(page)).toBe(1)
   await page.mouse.up()
   const words = await selected(page)
@@ -178,13 +195,21 @@ test('a drag that ends outside keeps the card and the selection until a press el
 })
 
 test('a drag with no selection that ends outside leaves as the pointer did', async ({ page }) => {
-  await shown(page)
+  const { link } = await shown(page)
   const box = await boxOf(card(page))
   // On the card's edge, where nothing is under the press to select.
-  await page.mouse.move(box.x + box.width - 2, box.y + 2, { steps: 6 })
+  await ontoCard(page, link, { x: box.x + box.width - 2, y: box.y + 2, steps: 6 })
   await page.mouse.down()
-  await page.mouse.move(box.x + box.width + 300, box.y + box.height + 300, { steps: 8 })
+  // Off the card and inside the window, on the page beside and under it: a drag that leaves the
+  // window is one more way to end outside, not the one this holds.
+  const end = { x: box.x - 200, y: box.y + box.height + 20 }
+  const view = page.viewportSize() ?? { width: 0, height: 0 }
+  expect(end.x > 0 && end.y < view.height, 'the drag ends inside the window').toBe(true)
+  await page.mouse.move(end.x, end.y, { steps: 8 })
   await page.mouse.up()
+  // The press on no text started no selection from the nearest letter, as the state's in the
+  // card's corner once did, and nothing held the card up.
+  expect(await selected(page)).toBe('')
   await expect(card(page)).toHaveCount(0)
 })
 
@@ -195,9 +220,10 @@ test('a selection hands focus back to a draft at the next Tab, which stays in th
   const draft = drawer.locator('.discussion-form').getByRole('textbox')
   await draft.fill('A draft in progress')
   await draft.focus()
-  await rest(page, reference(entry, 'MAIN-12'))
+  const link = reference(entry, 'MAIN-12')
+  await rest(page, link)
   await expect(card(page)).toBeVisible()
-  await dragOverTitle(page, card(page).locator('.preview-title'))
+  await dragOverTitle(page, link)
   await page.mouse.up()
   expect(await selected(page)).toMatch(/\S{3}/u)
   await page.keyboard.press('Tab')
@@ -210,10 +236,9 @@ test('a selection hands focus back to a draft at the next Tab, which stays in th
 test('moving from the number onto a control keeps the card, and the press selects nothing', async ({
   page,
 }) => {
-  await shown(page)
+  const { link } = await shown(page)
   const copy = page.getByRole('button', { name: WORDS.en.copy, exact: true })
-  const { x, y } = await middle(copy)
-  await page.mouse.move(x, y, { steps: 8 })
+  await ontoCard(page, link, { ...(await middle(copy)), steps: 8 })
   expect(await cardsAfterTheDelay(page)).toBe(1)
   // Still this reference's card, though another reference lies under it on a wide window.
   await expect(copy).toBeVisible()

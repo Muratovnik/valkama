@@ -27,7 +27,7 @@ from server.planning.routing import PlanningRouting
 from server.projects import project_registry, scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
-from tests.planning_fixtures import bulk_items, item_ids
+from tests.planning_fixtures import bulk_items, item_ids, standing_in
 from tests.registry_fixtures import project_entry, registry_bytes
 
 
@@ -66,6 +66,10 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.server = http_surface.PlatformHTTPServer(
             ("127.0.0.1", 0), http_surface.Handler, token_path=self.root / "installation-token"
         )
+        # A stream's handler closes its store connection after it unsubscribes, so a
+        # stream that has unsubscribed may still hold the store. Only non-daemon handler
+        # threads make `server_close` wait for each of them to close its connection.
+        self.server.daemon_threads = False
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(thread.join, 2)
@@ -264,7 +268,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         body = {
             **self.refs["primary"],
             "id": "SAME-1",
-            "kind": "decision",
+            "kind": "question",
             "prompt": "May this proceed?",
             "fields": [
                 {
@@ -1241,9 +1245,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.addCleanup(conn.close)
         for number in range(999):
             service.create_work_item(conn, space="SAME", title=f"Triage {number}")
-        review = service.create_work_item(
-            conn, space="SAME", title="Review me", state="review", acceptance="assignment"
-        )
+        review = standing_in(conn, "review", space="SAME", title="Review me")
         conn.commit()
 
         status, payload = self.request(self.model_path("primary"))

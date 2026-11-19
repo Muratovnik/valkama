@@ -3,13 +3,14 @@
  *
  * The poll of the usage endpoint runs in the listener, so its switch lives on the
  * server, and a write starts or stops the poll there at once (connection contract,
- * "The poll of the usage endpoint"). An account's name is kept by its organization in the
- * store, so every device and the quota alerts say the same one (connection contract,
- * "The owner's names for accounts").
+ * "The poll of the usage endpoint"). A name is kept in the store by the account's id or its
+ * organization's (`accountIds.ts`), so every device and the quota alerts say the same one
+ * (connection contract, "The owner's names for accounts").
  */
 
 import { parseContract, plainObject, strictObject, z } from '@/shared/api/contract.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
+import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 import { readAccountAliases } from '@/shared/lib/accountAliases.ts'
 import type { AccountAliases } from '@/shared/lib/accountAliases.ts'
 
@@ -64,7 +65,7 @@ async function namesRequest(init?: RequestInit): Promise<AccountAliases> {
   return readAccountAliases(parseContract(namesSchema, payload, 'quota.names', refused).names)
 }
 
-/** Every name the owner gave an account, by its organization id. */
+/** Every name the owner gave an account or an organization, by its id. */
 export function fetchAccountNames(): Promise<AccountAliases> {
   return namesRequest()
 }
@@ -83,7 +84,21 @@ export function saveAccountNames(names: AccountAliases, replace = true): Promise
 }
 
 /** The server's words for a refused write of names, or null where the failure is ours to word. */
-export function accountNamesRefusal(error: unknown): string | null {
+function accountNamesRefusal(error: unknown): string | null {
   const detail = (error as { detail?: unknown } | null)?.detail
   return typeof detail === 'string' ? detail : null
+}
+
+/**
+ * Why a write of names failed, in words: the server's own for a refused name, or the failure's as
+ * the app says any other. Settings and the quota's accounts both say it so.
+ */
+export function accountNamesFailure(
+  error: unknown,
+  t: (key: string, params: Record<string, unknown>) => string,
+): string {
+  const refusal = accountNamesRefusal(error)
+  if (refusal !== null) return refusal
+  const message = failureMessage(typedFailure(error))
+  return t(message.key, message.params ?? {})
 }

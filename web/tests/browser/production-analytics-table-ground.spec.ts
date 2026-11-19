@@ -10,7 +10,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
+import { openPanel, pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 /** The panels measured, by their address and a part that says their tables are drawn. */
@@ -59,11 +59,7 @@ const grounds = (page: Page) =>
  * and shows each of its charts as its table, as a phone opens it.
  */
 async function openWithTables(page: Page, address: string, ready: string) {
-  await page.goto(address)
-  const analytics = page.locator('.analytics-page')
-  await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
-  if (!(await analytics.locator('.analytics-panel').isVisible()))
-    await analytics.locator('.analytics-rail [aria-current="page"]').click()
+  await openPanel(page, address)
   await expect(page.locator(ready).first()).toBeVisible()
   const radios = page.locator('.analytics-panel').getByRole('radio', { name: 'Table', exact: true })
   for (const radio of await radios.all())
@@ -81,7 +77,6 @@ for (const colorScheme of ['light', 'dark'] as const)
       const seen: Record<string, unknown> = {}
       for (const panel of PANELS) {
         await openWithTables(page, panel.address, panel.ready)
-        await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
         const cells = await grounds(page)
         seen[panel.name] = cells
         expect(cells.length, `${panel.name}: cells kept in place`).toBeGreaterThan(0)

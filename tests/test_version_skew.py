@@ -210,7 +210,7 @@ class StoreSchemaVersionTests(unittest.TestCase):
         self.assert_left_as_it_was(before)
 
     def test_every_store_below_the_oldest_this_build_opens_is_refused(self) -> None:
-        for stored in (1, 8, 9, store.RELEASE_2_9_SCHEMA_VERSION - 1):
+        for stored in (1, 8, 9, store.EARLIER_2_9_SCHEMA_VERSION - 1):
             with self.subTest(stored=stored):
                 if os.path.exists(self.path):
                     os.remove(self.path)
@@ -224,9 +224,12 @@ class StoreSchemaVersionTests(unittest.TestCase):
                 self.assertEqual(stored, self.refused_as_too_old().stored)
                 self.assert_left_as_it_was(before)
 
-    def left_by(self, *, indexed: bool) -> str:
-        """A store at 17, with the word index as 2.9 left it or without it as 2.8 did."""
+    def left_by(self, *, indexed: bool, schema: int = 17) -> str:
+        """A store at 17, with the word index as 2.9 left it or without it as 2.8 did; or,
+        indexed, carried on to 18 as Valkama 2.9.0 leaves it."""
 
+        if os.path.exists(self.path):
+            os.remove(self.path)
         schema17.build(self.path)
         conn = sqlite3.connect(self.path)
         try:
@@ -236,36 +239,42 @@ class StoreSchemaVersionTests(unittest.TestCase):
             conn.commit()
         finally:
             conn.close()
+        if schema == 18:
+            schema17.raise_to_18(self.path)
         return self.digest()
 
     def test_a_store_valkama_2_9_left_waits_for_the_work_model_migration(self) -> None:
-        before = self.left_by(indexed=True)
-        with self.assertRaises(store.WorkModelMigrationRequiredError) as raised:
-            store.connect()
-        self.assertEqual(
-            "this store is at schema 17; run `valkama migrate work-model` once with every"
-            " session stopped; it takes a verified recovery point first",
-            str(raised.exception),
-        )
-        self.assert_left_as_it_was(before)
+        for schema in store.SCHEMAS_2_9:
+            with self.subTest(schema=schema):
+                before = self.left_by(indexed=True, schema=schema)
+                with self.assertRaises(store.WorkModelMigrationRequiredError) as raised:
+                    store.connect()
+                self.assertEqual(
+                    f"this store is at schema {schema}; run `valkama migrate work-model` once"
+                    " with every session stopped; it takes a verified recovery point first",
+                    str(raised.exception),
+                )
+                self.assert_left_as_it_was(before)
 
     def test_a_store_at_17_without_the_word_index_is_older_than_2_9(self) -> None:
         before = self.left_by(indexed=False)
         self.assertEqual(17, self.refused_as_too_old().stored)
         self.assert_left_as_it_was(before)
 
-    def test_what_reads_a_store_without_bringing_it_up_refuses_one_at_17(self) -> None:
-        before = self.left_by(indexed=True)
-        with self.assertRaisesRegex(sqlite3.OperationalError, "not at this build's schema"):
-            store.open_read_only()
-        with self.assertRaises(light.UnwritableError) as refusal:
-            light.open_light(self.path, store.STORE_SCHEMA_VERSION)
-        self.assertEqual("schema", refusal.exception.reason)
-        with self.assertRaises(store.WorkModelMigrationRequiredError):
-            released.open_store()
-        with self.assertRaises(store.WorkModelMigrationRequiredError):
-            store.connect_for_read()
-        self.assertEqual(before, self.digest())
+    def test_what_reads_a_store_without_bringing_it_up_refuses_one_2_9_left(self) -> None:
+        for schema in store.SCHEMAS_2_9:
+            with self.subTest(schema=schema):
+                before = self.left_by(indexed=True, schema=schema)
+                with self.assertRaisesRegex(sqlite3.OperationalError, "not at this build's schema"):
+                    store.open_read_only()
+                with self.assertRaises(light.UnwritableError) as refusal:
+                    light.open_light(self.path, store.STORE_SCHEMA_VERSION)
+                self.assertEqual("schema", refusal.exception.reason)
+                with self.assertRaises(store.WorkModelMigrationRequiredError):
+                    released.open_store()
+                with self.assertRaises(store.WorkModelMigrationRequiredError):
+                    store.connect_for_read()
+                self.assertEqual(before, self.digest())
 
     def test_a_file_that_holds_no_table_yet_becomes_a_fresh_store(self) -> None:
         open(self.path, "wb").close()

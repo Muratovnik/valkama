@@ -218,6 +218,25 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(["statusline"], json.loads(result.stdout))
 
+    def test_a_release_from_before_the_git_hook_answers_it_with_nothing(self) -> None:
+        """Git runs the hook after an agent's commit: a rollback past it prints nothing there."""
+
+        hooks = self.checkout / "server" / "hooks"
+        hooks.mkdir(parents=True)
+        (hooks / "entry.py").write_text("", encoding="utf-8", newline="\n")
+        commit(self.checkout, ENTRY, "a release with hooks and no git hook")
+        command = Path(str(self.install()["command"]))
+        result = self.run_command(command, "git-hook", "run", "post-commit")
+        self.assertEqual((0, b""), (result.returncode, result.stdout), result.stderr)
+
+        (hooks / "git_hook.py").write_text("", encoding="utf-8", newline="\n")
+        commit(self.checkout, ENTRY, "a release with the git hook")
+        result = self.run_command(
+            Path(str(self.install()["command"])), "git-hook", "run", "post-commit"
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["git-hook", "run", "post-commit"], json.loads(result.stdout))
+
     def test_the_posix_command_hands_every_argument_to_the_shim(self) -> None:
         """The hook guard lives in the shim both commands run; the wrapper only forwards."""
 
@@ -226,6 +245,7 @@ class LauncherTests(unittest.TestCase):
         shim = launcher._shim_bytes(Path("/releases/abc/valkama.py")).decode("utf-8")
         self.assertIn("sys.argv[1] in EARLY_ENTRIES", shim)
         self.assertIn('"hook": ["server", "hooks", "entry.py"]', shim)
+        self.assertIn('"git-hook": ["server", "hooks", "git_hook.py"]', shim)
 
     def test_clients_run_the_committed_tree_not_the_working_tree(self) -> None:
         head = git(self.checkout, "rev-parse", "HEAD")

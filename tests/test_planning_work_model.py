@@ -2,7 +2,7 @@
 
 The vocabulary is stated here rather than read from the code under test: eight
 categories a caller names and the service one only the store holds, the kinds in
-and out, the acceptance bases and the events of schema 18. A fresh space's
+and out, the acceptance bases and the events of schema 19. A fresh space's
 workflow has a state for each category and one service state, and the store
 itself refuses a kind in a state it never stands in.
 """
@@ -73,7 +73,8 @@ class VocabularyTests(unittest.TestCase):
 
     def test_the_acceptance_bases_and_the_events_of_schema_18(self) -> None:
         self.assertEqual(
-            ("owner", "assignment", "inherited", "label_rule", "migrated"), model.ACCEPTANCE_BASES
+            ("owner", "assignment", "inherited", "label_rule", "agent", "migrated"),
+            model.ACCEPTANCE_BASES,
         )
         self.assertLessEqual({"accepted", "opened", "child_left"}, set(model.EVENT_ACTIONS))
         self.assertEqual(("created", "transitioned", "opened"), model.STATE_ENTRY_ACTIONS)

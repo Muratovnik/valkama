@@ -7,6 +7,8 @@
  * lane would make Kanban the model again.
  */
 
+import { commitSchema } from '@/shared/api/commitModel.ts'
+import { confirmationSchema } from '@/shared/api/confirmationModel.ts'
 import {
   blankable,
   boundedList,
@@ -20,12 +22,15 @@ import {
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { itemProjectsField } from '@/shared/api/itemProjectsModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
+import { eventSchema } from '@/shared/api/planningEventActions.ts'
 import {
-  EVENT_ACTIONS,
-  EVENT_DETAIL_MAX,
-  LABELS_DETAIL_MAX,
-} from '@/shared/api/planningEventActions.ts'
-import { lapsedClaimField, recordObject, withheldField } from '@/shared/api/planningRecordRules.ts'
+  conditionsChangedField,
+  deferredField,
+  lapsedClaimField,
+  recordObject,
+  returnedField,
+  withheldField,
+} from '@/shared/api/planningRecordRules.ts'
 import {
   otherSpaceSchema,
   spaceBriefSchema,
@@ -57,7 +62,14 @@ export const WORK_ITEM_KINDS = ['bug', 'goal', 'improvement', 'stage', 'task'] a
  */
 export const CONTAINER_STATES = ['not_started', 'in_progress', 'awaiting_confirmation'] as const
 /** Why accepted work was accepted. */
-const ACCEPTANCE_BASES = ['owner', 'assignment', 'inherited', 'label_rule', 'migrated'] as const
+const ACCEPTANCE_BASES = [
+  'owner',
+  'assignment',
+  'inherited',
+  'label_rule',
+  'agent',
+  'migrated',
+] as const
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export const LINK_KINDS = ['blocks', 'discovered-from', 'duplicates', 'relates-to'] as const
 const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
@@ -115,10 +127,20 @@ const workItemBriefShape = {
     basis: enumField(ACCEPTANCE_BASES),
     at: boundedText(ISO, 96),
   }).nullable(),
+  /**
+   * Only on an item waiting for a triage review: when a review marked it seen and who,
+   * both null while none did.
+   */
+  triage_stack: strictObject({
+    seen_at: boundedText(ISO, 96).nullable(),
+    seen_by: holderField().nullable(),
+  }).optional(),
   /** When it started: a task's own start, a container's earliest descendant's. */
   started_at: boundedText(ISO, 96).nullable(),
   /** The open items that block it, by reference. */
   waits_for: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 500),
+  /** The cancelled items still linked to block it; only on open work, and only when there are any. */
+  cancelled_blockers: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 500).optional(),
   claim_ref: actor(),
   claim_state: claimStateField(),
   parent_id: boundedText(UUID, 36).nullable(),
@@ -168,7 +190,7 @@ const workItemRowSchema = recordObject({
   queue_order: positiveInt().nullable(),
 })
 
-const summarySchema = strictObject({
+export const summarySchema = strictObject({
   done: blankable(4000),
   next: blankable(4000),
   why: blankable(4000).optional(),
@@ -317,30 +339,6 @@ const commentSchema = z.union([
 ])
 
 /**
- * Who made the call that wrote an event, as far as the call proved it. `author`
- * is what the caller wrote about itself; this is what the call carried. An
- * event older than identity has no source and names nobody.
- */
-const eventIdentitySchema = strictObject({
-  state: enumField(['confirmed', 'unconfirmed'] as const),
-  source: boundedText(/^[a-z][a-z-]{0,63}$/u, 64).nullable(),
-  session_id: callField(),
-  agent_id: callField(),
-})
-
-/** A detail is a short line, but for the label sets a `labels_changed` event carries. */
-const eventSchema = strictObject({
-  action: enumField(EVENT_ACTIONS),
-  detail: blankable(LABELS_DETAIL_MAX),
-  author: actor(),
-  at: boundedText(ISO, 96),
-  identity: eventIdentitySchema,
-}).refine((event) => event.action === 'labels_changed' || event.detail.length <= EVENT_DETAIL_MAX, {
-  message: 'expected a detail of at most 512 characters',
-  path: ['detail'],
-})
-
-/**
  * A session that follows the item, as the call that subscribed proved it. `label` is the holder
  * a claim of that session, or of that agent of it, records: the server's own rule, by the
  * channel that proved the session, so it is the very text `claim_ref` holds.
@@ -419,6 +417,8 @@ const workItemSchema = recordObject({
   // The server counts neither, so neither does the card.
   links: z.array(linkSchema),
   refs: z.array(refSchema),
+  // Every full record carries them; optional while no view reads them.
+  commits: z.array(commitSchema).optional(),
   // Unbounded on purpose: the server sends the whole record, however long the
   // discussion and the history grew, and a card refused for its length is lost.
   // Each entry stays bounded.
@@ -432,6 +432,13 @@ const workItemSchema = recordObject({
   subscribers: z.array(subscriberSchema).optional(),
   // Who works on a goal or a stage: only the HTTP reads of one item carry it.
   participants: boundedList(participantSchema, 50).optional(),
+  // What a goal's or stage's confirmer checks, only while it awaits confirmation.
+  confirmation: confirmationSchema.optional(),
+  // Why it waits while put off, and why it came back while it stands in triage after that.
+  deferred: deferredField().optional(),
+  returned: returnedField().optional(),
+  // What became of steps taken off, reworded or moved to another item, once any were.
+  conditions_changed: conditionsChangedField().optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),
@@ -440,6 +447,10 @@ const workItemSchema = recordObject({
   requeued: stateMoveSchema.optional(),
   // The holder whose claim a close ended.
   released: holderField().optional(),
+  // The open items a close left with nothing open blocking them.
+  freed: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
+  // The goals and stages a write left with nothing open under them.
+  awaiting_confirmation: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
 })
 
 const workflowSchema = strictObject({

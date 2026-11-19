@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { DETAIL_TOOLTIPS, scanTooltipKinds } from '../scripts/ui-system/native-titles.mjs'
+import { DETAIL_TOOLTIPS } from '../scripts/ui-system/detail-tooltips.mjs'
+import { scanTooltipKinds } from '../scripts/ui-system/native-titles.mjs'
 import { collectVueSources } from '../scripts/ui-system/sources.mjs'
 
 /** A fixture tree registers nothing: the product's register would all be gone in it. */

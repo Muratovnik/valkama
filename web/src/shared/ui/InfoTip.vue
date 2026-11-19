@@ -146,7 +146,8 @@ defineExpose({ close })
       </button>
     </slot>
     <Teleport to="body">
-      <!-- The panel's role is its kind: a dialog holds a control, a tooltip reads. -->
+      <!-- The panel's role is its kind: a dialog holds a control, a tooltip reads. Pinned open by -->
+      <!-- a press, it is a popup over the page: no hint under it speaks (`underPopup`). -->
       <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
       <div
         v-if="isOpen"
@@ -156,6 +157,7 @@ defineExpose({ close })
         :role="panelRole"
         :aria-label="panelName"
         :style="panelStyle"
+        data-popup-surface
         @focusout="closeWhenFocusLeaves"
         @keydown.esc="dismiss"
       >

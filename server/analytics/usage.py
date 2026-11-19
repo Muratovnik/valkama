@@ -21,7 +21,8 @@ the one they make. A stretch with no length counts whole at its moment.
 
 A day is the caller's: the request carries its offset from UTC in minutes, and the server
 reads no time-zone database. A period across a change of daylight saving time is cut at
-one offset; a caller that minds asks for it in two.
+one offset; a caller that minds asks for it in two. The period's grammar, with its steps
+and its refusals, is the one every read over a period takes (`planning.usage.period`).
 
 | Dimension | Value | Read from |
 | --- | --- | --- |
@@ -32,7 +33,7 @@ one offset; a caller that minds asks for it in two.
 | `role` | who spent it: `main`, a session's own run; `subagent`; `advisor`, a segment an adviser spent, in either | the run and the segment |
 | `launch_class` | how a subagent's run was launched, `null` for a session's own run | the run |
 | `model`, `effort`, `environment` | as the segment holds them | the segment |
-| `seat` | the quota account of its organization the stretch was spent on, else the seat's key for the week, `unknown` where no sample says | the quota samples (`quota.seats`) |
+| `seat` | the quota account the stretch was spent on (`quota.accounts`): its organization, a slash, and its UUID or `weekly:` with its weekly reset; `<organization>/` where the organization is known and no sample names the account; `unknown` where neither is known | the quota samples (`quota.seats`) |
 
 A value the store does not hold is its own group, `unknown`. Work on no item, a
 session's own run, which is launched by no one, and work on an item that names no project
@@ -46,7 +47,6 @@ from __future__ import annotations
 import bisect
 import datetime as dt
 import operator
-import re
 import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -55,9 +55,9 @@ from dataclasses import dataclass, field
 from .. import sessions
 from ..planning import executors, item_projects, live_sessions
 from ..planning import usage as item_usage
-from ..planning.usage import Value
+from ..planning.usage import MAX_STEPS, STEPS, UsageQueryError, Value
 from ..projects import project_registry
-from ..quota import seats
+from ..quota import accounts, seats
 
 ACCOUNT = "account"
 PROJECT = "project"
@@ -84,25 +84,12 @@ DIMENSIONS = (
 #: Who spent a stretch: a session's own run, a subagent's, or an adviser in either.
 ROLES = item_usage.ROLES
 
-#: The length of each step, in seconds. A day is always 24 hours at one offset.
-STEPS = {"minute": 60, "hour": 3600, "day": 86400}
 _SECOND = 1_000_000
 _MILLISECOND = 1000
 MAX_GROUPS = 2
-#: Forty hours by the minute, a hundred days by the hour, or six and a half years by the day.
-MAX_STEPS = 2400
-#: The furthest any zone is from UTC.
-MAX_OFFSET_MINUTES = 14 * 60
 MAX_FILTER_VALUES = 100
 MAX_VALUE_LENGTH = 512
 
-_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
-_EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
-_MICRO = dt.timedelta(microseconds=1)
-#: The moments a period and its comparison may lie between: nothing is stored before
-#: the first, and a date past the second could not be written at every offset.
-_EARLIEST = 0
-_LATEST = (dt.datetime(9999, 1, 1, tzinfo=dt.UTC) - _EPOCH) // _MICRO
 _TOKENS = len(item_usage.TOKEN_KINDS)
 #: Where each priced kind sits among the token columns.
 _PRICED = tuple(
@@ -157,10 +144,6 @@ _ONE_AT_A_TIME = threading.Lock()
 _NONE_IS_A_VALUE = frozenset({WORK_ITEM, LAUNCH_CLASS, PROJECT})
 
 
-class UsageQueryError(ValueError):
-    """A request this read cannot answer, saying what in it is wrong."""
-
-
 @dataclass(frozen=True)
 class UsageQuery:
     """One request, checked: the period in microseconds since the epoch, and its cuts."""
@@ -173,40 +156,6 @@ class UsageQuery:
     #: The values each filtered dimension admits; `None` admits work with none.
     filters: Mapping[str, frozenset[Value]] = field(default_factory=dict)
     compare: bool = False
-
-
-def _micro(moment: dt.datetime) -> int:
-    return (moment - _EPOCH) // _MICRO
-
-
-def _at(micro: int, zone: dt.tzinfo) -> str:
-    return (_EPOCH + micro * _MICRO).astimezone(zone).isoformat()
-
-
-def _moment(text: str, name: str, zone: dt.tzinfo) -> int:
-    """A date as the start of that day in the caller's zone, or a time with its own offset."""
-
-    try:
-        if _DATE.fullmatch(text):
-            return _micro(dt.datetime.combine(dt.date.fromisoformat(text), dt.time(), zone))
-        moment = dt.datetime.fromisoformat(text)
-        if moment.tzinfo is None:
-            raise UsageQueryError(f"{name} must be a date or a time with its offset")
-        return _micro(moment)
-    except (ValueError, OverflowError) as error:
-        if isinstance(error, UsageQueryError):
-            raise
-        raise UsageQueryError(f"{name} must be a date or a time with its offset") from error
-
-
-def caller_zone(utc_offset: int) -> dt.timezone:
-    """The caller's zone, from its offset from UTC in minutes, or a refusal of the offset."""
-
-    if not -MAX_OFFSET_MINUTES <= utc_offset <= MAX_OFFSET_MINUTES:
-        raise UsageQueryError(
-            f"utc_offset must be from {-MAX_OFFSET_MINUTES} to {MAX_OFFSET_MINUTES} minutes"
-        )
-    return dt.timezone(dt.timedelta(minutes=utc_offset))
 
 
 def _dimensions(names: Iterable[str], parameter: str) -> list[str]:
@@ -246,20 +195,7 @@ def query(
 ) -> UsageQuery:
     """A request checked whole, or a refusal naming the first thing wrong in it."""
 
-    if step not in STEPS:
-        raise UsageQueryError("step must be minute, hour or day")
-    zone = caller_zone(utc_offset)
-    begins, ends = _moment(start, "from", zone), _moment(end, "to", zone)
-    if ends <= begins:
-        raise UsageQueryError("to must be later than from")
-    if (2 * begins - ends if compare else begins) < _EARLIEST or ends > _LATEST:
-        raise UsageQueryError(
-            "from and to must lie between 1970 and 9999, and with compare the period before too"
-        )
-    length, shift = STEPS[step] * _SECOND, utc_offset * 60 * _SECOND
-    steps = -(-(ends + shift) // length) - (begins + shift) // length
-    if steps > MAX_STEPS:
-        raise UsageQueryError(f"the period holds more than {MAX_STEPS} steps of one {step}")
+    begins, ends = item_usage.period(start, end, step=step, utc_offset=utc_offset, compare=compare)
     grouped = _dimensions(group_by, "group_by")
     if len(grouped) > MAX_GROUPS:
         raise UsageQueryError(f"group_by takes at most {MAX_GROUPS} dimensions")
@@ -424,14 +360,14 @@ def _parts(row: Sequence, bounds: Sequence[int]) -> list[tuple[int, _Part]]:
 def _stored(text: str) -> int:
     """A moment as the usage rows store it, in microseconds since the epoch."""
 
-    return _micro(dt.datetime.fromisoformat(text))
+    return item_usage.micro(dt.datetime.fromisoformat(text))
 
 
 def _stamp(micro: int, *, up: bool) -> str:
     """A moment in the stored form, to the millisecond, rounded the way that widens a range."""
 
     milliseconds = -(-micro // _MILLISECOND) if up else micro // _MILLISECOND
-    moment = _EPOCH + dt.timedelta(milliseconds=milliseconds)
+    moment = item_usage.EPOCH + dt.timedelta(milliseconds=milliseconds)
     return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
@@ -449,11 +385,12 @@ def _with_seats(
 ) -> tuple[list[Sequence], dict[str, dict]]:
     """The rows, each with its seat's value added, and what each value names.
 
-    The value is the quota account the seat belongs to, as its organization and UUID, or
-    else the seat's key for its week; `None`, unknown, where no sample says. Its id is the
-    organization, a slash and the UUID or the key, so neither an account in two
-    organizations nor one key in two is one group. All rows are resolved in one pass over
-    the samples (`seats.seats_of_segments`).
+    The value is the key of the quota account the stretch was spent on
+    (`accounts.Account.key`), so neither an account in two organizations nor one weekly
+    reset in two is one group; where no sample names the account, the stretch's
+    organization and a slash (`accounts.unknown_key`); `None`, unknown, where the
+    organization is not known either. All rows are resolved in one pass over the samples
+    (`seats.seats_of_segments`).
     """
 
     found = seats.seats_of_segments(
@@ -469,15 +406,18 @@ def _with_seats(
     seated: list[Sequence] = []
     for row, seat in zip(rows, found, strict=True):
         value = None
-        if seat.seat is not None:
-            organization = str(row[_ORGANIZATION])
-            value = f"{organization}/{seat.account_uuid or seat.seat}"
+        if seat.account is not None:
+            value = seat.account.key
             if value not in named:
                 named[value] = {
-                    "organization": organization,
-                    "account_uuid": seat.account_uuid,
-                    "seat_key": None if seat.account_uuid else seat.seat,
+                    "organization": seat.account.organization,
+                    "account_uuid": seat.account.account_uuid,
+                    "weekly_reset": seat.account.weekly_reset,
+                    "shared": seat.account.shared,
                 }
+        elif row[_ORGANIZATION] is not None:
+            value = accounts.unknown_key(str(row[_ORGANIZATION]))
+            named.setdefault(value, {**_UNNAMED[SEAT], "organization": str(row[_ORGANIZATION])})
         seated.append((*row, value))
     return seated, named
 
@@ -590,7 +530,7 @@ _UNNAMED: dict[str, dict] = {
     WORK_ITEM: {"reference": None, "title": None},
     PROJECT: {"name": None, "combinations": None},
     EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "title": None},
-    SEAT: {"organization": None, "account_uuid": None, "seat_key": None},
+    SEAT: {"organization": None, "account_uuid": None, "weekly_reset": None, "shared": False},
 }
 
 #: What a session's executor says of it that the answer carries: where it was opened.
@@ -783,7 +723,7 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     zone = dt.timezone(dt.timedelta(minutes=request.utc_offset))
 
     def at(moment: int) -> str:
-        return _at(moment, zone)
+        return item_usage.at(moment, zone)
 
     last = conn.execute("SELECT MAX(last_at) FROM usage_runs").fetchone()[0]
     return {
@@ -831,7 +771,6 @@ __all__ = [
     "STEPS",
     "UsageQuery",
     "UsageQueryError",
-    "caller_zone",
     "query",
     "read",
 ]

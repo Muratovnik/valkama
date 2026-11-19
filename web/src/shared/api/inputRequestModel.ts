@@ -1,5 +1,7 @@
 import { boundedList, boundedText, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
+import { ACTION_OUTCOMES, actionSchema } from '@/shared/api/inputRequestAction.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { otherSpaceSchema } from '@/shared/api/planningSpaceModel.ts'
 import { planningCoverageSchema, planningTargetSchema } from '@/shared/api/planningTarget.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
@@ -84,6 +86,47 @@ const versionSchema = strictObject({
   answered_at: boundedText(ISO, 96),
 })
 
+/**
+ * What a question asks for beyond an answer, as the store's CHECK holds them: a review, a
+ * goal's confirmation and work that came back, then the owner's part in an agent's writes —
+ * a goal, a task in a goal, a cancel, a condition, the consent of the sessions a cancel
+ * stops, and a finding. A strict reader refuses a purpose it does not list, and with it the
+ * whole list, so the list grows with the server's in the same release.
+ */
+const REQUEST_PURPOSES = [
+  'review',
+  'confirm',
+  'return',
+  'goal',
+  'task',
+  'cancel',
+  'condition',
+  'consent',
+  'triage',
+] as const
+
+/**
+ * What the owner's answer to a question with a purpose did, on the answer's own record and
+ * on no read: the category its item reached, or how the write it was asked about ended; for
+ * a group of findings, the answer with the tasks it moved out of the group and the ticked
+ * ones that took no part.
+ */
+const carriedOutSchema = z.union([
+  z.enum([
+    ...ACTION_OUTCOMES,
+    'completed',
+    'ready',
+    'deferred',
+    'cancelled',
+    'left_for_next_session',
+  ]),
+  strictObject({
+    answer: z.enum(['do', 'later', 'drop']),
+    moved_out: boundedList(boundedText(WORK_ITEM_REFERENCE, 20)),
+    skipped: boundedList(boundedText(WORK_ITEM_REFERENCE, 20)),
+  }),
+])
+
 const requestSchema = strictObject({
   request_id: boundedText(UUID, 36),
   work_item_id: boundedText(UUID, 36),
@@ -119,12 +162,28 @@ const requestSchema = strictObject({
   created_at: boundedText(ISO, 96),
   resolved_at: boundedText(ISO, 96).nullable(),
   revision: positiveInt(true),
-  /** `session_gone`: the session asked ended or went quiet, read while it stays so. */
+  /**
+   * `item_completed` and `item_cancelled`: its item's close ended it, done or cancelled, and
+   * reopening the item leaves it so. `session_gone`: the session asked ended or went quiet,
+   * read while it stays so.
+   */
   expired_reason: z
-    .enum(['deadline', 'withdrawn', 'execution_closed', 'task_closed', 'session_gone'])
+    .enum([
+      'deadline',
+      'withdrawn',
+      'execution_closed',
+      'item_completed',
+      'item_cancelled',
+      'session_gone',
+    ])
     .nullable(),
   /** The comment a list stands under; null for any other question. */
   comment_id: positiveInt().nullable().optional(),
+  /** What the owner's answer carries out; null for any other question. */
+  purpose: z.enum(REQUEST_PURPOSES).nullable(),
+  /** The write the question is about, which waits for the owner; only on such a question. */
+  action: actionSchema.optional(),
+  carried_out: carriedOutSchema.optional(),
 })
   .refine(
     (request) => new Set(request.fields.map((field) => field.id)).size === request.fields.length,
@@ -165,11 +224,24 @@ const detailSchema = strictObject({
 
 const listSchema = strictObject({
   interface_version: z.literal('valkama-planning-requests'),
-  items: boundedList(entrySchema, 100),
+  // One page; `fetchInputRequests` reads every page into one list.
+  items: boundedList(entrySchema, 200),
   // One source per registered project, and the registry counts none.
   coverage: z.array(planningCoverageSchema),
-  limit: positiveInt().max(100),
+  limit: positiveInt().max(200),
+  total: positiveInt(true),
   has_more: z.boolean(),
+  /**
+   * One line per space read whose triage stack waits past its thresholds: no question, so
+   * in no count or page. The age is the reader's to count from `oldest_at`.
+   */
+  triage_due: z.array(
+    strictObject({
+      space: otherSpaceSchema,
+      count: positiveInt(),
+      oldest_at: boundedText(ISO, 96),
+    }),
+  ),
 })
 
 export type InputRequestOption = z.infer<typeof optionSchema>
@@ -177,6 +249,11 @@ export type InputRequestField = z.infer<typeof fieldSchema>
 export type InputAnswers = z.infer<typeof answersSchema>
 export type InputRequestEntry = z.infer<typeof entrySchema>
 export type InputRequestList = z.infer<typeof listSchema>
+
+/** Whether its item's close ended the request, done or cancelled. */
+export function endedByClose(request: Pick<InputRequestEntry['request'], 'expired_reason'>) {
+  return request.expired_reason === 'item_completed' || request.expired_reason === 'item_cancelled'
+}
 
 export function validateInputRequestDetail(value: unknown): InputRequestEntry {
   const { target, request } = detailSchema.parse(value)

@@ -52,3 +52,15 @@ export function useLevelHeading(headed: () => boolean): ComputedRef<HeadingTag> 
   )
   return computed(() => tagOf(over.value + 1))
 }
+
+/**
+ * The parts below stand under a heading of rank `rank` that is not a level's: the side panel's
+ * own name, an `h2` the drawer gives it (`DrawerFrame`), which the panel's parts stand under
+ * rather than under the module's name.
+ */
+export function provideHeadingOver(rank: number) {
+  provide(
+    OVER,
+    computed(() => rank),
+  )
+}

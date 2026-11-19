@@ -61,7 +61,7 @@
     },
     "members": [
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000039",
+        "work_item_id": "00000000-0000-4000-8000-000000000038",
         "reference": "MAIN-12",
         "title": "Tree work in the nested stage",
         "kind": "task",
@@ -82,7 +82,7 @@
         "queue_order": 1
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000041",
+        "work_item_id": "00000000-0000-4000-8000-000000000040",
         "reference": "MAIN-13",
         "title": "Tree work under the stage",
         "kind": "task",
@@ -124,7 +124,7 @@
         "queue_order": null
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000042",
+        "work_item_id": "00000000-0000-4000-8000-000000000041",
         "reference": "MAIN-10",
         "title": "Tree stage",
         "kind": "stage",
@@ -140,7 +140,7 @@
         "queue_order": null
       },
       {
-        "work_item_id": "00000000-0000-4000-8000-000000000040",
+        "work_item_id": "00000000-0000-4000-8000-000000000039",
         "reference": "MAIN-11",
         "title": "Tree nested stage",
         "kind": "stage",

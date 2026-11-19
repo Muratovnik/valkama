@@ -17,9 +17,9 @@ Mermaid graph.
 
 Each write runs on its own copy of the tree. A write that changes which goals and
 stages stand accepted and open says so (`_Accepting`): one that accepts a goal or a
-stage, confirms one, creates one already accepted, opens a closed one again or
-files work under a stage is read against the tree as that write leaves it, and
-`ACCEPTING` names the five. The Planning routes write as the owner's interface
+stage, confirms one, creates one already accepted, opens a closed one again, files
+work under a stage, moves an accepted one out or converts a task into one and back is read
+against the tree as that write leaves it, and `ACCEPTING` names the eight. The Planning routes write as the owner's interface
 does, bound as the person's writes; the MCP tools as an agent's.
 """
 
@@ -54,6 +54,7 @@ from server.planning import (
     item_tree,
     leases,
     live_frame,
+    participation,
     person_events,
     service,
     states,
@@ -70,6 +71,8 @@ MARKER = "Marker-of-the-service-state"
 KEY = "OR"
 PROJECT = "or"
 SESSION = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
+#: Days around the hours the tree's facts are placed at, for a read over a period.
+VOLUMES_PERIOD = {"from": "2026-11-19", "to": "2026-11-22", "utc_offset": "0"}
 
 #: The writes that change which goals and stages stand accepted and open.
 ACCEPTING = frozenset(
@@ -79,6 +82,9 @@ ACCEPTING = frozenset(
         "a goal created that stands accepted at once",
         "a closed goal or stage opened again by a move to ready",
         "an item filed under a stage",
+        "an accepted stage moved out: from the service state to triage, a goal",
+        "an accepted task converted into a goal: from ready to the service state",
+        "an accepted goal with nothing under it converted into a task: to ready",
     }
 )
 #: The name `_Accepting` gives the item its write creates.
@@ -201,6 +207,21 @@ MCP_WRITES: dict[str, list[Args]] = {
             _with(_ids(id="D"), transition={"state": "ready"}),
             D="awaiting_confirmation",
         ),
+        _Accepting(
+            "an accepted stage moved out: from the service state to triage, a goal",
+            _with(_ids(id="S2"), move_out={"reason": "It is a goal of its own"}),
+            S2=None,
+        ),
+        _Accepting(
+            "an accepted task converted into a goal: from ready to the service state",
+            _with(_ids(id="y"), convert={"to": "goal"}),
+            y="not_started",
+        ),
+        _Accepting(
+            "an accepted goal with nothing under it converted into a task: to ready",
+            _with(_ids(id="H"), convert={"to": "task"}),
+            H=None,
+        ),
     ],
     "delete_work_item": [_ids(id="u")],
     "create_work_item_request": [
@@ -240,10 +261,27 @@ HTTP_READS: dict[str, list[Args]] = {
     "/api/planning/requests": [_none],
     "/api/planning/request": [_q(lambda case: {"id": case.pending})],
     "/api/planning/held": [_q(lambda _case: {"session": SESSION})],
+    "/api/planning/participation": [_none, _q(lambda _case: {"space": KEY})],
+    "/api/planning/decisions": [_none, _q(lambda _case: {"space": KEY, "point": "decision"})],
+    "/api/planning/commits/unattached": [
+        _q(lambda _case: {"space": KEY}),
+        _q(lambda _case: {"project": PROJECT}),
+        _none,
+    ],
+    "/api/planning/volumes": [
+        _q(lambda _case: {"scope_kind": "global", **VOLUMES_PERIOD}),
+        lambda case: _exact_read(case, **VOLUMES_PERIOD),
+    ],
+    "/api/planning/goal-volumes": [_q(_ids(id=name)) for name in ("G", "S")],
 }
 HTTP_WRITES: dict[str, list[Args]] = {
     "/api/planning/spaces": [lambda _case: {"name": "Other", "key": "OX"}],
     "/api/planning/space/settings": [lambda _case: {"space": KEY, "launch_place": "item_project"}],
+    "/api/planning/participation": [
+        lambda _case: {"space": KEY, "key": "finding", "value": "agent"},
+        lambda _case: {"space": None, "set": "manual"},
+        lambda _case: {"space": KEY, "label": "flow", "ready": True, "description": "The flow"},
+    ],
     "/api/planning/work-items": [
         lambda case: {"space": KEY, "title": "Under the goal", "parent": case.refs["G"]},
         _Accepting(
@@ -280,6 +318,29 @@ HTTP_WRITES: dict[str, list[Args]] = {
             D="awaiting_confirmation",
         ),
     ],
+    "/api/planning/work-item/defer": [
+        _with(_ids(id="z"), until="2099-01-01", reason="waits for the vendor"),
+    ],
+    "/api/planning/work-item/move-out": [
+        _with(_ids(id="e"), reason="It belongs to no stage"),
+        _Accepting(
+            "an accepted stage moved out: from the service state to triage, a goal",
+            _with(_ids(id="S2"), reason="It is a goal of its own"),
+            S2=None,
+        ),
+    ],
+    "/api/planning/work-item/convert": [
+        _Accepting(
+            "an accepted task converted into a goal: from ready to the service state",
+            _with(_ids(id="y"), to="goal"),
+            y="not_started",
+        ),
+        _Accepting(
+            "an accepted goal with nothing under it converted into a task: to ready",
+            _with(_ids(id="H"), to="task"),
+            H=None,
+        ),
+    ],
     "/api/planning/work-item/claim": [_ids(id="b")],
     "/api/planning/work-item/claim-ready": [lambda _case: {"space": KEY}],
     "/api/planning/work-item/checklist": [_with(_ids(id="b"), items=[{"text": "Another"}])],
@@ -310,6 +371,10 @@ HTTP_WRITES: dict[str, list[Args]] = {
     ],
     "/api/planning/work-item/ref": [
         _with(_ids(id="S"), kind="url", value="https://example.invalid/stage")
+    ],
+    "/api/planning/work-item/commit": [
+        _with(_ids(reference="S"), repository=PROJECT, hash=lambda case: case.commits["b"]),
+        _with(_ids(reference="G"), repository=PROJECT, hash=lambda case: case.commits["G"]),
     ],
     "/api/planning/work-item/apply": [
         _with(_ids(id="G"), comment={"body": "A note"}, summary=SUMMARY),
@@ -420,7 +485,7 @@ PLACES: tuple[tuple[str, str, str, str], ...] = (
     ("builds", "server.planning.live_frame", "_item", "states.public_state("),
     ("builds", "server.planning.live_frame", "_Item", "accepted_open"),
     ("builds", "server.planning.live_frame", "_row", "container_state"),
-    ("builds", "server.released", "_open_commit_refs", "s.key, s.name, s.category, s.is_terminal"),
+    ("builds", "server.released", "_open_commits", "s.key, s.name, s.category, s.is_terminal"),
     ("builds", "server.released", "released_items", "states.public_state("),
     ("builds", "server.released", "render", "item['state']"),
     ("builds", "server.planning.views", "stale_claims", "states.public_state("),
@@ -452,7 +517,7 @@ def _every_stale_claim(conn: sqlite3.Connection) -> list[dict]:
 
     later = datetime.now(UTC) + timedelta(days=3650)
     with mock.patch.object(leases, "utc_now", return_value=later):
-        return views.stale_claims(conn, space=KEY)
+        return views.stale_claims(conn, settings=participation.load(conn), space=KEY)
 
 
 def _walk(value: object, path: str = "") -> Iterator[tuple[str, object]]:
@@ -475,6 +540,7 @@ class Surfaces(unittest.TestCase):
     report: int
     revision: int
     data_scope_id: str
+    commits: dict[str, str]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -534,7 +600,18 @@ class Surfaces(unittest.TestCase):
         for name in ("G", "S2", "H", "b"):
             cls._git("commit", "--allow-empty", "-m", f"feat: the work of {name}")
             commits[name] = cls._git("rev-parse", "HEAD")
-            service.attach_ref(conn, tree.refs[name], "commit", commits[name][:12])
+            # Attached as the project the registry places at the repository.
+            commit_id = conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, reported_at)"
+                " VALUES (?, ?, ?, '2026-01-02T03:04:05Z')",
+                (PROJECT, commits[name], f"feat: the work of {name}"),
+            ).lastrowid
+            conn.execute(
+                "INSERT INTO work_item_commits(work_item_id, commit_id, attached_by)"
+                " VALUES (?, ?, 'manual')",
+                (tree.ids[name], commit_id),
+            )
+        cls.commits = commits
         # The live frame shows what holds live work and what is pinned, and no session
         # holds anything here: pinned, the goal and its stages are its rows.
         for name in ("G", "S", "S2"):

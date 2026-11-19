@@ -17,22 +17,28 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 
+from ..projects import project_registry
 from . import (
     acknowledgements,
     calls,
+    deferral,
     item_projects,
     item_tree,
     leases,
     mentions,
     model,
+    participation,
     queue,
     sections,
     states,
     subscriptions,
+    triage,
 )
+from . import closing as closing_rules
 
 
 @contextlib.contextmanager
@@ -80,6 +86,29 @@ def item_by_id(conn: sqlite3.Connection, work_item_id: str) -> sqlite3.Row:
     if row is None:
         raise model.PlanningError("work item disappeared mid-write")
     return row
+
+
+def space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
+    """The space a caller named by its id, key or name."""
+
+    text = model.text_field(reference, "planning space", limit=200)
+    row = conn.execute(
+        "SELECT * FROM planning_spaces WHERE planning_space_id = ? OR key = ? OR name = ?",
+        (text, text, text),
+    ).fetchone()
+    if row is None:
+        raise model.PlanningError(f"no planning space named {text}")
+    return row
+
+
+def space_identity(conn: sqlite3.Connection, reference: object) -> str:
+    """The id of the space a caller named by its id, key or name.
+
+    It reads nothing but the space's identity, so a store another build wrote,
+    whose spaces lack a column the record reads, still answers it.
+    """
+
+    return str(space_row(conn, reference)["planning_space_id"])
 
 
 def state_by_id(conn: sqlite3.Connection, state_id: str) -> sqlite3.Row:
@@ -222,7 +251,7 @@ def other_space_ends(conn: sqlite3.Connection, identities: Iterable[str]) -> lis
             "work_item_id": str(row["work_item_id"]),
             "reference": model.human_id(str(row["space_key"]), int(row["number"])),
             "title": row["title"],
-            "kind": outward_kind(row["kind"], row["parent_id"]),
+            "kind": model.outward_kind(row["kind"], row["parent_id"]),
             "state": states.public_state(row) if row["category"] is not None else None,
             "space": {"key": row["space_key"], "name": row["space_name"]},
         }
@@ -243,17 +272,6 @@ def blocked(conn: sqlite3.Connection, work_item_id: str) -> bool:
         ).fetchone()
         is not None
     )
-
-
-def outward_kind(kind: object, parent_id: object) -> str:
-    """The kind a reader sees: a container is a goal, or a stage under a parent.
-
-    Every place a kind leaves the server from a row reads it through this.
-    """
-
-    if kind == model.CONTAINER_KIND:
-        return "stage" if parent_id else "goal"
-    return str(kind)
 
 
 def acceptance(row: sqlite3.Row) -> dict | None:
@@ -300,6 +318,23 @@ def closing(
         (identity, identity),
     ).fetchone()
     return _closed(row, (str(found[0]), found[1]) if found is not None else None)
+
+
+def triage_stacks(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict[str, dict]:
+    """`triage_stack` for every item among `rows` that waits in the triage stack, by item id.
+
+    One statement finds the triage states and one reads the stack (`triage.field`), and
+    only when a row stands in one of them, so a store an earlier build wrote, which
+    has no triage, is read as it is. `present` reads an absent item as one without the
+    field.
+    """
+
+    standing = {
+        str(state[0])
+        for state in conn.execute("SELECT state_id FROM workflow_states WHERE category = 'triage'")
+    }
+    waiting = [str(row["work_item_id"]) for row in rows if str(row["state_id"]) in standing]
+    return dict(triage.field(conn, waiting)) if waiting else {}
 
 
 def closings(
@@ -828,6 +863,8 @@ def present(
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
     read_space: str | None = None,
+    settings: participation.Settings | None = None,
+    stack: Mapping[str, dict] | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
@@ -848,7 +885,10 @@ def present(
     under it. `projects` is what `item_projects.of_items` read for such a read in
     one walk; absent, the item reads its own. `read_space` is the space, by id, a
     read of one space is of, which `withheld` asks another space's item by
-    (`queue.withheld`).
+    (`queue.withheld`). `settings` is the participation setting as such a read, or
+    the write that answers, loaded it once (`participation.load`); absent, an item
+    somebody holds loads it, since its lease is read by it. `stack` is what
+    `triage_stacks` read for such a read; absent, an item in triage reads its own.
 
     `state` is what `states.public_state` makes of the item's state: null for an
     accepted open container, which says what it derives as `container_state`
@@ -864,6 +904,8 @@ def present(
         tree=tree,
         projects=projects,
         read_space=read_space,
+        settings=settings,
+        stack=stack,
     )
     identity = str(row["work_item_id"])
     if not full:
@@ -878,6 +920,7 @@ def present(
     record["summary_comment_id"] = row["summary_comment_id"]
     record["links"] = links(conn, identity)
     record["refs"] = refs(conn, identity)
+    record["commits"] = commits(conn, identity)
     record["comments"], shown_threads, more = _cut_comments(
         conn,
         identity,
@@ -907,7 +950,78 @@ def present(
     record["mentions"], record["mentions_total"] = mentions_of(conn, identity, HTTP_MENTIONS)
     # Who follows it without holding it, for the card to name.
     record["subscribers"] = subscriptions.subscribers(conn, identity)
+    # What its confirmer checks, only while it awaits confirmation.
+    if record["container_state"] == closing_rules.AWAITING:
+        record["confirmation"] = closing_rules.confirmation(conn, row)
+    record.update(_put_off(conn, identity, record["state"]))
+    changed = conditions_changed(conn, identity)
+    if changed is not None:
+        record["conditions_changed"] = changed
     return record
+
+
+#: The history that says an item's steps changed under it: a step taken off or reworded,
+#: a part split off with some, and a conversion that left its work in a new task.
+_CONDITIONS_CHANGED = (
+    "SELECT action, detail FROM work_item_events WHERE work_item_id = ?"
+    " AND action IN ('checklist_removed', 'split_off', 'converted') ORDER BY id"
+)
+#: How a `split_off` detail names the part and how many steps it took.
+_SPLIT_OFF = re.compile(r"^(?P<to>\S+): (?P<count>\d+) steps$")
+#: How a `converted` detail names the task it left and how many steps went there
+#: (`split.convert`).
+_LEFTOVER = re.compile(r"; leftover (?P<to>[A-Z][A-Z0-9]*-\d+): (?P<count>\d+) steps")
+
+
+def conditions_changed(conn: sqlite3.Connection, identity: str) -> dict | None:
+    """What became of steps that are no longer on the item as they were, or None.
+
+    `removed` holds the text of each step an edit took off and the former text of each
+    step reworded by its id (`checklist_removed`, cut to 120 characters); `moved` each
+    item that took steps away with their work: a part split off it (`split_off`) and the
+    task a conversion left (`converted`), each with how many steps went, as its history
+    recorded it then. None when nothing of the
+    kind is in the history, which counts from this build on. The full record carries
+    it, and the answers of entering review and of completing name it; the card does not.
+    """
+
+    removed: list[str] = []
+    moved: list[dict] = []
+    for action, detail in conn.execute(_CONDITIONS_CHANGED, (identity,)):
+        text = str(detail)
+        if action == "checklist_removed":
+            removed.append(text)
+            continue
+        if action == "split_off":
+            found = _SPLIT_OFF.match(text)
+            if found is not None:
+                moved.append({"to": found["to"], "count": int(found["count"])})
+            continue
+        left = _LEFTOVER.search(text)
+        if left is not None:
+            moved.append({"to": left["to"], "count": int(left["count"])})
+    if not removed and not moved:
+        return None
+    return {"removed": removed, "moved": moved}
+
+
+def _put_off(conn: sqlite3.Connection, identity: str, state: Mapping | None) -> dict:
+    """`deferred`, the condition of an item put off, or `returned`, why one in triage came
+    back; each only while it holds, and neither of any other item.
+
+    Read from the condition's row and the history, so a full record and the card carry
+    them, never a brief record. Reading writes nothing: a condition that has come stands
+    until a write brings the item back.
+    """
+
+    category = None if state is None else state["category"]
+    if category == "deferred":
+        found = deferral.record(conn, identity)
+        return {} if found is None else {"deferred": found}
+    if category == "triage":
+        came = deferral.returned(conn, identity)
+        return {} if came is None else {"returned": came}
+    return {}
 
 
 def _record(
@@ -920,6 +1034,8 @@ def _record(
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
     read_space: str | None = None,
+    settings: participation.Settings | None = None,
+    stack: Mapping[str, dict] | None = None,
 ) -> tuple[dict, leases.Lease | None]:
     """What the brief record, the full one and the card share, and the lease it read.
 
@@ -931,18 +1047,27 @@ def _record(
 
     state = state_by_id(conn, str(row["state_id"]))
     shown = states.public_state(state)
+    # Only an item that waits in the triage stack carries the field.
+    identity = str(row["work_item_id"])
+    if stack is not None:
+        waiting = stack.get(identity)
+    elif state["category"] == "triage":
+        waiting = triage.field(conn, [identity], str(row["planning_space_id"])).get(identity)
+    else:
+        waiting = None
     record = {
         "work_item_id": row["work_item_id"],
         "planning_space_id": row["planning_space_id"],
         "reference": reference(conn, row),
         "number": int(row["number"]),
         "title": row["title"],
-        "kind": outward_kind(row["kind"], row["parent_id"]),
+        "kind": model.outward_kind(row["kind"], row["parent_id"]),
         "priority": row["priority"],
         "state": None if shown is None else {"state_id": state["state_id"], **shown},
         "open": not state["is_terminal"],
         "container_state": None,
         "acceptance": acceptance(row),
+        **({} if waiting is None else {"triage_stack": waiting}),
         "started_at": None,
         "waits_for": [],
         "claim_ref": row["claim_ref"],
@@ -963,7 +1088,6 @@ def _record(
     # Readiness is computed here, once, so the list, the board and the graph all
     # answer the same question the same way. The Board era left it to each view,
     # and they disagreed about a held item and about a container.
-    identity = str(row["work_item_id"])
     # A read of many items hands over every closing it loaded at once.
     record["closed_at"], record["last_claim_ref"] = (
         closing(conn, row, bool(state["is_terminal"]))
@@ -977,15 +1101,23 @@ def _record(
     asked = (
         facts.question(identity) if facts.asked is not None and identity in facts.nodes else None
     )
-    lease = leases.lease(conn, row, asked=asked) if full else None
-    record["claim_state"] = (
-        (lease.state if lease is not None else None)
-        if full
-        else leases.state(conn, row, asked=asked)
-    )
+    lease: leases.Lease | None = None
+    if row["claim_ref"]:
+        # Only a held item's lease reads the setting, so only it loads one of its own.
+        snapshot = participation.load(conn) if settings is None else settings
+        lease = leases.lease(conn, row, settings=snapshot, asked=asked) if full else None
+        record["claim_state"] = (
+            (lease.state if lease is not None else None)
+            if full
+            else leases.state(conn, row, settings=snapshot, asked=asked)
+        )
     record["container_state"] = facts.container_state(identity)
     record["started_at"] = facts.started_at(identity)
     record["waits_for"] = facts.waits_for(identity)
+    # Only when there is one: a cancelled item it was linked to wait for.
+    cancelled_blockers = facts.cancelled_blockers(identity)
+    if cancelled_blockers:
+        record["cancelled_blockers"] = cancelled_blockers
     # The take-next queue's own rule (`queue.withheld`): the queue gives exactly
     # what reads workable, and the codes say why anything else is not given.
     record["withheld"] = queue.withheld(conn, row, facts, read_space=read_space)
@@ -1003,13 +1135,16 @@ def _record(
 #: The parts an item is read by, in the order its table of contents names them.
 #: `card` is the item itself; every other part is the field of that name in its
 #: full record, but `sections`, which divides the description, and `participants`,
-#: which only a goal or a stage has.
+#: which only a goal or a stage has. `confirmation` is a goal's or stage's only while
+#: it awaits confirmation (`closing.confirmation`), and the table names it then even
+#: with nothing cancelled or moved out under it: the wait itself is what to read.
 PARTS = (
     "card",
     "comments",
     "events",
     "links",
     "refs",
+    "commits",
     "questions",
     "mentions",
     "sessions",
@@ -1018,6 +1153,7 @@ PARTS = (
     "claim",
     "sections",
     "participants",
+    "confirmation",
 )
 #: The card's fields, in the order it carries them. A card carries each one its
 #: record has, so a field the record gains reaches the card once it is named here.
@@ -1030,8 +1166,12 @@ CARD_FIELDS = (
     "open",
     "container_state",
     "acceptance",
+    "triage_stack",
     "started_at",
     "waits_for",
+    "cancelled_blockers",
+    "deferred",
+    "returned",
     "workable",
     "withheld",
     "projects",
@@ -1057,9 +1197,12 @@ CARD_STEP_MARKS = ("claimed_by", "done_by", "by_previous_holder")
 #: The state's fields on the card; whether work is over in it is `open`.
 CARD_STATE = ("key", "name", "category")
 #: What the full record holds that is neither on the card nor a part: the ids the
-#: card's `reference` and `parent` stand for, the summary's comment, and the counts
-#: and marks of a cut history, which the table of contents and the parts carry.
+#: card's `reference` and `parent` stand for, the summary's comment, the counts
+#: and marks of a cut history, which the table of contents and the parts carry, and
+#: what became of steps no longer on the item as they were (`conditions_changed`),
+#: which entering review and completing answer with.
 OFF_CARD = (
+    "conditions_changed",
     "work_item_id",
     "planning_space_id",
     "number",
@@ -1122,15 +1265,31 @@ def card(
         "checklist": [card_step(step) for step in record["checklist"]],
         "summary": model.summary(row["summary"], required=False),
     }
+    put_off = _put_off(conn, str(row["work_item_id"]), state)
+    if "deferred" in put_off:
+        # Why and who put it off are read with the events part, so the card stays short.
+        put_off["deferred"] = deferral.card(put_off["deferred"])
+    found.update(put_off)
     shown = {name: found[name] for name in CARD_FIELDS if name in found}
     if shown["summary"] is None:
         del shown["summary"]
+    awaiting = record["container_state"] == closing_rules.AWAITING
     shown["parts"] = table_of_contents(
         {
             **part_counts(conn, str(row["work_item_id"]), lease),
             "sections": {"count": sections.card_count(str(row["description"]))},
             **(counted or {}),
-        }
+            **(
+                {
+                    "confirmation": {
+                        "count": closing_rules.counted(closing_rules.confirmation(conn, row))
+                    }
+                }
+                if awaiting
+                else {}
+            ),
+        },
+        standing=("confirmation",) if awaiting else (),
     )
     return shown
 
@@ -1159,34 +1318,56 @@ def _parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None
     return model.human_id(str(found[0]), int(found[1]))
 
 
-def table_of_contents(counts: Mapping[str, Mapping[str, int]]) -> dict:
+def table_of_contents(
+    counts: Mapping[str, Mapping[str, int]], *, standing: Iterable[str] = ()
+) -> dict:
     """Every part an item has but the card, in the order of `PARTS`, each with its counts.
 
-    A part with nothing in it is left out, so the card names only what there is to read.
-    The questions part has something in it when only a request asked of an agent
-    session is open, which its `count` of the owner's questions leaves out.
+    A part with nothing in it is left out, so the card names only what there is to read,
+    but a part named `standing`, which is there to read whatever it counts. The
+    questions part has something in it when only a request asked of an agent session is
+    open, which its `count` of the owner's questions leaves out.
     """
 
+    kept = frozenset(standing)
     return {
         name: dict(counts[name])
         for name in PARTS
         if name != "card"
         and name in counts
-        and any(int(value) > 0 for value in counts[name].values())
+        and (name in kept or any(int(value) > 0 for value in counts[name].values()))
     }
 
 
-#: Which calls name a session behind the writes to item `:id`; `sessions` lists them.
-_SESSION_CALLS = (
-    " FROM execution_events WHERE kind = :kind AND work_item_id = :id"
+#: Which calls name a session behind the writes to the items `{items}` names.
+_SESSION_CALLS_OF = (
+    " FROM execution_events WHERE kind = :kind AND work_item_id {items}"
     " AND identity_state = :confirmed AND COALESCE(session_id, '') != ''"
+)
+#: Which calls name a session behind the writes to item `:id`; `sessions` lists them.
+_SESSION_CALLS = _SESSION_CALLS_OF.format(items="= :id")
+#: The pairs of item and session behind the items `:ids`: the calls above, and the usage
+#: rows that spent on them; `session_ids` reads them.
+_SESSIONS_OF_ITEMS = (
+    "SELECT work_item_id, session_id"  # noqa: S608 - fixed clauses
+    + _SESSION_CALLS_OF.format(items="IN (SELECT value FROM json_each(:ids))")
+    + " UNION SELECT work_item_id, session_id FROM usage_segments"
+    " WHERE work_item_id IN (SELECT value FROM json_each(:ids)) AND session_id != ''"
 )
 
 
-def _session_calls(identity: str) -> dict[str, str]:
-    """The values `_SESSION_CALLS` names."""
+#: The commits attached now to the items `{items}` names. A commit a rewrite replaced is
+#: not among them: its attachments moved to the commit that replaced it.
+ATTACHED_OF = (
+    " FROM work_item_commits a JOIN commits c ON c.commit_id = a.commit_id"
+    " WHERE a.work_item_id {items} AND c.rewritten_to IS NULL"
+)
 
-    return {"id": identity, "kind": calls.KIND, "confirmed": calls.CONFIRMED}
+
+def _session_calls(identity: str, name: str = "id") -> dict[str, str]:
+    """The values `_SESSION_CALLS_OF` names, the items as `name`."""
+
+    return {name: identity, "kind": calls.KIND, "confirmed": calls.CONFIRMED}
 
 
 def part_counts(
@@ -1210,6 +1391,7 @@ def part_counts(
         " (SELECT COUNT(*) FROM work_item_links WHERE from_id = :id)"
         " + (SELECT COUNT(*) FROM work_item_links WHERE to_id = :id),"
         " (SELECT COUNT(*) FROM work_item_refs WHERE work_item_id = :id),"
+        " (SELECT COUNT(*)" + ATTACHED_OF.format(items="= :id") + "),"
         " (SELECT COUNT(*) FROM work_item_events WHERE work_item_id = :id"
         "  AND action = 'mentioned'),"
         " (SELECT COUNT(DISTINCT session_id)" + _SESSION_CALLS + "),"
@@ -1226,6 +1408,7 @@ def part_counts(
         detail,
         linked,
         pointed,
+        attached,
         named,
         writers,
         pictures,
@@ -1240,6 +1423,7 @@ def part_counts(
         "events": {"count": events, "chars": detail},
         "links": {"count": linked},
         "refs": {"count": pointed},
+        "commits": {"count": attached},
         "mentions": {"count": named},
         "sessions": {"count": writers},
         "images": {"count": pictures},
@@ -1303,9 +1487,14 @@ def _comments_page(conn: sqlite3.Connection, identity: str, after: int) -> tuple
 
 
 def claim(conn: sqlite3.Connection, row: sqlite3.Row) -> dict | None:
-    """The lease on the item as the full record carries it, or None while nobody holds it."""
+    """The lease on the item as the full record carries it, or None while nobody holds it.
 
-    lease = leases.lease(conn, row)
+    A read of one part, so it loads the setting its lease is read by itself.
+    """
+
+    if not row["claim_ref"]:
+        return None
+    lease = leases.lease(conn, row, settings=participation.load(conn))
     return None if lease is None else lease.as_dict()
 
 
@@ -1349,6 +1538,46 @@ def refs(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
         for ref in conn.execute(
             "SELECT * FROM work_item_refs WHERE work_item_id = ? ORDER BY id", (work_item_id,)
         )
+    ]
+
+
+def commits(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
+    """The commits attached to an item now, the newest attachment first.
+
+    A commit a rewrite replaced is not among them: its attachments moved to the
+    commit that replaced it. `display_name` is the registry's when it records the
+    project, read only when there is a commit to name; `repository` and
+    `display_name` are null for a commit whose repository is not known.
+    """
+
+    rows = conn.execute(
+        "SELECT c.project_id, c.hash, c.subject, c.committed_at, c.session_id, c.agent_id,"
+        " a.attached_by, a.label"
+        + ATTACHED_OF.format(items="= ?")
+        + " ORDER BY a.created_at DESC, a.commit_id DESC",
+        (work_item_id,),
+    ).fetchall()
+    names: dict[str, str] = {}
+    if any(row[0] is not None for row in rows):
+        listing = project_registry.read_registry()
+        if listing["status"] == "available":
+            names = {
+                str(entry["project_id"]): str(entry["display_name"])
+                for entry in listing["projects"]
+            }
+    return [
+        {
+            "repository": row[0],
+            "display_name": None if row[0] is None else names.get(str(row[0])),
+            "hash": row[1],
+            "subject": row[2],
+            "committed_at": row[3],
+            "session": row[4],
+            "agent": row[5],
+            "attached_by": row[6],
+            "label": row[7],
+        }
+        for row in rows
     ]
 
 
@@ -1409,28 +1638,46 @@ def _cut_comments(
     return flat, None, None
 
 
-def _events(conn: sqlite3.Connection, identity: str, limit: int | None) -> list[dict]:
-    """An item's history, oldest first: every event, or only the newest `limit`."""
+_EVENT_ROWS = (
+    "SELECT e.id, e.action, e.detail, e.author, e.created_at,"
+    " c.identity_state, c.identity_source, c.session_id, c.agent_id, {point} AS point"
+    " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id{marks}"
+    " WHERE e.work_item_id = ?"
+)
+#: Each event with the point an agent's own decision marked it at (`planning.decisions`).
+_MARKED_EVENTS = _EVENT_ROWS.format(
+    point="d.point", marks=" LEFT JOIN agent_decisions d ON d.event_id = e.id"
+)
+#: The same for an attached store an earlier build wrote, which marks nothing.
+_UNMARKED_EVENTS = _EVENT_ROWS.format(point="NULL", marks="")
 
-    return [
-        {
+
+def _events(conn: sqlite3.Connection, identity: str, limit: int | None) -> list[dict]:
+    """An item's history, oldest first: every event, or only the newest `limit`.
+
+    An event an agent's own decision marked carries the mark's `point`; any other
+    has no such key.
+    """
+
+    try:
+        rows = _newest(conn, _MARKED_EVENTS, "e.id", (identity,), limit)
+    except sqlite3.OperationalError as error:
+        if str(error) != "no such table: agent_decisions":
+            raise
+        rows = _newest(conn, _UNMARKED_EVENTS, "e.id", (identity,), limit)
+    found = []
+    for event in rows:
+        shown = {
             "action": event["action"],
             "detail": event["detail"],
             "author": event["author"],
             "at": event["created_at"],
             "identity": _identity(event),
         }
-        for event in _newest(
-            conn,
-            "SELECT e.id, e.action, e.detail, e.author, e.created_at,"
-            " c.identity_state, c.identity_source, c.session_id, c.agent_id"
-            " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
-            " WHERE e.work_item_id = ?",
-            "e.id",
-            (identity,),
-            limit,
-        )
-    ]
+        if event["point"] is not None:
+            shown["point"] = event["point"]
+        found.append(shown)
+    return found
 
 
 def _events_total(conn: sqlite3.Connection, identity: str) -> int:
@@ -1488,6 +1735,45 @@ def sessions(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
         }
         for entry in found.values()
     ]
+
+
+def session_ids(conn: sqlite3.Connection, ids: Iterable[str]) -> dict[str, set[str]]:
+    """The sessions behind each of these items, in one read: the ones that wrote to it by
+    the rule of `sessions`, and the ones whose usage rows spent on it, a subagent's under
+    its session. An item with neither is absent.
+
+    A count of sessions over several items is the size of the union of theirs, never the
+    sum of their counts: one session on two items is one session.
+    """
+
+    found: dict[str, set[str]] = {}
+    for item, session in conn.execute(
+        _SESSIONS_OF_ITEMS,
+        _session_calls(json.dumps(sorted(set(ids))), "ids"),
+    ):
+        found.setdefault(str(item), set()).add(str(session))
+    return found
+
+
+def attached_commits(
+    conn: sqlite3.Connection, ids: Iterable[str]
+) -> dict[str, set[tuple[int, bool]]]:
+    """The commits attached now to each of these items, as `commits` reads one item's, in
+    one read: each commit's row id and whether its repository is known. An item with none
+    is absent.
+
+    A commit of no known repository is stored as its hash was written, abbreviated too,
+    so two of its rows may be one commit: its row id counts records, not commits.
+    """
+
+    found: dict[str, set[tuple[int, bool]]] = {}
+    for item, commit, known in conn.execute(
+        "SELECT a.work_item_id, c.commit_id, c.project_id IS NOT NULL"  # noqa: S608 - fixed clauses
+        + ATTACHED_OF.format(items="IN (SELECT value FROM json_each(?))"),
+        (json.dumps(sorted(set(ids))),),
+    ):
+        found.setdefault(str(item), set()).add((int(commit), bool(known)))
+    return found
 
 
 def _identity(event: sqlite3.Row) -> dict:

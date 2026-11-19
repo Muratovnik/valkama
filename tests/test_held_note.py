@@ -14,11 +14,12 @@ import random
 import re
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
-from server import mcp_surface, store
+from server import mcp_surface, sessions, store
 from server.hooks import held_note
-from server.planning import held, item_projects, service
+from server.planning import held, item_projects, request_model, requests, service
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
@@ -34,6 +35,7 @@ STRANGER = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
 
 RULE = "Current: read an item only for what this note leaves out."
 DEV = {"key": "dev", "name": "Dev", "category": "active"}
+ANSWER = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
 
 
 def entry(reference: str, title: str, **facts: object) -> dict:
@@ -614,6 +616,43 @@ class RecipientTests(unittest.TestCase):
         mcp_surface.call_tool(self.conn, "claim_work_item", {"id": reference}, meta=meta)
         self.conn.commit()
 
+    def call(self, session: str, tool: str, arguments: dict) -> object:
+        """One tool call of `session`'s own conversation, at the request's current revision."""
+
+        revision = requests.get(self.conn, arguments["id"])["revision"]
+        meta = {"sessionId": session, "threadId": session}
+        answer = mcp_surface.call_tool(
+            self.conn, tool, {**arguments, "expected_revision": revision}, meta=meta
+        )
+        self.conn.commit()
+        return answer
+
+    def ask(self, asker: str, reference: str, seconds_ago: int, **extra: object) -> str:
+        """`asker` asks the session a question on `reference`, `seconds_ago` before now.
+
+        The time is given so that which request is newer never hangs on how finely
+        the clock reads. Answers the request's id.
+        """
+
+        arguments = {
+            "id": reference,
+            "kind": "question",
+            "prompt": "Which way?",
+            "fields": [ANSWER],
+            "addressees": [SESSION],
+            **extra,
+        }
+        at = request_model.stamp(datetime.now(UTC) - timedelta(seconds=seconds_ago))
+        meta = {"sessionId": asker, "threadId": asker}
+        with mock.patch.object(request_model, "now", return_value=at):
+            answer = mcp_surface.call_tool(
+                self.conn, "create_work_item_request", arguments, meta=meta
+            )
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        [asked] = answer["requests"]
+        return str(asked["request_id"])
+
     def told(self, session: str, agent: str | None = None) -> str | None:
         payload = {"session_id": session, "source": "compact", "hook_event_name": "SessionStart"}
         if agent is not None:
@@ -638,22 +677,81 @@ class RecipientTests(unittest.TestCase):
             assert text is not None
             return set(re.findall(r"^- (\S+) ", text, re.MULTILINE))
 
+        # A request asked of the session reaches its orchestrator, and no subagent of it.
+        self.ask(OTHER, named, 10)
+
         by_agent = self.told(SESSION, CHILD)
         self.assertEqual({agents_own}, references(by_agent))
         self.assertTrue(str(by_agent).startswith("Valkama now: this agent holds 1 open item:"))
+        self.assertNotIn("Waiting for your answer", str(by_agent))
         by_session = self.told(SESSION)
         self.assertEqual({mine, agents_own, siblings_own}, references(by_session))
         self.assertTrue(str(by_session).startswith("Valkama now: this session holds 3"))
+        self.assertIn(f"\nWaiting for your answer: {named}.\n", str(by_session))
         self.assertIsNone(self.told(STRANGER))
         self.assertEqual({named}, references(self.told(OTHER)))
-        # Losses reach a subagent as they reach the session; requests reach only the session.
-        items = held.held_for_note(self.conn, SESSION, CHILD)
-        to_agent = str(held_note.compose(items, agent=True, lost=["NT-90"], waiting=["NT-91"]))
-        self.assertIn("No longer held by you: NT-90.", to_agent)
-        self.assertNotIn("Waiting for your answer", to_agent)
-        items = held.held_for_note(self.conn, SESSION)
-        to_session = str(held_note.compose(items, agent=False, lost=["NT-90"], waiting=["NT-91"]))
-        self.assertIn("Waiting for your answer: NT-91.", to_session)
+        self.assertNotIn("Waiting for your answer", str(self.told(OTHER)), "it asked")
+
+    def test_the_session_is_told_the_items_waiting_for_its_answer(self) -> None:
+        # The session only started: it holds nothing, and is told what waits for it.
+        sessions.op_ingest_session_event(
+            self.conn, {"event": "session_start", "session_id": SESSION, "client": "claude-code"}
+        )
+        self.conn.commit()
+        self.claim(OTHER, self.item("The asker's own"))
+        self.claim(STRANGER, self.item("The other asker's own"))
+        first, second, third = (self.item(title) for title in ("First", "Second", "Third"))
+        self.ask(OTHER, first, 40)
+        self.ask(OTHER, second, 30)
+        self.ask(STRANGER, first, 20)
+        self.ask(OTHER, third, 10)
+        # By the newest request of each item: `first` stands by its second request.
+        self.assertEqual(
+            "\n".join(
+                (
+                    "Valkama now: this session holds no open item.",
+                    f"Waiting for your answer: {third}, {first} and {second}.",
+                    RULE,
+                )
+            ),
+            self.told(SESSION),
+        )
+
+    def test_a_request_answered_withdrawn_or_lapsed_leaves_the_line(self) -> None:
+        mine = self.item("The session's own")
+        self.claim(SESSION, mine)
+        self.claim(OTHER, self.item("The asker's own"))
+        answered, withdrawn, lapsing = (
+            self.item(title) for title in ("Answered", "Withdrawn", "Lapsing")
+        )
+        to_answer = self.ask(OTHER, answered, 30)
+        to_withdraw = self.ask(OTHER, withdrawn, 20)
+        deadline = datetime.now(UTC) + timedelta(hours=1)
+        self.ask(OTHER, lapsing, 10, expires_at=request_model.stamp(deadline))
+
+        def waiting(text: str | None) -> list[str]:
+            assert text is not None
+            return [line for line in text.splitlines() if line.startswith("Waiting")]
+
+        self.assertEqual(
+            [f"Waiting for your answer: {lapsing}, {withdrawn} and {answered}."],
+            waiting(self.told(SESSION)),
+        )
+        self.call(
+            SESSION,
+            "answer_work_item_request",
+            {"id": to_answer, "answers": {"answer": "This way."}},
+        )
+        self.assertEqual(
+            [f"Waiting for your answer: {lapsing} and {withdrawn}."], waiting(self.told(SESSION))
+        )
+        self.call(OTHER, "expire_work_item_request", {"id": to_withdraw})
+        self.assertEqual([f"Waiting for your answer: {lapsing}."], waiting(self.told(SESSION)))
+        later = request_model.stamp(deadline + timedelta(minutes=1))
+        with mock.patch.object(request_model, "now", return_value=later):
+            told = self.told(SESSION)
+        self.assertEqual([], waiting(told))
+        self.assertEqual({mine}, set(re.findall(r"^- (\S+) ", str(told), re.MULTILINE)))
 
     def test_each_recipient_is_told_its_own_losses(self) -> None:
         mine = self.item("The session's own")

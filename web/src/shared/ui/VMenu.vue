@@ -19,6 +19,9 @@
  * accessible name, reaching `--size-control-target` under a finger as every icon button does;
  * or its sign and its words where the host says so. A press that was meant for something that
  * stood here before reaches neither the trigger nor an entry (`strayPress`).
+ *
+ * A choice's options stand in one radio group, which carries the entry's `key` as
+ * `data-choice`: the hook a test reads one choice's options by, whatever others the menu holds.
  */
 import { computed, ref, useId, useTemplateRef, watch } from 'vue'
 
@@ -221,6 +224,7 @@ function closed(event: Event) {
               />
               <DropdownMenuLabel class="menu-caption">{{ entry.label }}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
+                :data-choice="entry.key"
                 :model-value="entry.value"
                 @update:model-value="(value) => choose(entry, value)"
               >
