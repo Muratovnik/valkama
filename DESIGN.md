@@ -2837,8 +2837,8 @@ the one starting the next stood a few pixels apart and read as one axis. Every w
 model's week, has its name on one line with «Breakdown», a compact button at the row's end that
 opens what used it in the side panel, the name cut short before the button wraps under it; then
 the same two parts 12px apart: what stands now and the `StepLine` of its readings.
-The menu beside an account's name, named «Account actions: Work», holds three entries and no
-more. «Rename» puts a field in the name's place that saves through the same names and rules as
+The menu beside an account's name, named «Account actions: Work», holds three entries at most.
+«Rename» puts a field in the name's place that saves through the same names and rules as
 Settings, by the account's key, and on the group of an organization no source read by the
 organization's: Enter or leaving it saves, Escape leaves the name as it was, either gives the
 focus back to the menu's button, and a save that fails keeps the field with the reason under it.
