@@ -87,7 +87,8 @@ for (const size of WIDTHS) {
     await expect(match).not.toContainText('match')
 
     // Five rows drawn, one of them the match: the counts say one.
-    const counts = page.getByRole('status').filter({ hasText: / open$/u })
-    await expect(counts).toHaveText(/^1 of \d+ open$/u)
+    // The counts and, under a filter, its reset.
+    const counts = page.getByRole('status').filter({ hasText: / of \d+ open/u })
+    await expect(counts).toHaveText(/^1 of \d+ open\b/u)
   })
 }
