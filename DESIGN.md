@@ -2394,7 +2394,8 @@ asks first, as every answer that cancels does. Where open work stands under the 
 question did not ask about, the server refuses it with the list of that work; the list stands
 over the answers, what closes with who holds it and what waits on it, the reference it waits on
 never split at its hyphen, focus goes to its first
-line, which says the answer cancels that work too, and the asking stands again. Confirming it
+line, which says the answer cancels that work too, and the asking stands again, its buttons
+brought back into view. Confirming it
 sends that list's token, never the one the question was asked with, which listed the findings the
 answer cancels first; a list that changed meanwhile is refused and shown again the same way.
 Where the list holds more than one kind, tabs over it offer All and each kind it holds, each with
@@ -2434,7 +2435,12 @@ same without closing the card or the list. Choosing or writing anything takes th
 so that Send is Send again by the time it is pressed. The step lasts only while attention is on
 its question: a press or focus landing outside it ends it, so a page holds one step at most, and
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
-person pressed no longer stands where they left it. What is asked lies on nothing, so that a
+person pressed no longer stands where they left it. What moved them before the step began is the
+screen's, not the person's: the list a refused answer brings stands over its buttons as the
+asking stands again, and on a phone it pushed them past the fold, so the scroll to them ended the
+step meant to confirm it. The step therefore brings its buttons into view, by no more than it
+takes, before it takes their place, and a scroll the person makes after that ends it as any
+other. What is asked lies on nothing, so that a
 person refuses seeing the end of what will not go, and moves nothing: it takes the place of
 Check status, since a press on it would end the step anyway, and that
 place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as
