@@ -2,6 +2,7 @@
 
 import { accountAliasMessages } from '@/shared/i18n/accountAliasMessages.ts'
 import { kindColorMessages } from '@/shared/i18n/kindColorMessages.ts'
+import { participationMessages } from '@/shared/i18n/participationMessages.ts'
 import { scopedSettingMessages } from '@/shared/i18n/scopedSettingMessages.ts'
 
 export const settingsMessages = {
@@ -11,6 +12,7 @@ export const settingsMessages = {
       sectionLabel: 'Settings section',
       section: {
         general: 'General',
+        participation: 'Participation',
         diagnostics: 'Diagnostics',
       },
       interface: 'Interface',
@@ -40,6 +42,7 @@ export const settingsMessages = {
       kindColors: kindColorMessages.en,
       accountAliases: accountAliasMessages.en,
       scoped: scopedSettingMessages.en,
+      participation: participationMessages.en,
       searchOptions: 'Search options',
       noOptions: 'No matching options',
       diagnostics: {
@@ -54,6 +57,7 @@ export const settingsMessages = {
       sectionLabel: 'Раздел настроек',
       section: {
         general: 'Общие',
+        participation: 'Участие',
         diagnostics: 'Диагностика',
       },
       interface: 'Интерфейс',
@@ -83,6 +87,7 @@ export const settingsMessages = {
       kindColors: kindColorMessages.ru,
       accountAliases: accountAliasMessages.ru,
       scoped: scopedSettingMessages.ru,
+      participation: participationMessages.ru,
       searchOptions: 'Поиск по вариантам',
       noOptions: 'Подходящих вариантов нет',
       diagnostics: {

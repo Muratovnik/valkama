@@ -100,6 +100,14 @@ class _Normalizer:
         return self.uuids[found.group(0)]
 
 
+def _order_moves(workflow: dict) -> None:
+    """Put a workflow's moves in its states' order: they stand in the order of the states' ids,
+    which change run to run."""
+
+    position = {state["state_id"]: state["position"] for state in workflow["states"]}
+    workflow["transitions"].sort(key=lambda move: (position[move["from"]], position[move["to"]]))
+
+
 class _Scenario:
     """One store with threads and questions in every state a card shows."""
 
@@ -355,6 +363,37 @@ class _Scenario:
         )
         question = answer["waits_for_owner"]["question"]
         return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
+
+    def participation(self) -> dict[str, dict]:
+        """The owner's participation as Settings reads and writes it: a space with one value
+        of its own and a label's rule over a shared one, a write's answer, and the space's
+        record its launch place write answers with."""
+
+        self.http(
+            "/api/planning/participation", {"space": None, "key": "goal_close", "value": "human"}
+        )
+        self.http(
+            "/api/planning/participation",
+            {"space": None, "label": "flow", "ready": True, "description": "The main line"},
+        )
+        self.http(
+            "/api/planning/participation",
+            {"space": SPACE, "label": "flow", "ready": False, "description": None},
+        )
+        written = self.http(
+            "/api/planning/participation", {"space": SPACE, "key": "lease_quiet_days", "value": 5}
+        )
+        record = self.http(
+            "/api/planning/space/settings",
+            {"space": SPACE, "launch_place": "item_project", "author": "user"},
+        )
+        _order_moves(record["workflow"])
+        return {
+            "participation-space": self.http(f"/api/planning/participation?space={SPACE}"),
+            "participation-shared": self.http("/api/planning/participation"),
+            "participation-written": written,
+            "space-settings": record,
+        }
 
     def put_off(self) -> dict[str, dict]:
         """A card put off until another item, and one that came back when the item it
@@ -790,11 +829,7 @@ class _Scenario:
         model = self.http(f"/api/planning?{urlencode(self.space_ref)}")
         # A digest of the whole answer, ids and instants included, which change run to run.
         model["revision"] = "0" * 64
-        # The workflow's moves stand in the order of their states' ids; put them in the states'.
-        position = {state["state_id"]: state["position"] for state in model["workflow"]["states"]}
-        model["workflow"]["transitions"].sort(
-            key=lambda move: (position[move["from"]], position[move["to"]])
-        )
+        _order_moves(model["workflow"])
         found = self.http(f"/api/modules/planning/search?{urlencode({'q': 'Tree', 'limit': '50'})}")
         # Equal matches stand in the order of their ids, which change run to run.
         found["items"].sort(key=lambda hit: int(hit["item"]["reference"].split("-")[1]))
@@ -1110,6 +1145,8 @@ class _Scenario:
             ),
             # After the counts above, which the group's goal and findings would change.
             "request-triage-group": self.triage_group(),
+            # Last: its launch place changes the space every answer above reads.
+            **self.participation(),
         }
 
 

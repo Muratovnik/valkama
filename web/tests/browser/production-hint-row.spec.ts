@@ -106,9 +106,9 @@ for (const width of [1440, 1024]) {
     test('a setting’s hint stands beside its control, inside its own row', async ({ page }) => {
       await installBackend(page)
       await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
-      const rows = page.locator('.settings-general-sheet .settings-row')
+      const rows = page.locator('.settings-sheet .settings-row')
       await expect(rows.first()).toBeVisible()
-      const swept = await sweepRows(page, rows, '.settings-general-sheet .settings-row')
+      const swept = await sweepRows(page, rows, '.settings-sheet .settings-row')
       // The colours, the alerts' switch, the check of the connection and the opening lanes: eight
       // of the sheet's seventeen rows show a hint, and the others' labels are whole.
       expect(swept.pointed.length).toBeGreaterThan(4)

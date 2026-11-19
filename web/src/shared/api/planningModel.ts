@@ -453,7 +453,7 @@ const workItemSchema = recordObject({
   awaiting_confirmation: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
 })
 
-const workflowSchema = strictObject({
+export const workflowSchema = strictObject({
   workflow_id: boundedText(UUID, 36),
   name: boundedText(TITLE, 200),
   initial_state_id: boundedText(UUID, 36),

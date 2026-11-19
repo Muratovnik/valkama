@@ -122,7 +122,7 @@ test('a failed read of the alerts lies inside its settings group, apart from the
   const room = await panel.evaluate((node) => {
     const box = node.getBoundingClientRect()
     const head = node.closest('.settings-group')?.querySelector('.settings-group-head')
-    const sheet = node.closest('.settings-general-sheet')
+    const sheet = node.closest('.settings-sheet')
     const headBox = head?.getBoundingClientRect()
     const sheetBox = sheet?.getBoundingClientRect()
     if (!headBox || !sheetBox) return null
@@ -169,7 +169,10 @@ const ON_THE_WORKSPACE: { name: string; open: (page: Page) => Promise<Locator> }
     open: async (page) => {
       await page.route('**/api/doctor', (route) => route.fulfill(BUSY))
       await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
-      await page.locator('.settings-page-sections').getByRole('tab').nth(1).click()
+      await page
+        .locator('.settings-page-sections')
+        .getByRole('tab', { name: 'Diagnostics' })
+        .click()
       return page.locator('.installation-health .platform-state-panel')
     },
   },

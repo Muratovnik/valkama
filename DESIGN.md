@@ -2875,6 +2875,33 @@ and a cleared one; a field keeps what was typed until its save holds. Analytics 
 account by that name, with no hint of its id, and a session by the title its client gave it,
 with the id in the hint.
 
+Participation, the tab between General and Diagnostics, says at which points an agent's
+decision waits for the owner. A scope choice heads it: «Общие значения» («Shared values») and
+«Пространство MAIN» («Space MAIN»), the space chosen in the context bar, which it starts on;
+with all spaces chosen there it has the shared segment alone and a line under it saying a
+space is chosen at the top, not by a second choice of space on the page. Under it stand the
+set, then the groups «Кто решает» («Who decides»), a row per point with «Агент | Человек»
+(«Agent | Person»), «Очередь и сроки» («Queue and periods»), the queue and triage switches and
+four number fields, «Метки» («Labels») and, in a space, «Место запуска» («Launch place»). A row's
+hint says what happens at the value in force, and changes with it. The set is four segments;
+when the rows match none, none is chosen and the hint says «Свой набор: отличается в N
+строках» («Custom set: differs in N rows»): there is no «Custom» segment, since it could not be
+chosen. In a space a row inherits the shared value until its «Своё значение» («Own value»)
+switch is on: inheriting, it says the shared value in words and draws no choice; owning, its
+choice starts from the shared value and its name carries a quiet «своё» («own»); switching it
+off inherits again, and no separate reset exists. A set chosen in a space gives every row a value
+of the space's own. Labels lists only those with a rule or a description — whether their
+findings are ready at once, and a description field — and «Добавить правило метке» («Add a rule
+to a label») finds one among the labels the space's work carries or takes it typed whole. Every
+change is written at once and nothing is disabled while it is out; a number is written when its
+field is left or Enter is pressed. A newer change replaces only the waiting change of its own
+row, so changing a second row never drops the first. A save that does not hold puts back the
+value the server last confirmed and says why under its row, focus staying on the control. The
+launch place, «Из пространства | Из проекта карточки» («From the space | From the card's
+project»), is a field of the space's own record: it writes, takes back and refreshes on its own,
+and a refused participation write never touches it. A first read that fails says «Не удалось
+прочитать настройки участия» with a retry.
+
 ## Accessibility
 
 The target is WCAG 2.1 AA: full keyboard reach, a visible focus ring, semantic
