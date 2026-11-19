@@ -122,7 +122,7 @@ test('a failed read of the alerts lies inside its settings group, apart from the
   const room = await panel.evaluate((node) => {
     const box = node.getBoundingClientRect()
     const head = node.closest('.settings-group')?.querySelector('.settings-group-head')
-    const sheet = node.closest('.settings-general-sheet')
+    const sheet = node.closest('.settings-sheet')
     const headBox = head?.getBoundingClientRect()
     const sheetBox = sheet?.getBoundingClientRect()
     if (!headBox || !sheetBox) return null
