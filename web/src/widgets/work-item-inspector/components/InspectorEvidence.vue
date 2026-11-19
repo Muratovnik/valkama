@@ -1,10 +1,13 @@
 <script setup lang="ts">
 /**
- * What is attached to the item as evidence of its work — sessions, commits, memory records,
- * links — with the plan anchor it was raised from first, each with who attached it and when.
+ * What is attached to the item as evidence of its work — sessions, memory records, links —
+ * with the plan anchor it was raised from first, each with who attached it and when, then
+ * its commits (`InspectorCommits`). The heading counts both.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import InspectorCommits from '@/widgets/work-item-inspector/components/InspectorCommits.vue'
 
 import OpenAction from '@/features/session-open/OpenAction.vue'
 
@@ -19,6 +22,10 @@ import SectionHeader from '@/shared/ui/SectionHeader.vue'
 
 const props = defineProps<{ item: WorkItem }>()
 const { t, d } = useI18n()
+
+const commits = computed(() => props.item.commits ?? [])
+const count = computed(() => props.item.refs.length + commits.value.length)
+const any = computed(() => count.value > 0 || Boolean(props.item.source))
 
 /**
  * The plan anchor is one of the item's references, so its whole path stands
@@ -43,7 +50,7 @@ function when(value: string): string {
   <section class="evidence">
     <SectionHeader
       :title="t('workItem.refs')"
-      :count="item.refs.length || ''"
+      :count="count || ''"
     />
     <ul
       v-if="item.refs.length || item.source"
@@ -82,8 +89,12 @@ function when(value: string): string {
         }}</span>
       </li>
     </ul>
+    <InspectorCommits
+      v-if="commits.length"
+      :commits="commits"
+    />
     <DataEmptyState
-      v-else
+      v-if="!any"
       :title="t('workItem.noRefs')"
       :description="t('workItem.refsIntro')"
       inline

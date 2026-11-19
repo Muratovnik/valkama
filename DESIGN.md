@@ -1852,6 +1852,16 @@ of the list shares, on the title's first line with every dot on one edge, and un
 title, at its edge, where the list is a phone's. The state followed its title in a row that
 wrapped, so down a list it jumped between the end of a short title's line and a line of its
 own under a long one, and groups that sized their own columns put it at another edge in each.
+The evidence ends with the item's commits, «Коммиты», newest first: each named by its
+repository and the start of its hash, «valkama · a3cc0de4», the pair that finds it, with its
+subject, then its project's name, when it was committed and, for a commit attached by hand,
+«прикреплён вручную». The server attaches a commit itself when a session makes it, which is
+the norm and says nothing. Its name opens what git says of it in a dialog, asked by that
+repository and hash (`GET /api/commit`) in the repository's registered root alone; a
+commit of no known repository says git has nowhere to be asked. A hash written in the
+card's text opens the same dialog where it names one commit the card carries, and is text
+where it names none or could name two. A commit is not a ref: the refs above it are
+sessions, memory records and links.
 A card's chain is a tab of its own, «Цепочка», in the order Обзор · Агенты · Цепочка ·
 Исполнение · Память · Связи · Системные события, of which a card shows those it offers.
 The card offers it only where there is a chain — an item with children, or one work was

@@ -62,6 +62,7 @@ export const en = {
   pastedImages: pastedImageMessages.en.pastedImages,
   ...connectionMessages.en,
   liveWork: liveWorkMessages.en.liveWork,
+  commits: workItemFactMessages.en.commits,
   analytics: analyticsMessages.en.analytics,
   app: {
     title: 'Valkama',

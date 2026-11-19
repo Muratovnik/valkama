@@ -1,13 +1,19 @@
 /**
  * What a card's facts say of how the work came to be done and who is on it: why and when it
  * was accepted, that a task waiting to be taken was already started, who works on a goal or a
- * stage, and a step its former holder marked.
+ * stage, and a step its former holder marked; and how «Связи» names the commits attached to it.
  *
  * The bases of acceptance are the server's (`ACCEPTANCE_BASES`), each said as the reason a
  * person reads: who decided the work is to be done.
  */
 export const workItemFactMessages = {
   en: {
+    commits: {
+      many: 'Commits',
+      show: 'Show commit {commit}',
+      manual: 'attached by hand',
+      noRepository: 'The repository of this commit is not known, so git has nowhere to be asked.',
+    },
     facts: {
       accepted: 'Accepted',
       acceptedOn: '{basis} · {date}',
@@ -27,6 +33,12 @@ export const workItemFactMessages = {
     },
   },
   ru: {
+    commits: {
+      many: 'Коммиты',
+      show: 'Показать коммит {commit}',
+      manual: 'прикреплён вручную',
+      noRepository: 'Репозиторий этого коммита неизвестен, поэтому git спросить негде.',
+    },
     facts: {
       accepted: 'Принято',
       acceptedOn: '{basis} · {date}',

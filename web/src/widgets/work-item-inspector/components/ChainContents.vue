@@ -146,6 +146,13 @@ defineExpose({ reveal })
         :aria-label="t('workItem.chain.contents.table', { reference: chain.root.reference })"
         v-bind="treeGridAttrs({ rowCount: rows.length + 1, windowed: false })"
       >
+        <!-- The columns' widths: a fixed table takes them from its first row, which here is
+             the hidden head's, so they stand on the columns themselves. -->
+        <colgroup>
+          <col class="contents-col-work" />
+          <col class="contents-col-state" />
+          <col class="contents-col-holder" />
+        </colgroup>
         <thead class="visually-hidden">
           <tr>
             <th scope="col">{{ t('workItem.chain.contents.work') }}</th>
@@ -205,7 +212,7 @@ defineExpose({ reveal })
               <span
                 v-if="holder(row.item)"
                 v-tooltip.clipped="holder(row.item)"
-                class="one-line"
+                class="contents-holder-name one-line"
                 >{{ holder(row.item) }}</span
               >
             </td>
@@ -284,8 +291,8 @@ defineExpose({ reveal })
   }
 }
 
-.contents-work {
-  width: 62%;
+.contents-col-work {
+  width: 54%;
 }
 
 .contents-work-line {
@@ -305,12 +312,20 @@ defineExpose({ reveal })
   min-width: 0;
 }
 
-.contents-state {
-  width: 22%;
+.contents-col-state {
+  width: 26%;
+}
+
+.contents-col-holder {
+  width: 20%;
+}
+
+/* The holder's name is cut at its column's edge, whole in its hint. */
+.contents-holder-name {
+  display: block;
 }
 
 .contents-holder {
-  width: 16%;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
 }
@@ -318,12 +333,16 @@ defineExpose({ reveal })
 /* At a phone's width the holder gives way, as the chain's list lets it go, and the card
    names it. */
 @container chain-contents (width < 480px) {
-  .contents-work {
+  .contents-col-work {
     width: 64%;
   }
 
-  .contents-state {
+  .contents-col-state {
     width: 36%;
+  }
+
+  .contents-col-holder {
+    width: 0;
   }
 
   .contents-holder {

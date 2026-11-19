@@ -62,6 +62,7 @@ export const ru = {
   pastedImages: pastedImageMessages.ru.pastedImages,
   ...connectionMessages.ru,
   liveWork: liveWorkMessages.ru.liveWork,
+  commits: workItemFactMessages.ru.commits,
   analytics: analyticsMessages.ru.analytics,
   app: {
     title: 'Valkama',
