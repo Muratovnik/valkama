@@ -1368,6 +1368,34 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   dialog as a choice list does. A stray press reaches neither the trigger nor an entry. A
   menu does things to what it stands beside; picking the value a field holds is
   `ChoiceSelect`'s.
+- **Facet filter:** `FacetFilter` owns a filter's field and its menu, and
+  `FacetFilterChips` the values it holds as chips; the Work views and the Analytics bar
+  filter through them, each saying what its filter is over: the values no facet holds, the
+  facets, and each facet's values. The field is the way into the menu, with no button of
+  its own: a press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
+  itself does not, since Tab passes through to what the menu would cover. Escape closes the
+  menu, then clears the text, then leaves the field, one step a press. The menu takes two
+  steps, as Linear's does: it opens on the facets, each row marked with a chevron, and a
+  facet's row steps into that facet's values. The values' step heads its list with the
+  facet's name as the way back; ← or Backspace from the start of the text goes back too,
+  and the highlight lands on the facet it left. Typing in the facets' step still finds a
+  value of any facet, the fast path for a reader who knows the word, and a pick made that
+  way lands in its facet's step with the value highlighted; inside a facet the text narrows
+  its values. A facet's values are asked for only while they show — the facet stepped into,
+  or every facet while text searches them all — so a host that reads them reads none for a
+  closed menu; what is not there is said under them, in the muted detail words and no row:
+  a wait once it has lasted, a read that failed, nothing found. Every row keeps to one line
+  by the one-line labels' rule, its words cut with an ellipsis where the menu is too narrow
+  and said whole in its hint. The menu is as wide as the field, up to 24rem, or as wide as
+  its host asks, and never past the window's end; it stands as tall as the window lets it,
+  down to 8px over its foot. While it shows it is the page's open popup, and the hints of
+  what lies under it keep quiet. A chip is a press that takes its value out; once the chips
+  without it are drawn, the focus goes to the chip before it, the next one when it was the
+  first, and the field when none is left, so it never falls to the page. ← from the start
+  of the text reaches the last chip, and Backspace there takes it out. The Analytics page
+  once had a list of its own, a field for each dimension under a button: an unplaced
+  account's «<id> · аккаунт не определён» wrapped to two lines there, 52px beside rows of
+  40px.
 - **Disclosure:** what shows more of something — the rest of a long text,
   earlier replies, a chain's or a lane's further rows, a folded thread — is the
   bare `text` weight, its words in line with what it opens. The ghost's fill is
@@ -1621,21 +1649,13 @@ cannot stand beside that, the bar takes its phone form, where the menu is its si
 alone. The filter's
 hint starts with «Filter:» and names what it narrows by, so it does not read as the
 search over every project, «Go to a task» in the navigation; it is whole where it fits
-and short where it would be cut. The field is the way into the filter's menu, with no button of its own: a
-press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
-itself does not, since Tab passes through to what the menu would cover. The menu takes
-two steps, as Linear's does: it opens on the facets — state, kind, priority, holder,
-label — under the two conditions, and a facet's row, marked with a chevron, steps into
-that facet's values. Every value of every facet at once was a list a real space's
-labels made thousands of rows long. The values' step heads its list with the facet's
-name as the way back; ← or Backspace from the start of the text goes back too, and
-the highlight lands on the facet it left. Typing in the facets' step still finds a
-value of any facet, the fast path for a reader who knows the word, and a pick made
-that way lands in its facet's step with the value highlighted. Text always ends the
+and short where it would be cut. The field is the shared facet filter (Shared component
+grammar): its facets are state, kind, priority, holder and label, under the two conditions.
+Every value of every facet at once was a list a real space's labels made thousands of rows
+long. Text always ends the
 menu with «Search for "…" in all projects», which hands it to the finder; with no
 value left that row is all the menu holds, one row tall, and Escape takes it away.
-The menu stands as tall as the window
-lets it, down to 8px over its foot. A group's head stays in sight while its values scroll, and
+A group's head stays in sight while its values scroll, and
 the label group's head says how the labels picked combine, «all» or «any», where the
 space has two to combine. Where typed text offers that group beside others it stands last, as the
 longest list, and until the list reaches it its head waits at the menu's lower edge, so the
@@ -2556,7 +2576,8 @@ filters' chips had, the way to add a filter standing before them: it moves neith
 height nor any of its controls. Fitted for the bar as it stood, a failure moved «Add filter»
 260px and the age as far, gave up the failure's own words beside a span of days at 1440px, and
 turned a line of 1280px into two rows that moved the panel. Beside a span of days, in Russian,
-the line needs a 1360px window; at 1108px «Refresh» ran 188px past the bar's end, and pressing it
+the line needs a 1390px window, the filter's field taking 30px more than the button it replaced;
+at 1108px «Refresh» ran 188px past the bar's end, and pressing it
 scrolled the bar sideways. There, choosing such a span moves the panel down by the second row:
 one line wherever it fits was chosen over a bar of one height for every period.
 Below a bar 50rem wide, a window under about 1107px beside the expanded navigation, the bar is
@@ -2578,6 +2599,28 @@ refresh beside it. Reading another period or filter dims what is shown until its
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,
 and say «no data yet» in their hint rather than being drawn as a drop.
+
+The bar's filter is the shared facet filter (Shared component grammar), the one the Work views
+filter through. Its field, «Add a filter», stands first, then the chips it set. Its facets are
+the page's dimensions in the rail's order, the project left out inside a project, and a
+dimension's values are its «none» as the read admits it — «No task» for work on no item, «The
+session itself» for a session's own run, «Unknown» for a value nobody can place, and none for a
+role, which every stretch has — then the values that spent anything in the period, each named as
+the page names it; a value a link names that the period did not spend still stands, chosen,
+under its id. A dimension's values are read when it is stepped into and again for a new period,
+and a filter set has its dimension's read to name its chip; the page used to read all ten at
+once to open its list. Several values of one dimension admit any of them, and the dimensions'
+filters all apply. «Add to filter» in a value's panel adds to the same filter, and an old link
+reads as it did. A chip says its dimension and its value, «Model: model-a». The chips take the
+room the line leaves; those it has no room for are counted with the rest in «Filters: N»,
+which opens the list of every chip with «Clear filters», over the panel under the bar's line
+and as wide as it, so opening it moves nothing. The field is as wide as its words, 176px, and
+not as the room beside it, so a failure that takes the chips' room moves it not at all; the
+first thing it gives up, beside the count, on a short bar and on a phone, is its words for its
+short «Filter», 62px with less air at its ends. At 108px, as wide as the Work filter on a phone,
+a failure said on a phone's row pushed the periods and the refresh 26px aside at 360px, and a
+span of days needed a window 70px wider for one line. On a phone, with no filter set, the chips
+take no room and no gap of the row.
 
 An item's work has two times, and each has one name wherever it stands. «Work on the clock»
 («Работа по часам») is the time that passed while agents worked, which agents working side by
@@ -2894,7 +2937,7 @@ never as a line of the panel. Its days are the page's period and step with
 the period before marked, one series in the value's colour; under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
 the value's filter added, and wait and fail as the page's do. «Add to filter» adds the value to
-its dimension's filter beside the values already there, as choosing it in the filter's field
+its dimension's filter beside the values already there, as choosing it in the filter's menu
 does, so A and B and then C is A, B and C: the page stays on its section and the panel closes, a
 step of the history too. A value the filter holds already offers it disabled, «Already in
 filter»; a filter the link cannot hold says why in the panel. A press with a modifier or the
