@@ -1,14 +1,15 @@
 import { unfinished } from '@/pages/analytics/utils/dayFigures.ts'
 import {
-  changeOf,
   figureOf,
+  lineChangeOf,
   measureOf,
   spendingLines,
   spentAnything,
   spentOf,
+  unplacedBefore,
   workedValue,
 } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { LineChange, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 /**
  * The figures of the rail's tiles, kept apart from the words so a test can hold every number.
@@ -16,7 +17,8 @@ import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageF
  * The overview's tile is the period's total in the chosen measure, how it moved from the period
  * before and the period day by day. A rise from a base so small that its percentage says nothing
  * — a tenth of the figure now or less — is said by the base itself (`from`), as a period before
- * that spent nothing already is (`none`).
+ * that spent nothing already is (`none`). Narrowed to accounts whose organizations' work on no
+ * account outweighed their own before, it moved by nothing anybody can say (`unplaced`).
  *
  * A dimension's tile is how many values worked in the period in the measure, the first of them
  * with its share of the whole, and the shares of the first few, what they leave out folded into
@@ -33,7 +35,7 @@ import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 
 /** How the overview's total moved: a change as the page's tiles say it, or the small base. */
-export type RailChange = Change | { before: Spent; direction: 'from' }
+export type RailChange = LineChange | { before: Spent; direction: 'from' }
 
 /** A rise to this many times the figure before or more is said by that figure, not a percentage. */
 const SMALL_BASE = 10
@@ -58,7 +60,7 @@ export function overviewFigures(usage: Usage, measure: Measure, readAt: Date): O
   const before = usage.comparison ? spentOf(usage.comparison.total) : null
   return {
     total,
-    change: before ? railChange(measure, total, before) : null,
+    change: before ? railChange(measure, total, before, unplacedBefore(usage)) : null,
     trend: usage.series.map((day) => ({
       key: day.start,
       value: measureOf(measure, spentOf(day)),
@@ -67,9 +69,17 @@ export function overviewFigures(usage: Usage, measure: Measure, readAt: Date): O
   }
 }
 
-/** How `now` moved from `before` in a measure, by the page's own rule, a small base apart. */
-export function railChange(measure: Measure, now: Spent, before: Spent): RailChange {
-  const change = changeOf(measure, now, before)
+/**
+ * How `now` moved from `before` in a measure, by the page's own rule (`lineChangeOf`) beside the
+ * work left out on no account before (`unplaced`), a small base apart.
+ */
+export function railChange(
+  measure: Measure,
+  now: Spent,
+  before: Spent,
+  unplaced?: Spent,
+): RailChange {
+  const change = lineChangeOf(measure, now, before, unplaced)
   if (change.direction !== 'up') return change
   const was = figureOf(measure, before) ?? 0
   const at = figureOf(measure, now) ?? 0

@@ -22,12 +22,7 @@ import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
-import type {
-  Change,
-  LineChange,
-  SpendingLine,
-  Spent,
-} from '@/pages/analytics/utils/usageFigures.ts'
+import type { LineChange, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
@@ -263,9 +258,11 @@ export function useSpendingWords() {
 
   /**
    * How a measure's figure moved, against the period it is compared with; with a figure absent,
-   * which period has none — no price, no token counted — and no change at all.
+   * which period has none — no price, no token counted — and no change at all; for accounts whose
+   * figure before is not known (`LineChange`), the table's own words for it.
    */
-  function change(name: Measure, moved: Change, before: string) {
+  function change(name: Measure, moved: LineChange, before: string) {
+    if (moved.direction === 'unplaced') return t('analytics.table.moved.unplaced')
     if (moved.direction === 'absent')
       return t(`analytics.change.absent.${name}.${moved.missing}`, { period: before })
     if (moved.direction === 'none') return t('analytics.change.none', { period: before })

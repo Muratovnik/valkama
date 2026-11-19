@@ -3,7 +3,7 @@
  * tiles state, an hour of agent time's among them, and the part of the panel a press to narrow the view came from, where a refusal of
  * that press is said.
  */
-import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { figureOf, spentOf, unplacedBefore } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Usage } from '@/shared/api/analyticsApi.ts'
@@ -17,15 +17,25 @@ export interface Refusal {
   words: string
 }
 
-/** The period's total, and what the period before spent and when; null when that was not read. */
+/**
+ * The period's total, and what the period before spent and when, with what a read narrowed to
+ * accounts left out of it on no account (`unplacedBefore`); null when that was not read.
+ */
 export function tileFigures(usage: Usage): {
-  before: { from: string; spent: Spent; to: string } | null
+  before: { from: string; spent: Spent; to: string; unplaced?: Spent } | null
   total: Spent
 } {
   const { comparison } = usage
+  const unplaced = unplacedBefore(usage)
   return {
     total: spentOf(usage.total),
-    before: comparison ? { ...comparison.period, spent: spentOf(comparison.total) } : null,
+    before: comparison
+      ? {
+          ...comparison.period,
+          spent: spentOf(comparison.total),
+          ...(unplaced ? { unplaced } : {}),
+        }
+      : null,
   }
 }
 

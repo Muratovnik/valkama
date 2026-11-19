@@ -6,8 +6,9 @@
  * the measure's own units, «+6 h 11 min», and words where a side had nothing at all. Two lines an
  * entry and four entries stand as high as a card's five rows, so the row stays one height and the
  * name has the card's whole width. Work on no task is among them, by its name, as it is a large
- * part of what a period spends. The arrow says the way; the headings of the ways are for a
- * screen reader.
+ * part of what a period spends. Narrowed to accounts, a task whose work on no account of their
+ * organizations outweighed their own before moved by nothing anybody can say (`LineChange`), and
+ * is not among them. The arrow says the way; the headings of the ways are for a screen reader.
  *
  * A name cut at the card's edge is whole in the line's hint, under the pointer and in the keyboard's
  * focus, and a name the card holds whole has none.
@@ -68,6 +69,7 @@ const most = computed(() =>
   mostMoved(
     comparedLines({
       before: comparison.value?.rows ?? null,
+      unplaced: comparison.value?.unplaced?.rows ?? null,
       dimension: 'work_item',
       measure: props.measure,
       rows: props.usage.rows,

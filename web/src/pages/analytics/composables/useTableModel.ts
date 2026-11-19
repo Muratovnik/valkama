@@ -23,13 +23,14 @@ import {
 } from '@/pages/analytics/utils/tokenKinds.ts'
 import type { TokenKind } from '@/pages/analytics/utils/tokenKinds.ts'
 import {
-  changeOf,
   comparedLines,
   figureOf,
+  lineChangeOf,
   measureOf,
   spentAnything,
   spentOf,
   spentTogether,
+  unplacedBefore,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { LineChange, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
@@ -218,12 +219,13 @@ export function useTableModel(source: () => TableSource) {
         : []),
       ...kindColumns(),
     ]
-    // A value's change is its line's (`comparedLines`); the total's, the tiles' own rule.
+    // A value's change is its line's (`comparedLines`); the total's, the tiles' own rule beside
+    // what a read narrowed to accounts left out on no account (`unplacedBefore`).
     const cellsOf = (
       now: Spent,
       before: Spent | null,
       tokens: UsageTokens,
-      change: LineChange | null = before ? changeOf(measure, now, before) : null,
+      change: LineChange | null,
     ): TableCell[] => {
       return [
         ...MEASURES.map((key) => figureCell(key, key, now, key === measure)),
@@ -248,6 +250,7 @@ export function useTableModel(source: () => TableSource) {
       measure,
       name: (value) => words.valueLabel(by, value),
       across,
+      unplaced: comparison?.unplaced?.rows ?? null,
     })
     const lines = compared.map((line) =>
       lineOf(line, [
@@ -255,21 +258,33 @@ export function useTableModel(source: () => TableSource) {
         whenOf(measure, line.now, line.before),
       ]),
     )
+    const before = comparison ? spentOf(comparison.total) : null
     const total = cellsOf(
       spentOf(usage.total),
-      comparison ? spentOf(comparison.total) : null,
+      before,
       usage.total.tokens,
+      before ? lineChangeOf(measure, spentOf(usage.total), before, unplacedBefore(usage)) : null,
     )
-    /** The total of the rows whose keys are given, column by column, as `total` is the period's. */
+    /**
+     * The total of the rows whose keys are given, column by column, as `total` is the period's: its
+     * change beside the work on no account their own changes were held to, each line of it once.
+     */
     const totalOf = (keys: readonly string[]) => {
       const held = new Set(keys)
       const found = compared.filter((line) => held.has(line.key))
+      const now = spentTogether(found.map((line) => line.now))
+      const was = comparison
+        ? spentTogether(found.flatMap((line) => (line.before ? [line.before] : [])))
+        : null
+      const left = new Map(
+        found.flatMap(({ unplaced }) => (unplaced ? [[unplaced.key, unplaced.spent]] : [])),
+      )
+      const loose = left.size ? spentTogether([...left.values()]) : undefined
       return cellsOf(
-        spentTogether(found.map((line) => line.now)),
-        comparison
-          ? spentTogether(found.flatMap((line) => (line.before ? [line.before] : [])))
-          : null,
+        now,
+        was,
         kindsTogether(kinds, [...held]),
+        was ? lineChangeOf(measure, now, was, loose) : null,
       )
     }
     // The period compared with is named in its column's heading, so the title need not say it.

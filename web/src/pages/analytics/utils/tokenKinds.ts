@@ -98,6 +98,11 @@ export interface KindLine {
   steps: (number | null)[]
   /** In the period compared with; null when it reported none or was not read. */
   before?: number | null
+  /**
+   * What a read narrowed to accounts left out of the period compared with on no account
+   * (`Usage['unplaced']`); undefined for a read not narrowed to an account.
+   */
+  unplaced?: number | null
 }
 
 /**
@@ -107,11 +112,13 @@ export interface KindLine {
  */
 export function kindLines(usage: Usage): KindLine[] {
   const before = usage.comparison?.total.tokens
+  const left = usage.comparison?.unplaced?.total.tokens
   const line = (kind: TokenKind, counted: boolean): KindLine => ({
     kind,
     counted,
     count: usage.total.tokens[kind],
     before: before ? before[kind] : undefined,
+    ...(left ? { unplaced: left[kind] } : {}),
     steps: usage.series.map((point) => point.tokens[kind]),
   })
   const reported = (one: KindLine) => one.count !== null || (one.before ?? null) !== null
