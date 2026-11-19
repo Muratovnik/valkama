@@ -396,21 +396,54 @@ class _Scenario:
                     }
                 )
             ),
+            # That day narrowed to the account, by model, beside the day before, when the
+            # session's work for its organization was on no account yet: `unplaced`.
+            "analytics-usage-account": self.http(
+                "/api/analytics/usage?"
+                + urlencode(
+                    {
+                        "from": "2026-11-12",
+                        "to": "2026-11-13",
+                        "utc_offset": "180",
+                        "group_by": "model",
+                        "seat": "org-fixture/acct-fixture",
+                        "compare": "true",
+                    }
+                )
+            ),
         }
 
     @staticmethod
     def seats(conn: sqlite3.Connection) -> None:
         """A session's work on 2026-11-12, after the days the reads above cover: on the seat
         an account's poll names, then on one no account names, then for no organization,
-        then for an organization no sample reads. Its run's last record is the card's, so
-        the reads above say the same."""
+        then for an organization no sample reads. The day before, another session's work for
+        the same organization, ahead of every sample, is on no account of it. Their runs'
+        last record is the card's, so the reads above say the same."""
 
         session, organization = "sess-seat", "org-fixture"
-        run = conn.execute(
-            "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
-            " read_at) VALUES (?, '', 'claude', 'seat.jsonl', ?, ?, ?)",
-            (session, *("2026-11-10T10:00:00.000Z",) * 2, "2026-11-10T11:00:00.000Z"),
-        ).lastrowid
+
+        def run_of(session: str) -> int | None:
+            return conn.execute(
+                "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+                " read_at) VALUES (?, '', 'claude', ?, ?, ?, ?)",
+                (
+                    session,
+                    f"{session}.jsonl",
+                    *("2026-11-10T10:00:00.000Z",) * 2,
+                    "2026-11-10T11:00:00.000Z",
+                ),
+            ).lastrowid
+
+        run, loose = run_of(session), run_of("sess-loose")
+        conn.execute(
+            "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+            " ended_at, seconds, input_tokens, output_tokens, estimated_api_cost_usd,"
+            " price_book, quality, organization)"
+            " VALUES (?, 'sess-loose', '', 'claude-opus-5-5', '2026-11-11T12:00:00.000Z',"
+            " '2026-11-11T12:20:00.000Z', 1200, 20, 2, 0.02, '2026-11-10', 'observed', ?)",
+            (loose, organization),
+        )
         for start, end, held in (
             # What the session worked for, before the day read.
             ("2026-11-11T20:00:00.000Z", "2026-11-11T20:00:00.000Z", organization),
@@ -935,6 +968,7 @@ class ServerFixtureTests(unittest.TestCase):
                 "last_event_at",
                 "total",
                 "rows",
+                "unplaced",
                 "series",
                 "comparison",
             },
@@ -955,8 +989,23 @@ class ServerFixtureTests(unittest.TestCase):
             self.assertEqual(measures | {"start", "end", "groups"}, set(point))
             for group in point["groups"]:
                 self.assertEqual({"work_item", "model"}, set(group["group"]))
-        self.assertEqual({"period", "total", "rows"}, set(usage["comparison"]))
+        self.assertEqual({"period", "total", "rows", "unplaced"}, set(usage["comparison"]))
+        # Not narrowed to an account, the read leaves out no account's unplaced work.
+        self.assertIsNone(usage["unplaced"])
+        self.assertIsNone(usage["comparison"]["unplaced"])
         self.assertNotIn("quota", json.dumps(answer))
+
+    def test_an_answer_narrowed_to_an_account_has_its_unplaced_work_beside(self) -> None:
+        answer = json.loads((FIXTURES / "analytics-usage-account.json").read_text(encoding="utf-8"))
+        usage = answer["usage"]
+        total_keys = set(usage["total"])
+        for unplaced in (usage["unplaced"], usage["comparison"]["unplaced"]):
+            self.assertEqual({"total", "rows"}, set(unplaced))
+            self.assertEqual(total_keys, set(unplaced["total"]))
+        before = usage["comparison"]["unplaced"]
+        self.assertEqual(1, len(before["rows"]))
+        self.assertEqual(set(usage["rows"][0]), set(before["rows"][0]))
+        self.assertEqual({"model"}, set(before["rows"][0]["group"]))
 
 
 if __name__ == "__main__":

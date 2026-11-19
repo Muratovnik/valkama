@@ -1066,6 +1066,7 @@ with.
                "agent_seconds": 5400.0, "…": "the measures",
                "groups": [{"group": {"work_item": {"…": "as in rows"}},
                            "agent_seconds": 3600.0, "…": "the measures"}]}],
+   "unplaced": null,
    "comparison": null}}
 ```
 
@@ -1078,7 +1079,8 @@ with.
 | `total` | the measures of the whole period, and `unpriced_models` as the reads above give it |
 | `rows` | one line per group of values that spent anything, the most time first: `group`, one value per dimension of `group_by`, and the measures. With no `group_by` it is one line with an empty `group` |
 | `series` | one point per step, oldest first, every step present: `start`, `end`, the measures, and `groups`, the step broken down by the groups of `rows`: by the one dimension of `group_by`, or by the pair of both with two, each `group` naming every dimension as a row's does; empty with none |
-| `comparison` | with `compare=true`, `period` (`from`, `to`), `total` and `rows` of the preceding period of the same length; otherwise `null` |
+| `unplaced` | with a `seat` filter that admits an account, the work of that account's organization no sample places on an account, `<organization>/`, which the filter leaves out: `total` and `rows`, grouped as `rows` are and held to every other filter, for each organization of an admitted account whose own `<organization>/` the filter does not admit. It is in no other figure. `null` with no `seat` filter, or one that admits no account |
+| `comparison` | with `compare=true`, `period` (`from`, `to`), `total`, `rows` and `unplaced` of the preceding period of the same length; otherwise `null` |
 
 The measures are the reads' above: `agent_seconds`, `estimated_seconds`, `quality`
 (`observed`, `estimated`, `mixed`, or `null` when no time was counted), `tokens` by

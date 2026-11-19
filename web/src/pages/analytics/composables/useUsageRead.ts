@@ -109,7 +109,8 @@ const orNull = <T>(reading: Promise<T>) => reading.catch(() => null)
 
 /**
  * The answer beside the period it is compared with when that was read on its own
- * (`comparedPeriod`): that read's period, total and rows, or none when it could not be read.
+ * (`comparedPeriod`): that read's period, total, rows and the work its filter left out on no
+ * account (`unplaced`), or none when it could not be read.
  * Undefined `before` leaves the answer as the read compared it. Every read the page shows asks
  * for a comparison, so an answer here with no comparison is one whose period before was not read.
  */
@@ -120,6 +121,7 @@ function compared(usage: Usage, before: Usage | null | undefined): Usage {
         period: { from: before.period.from, to: before.period.to },
         total: before.total,
         rows: before.rows,
+        unplaced: before.unplaced,
       }
     : null
   return { ...usage, comparison }

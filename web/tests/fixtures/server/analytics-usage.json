@@ -240,6 +240,7 @@
         ]
       }
     ],
+    "unplaced": null,
     "comparison": {
       "period": {
         "from": "2026-01-02T03:04:05+03:00",
@@ -261,7 +262,8 @@
         "unpriced_tokens": 0,
         "unpriced_models": []
       },
-      "rows": []
+      "rows": [],
+      "unplaced": null
     }
   }
 }

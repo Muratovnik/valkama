@@ -84,7 +84,12 @@ export function useCrossRead(options: {
       const crossed: Usage = {
         ...now,
         comparison: before
-          ? { period: comparison?.period ?? before.period, total: before.total, rows: before.rows }
+          ? {
+              period: comparison?.period ?? before.period,
+              total: before.total,
+              rows: before.rows,
+              unplaced: before.unplaced,
+            }
           : null,
       }
       if (controller.signal.aborted) return

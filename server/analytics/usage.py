@@ -37,6 +37,14 @@ one offset; a caller that minds asks for it in two.
 A value the store does not hold is its own group, `unknown`. Work on no item and a
 session's own run, which is launched by no one, are groups of their own too, and are not
 unknown: there is nothing to know. Nothing is collected here.
+
+A `seat` filter that admits an account leaves out its organization's work no sample
+placed on an account, `<organization>/`, and a figure of that account alone cannot say
+how much of it was the account's. That work, every other filter applied, is answered
+beside the figures as `unplaced`, in total and by the same groups, for the period and
+for its comparison, so a reader can tell a rise from the samples starting to name the
+account. It is in no other figure, and an organization the filter admits itself is not
+in it: its work is in the figures already.
 """
 
 from __future__ import annotations
@@ -642,6 +650,23 @@ def _total(window: _Window) -> dict:
     return {**window.total.measures(), "unpriced_models": sorted(window.unpriced_models)}
 
 
+def _unplaced_seats(admitted: frozenset[Value] | None) -> frozenset[Value]:
+    """The seats of the work no sample placed on an account, of the organizations of the
+    accounts a `seat` filter admits (`accounts.unknown_key`), save one the filter admits
+    itself. Empty with no such filter, or one that admits no account."""
+
+    if not admitted:
+        return frozenset()
+    organizations = {
+        value.partition("/")[0]
+        for value in admitted
+        if isinstance(value, str) and accounts.is_account_key(value)
+    }
+    return frozenset(accounts.unknown_key(organization) for organization in organizations) - (
+        admitted
+    )
+
+
 def read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     """What agent work spent in the period, in total, by group and by step, in one pass."""
 
@@ -665,12 +690,24 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     projects = project_registry.read_registry()["projects"] if PROJECT in needed else []
     readers = _readers(conn, rows, needed, projects)
     grouping = [readers[dimension] for dimension in request.group_by]
-    filters = [(readers[dimension], admitted) for dimension, admitted in request.filters.items()]
+    filters = [
+        (readers[dimension], admitted)
+        for dimension, admitted in request.filters.items()
+        if dimension != SEAT
+    ]
+    seat_admits = request.filters.get(SEAT)
+    loose_seats = _unplaced_seats(seat_admits)
     main, earlier = _Window(), _Window()
+    # The work the seat filter leaves out that no sample placed on an account (`unplaced`).
+    loose, loose_earlier = _Window(), _Window()
     steps = [_Tally() for _ in range(len(bounds) - 1 - first)]
     by_step: list[dict[tuple[Value, ...], _Tally]] = [{} for _ in steps]
     for row in rows:
         if not all(reader(row) in admitted for reader, admitted in filters):
+            continue
+        seat = row[_SEAT] if seat_admits is not None else None
+        placed = seat_admits is None or seat in seat_admits
+        if not placed and seat not in loose_seats:
             continue
         parts = _parts(row, bounds)
         if not parts:
@@ -684,16 +721,31 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
             else None
         )
         for interval, part in parts:
-            window = earlier if interval < first else main
+            if placed:
+                window = earlier if interval < first else main
+            else:
+                window = loose_earlier if interval < first else loose
             window.total.add(part)
             window.groups.setdefault(key, _Tally()).add(part)
             if unpriced_model is not None:
                 window.unpriced_models.add(unpriced_model)
-            if interval >= first:
+            if placed and interval >= first:
                 steps[interval - first].add(part)
                 if key:
                     by_step[interval - first].setdefault(key, _Tally()).add(part)
-    namer = _Namer(conn, request.group_by, [*main.groups, *earlier.groups], projects, seat_names)
+    namer = _Namer(
+        conn,
+        request.group_by,
+        [*main.groups, *earlier.groups, *loose.groups, *loose_earlier.groups],
+        projects,
+        seat_names,
+    )
+
+    def unplaced(window: _Window) -> dict | None:
+        if not loose_seats:
+            return None
+        return {"total": _total(window), "rows": _rows(window, namer)}
+
     zone = dt.timezone(dt.timedelta(minutes=request.utc_offset))
 
     def at(moment: int) -> str:
@@ -725,11 +777,13 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
             }
             for index, tally in enumerate(steps)
         ],
+        "unplaced": unplaced(loose),
         "comparison": (
             {
                 "period": {"from": at(bounds[0]), "to": at(bounds[1])},
                 "total": _total(earlier),
                 "rows": _rows(earlier, namer),
+                "unplaced": unplaced(loose_earlier),
             }
             if request.compare
             else None

@@ -40,6 +40,7 @@ function answerOf(rows: Usage['rows'], before: Usage['rows'] | null): Usage {
           period: { from: base.usage.period.from, to: base.usage.period.from },
           total: sum(before),
           rows: before,
+          unplaced: null,
         }
       : null,
   }

@@ -119,6 +119,13 @@ const totalSchema = strictObject({
   unpriced_models: z.array(boundedText(RUN_TEXT, 200)),
 })
 
+/**
+ * The work a `seat` filter leaves out of the organizations of the accounts it admits, because no
+ * reading placed it on an account (`<organization>/`), grouped as the rows are and held to every
+ * other filter; null with no such filter. It is in no other figure.
+ */
+const unplacedSchema = strictObject({ total: totalSchema, rows: z.array(rowSchema) }).nullable()
+
 const usageSchema = strictObject({
   period: strictObject({
     from: moment(),
@@ -134,10 +141,12 @@ const usageSchema = strictObject({
   series: z.array(
     strictObject({ start: moment(), end: moment(), ...measures, groups: z.array(rowSchema) }),
   ),
+  unplaced: unplacedSchema,
   comparison: strictObject({
     period: strictObject({ from: moment(), to: moment() }),
     total: totalSchema,
     rows: z.array(rowSchema),
+    unplaced: unplacedSchema,
   }).nullable(),
 })
 

@@ -191,10 +191,14 @@ const READ_DIMENSIONS: readonly UsageDimension[] = USAGE_DIMENSIONS
 const isReadDimension = (name: string): name is UsageDimension =>
   READ_DIMENSIONS.includes(name as UsageDimension)
 
-/** Whether every filter of the query admits a stretch, `none` as the contract reads it. */
-function admits(query: URLSearchParams, group: Stretch['group']) {
+/**
+ * Whether every filter of the query admits a stretch, `none` as the contract reads it; but
+ * `except`, which is not asked.
+ */
+function admits(query: URLSearchParams, group: Stretch['group'], except?: UsageDimension) {
   const none = new Set(query.get('none')?.split(',') ?? [])
   return READ_DIMENSIONS.every((dimension) => {
+    if (dimension === except) return true
     const named = query.get(dimension)?.split(',') ?? []
     if (!named.length && !none.has(dimension)) return true
     const value = group[dimension] ?? unknownValue
@@ -203,6 +207,20 @@ function admits(query: URLSearchParams, group: Stretch['group']) {
       : dimension !== 'role' && value.unknown
     return (value.id !== null && named.includes(value.id)) || (none.has(dimension) && isNone)
   })
+}
+
+/**
+ * The seats of the work a query's `seat` filter leaves out on no account, as the contract names
+ * them: `<organization>/` of each account it admits — an organization, a slash and more — save one
+ * it admits itself. Empty with no such filter.
+ */
+function looseSeats(query: URLSearchParams): Set<string> {
+  const named = query.get('seat')?.split(',') ?? []
+  const organizations = named.flatMap((id) => {
+    const [organization = '', ...tail] = id.split('/')
+    return organization && tail.join('/') ? [organization] : []
+  })
+  return new Set(organizations.map((one) => `${one}/`).filter((seat) => !named.includes(seat)))
 }
 
 /**
@@ -239,10 +257,17 @@ export function serveUsage(
   const step = asked === 'hour' || asked === 'minute' ? asked : 'day'
   const edges = dayEdges(from, to, offset, STEP[step])
   const groupBy = (query.get('group_by')?.split(',') ?? []).filter(isReadDimension)
-  const within = (start: number, end: number) =>
+  const loose = looseSeats(query)
+  const compare = query.get('compare') === 'true'
+  /** The stretches of a span the filters admit, or that the seat filter leaves out (`unplaced`). */
+  const within = (start: number, end: number, left = false) =>
     stretches
       .filter((one) => one.at.getTime() >= start && one.at.getTime() < end)
-      .filter((one) => admits(query, one.group))
+      .filter((one) =>
+        left
+          ? admits(query, one.group, 'seat') && loose.has(one.group.seat?.id ?? '')
+          : admits(query, one.group),
+      )
       .map((one) => ({
         day: edges.findLastIndex((edge) => edge <= one.at.getTime()),
         group: one.group,
@@ -253,7 +278,13 @@ export function serveUsage(
     offset,
     groupBy,
     stretches: within(from, to),
-    before: query.get('compare') === 'true' ? within(from - (to - from), from) : null,
+    before: compare ? within(from - (to - from), from) : null,
+    unplaced: loose.size
+      ? {
+          now: within(from, to, true),
+          before: compare ? within(from - (to - from), from, true) : null,
+        }
+      : null,
     step,
     lastEventAt,
   })
@@ -274,8 +305,18 @@ export function momentAt(moment: Date | number, offset = -new Date(moment).getTi
 type Answer = { interface_version: 'valkama-analytics-api'; usage: Usage }
 
 /**
+ * What a read narrowed to accounts leaves out on no account (`Usage['unplaced']`): its stretches
+ * in the period and in the period before, which has none when it was not read.
+ */
+export interface LeftOut {
+  before: readonly Stretch[] | null
+  now: readonly Stretch[]
+}
+
+/**
  * The answer for the days between `edges`, each moment written at `offset`, broken down by
- * `groupBy` and beside `before`, the period of the same length right before, when given.
+ * `groupBy` and beside `before`, the period of the same length right before, when given, with
+ * what a read narrowed to accounts left out on no account (`unplaced`) beside each.
  */
 function answerOf(options: {
   edges: readonly number[]
@@ -285,8 +326,11 @@ function answerOf(options: {
   before?: readonly Stretch[] | null
   lastEventAt?: Date
   step?: Usage['period']['step']
+  unplaced?: LeftOut | null
 }): Answer {
   const { edges, offset, groupBy, stretches, before, lastEventAt, step = 'day' } = options
+  const left = (part: readonly Stretch[] | null | undefined) =>
+    options.unplaced && part ? { total: totalOf(part), rows: rowsOf(part, groupBy) } : null
   const at = (moment: number) => momentAt(moment, offset)
   const first = edges[0] ?? 0
   const end = edges.at(-1) ?? first
@@ -310,11 +354,13 @@ function answerOf(options: {
       total: totalOf(stretches),
       rows: rowsOf(stretches, groupBy),
       series,
+      unplaced: left(options.unplaced?.now),
       comparison: before
         ? {
             period: { from: at(2 * first - end), to: at(first) },
             total: totalOf(before),
             rows: rowsOf(before, groupBy),
+            unplaced: left(options.unplaced?.before),
           }
         : null,
     },
@@ -323,8 +369,9 @@ function answerOf(options: {
 
 /**
  * The answer for `days` days from `first`, the last one ending at `end` (now, for a period still
- * running), broken down by `groupBy` and beside `before` when given. The days are steps of 24
- * hours at `offset`, the browser's own offset at `first` unless the test names another.
+ * running), broken down by `groupBy` and beside `before` when given, with what a read narrowed to
+ * accounts left out on no account when `unplaced` is given. The days are steps of 24 hours at
+ * `offset`, the browser's own offset at `first` unless the test names another.
  */
 export function usageAnswer(options: {
   days: number
@@ -334,6 +381,7 @@ export function usageAnswer(options: {
   before?: readonly Stretch[] | null
   end?: Date
   offset?: number
+  unplaced?: LeftOut | null
 }): Answer {
   const { first, days } = options
   const edges = Array.from({ length: days + 1 }, (_, index) => first.getTime() + index * DAY)
@@ -361,8 +409,14 @@ export function figuresAnswer(total: Spend, before?: { from: string; spent: Spen
     total: whole(total),
     rows: [],
     series: [],
+    unplaced: null,
     comparison: before
-      ? { period: { from: before.from, to: before.to }, total: whole(before.spent), rows: [] }
+      ? {
+          period: { from: before.from, to: before.to },
+          total: whole(before.spent),
+          rows: [],
+          unplaced: null,
+        }
       : null,
   }
   return usage
