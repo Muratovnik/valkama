@@ -90,9 +90,12 @@ test('the rows are one Tab stop, walked by the arrows, and a closed card gives f
   await expect(rows.first()).toBeVisible()
   const count = await rows.count()
   await expect(page.locator('.work-item-list tbody .list-open[tabindex="0"]')).toHaveCount(1)
-  // Tab from the last sort heading lands on the first row, and the next Tab leaves the list.
-  await page.locator('.work-item-list thead .list-sort').last().focus()
-  await page.keyboard.press('Tab')
+  // The sorts are no Tab stops: ↑ from the first row reaches them, and ↓ comes back.
+  await expect(page.locator('.work-item-list thead .list-sort:not([tabindex="-1"])')).toHaveCount(0)
+  await rows.first().focus()
+  await page.keyboard.press('ArrowUp')
+  await expect(page.locator('.work-item-list thead .list-sort').first()).toBeFocused()
+  await page.keyboard.press('ArrowDown')
   await expect(rows.first()).toBeFocused()
   await page.keyboard.press('ArrowDown')
   await expect(rows.nth(1)).toBeFocused()

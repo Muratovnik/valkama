@@ -12,7 +12,8 @@
  *
  * The arrow is out of the Tab order: on the row, ← and → fold and open it. A
  * press on it folds or opens and goes no further, so the row does not take it
- * for a press that opens the row.
+ * for a press that opens the row, and takes no focus: its host moves focus to
+ * the row, as the keys do (`useListKeys.ts`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -52,6 +53,7 @@ const label = computed(() => t(props.expanded ? 'tree.fold' : 'tree.unfold', { n
       class="tree-toggle"
       tabindex="-1"
       :aria-label="label"
+      @mousedown.prevent
       @click.stop="emit('toggle')"
     >
       <VIcon

@@ -1791,7 +1791,13 @@ in and about its scrolled window, and gaps hidden from a reader hold the height
 of the rest, so the scroll bar is as long as the whole list. Its columns are as
 wide as all the rows need wherever it scrolls; a sort and a filter act on every
 row; ↑/↓, Home/End and Page Up/Page Down move by a row's place in the whole list
-and bring the row into view; the Tab stop and the row focus is in stay in the
+and bring the row into view; the rows are the list's one Tab stop, and the head's sorts
+and its choice of orders are none of their own, since Tab came to the rows only after a
+stop at every sort, seven for a reader before the first row: ↑ from the first row goes to
+the heading above the cell focus was in, ← and →, Home and End walk the head, and ↓ goes
+back to the rows; nothing in the list or around it listens for a press but its controls,
+since a browser names a listening element clickable to a reader, and the list's box was
+read as «clickable» before its table; the Tab stop and the row focus is in stay in the
 page wherever the list scrolls; the table tells a reader how many rows it has
 and each row where it stands; a printed list prints every row; and Ctrl+F finds
 in every row, as the next rule says. The cost, for now: on a list that long, a
@@ -1826,7 +1832,10 @@ the rule folds nothing. Below the indent's last level a row names its parent,
 Up/Page Down move by place in the whole tree. → opens a folded row and
 otherwise goes to the row's first cell. ← folds an open row and otherwise goes
 to its parent. In a cell, ← and → go to the cell beside it, and ← from the
-first cell returns to the row. Enter opens the card. Folding a row that holds
+first cell returns to the row. Enter opens the card. A press on a row's arrow takes no
+focus: it moves focus to the row and then folds or opens it, as the keys do, so a reader
+hears the row and then its change; on the arrow the row took focus from inside itself and
+a reader heard neither. Folding a row that holds
 the focused row moves focus to the folded row. The tree draws its window from
 300 rows it could show, folded rows included, not from the rows it shows. Its
 first column is as wide as the deepest reference needs after its indent, so

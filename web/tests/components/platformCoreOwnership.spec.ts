@@ -1,7 +1,7 @@
 import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
@@ -148,6 +148,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
+// After hooks run last first: the wrappers go before the page is emptied.
+enableAutoUnmount(afterEach)
 
 async function render(
   primaryWriteScopeId: string | null,
@@ -156,7 +158,9 @@ async function render(
   shellContext: PlatformContextReady | null = context,
 ) {
   const i18n = createI18n({ legacy: false, locale: 'en', messages })
+  // In the page, as the list hears a press at the document.
   const wrapper = mount(PlanningModuleSurface, {
+    attachTo: document.body,
     props: {
       context: shellContext,
       primaryWriteScopeId,

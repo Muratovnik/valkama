@@ -167,8 +167,10 @@ describe('work discovery', () => {
     if (!item) throw new Error('Expected fixture item')
     item.claim_ref = 'A long task owner with a descriptive session name'
     const host = keptOrder()
+    // In the page, as the list hears a press at the document.
     const wrapper = host.hold(
       mount(WorkItemList, {
+        attachTo: document.body,
         props: { items: data.work_items, links: data.links, ...host.props },
         global: { plugins: [i18n()] },
       }),
@@ -190,6 +192,7 @@ describe('work discovery', () => {
       'MAIN-265',
       'MAIN-264',
     ])
+    wrapper.unmount()
   })
 })
 describe('supporting copy', () => {

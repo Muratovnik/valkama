@@ -18,6 +18,19 @@ export function tokenValue(token: string): string {
   return token.startsWith(NEW) ? token.slice(NEW.length).trim() : token.slice(VALUE.length)
 }
 
+/** The options whose words or note hold `query`, ignoring case; every option for no query. */
+export function choicesHolding<Option extends ChoiceOption>(
+  options: readonly Option[],
+  query: string,
+): Option[] {
+  const needle = query.trim().toLocaleLowerCase()
+  return needle
+    ? options.filter((option) =>
+        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
+      )
+    : [...options]
+}
+
 export interface SearchedChoices {
   /** The options that answer the query, in the host's order. */
   found: ChoiceOption[]
@@ -47,11 +60,7 @@ export function searchChoices(input: {
   ]
   const words = input.query.trim()
   const needle = words.toLocaleLowerCase()
-  const found = needle
-    ? listed.filter((option) =>
-        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
-      )
-    : listed
+  const found = choicesHolding(listed, words)
   const said = listed.some((option) => option.label.toLocaleLowerCase() === needle)
   return { found, fresh: input.creatable && words && !said ? words : '' }
 }

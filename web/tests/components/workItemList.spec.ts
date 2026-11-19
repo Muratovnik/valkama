@@ -69,7 +69,7 @@ describe('the list rows', () => {
     expect(after.map((button) => button.text())).toEqual(['MAIN-2'])
   })
 
-  it('walk with the arrows, Home and End, and stop at either end', async () => {
+  it('walk with the arrows, Home and End, stop at the end, and go up into the head', async () => {
     const wrapper = await list()
     buttons(wrapper)[0].element.focus()
     press('ArrowDown')
@@ -80,7 +80,10 @@ describe('the list rows', () => {
     expect(focusedReference()).toBe('MAIN-1')
     press('Home')
     expect(focusedReference()).toBe('MAIN-4')
+    // Above the first row is the head, the sort over the reference, and ↓ comes back.
     press('ArrowUp')
+    expect(focusedReference()).toBe('Ref')
+    press('ArrowDown')
     expect(focusedReference()).toBe('MAIN-4')
     // A modified arrow is someone else's shortcut.
     press('ArrowDown', { shiftKey: true })

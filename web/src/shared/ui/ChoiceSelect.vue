@@ -24,6 +24,7 @@ import {
 import { choiceValueCodec, decodeChoiceValue, encodeChoiceValue } from '@/shared/ui/choiceControls'
 import type { ChoiceOption } from '@/shared/ui/choiceControls'
 import ControlIcon from '@/shared/ui/ControlIcon.vue'
+import { choicesHolding } from '@/shared/ui/searchChoices.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
@@ -36,6 +37,8 @@ const props = withDefaults(
     disabled?: boolean
     emptyLabel?: string
     invalid?: boolean
+    /** Reached by its host's keys rather than by Tab: the button is out of the Tab order. */
+    keyed?: boolean
     placeholder?: string
     searchable?: boolean
     searchLabel?: string
@@ -73,14 +76,9 @@ const selected = computed(() => props.options.find((option) => option.value === 
 // (a state move the server refused) left the item selected inside the list, and
 // choosing it again changed nothing and sent nothing.
 const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? null)
-const filtered = computed(() => {
-  const needle = query.value.trim().toLocaleLowerCase()
-  return needle
-    ? props.options.filter((option) =>
-        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
-      )
-    : [...props.options]
-})
+const filtered = computed(() => choicesHolding(props.options, query.value))
+/** Out of the Tab order where the host's keys reach the button. */
+const triggerTab = computed(() => (props.keyed ? -1 : undefined))
 
 function updateValue(value: unknown) {
   if (typeof value !== 'string') return
@@ -126,6 +124,7 @@ defineExpose({ show: () => updateOpen(true) })
         :aria-label="label"
         :aria-invalid="invalidMark"
         :aria-describedby="describedby"
+        :tabindex="triggerTab"
       >
         <ControlIcon
           v-if="selected?.icon"
