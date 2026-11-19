@@ -6,6 +6,8 @@
  * window's forecast is drawn hatched, its words lead with the key that names the hatch
  * (`forecastKey`, `forecastLine`), and what a step line points at past its readings — the window
  * now and its forecast at the reset — has its own words (`readings.now`, `readings.forecast`).
+ * How the window before a window ended, and a past window shown in its place with the controls
+ * that step back and return, have theirs (`past`); none of them names a forecast.
  * `analyticsMessages` holds these under `analytics.quota`.
  *
  * What used a window (`spent`) is the one place money is named, apart from the window's share: its
@@ -166,6 +168,23 @@ export const analyticsQuotaMessages = {
       restartReset: 'Window reset time unchanged: {at}',
       restarts: 'Counter zeroed at {at}.',
     },
+    past: {
+      line: 'Previous window: until {at} — {share}',
+      lineRanOut: 'Previous window: until {at} — {share}, ran out',
+      none: 'Previous window: no readings',
+      shown: 'Past window: {from} – {to}',
+      lead: '{share} by the reset',
+      leadRanOut: '{share} by the reset · the limit ran out before it',
+      label: '{window}, past window: {from} – {to}',
+      earlier: 'Earlier',
+      earlierName: 'Earlier window: until {at} — {share}',
+      noEarlier: 'No readings earlier',
+      current: 'Current window',
+      reading: 'Reading the past window…',
+      failed: 'The past window could not be loaded.',
+      retry: 'Retry',
+      gone: 'No readings of this window are kept any more.',
+    },
   },
   ru: {
     sections: {
@@ -316,6 +335,23 @@ export const analyticsQuotaMessages = {
       restart: 'Счётчик обнулён',
       restartReset: 'Время сброса окна не изменилось: {at}',
       restarts: 'Счётчик обнулён в {at}.',
+    },
+    past: {
+      line: 'Прошлое окно: до {at} — {share}',
+      lineRanOut: 'Прошлое окно: до {at} — {share}, исчерпано',
+      none: 'Прошлое окно: показаний не было',
+      shown: 'Прошедшее окно: {from} – {to}',
+      lead: '{share} к сбросу',
+      leadRanOut: '{share} к сбросу · лимит закончился раньше сброса',
+      label: '{window}, прошедшее окно: {from} – {to}',
+      earlier: 'Раньше',
+      earlierName: 'Окно раньше: до {at} — {share}',
+      noEarlier: 'Раньше показаний не было',
+      current: 'К текущему окну',
+      reading: 'Загружается прошедшее окно…',
+      failed: 'Не удалось загрузить прошедшее окно.',
+      retry: 'Повторить',
+      gone: 'Показания этого окна больше не хранятся.',
     },
   },
 } as const

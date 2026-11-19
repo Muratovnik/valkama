@@ -47,16 +47,22 @@
  * A window is fresh or silent by the panel's moment, as its reset is: a reading that was fresh
  * when the answer came turns silent once it is older than the answer's `fresh_for_seconds`.
  *
+ * Under the window stands how its previous window ended, a line that opens that window in the
+ * card's place and steps back from there (`QuotaPastWindow`); while one is open, nothing of this
+ * window stands beside it — its lead, bar, facts, readings and «Breakdown» are hidden.
+ *
  * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
  * at the panel's moment in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
  * `latest`); the lines over its bar are `data-lead`, `share` for a standing window's, `ended` and
  * `before` for one past its reset.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import QuotaPastWindow from '@/pages/analytics/components/QuotaPastWindow.vue'
 import { useWindowDetail } from '@/pages/analytics/composables/useDetail.ts'
+import { useQuotaStepWords } from '@/pages/analytics/composables/useQuotaStepWords.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import {
   accountKey,
@@ -75,8 +81,7 @@ import StepLineTable from '@/shared/ui/StepLineTable.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import WindowBar from '@/shared/ui/WindowBar.vue'
-import { stepTop } from '@/shared/ui/windowGeometry.ts'
-import type { StepAhead, StepWords } from '@/shared/ui/windowGeometry.ts'
+import type { StepAhead } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   account: QuotaAccount
@@ -196,17 +201,10 @@ const span = computed(() => {
 const stepMoment = (at: number) =>
   words.moment(momentAtOffset(at, offsetOf(props.today)), props.today)
 
-const stepWords = computed<StepWords>(() => ({
-  ahead: t('analytics.quota.readings.ahead'),
-  whole: t('analytics.quota.readings.whole'),
-  views: t('analytics.quota.readings.views', { window: name.value }),
-  top: t('analytics.quota.readings.top', { share: words.share(stepTop(points.value)) }),
-  time: t('analytics.quota.readings.time'),
-  value: t('analytics.quota.readings.value'),
-  note: t('analytics.quota.readings.note'),
-  empty: t('analytics.quota.readings.empty'),
-  past: t('analytics.quota.readings.past'),
-}))
+const stepWordsOf = useQuotaStepWords()
+const stepWords = computed(() => stepWordsOf(props.window, points.value))
+/** Whether a past window stands in this one's place (`QuotaPastWindow`). */
+const past = ref(false)
 const legend = computed(() => ({
   line: t('analytics.quota.readings.line'),
   ahead: t('analytics.quota.forecastKey'),
@@ -250,7 +248,7 @@ const readingsCaption = computed(() =>
     one-line
   >
     <template
-      v-if="spends && openSpend"
+      v-if="spends && openSpend && !past"
       #actions="{ size }"
     >
       <VButton
@@ -261,7 +259,10 @@ const readingsCaption = computed(() =>
         {{ t('analytics.detail.window.open') }}
       </VButton>
     </template>
-    <div class="quota-window-parts">
+    <div
+      v-show="!past"
+      class="quota-window-parts"
+    >
       <div class="quota-window-summary">
         <template v-if="shown === 'chart'">
           <template v-if="bar.ended">
@@ -341,6 +342,15 @@ const readingsCaption = computed(() =>
         :restarts="restarts"
       />
     </div>
+    <QuotaPastWindow
+      v-model:open="past"
+      :account="account"
+      :fresh-for="freshFor"
+      :now="now"
+      :shown="shown"
+      :today="today"
+      :window="window"
+    />
   </PanelLevel>
 </template>
 
