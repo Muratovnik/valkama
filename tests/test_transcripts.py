@@ -223,6 +223,16 @@ class HookArchiveTests(ArchiveCase):
         self.assertEqual(data, self.read_copy(row["archive_path"]))
         self.assertEqual([], transcripts.pending(self.conn))
 
+    def test_only_an_end_may_owe_a_copy(self) -> None:
+        self.assertFalse(transcripts.may_owe(self.conn))
+        source = self.transcript("session.jsonl", synthetic(3))
+        self.deliver("session-start", transcript_path=source)
+        self.assertFalse(transcripts.may_owe(self.conn))
+        with mock.patch.object(transcripts, "HOOK_MAX_BYTES", 1):
+            self.deliver("session-end", transcript_path=source)
+        self.assertEqual(1, len(transcripts.pending(self.conn)))
+        self.assertTrue(transcripts.may_owe(self.conn))
+
     def test_a_missing_source_keeps_the_event_and_the_sweep_records_it_gone(self) -> None:
         gone = os.path.join(self.client, "never-written.jsonl")
         self.assertEqual("direct", self.deliver("session-end", transcript_path=gone))

@@ -237,7 +237,10 @@ def start_transcript_sweep(
     """Start the transcript sweep in the background when the archive may owe or hold anything.
 
     `conn` is only read, on the caller's thread, to decide whether there is
-    anything to do: an archive directory, or a copy still owed. The sweep
+    anything to do: an archive directory, or an end that may still owe a copy.
+    Which copies are owed is the sweep's search, never the caller's: it takes
+    seconds on a large store, and a client gives a starting server about ten
+    before it drops its tools. The sweep
     itself opens its own connection in the thread, because a connection
     belongs to the thread that made it, and says what is worth saying through
     `report`. The thread is a daemon: an ending process does not wait for a copy.
@@ -246,7 +249,7 @@ def start_transcript_sweep(
     path = store.db_path()
     root = transcripts.directory(path)
     try:
-        if not os.path.isdir(root) and not transcripts.pending(conn):
+        if not os.path.isdir(root) and not transcripts.may_owe(conn):
             return None
     except Exception as error:  # noqa: BLE001 -- a surface starts whatever maintenance does
         report(f"transcript sweep not started: {_describe(error)}")
