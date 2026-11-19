@@ -106,7 +106,8 @@ export function useQuotaWords() {
     const local = momentAtOffset(at, offsetOf(today))
     if (window.kind === 'five_hour')
       return t('analytics.quota.runOut.at', { at: moment(local, today) })
-    const day = words.stepName(local, 'day').dated.label
+    // A day's step always names its date with its month; a time's never does.
+    const day = words.stepName(local, 'day').dated?.label ?? ''
     if (short) return t('analytics.quota.runOut.about', { day })
     const part = PARTS[Math.floor(named(local).getUTCHours() / 6)] ?? 'evening'
     return t(`analytics.quota.runOut.by.${part}`, { day })
