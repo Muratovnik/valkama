@@ -16,7 +16,7 @@ import { python } from './serverStore.ts'
  * fit a Windows command line. So the list never goes on one: it is written to a file
  * Playwright reads with `--test-list`, and the runner refuses, before Playwright starts, a
  * list that is empty, a list file that is missing, a name that is no spec, and a clipboard
- * spec that `--with-clipboard=<file>` does not name. Playwright runs with `clipboardOptIn`
+ * spec that `--with-clipboard=<spec name>` does not name. Playwright runs with `clipboardOptIn`
  * set when `--with-clipboard` names a spec, and without it otherwise.
  *
  * A run holds the machine's heavy-test lock, `tests/machine_lock.py`, for as long as Playwright
@@ -109,7 +109,7 @@ function selectSpecs(request: Request, io: RunnerIo): string[] {
   const clipboard = names.filter((name) => !allowed(name))
   if (clipboard.length > 0)
     throw new Refusal(
-      `${clipboard.join(', ')} write the clipboard; name each with --with-clipboard=<file>`,
+      `${clipboard.join(', ')} write the clipboard; name each with --with-clipboard=<spec name>`,
     )
   return names
 }

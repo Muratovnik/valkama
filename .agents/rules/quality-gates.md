@@ -40,7 +40,7 @@ Each command below runs in `web/`:
 
 The specs that write the system clipboard or are granted it are named in
 `web/tests/browser/clipboardSpecs.ts`, and they run only when asked for: with
-`VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<file>`.
+`VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<spec name>`.
 `web/playwright.config.ts` reads that list and selects none of them without the
 variable — not in a bare run, not when one is named, not under `--list` — and
 the runner sets it when `--with-clipboard` names one and removes it otherwise.
