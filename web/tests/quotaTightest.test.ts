@@ -72,6 +72,7 @@ const quota = (...accounts: QuotaAccount[]): Quota => ({
   now: new Date(NOW).toISOString(),
   utc_offset: OFFSET,
   fresh_for_seconds: 900,
+  retained_from: new Date(NOW - 365 * DAY).toISOString(),
   accounts,
 })
 

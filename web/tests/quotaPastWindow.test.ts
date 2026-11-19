@@ -26,8 +26,9 @@ const OFFSET = 180
 const quota = quotaAt(NOW, OFFSET)
 const work = quota.accounts[0]
 if (!work) throw new Error('the fixture names «Work» first')
-const current = work.windows.find((one): one is QuotaShareWindow => one.kind === 'week')
-if (!current) throw new Error('«Work» reads its week')
+const week = work.windows.find((one): one is QuotaShareWindow => one.kind === 'week')
+if (!week) throw new Error('«Work» reads its week')
+const current: QuotaShareWindow = week
 
 /** A week that reset `daysAgo` days before now, with one reading a day before its reset. */
 const weekBefore = (daysAgo: number) =>
