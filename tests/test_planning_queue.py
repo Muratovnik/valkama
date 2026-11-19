@@ -186,6 +186,25 @@ class ConditionTests(QueueCase):
                 self.assertEqual(["goal_or_stage"], self.withheld(tree, name))
         self.assertIsNone(self.given(tree))
 
+    def test_a_question_to_the_owner_on_a_goal_or_stage_is_named_after_its_kind(self) -> None:
+        tree = self.space()
+        tree.add("G", kind="goal", state="container")
+        tree.add("S", kind="stage", state="container", parent="G")
+        tree.add("quiet", kind="stage", state="container", parent="G")
+        for name in ("G", "S"):
+            self.ask(tree, name)
+        for name, codes in (
+            ("G", ["goal_or_stage", "question"]),
+            ("S", ["goal_or_stage", "question"]),
+            ("quiet", ["goal_or_stage"]),
+        ):
+            with self.subTest(item=name):
+                self.assertEqual(codes, self.withheld(tree, name))
+                # The kind still comes first: a claim of it is refused for its kind alone.
+                with self.assertRaisesRegex(model.WorkflowGuardError, r"^\[goal_or_stage\] "):
+                    service.claim_work_item(self.conn, tree.refs[name], author="agent")
+        self.assertIsNone(self.given(tree))
+
     def test_work_in_triage_or_deferred_is_not_ready(self) -> None:
         for state in ("triage", "deferred"):
             with self.subTest(state=state):

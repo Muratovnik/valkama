@@ -47,7 +47,7 @@ _CANDIDATES = (
 
 #: Why the queue does not give an item, in the order `withheld` names them.
 CODES = (
-    #: It is a goal or a stage: nobody works one, and it has no other code.
+    #: It is a goal or a stage: nobody works one, and its only other code is `question`.
     "goal_or_stage",
     #: It does not stand in a ready state.
     "not_ready",
@@ -90,7 +90,9 @@ def withheld(
     """Why the queue of its space does not give this item; empty when it does.
 
     `row` is the item's own, and `tree` holds its facts and those of every item
-    over it. A goal or stage is never given and says only that. Every other reason
+    over it. A goal or stage is never given and says that first, then `question`
+    while a question to the owner on it is open, as a task does: what waits on the
+    owner's answer is found by that code whatever its kind. Every other reason
     that holds is named. A task in a ready state is asked last whether its
     workflow can start it, and only that one: in any other state `not_ready`
     already says it is not given, and coming back to work from review or
@@ -112,7 +114,7 @@ def withheld(
     if node is None:
         raise model.PlanningError("work item disappeared mid-write")
     if node.container:
-        return ["goal_or_stage"]
+        return ["goal_or_stage", *(["question"] if tree.question(identity) else [])]
     found: list[str] = []
     ready = node.category in model.WORKABLE_CATEGORIES
     if not ready:
