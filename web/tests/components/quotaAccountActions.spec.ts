@@ -1,6 +1,8 @@
 /**
  * The menu at a quota account's name (`useAccountActions`). The oracle is the requirement: three
- * entries and no more — rename, add to the page's filter, copy the whole id — in that order; the
+ * entries and no more — rename, add to the page's filter, copy the whole id — in that order, with
+ * no rename on an account with no name of its own, which «Name» at its heading names instead (one
+ * naming action for each state, `DESIGN.md`, the quota's panel); the
  * filter's entry is absent where there is no page filter and disabled, «Already in filter», where
  * the filter by account (`seat`) holds the account; a rename saves through the names Valkama keeps
  * by the account's id, or by its organization's on the card of an organization no source read,
@@ -109,6 +111,7 @@ afterEach(() => {
 
 describe('the menu at a quota account’s name', () => {
   it('offers rename, add to filter and copy, and no filter’s entry outside the page', () => {
+    useAccountNamesStore().names = { [ID]: 'Work' }
     const onPage = actionsOf(ACCOUNT).actions
     expect(
       onPage.entries.value.map((one) => [one.key, one.kind === 'action' && one.label]),
@@ -121,6 +124,16 @@ describe('the menu at a quota account’s name', () => {
       'rename',
       'copy',
     ])
+  })
+
+  it('offers no rename to an account with no name, which «Name» names, and rename once it has one', () => {
+    const store = useAccountNamesStore()
+    const unnamed = actionsOf(ACCOUNT).actions
+    expect(unnamed.unnamed.value).toBe(true)
+    expect(unnamed.entries.value.map((one) => one.key)).toEqual(['filter', 'copy'])
+    store.names = { [ID]: 'Work' }
+    expect(unnamed.unnamed.value).toBe(false)
+    expect(unnamed.entries.value.map((one) => one.key)).toEqual(['rename', 'filter', 'copy'])
   })
 
   it('adds the account beside the accounts the filter holds, and is disabled once it holds it', () => {
@@ -139,7 +152,7 @@ describe('the menu at a quota account’s name', () => {
     const store = useAccountNamesStore()
     const save = vi.spyOn(store, 'save').mockResolvedValue()
     const { actions, focused, renamed } = actionsOf(ACCOUNT)
-    entry(actions, 'rename').select()
+    await actions.rename()
     expect(actions.draft.value).toBe('')
     actions.type('  Night   shift ')
     actions.press(press('Enter'))
@@ -194,7 +207,7 @@ describe('the menu at a quota account’s name', () => {
     const store = useAccountNamesStore()
     vi.spyOn(store, 'save').mockRejectedValue(new Error('offline'))
     const { actions, focused, renamed } = actionsOf(ACCOUNT)
-    entry(actions, 'rename').select()
+    await actions.rename()
     actions.type('Night shift')
     await actions.save()
     expect(actions.draft.value).toBe('Night shift')

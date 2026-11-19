@@ -1,6 +1,7 @@
 /**
  * The menu at an account's name on the quota's panel, in the real app. The oracle is the
- * requirement (`DESIGN.md`, Analytics, the quota's panel): three entries and no more; «Rename»
+ * requirement (`DESIGN.md`, Analytics, the quota's panel): three entries and no more, with no
+ * «Rename» on an account with no name of its own, which «Name» beside the menu names; «Rename»
  * opens a field in the name's place, starting where the name did, that saves through the names
  * Valkama keeps, the name Settings then shows, on Enter, leaves the name on Escape, and gives the
  * focus back to the menu's button either way; «Add to filter» adds the account to the page's filter, a chip in the bar, and the
@@ -51,9 +52,12 @@ test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, an
   const name = await analytics
     .locator(`[data-account="${NIGHT_NAME}"] .quota-account-name`)
     .boundingBox()
+  // With no name of its own the menu has no «Rename»: «Name» beside it opens the field.
   const { menu } = await openMenu(page, NIGHT_NAME)
-  await expect(menu.getByRole('menuitem')).toHaveText(['Rename', 'Add to filter', 'Copy ID'])
-  await menu.getByRole('menuitem', { name: 'Rename' }).click()
+  await expect(menu.getByRole('menuitem')).toHaveText(['Add to filter', 'Copy ID'])
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await page.getByRole('button', { name: `Name account ${NIGHT_NAME}` }).click()
   const field = analytics.getByRole('textbox', { name: 'Account name' })
   await expect(field).toBeFocused()
   await expect(field).toHaveValue('')
@@ -76,6 +80,11 @@ test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, an
   // Escape leaves the name as it was, and writes nothing.
   const writes = backend.accountNameWrites.length
   await renamed.click()
+  await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText([
+    'Rename',
+    'Add to filter',
+    'Copy ID',
+  ])
   await page.getByRole('menuitem', { name: 'Rename' }).click()
   const again = analytics.getByRole('textbox', { name: 'Account name' })
   await expect(again).toHaveValue('Night shift')

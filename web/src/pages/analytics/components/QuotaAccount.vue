@@ -28,8 +28,9 @@
  * menu, `name-it` for «Name» and `facts` for what stands beside it.
  *
  * An account with no name of its own — the start of an id, a time its week resets — is no account
- * a person recognizes, so beside its menu stands «Name», which opens the same field as «Rename»
- * and is gone once the account has a name.
+ * a person recognizes, so beside its menu stands «Name», which opens the field, and its menu has
+ * no «Rename»; once the account has a name the button is gone and «Rename» is in the menu. One
+ * naming action stands for each state: both at once said the same thing twice.
  */
 import { computed, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
