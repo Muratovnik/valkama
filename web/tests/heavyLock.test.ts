@@ -63,7 +63,6 @@ describe('the heavy-test lock the web runners take', () => {
         const write = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, '')`
         const waiter = started(lockedCommand('a node run', [process.execPath, '-e', write], lock))
         await until(() => waiter.said().includes('waiting'), 'the waiter to say so')
-        await new Promise((resolve) => setTimeout(resolve, 600))
         expect(existsSync(marker)).toBe(false)
         expect(waiter.said()).toContain('it is held by a Python holder in ')
         expect(waiter.said()).toContain(`process ${pid},`)

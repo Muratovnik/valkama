@@ -550,6 +550,7 @@ class HeavyLockTests(Workspace):
         said = log.read_text(encoding="utf-8")
         self.assertIn("it is held by another checkout's browser run", said)
         self.assertIn("took the heavy-test lock after", said)
+        self.assertIn("in", said.splitlines())
 
     def test_a_gates_run_under_a_holder_passes_the_hold_on_to_every_step(self) -> None:
         with held_elsewhere(self.lock, "the run that started the gates"):
