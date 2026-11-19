@@ -11,7 +11,9 @@
  * leave; they are as wide as what they hold, and the holder, whose values run
  * long, stops at a measure and ends in an ellipsis with the whole name on
  * hover. Where the list is too narrow for every column, columns give way in a
- * stated order rather than being pushed off the edge (`listColumns.ts`).
+ * stated order rather than being pushed off the edge (`listColumns.ts`). «Project»
+ * stands only where the host gives the space's projects: a space of several, with no
+ * project chosen, as a tile marks its project.
  *
  * The rows are one Tab stop, as the board's tiles are: the row last focused.
  * Enter on it or a click anywhere in a row opens the card, and closing the
@@ -45,6 +47,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { listFindWords } from '@/widgets/work-item-views/components/listFindWords.ts'
 import { listGroupCell, listRefCell } from '@/widgets/work-item-views/components/listRefCell.ts'
 import { listUnderTitle } from '@/widgets/work-item-views/components/listUnderTitle.ts'
 import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListFind.vue'
@@ -55,9 +58,10 @@ import { useListRuns } from '@/widgets/work-item-views/composables/useListRuns.t
 import { useListTreeRows } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import type { ListTreeScope } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
+import type { SpaceProject } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import { drawnColumns, isFolded } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
-import { ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
+import { ROW_FACETS } from '@/widgets/work-item-views/utils/listRowWords.ts'
 import { orderedWork, QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
 import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
@@ -80,6 +84,11 @@ const props = withDefaults(
     links: PlanningEdge[]
     /** The filter in force, so a mark already in it offers to come out. */
     filter?: WorkFilter
+    /**
+     * The space's projects where a row names its own; null where the list draws no
+     * «Project». Read as the list is made, as `tree` is: its host makes it again to change it.
+     */
+    projects?: readonly SpaceProject[] | null
     /** The order the rows stand in, which the host keeps; in a tree, inside each container. */
     sort?: ViewSort
     /** The whole space, where each row's goal and stages are found; the rows' own by default. */
@@ -105,8 +114,15 @@ const stateName = useStandingName()
 const space = () => props.spaceItems ?? source.value
 const sorted = computed(() => orderedWork(source.value, props.sort, stateName, { space: space() }))
 
+/** The tree by goal shows where a row stands by its place, so it draws no «Goal and stage». */
+const drawsGoal = !props.tree || props.tree.grouping === 'project'
+/** The list by project names a row's project by its group. */
+const projects = () => (props.tree?.grouping === 'project' ? null : (props.projects ?? null))
+const drawsProject = Boolean(projects())
+const columns = drawnColumns({ goal: drawsGoal, project: drawsProject })
+
 const root = ref<HTMLElement | null>(null)
-const { fit, measured, narrow, width } = useListFit(root)
+const { fit, measured, narrow, width } = useListFit(root, drawsGoal && drawsProject)
 
 const tree = useListTreeRows({
   items: () => props.items,
@@ -116,8 +132,8 @@ const tree = useListTreeRows({
 })
 const { cellTab, isGroup, isPath, matchingOf, nameId, rows, treeOf, underOf } = tree
 
-const words = useListWords(() => source.value, tree.indentOf, space)
-const { goalCellOf, goalOf, holderOf, updatedOf, widths } = words
+const words = useListWords(() => source.value, tree.indentOf, space, projects)
+const { goalCellOf, goalOf, holderOf, projectCellOf, projectOf, updatedOf, widths } = words
 
 // One listener each for the whole list rather than three on every row: a
 // space of a thousand rows paid for three thousand of them on every opening.
@@ -146,16 +162,13 @@ const runs = useListRuns({
   onFilter: (token) => emit('filter', token),
   width,
 })
-const { context, fact, lead, priorityWord, readWidth, waiting, word } = runs
+const { fact, lead, priorityWord, readWidth, waiting, word } = runs
 
 const { HOLDER, STATE, STEPS } = ROW_FACETS
 
 const folded = (key: SortKey) => isFolded(fit.value, key)
 /** A row's first cell, drawn with the row rather than as a component of its own. */
 const refCell = listRefCell({ after: () => folded('priority'), glyph: lead, keys, tree })
-/** The tree by goal shows where a row stands by its place, so it draws no «Goal and stage». */
-const columns = drawnColumns(tree.isTree && props.tree?.grouping !== 'project')
-const drawsGoal = columns.some((column) => column.key === 'goal')
 const shownColumns = computed(() => columns.filter((column) => !folded(column.key)))
 const groupCell = listGroupCell({ columns: () => shownColumns.value.length, keys, tree })
 const foldedColumns = computed(() => columns.filter((column) => folded(column.key)))
@@ -184,7 +197,6 @@ function memo(entry: ListEntry<WorkItemBrief>): unknown[] {
 const rowClass = (entry: ListEntry<WorkItemBrief>) =>
   entry.kind === 'gap' ? 'list-gap' : ['list-row', { 'list-row-held': list.held(entry.row) }]
 const gapOf = (gap: { height: number }) => `${gap.height}px`
-
 /**
  * What a row says to a reader: in a flat list its place where a window is
  * drawn; in a tree, from `treeRows.ts`, its level, its place beside its
@@ -213,22 +225,13 @@ const underTitle = listUnderTitle({
   fit: () => fit.value,
   folded,
   goal: (item) => (drawsGoal && folded('goal') ? goalOf(item) : ''),
+  project: (item) => (drawsProject && folded('project') ? projectOf(item) : ''),
   runs,
   updated: updatedOf,
 })
 
 /** A row's words for the list's find, as the template below draws them. */
-const said = (item: WorkItemBrief) =>
-  tree.isGroup(item)
-    ? [item.title, tree.matchingOf(item)].filter(Boolean)
-    : rowWords(item, {
-        context: context(item),
-        fit: fit.value,
-        goal: drawsGoal ? { cell: goalCellOf(item), path: goalOf(item) } : undefined,
-        tree: [matchingOf(item), underOf(item)].filter(Boolean),
-        updated: updatedOf(item),
-        words: runs.words,
-      })
+const said = listFindWords({ drawsGoal, drawsProject, fit, runs, tree, words })
 </script>
 
 <template>
@@ -308,6 +311,14 @@ const said = (item: WorkItemBrief) =>
                 :tabindex="cellTab"
               >
                 {{ goalCellOf(entry.row) }}
+              </td>
+              <td
+                v-if="drawsProject && !folded('project')"
+                v-tooltip.clipped="projectOf(entry.row)"
+                class="list-cell list-project one-line"
+                :tabindex="cellTab"
+              >
+                {{ projectCellOf(entry.row) }}
               </td>
               <td
                 v-if="!folded('state')"
@@ -486,7 +497,8 @@ const said = (item: WorkItemBrief) =>
   max-width: calc(10rem + 2 * var(--space-3));
 }
 
-.list-goal {
+.list-goal,
+.list-project {
   max-width: calc(10rem + 2 * var(--space-3));
 }
 

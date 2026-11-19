@@ -1313,20 +1313,35 @@ def card_step(step: Mapping[str, object]) -> dict:
 def parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None:
     """The reference of the item over this one, read from its own space; None for a root.
 
-    The agent's card and the interface's exact read of one item carry it beside `parent_id`,
-    which an exact read scoped to a space cannot read an item by.
+    The agent's card, the interface's exact read of one item and a space's list read carry
+    it beside `parent_id`, which an exact read scoped to a space cannot read an item by.
     """
 
     if not parent_id:
         return None
-    found = conn.execute(
-        "SELECT p.key, i.number FROM work_items i JOIN planning_spaces p"
-        " ON p.planning_space_id = i.planning_space_id WHERE i.work_item_id = ?",
-        (str(parent_id),),
-    ).fetchone()
+    found = parent_references(conn, [parent_id]).get(str(parent_id))
     if found is None:
         raise model.PlanningError("work item disappeared mid-write")
-    return model.human_id(str(found[0]), int(found[1]))
+    return found
+
+
+def parent_references(conn: sqlite3.Connection, parent_ids: Iterable[object]) -> dict[str, str]:
+    """The reference of each item named, read from its own space, by id, in one statement.
+
+    A space's list read names the parent of each of its rows by it, another space's card's
+    among them, which that space holds and the read does not.
+    """
+
+    wanted = sorted({str(identity) for identity in parent_ids if identity})
+    if not wanted:
+        return {}
+    found = conn.execute(
+        "SELECT i.work_item_id, p.key, i.number FROM work_items i JOIN planning_spaces p"
+        " ON p.planning_space_id = i.planning_space_id"
+        " WHERE i.work_item_id IN (SELECT value FROM json_each(?))",
+        (json.dumps(wanted),),
+    ).fetchall()
+    return {str(row[0]): model.human_id(str(row[1]), int(row[2])) for row in found}
 
 
 def table_of_contents(

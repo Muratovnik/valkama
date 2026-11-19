@@ -901,6 +901,7 @@ export const en = {
       reference: 'Ref',
       title: 'Title',
       goal: 'Goal and stage',
+      project: 'Project',
       state: 'State',
       priority: 'Priority',
       claim: 'Assignee',

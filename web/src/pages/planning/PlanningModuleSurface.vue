@@ -493,6 +493,7 @@ defineExpose({ refresh, selectedId })
     <PlanningWorkspace
       ref="workspace"
       :model="shownModel ?? model ?? readingModel"
+      :project="projectId"
       :reading="!model"
       :route-state="route.state"
       :state-bytes="stateBytes"

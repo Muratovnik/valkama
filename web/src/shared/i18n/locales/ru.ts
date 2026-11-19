@@ -901,6 +901,7 @@ export const ru = {
       reference: 'Ссылка',
       title: 'Название',
       goal: 'Цель и этап',
+      project: 'Проект',
       state: 'Состояние',
       priority: 'Приоритет',
       claim: 'Исполнитель',
