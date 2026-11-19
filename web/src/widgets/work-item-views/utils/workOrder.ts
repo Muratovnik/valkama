@@ -40,6 +40,7 @@ export const VIEW_SORT_KEYS: readonly ViewSortKey[] = [
   'reference',
   'title',
   'goal',
+  'project',
   'state',
   'claim',
   'checklist',

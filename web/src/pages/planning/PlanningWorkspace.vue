@@ -71,6 +71,8 @@ const props = defineProps<{
   graphFocus?: number
   /** How the address groups the views; a view that does not offer it draws none. */
   grouping?: ViewGrouping
+  /** The project the scope narrows to; none while «All projects» is chosen. */
+  project?: string
   /** The space is being read: the bar stands, and the stage says so in place of a view. */
   reading?: boolean
   selectedId?: string | null
@@ -248,8 +250,19 @@ const barGrouping = computed<ViewGrouping | null>(() =>
 const barGroupings = computed(() => VIEW_GROUPINGS[stageView.value])
 /** The order of the view on the stage; the graph is drawn by its links and has none. */
 const barSort = computed(() => (stageView.value === 'graph' ? null : sort.value))
-/** The list's key, which makes it anew when its grouping turns. */
-const listKind = computed(() => listTree.value?.grouping ?? 'flat')
+/**
+ * The space's projects where the list names each row's: a space of several with «All
+ * projects» chosen, the rule a tile's project mark follows. Null elsewhere: one project is
+ * every row's, and a chosen one is the scope's.
+ */
+const listProjects = computed(() => {
+  const projects = props.model.planning_space?.projects ?? []
+  return props.project === undefined && projects.length > 1 ? projects : null
+})
+/** The list's key, which makes it anew when its grouping turns or its projects come or go. */
+const listKind = computed(
+  () => `${listTree.value?.grouping ?? 'flat'}:${listProjects.value ? 'projects' : 'one'}`,
+)
 /**
  * What the view leaves out of the counts: the graph's parents, which the bar
  * says as a sentence, and the grouped board's goals, which it says as rows.
@@ -357,6 +370,7 @@ defineExpose({ toggleFilter })
           :links="model.links"
           :filter="filter"
           :tree="listTree"
+          :projects="listProjects"
           :space-items="model.work_items"
           :sort="sort"
           @filter="toggleFilter"

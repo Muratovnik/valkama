@@ -184,8 +184,6 @@ const agentsVersion = ref(0)
 const trail = usePlanningCardTrail({ open: () => open.value, show })
 const { closeItem, openItem, reset: resetTrail } = trail
 const composerOpen = ref(false)
-/** The state the composer's «Not sorted» switch leaves a new card in, where the workflow has one. */
-const composerTriage = computed(() => triageState(model.value?.workflow?.states ?? []))
 
 const planningKey = computed(() =>
   JSON.stringify([props.scope, boundSpace.value, routeSelection.value.status]),
@@ -484,6 +482,7 @@ defineExpose({ refresh, selectedId })
     <PlanningWorkspace
       ref="workspace"
       :model="shownModel ?? model ?? readingModel"
+      :project="projectId"
       :reading="!model"
       :route-state="route.state"
       :state-bytes="stateBytes"
@@ -546,7 +545,7 @@ defineExpose({ refresh, selectedId })
     :items="model.work_items"
     :projects="model.planning_space.projects"
     :project="workspaceProject"
-    :triage="composerTriage"
+    :triage="triageState(model.workflow?.states ?? [])"
     @close="composerOpen = false"
     @created="itemCreated"
   />

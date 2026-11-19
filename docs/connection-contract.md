@@ -1169,8 +1169,11 @@ as for the full read.
 reference of the goal or stage the item stands under, `"MAIN-3"`, or `null` for
 an item under none, as an agent's card names it. The read takes a reference and
 no id, so this is how a reader of one item reads the item over it, as the
-question about a task in a goal reads the goal it shows. A write's answer and the
-rows of a list do not carry it.
+question about a task in a goal reads the goal it shows. The rows of a space's
+read, `work_items` of `GET /api/planning`, carry it too, read for all of them at
+once: another space's item there stands under a parent in its own space, which
+that read does not hold. A write's answer and the rows of `list_work_items` do not
+carry it.
 
 ### Commits on no card
 

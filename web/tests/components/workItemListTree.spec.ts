@@ -123,6 +123,11 @@ const shown = () =>
       .join(' '),
   }))
 
+const parentOf = (reference: string) =>
+  document
+    .querySelector(`tbody tr[data-reference="${reference}"] .list-parent`)
+    ?.textContent?.trim()
+
 describe("another space's cards in the tree", () => {
   // This space's goal with a task under it and a task under no goal; another space's
   // goal and task under ALPHA, and a task under BETA, each naming this space's project.
@@ -131,8 +136,12 @@ describe("another space's cards in the tree", () => {
   const alpha = { key: 'ALPHA', name: 'Alpha' }
   const elsewhere = [
     boardItem(50, 'backlog', { kind: 'goal', other_space: alpha }),
-    // Its parent is in its own space, which this read does not hold.
-    boardItem(51, 'done', { parent_id: boardItem(49).work_item_id, other_space: alpha }),
+    // Its parent is in its own space, which this read does not hold and names by reference.
+    boardItem(51, 'done', {
+      parent_id: boardItem(49).work_item_id,
+      parent: 'ALPHA-49',
+      other_space: alpha,
+    }),
     boardItem(60, 'backlog', { other_space: { key: 'BETA', name: 'Beta' } }),
   ].map((item) => ({
     ...item,
@@ -166,6 +175,15 @@ describe("another space's cards in the tree", () => {
     expect(goalThere?.hasAttribute('aria-expanded')).toBe(false)
     const group = document.querySelector('tbody tr[data-reference="group:space:ALPHA"]')
     expect(group?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('name the parent in their own space under the title, and only theirs', async () => {
+    await spaces(scope, false)
+    expect(parentOf('ALPHA-51')).toBe('in ALPHA-49')
+    // A card under no parent names none; this space's task stands under its goal by its indent.
+    expect(parentOf('ALPHA-50')).toBeUndefined()
+    expect(parentOf('BETA-60')).toBeUndefined()
+    expect(parentOf('MAIN-2')).toBeUndefined()
   })
 
   it('fold from their row, which opens no card', async () => {

@@ -39,7 +39,8 @@ def planning_payload(
     its projects, each marked `other_space` (`service.list_work_items`), and every
     link with an end among them. The end of such a link the read does not hold is
     in `other_space_ends`. `project` narrows the read to the items naming it, and
-    other spaces bring theirs only when it is one of the space's projects.
+    other spaces bring theirs only when it is one of the space's projects. Each item
+    carries `parent`, its parent's reference (`read_model.parent_references`), or None.
     """
 
     spaces = service.list_planning_spaces(conn)
@@ -60,6 +61,11 @@ def planning_payload(
     items = service.list_work_items(
         conn, space=space_id, project=project, other_spaces=True, limit=None
     )
+    # Each row names its parent by reference, one statement for them all: another
+    # space's card stands under a parent this read does not hold.
+    parents = read_model.parent_references(conn, (item["parent_id"] for item in items))
+    for item in items:
+        item["parent"] = parents.get(str(item["parent_id"])) if item["parent_id"] else None
     links, ends = _links(conn, items)
     workflow = chosen.pop("workflow")
     # The store this read is of names the spaces its projects are bound to.

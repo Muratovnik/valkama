@@ -1849,6 +1849,16 @@ title, on one line cut at the row's edge and whole on hover: a line of its own a
 open blocker and the labels down to 900px, and the first fact of the line of facts below
 that, where it folds with the state, the priority and the holder. The list by goal draws
 no such column, since a row's place there is its goal; the list by project does.
+After it «Project» («Проект») names what a row changes, drawn by the rule of a tile's
+project mark: the space has several projects and «All projects» is chosen. It says the one
+project of this space the row names, «Several projects» for one naming more, as the board's
+lane by project does, and a dash for work naming none; a card of another space is named by
+this space's projects alone. It sorts by the project's name, work naming none first and
+work naming several last. The list by project draws no such column, since a row's group
+names it. It folds with «Goal and stage» and follows the path wherever that leads, a name
+saying nothing for work naming none. Each of the two is at most 10rem wide, and side by
+side at that measure they left the title of a 1100px list 21 characters, so where the list
+draws both they stand from 1240px, where it keeps 38.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
 list's sort order. Grouped «By project», it is a tree of one level: a row per group, as
@@ -1857,7 +1867,10 @@ under it in the list's order. A group's row opens nothing: Enter, a press on its
 and → fold and open it. A card of another space, which has no parent here, stands by goal
 in a group of its space, «Space ALPHA · name», one a space, after this space's rows, as the
 board's lane and the graph's frame of that space do: a group's row, its cards under it as a
-list with no tree inside, so another space's goal opens nothing here. «From another space»
+list with no tree inside, so another space's goal opens nothing here. A card there with a
+parent names it under its title, «in ALPHA-4», as a row below the indent's last level
+names its own: the read names that parent, which lies in the card's space and among none
+of this space's rows. «From another space»
 negated keeps those cards out and their groups with them. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
 starts folded. A reader's choice against that rule is kept per space and is
 forgotten once it agrees with the rule. A filter lays out the whole scope and

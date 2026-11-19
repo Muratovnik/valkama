@@ -2,9 +2,9 @@
  * What a list row prints under its title. A wide list prints an open blocker and
  * the labels there; a narrower one prints what its folded columns say instead,
  * as one line of facts: the state where its column folded and an open blocker,
- * the holder, the steps and the date. «Goal and stage», wherever its column
- * folded, leads with a line of its own on a wide list and leads the facts on a
- * narrower one. The row's words for the list's find say them in this order too
+ * the holder, the steps and the date. «Goal and stage» and «Project», wherever
+ * their columns folded, lead with a line of their own on a wide list and lead the
+ * facts on a narrower one. The row's words for the list's find say them in this order too
  * (`listRowWords.ts`).
  *
  * It is drawn from the list's own render as plain elements, as the row's first
@@ -38,17 +38,24 @@ interface UnderTitleList {
   folded: (key: SortKey) => boolean
   /** «Goal › Stage», where that column folded; empty where it stands or is not drawn. */
   goal: (item: WorkItemBrief) => string
+  /** The row's project, where that column folded; empty where it stands, is not drawn or names none. */
+  project: (item: WorkItemBrief) => string
   /** When the row last moved, as the list says it. */
   updated: (item: WorkItemBrief) => string
 }
 
 /** Draws what a row prints under its title, for a list whose columns fold as these say. */
-export function listUnderTitle({ fit, folded, goal, runs, updated }: UnderTitleList) {
+export function listUnderTitle({ fit, folded, goal, project, runs, updated }: UnderTitleList) {
   const { HOLDER, STEPS, UNDER } = ROW_FACETS
+  /** Where a row stands and what it changes, first under its title wherever they folded. */
+  const lead = (item: WorkItemBrief) => {
+    const [path, named] = [goal(item), project(item)]
+    return [path ? pathFact(path) : null, named ? fact(named) : null]
+  }
 
-  function facts(item: WorkItemBrief, path: string): VNode {
+  function facts(item: WorkItemBrief): VNode {
     return h('span', { class: 'list-facts' }, [
-      path ? pathFact(path) : null,
+      ...lead(item),
       runs.facts(item, factsOf(fit()), runs.context(item)),
       // A dash says "nobody" under a heading; on a line of facts it says nothing.
       holderRef(item) ? runs.facts(item, HOLDER) : null,
@@ -58,11 +65,11 @@ export function listUnderTitle({ fit, folded, goal, runs, updated }: UnderTitleL
   }
 
   return (item: WorkItemBrief): VNode => {
-    const path = goal(item)
-    if (!labelsUnder(fit())) return facts(item, path)
+    if (!labelsUnder(fit())) return facts(item)
     const under = runs.filtering(surfaceMarks('list', item, runs.context(item), UNDER))
+    const led = lead(item)
     return h(Fragment, [
-      path ? h('span', { class: 'list-facts' }, [pathFact(path)]) : null,
+      led.some(Boolean) ? h('span', { class: 'list-facts' }, led) : null,
       h('span', { class: 'list-under' }, [under]),
     ])
   }

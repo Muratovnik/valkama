@@ -15,7 +15,8 @@ import { useResizeObserver } from '@vueuse/core'
 
 import { fitFor } from '@/widgets/work-item-views/utils/listColumns.ts'
 
-export function useListFit(root: Ref<HTMLElement | null>) {
+/** `both` where the list draws «Goal and stage» and «Project», which stand from a wider list. */
+export function useListFit(root: Ref<HTMLElement | null>, both = false) {
   const width = ref(0)
   const measured = ref(false)
   useResizeObserver(root, ([entry]) => {
@@ -25,7 +26,7 @@ export function useListFit(root: Ref<HTMLElement | null>) {
     width.value = root.value?.clientWidth ?? 0
     measured.value = true
   })
-  const fit = computed(() => fitFor(width.value))
+  const fit = computed(() => fitFor(width.value, both))
   return {
     fit,
     measured,

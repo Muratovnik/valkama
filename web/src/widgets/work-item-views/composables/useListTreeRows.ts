@@ -1,8 +1,8 @@
 /**
  * What the list draws differently as a tree, for each row: the indent and the
  * arrow at its start, the quiet tone of a path row with the count of what
- * matched under it, the parent of a row deeper than the indent goes, and the
- * names a reader hears. A flat list asks the same and is told nothing.
+ * matched under it, the parent the tree does not show, and the names a reader
+ * hears. A flat list asks the same and is told nothing.
  *
  * The indent is `TreeRowLead`'s: a step is the arrow's 16px square and the 8px
  * after it, 16px in all on a narrow list, which also stops the indent at its
@@ -126,10 +126,17 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
           }
         : null,
     treeOf,
-    /** The parent of a row deeper than the indent goes, which the indent no longer shows. */
+    /**
+     * The parent the tree does not show: of a row deeper than the indent goes, and of
+     * another space's card in its space's group, whose parent lies in its own space and
+     * which the read names by reference.
+     */
     underOf(item: WorkItemBrief): string {
       const row = treeOf(item)
-      if (!tree || !row || row.depth < levels.value) return ''
+      if (!tree || !row) return ''
+      if (item.other_space && live()?.grouping !== 'project')
+        return item.parent ? t('tree.under', { reference: item.parent }) : ''
+      if (row.depth < levels.value) return ''
       const parent = tree.parentItem(row)
       return parent ? t('tree.under', { reference: parent.reference }) : ''
     },
