@@ -104,6 +104,7 @@ watch(
       :failed="failed"
       :partial="partial"
       :drafts="drafts"
+      recommend-all
       @refresh="refresh"
       @updated="changed"
       @dismiss="remove"

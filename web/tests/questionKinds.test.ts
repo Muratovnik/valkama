@@ -155,6 +155,8 @@ describe('the answers of a kind', () => {
       { label: 'Later…', sent: ticks, counts: undefined },
       { label: 'Don’t do', sent: ticks, counts: undefined },
     ])
+    // The server takes every answer but Don't do only with a finding ticked.
+    expect(group.answers.map(({ needsTicked }) => needsTicked)).toEqual([true, true, undefined])
     // Only a group offers findings to tick; a goal with a field of the same name does not.
     expect(ticksOf(asked('goal', [choice('do', 'later', 'drop'), findings]))).toBeNull()
   })

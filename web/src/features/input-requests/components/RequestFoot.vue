@@ -93,6 +93,8 @@ const emit = defineEmits<{
   'way-out': []
 }>()
 const { t } = useI18n()
+/** Why the answer that puts off cannot be sent now, which its choice of a day says too. */
+const laterBlocked = computed(() => props.answers.find((answer) => answer.later)?.blocked)
 /** Which edge of the scrolling panel it keeps to, for what moves focus clear of it. */
 const edge = computed(() => (props.stuck ? 'end' : undefined))
 const actions = ref<InstanceType<typeof RequestActions> | null>(null)
@@ -135,6 +137,7 @@ defineExpose({
       class="request-later-place"
       :busy="busy"
       :disabled="disabled"
+      :blocked="laterBlocked"
       :entry="later.entry"
       :panel-id="later.controls"
       :value="later.value"

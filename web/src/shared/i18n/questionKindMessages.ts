@@ -1,6 +1,6 @@
 /**
  * The words of the kinds of question in «Needs my answer»: the tabs over the list, each kind's
- * answers by the server's option id, the headings of each kind's content, the put-off until a
+ * answers by the server's option id, the headings of each kind's content, a task's goal, the put-off until a
  * card closes, and the open work an answer would cancel that its question did not ask about.
  */
 export const questionKindMessages = {
@@ -32,6 +32,7 @@ export const questionKindMessages = {
         leave: 'Leave it open',
       },
       counted: '{answer}: {n}',
+      tickFirst: 'Tick a finding first, or answer «{drop}».',
       outcome: 'Task outcome',
       noOutcome: 'The task has no outcome written.',
       conditions: 'Conditions',
@@ -48,6 +49,10 @@ export const questionKindMessages = {
       noConsent: 'no answer yet',
       consentAnswers: { agree: 'agrees', object: 'objects', moved_out: 'moved its work out' },
       unread: 'The card could not be read.',
+      inGoal: 'Its goal',
+      goalConditions: 'Conditions of the goal',
+      noGoal: 'The task stands in no goal now.',
+      goalUnread: 'The goal could not be read.',
       untilDay: 'Until a day',
       untilCard: 'Until a card closes',
       cardHint: 'Type a number or words of the title',
@@ -86,6 +91,7 @@ export const questionKindMessages = {
         leave: 'Оставить открытой',
       },
       counted: '{answer}: {n}',
+      tickFirst: 'Сначала отметьте находку или ответьте «{drop}».',
       outcome: 'Итог задачи',
       noOutcome: 'Итог у задачи не записан.',
       conditions: 'Условия',
@@ -102,6 +108,10 @@ export const questionKindMessages = {
       noConsent: 'ещё не ответила',
       consentAnswers: { agree: 'согласна', object: 'возражает', moved_out: 'вынесла свою работу' },
       unread: 'Карточку не удалось прочитать.',
+      inGoal: 'Её цель',
+      goalConditions: 'Условия цели',
+      noGoal: 'Задача больше не стоит в цели.',
+      goalUnread: 'Цель не удалось прочитать.',
       untilDay: 'До даты',
       untilCard: 'До закрытия карточки',
       cardHint: 'Номер или слова названия',

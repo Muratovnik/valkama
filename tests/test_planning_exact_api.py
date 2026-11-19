@@ -144,7 +144,8 @@ class PlanningExactApiTests(unittest.TestCase):
         # A place in the queue is the list's, not the item's: the preview has none.
         self.assertNotIn("queue_order", brief["state"]["payload"]["work_item"])
         listed.pop("queue_order")
-        self.assertEqual({"work_item": listed}, brief["state"]["payload"])
+        # And it names the item over it, which the list's rows leave to `parent_id`.
+        self.assertEqual({"work_item": {**listed, "parent": None}}, brief["state"]["payload"])
         self.assertEqual(1, listed["comment_count"])
         # What a preview draws is all there; the history is not.
         for field in ("state", "title", "claim_ref", "claim_state", "last_claim_ref"):
@@ -161,6 +162,27 @@ class PlanningExactApiTests(unittest.TestCase):
         )["state"]["payload"]["work_item"]
         self.assertEqual(["A finding."], [comment["body"] for comment in full["comments"]])
         self.assertNotIn("comment_count", full)
+
+    def test_both_reads_name_the_item_over_it_by_reference(self) -> None:
+        """`parent` beside `parent_id`, in the full and the brief read; null for a root."""
+
+        goal = planning_service.create_work_item(
+            self.conn, space="EXA", title="A goal", kind="goal"
+        )
+        task = planning_service.create_work_item(
+            self.conn, space="EXA", title="A task in it", parent=goal["reference"]
+        )
+        self.conn.commit()
+        for brief in ({}, {"brief": "true"}):
+            for item, parent in ((task, goal["reference"]), (goal, None)):
+                with self.subTest(brief=bool(brief), item=item["reference"]):
+                    read = exact_api.work_item_payload(
+                        self.routing(),
+                        self.exact(reference=item["reference"], **brief),
+                        planning_service.get_work_item,
+                    )["state"]["payload"]["work_item"]
+                    self.assertEqual(parent, read["parent"])
+                    self.assertEqual(item["parent_id"], read["parent_id"])
 
     def test_a_brief_read_is_refused_as_the_full_one_is(self) -> None:
         """Only `brief=true`; an unknown item is 404 and a space that is not there is 409."""

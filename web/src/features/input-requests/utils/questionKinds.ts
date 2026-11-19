@@ -50,6 +50,8 @@ const CANCELS_FIELD = 'cancels'
 const FINDINGS_FIELD = 'items'
 /** The answer that names how many findings go once some are unticked. */
 const COUNTED = 'do'
+/** The one answer a group takes with nothing ticked: it drops the whole group. */
+const TAKES_NONE = 'drop'
 
 /**
  * The server's answers of each kind, in the order its buttons stand. An answer the server adds
@@ -114,6 +116,7 @@ export function kindRecord(
       answer: { [ANSWER_FIELD]: option.id },
       ...(cancels(option.id) ? { cancels: { field: CANCELS_FIELD } } : {}),
       ...(ticks ? { ticks } : {}),
+      ...(ticks && option.id !== TAKES_NONE ? { needsTicked: true as const } : {}),
       ...(ticks && option.id === COUNTED ? { counts: true as const } : {}),
       ...(option.id === 'later' && until ? { later: { field: UNTIL_FIELD } } : {}),
       ...(ASKS_FIRST.has(option.id) ? { twoStep: true as const } : {}),

@@ -166,16 +166,25 @@ export const everyKind = () => [
   ).map((purpose) => ofPurpose(purpose)),
 ]
 
-/** The list open over the board at a width, with the clock under the test's hand. */
-export async function openKinds(page: Page, entries: InputRequestEntry[], width: number) {
+/**
+ * The list open over the board at a width, with the clock under the test's hand. `prepare` adds
+ * routes of the test's own, over the backend's, before the page first asks.
+ */
+export async function openKinds(
+  page: Page,
+  entries: InputRequestEntry[],
+  width: number,
+  prepare?: () => Promise<unknown>,
+) {
   await page.setViewportSize({ width, height: 900 })
   await page.clock.install()
-  const opened = await openQuestion(page, entries, () =>
-    page.route('**/api/modules/planning/search?**', (route) => {
+  const opened = await openQuestion(page, entries, async () => {
+    await page.route('**/api/modules/planning/search?**', (route) => {
       const query = new URL(route.request().url()).searchParams.get('q') ?? ''
       return route.fulfill({ json: searchAnswer(query) })
-    }),
-  )
+    })
+    await prepare?.()
+  })
   await page.keyboard.press('Escape')
   await expect(opened.drawer).toHaveCount(0)
   await page.getByRole('button', { name: /^(?:Needs my answer|Ждут моего ответа)/u }).click()

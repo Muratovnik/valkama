@@ -73,6 +73,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'analytics-usage-seat.json': validateUsageAnswer,
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
+  'card-in-goal-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'card-goal.json': (value) => validatePlanningWorkItemPayload(value),
   'card-deferred.json': (value) => validatePlanningWorkItemPayload(value),
@@ -220,6 +221,16 @@ describe('the server fixtures', () => {
     expect(item.claim?.executor?.state).toBe('live')
     expect(item.checklist.map((step) => step.executor?.state)).toEqual(['live', 'none', 'none'])
     expect(item.agents?.map((agent) => agent.executor?.state).toSorted()).toEqual(['ended', 'live'])
+  })
+
+  it('name the item over the one read by its reference, and none over a root', () => {
+    const under = validatePlanningWorkItemBriefPayload(read('card-in-goal-brief.json'))
+    const root = validatePlanningWorkItemBriefPayload(read('card-brief.json'))
+    if (under.state.status !== 'ready' || root.state.status !== 'ready')
+      throw new Error('the brief read is not ready')
+    expect(under.state.payload.work_item.parent).toBe('MAIN-4')
+    expect(root.state.payload.work_item.parent).toBeNull()
+    expect(cardItem('card-goal.json').parent).toBeNull()
   })
 
   it('name who works on a goal: its creator following it, and a holder under it', () => {
