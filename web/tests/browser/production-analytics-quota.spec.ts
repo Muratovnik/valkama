@@ -195,10 +195,11 @@ for (const colorScheme of ['light', 'dark'] as const)
     })
 
 for (const width of [390, 1440])
-  test(`at ${width}px every switch of a drawn window stands inside the window`, async ({
+  test(`at ${width}px every control of a drawn window stands inside the window`, async ({
     page,
   }, info) => {
-    // A narrow page opens on the table; drawn, a window's switches once ran past its edge.
+    // A narrow page opens on the table; drawn, a window's switch of its line's span once ran past
+    // its edge. The switch is gone; «Breakdown» and the line of the window before stand there.
     await serve(page)
     await page.setViewportSize({ width, height: 1000 })
     await page.goto(pageAt())
@@ -206,17 +207,17 @@ for (const width of [390, 1440])
       await choose(page, section)
       await settled(page)
       await drawLined(page.locator('.chart-section').first())
-      // Each window by its hook (`QuotaWindow`), and each switch in it by its role.
-      const { past, switches, windows } = await page
+      // Each window by its hook (`QuotaWindow`), and each control in it by its role.
+      const { controls, past, windows } = await page
         .locator('[data-window]')
         .evaluateAll((found) => {
           const groups = found.map((window) => [
             window,
-            [...window.querySelectorAll('[role="radiogroup"]')],
+            [...window.querySelectorAll('button, [role="radiogroup"]')],
           ])
           return {
             windows: found.length,
-            switches: groups.reduce((all, [, one]) => all + (one as Element[]).length, 0),
+            controls: groups.reduce((all, [, one]) => all + (one as Element[]).length, 0),
             past: groups.flatMap(([window, one]) => {
               const edge = (window as Element).getBoundingClientRect().right
               return (one as Element[])
@@ -229,8 +230,8 @@ for (const width of [390, 1440])
           }
         })
       expect(windows, `${section}: the windows drawn`).toBeGreaterThan(0)
-      expect(switches, `${section}: the switches drawn`).toBeGreaterThan(0)
-      expect(past, `${section}: switches past their window`).toEqual([])
+      expect(controls, `${section}: the controls drawn`).toBeGreaterThan(0)
+      expect(past, `${section}: controls past their window`).toEqual([])
       await page
         .locator('.analytics-panel')
         .screenshot(shot(info, `quota-drawn-${section}-${width}.png`))
