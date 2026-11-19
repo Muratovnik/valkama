@@ -74,9 +74,14 @@ export const watchHints = (page: Page) =>
     requestAnimationFrame(frame)
   })
 
-/** What the page noted since the last call (`watchHints`). */
+/**
+ * What the page noted since the last call (`watchHints`), up to the next frame. A wait on the
+ * document, such as a hint's count, ends as soon as the hint is added or removed, before the frame
+ * that draws it; the next frame's own note comes first, as it asked for that frame before this did.
+ */
 export const watched = (page: Page) =>
-  page.evaluate(() => {
+  page.evaluate(async () => {
+    await new Promise((done) => requestAnimationFrame(done))
     const host = window as unknown as Watched
     return {
       arrivals: host.arrivals.splice(0),
