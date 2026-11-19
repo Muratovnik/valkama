@@ -133,8 +133,10 @@ for (const { width, height, tallest } of QUOTA_SIZES)
         .locator('.quota-account[data-account="Work"] .quota-window')
         .evaluateAll((windows) =>
           windows.map((window) => {
-            const { top, left, width: wide } = window.getBoundingClientRect()
-            return { top: Math.round(top), left: Math.round(left), width: Math.round(wide) }
+            // The edges as laid out: rounded each on its own, three of them missed the gap by a
+            // pixel once the rail beside them moved by a fraction of one.
+            const { top, left, right } = window.getBoundingClientRect()
+            return { top: Math.round(top), left, right }
           }),
         ),
     }
@@ -149,10 +151,9 @@ for (const { width, height, tallest } of QUOTA_SIZES)
     expect(seen.surface.radius).not.toBe('0px')
     const [week, model] = seen.work
     expect(model?.top, 'the two windows of «Work» on one row').toBe(week?.top)
-    expect(
-      (model?.left ?? 0) - (week?.left ?? 0) - (week?.width ?? 0),
-      'apart, a hairline between',
-    ).toBe(32)
+    expect(Math.round((model?.left ?? 0) - (week?.right ?? 0)), 'apart, a hairline between').toBe(
+      32,
+    )
     expect(seen.height, 'six accounts').toBeLessThan(tallest)
   })
 
