@@ -4,11 +4,16 @@
  * one press writes the option it names; «Later…» puts a question off to a day or to a card's
  * close; a question its card's close took away says so; and the tabs over the list show one
  * kind's questions, drop a kind with none, give way to «All» when the open kind empties, and are
- * what «Question N of M» counts.
+ * what «Question N of M» counts. A task in a goal shows its goal and the goal's conditions, the goal
+ * read by the reference the task's card names it by, at a phone's width in both languages too.
  */
 import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
+import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { everyKind, ofPurpose, openKinds } from './questionKindsPage.ts'
+import { held } from './served/preview.ts'
+import { briefAnswer, itemAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [1280, 620, 390] as const
@@ -198,3 +203,79 @@ test('a list of one kind offers no tabs: All would be that kind again', async ({
   await expect(record('Where should the comments go?')).toHaveCount(2)
   await expect(dialog.getByRole('tablist')).toHaveCount(0)
 })
+
+/** The goal the task of the questions stands in, as its brief read answers it. */
+const GOAL = held(330, 'Every switch says its state', {
+  kind: 'goal',
+  checklist: ['The switch names its state', 'The state is read aloud'].map((text, index) => ({
+    id: `33333333-3333-4333-8333-00000000000${index}`,
+    text,
+    done: false,
+    claimed_by: '',
+    done_by: '',
+    by_previous_holder: false,
+  })),
+})
+
+/** The task's card names its goal, and the goal's brief read answers it. */
+function serveGoal(page: Page) {
+  return page.route('**/api/modules/planning/work-item?*', (route) => {
+    const query = new URL(route.request().url()).searchParams
+    const brief = query.get('brief') === 'true'
+    const reference = query.get('reference')
+    if (reference === workItemRef.reference && !brief)
+      return route.fulfill({
+        json: itemAnswer(spaceScope, workItemRef, { ...workItem, parent: GOAL.reference }),
+      })
+    if (reference === GOAL.reference && brief) return route.fulfill(briefAnswer(GOAL))
+    return route.fallback()
+  })
+}
+
+const GOAL_WORDS = {
+  en: {
+    inGoal: 'Its goal',
+    conditions: 'Conditions of the goal',
+    answers: ['Do', 'Later…', 'Move out of the goal', 'Don’t do'],
+  },
+  ru: {
+    inGoal: 'Её цель',
+    conditions: 'Условия цели',
+    answers: ['Делать', 'Позже…', 'Вынести из цели', 'Не делать'],
+  },
+} as const
+
+for (const { width, locale } of [
+  { width: 1280, locale: 'en' },
+  { width: 620, locale: 'en' },
+  { width: 390, locale: 'en' },
+  { width: 390, locale: 'ru' },
+] as const) {
+  test(`at ${width}px in ${locale} a task in a goal shows its goal and the goal’s conditions`, async ({
+    page,
+  }) => {
+    const words = GOAL_WORDS[locale]
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    const task = ofPurpose('task', { prompt: 'The task in its goal' })
+    const { record } = await openKinds(page, [task], width, () => serveGoal(page))
+    const one = record('The task in its goal')
+    await one.scrollIntoViewIfNeeded()
+    const subject = one.locator('[data-kind-subject="task"]')
+    const goal = subject.locator('[data-kind-part="goal"]')
+    await expect(goal).toContainText(words.inGoal)
+    await expect(goal.getByRole('listitem')).toHaveText([`MAIN-330 ${GOAL.title}`])
+    const conditions = subject.locator('[data-kind-part="conditions"]')
+    await expect(conditions).toContainText(words.conditions)
+    await expect(conditions.getByRole('listitem')).toHaveText([
+      'The switch names its state',
+      'The state is read aloud',
+    ])
+    await expect(subject.locator('[data-kind-part="description"]')).toContainText(
+      'Deliver the exact project vertical slice.',
+    )
+    await expect(one.locator('.request-pair').getByRole('button')).toHaveText(words.answers)
+    // Nothing of it runs past the record's edge.
+    const overflow = await subject.evaluate((element) => element.scrollWidth - element.clientWidth)
+    expect(overflow).toBeLessThanOrEqual(0)
+  })
+}
