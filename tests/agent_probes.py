@@ -1138,9 +1138,11 @@ def client_argv(
         # The elevated sandbox keeps its setup in the Codex home, which every run
         # clears, and makes it again only with an administrator's consent: each run
         # asked for it, and a run nobody watched had no shell. The unelevated one
-        # needs no setup; what a probe judges does not depend on which one isolates.
+        # cannot start an app alias such as a Store PowerShell's `pwsh.exe`. MXC
+        # needs no setup, starts both and still refuses a write outside the
+        # workspace; what a probe judges does not depend on which one isolates.
         "-c",
-        'windows.sandbox="unelevated"',
+        'windows.sandbox="mxc"',
         "--dangerously-bypass-hook-trust",
     ]
     return argv + (["resume", session, prompt] if session else [prompt])

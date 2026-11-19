@@ -698,7 +698,7 @@ class SandboxRefusalTests(unittest.TestCase):
     def test_codex_turns_ask_for_the_sandbox_that_needs_no_setup(self) -> None:
         argv = agent_probes.client_argv("codex", ["codex"], "go", Path("W"), None)
 
-        self.assertIn('windows.sandbox="unelevated"', argv)
+        self.assertIn('windows.sandbox="mxc"', argv)
 
 
 class StoreCopyRegistryTests(unittest.TestCase):
