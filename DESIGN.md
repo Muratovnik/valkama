@@ -440,10 +440,29 @@ and only fades the end of a strip that scrolls on past it.
   its `option` slot and `OptionGroups` through its `text` slot; neither knows a facet.
   `production-choice-marks.spec.ts` compares each row with its button.
 - **A form asks in the order the card reads.** The new-task dialog asks for the title,
-  then the kind and the priority, then the labels and the parent, and the description
-  last: its rows come from `FACET_ORDER` (`COMPOSER_ROWS`), the order every surface
-  reads an item's facets in, and the description follows the facts as it does on the
-  card. It used to ask for the description between the two pairs.
+  then the kind and the priority, then the project and the labels, then the parent on a
+  row of its own, and the description last: its rows come from `FACET_ORDER`
+  (`COMPOSER_ROWS`), the order every surface reads an item's facets in, the project before
+  the labels as what the work changes before how it is marked, and the description follows
+  the facts as it does on the card. The project and the labels share a row where each has
+  240px and stand one under the other on a phone, where a chip and the input took two lines
+  in half the dialog; the project is named above its input as the labels are, so the two
+  inputs stand level. It used to ask for the description between the two pairs.
+- **«Новая работа» says what the new work is and where it starts.** A stage is a goal
+  under a parent, so the kind offers no stage of its own: «Цель» chosen with a parent reads
+  «Этап», with a stage's mark, and is sent as a goal, which the server makes a stage
+  (`composerKinds`). A stage offered on its own was refused for want of a parent. The
+  project field starts on the project the workspace stands on, the one the scope narrows
+  to or else the space's default, and offers the space's projects; the dialog names a
+  project only where another than the default is chosen, and the server reads the default
+  otherwise. A goal or stage holds the work of any project and names none, which the server
+  enforces, so for one the field says «Любой проект», takes no choice and says why in its
+  accessible description. A space with no project, or whose projects were not read, draws
+  no field. A switch under the description, «В „Не разобрано“», named by the workflow's
+  one triage state as the interface names it, leaves the new card there, for work raised
+  before it is sorted: the owner's own write otherwise lands where the workflow puts it. A
+  workflow with no such state, or two, draws no switch (`triageState`). Every field starts
+  over each time the dialog opens.
 - **«Новая работа» chooses its parent from the tree.** The field offers «Без цели» first,
   then every goal and stage of the space at any depth, laid out by the tree's model
   (`treeRows`) as the list draws them: each under the one it stands in, open before
@@ -2065,9 +2084,14 @@ space is, «Пространство ALPHA · Alpha» (`space:<key>`). Such a ca
 its own space, so «Без цели» would say the wrong thing about it, and another space's goal
 is a card there rather than a frame, since it holds nothing in this space. That frame's
 header is the work under no goal's: a fold and the name, with nothing to open, and it folds
-by the same rule. The far end of a link is counted nowhere above the field: it is not this
-space's work. A frame is told by tone and draws no line: it is ground a step above the
-field and its cards a step above it, and a frame inside a frame is a well cut a
+by the same rule. The counts line says another space's cards apart, after this space's
+work: «8 открытых из 9 и 2 из других пространств», since they are in the read and drawn on
+the field but are not this space's work; under a filter it says what the filter let through
+of them, and «≠ Из другого пространства» leaves none, nor any of their frames or the links
+to them. The far end of a link is counted nowhere above the field, in that part or any
+other: the read holds it only to end the link. The census behind the line is the one
+every view reads (`usePlanningCensus`). A frame is told by tone and draws no line: it is
+ground a step above the field and its cards a step above it, and a frame inside a frame is a well cut a
 step below the one it stands in. Without a filter the field draws every frame with
 open work and every open goal, and in «All» every goal; under a filter, as on the
 board, only a frame the filter found something in. So every item is on the field,

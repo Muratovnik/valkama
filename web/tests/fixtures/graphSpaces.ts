@@ -17,7 +17,9 @@
  *
  * The links follow the same shape: in the broad space 360 discovered-from, 177
  * blocks and 106 relates-to, of which 87 touch a goal — 5 from open work to its
- * own goal, 28 between open work and another goal — and 2 reach another space.
+ * own goal, 28 between open work and another goal — and 2 reach another space, both to one
+ * task of space ALPHA that the read names as their far end (`other_space_ends`): a space the
+ * read could not reach is a case of its own, which the specs of other spaces' frames hold.
  *
  * Built rather than written out, from a fixed seed, so the counts above are
  * arithmetic a test can check and the same input arrives on every run.
@@ -296,7 +298,7 @@ function wire(
   add(total - pairs.length - 2, () => [pick(closed), pick(closed)])
 
   // Two links reach another space: one leaves it, and one blocks into it.
-  const outside = identity(990_001)
+  const outside = OUTSIDE.work_item_id
   const leaving = pick(open)
   const entering = pick(open)
   pairs.push(
@@ -361,8 +363,24 @@ function readModel(plan: ShapePlan, built: Built): PlanningReadModel {
     },
     work_items: built.items,
     links: built.links,
+    // The far end of the links with another space, which the read names beside its items.
+    other_space_ends: built.links.some((link) =>
+      [link.from, link.to].includes(OUTSIDE.work_item_id),
+    )
+      ? [OUTSIDE]
+      : [],
     stale_claims: [],
   }
+}
+
+/** The task of another space two links of the broad space reach. */
+const OUTSIDE = {
+  work_item_id: identity(990_001),
+  reference: 'ALPHA-9',
+  title: 'A task in another space',
+  kind: 'task' as const,
+  state: { key: 'todo', ...STATES.todo },
+  space: { key: 'ALPHA', name: 'Alpha' },
 }
 
 /** `count` frames that differ only in how much work each holds. */
