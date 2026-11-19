@@ -11,7 +11,10 @@
  * view by the focus stands clear of the heading row and the total. A table shorter than that
  * height stands at its own. Each column's heading sorts by it, largest first, then the other way; the first sort is the chosen
  * measure. A row is one line: the figures take what they need, the name the rest down to its
- * least, cut where the column is narrower (`SpendingTableName`). A cost that leaves tokens without
+ * least, cut where the column is narrower (`SpendingTableName`). Asked to (`twoLineNames`), as the
+ * side panel's narrow table is, names of free text, tasks and sessions, take two lines at most, as
+ * a ranked list does in a narrow place: cut to one line there, a task's name showed its reference
+ * alone. Its figures stay on the name's first line. A cost that leaves tokens without
  * a price says how many on a second line of its cell, under its amount (`SpendingTableFigure`):
  * that row is taller, and its column is as wide as the longer of the two lines. A window too
  * narrow for that column scrolls the table sideways in its frame, the names held at its start.
@@ -38,6 +41,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
+import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type {
@@ -68,6 +72,8 @@ const props = defineProps<{
   find?: string
   /** Why the last press here did not open what it asked for, in words; empty otherwise. */
   notice?: string
+  /** Names of free text take two lines at most, as a narrow place asks; one line otherwise. */
+  twoLineNames?: boolean
 }>()
 /** A value pressed to open its side panel; the crossed read again. */
 const emit = defineEmits<{
@@ -102,6 +108,10 @@ const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${pr
 const tableUsage = computed(() => crossed.value?.usage ?? props.usage)
 /** What a row names: a pair of values while split, whose name column keeps more room. */
 const rows = computed(() => (crossed.value ? 'pairs' : 'values'))
+/** Its names take two lines where they are free text, tasks and sessions, and it is asked to. */
+const nameLines = computed(() =>
+  props.twoLineNames && namedByText(props.by, crossed.value?.across) ? 2 : 1,
+)
 
 const model = useTableModel(() => ({
   by: props.by,
@@ -276,6 +286,7 @@ defineExpose({ reveal })
           <SpendingTableName
             :by="by"
             :line="line"
+            :lines="nameLines"
             @inspect="(value, label) => emit('inspect', value, label)"
           />
           <SpendingTableFigure
@@ -414,7 +425,8 @@ defineExpose({ reveal })
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
-   where it is longer (`SpendingTableName`); a figure's remark takes a second line of its own
+   where it is longer, or on two lines where it is free text and the table is asked to
+   (`SpendingTableName`); a figure's remark takes a second line of its own
    (`SpendingTableFigure`). Where the headings on one line would widen the table past its frame,
    they take a second line instead (`headingLines`). */
 .chart-cell[data-numeric='true'] {

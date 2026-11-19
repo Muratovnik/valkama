@@ -1255,6 +1255,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   scroll-driven animation, the heading row lagged a frame behind the rows and shook as the page
   scrolled. Each heading sorts by its column, and a line over the table says how many rows it
   shows of how many, how they are sorted, and downloads what it shows in that order.
+  A row of such a table is one line: its figures take what they need and its name the rest,
+  cut with an ellipsis and whole in its hint. The side panel's table of every value leaves its
+  names a narrow column, and there a value named by free text, a task or a session, takes two
+  lines at most as in a ranked list, then an ellipsis, whole in its hint, so the reference and
+  the start of the title stand together: cut to one line in a column of eight ems, a task's name
+  showed its reference alone. A pair there takes a line a part, a session's detail a line of
+  its own under its name, and the row's figures stand on the name's first line. Any other name
+  there, and every name of the section's own table, keeps to one line.
   `DonutChart` is a ring of how one whole splits into parts, one of the two drawings of every
   such chart beside its ranked bars: a sector a part, largest first from the top, five at most
   with the smaller past them folded into one rest in the folded tail's neutral; each part in the

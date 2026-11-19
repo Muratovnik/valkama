@@ -4,7 +4,8 @@
  * line under its ranked list that counts them, «All 30»: the section's own table (`SpendingTable`)
  * with its sort, its download and, while the section is split, its pairs (`useCrossRead`), under a
  * field that finds a value by its name. A row's name pressed opens that value's panel in place of
- * the table, as a new place in the history, so Back returns to the table (`inspect`).
+ * the table, as a new place in the history, so Back returns to the table (`inspect`). The panel
+ * leaves the names a narrow column, so a name of free text takes two lines (`twoLineNames`).
  *
  * While the page reads its answer anew, of this section or another, the table waits for it rather
  * than showing rows of another dimension under this one's name. What a reader of the panel selects
@@ -95,6 +96,7 @@ const find = ref('')
         :measure="measure"
         :notice="notice"
         :usage="usage"
+        two-line-names
         @inspect="(value, label) => emit('inspect', value, label)"
         @reread="cross.retry"
       />
