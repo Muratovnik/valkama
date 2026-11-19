@@ -116,6 +116,16 @@ async function shoot(page: Page, info: TestInfo, name: string) {
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
 
+/** Where each element's box starts, by its selector. */
+async function starts(page: Page, selectors: readonly string[]) {
+  const found: Record<string, number> = {}
+  for (const selector of selectors) {
+    const box = await page.locator(selector).first().boundingBox()
+    found[selector] = box?.x ?? Number.NaN
+  }
+  return found
+}
+
 for (const size of SIZES) {
   const words = WORDS[size.lang]
   const tag = `${size.lang} ${size.width}`
@@ -131,6 +141,14 @@ for (const size of SIZES) {
       await expect(rows).toHaveCount(30)
       await expect(page.locator('.decisions-table-count')).toHaveText(words.count(30))
       await shoot(page, info, `ready-${tag}`)
+      // The bar's periods, the count and the table's frame stand on one left edge.
+      const edges = await starts(page, [
+        '.decisions-bar .period-bar-periods',
+        '.decisions-table-count',
+        '.decisions-table .section-table-frame',
+      ])
+      const lefts = Object.values(edges)
+      expect(Math.max(...lefts) - Math.min(...lefts), JSON.stringify(edges)).toBeLessThanOrEqual(1)
 
       // The point first: this week holds no goal closed, and the page says so.
       await page.getByRole('combobox', { name: words.point }).click()
@@ -162,6 +180,13 @@ for (const size of SIZES) {
       expect(opened.state).toEqual({ period: 'weeks4', point: 'goal_close' })
       expect(planningWorkItemRef(opened.entity)).toEqual(workItemRef)
       await shoot(page, info, `card-${tag}`)
+      // The mark's sign starts on the edge its event's title starts on.
+      const markEdges = await starts(page, ['.drawer .entry-title', '.drawer .entry-point'])
+      const markLefts = Object.values(markEdges)
+      expect(Math.abs(markLefts[0] - markLefts[1]), JSON.stringify(markEdges)).toBeLessThanOrEqual(
+        1,
+      )
+      await record(info, `decisions edges ${tag}`, { page: edges, mark: markEdges })
 
       // Back closes the card and gives the page back as it was left.
       await page.goBack()
