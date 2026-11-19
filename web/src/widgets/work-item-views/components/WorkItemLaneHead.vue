@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * A lane's heading: which goal the row is and how much it holds, on one calm
- * line. Its state is said only once the goal has moved; a goal not started
+ * A lane's heading: whose the row is — a goal, by stage the path «Goal › Stage»,
+ * or the word of a lane no card heads (`laneTitle`) — and how much it holds, on one
+ * calm line. Its state is said only once the goal has moved; a goal not started
  * keeps the word for a screen reader. The goal's card and chain are one click
  * away and come up under the pointer or the keyboard, so a board of a hundred
  * goals does not stand two buttons per row; where nothing can hover they stay.
@@ -15,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useLaneActionsPlace } from '@/widgets/work-item-views/composables/useLaneActionsPlace.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import { laneTitle } from '@/widgets/work-item-views/utils/laneTitle.ts'
 
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
@@ -46,7 +48,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const title = computed(() => props.lane.goal?.title ?? t('workItem.lanes.noParent'))
+const title = computed(() => laneTitle(props.lane.head, t))
 const counts = computed(() =>
   t('workItem.lanes.counts', { open: props.lane.open, closed: props.lane.closed }),
 )

@@ -1,33 +1,44 @@
 /**
- * The board read by goal: one lane per goal, holding all the work under it at any
- * depth, and one lane for the work filed under none.
+ * The board read in lanes: by goal, by stage or by project, each lane a row of
+ * the state columns.
  *
- * A lane is a root's: a goal, which stands under nothing. Work filed under a stage
- * stands in the lane of the goal the stage is under, however deep, and a stage is
- * work of that lane like any other — a tile there while it stands in a column, and
- * the head of no lane. A lane per nearest container would be another grouping; this
- * one reads the space by goal.
+ * By goal, a lane is a root's: a goal, which stands under nothing. Work filed under
+ * a stage stands in the lane of the goal the stage is under, however deep, and
+ * names that stage on its tile (`stages`); a stage is work of that lane like any
+ * other — a tile there while it stands in a column, and the head of no lane. By
+ * stage, a lane is the nearest container's, a goal's or a stage's, and every
+ * container heads one and stands as no tile. Work under no goal stands in a lane of
+ * its own, last of this space's.
+ *
+ * A card of another space, which names one of this space's projects, has no parent
+ * here: its parent is in its own space. By goal and by stage it stands in a lane of
+ * that space, after this space's lanes, rather than under no goal, which would say
+ * it has none. By project it stands in the lane of the project it names, as any card.
+ *
+ * By project, a lane is one of the space's projects; a card naming several stands
+ * once, in «Several projects», since one card twice on a screen breaks its drag and
+ * its focus and the lanes' counts would no longer add up to the scope's; a card
+ * naming none stands in «No project». An accepted open goal or stage stands in no
+ * column, so it is in no project's lane either.
  *
  * Three sets go in because a lane answers three questions. Which lanes there are
  * and what each counts comes from the board's scope — the space, or the chain it
- * is narrowed to — before any queue or search filter, because a lane's counts
- * describe its goal and not the filter. Which tiles a lane draws comes from the
- * filtered items. And a goal is named from the whole space, because a chain can
- * hold an item whose goal is not itself in the chain.
- *
- * A goal is the lane, not a tile in it: its title heads the lane and its state
- * is marked there, and its card is one click away. Drawing it again among its
- * own work would put the same item twice on one screen, and so would a stage that
- * headed a lane of its own while it stood as a tile in its goal's.
+ * is narrowed to — before any filter, because a lane's counts describe its work
+ * and not the filter. Which tiles a lane draws comes from the filtered items. And
+ * a container is named from the whole space, because a chain can hold an item
+ * whose goal is not itself in the chain.
  */
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-export type BoardGrouping = 'goal' | 'none'
+export type BoardGrouping = 'goal' | 'none' | 'project' | 'stage'
 
 /** The lane of the work filed under no goal. */
 export const NO_PARENT = 'none'
+/** The lanes of the work naming several projects, and none. */
+const SEVERAL_PROJECTS = 'projects:several'
+const NO_PROJECT = 'projects:none'
 
 /** Tiles a lane cell draws before it asks to show the rest. */
 const CELL_LIMIT = 3
@@ -40,65 +51,238 @@ export function drawnInCell(state: { is_terminal: boolean }): number {
   return state.is_terminal ? 0 : CELL_LIMIT
 }
 
+/** What heads a lane, which says whose work the row is. */
+export type LaneHead =
+  /** A goal or a stage; by stage, `path` is the containers over it, the goal first. */
+  | { item: WorkItemBrief; kind: 'container'; path: WorkItemBrief[] }
+  | { kind: 'no-goal' }
+  | { key: string; kind: 'space'; name: string }
+  | { id: string; kind: 'project'; name: string }
+  | { kind: 'several-projects' }
+  | { kind: 'no-project' }
+
 export interface BoardLane {
   closed: number
-  /** The goal heading the lane; null for the work under none. */
+  /** The goal or stage heading the lane; null for a lane no card heads. */
   goal: WorkItemBrief | null
-  /** The goal's work item id, or `NO_PARENT`. */
+  head: LaneHead
+  /** The container's work item id, or the lane's own word. */
   id: string
   /** The tiles the lane draws, in the order the server listed them. */
   items: WorkItemBrief[]
   open: number
+  /** By goal, the stage a tile stands under, by the tile's id, which its second line names. */
+  stages: ReadonlyMap<string, WorkItemBrief>
 }
 
-/** An item that heads a lane: a container that is nobody's child, which is a goal. */
-function headsLane(item: WorkItemBrief): boolean {
-  return item.parent_id === null && WORK_ITEM_TREE.isContainer(item)
+/** A project of the space, which a lane by project is. */
+export interface SpaceProject {
+  display_name: string
+  project_id: string
 }
 
-/**
- * The lanes, in reading order: those with open work first, then those without,
- * each in the order the space lists its goals, and the work under no goal last.
- *
- * Under a filter a lane with nothing to draw is left out, or a search would
- * answer with a column of empty lane headings; without one every goal keeps its
- * lane, an empty one included, so a new goal is visible before it holds work.
- */
-export function boardLanes(input: {
+interface LaneInput {
   filtered: boolean
   scope: readonly WorkItemBrief[]
   space: readonly WorkItemBrief[]
   visible: readonly WorkItemBrief[]
-}): BoardLane[] {
+  /** How the lanes are cut; by goal unless it says. */
+  grouping?: Exclude<BoardGrouping, 'none'>
+  /** The space's projects, in its order; null where the registry was not read. */
+  projects?: readonly SpaceProject[] | null
+}
+
+const isContainer = (item: WorkItemBrief) => WORK_ITEM_TREE.isContainer(item)
+const spaceLane = (key: string) => `space:${key}`
+const projectLane = (id: string) => `project:${id}`
+
+/**
+ * The lane an item stands in, null when it heads one itself, or undefined when it
+ * stands in none: an accepted open container by project, which has no column.
+ */
+type LaneOf = (item: WorkItemBrief) => string | null | undefined
+
+/** The containers over an item, nearest first, as the space holds them. */
+function ancestorsIn(byId: ReadonlyMap<string, WorkItemBrief>, item: WorkItemBrief) {
+  const found: WorkItemBrief[] = []
+  const seen = new Set([item.work_item_id])
+  let parent = item.parent_id === null ? undefined : byId.get(item.parent_id)
+  while (parent !== undefined && !seen.has(parent.work_item_id)) {
+    found.push(parent)
+    seen.add(parent.work_item_id)
+    parent = parent.parent_id === null ? undefined : byId.get(parent.parent_id)
+  }
+  return found
+}
+
+/** The projects of this space an item names; another space's card names only those. */
+function namedProjects(item: WorkItemBrief, own: ReadonlySet<string> | null): string[] {
+  const named = [...new Set(item.projects.map((project) => project.project_id))]
+  return item.other_space && own ? named.filter((id) => own.has(id)) : named
+}
+
+/**
+ * The group by project an item stands in, the list's as the board's: the one project of
+ * the space it names, several, or none.
+ */
+export function projectGroupOf(projects: readonly SpaceProject[] | null | undefined) {
+  const own = projects ? new Set(projects.map((p) => p.project_id)) : null
+  return (item: WorkItemBrief): string => {
+    const named = namedProjects(item, own)
+    if (named.length > 1) return SEVERAL_PROJECTS
+    return named.length ? projectLane(named[0] ?? '') : NO_PROJECT
+  }
+}
+
+/** The groups by project, in the order they are read: the space's projects, then the rest. */
+export function projectGroups(projects: readonly SpaceProject[] | null | undefined): string[] {
+  return [...(projects ?? []).map((p) => projectLane(p.project_id)), SEVERAL_PROJECTS, NO_PROJECT]
+}
+
+function laneReader(input: LaneInput, byId: ReadonlyMap<string, WorkItemBrief>): LaneOf {
+  const grouping = input.grouping ?? 'goal'
+  if (grouping === 'project') {
+    const groupOf = projectGroupOf(input.projects)
+    return (item) => (isContainer(item) && item.state === null ? undefined : groupOf(item))
+  }
+  return (item) => {
+    if (item.other_space) return spaceLane(item.other_space.key)
+    if (grouping === 'stage') {
+      return isContainer(item)
+        ? null
+        : (ancestorsIn(byId, item).find((parent) => isContainer(parent))?.work_item_id ?? NO_PARENT)
+    }
+    // By goal a lane is a root's: a container that is nobody's child.
+    if (item.parent_id === null && isContainer(item)) return null
+    const root = ancestorsIn(byId, item).find(
+      (parent) => parent.parent_id === null && isContainer(parent),
+    )
+    return root?.work_item_id ?? NO_PARENT
+  }
+}
+
+/** What heads the lane of this id. */
+function headOf(
+  id: string,
+  input: LaneInput,
+  byId: ReadonlyMap<string, WorkItemBrief>,
+  spaces: ReadonlyMap<string, string>,
+): LaneHead {
+  if (id === NO_PARENT) return { kind: 'no-goal' }
+  if (id === SEVERAL_PROJECTS) return { kind: 'several-projects' }
+  if (id === NO_PROJECT) return { kind: 'no-project' }
+  if (id.startsWith('space:')) {
+    const key = id.slice('space:'.length)
+    return { kind: 'space', key, name: spaces.get(key) ?? key }
+  }
+  if (id.startsWith('project:')) {
+    const project = id.slice('project:'.length)
+    const name = input.projects?.find((p) => p.project_id === project)?.display_name
+    return { kind: 'project', id: project, name: name ?? project }
+  }
+  const item = byId.get(id)
+  if (item === undefined) return { kind: 'no-goal' }
+  const path = input.grouping === 'stage' ? ancestorsIn(byId, item).reverse() : []
+  return { kind: 'container', item, path }
+}
+
+/**
+ * By goal, the stage a tile in this lane stands under: its parent, where that is a
+ * container and not the lane's own goal. By stage the lane is the stage, and by project
+ * the lane says no goal, so neither names one.
+ */
+function stageReader(input: LaneInput, byId: ReadonlyMap<string, WorkItemBrief>) {
+  const named = (input.grouping ?? 'goal') === 'goal'
+  return (item: WorkItemBrief, lane: string): WorkItemBrief | undefined => {
+    const stage = named ? byId.get(item.parent_id ?? '') : undefined
+    return stage && isContainer(stage) && stage.work_item_id !== lane ? stage : undefined
+  }
+}
+
+/** Puts each tile the filter let through in its lane, with the stage it names. */
+function drawTiles(
+  input: LaneInput,
+  laneOf: LaneOf,
+  lane: (id: string) => BoardLane,
+  stageOf: ReturnType<typeof stageReader>,
+) {
+  for (const item of input.visible) {
+    const id = laneOf(item)
+    if (id === undefined || id === null) continue
+    const found = lane(id)
+    found.items.push(item)
+    const stage = stageOf(item, id)
+    if (stage) (found.stages as Map<string, WorkItemBrief>).set(item.work_item_id, stage)
+  }
+}
+
+/** What heads the group by project of this id (`projectGroupOf`). */
+export const projectHead = (id: string, projects: readonly SpaceProject[] | null | undefined) =>
+  headOf(
+    id,
+    { filtered: false, grouping: 'project', projects, scope: [], space: [], visible: [] },
+    new Map(),
+    new Map(),
+  )
+
+/** This space's lanes first, then the work under no goal, then other spaces'. */
+const laneKind = (lane: BoardLane) =>
+  lane.head.kind === 'space' ? 2 : Number(lane.id === NO_PARENT)
+
+/** The order the lanes are read in, smaller first. */
+function laneRank(input: LaneInput, order: ReadonlyMap<string, number>) {
+  if (input.grouping === 'project') {
+    const ranks = new Map(projectGroups(input.projects).map((id, at) => [id, at]))
+    return (lane: BoardLane): number[] => [ranks.get(lane.id) ?? ranks.size]
+  }
+  // This space's lanes with open work, then the rest, then the work under no goal, then the
+  // lanes of other spaces by their key.
+  return (lane: BoardLane): number[] => [
+    laneKind(lane),
+    Number(lane.open === 0 && laneKind(lane) === 0),
+    order.get(lane.id) ?? 0,
+  ]
+}
+
+const compareRanks = (left: number[], right: number[]) => {
+  for (const [at, value] of left.entries()) {
+    const other = right[at] ?? 0
+    if (value !== other) return value - other
+  }
+  return 0
+}
+
+/**
+ * The lanes, in reading order. Under a filter a lane with nothing to draw is left out,
+ * or a search would answer with a column of empty lane headings; without one every
+ * goal, stage or project keeps its lane, an empty one included, so a new goal is
+ * visible before it holds work. A lane no card or project heads shows only with work.
+ */
+export function boardLanes(input: LaneInput): BoardLane[] {
   const order = new Map(input.space.map((item, index) => [item.work_item_id, index]))
   const byId = new Map(input.space.map((item) => [item.work_item_id, item]))
+  const spaces = new Map(
+    input.space.flatMap((item) =>
+      item.other_space ? [[item.other_space.key, item.other_space.name]] : [],
+    ),
+  )
+  const laneOf = laneReader(input, byId)
   const lanes = new Map<string, BoardLane>()
-  /**
-   * The lane an item stands in: its root's, found by its parents in the space. An item
-   * whose line of parents leaves the space before it reaches a goal has no goal to stand
-   * under here, and stands with the work under none.
-   */
-  const laneOf = (item: WorkItemBrief): string | null => {
-    if (headsLane(item)) return null
-    const seen = new Set([item.work_item_id])
-    let parent = item.parent_id === null ? undefined : byId.get(item.parent_id)
-    while (parent !== undefined && !seen.has(parent.work_item_id)) {
-      if (headsLane(parent)) return parent.work_item_id
-      seen.add(parent.work_item_id)
-      parent = parent.parent_id === null ? undefined : byId.get(parent.parent_id)
-    }
-    return NO_PARENT
-  }
   const lane = (id: string): BoardLane => {
     let found = lanes.get(id)
     if (found === undefined) {
-      found = { id, goal: byId.get(id) ?? null, items: [], open: 0, closed: 0 }
+      const head = headOf(id, input, byId, spaces)
+      const goal = head.kind === 'container' ? head.item : null
+      found = { id, goal, head, items: [], open: 0, closed: 0, stages: new Map() }
       lanes.set(id, found)
     }
     return found
   }
+  if (input.grouping === 'project')
+    for (const project of input.projects ?? []) lane(projectLane(project.project_id))
   for (const item of input.scope) {
     const id = laneOf(item)
+    if (id === undefined) continue
     if (id === null) {
       lane(item.work_item_id)
       continue
@@ -107,21 +291,15 @@ export function boardLanes(input: {
     if (WORK_ITEM_TREE.isOpen(item)) counted.open += 1
     else counted.closed += 1
   }
-  for (const item of input.visible) {
-    const id = laneOf(item)
-    if (id !== null) lane(id).items.push(item)
-  }
-  const rank = (entry: BoardLane) =>
-    entry.id === NO_PARENT ? Number.POSITIVE_INFINITY : (order.get(entry.id) ?? 0)
+  drawTiles(input, laneOf, lane, stageReader(input, byId))
+  const rank = laneRank(input, order)
   return [...lanes.values()]
     .filter((entry) => !input.filtered || entry.items.length > 0)
-    .filter((entry) => entry.id !== NO_PARENT || entry.open + entry.closed > 0)
-    .sort(
-      (left, right) =>
-        Number(left.id === NO_PARENT) - Number(right.id === NO_PARENT) ||
-        Number(left.open === 0) - Number(right.open === 0) ||
-        rank(left) - rank(right),
+    .filter(
+      (entry) =>
+        entry.goal !== null || entry.head.kind === 'project' || entry.open + entry.closed > 0,
     )
+    .sort((left, right) => compareRanks(rank(left), rank(right)))
 }
 
 /** A state a lane holds work in, and how much. */

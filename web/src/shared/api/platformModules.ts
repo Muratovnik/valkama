@@ -117,6 +117,9 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
       'closed',
       'group',
       'branch',
+      // The order of the views and its direction (`viewSortRoute.ts`).
+      'sort',
+      'desc',
       // The Work filter beside the text in `query` (`workFilter.ts`).
       'ready',
       'held',

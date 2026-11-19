@@ -18,6 +18,7 @@ import { i18n as appI18n, messages } from '@/shared/i18n/index.ts'
 
 import { planningReadModel, workItem } from '../browser/planningFixtures.ts'
 import { stateOf } from '../fixtures/workItem.ts'
+import { keptOrder } from '../support/listOrder.ts'
 
 vi.mock('@/shared/api/memoryApi.ts', () => ({
   fetchMemoryProviders: vi.fn(),
@@ -165,10 +166,13 @@ describe('work discovery', () => {
     const item = data.work_items[0]
     if (!item) throw new Error('Expected fixture item')
     item.claim_ref = 'A long task owner with a descriptive session name'
-    const wrapper = mount(WorkItemList, {
-      props: { items: data.work_items, links: data.links },
-      global: { plugins: [i18n()] },
-    })
+    const host = keptOrder()
+    const wrapper = host.hold(
+      mount(WorkItemList, {
+        props: { items: data.work_items, links: data.links, ...host.props },
+        global: { plugins: [i18n()] },
+      }),
+    )
     const header = wrapper.get('th')
     await header.get('button').trigger('click')
     expect(wrapper.findAll('tbody tr').map((row) => row.get('.list-open').text())).toEqual([

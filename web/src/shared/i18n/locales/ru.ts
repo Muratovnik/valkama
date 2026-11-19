@@ -802,7 +802,6 @@ export const ru = {
     },
     columnEmpty: 'Пусто',
     lanes: {
-      noParent: 'Без родителя',
       counts: 'открыто {open} · закрыто {closed}',
       fold: 'Свернуть «{lane}»',
       unfold: 'Развернуть «{lane}»',

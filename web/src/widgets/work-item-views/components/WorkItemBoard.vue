@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /**
  * Kanban: one column per workflow state, over the same model the list and the
- * graph read — or, grouped by goal, one lane of those columns per goal.
+ * graph read — or, grouped, one lane of those columns per goal, per stage or per
+ * project (`boardLanes`).
  *
  * The columns come from `workflow.states`, in the order the workflow gives
  * them, the terminal states last. Nothing here knows there are six, or that one
  * of them is called Dev.
- * A state's tiles arrive in the order of work the server computes, and nothing
- * here changes it: a tile dragged to another column is handed up as the state it
+ * A state's tiles stand in the order the view asks for (`orderedWork`), the queue's
+ * unless it says, inside each column and each lane: a tile dragged to another column is handed up as the state it
  * goes to, for the page to send. What the move did is said aloud here, because a
  * reader who moved a tile without looking needs to hear where it went.
  */
@@ -23,6 +24,8 @@ import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import { newestClosedFirst } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import { orderedWork, QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
+import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
@@ -30,7 +33,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { PlanningEdge, PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { useStateName } from '@/shared/lib/useStateName.ts'
+import { useStandingName, useStateName } from '@/shared/lib/useStateName.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -44,8 +47,12 @@ const props = withDefaults(
     grouping?: BoardGrouping
     /** What an agent's session is doing on each item with live work, by item id. */
     live?: Readonly<Record<string, LiveWork>>
+    /** The space's projects, which the lanes by project are; none where it has none. */
+    projects?: readonly { display_name: string; project_id: string }[] | null
     /** The items the board is scoped to before any filter; `items` when absent. */
     scopeItems?: WorkItemBrief[]
+    /** The order inside each column; the queue's unless it says. */
+    sort?: ViewSort
     /** The planning space, which names goals outside the scope and owns the folded lanes. */
     spaceId?: string
     spaceItems?: WorkItemBrief[]
@@ -56,7 +63,9 @@ const props = withDefaults(
     filtered: false,
     grouping: 'none',
     live: () => ({}),
+    projects: null,
     scopeItems: undefined,
+    sort: () => QUEUE_ORDER,
     spaceId: '',
     spaceItems: undefined,
     writable: true,
@@ -74,23 +83,32 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const hintId = `${useId()}-keys`
 
-/** The items in the order the board draws them: Done newest closed first. */
-const ordered = computed(() => newestClosedFirst(props.items))
+const standingName = useStandingName()
+/**
+ * The items in the order the board draws them. In the queue's order, from its start,
+ * Done stands newest closed first, as it always has: the queue gives none of it.
+ */
+const ordered = computed(() => {
+  const sorted = orderedWork(props.items, props.sort, standingName, props.scopeItems)
+  return props.sort.key === 'queue' && !props.sort.descending ? newestClosedFirst(sorted) : sorted
+})
 const columns = computed(() => terminalLast(byState(props.workflow, ordered.value)))
 const states = computed(() => columns.value.map((column) => column.state))
 /** What each item waits on, judged against the whole space so a filtered-out blocker still counts. */
 const waiting = computed(() => waitingOn(props.links, props.spaceItems ?? props.items))
 const lanes = computed(() =>
-  props.grouping === 'goal'
-    ? boardLanes({
+  props.grouping === 'none'
+    ? []
+    : boardLanes({
         filtered: props.filtered,
+        grouping: props.grouping,
+        projects: props.projects,
         scope: props.scopeItems ?? props.items,
         space: props.spaceItems ?? props.items,
         visible: ordered.value,
-      })
-    : [],
+      }),
 )
-const grouped = computed(() => props.grouping === 'goal')
+const grouped = computed(() => props.grouping !== 'none')
 /** Flat, the columns are one row the arrows cross; grouped, each lane is its own. */
 const boardRow = computed(() => (grouped.value ? undefined : ''))
 

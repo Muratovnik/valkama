@@ -62,6 +62,8 @@ const props = defineProps<{
   hintId?: string
   /** Draw only this many tiles; every item is still read. */
   limit?: number
+  /** The stage each tile stands under, by its id, which its second line names. */
+  stages?: ReadonlyMap<string, WorkItemBrief>
 }>()
 
 const emit = defineEmits<{
@@ -92,6 +94,7 @@ const stop = computed(() => {
 })
 
 const waitingOn = (item: WorkItemBrief) => props.waiting.get(item.work_item_id) ?? null
+const stageOf = (item: WorkItemBrief) => props.stages?.get(item.work_item_id) ?? null
 
 /**
  * The stack a drop ended in, with the dragged element standing in its place there.
@@ -275,6 +278,7 @@ defineExpose({ focusAt, walkFrom })
     >
       <WorkItemTile
         :item="item"
+        :stage="stageOf(item)"
         :waiting-on="waitingOn(item)"
         :live="props.live[item.work_item_id] ?? null"
         :filter="props.filter"

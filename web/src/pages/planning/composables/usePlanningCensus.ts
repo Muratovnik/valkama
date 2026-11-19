@@ -78,17 +78,19 @@ export function usePlanningCensus(input: CensusInput) {
   })
 
   /**
-   * The board grouped by goal heads each lane with its goal, so its columns count
-   * every item but those; under a filter it describes what the filter let
-   * through, as the board does. The graph leaves nothing out: the whole space
+   * The board grouped by goal or by stage heads each lane with its goal or stage, so
+   * its columns count every item but those; under a filter it describes what the
+   * filter let through, as the board does. By project no card heads a lane. The graph
+   * leaves nothing out: the whole space
    * draws each goal and stage as the frame round its work, and a chain draws its parents.
    */
   const exclusion = computed<CensusExclusion | null>(() => {
     const { grouping, space, view } = input()
     const items = filtered.value ? matched.value : counted.value
-    if (view === 'kanban' && grouping === 'goal') {
+    if (view === 'kanban' && (grouping === 'goal' || grouping === 'stage')) {
       const tiles = boardLanes({
         filtered: filtered.value,
+        grouping,
         scope: counted.value,
         space,
         visible: items,

@@ -126,6 +126,9 @@ _MODULES = (
             "closed",
             "group",
             "branch",
+            # The order of the views and its direction: web `viewSortRoute.ts`.
+            "sort",
+            "desc",
             # The Work filter beside the text in `query`: web `workFilter.ts`.
             "ready",
             "held",

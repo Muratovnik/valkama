@@ -17,6 +17,7 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardItem } from '../fixtures/board.ts'
+import { keptOrder } from '../support/listOrder.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
 /** `ChoiceSelect` is generic over its options, which test-utils cannot read its props through. */
@@ -36,11 +37,14 @@ const items = [1, 2, 3, 4].map((number) =>
 )
 
 async function list() {
-  const wrapper = mount(WorkItemList, {
-    attachTo: document.body,
-    props: { items, links: [] },
-    global: { plugins: [i18n()] },
-  })
+  const host = keptOrder()
+  const wrapper = host.hold(
+    mount(WorkItemList, {
+      attachTo: document.body,
+      props: { items, links: [], ...host.props },
+      global: { plugins: [i18n()] },
+    }),
+  )
   // The list listens once for all its rows, from the moment it is in the page.
   await flushPromises()
   return wrapper
@@ -307,12 +311,10 @@ describe('the list head on a narrow list', () => {
   function head(sortKey: (typeof LIST_COLUMNS)[number]['key']) {
     return mount(WorkItemListHead, {
       props: {
-        sortState: () => 'none' as const,
         columns: LIST_COLUMNS.filter((column) => !folded.includes(column)),
-        descending: true,
         folded,
         narrow: true,
-        sortKey,
+        sort: { key: sortKey, descending: true },
       },
       global: { plugins: [i18n()] },
     })
@@ -328,7 +330,7 @@ describe('the list head on a narrow list', () => {
     // Nothing to turn over until a folded order is the list's.
     expect((choice.props() as ChoiceProps).modelValue).toBe('')
     choice.vm.$emit('update:modelValue', 'priority')
-    expect(wrapper.emitted('sort')).toEqual([['priority']])
+    expect(wrapper.emitted('sort')).toEqual([[{ key: 'priority', descending: true }]])
   })
 
   it('turns a chosen folded order over from the same choice', () => {
@@ -338,6 +340,6 @@ describe('the list head on a narrow list', () => {
     const turn = (choice.props() as ChoiceProps).options.at(-1)
     expect(turn?.label).toBe('Sort ascending')
     choice.vm.$emit('update:modelValue', turn?.value)
-    expect(wrapper.emitted('sort')).toEqual([['updated']])
+    expect(wrapper.emitted('sort')).toEqual([[{ key: 'updated', descending: false }]])
   })
 })

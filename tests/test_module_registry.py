@@ -144,6 +144,29 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertLessEqual(set(written), set(allowed))
         self.assertEqual(len(allowed), len(set(allowed)))
 
+    def test_planning_state_admits_the_order_the_views_write(self) -> None:
+        """A reload and a saved view keep the views' order only if the manifest admits it.
+
+        The order is written as `sort` and `desc` by the one module that writes it; a
+        key the manifest does not list drops the whole route state in the browser.
+        """
+
+        source = (
+            pathlib.Path(__file__).parents[1]
+            / "web"
+            / "src"
+            / "pages"
+            / "planning"
+            / "utils"
+            / "viewSortRoute.ts"
+        ).read_text(encoding="utf-8")
+        written = set(re.findall(r"\{ (sort|desc): ", source))
+        self.assertEqual({"sort", "desc"}, written)
+        planning = next(
+            item for item in platform_modules.module_manifests() if item["module_id"] == "planning"
+        )
+        self.assertLessEqual(written, set(planning["state_schema"]["allowed_keys"]))
+
     def test_analytics_state_admits_every_key_the_page_address_writes(self) -> None:
         """A reload keeps the Analytics view only if the manifest admits its keys.
 

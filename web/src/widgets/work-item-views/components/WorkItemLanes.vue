@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * The board read by goal: a row of state columns per goal, and the states named
- * once above them all.
+ * The board in lanes — by goal, by stage or by project (`boardLanes`): a row of
+ * state columns per lane, and the states named once above them all.
  *
  * Every lane shares one set of column tracks, so a state stands at the same x in
  * every lane and its name is said once, in a header that stays while the lanes
@@ -41,6 +41,7 @@ import { useLaneCollapse } from '@/widgets/work-item-views/composables/useLaneCo
 import { outOfSight } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardLane, HeldIn } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import { laneTitle } from '@/widgets/work-item-views/utils/laneTitle.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
@@ -146,7 +147,7 @@ function bodyId(lane: BoardLane): string {
 }
 
 function title(lane: BoardLane): string {
-  return lane.goal?.title ?? t('workItem.lanes.noParent')
+  return laneTitle(lane.head, t)
 }
 
 function inState(lane: BoardLane, state: WorkflowState): WorkItemBrief[] {
@@ -278,6 +279,7 @@ function laneGroup(lane: BoardLane): string {
               :group="laneGroup(lane)"
               :state="state"
               :items="inState(lane, state)"
+              :stages="lane.stages"
               :waiting="props.waiting"
               :live="props.live"
               :filter="props.filter"
