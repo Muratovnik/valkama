@@ -2729,7 +2729,12 @@ nothing of it in the card's inset — the five hours a point, lasting to the res
 then, or running out at a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
 end there says the week runs out before its reset and about when its slower pace spends it, a
 high end there that it may, and ends said alike one value — and when it resets in absolute and
-relative time, quieter, each line 4px from the next. The bar's tail, the tile's and the step
+relative time, quieter, each line 4px from the next. A run-out is said one way wherever the
+quota says it, in the window, its bar's and its line's words and the tile: five hours by the clock
+time, «Limit runs out at 14:05», and a week by its day and the part of the day it falls in at the
+page's offset — night to 06:00, morning to 12:00, day to 18:00, evening to midnight — «by the
+evening of Nov 24», never to the minute: a week's forecast moves by hours from one reading to the
+next, and its minute claimed what it could not know. The bar's tail, the tile's and the step
 line's corridor are drawn from one mapping of the forecast (`forecastCourses`), so none of them
 and none of their words disagree; a window past its reset by the page's clock forecasts nothing
 more, so none of them is drawn and its words say when it reset where they said its forecast.

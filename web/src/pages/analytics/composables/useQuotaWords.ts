@@ -21,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { lastingEnd, runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
-import { dayOf, momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
+import { dayOf, momentAtOffset, named, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type {
@@ -32,6 +32,9 @@ import type {
 } from '@/shared/api/analyticsApi.ts'
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import type { StepPoint, StepRestart, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
+
+/** The parts of a day a week's run-out is said by, six hours each from midnight. */
+const PARTS = ['night', 'morning', 'day', 'evening'] as const
 
 /** Whether a window is silent at `now` (ms), by the answer's threshold `freshFor` (s). */
 const silent = (window: QuotaWindow, now: number, freshFor: number) =>
@@ -91,6 +94,23 @@ export function useQuotaWords() {
   const ago = (at: string, now: number) => agoWords(Date.parse(at), now, span)
 
   /**
+   * When a window runs out, `at` (ms), said at the answer's offset after the verb: five hours by
+   * the clock time, as every moment of the answer, «at 14:05»; a week by its day and the part of
+   * the day it falls in (`PARTS`), «by the evening of Nov 24», never to the minute: a week's
+   * forecast moves by hours from one reading to the next, and a minute claimed what it cannot know.
+   * Every run-out the quota says — the window's forecast, its bar's and its line's words, the
+   * tile's state — is said here.
+   */
+  function runOutWords(window: QuotaShareWindow, at: number, today: string) {
+    const local = momentAtOffset(at, offsetOf(today))
+    if (window.kind === 'five_hour')
+      return t('analytics.quota.runOut.at', { at: moment(local, today) })
+    const part = PARTS[Math.floor(named(local).getUTCHours() / 6)] ?? 'evening'
+    const day = words.stepName(local, 'day').dated.label
+    return t(`analytics.quota.runOut.by.${part}`, { day })
+  }
+
+  /**
    * The bar's words for a reader who cannot see it: the share, the pace, the state with how long
    * the window has been silent at `now` (ms), and the forecast its tail draws, after its key, or
    * that the window has reset (`forecastAt`).
@@ -132,9 +152,9 @@ export function useQuotaWords() {
     if (window.latest.used_percent >= 100) return t('analytics.quota.forecast.spent')
     if (found.low_percent >= 100) {
       const at = runsOutAt(window, found.low_percent, Date.parse(today))
-      if (at === null) return t('analytics.quota.forecast.short')
-      const said = moment(momentAtOffset(at, offsetOf(today)), today)
-      return t('analytics.quota.forecast.shortBy', { at: said })
+      return at === null
+        ? t('analytics.quota.forecast.short')
+        : t('analytics.quota.forecast.shortBy', { at: runOutWords(window, at, today) })
     }
     if (found.high_percent >= 100) return t('analytics.quota.forecast.mayRunOut', { low })
     if (low === high) return t('analytics.quota.forecast.one', { share: low })
@@ -151,7 +171,9 @@ export function useQuotaWords() {
     if ('low_percent' in found) return range(window, found, today)
     if (found.outcome === 'spent') return t('analytics.quota.forecast.spent')
     if (found.outcome === 'runs_out' && found.runs_out_at)
-      return t('analytics.quota.forecast.runs_out', { at: moment(found.runs_out_at, today) })
+      return t('analytics.quota.forecast.runs_out', {
+        at: runOutWords(window, Date.parse(found.runs_out_at), today),
+      })
     return t('analytics.quota.forecast.lasts', { share: share(lastingEnd(window)) })
   }
 
@@ -346,6 +368,7 @@ export function useQuotaWords() {
     readingsLabel,
     restarts,
     reset,
+    runOutWords,
     sectionName,
     share,
     stateWords,

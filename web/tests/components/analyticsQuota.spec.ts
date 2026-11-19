@@ -360,7 +360,8 @@ describe('the quota panel’s times', () => {
     vi.setSystemTime(at)
     const latest = { at: '2026-11-14T21:44:00+03:00', used_percent: 70, source: 'poll' } as const
     // The slower pace runs from 70 % now to 120 % at the reset five hours on, so it reaches 100 %
-    // (100 − 70) / (120 − 70) = 0.6 of the way: three hours on, 00:46 of 15 November at +03:00.
+    // (100 − 70) / (120 − 70) = 0.6 of the way: three hours on, 00:46 of 15 November at +03:00,
+    // which a week says by its day and the part of the day, the night before the 15th.
     const week: QuotaShareWindow = {
       kind: 'week',
       model: null,
@@ -376,7 +377,9 @@ describe('the quota panel’s times', () => {
     stubAnalyticsReads(usage, workWith(at, [week]))
     const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
     const said = windowOf(accountNamed(page, 'Work'), 'week')
-    expect(said.forecast).toBe('Forecast · Limit runs out before the reset, by about Nov 15, 00:46')
+    expect(said.forecast).toBe(
+      'Forecast · Limit runs out before the reset, by the night before Nov 15',
+    )
     // The reset falls after the answer's midnight, so it carries its date.
     expect(said.reset).toBe('Resets Nov 15, 02:46, in 5 h')
   })

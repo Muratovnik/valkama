@@ -8,7 +8,10 @@ import { defineComponent, h } from 'vue'
  * ends are said alike says one value; any other range is said as a range, in both languages.
  *
  * The time is the contract's own arithmetic: the slower pace runs from the window's share at the
- * answer's moment to the low end at its reset, so it reaches 100 % that share of the way along.
+ * answer's moment to the low end at its reset, so it reaches 100 % that share of the way along. A
+ * week says it by its day and the part of the day (DESIGN.md § Analytics): night from 0 to 6,
+ * morning to 12, day to 18, evening to midnight, at the answer's offset; five hours keep the clock
+ * time.
  */
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -67,23 +70,20 @@ const said = (locale: 'en' | 'ru', window: QuotaShareWindow) =>
 
 describe('a week’s forecast that reaches 100 %', () => {
   it('says the window runs out before the reset, and about when at the slower pace', () => {
-    // 80 % now, 180 % by a reset ten hours on: the slower pace adds 10 % an hour, so 100 % at 12:00.
+    // 80 % now, 180 % by a reset ten hours on: the slower pace adds 10 % an hour, so 100 % at 12:00,
+    // the first minute of the day's afternoon.
     const window = week(80, 10 * HOUR, 180, 200)
-    expect(said('en', window)).toBe('Limit runs out before the reset, by about 12:00')
-    expect(said('ru', window)).toBe('Лимит закончится до сброса, примерно к 12:00')
+    expect(said('en', window)).toBe('Limit runs out before the reset, by the afternoon of Nov 11')
+    expect(said('ru', window)).toBe('Лимит закончится до сброса, примерно к середине дня 11 нояб.')
   })
 
   it('names the day of a time on another day, and never a share past 100 %', () => {
     // The review's account: 79 % used, 4 d 14 h left, 212 % to 229 % by the reset. The slower pace
     // spends 21 of its 133 points by 21/133 of 110 hours: 17 h 22 min on, 03:22 on 12 November.
+    // That is the night before the 12th, said with no minute.
     const window = week(79, (4 * 24 + 14) * HOUR, 212, 229)
-    for (const locale of ['en', 'ru'] as const) {
-      const text = said(locale, window)
-      expect(text, locale).toMatch(/12.*03:22$/u)
-      expect(text, locale).not.toMatch(/%/u)
-    }
-    expect(said('en', window)).toMatch(/^Limit runs out before the reset, by about /u)
-    expect(said('ru', window)).toMatch(/^Лимит закончится до сброса, примерно к /u)
+    expect(said('en', window)).toBe('Limit runs out before the reset, by the night before Nov 12')
+    expect(said('ru', window)).toBe('Лимит закончится до сброса, примерно к ночи на 12 нояб.')
   })
 
   it('says only that it runs out before the reset where the pace gives no time', () => {
@@ -142,5 +142,48 @@ describe('a restart of a window’s count', () => {
       expect(restart?.notes[0]).toMatch(/13.*10:00$/u)
     }
     expect(wordsIn('en').restarts(week(5, 48 * HOUR, 20, 30), TODAY)).toEqual([])
+  })
+})
+
+/** When a window of `kind` runs out at `moment`, said against the answer's moment. */
+const runOut = (locale: 'en' | 'ru', kind: QuotaShareWindow['kind'], moment: string) =>
+  plain(
+    wordsIn(locale).runOutWords(
+      { ...week(50, 48 * HOUR, 120, 130), kind },
+      Date.parse(moment),
+      TODAY,
+    ),
+  )
+
+describe('when a window runs out', () => {
+  it('says a week by its day and the part of the day it falls in, at each edge of a part', () => {
+    const cases = [
+      ['2026-11-24T00:00:00.000+03:00', 'by the night before Nov 24', 'к ночи на 24 нояб.'],
+      ['2026-11-24T05:59:00.000+03:00', 'by the night before Nov 24', 'к ночи на 24 нояб.'],
+      ['2026-11-24T06:00:00.000+03:00', 'by the morning of Nov 24', 'к утру 24 нояб.'],
+      ['2026-11-24T11:59:00.000+03:00', 'by the morning of Nov 24', 'к утру 24 нояб.'],
+      ['2026-11-24T12:00:00.000+03:00', 'by the afternoon of Nov 24', 'к середине дня 24 нояб.'],
+      ['2026-11-24T17:59:00.000+03:00', 'by the afternoon of Nov 24', 'к середине дня 24 нояб.'],
+      ['2026-11-24T18:00:00.000+03:00', 'by the evening of Nov 24', 'к вечеру 24 нояб.'],
+      ['2026-11-24T23:59:00.000+03:00', 'by the evening of Nov 24', 'к вечеру 24 нояб.'],
+    ] as const
+    for (const [moment, en, ru] of cases) {
+      expect(runOut('en', 'week', moment), moment).toBe(en)
+      expect(runOut('ru', 'week', moment), moment).toBe(ru)
+      expect(runOut('ru', 'week_model', moment), moment).toBe(ru)
+    }
+  })
+
+  it('takes the part of the day at the answer’s offset, not at the moment’s own', () => {
+    // 15:30 UTC is 18:30 at the answer's +03:00: its evening, though UTC's afternoon.
+    expect(runOut('en', 'week', '2026-11-24T15:30:00.000Z')).toBe('by the evening of Nov 24')
+  })
+
+  it('keeps the clock time of five hours, with the date on another day than the answer’s', () => {
+    expect(runOut('en', 'five_hour', '2026-11-11T14:05:00.000+03:00')).toBe('at 14:05')
+    expect(runOut('ru', 'five_hour', '2026-11-11T14:05:00.000+03:00')).toBe('в 14:05')
+    expect(runOut('en', 'five_hour', '2026-11-12T01:50:00.000+03:00')).toMatch(
+      /^at Nov 12, 01:50$/u,
+    )
   })
 })
