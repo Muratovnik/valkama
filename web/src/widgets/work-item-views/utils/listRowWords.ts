@@ -47,6 +47,11 @@ export interface RowReading {
    */
   goal?: { cell: string; path: string }
   /**
+   * What «Project» prints: in its column the project, «Several projects» or a dash,
+   * folded the project alone, after the goal; absent where the list does not draw it.
+   */
+  project?: { cell: string; named: string }
+  /**
    * What a tree prints after the title (`WorkItemListTreeWords.vue`): how much
    * under the row matched and the parent the indent no longer shows; none in a
    * flat list.
@@ -58,12 +63,13 @@ const marksOf = (item: WorkItemBrief, facets: readonly FacetId[], asked: FacetCo
   surfaceMarks('list', item, asked, facets)
 
 /**
- * The lines under the title (`listUnderTitle.ts`): a folded goal and stage first;
- * then on a wide list an open blocker and the labels, else the folded columns.
+ * The lines under the title (`listUnderTitle.ts`): a folded goal and stage and project
+ * first; then on a wide list an open blocker and the labels, else the folded columns.
  */
 function underTitle(item: WorkItemBrief, reading: RowReading): string[] {
-  const { context, fit, goal, updated, words } = reading
+  const { context, fit, goal, project, updated, words } = reading
   const said = goal?.path && isFolded(fit, 'goal') ? [goal.path] : []
+  if (project?.named && isFolded(fit, 'project')) said.push(project.named)
   if (labelsUnder(fit))
     return [...said, ...runWords(marksOf(item, ROW_FACETS.UNDER, context), words)]
   said.push(...runWords(marksOf(item, factsOf(fit), context), words))
@@ -80,7 +86,7 @@ function underTitle(item: WorkItemBrief, reading: RowReading): string[] {
  * prints at this width and in this language, and nothing it keeps out of sight.
  */
 export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
-  const { fit, goal, tree = [], updated, words } = reading
+  const { fit, goal, project, tree = [], updated, words } = reading
   const shown = (key: SortKey) => !isFolded(fit, key)
   const cell = (facets: readonly FacetId[]) => cellWords(marksOf(item, facets), words)
   return [
@@ -91,6 +97,7 @@ export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
     ...tree,
     ...underTitle(item, reading),
     ...(goal?.cell && shown('goal') ? [goal.cell] : []),
+    ...(project && shown('project') ? [project.cell] : []),
     ...(shown('state') ? runWords(marksOf(item, ROW_FACETS.STATE), words) : []),
     ...(shown('priority') ? cell(ROW_FACETS.PRIORITY) : []),
     ...(shown('claim') ? cell(ROW_FACETS.HOLDER) : []),

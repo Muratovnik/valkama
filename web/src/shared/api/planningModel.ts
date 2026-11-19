@@ -177,8 +177,9 @@ const workItemBriefShape = {
 }
 /**
  * The goal or stage an item stands under, by reference, or null for one under none: the exact
- * read of one item carries it beside `parent_id`, by which that read cannot read the item over it.
- * A write's answer and a list's rows do not carry it.
+ * read of one item carries it beside `parent_id`, by which that read cannot read the item over it,
+ * and so does each row of a space's read, where another space's card stands under a parent the
+ * read does not hold. A write's answer does not carry it.
  */
 const parentField = () => boundedText(WORK_ITEM_REFERENCE, 20).nullable().optional()
 const workItemBriefSchema = recordObject({
@@ -195,6 +196,7 @@ const workItemRowSchema = recordObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
   queue_order: positiveInt().nullable(),
+  parent: parentField(),
 })
 
 export const summarySchema = strictObject({
