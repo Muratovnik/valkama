@@ -225,7 +225,7 @@ const showTable = () => table.value?.reveal()
         />
       </PanelLevel>
       <PanelLevel
-        class="dimension-charts"
+        class="dimension-charts dimension-wide"
         level="group"
         as="div"
       >
@@ -261,21 +261,22 @@ const showTable = () => table.value?.reveal()
             @inspect="(value, label) => emit('inspect', by, value, label, 'bars')"
           />
         </div>
-        <SpendingDays
-          :accounts="accounts"
-          :by="by"
-          :across="ranked.across"
-          :live="live"
-          :measure="measure"
-          :narrow="narrow"
-          :notice="noticeIn('days')"
-          :read-at="readAt"
-          :usage="ranked.usage"
-          @frame="(span, label) => emit('frame', span, label)"
-          @step="(span, label) => emit('step', span, label)"
-          @inspect="(value, label) => emit('inspect', by, value, label, 'days')"
-        />
       </PanelLevel>
+      <SpendingDays
+        class="dimension-wide"
+        :accounts="accounts"
+        :by="by"
+        :across="ranked.across"
+        :live="live"
+        :measure="measure"
+        :narrow="narrow"
+        :notice="noticeIn('days')"
+        :read-at="readAt"
+        :usage="ranked.usage"
+        @frame="(span, label) => emit('frame', span, label)"
+        @step="(span, label) => emit('step', span, label)"
+        @inspect="(value, label) => emit('inspect', by, value, label, 'days')"
+      />
       <SpendingTable
         ref="table"
         :across="across"
@@ -301,21 +302,24 @@ const showTable = () => table.value?.reveal()
   container-type: inline-size;
 }
 
-/* The charts, top to bottom: the line to the table, then the ranked list and the small charts
+/* The charts, top to bottom: the line to the table over the ranked list and the small charts
    side by side where both read well, the list first, or the list alone across the width where its
-   names are free text, then the day chart. The air at the sides
+   names are free text; then the day chart, a part of the section of its own, as far under them as
+   the table stands under it (`--space-section-part`). In the charts' group, 16px under
+   a ring that reaches its block's foot, its heading read as stuck to it. The air at the sides
    holds what a chart reaches past its column (a focus ring, a pressed fill), so nothing in it
    stands wider than its box. */
-.dimension-charts {
+.dimension-wide {
   padding-inline: var(--space-2);
   margin-inline: calc(-1 * var(--space-2));
 }
 
-/* The two charts are blocks of the charts' group, its air apart. */
+/* The two charts stand a block's air apart side by side, and as far as two parts of the section
+   one under the other on a narrow panel. */
 .dimension-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-section-part) var(--space-4);
   align-items: start;
   min-width: 0;
 }

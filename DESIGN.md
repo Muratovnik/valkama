@@ -128,7 +128,11 @@ and only fades the end of a strip that scrolls on past it.
 - Spacing stays on the four-pixel grid: label/value gaps are 8px, heading/content
   gaps are 12px and panel spacing is 16px. What a module lays out stands at four
   levels, each with its own gap: sections 36px apart, the groups of a section
-  24px, the blocks of a group 16px and the lines of a block 4–8px. A heading says
+  24px, the blocks of a group 16px and the lines of a block 4–8px. The air between the
+  parts of a section is declared once, on the section, and two blocks a section lays out side
+  by side stand that far apart one under the other, so the air after every part of a section
+  is the same whichever view each block shows: the day chart stood 16px under a ring, whose
+  drawing reaches its block's foot, and its heading read as stuck to it. A heading says
   its level before it is read: the type scale gives each level one size in every
   module — the module's name `module` 18px, a section `section` 16px, a group
   `emphasis` 15px, a block `interface` 14px and a label over a block's lines
@@ -2760,7 +2764,9 @@ a list of free text sets it apart after its values instead, with its bar on thei
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
 a day. That colour is its place in the period's ranking without the page's filters, so a
 filter that takes values away repaints none of those it leaves; another measure ranks again
-and may. Ranked over what the filter left, every survivor moved up a hue. The section runs in the panel's one scroll: the cells and the charts at their own height,
+and may. Ranked over what the filter left, every survivor moved up a hue. The day chart is a
+part of the section of its own, under the ranked chart and the small charts and 24px under the
+lower of them, as the table stands under it, whichever view either shows. The section runs in the panel's one scroll: the cells and the charts at their own height,
 and the table under them, held to about the window's height so it and its heading line stand
 in the window together, scrolling inside its frame with its heading row and total row at the
 frame's edges, so what focus brings into view stands clear of them. A «To the table» link over

@@ -8,7 +8,10 @@
  * every heading of a level reads (`headingLevels.css`), so no heading is the size of the level
  * over it. The heading's element is not the level's but its place in the outline, one rank under
  * the heading of the level around it (`usePanelOutline`). The panel shows one section at a time,
- * so the 36px between two sections has no place on it yet.
+ * so the 36px between two sections has no place on it yet. The air between the parts of a section
+ * is one token, `--space-section-part`: a pair of blocks a section lays out side by side, which
+ * stack on a narrow panel, stands that far apart one under the other, so the air after every part
+ * of the section is the same whichever view each block shows.
  *
  * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact, a menu) and
  * the controls that act on the whole level, each at the one size a heading's control takes, at the
@@ -318,9 +321,10 @@ const rivals = computed(() =>
 }
 
 /* The heading and its «ⓘ» take their level's type from the scale (`headingLevels.css`); the air
-   between what each level holds is the level's own. */
+   between what each level holds is the level's own, a section's the one token two blocks it lays
+   out side by side read as well (`--space-section-part`). */
 .level-section > .level-body {
-  gap: var(--space-6);
+  gap: var(--space-section-part);
 }
 
 .level-group > .level-body {

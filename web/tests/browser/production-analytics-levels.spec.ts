@@ -61,16 +61,16 @@ test('at 1440×900 the task section keeps the air of its groups and blocks and t
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.evaluate(() => document.fonts.ready)
   const seen = {
-    // The figures, the charts and the table: the groups of the section.
+    // The figures, the charts, the day chart and the table: the parts of the section.
     groups: await gaps(page, '.dimension-section > .level-body'),
-    // The line to the table, the two charts side by side and the day chart: blocks of a group.
+    // The line to the table and the two charts side by side: blocks of a group.
     blocks: await gaps(page, '.dimension-charts > .level-body'),
     block: await size(page, '.spending-bars .level-heading'),
     table: await size(page, '.spending-table-title .level-heading'),
   }
   await record(info, 'levels task 1440x900', seen)
-  expect(seen.groups, 'the groups of the section').toEqual([24, 24])
-  expect(seen.blocks, 'the blocks of the charts').toEqual([16, 16])
+  expect(seen.groups, 'the parts of the section').toEqual([24, 24, 24])
+  expect(seen.blocks, 'the blocks of the charts').toEqual([16])
   expect(seen.block, 'a chart’s heading').toBe('14px')
   expect(seen.table, 'the table’s heading').toBe('14px')
 })

@@ -252,11 +252,12 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
 }
 
 /* The ranked kinds first, and their small charts beside them where both read well, a block's
-   air apart. */
+   air apart; one under the other on a narrow panel, as far apart as two parts of the section
+   (`--space-section-part`). */
 .kinds-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-section-part) var(--space-4);
   align-items: start;
 }
 
