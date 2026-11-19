@@ -254,6 +254,11 @@ export interface PeriodWords {
   absent?: string
   /** The words before the figure of the period compared with, and the heading over them. */
   before?: string
+  /**
+   * What the legend calls the line a change at a period's start is drawn as (`PeriodMark`),
+   * beside a short upright line while the plot marks one: "account change".
+   */
+  change?: string
   emptyDescription?: string
   /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
   pending?: string

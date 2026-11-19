@@ -6,8 +6,9 @@
  * apart, as in the bars, and never inside «other». The day not over yet is hatched, its hint
  * says it is running and the legend names the hatch, «in progress», so its short column does not
  * read as a fall; a line stands where the known accounts
- * with a figure in the measure shown changed from the last day a known account had one, and that
- * day's hint, name and table row say the change, «Account change: a → b» (`accountChanges`):
+ * with a figure in the measure shown changed from the last day a known account had one, the
+ * legend names it, «account change», and that day's hint, name and table row say the change by
+ * the accounts that came and left, «Account change: +b, −a» (`accountChanges`):
  * work whose organization nobody recorded is no account and marks nothing. The marks are the ones
  * read with the answer shown, and a read of the accounts that failed says the marks are not there
  * rather than leaving them out without a word.
@@ -192,7 +193,7 @@ const chart = computed<PeriodChartProps>(() => ({
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts, props.measure).map((change) => ({
           at: change.at,
-          label: words.accounts(change.before, change.after),
+          label: words.accounts(change.came, change.left),
         }))
       : [],
   words: said.value.words,

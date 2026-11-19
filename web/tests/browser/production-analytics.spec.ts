@@ -90,8 +90,7 @@ for (const width of [1440, 1024, 390]) {
       await expect(drawn).toContainText(/\d/u)
       await expect(drawn).not.toContainText('running')
     }
-    const change = `Account change: ${workName()} → ${workName()}, ${nightName()}`
-    await expect.poll(() => daysSaying(analytics, change)).toBe(1)
+    await expect.poll(() => daysSaying(analytics, `Account change: +${nightName()}`)).toBe(1)
 
     const measured = await measure(page)
     await record(info, `analytics layout ${width}`, measured)
@@ -156,12 +155,15 @@ test.describe('in Russian', () => {
       await page.screenshot(shot(info, `analytics-ru-${width}.png`))
     })
 
-  // Named by its weekday, a day would read «Показать задачи за среда»: it is named by its date.
+  // Named by its weekday, a day would read «Показать задачи за среда»: it is named by its date,
+  // and then by the change of accounts at its start.
   test('a day of the chart is named by its date, so «за» takes no weekday', async ({ page }) => {
     await serve(page)
     const analytics = await openReport(page, 1440)
     const days = analytics.locator('.spending-days button.period-column')
-    await expect(days.last()).toHaveAccessibleName('Показать задачи за 11 ноября, ср')
+    await expect(days.last()).toHaveAccessibleName(
+      `Показать задачи за 11 ноября, ср. Смена аккаунта: −${workName('ru')}`,
+    )
   })
 })
 
@@ -208,7 +210,7 @@ const READ_STATES: {
     says: async (analytics, ru) => {
       // Said where the day is read, once: its day's hint on the chart, or its row of the table.
       const lang = ru ? 'ru' : 'en'
-      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: ${workName(lang)} → ${nightName(lang)}`
+      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: +${nightName(lang)}, −${workName(lang)}`
       await expect.poll(() => daysSaying(analytics, said), 'days that say it').toBe(1)
     },
   },

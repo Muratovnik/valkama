@@ -5,8 +5,10 @@
  * names as many periods as it has room for, counted back from the last. A period still running
  * is hatched (`hatch.css`), so a short last column does not read as a drop, and while one is on
  * the plot the legend names the hatch (`words.hatch`); a change at the start of a period
- * (the account switched) is a line up the plot in the gap before it, and the period's hint, name
- * and table row say what changed: no row of the chart is kept for it, above the plot or under it.
+ * (the account switched) is a line up the plot in the gap before it, which the legend names while
+ * the plot marks one (`words.change`), and the period's hint, name and table row say what changed —
+ * a period that acts has it in its name after the action — and no row of the chart is kept for
+ * it, above the plot or under it.
  * A period compared with this one (`before`) stands on the same scale as a tick at its height
  * across each column, an edge in the text's main ink and not a hue, named in the legend, and the
  * period's hint says its figure. The tick reaches 4px past each side of its column, where no
@@ -129,6 +131,10 @@ const outline = computed(() =>
 const hatch = computed(() =>
   props.columns.some((column) => column.incomplete) ? props.words.hatch : undefined,
 )
+/** The name of the line of a change at a period's start while the plot marks one. */
+const change = computed(() =>
+  chart.value.columns.some((one) => one.marks.length) ? props.words.change : undefined,
+)
 const empty = computed(() => !props.columns.length || !props.series.length)
 
 /** Whether anything in the chart acts, which gives its periods their least width. */
@@ -231,7 +237,9 @@ function columnAttrs(one: StackedColumn, index: number) {
   return {
     'type': acts ? 'button' : undefined,
     'role': acts ? undefined : 'img',
-    'aria-label': one.column.action ?? columnSummary(one, props.words, props.formatValue),
+    'aria-label': one.column.action
+      ? [one.column.action, ...one.marks].join('. ')
+      : columnSummary(one, props.words, props.formatValue),
     'tabindex': tabStop(index, null),
     'data-cell': cellId(index, null),
     'aria-keyshortcuts': props.frames ? FRAME_KEYS : undefined,
@@ -302,10 +310,11 @@ function focus(event: FocusEvent, index: number, at: number | null) {
     />
     <template v-else>
       <ChartLegend
-        v-if="series.length > 1 || outline || hatch"
+        v-if="series.length > 1 || outline || hatch || change"
         :series="series"
         :hatch="hatch"
         :outline="outline"
+        :change="change"
         :hints="legendHints"
         @follow="(key, event) => emit('follow', key, event)"
         @select="(key) => emit('series', key)"

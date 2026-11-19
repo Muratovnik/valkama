@@ -301,14 +301,20 @@ describe('the name of an executor and an account', () => {
     )
   })
 
-  it('says a change of accounts by their names', () => {
+  it('says a change of accounts by the accounts that came and those that left, by their names', () => {
     const words = wordsIn('ru')
-    useAccountNamesStore().names = { [`${account.id}/${UUID}`]: 'Основной' }
-    const known = seat(UUID, '4T09:00Z')
-    const other = seat('b7b7b7b7-0000-4000-8000-000000000000', null)
-    expect(words.accounts([known], [known, other])).toBe(
-      'Смена аккаунта: Основной → Основной, b7b7b7b7',
-    )
+    const a = seat(UUID, null)
+    const b = seat('b7b7b7b7-0000-4000-8000-000000000000', null)
+    const c = seat('c3c3c3c3-0000-4000-8000-000000000000', null)
+    useAccountNamesStore().names = { [a.id]: 'A', [b.id]: 'B', [c.id]: 'C' }
+    // The accounts that came and those that left, as the day figures give them.
+    expect(words.accounts([b], [])).toBe('Смена аккаунта: +B')
+    expect(words.accounts([], [c])).toBe('Смена аккаунта: −C')
+    expect(words.accounts([b], [c])).toBe('Смена аккаунта: +B, −C')
+    expect(wordsIn('en').accounts([b], [a])).toBe('Account change: +B, −A')
+    // An account with no name of its own is said as everywhere else on the page.
+    useAccountNamesStore().names = {}
+    expect(wordsIn('en').accounts([b], [])).toBe('Account change: +b7b7b7b7')
   })
 
   it('names an account the owner left unnamed by the start of its id', () => {

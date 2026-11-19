@@ -6,11 +6,14 @@
  * legend names no lone series whatever keys it still carries (`named`). A chart
  * that hatches a period still running names the hatch after the series (`hatch`), beside a
  * hatched swatch, so the texture never has to be guessed; and a chart that marks a period it is
- * compared with names that mark last (`outline`), beside a short line in the ink the plot draws
- * it in at the height that period reached. Neither key acts, and neither is a series: each is a
- * key of a mark (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever
- * reads the series reads them alone and no series' key can meet a mark's. The hatch's key, with
- * nothing to add, says its name whole while it is cut, as an entry with no hint of its own does.
+ * compared with names that mark after them (`outline`), beside a short line in the ink the plot
+ * draws it in at the height that period reached; a chart that marks a change at a period's start
+ * names that line last (`change`), beside a short upright line in the ink the plot draws it in,
+ * so the line up the plot is read without a hint. No such key acts, and none is a series: each is
+ * a key of a mark (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever
+ * reads the series reads them alone and no series' key can meet a mark's. The hatch's key and the
+ * change's, with nothing to add, say their name whole while it is cut, as an entry with no hint of
+ * its own does.
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
@@ -41,8 +44,8 @@
  *
  * What a reader of the page selects it by: the list declares itself (`data-hint-list="legend"`),
  * and each line is an item of it. A series' key carries the series' key (`data-series`), its
- * swatch the slot of its hue (`data-slot`); a mark's key carries its mark (`data-mark`, `hatch` or
- * `outline`). In either, the name is `data-part="name"`, and the figure at a line's end
+ * swatch the slot of its hue (`data-slot`); a mark's key carries its mark (`data-mark`, `hatch`,
+ * `outline` or `change`). In either, the name is `data-part="name"`, and the figure at a line's end
  * `data-part="figure"`.
  */
 import { computed, useId } from 'vue'
@@ -55,6 +58,8 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   series: readonly PeriodSeries[]
+  /** The name of the line of a change at a period's start, when the chart draws one. */
+  change?: string
   /** The figure each entry gives at the end of its line, by series key; none for a legend of names. */
   figures?: ReadonlyMap<string, string>
   /** The name of the hatch, while the chart draws a period still running. */
@@ -207,6 +212,26 @@ const figureOf = (key: string) => props.figures?.get(key)
         >
       </span>
     </li>
+    <li
+      v-if="change"
+      class="chart-entry chart-entry-mark"
+    >
+      <span
+        v-tooltip.clipped="change"
+        class="chart-mark"
+        data-mark="change"
+      >
+        <span
+          class="chart-change"
+          aria-hidden="true"
+        />
+        <span
+          class="chart-mark-name one-line"
+          data-part="name"
+          >{{ change }}</span
+        >
+      </span>
+    </li>
   </ul>
 </template>
 
@@ -302,6 +327,20 @@ const figureOf = (key: string) => props.figures?.get(key)
   inline-size: var(--space-3);
   border-block-start: var(--space-half) solid currentcolor;
   color: var(--color-text);
+}
+
+/* The line of a change at a period's start, as the plot draws it (`periodPlot.css`): a hair
+   upright in the tertiary ink, a forced palette's ink there. */
+.chart-change {
+  flex: none;
+  inline-size: var(--space-hair);
+  block-size: var(--space-3);
+  background: var(--color-text-tertiary);
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 
 .chart-swatch,

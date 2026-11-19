@@ -6,6 +6,9 @@
  * the pointer walks the days. «Today», read by its hours at 15:30, says the running hour as under
  * way and stops Tab on it rather than on 23:00, and its hours' names never touch: the axis
  * stepping back from 23:00 by three names 14:00, which used to run into the running 15:00.
+ * A change names the accounts that came, «+», and those that left, «−»; the legend keys its line
+ * while the plot draws one and never otherwise, and an hour that starts one, a button, has the
+ * change in its accessible name after what pressing it does.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -117,21 +120,15 @@ test('two account changes leave the overview plot as tall as none at 1440×900, 
 
   // Each day says its own change in its hint, Wednesday and Tuesday.
   const columns = chart.locator('.period-column')
-  await expect(await pointAt(page, columns.last())).toContainText(
-    'Account change: f0f0f0f0, 2a2a2a2a → 2a2a2a2a',
-  )
-  await expect(await pointAt(page, columns.nth(1))).toContainText(
-    'Account change: f0f0f0f0 → f0f0f0f0, 2a2a2a2a',
-  )
+  await expect(await pointAt(page, columns.last())).toContainText('Account change: −f0f0f0f0')
+  await expect(await pointAt(page, columns.nth(1))).toContainText('Account change: +2a2a2a2a')
   await expect(
     chart.locator('[data-tooltip-area]').nth(1).locator('[data-mark="change"]'),
   ).toHaveCount(1)
 
   // The table keeps saying each change in its day's row.
   await chart.getByRole('radio', { name: 'Table' }).click()
-  await expect(chart.locator('tbody tr').nth(1)).toContainText(
-    'Account change: f0f0f0f0 → f0f0f0f0, 2a2a2a2a',
-  )
+  await expect(chart.locator('tbody tr').nth(1)).toContainText('Account change: +2a2a2a2a')
 })
 
 /** An hour on each of the thirteen days that end on Wednesday 11 November, the account switching daily. */
@@ -271,4 +268,60 @@ test('«Today» says the running hour, and its hours’ names keep apart at ever
   await record(info, 'today-hour-gaps', { overview, section })
   expectApart(overview)
   expectApart(section)
+})
+
+/** Half an hour on one task at `hour` on Wednesday 11 November, under an account. */
+const hourOf = (hour: number, account: typeof FIRST): TimedStretch => ({
+  at: new Date(2026, 10, 11, hour),
+  group: { work_item: task(1, 'Import the planning documents'), seat: account },
+  spend: { seconds: 1800 },
+})
+
+/**
+ * Wednesday by its hours: the first account at nine, both at eleven, the second alone at one, so
+ * the second comes at 11:00 and the first leaves at 13:00.
+ */
+const HOURS = [hourOf(9, FIRST), hourOf(11, FIRST), hourOf(11, SECOND), hourOf(13, SECOND)]
+
+/** The same hours under the first account alone: no change. */
+const STILL_HOURS = HOURS.map((stretch) => ({
+  ...stretch,
+  group: { ...stretch.group, seat: FIRST },
+}))
+
+/** The change marks up the plot and the legend's key of them, by the hooks they document. */
+const changeMarks = (chart: Locator) => ({
+  lines: chart.locator('[data-region="field"] [data-mark="change"]'),
+  key: chart.locator('[data-hint-list="legend"] [data-mark="change"]'),
+})
+
+test('«Today» keys its line of an account change in the legend and names the change on its hour', async ({
+  page,
+}) => {
+  await serve(page, HOURS)
+  await page.clock.setSystemTime(HALF_PAST_THREE)
+  const chart = await openOverview(page, 1440, 900, pageAt({ period: 'today' }))
+  const { lines, key } = changeMarks(chart)
+  await expect(lines).toHaveCount(2)
+  // The legend keys the line once, though the chart has one series and needs no key for that.
+  await expect(key).toHaveCount(1)
+  await expect(key).toBeVisible()
+  await expect(key).toHaveText('account change')
+  // Each hour that starts a change is a button that names it after what pressing it does: what
+  // the line means reaches a screen reader without the hint.
+  const hour = (at: string) => chart.locator(`.period-slot[data-key*="T${at}"] .period-column`)
+  await expect(hour('11:00')).toHaveAccessibleName(/\. Account change: \+2a2a2a2a$/u)
+  await expect(hour('13:00')).toHaveAccessibleName(/\. Account change: −f0f0f0f0$/u)
+  await expect(hour('09:00')).toHaveAccessibleName(/^Show /u)
+  await expect(hour('09:00')).not.toHaveAccessibleName(/Account change/u)
+})
+
+test('«Today» with no account change keys no line in the legend', async ({ page }) => {
+  await serve(page, STILL_HOURS)
+  await page.clock.setSystemTime(HALF_PAST_THREE)
+  const chart = await openOverview(page, 1440, 900, pageAt({ period: 'today' }))
+  const { lines, key } = changeMarks(chart)
+  await expect(chart.locator('.period-slot')).toHaveCount(24)
+  await expect(lines).toHaveCount(0)
+  await expect(key).toHaveCount(0)
 })

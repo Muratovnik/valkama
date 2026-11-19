@@ -179,11 +179,16 @@ export function dayColumns(
   })
 }
 
-/** A change of the known accounts that worked: on which day, which worked before and which then. */
+/**
+ * A change of the known accounts that worked: on which day, which worked before and which then,
+ * and so which came that had not worked before and which left that worked before.
+ */
 export interface AccountChange {
   after: UsageGroupValue[]
   at: string
   before: UsageGroupValue[]
+  came: UsageGroupValue[]
+  left: UsageGroupValue[]
 }
 
 /**
@@ -209,6 +214,12 @@ const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupVa
   return keys.size === right.length && right.every((value) => keys.has(valueKey(value)))
 }
 
+/** The accounts of `values` that `of` does not hold. */
+const outside = (values: readonly UsageGroupValue[], of: readonly UsageGroupValue[]) => {
+  const keys = new Set(of.map((value) => valueKey(value)))
+  return values.filter((value) => !keys.has(valueKey(value)))
+}
+
 /**
  * Where the set of known accounts that worked differs from that of the last day a known account
  * worked, read from an answer by account in the measure the chart shows (`accountsOf`). A day with no known account changes nothing, whether
@@ -222,7 +233,14 @@ export function accountChanges(byAccount: Usage, measure: Measure): AccountChang
   for (const point of byAccount.series) {
     const now = accountsOf(point, measure)
     if (!now.length) continue
-    if (last && !sameKeys(last, now)) changes.push({ at: point.start, before: last, after: now })
+    if (last && !sameKeys(last, now))
+      changes.push({
+        at: point.start,
+        before: last,
+        after: now,
+        came: outside(now, last),
+        left: outside(last, now),
+      })
     last = now
   }
   return changes

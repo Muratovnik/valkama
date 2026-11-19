@@ -257,10 +257,10 @@ describe('the days', () => {
     const hint = (index: number) =>
       (spokenDays(days)[index]?.holds ?? '').replaceAll(/[^\S\n]/gu, ' ')
     expect(hint(4)).toBe(
-      'Friday, November 13: total 1 h\nAccount change: acc-b → acc-a, acc-b\nMAIN-1 One 1 h, 100% of the total',
+      'Friday, November 13: total 1 h\nAccount change: +acc-a\nMAIN-1 One 1 h, 100% of the total',
     )
     expect(hint(3)).toBe(
-      'Thursday, November 12: total 1 h\nAccount change: acc-a → acc-b\nMAIN-1 One 1 h, 100% of the total',
+      'Thursday, November 12: total 1 h\nAccount change: +acc-b, −acc-a\nMAIN-1 One 1 h, 100% of the total',
     )
   })
 
@@ -276,13 +276,7 @@ describe('the days', () => {
       .getComponent(PeriodColumnsTable)
       .findAll('tbody tr')
       .map((row) => row.findAll('td').at(-1)?.text() ?? '')
-    expect(notes).toEqual([
-      '',
-      '',
-      '',
-      'Account change: acc-a → acc-b',
-      'Account change: acc-b → acc-a, acc-b',
-    ])
+    expect(notes).toEqual(['', '', '', 'Account change: +acc-b, −acc-a', 'Account change: +acc-a'])
   })
 
   it('name the month on the axis at its first day and where a new month starts', () => {
@@ -334,12 +328,14 @@ function daysOf(...days: readonly (readonly string[])[]): Usage {
   }).usage
 }
 
-/** The days a change stands on, by their index, with the known accounts before and after. */
+/** The days a change stands on, by index, with the known accounts before, after, come and gone. */
 const changesOf = (byAccount: Usage) =>
   accountChanges(byAccount, 'time').map((change) => ({
     day: byAccount.series.findIndex((point) => point.start === change.at),
     before: change.before.map((account) => account.id),
     after: change.after.map((account) => account.id),
+    came: change.came.map((account) => account.id),
+    left: change.left.map((account) => account.id),
   }))
 
 /** One task worked every one of `count` days, for a chart the account marks stand on. */
@@ -369,8 +365,9 @@ describe('the account marks', () => {
   })
 
   it('mark the change hidden behind a day of unrecorded work on the day the new account works', () => {
-    expect(changesOf(daysOf([A], [UNRECORDED], [B]))).toEqual([{ day: 2, before: [A], after: [B] }])
-    expect(changesOf(daysOf([A], [UNPLACED], [B]))).toEqual([{ day: 2, before: [A], after: [B] }])
+    const change = { day: 2, before: [A], after: [B], came: [B], left: [A] }
+    expect(changesOf(daysOf([A], [UNRECORDED], [B]))).toEqual([change])
+    expect(changesOf(daysOf([A], [UNPLACED], [B]))).toEqual([change])
   })
 
   it('mark the accounts with a figure above zero in the measure shown, and only those', () => {
@@ -394,8 +391,11 @@ describe('the account marks', () => {
     expect(days.findAll('.period-mark')).toHaveLength(0)
   })
 
-  it('mark a change where a known account joins', () => {
-    expect(changesOf(daysOf([A], [A, B]))).toEqual([{ day: 1, before: [A], after: [A, B] }])
+  it('mark a change where a known account joins or leaves, by the account that came or left', () => {
+    const joined = { day: 1, before: [A], after: [A, B], came: [B], left: [] }
+    expect(changesOf(daysOf([A], [A, B]))).toEqual([joined])
+    const gone = { day: 1, before: [A, B], after: [A], came: [], left: [B] }
+    expect(changesOf(daysOf([A, B], [A]))).toEqual([gone])
   })
 
   it('say the change in the hint of its day and to a screen reader by the known accounts alone', () => {
@@ -409,16 +409,18 @@ describe('the account marks', () => {
       true,
       false,
     ])
-    expect(named[2]).toContain('Account change: acc-a → acc-b')
+    expect(named[2]).toContain('Account change: +acc-b, −acc-a')
     expect(named.join(' ')).not.toContain('Unknown')
     expect(named.join(' ')).not.toContain('account not known')
+    // A day is a button named by what pressing it does, then by the change at its start.
+    expect(spokenDays(days)[2]?.name).toMatch(/\. Account change: \+acc-b, −acc-a$/u)
 
     const table = mountDays(everyDay(4), { narrow: true, accounts, readAt: AFTER })
     const notes = table
       .getComponent(PeriodColumnsTable)
       .findAll('tbody tr')
       .map((row) => row.findAll('td').at(-1)?.text() ?? '')
-    expect(notes).toEqual(['', '', 'Account change: acc-a → acc-b', ''])
+    expect(notes).toEqual(['', '', 'Account change: +acc-b, −acc-a', ''])
   })
 })
 

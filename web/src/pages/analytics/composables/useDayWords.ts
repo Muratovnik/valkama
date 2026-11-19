@@ -18,6 +18,7 @@ export function useDayWords() {
     words: {
       absent: measure === 'time' ? undefined : t(`analytics.days.absent.${measure}`),
       before: t('analytics.overview.before.word'),
+      change: t('analytics.days.change'),
       empty: t('analytics.days.empty'),
       incomplete: t('analytics.days.soFar'),
       hatch: t('analytics.days.hatch'),

@@ -153,7 +153,8 @@ for (const { changes, world } of CHANGES)
     const cards = panel.locator('[data-card]')
     await expect(cards).toHaveCount(3)
     for (const card of await cards.all()) await expect(card.locator('.ranked-row')).toHaveCount(5)
-    await expect(panel.locator('[data-mark="change"]')).toHaveCount(changes)
+    // The lines up the plot; the legend keys the line once, apart from them.
+    await expect(panel.locator('[data-region="field"] [data-mark="change"]')).toHaveCount(changes)
     // Across the panel the legend takes one line.
     const legendLines = await panel
       .locator(`.overview-chart ${LEGEND_SERIES}`)

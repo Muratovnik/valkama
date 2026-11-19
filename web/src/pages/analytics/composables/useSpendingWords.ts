@@ -520,11 +520,16 @@ export function useSpendingWords() {
   const axis = (name: Measure) =>
     name === 'time' ? durationAxis(spanWordsOf(t), HOUR_SECONDS) : undefined
 
-  /** What changed in the accounts that worked: «Account change: a → a, b». */
-  const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
+  /**
+   * What changed in the accounts that worked (`AccountChange`), each that came «+» and each that
+   * left «−»: «Account change: +b» where b joined a, «Account change: +b, −a» where b took a's place.
+   */
+  const accounts = (came: readonly UsageGroupValue[], left: readonly UsageGroupValue[]) =>
     t('analytics.days.accounts', {
-      before: before.map((value) => valueLabel('seat', value)).join(', '),
-      after: after.map((value) => valueLabel('seat', value)).join(', '),
+      change: [
+        ...came.map((value) => `+${valueLabel('seat', value)}`),
+        ...left.map((value) => `−${valueLabel('seat', value)}`),
+      ].join(', '),
     })
 
   /**

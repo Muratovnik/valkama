@@ -1126,9 +1126,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   Russian as «пока», which reads as «bye». While such a period is on the plot the legend names
   the hatch, «in progress» beside a hatched swatch, and drops the key once none is. A change
   at a period's start, such as the account the work ran under, is a line up the plot in the gap
-  before its column, a shape and not a hue, and the period's hint, name and table row say it,
-  «Account change: a → a, b», naming each account as the page does, an account and not its
-  organization, and leaving out work no reading places on an account: the chart keeps no row for
+  before its column, a shape and not a hue. While the plot marks one the legend names the line,
+  «account change» beside a short upright line, and drops the key once none is, so the line is
+  read without a hint. The period's hint, its table row and its name say what changed — a period
+  that acts names its action and then the change — by the accounts that came, «+», and those that
+  left, «−»: «Account change: +b» where b joined a, «Account change: −c» where c left a, never
+  «a → a, b», which made the reader find the difference. Each account is named as the page names
+  one, an account and not its organization, and work no reading places on an account is left
+  out: the chart keeps no row for
   changes, over the plot or under it, so they cost the plot none of its height. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own but a live span's frame keeping up with its running
   period, as below, which never meant that nothing may stand over it: a hint lies in the hint
