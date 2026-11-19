@@ -8,8 +8,10 @@
  * what it spent, read with
  * the page's period, steps and filters and its own filter (`useValueRead`):
  *
- * - its figures, the agent time, the tokens and the cost, and its share of the whole the page
- *   shows in the page's measure, with what qualifies them — that the cost is an estimate at API
+ * - its figures under a heading that names their period as the page names one, «Figures · Nov 9 –
+ *   11»: the agent time, the tokens and the cost, its share of the whole the page shows in the
+ *   page's measure and, for a task, its cost of all time as its card says it (`useTaskAllTime`),
+ *   with what qualifies them — the time of agents at once added up, the cost an estimate at API
  *   prices, what the tokens count and, read by the minute, that a minute's figures are shared out
  *   (`useSectionCaveats`, of the value's own read) — said once in the «ⓘ» that ends their
  *   heading's line, «About these figures», never as a line of the panel: the section's «ⓘ» that
@@ -26,7 +28,7 @@
  *
  * What a reader of the panel selects it by: the content is `data-detail="value"`, each part of it
  * `data-part` (`actions`, `figures`, `days`, `model`, `account`) and each figure `data-figure`
- * (`time`, `tokens`, `cost`, `share`).
+ * (`time`, `tokens`, `cost`, `share`, `all-time`).
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -41,6 +43,7 @@ import { usePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { useTaskAllTime } from '@/pages/analytics/composables/useTaskAllTime.ts'
 import {
   useValueRead,
   valueBreakdowns,
@@ -163,6 +166,12 @@ const shows = computed(() => {
   return usage.rows.length ? 'spent' : 'empty'
 })
 
+/** A task's cost of all time, as its card says it (`useTaskAllTime`). */
+const allTimeFigure = useTaskAllTime({
+  reference: () => (card.value ? (named.value.reference ?? null) : null),
+  readAt: () => props.readAt,
+})
+
 const spent = computed(() => (steps.value ? spentOf(steps.value.total) : null))
 /** Its share of what the page shows in the page's measure; none where that is nothing. */
 const share = computed(() => {
@@ -181,20 +190,33 @@ const figures = computed(() => {
     text: words.lineFigure(measure, own),
   }))
   const ratio = share.value
-  return ratio === null
-    ? each
-    : [
-        ...each,
-        {
-          key: 'share',
-          name: t('analytics.detail.share'),
-          text: t('analytics.detail.shareOf', {
-            share: words.share(ratio),
-            measure: words.measure(props.measure),
-          }),
-        },
-      ]
+  const whole = allTimeFigure.value
+  return [
+    ...each,
+    ...(ratio === null
+      ? []
+      : [
+          {
+            key: 'share',
+            name: t('analytics.detail.share'),
+            text: t('analytics.detail.shareOf', {
+              share: words.share(ratio),
+              measure: words.measure(props.measure),
+            }),
+          },
+        ]),
+    ...(whole ? [whole] : []),
+  ]
 })
+/** The figures' heading, with the period they are of as the page names a period. */
+const figuresTitle = computed(() => {
+  const period = steps.value?.period
+  const figures = t('analytics.detail.figures')
+  return period
+    ? t('analytics.detail.figuresOf', { figures, period: words.period(period.from, period.to) })
+    : figures
+})
+
 /** What qualifies the figures, as the section's «ⓘ» under the panel says it of the page's. */
 const about = computed(() => (steps.value ? caveats.spending(steps.value) : []))
 
@@ -346,7 +368,7 @@ const narrow = useNarrowCharts(body)
         <PanelLevel
           level="block"
           data-part="figures"
-          :title="t('analytics.detail.figures')"
+          :title="figuresTitle"
           :about="about"
           :about-label="t('analytics.detail.about')"
         >

@@ -6,6 +6,8 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
  *
  * With `columns`, and where the drawer has room, the figures stand in the columns of the grid
  * around them instead, so that a list of them can be compared down the page.
+ *
+ * Each figure is marked by its key, `data-fact`, which is what a reader of it selects it by.
  */
 withDefaults(
   defineProps<{
@@ -27,6 +29,7 @@ withDefaults(
       :key="fact.key"
       v-tooltip.detail="fact.title"
       class="usage-fact"
+      :data-fact="fact.key"
       ><span
         v-if="fact.label"
         class="usage-fact-label"

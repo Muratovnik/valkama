@@ -96,7 +96,9 @@ describe('what a value’s panel shows', () => {
     )
     // Task 1 spent eleven hours on Monday and one on Tuesday, of the week's 67 hours and 40 minutes
     // the ten tasks, no task and unknown work spent: 12 / 67.67 is 17.7 %, said as 18 %.
-    expect(Object.keys(figures)).toEqual(['time', 'tokens', 'cost', 'share'])
+    // A task has its cost of all time after them; this stand-in answers no read of the card, so
+    // the row says the read failed (`analyticsValueFigures.spec.ts` reads it).
+    expect(Object.keys(figures)).toEqual(['time', 'tokens', 'cost', 'share', 'all-time'])
     expect(figures.time).toBe('12 h')
     expect(figures.share).toBe('18% · Agent time')
     // The panel's parts, in the order they stand; a chart's legend names its own parts inside.

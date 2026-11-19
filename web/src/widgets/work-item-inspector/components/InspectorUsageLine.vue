@@ -16,20 +16,12 @@ import UsageFacts from '@/widgets/work-item-inspector/components/UsageFacts.vue'
 import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import { isEstimated, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
-import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
-
 const emit = defineEmits<{ details: [] }>()
 
 const { t } = useI18n()
-const { cost, notes, span, time, tokens } = useUsageWords()
+const { itemCost, notes, span, time, tokens } = useUsageWords()
 const read = injectInspectorUsage()?.read
 const usage = computed(() => read?.usage.value ?? null)
-
-function costWords(usage: ItemUsage): string {
-  const { estimated_api_cost_usd: usd, unpriced_models: unpriced } = usage
-  if (usd === null) return unpriced.length ? t('workItem.usage.noPrice') : ''
-  return cost(usd, unpriced.length > 0)
-}
 
 /** The label rides the first figure there is, so what wraps is a figure and not the label. */
 const facts = computed(() => {
@@ -38,7 +30,7 @@ const facts = computed(() => {
   const label = t(shown.scope === 'item' ? 'workItem.usage.work' : 'workItem.usage.workEpic')
   return [
     { key: 'time', text: time(shown.elapsed_seconds, isEstimated(shown)) },
-    { key: 'cost', text: costWords(shown) },
+    { key: 'cost', text: itemCost(shown) },
     { key: 'tokens', text: tokens(shown.tokens) },
   ]
     .filter((fact) => fact.text)

@@ -128,5 +128,15 @@ export function useUsageWords() {
     return [...agents, ...cost, ...work, ...(unpriced ? [unpriced] : [])]
   }
 
-  return { cost, explanations, figures, notes, span, time, tokenFigure, tokens }
+  /**
+   * An item's cost as its card's line says it: the estimate, marked incomplete when models are
+   * left out of it, «no price» where none had one, and nothing where nothing was priced or asked.
+   */
+  function itemCost(usage: Pick<ItemUsage, 'estimated_api_cost_usd' | 'unpriced_models'>) {
+    const { estimated_api_cost_usd: usd, unpriced_models: unpriced } = usage
+    if (usd === null) return unpriced.length ? t('workItem.usage.noPrice') : ''
+    return cost(usd, unpriced.length > 0)
+  }
+
+  return { cost, explanations, figures, itemCost, notes, span, time, tokenFigure, tokens }
 }

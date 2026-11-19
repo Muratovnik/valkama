@@ -2861,7 +2861,11 @@ opens it again with no focus ring; the overlay host gives it the focus, Escape c
 page under it is held, and the focus returns to what opened it. On a narrow window it takes the
 whole width. It names the value in full, and for a task «Open the card» opens the card over the
 page as any reference to the task does. Its figures are the time, the tokens, the cost and the
-value's share of the whole in the page's measure. What qualifies them — that the cost is an
+value's share of the whole in the page's measure, under a heading that names their period as the
+page names one, «Figures · Nov 9 – 11»; a task's end on its cost of all time, «All time ≈ $120.00»,
+read and said as its card's line reads and says it, of the item's own work. Without either, a
+week's cost in the panel beside the card's larger one read as two answers to one question. What
+qualifies them — that the cost is an
 estimate at API prices, what the tokens count and, read by the minute, that a minute's figures
 are shared out — the section's «ⓘ» says under the panel, so the «ⓘ» «About these figures» that
 ends the figures' heading says it for the value's own read, once and in that «ⓘ» alone,
