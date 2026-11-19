@@ -8,8 +8,9 @@
  * which the page reads on its own, so the words come through that read too.
  *
  * The words take the percent's place and nothing else: the rail's tile of the overview keeps its
- * box to the pixel and the words whole inside it, its total giving way as the tile's line says,
- * cut with an ellipsis and never silently, and no tile's change is cut. Each run prints what it
+ * box to the pixel and the words whole inside it, and no tile's change is cut. The rail says the
+ * words shorter, «Not known before», so its total stands whole beside them at both widths, as it
+ * does beside the percent; the cards keep the whole phrase. Each run prints what it
  * measured, the total's cut too. At 1024 pixels the rail is the list of sections, read before the
  * overview's panel is opened over it.
  */
@@ -18,7 +19,7 @@ import type { Page } from '@playwright/test'
 
 import { seatValue, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { pageAt, record, serve } from './analyticsPage.ts'
+import { pageAt, record, serve, shortfalls } from './analyticsPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
@@ -52,7 +53,8 @@ const WEEK: TimedStretch[] = [
 const narrowed = (filter: Record<string, string[]>) =>
   pageAt(Object.keys(filter).length ? { filters: JSON.stringify(filter) } : {})
 
-const overviewTile = (page: Page) => page.locator('.analytics-rail-entry[data-section="overview"]')
+const OVERVIEW_TILE = '.analytics-rail-entry[data-section="overview"]'
+const overviewTile = (page: Page) => page.locator(OVERVIEW_TILE)
 
 /** What the rail's tile of the overview says, and where it and its words stand. */
 async function railTile(page: Page) {
@@ -106,10 +108,12 @@ async function open(page: Page, width: number, filter: Record<string, string[]>,
   await expect(overviewTile(page).locator('.rail-tile-aside')).toHaveText(aside)
   await page.evaluate(() => document.fonts.ready)
   const rail = await railTile(page)
+  // The total, measured where its letters are laid: a cut of a fraction of a pixel counts.
+  const [lead] = await shortfalls(page, `${OVERVIEW_TILE} .rail-tile-lead`)
   await expectNoSilentClipping(page, `rail saying ${aside} at ${width}px`, '.analytics-rail')
   if (!(await page.locator('.spending-tiles').isVisible())) await overviewTile(page).click()
   await expect(page.locator('.spending-tiles')).toBeVisible()
-  return rail
+  return { ...rail, leadShort: lead?.short ?? Number.NaN }
 }
 
 for (const width of [1440, 1024])
@@ -119,7 +123,8 @@ for (const width of [1440, 1024])
     await serve(page, WEEK)
 
     // P: three hours on no account against its own ten minutes.
-    const words = await open(page, width, { seat: [P.id ?? ''] }, 'Account not known before')
+    // The rail says it in its own short words; the cards in the table's whole phrase.
+    const words = await open(page, width, { seat: [P.id ?? ''] }, 'Not known before')
     const wordsTiles = await tileChanges(page)
     expect(wordsTiles.map((one) => one.text)).toEqual([
       'Account not known before',
@@ -147,6 +152,9 @@ for (const width of [1440, 1024])
     expect(words.entry).toEqual(percent.entry)
     expect(words.lead).toBe('6 h')
     expect(percent.lead).toBe('2 h')
+    // The tile's total stands whole beside the words, as beside the percent.
+    expect(words.leadShort, 'the total beside the words is cut, in px').toBeLessThanOrEqual(0)
+    expect(percent.leadShort, 'the total beside the percent is cut, in px').toBeLessThanOrEqual(0)
     expect(words.asideBox?.right ?? Infinity).toBeLessThanOrEqual(words.inner + 0.5)
     for (const one of [...wordsTiles, ...percentTiles])
       expect(one.cut, `${one.text} is cut`).toBeLessThanOrEqual(0)

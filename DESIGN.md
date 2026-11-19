@@ -2736,7 +2736,10 @@ their organizations the filter leaves out — the overview's tiles and the rail'
 overview, the table's lines and its total, the tokens by kind — none of them ever among what
 changed most: which account that work ran under is not known, so a percent read the readings
 starting to place the work as growth, a rise of thousands of percent on an account that had
-worked all along. Work with no value in the dimension, or of a value
+worked all along. The rail's tile says it in words of its own, «Not known before», where the
+table and the cards say «Account not known before»: beside the tile's total the whole phrase cut
+«6 h» into an ellipsis by 9px at 1440px. The Russian «Раньше не определён» is short already and
+stays. Work with no value in the dimension, or of a value
 nobody can place — an unknown model — is ranked where its figure puts it, in the neutral colour;
 a list of free text sets it apart after its values instead, with its bar on their scale. A value
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of

@@ -105,10 +105,14 @@ export function useRailTiles(options: {
   const failed = () => standing('failed', t('analytics.rail.failed'))
   const noData = () => standing('empty', t('analytics.rail.noData'))
 
-  /** How the total moved, as words beside it. */
+  /**
+   * How the total moved, as words beside it: the rail's own short words where the figure before
+   * is not known, which the whole phrase of the table left the total no room beside.
+   */
   function moved(measure: Measure, figures: OverviewFigures, usage: Usage) {
     const { change } = figures
     if (!change || !usage.comparison) return t('analytics.rail.unread')
+    if (change.direction === 'unplaced') return t('analytics.rail.unplaced')
     if (change.direction === 'from')
       return t('analytics.rail.from', { before: words.figure(measure, change.before) })
     return words.lineChange(measure, change, figures.total, spentOf(usage.comparison.total))
