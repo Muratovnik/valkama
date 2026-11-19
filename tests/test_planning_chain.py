@@ -383,6 +383,7 @@ class ChainBoundaryTests(ChainFixture):
                 "workable",
                 "by_category",
                 "by_container_state",
+                "by_project",
                 "origins",
                 "series",
                 "recent",
@@ -393,6 +394,10 @@ class ChainBoundaryTests(ChainFixture):
         )
         self.assertEqual(
             {"parent_reference", "parent_title", "count", "open"}, set(found["origins"][0])
+        )
+        # No member task names a project here, so they all stand in the row of none.
+        self.assertEqual(
+            [{"project_id": None, "display_name": None, "count": 9}], found["by_project"]
         )
         self.assertEqual(
             {"day", "created", "closed", "total", "closed_total"}, set(found["series"][0])

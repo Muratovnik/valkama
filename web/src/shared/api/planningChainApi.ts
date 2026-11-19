@@ -34,7 +34,7 @@ import {
   WORK_ITEM_REFERENCE,
 } from '@/shared/api/planningModel.ts'
 import { readRefusal } from '@/shared/api/planningRefusal.ts'
-import { enumField, invalid, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
+import { enumField, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 const CHAIN_SCOPES = ['chain', 'tree'] as const
@@ -64,6 +64,17 @@ const originSchema = strictObject({
   parent_title: title().nullable(),
   count: count(),
   open: count(),
+})
+
+/**
+ * How many member tasks change one project. A task of several projects counts in the row of
+ * each, so the rows add up to no total; the row of no project has a null id and name.
+ */
+const projectCountSchema = strictObject({
+  project_id: boundedText(PROJECT_ID, 160).nullable(),
+  /** Null when the registry does not name the project or could not be read. */
+  display_name: boundedText(/^[^\u{0}]{1,200}$/u, 200).nullable(),
+  count: positiveInt(),
 })
 
 const daySchema = strictObject({
@@ -140,6 +151,8 @@ const chainSchema = strictObject({
   by_category: z.partialRecord(enumField(STATE_CATEGORIES), count()),
   /** The accepted open goals and stages among the members, by what each derives. */
   by_container_state: z.partialRecord(enumField(CONTAINER_STATES), count()),
+  /** The member tasks by project: the most first, the row of no project last. */
+  by_project: z.array(projectCountSchema),
   // A chain is as large as the work it grew into; the server caps none of these.
   origins: z.array(originSchema),
   series: chainSeriesSchema,

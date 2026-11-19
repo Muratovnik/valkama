@@ -7,10 +7,15 @@
  * the server's words, and the inspector offers the next action where it has
  * one. Overriding is offered only where the server accepts an override for
  * that exact refusal, and only runs after a second, explicit answer.
+ *
+ * The writes that close work or put it off ask first, in a window or in place, and are the
+ * card's closing writes' (`provideInspectorClosing`), which this provides for the card.
  */
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { provideInspectorClosing } from '@/widgets/work-item-inspector/utils/useInspectorClosing.ts'
 
 import {
   attachWorkItemRef,
@@ -70,6 +75,7 @@ export function useInspectorWrites(options: {
   const { t } = useI18n()
   const nameOf = useStateName()
   const { busy } = options
+  const closing = provideInspectorClosing(options)
   const error = ref('')
   const notice = ref<RefusalNotice | null>(null)
   /** The override the refusal on screen offers, held until it is confirmed or dismissed. */
@@ -233,6 +239,7 @@ export function useInspectorWrites(options: {
     attachMemory,
     changeFacts,
     claim,
+    closing,
     dismiss,
     error,
     force,
