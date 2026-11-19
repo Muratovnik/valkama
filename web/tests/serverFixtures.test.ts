@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest'
 import {
   pageDimensionOf,
   validateQuotaAnswer,
+  validateQuotaWindowAnswer,
   validateUsageAnswer,
 } from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
@@ -63,6 +64,7 @@ const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${n
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
   'analytics-quota.json': validateQuotaAnswer,
+  'analytics-quota-window.json': validateQuotaWindowAnswer,
   'analytics-usage.json': validateUsageAnswer,
   'analytics-usage-seat.json': validateUsageAnswer,
   'card.json': (value) => validatePlanningWorkItemPayload(value),

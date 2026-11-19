@@ -1,9 +1,11 @@
 /**
  * What agent work spent in a period, `GET /api/analytics/usage`, and where each account's
- * subscription quota stands now, `GET /api/analytics/quota`: the two reads of the Analytics page.
+ * subscription quota stands now, `GET /api/analytics/quota`: the two reads of the Analytics page,
+ * with one past window of an account's quota, `GET /api/analytics/quota/window`, read when a person
+ * steps back to it.
  *
- * Both answers are described in `docs/connection-contract.md` ("What agent work spent in a
- * period", "Each account's subscription quota"). The usage figures add up exactly: the rows to
+ * The answers are described in `docs/connection-contract.md` ("What agent work spent in a
+ * period", "Each account's subscription quota", "One past quota window"). The usage figures add up exactly: the rows to
  * the total, the steps of the series to the total, a step's groups to the step. A quota figure
  * is a share of one window of one account and adds up to nothing. Strict like every contract
  * here: a field nobody declared is refused rather than drawn.
@@ -251,6 +253,17 @@ const rangeForecastSchema = strictObject({
   message: 'a range runs from its low to its high',
 })
 
+/**
+ * How the window before a window ended: its span, its latest reading and whether a reading of it
+ * reached the whole window. `null` on the window where the store keeps no earlier one.
+ */
+const endedWindowSchema = strictObject({
+  started_at: moment(),
+  resets_at: moment(),
+  latest: quotaReadingSchema,
+  ran_out: z.boolean(),
+})
+
 const shareWindowSchema = strictObject({
   kind: enumField(SHARE_KINDS),
   model: boundedText(RUN_TEXT, 200).nullable(),
@@ -266,6 +279,7 @@ const shareWindowSchema = strictObject({
    */
   restarts: z.array(moment()),
   forecast: z.union([pointForecastSchema, rangeForecastSchema]).nullable(),
+  previous: endedWindowSchema.nullable(),
 }).superRefine((window, context) => {
   if ((window.kind === 'week_model') !== (window.model !== null))
     context.addIssue({ code: 'custom', path: ['model'], message: 'a model only for its week' })
@@ -320,6 +334,8 @@ const quotaSchema = strictObject({
   now: utcMoment(),
   utc_offset: z.number().int().min(-840).max(840),
   fresh_for_seconds: positiveInt(),
+  /** The oldest moment the store keeps a reading at `now`: no window before it is ever read. */
+  retained_from: moment(),
   accounts: z.array(quotaAccountSchema),
 })
 
@@ -330,11 +346,35 @@ const quotaAnswerSchema = strictObject({
   quota: quotaSchema,
 })
 
+/** One past window of one account: the latest of its kind that reset at or before `before`. */
+const quotaWindowSchema = strictObject({
+  now: utcMoment(),
+  utc_offset: z.number().int().min(-840).max(840),
+  fresh_for_seconds: positiveInt(),
+  retained_from: moment(),
+  account: boundedText(VALUE, 512),
+  kind: enumField(SHARE_KINDS),
+  model: boundedText(RUN_TEXT, 200).nullable(),
+  before: moment(),
+  window: shareWindowSchema.nullable(),
+})
+
+const quotaWindowAnswerSchema = strictObject({
+  interface_version: z.literal('valkama-analytics-api', {
+    message: 'expected valkama-analytics-api',
+  }),
+  quota_window: quotaWindowSchema,
+})
+
 export type Quota = z.infer<typeof quotaSchema>
 export type QuotaAccount = Quota['accounts'][number]
 export type QuotaWindow = QuotaAccount['windows'][number]
 /** A window that is a share of a limit: five hours, the week, a model's week. */
 export type QuotaShareWindow = Extract<QuotaWindow, { readings: unknown }>
+/** How the window before a window ended. */
+export type QuotaEndedWindow = NonNullable<QuotaShareWindow['previous']>
+/** A past window's answer: what was asked, and the window, or `null` where none is kept. */
+export type QuotaPastWindow = z.infer<typeof quotaWindowSchema>
 /** A week's forecast: the share its slower and its faster pace spend by the reset. */
 export type QuotaRange = Extract<NonNullable<QuotaShareWindow['forecast']>, { low_percent: number }>
 
@@ -354,4 +394,40 @@ export async function fetchQuota(utcOffset: number, signal?: AbortSignal): Promi
   const { response, payload } = await readJsonResponse(`${path}?${query}`, { signal })
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
   return validateQuotaAnswer(payload)
+}
+
+/** The past window's answer, or a refusal naming what does not fit the contract. */
+export function validateQuotaWindowAnswer(payload: unknown): QuotaPastWindow {
+  return parseContract(quotaWindowAnswerSchema, payload, 'analytics.quotaWindow', invalid)
+    .quota_window
+}
+
+/** What a past window is asked by: the account's key, the window and the moment it reset by. */
+export interface QuotaWindowQuery {
+  account: string
+  kind: QuotaShareWindow['kind']
+  model: string | null
+  before: string
+  utcOffset: number
+}
+
+/**
+ * One past window of an account: the latest of `kind` and `model` that reset at or before `before`,
+ * every time in it at `utcOffset` minutes east of UTC, but `now` in UTC.
+ */
+export async function fetchQuotaWindow(
+  query: QuotaWindowQuery,
+  signal?: AbortSignal,
+): Promise<QuotaPastWindow> {
+  const path = '/api/analytics/quota/window'
+  const parameters = new URLSearchParams({
+    account: query.account,
+    kind: query.kind,
+    before: query.before,
+    utc_offset: String(query.utcOffset),
+  })
+  if (query.model !== null) parameters.set('model', query.model)
+  const { response, payload } = await readJsonResponse(`${path}?${parameters}`, { signal })
+  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
+  return validateQuotaWindowAnswer(payload)
 }

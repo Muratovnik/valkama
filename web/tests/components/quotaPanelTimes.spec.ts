@@ -66,6 +66,7 @@ describe('the quota panel’s times', () => {
       even_percent: 97.02,
       readings: [latest],
       restarts: [],
+      previous: null,
       forecast: { low_percent: 120, high_percent: 140 },
     }
     stubAnalyticsReads(usage, workWith(at, [week]))
@@ -93,6 +94,7 @@ describe('the quota panel’s times', () => {
       even_percent: 63.33,
       readings: [{ at: '2026-11-14T21:40:00+03:00', used_percent: 10, source: 'poll' }, latest],
       restarts: [],
+      previous: null,
       forecast: {
         outcome: 'runs_out',
         runs_out_at: '2026-11-15T01:50:00+03:00',
@@ -129,6 +131,7 @@ describe('the quota panel’s times', () => {
       even_percent: null,
       readings: [latest],
       restarts: [],
+      previous: null,
       forecast: null,
     }
     stubAnalyticsReads(usage, workWith(at, [week]))

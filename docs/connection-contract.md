@@ -1392,6 +1392,7 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
 | --- | --- |
 | `now` | the moment the answer was worked out; every pace and state is as of it |
 | `fresh_for_seconds` | how old a window's latest sample may be and still be fresh: 900, the span the quota alerts read too |
+| `retained_from` | the oldest moment the store keeps a sample at `now`: 365 days before it. No window before it is ever `previous` or answered by the past read |
 | `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. An account known by its weekly reset is one entry however many weeks it was read in, and one read only in a week that has ended stands with that week silent. Ordered by `account` |
 | `account` | the account's key, as the `seat` dimension gives it: `<organization>/<UUID>`, `<organization>/weekly:<reset>` for an account no sample names a UUID for, or `<organization>/` for an organization with no sample |
 | `organization` | the organization's id |
@@ -1416,6 +1417,7 @@ A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
 | `even_percent` | how much of the window steady use from its start would have spent by `now`: the pace tick. `null` without a reset or once the reset has passed |
 | `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it, and a source's own reading falls where the window's count restarted |
 | `restarts` | the moments, oldest first, at which the window's count restarted inside it, its reset unchanged: one feed's reading fell ten points or more below that feed's previous reading of the window, and as far below the count. A feed is one session's samples, or the organization's poll and imports. The forecast reads only the readings from the latest restart on. Another feed's lower reading is no restart but a stale one, and is left out of the forecast. Empty where the count never restarted. What zeroed the counter is not said: the samples cannot tell |
+| `previous` | how the window before this one ended: the latest window of the same account, `kind` and `model` whose reset is at or before this one's `started_at`, or, where this one names no start, its latest reading. Five-hour windows are not contiguous, since one starts at the first use after the last reset, so after a gap this is the latest kept window, however far back, never the one a fixed length before. It holds `started_at`, `resets_at`, `latest` as above and `ran_out`, `true` where a reading of that window reached 100. `null` where the store keeps no reading of an earlier window since `retained_from` |
 | `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts` with `at_reset_percent`, the share of the window its pace will have spent by the reset, at most 100 and rounded to the hundredth as a week's range is; `runs_out` with `runs_out_at`; or `spent`. `runs_out_at` and `at_reset_percent` are `null` for the other outcomes. `basis` is the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
 
 A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,
@@ -1427,6 +1429,51 @@ account: the windows of an account are not added, and neither are two accounts'
 percentages, of one organization or of two. A reading whose organization is not known
 yet, because the session's transcript has not been read that far, or that names neither
 an account's UUID nor a seat, belongs to no account and is not in the answer.
+
+### One past quota window
+
+`GET /api/analytics/quota/window` answers, under the same `interface_version`, one past
+window of one account, so a reader steps back through the windows the store keeps:
+
+```text
+GET /api/analytics/quota/window?account=org-a/acct-a&kind=week&before=2030-03-01T12:00:00%2B03:00&utc_offset=180
+```
+
+`account` is an account's key as the quota answer gives it, and an organization's key with
+nothing after its slash is refused. `kind` is `five_hour`, `week` or `week_model`, and
+`model` is given for `week_model` and for no other kind. `before` is a time with its
+offset: the answer is the latest window that reset at or before it, or at `now` where that
+is earlier, so a window that has not reset yet is never answered. A current window's
+`started_at` gives its `previous`, and that window's `started_at` the one before it.
+`utc_offset` is as above. A missing, repeated or unknown parameter, or any other value, is
+refused with `400` and `invalid_request`.
+
+```json
+{"interface_version": "valkama-analytics-api",
+ "quota_window": {
+   "now": "2030-03-06T13:00:00.000+03:00", "utc_offset": 180, "fresh_for_seconds": 900,
+   "retained_from": "2029-03-06T13:00:00.000+03:00",
+   "account": "org-a/acct-a", "kind": "week", "model": null,
+   "before": "2030-03-01T12:00:00.000+03:00",
+   "window": {"kind": "week", "model": null, "state": "silent",
+              "resets_at": "2030-03-01T12:00:00.000+03:00",
+              "latest": {"at": "2030-02-28T22:00:00.000+03:00", "source": "poll",
+                         "used_percent": 62.0},
+              "started_at": "2030-02-22T12:00:00.000+03:00", "even_percent": null,
+              "readings": ["…"], "restarts": [], "forecast": null,
+              "previous": {"started_at": "2030-02-15T12:00:00.000+03:00",
+                           "resets_at": "2030-02-22T12:00:00.000+03:00",
+                           "latest": {"…": "as above", "used_percent": 35.0},
+                           "ran_out": false}}}}
+```
+
+`account`, `kind`, `model` and `before` say what was asked, `before` as the moment the
+answer read to. `window` is the window as a current window of a share is given above, with
+its `readings`, `restarts` and `previous`; past its reset it has no `even_percent` and no
+`forecast`. It is `null` where the store keeps no such window since `retained_from`. An
+account's past windows are looked for by the seats that may be its: those its UUID names,
+and those whose week resets at its time of week, which for an account known by its UUID
+no UUID names.
 
 ### The owner's names for accounts
 

@@ -3,7 +3,8 @@
 Planning, Analytics, Memory and Settings are the product. Analytics is where
 agent work's usage is read -- time, tokens, an API-price estimate, subscription quota.
 Its read model `analytics.usage` is `GET /api/analytics/usage`; `analytics.quota`, each
-account's quota windows now, is `GET /api/analytics/quota`; `analytics.uses`, how often
+account's quota windows now, is `GET /api/analytics/quota`, and one of its past windows
+`GET /api/analytics/quota/window`; `analytics.uses`, how often
 each of its surfaces was opened, is `GET /api/analytics/uses`, and the action
 `module.analytics.report-use` counts one opening with `POST` there (`analytics.api`).
 Which of them exist is decided here, by the build, and nowhere else: no store row

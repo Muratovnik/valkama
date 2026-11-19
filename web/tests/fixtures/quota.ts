@@ -11,7 +11,8 @@
  *   hours at 74 % and fresh, the tightest five hours, and its week at 20 %.
  *
  * The tightest window of each kind is therefore never the first account, so a tile that named the
- * first account rather than the tightest would say the wrong one.
+ * first account rather than the tightest would say the wrong one. No window says how a window
+ * before it ended unless a spec gives it one (`previous`), and the store keeps a year.
  */
 import type { Quota, QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 
@@ -52,6 +53,8 @@ export function share(
     model?: string
     /** Where its count restarted, as many ms before `now` as one of its readings. */
     restarts?: number[]
+    /** How the window before it ended; none by default. */
+    previous?: QuotaShareWindow['previous']
   },
 ): QuotaShareWindow {
   const at = (ms: number) => momentAt(ms, offset)
@@ -77,6 +80,7 @@ export function share(
     readings,
     restarts: (window.restarts ?? []).map((ago) => at(now - ago)),
     forecast: window.forecast,
+    previous: window.previous ?? null,
   }
 }
 
@@ -219,7 +223,13 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
       ],
     },
   ]
-  return { now: at(moment), utc_offset: offset, fresh_for_seconds: 900, accounts }
+  return {
+    now: at(moment),
+    utc_offset: offset,
+    fresh_for_seconds: 900,
+    retained_from: at(moment - 365 * DAY),
+    accounts,
+  }
 }
 
 /** The answer as the server sends it. */

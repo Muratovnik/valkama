@@ -438,13 +438,15 @@ class _Scenario:
                 (at, source, owner, None if owner else session, account, seat),
             )
 
-    def quota(self) -> dict:
-        """The quota read as of a fixed moment: every kind of window, no source, a seat.
+    def quota(self) -> dict[str, dict]:
+        """The quota read as of a fixed moment: every kind of window, no source, a seat; and
+        the past read of the five hours before the account's current ones.
 
-        One account read by the poll: its five hours twice and fresh, its week and a
-        model's week silent, and its usage credits. An organization that worked with no
-        source, and a session's account known by its seat alone. The read is held at
-        `moment`, which every reading is placed before, so its paces stay the same.
+        One account read by the poll: its five hours twice and fresh, after a window of five
+        hours that reset four hours before, its week and a model's week silent, and its usage
+        credits. An organization that worked with no source, and a session's account known
+        by its seat alone. The reads are held at `moment`, which every reading is placed
+        before, so its paces stay the same.
         """
 
         moment = datetime(2026, 11, 10, 10, 0, tzinfo=UTC)
@@ -476,6 +478,15 @@ class _Scenario:
                     (run, session, ago(hours=3), ago(hours=1), worked_for),
                 )
             readings = (
+                samples.Reading(
+                    "poll",
+                    ago(hours=6),
+                    (samples.Window("five_hour", 30.0, ago(hours=4)),),
+                    week_seat,
+                    organization=organization,
+                    account_uuid=account,
+                    plan="Max",
+                ),
                 samples.Reading(
                     "poll",
                     ago(hours=1),
@@ -512,8 +523,22 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
-        with mock.patch.object(analytics_quota, "read", partial(analytics_quota.read, now=moment)):
-            return self.http("/api/analytics/quota?utc_offset=180")
+        asked = urlencode(
+            {
+                "account": f"{organization}/{account}",
+                "kind": "five_hour",
+                "before": (moment - timedelta(hours=3)).isoformat(),
+                "utc_offset": "180",
+            }
+        )
+        with (
+            mock.patch.object(analytics_quota, "read", partial(analytics_quota.read, now=moment)),
+            mock.patch.object(analytics_quota, "past", partial(analytics_quota.past, now=moment)),
+        ):
+            return {
+                "analytics-quota": self.http("/api/analytics/quota?utc_offset=180"),
+                "analytics-quota-window": self.http(f"/api/analytics/quota/window?{asked}"),
+            }
 
     def live_frame(self) -> dict:
         """The frame a pin answers with: the pinned card, a waiting row, a quiet one under an epic."""
@@ -775,7 +800,7 @@ class _Scenario:
             "live-frame": self.live_frame(),
             **self.usage(),
             "doctor-vocabulary": {"quota": _doctor_quota_codes()},
-            "analytics-quota": self.quota(),
+            **self.quota(),
         }
 
 

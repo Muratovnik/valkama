@@ -81,10 +81,11 @@ navigation destination. Analytics is the destination for the usage of agent
 work — time, tokens, an API-price estimate and the subscription quota. It
 declares three read models: `analytics.usage`, what agent work spent in a period,
 by up to two of its dimensions, served as `GET /api/analytics/usage`;
-`analytics.quota`, where each account's quota windows stand now, served as
-`GET /api/analytics/quota`; and `analytics.uses`, how often each analytics surface
+`analytics.quota`, where each account's quota windows stand now and how each window
+before them ended, served as `GET /api/analytics/quota`, with one past window at a time
+as `GET /api/analytics/quota/window`; and `analytics.uses`, how often each analytics surface
 was opened, by day and kind, served as `GET /api/analytics/uses`. Its one action, `module.analytics.report-use`, counts an
-opening with `POST /api/analytics/uses`. All four are described in
+opening with `POST /api/analytics/uses`. All five are described in
 `connection-contract.md`. Improvements, Skills, and standalone Sessions registrations,
 pages, and APIs are retired, as are the flow-metrics Analytics dashboards and
 exports that an earlier build registered under the same id.

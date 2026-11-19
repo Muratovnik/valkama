@@ -3,9 +3,11 @@
 A reading every ten minutes for a year, the five-hour window and the week each time: two
 accounts read by the poll, one of them with a model's week as well, and one read through
 a session's status line, which a read gives its organization one reading at a time. Only
-the last seven days are answered, and the year before them must not cost the read. The
-budget is the Analytics read's own (`test_analytics_cost`), held to the quickest of a few
-reads for the reason given there.
+the last seven days are answered, and the year before them must not cost the read, though
+every window says how the one before it ended. A fourth account, read by the poll only in
+the last day and under the same weekly reset, has no week before its current one, and
+looking for one must not read the year either. The budget is the Analytics read's own
+(`test_analytics_cost`), held to the quickest of a few reads for the reason given there.
 """
 
 from __future__ import annotations
@@ -57,6 +59,8 @@ class QuotaCostTests(UsageStore):
                 ),
             ):
                 rows += [(at, *identity, seat, *window) for window in kinds]
+            if NOW - moment < dt.timedelta(days=1):
+                rows += [(at, "poll", "org-d", None, "acct-d", seat, *window) for window in windows]
             moment += STEP
             count += 1
         self.conn.executemany(
@@ -88,9 +92,20 @@ class QuotaCostTests(UsageStore):
                 ("org-a/acct-a", "acct-a", slot, 2),
                 ("org-b/acct-b", "acct-b", slot, 3),
                 (f"org-c/weekly:{slot}", None, slot, 2),
+                ("org-d/acct-d", "acct-d", slot, 2),
             ],
             [
                 (one["account"], one["account_uuid"], one["weekly_reset"], len(one["windows"]))
                 for one in answer["accounts"]
+            ],
+        )
+        # Every window of the year's accounts ended one before it, and the new account's five
+        # hours did in its day; its week has none before it.
+        self.assertEqual(
+            [True] * 8 + [False],
+            [
+                window["previous"] is not None
+                for one in answer["accounts"]
+                for window in one["windows"]
             ],
         )

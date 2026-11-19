@@ -59,6 +59,7 @@ function week(used: number, left: number, low: number, high: number): QuotaShare
     even_percent: null,
     readings: [],
     restarts: [],
+    previous: null,
     forecast: { low_percent: low, high_percent: high },
   }
 }
