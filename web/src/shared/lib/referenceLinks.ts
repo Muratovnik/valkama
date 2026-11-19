@@ -80,28 +80,3 @@ export function provideReferenceLinks(
 export function referenceSpaceKey(reference: string): string {
   return reference.slice(0, reference.lastIndexOf('-'))
 }
-
-/**
- * A recorded commit value may name its repository before the revision, as
- * `repo@abc1234` or `repo abc1234`: a name that starts with a letter or digit,
- * then `@` or spaces, then one word that is not git's own `@{...}` syntax.
- * Anything else is the revision as written. The server's `/api/ref` reads a
- * value by this same rule (`split_commit_value` in `server/refs.py`), and both
- * test suites hold the same examples.
- */
-const NAMED_COMMIT = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:@(?!\{)| +)(\S+)$/
-
-function commitRevision(value: string): string {
-  return NAMED_COMMIT.exec(value)?.[1] ?? value
-}
-
-/**
- * Whether two commit names are the same commit: one is a prefix of the other,
- * at the seven characters git itself abbreviates to. A repository name in
- * front of either is not compared.
- */
-export function sameCommit(left: string, right: string): boolean {
-  const a = commitRevision(left).toLowerCase()
-  const b = commitRevision(right).toLowerCase()
-  return Math.min(a.length, b.length) >= 7 && (a.startsWith(b) || b.startsWith(a))
-}

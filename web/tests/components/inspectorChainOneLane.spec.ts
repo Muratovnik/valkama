@@ -6,8 +6,8 @@ import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
-import { chainResponse, emptyChain, largeGoalChain } from '../fixtures/chain.ts'
-import { getButton, showChain, workItemFixture } from '../fixtures/workItem.ts'
+import { chainResponse, emptyChain, largeGoalChain, largeGoalContents } from '../fixtures/chain.ts'
+import { chooseScope, getButton, showChain, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -43,29 +43,26 @@ async function openWith(...answers: Response[]) {
   return wrapper
 }
 
+/** The goal opens on its contents; these are readings of what its work grew into. */
+async function openChainWith(...answers: Response[]) {
+  const wrapper = await openWith(...answers)
+  await chooseScope(wrapper, 'Chain')
+  return wrapper
+}
+
 const section = (wrapper: VueWrapper) => wrapper.find('section.chain')
 
 describe('the chain section of a card, with nothing to choose between', () => {
   useInspectorHarness()
 
   it('narrows nothing once a chosen lane is the only one the answer has', async () => {
-    const whole = largeGoalChain()
-    const goal = {
-      ...whole,
-      scope: 'tree' as const,
-      members: whole.members.filter((member) => member.parent_reference === 'MAIN-384'),
-      total: 273,
-      closed: 273,
-      open: 0,
-      workable: 0,
-      by_category: { completed: 273 },
-      origins: whole.origins.slice(0, 1),
-      edges: [],
-    }
-    const wrapper = await openWith(json(chainResponse(whole)), json(chainResponse(goal)))
+    // The refresh answers with the root's own children alone: one lane, the one chosen.
+    const only = { ...largeGoalContents(), scope: 'chain' as const }
+    const whole = json(chainResponse(largeGoalChain()))
+    const wrapper = await openChainWith(whole, whole, json(chainResponse(only)))
     await getButton(wrapper, 'MAIN-384').trigger('click')
     expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(true)
-    await getButton(wrapper, 'Contents').trigger('click')
+    await wrapper.setProps({ refreshToken: 1 })
     await flushPromises()
     expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(false)
   })

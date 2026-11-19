@@ -264,13 +264,17 @@ describe('where the layer stands', () => {
     server({ 'docs/a.md': FILE })
     const item = {
       ...workItemFixture('Task', 1),
-      refs: [
+      commits: [
         {
-          kind: 'commit' as const,
-          value: 'repo@a1b2c3d4e5',
-          label: 'fix: one thing',
-          author: 'agent',
-          at: '2026-08-27T18:00:00Z',
+          repository: 'repo',
+          display_name: 'Repo',
+          hash: 'a1b2c3d4e5',
+          subject: 'fix: one thing',
+          committed_at: '2026-08-27T18:00:00Z',
+          session: '',
+          agent: '',
+          attached_by: 'server' as const,
+          label: '',
         },
       ],
     }

@@ -9,8 +9,15 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 
-import { chainResponse, emptyChain, largeGoalChain } from '../fixtures/chain.ts'
-import { deferred, findTab, getButton, showChain, workItemFixture } from '../fixtures/workItem.ts'
+import { chainResponse, emptyChain, largeGoalChain, largeGoalContents } from '../fixtures/chain.ts'
+import {
+  chooseScope,
+  deferred,
+  findTab,
+  getButton,
+  showChain,
+  workItemFixture,
+} from '../fixtures/workItem.ts'
 import { documentOrder } from '../support/documentOrder.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
@@ -55,6 +62,13 @@ async function open(item = ROOT, overrides: { writable?: boolean } = {}) {
   return wrapper
 }
 
+/** Open the goal, which reads its contents first, and turn to what its work grew into. */
+async function openChain(item = ROOT) {
+  const wrapper = await open(item)
+  await chooseScope(wrapper, 'Chain')
+  return wrapper
+}
+
 function section(wrapper: VueWrapper) {
   return wrapper.find('section.chain')
 }
@@ -87,13 +101,20 @@ describe('the chain section of a card', () => {
   useInspectorHarness()
 
   it('reads a MAIN-384-shaped chain as a map first, then one line, its verdict and the groups', async () => {
-    const asked = serveChain(json(chainResponse(largeGoalChain())))
+    const asked = serveChain(
+      json(chainResponse(largeGoalContents())),
+      json(chainResponse(largeGoalChain())),
+    )
+    // A goal is read first as its contents, which draw no map.
     const wrapper = await open()
-    const chain = section(wrapper)
-    expect(chain.exists()).toBe(true)
-    expect(asked).toHaveLength(1)
+    expect(asked.map((query) => query.get('scope'))).toEqual(['tree'])
     expect(asked[0].get('id')).toBe(ROOT.work_item_id)
-    expect(asked[0].get('scope')).toBe('chain')
+    expect(section(wrapper).find('.contents').exists()).toBe(true)
+    expect(section(wrapper).find('.branch-map').exists()).toBe(false)
+    await chooseScope(wrapper, 'Chain')
+    expect(asked.map((query) => query.get('scope'))).toEqual(['tree', 'chain'])
+    const chain = section(wrapper)
+    expect(chain.find('.contents').exists()).toBe(false)
 
     // The section leads with its map; the totals follow it in one line, and the
     // chain's history is one action away.
@@ -172,7 +193,7 @@ describe('the chain section of a card', () => {
     ))
       Object.assign(member.state, { key: 'icebox', name: 'Icebox' })
     serveChain(json(chainResponse(mixed)))
-    const wrapper = await open()
+    const wrapper = await openChain()
     const chain = section(wrapper)
     const legend = chain.findAll('.branch-key .state-label').map((label) => label.text())
     const headings = chain
@@ -200,16 +221,17 @@ describe('the chain section of a card', () => {
     for (const member of mixed.members.slice(0, 2))
       Object.assign(member.state, { key: 'cancelled', name: 'Cancelled', category: 'cancelled' })
     Object.assign(mixed.by_category, { completed: 481, cancelled: 2 })
-    serveChain(json(chainResponse(largeGoalChain())), json(chainResponse(mixed)))
+    const plain = json(chainResponse(largeGoalChain()))
+    serveChain(plain, plain, json(chainResponse(mixed)))
     // One state per group: the heading names it, and the rows do not repeat it.
-    const single = await open()
+    const single = await openChain()
     expect(details(single, 'Ready')).toEqual(eight(null))
     await getButton(single, 'Done · 483').trigger('click')
     expect(details(single, 'Done')).toEqual(eight(null))
     single.unmount()
 
     // A group that mixes states is headed by its category, and each row names its own.
-    const several = await open()
+    const several = await openChain()
     expect(group(several, 'Triage')?.get('.chain-group-title').text()).toBe('Triage · 107')
     await getButton(several, 'Show all · 107').trigger('click')
     const backlog = details(several, 'Triage') ?? []
@@ -223,7 +245,7 @@ describe('the chain section of a card', () => {
 
   it('stops a long group after eight rows and shows the rest on request', async () => {
     serveChain(json(chainResponse(largeGoalChain())))
-    const wrapper = await open()
+    const wrapper = await openChain()
     const backlog = () =>
       section(wrapper)
         .findAll('section.chain-group')
@@ -238,7 +260,7 @@ describe('the chain section of a card', () => {
 
   it('opens a long group and closes it again, and focus never falls out of the list', async () => {
     serveChain(json(chainResponse(largeGoalChain())))
-    const wrapper = await open()
+    const wrapper = await openChain()
     const backlog = () => group(wrapper, 'Triage')
     const toggle = () => backlog()?.get('.chain-more')
     const list = backlog()?.get('ul')
@@ -269,13 +291,15 @@ describe('the chain section of a card', () => {
     expect(toggle()?.attributes('aria-expanded')).toBe('false')
   })
 
-  it('asks again with scope=tree when the scope toggle says Contents', async () => {
-    const goal = { ...largeGoalChain(), scope: 'tree' as const }
-    const asked = serveChain(json(chainResponse(largeGoalChain())), json(chainResponse(goal)))
-    const wrapper = await open()
-    await getButton(wrapper, 'Contents').trigger('click')
-    await flushPromises()
-    expect(asked.map((query) => query.get('scope'))).toEqual(['chain', 'tree'])
+  it('asks the server again each time the scope toggle turns to the other reading', async () => {
+    const asked = serveChain(
+      json(chainResponse(largeGoalContents())),
+      json(chainResponse(largeGoalChain())),
+      json(chainResponse(largeGoalContents())),
+    )
+    const wrapper = await openChain()
+    await chooseScope(wrapper, 'Contents')
+    expect(asked.map((query) => query.get('scope'))).toEqual(['tree', 'chain', 'tree'])
     await getButton(wrapper, 'Chart and pace').trigger('click')
     expect(section(wrapper).get('.chain-pace').text()).toContain('+53 added, −42 done')
   })
@@ -321,9 +345,10 @@ describe('the chain section of a card', () => {
       json({ error: { code: 'invalid_request', message: 'no work item' } }, 400),
       json(chainResponse(largeGoalChain())),
     )
+    // A goal's first read is its contents, and the failure says so.
     const wrapper = await open()
     expect(section(wrapper).get('[role="alert"]').text()).toContain(
-      'The chain could not be loaded.',
+      'The contents could not be read.',
     )
     await getButton(wrapper, 'Retry').trigger('click')
     await flushPromises()
@@ -341,7 +366,7 @@ describe('the chain section of a card', () => {
 
   it('opens a member, or a lane’s goal, through the card navigation', async () => {
     serveChain(json(chainResponse(largeGoalChain())))
-    const wrapper = await open()
+    const wrapper = await openChain()
     const row = section(wrapper).findAll('.chain-row')[0]
     const reference = row.get('.chain-row-reference').text()
     await row.trigger('click')
@@ -357,7 +382,7 @@ describe('the chain section of a card', () => {
 
   it('narrows the member list to the lane chosen on the map, and widens it back', async () => {
     serveChain(json(chainResponse(largeGoalChain())))
-    const wrapper = await open()
+    const wrapper = await openChain()
     const headings = () =>
       section(wrapper)
         .findAll('.chain-group-title')
@@ -403,38 +428,22 @@ describe('the chain section of a card', () => {
     expect(chip().exists()).toBe(false)
   })
 
-  it('forgets a chosen lane the next answer does not have', async () => {
-    // The goal scope is the root's own children: one lane, and no MAIN-900 in it.
-    const whole = largeGoalChain()
-    const goal = {
-      ...whole,
-      scope: 'tree' as const,
-      members: whole.members.filter((member) => member.parent_reference === 'MAIN-384'),
-      total: 273,
-      closed: 273,
-      open: 0,
-      workable: 0,
-      by_category: { completed: 273 },
-      origins: whole.origins.slice(0, 1),
-      edges: [],
-    }
-    serveChain(json(chainResponse(whole)), json(chainResponse(goal)))
-    const wrapper = await open()
+  it('drops a chosen lane on Contents, which draws no map to choose one on', async () => {
+    // The contents are the root's own children: one lane, and no MAIN-900 in it.
+    const contents = json(chainResponse(largeGoalContents()))
+    serveChain(contents, json(chainResponse(largeGoalChain())), contents)
+    const wrapper = await openChain()
     await getButton(wrapper, 'MAIN-900').trigger('click')
     expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(true)
-    await getButton(wrapper, 'Contents').trigger('click')
-    await flushPromises()
-    expect(
-      section(wrapper)
-        .findAll('.branch-map-label')
-        .map((label) => label.text()),
-    ).toEqual(['MAIN-384'])
+    await chooseScope(wrapper, 'Contents')
+    expect(section(wrapper).find('.branch-map').exists()).toBe(false)
     expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(false)
+    expect(section(wrapper).findAll('.contents-row').length).toBeGreaterThan(0)
   })
 
   it('hands the chain it shows to the graph', async () => {
     serveChain(json(chainResponse(largeGoalChain())))
-    const wrapper = await open()
+    const wrapper = await openChain()
     await getButton(wrapper, 'On graph').trigger('click')
     const [[shown, branch]] = wrapper.emitted('chain') as [
       [{ root: { reference: string }; total: number }, string | null],
@@ -447,7 +456,7 @@ describe('the chain section of a card', () => {
 
   it('hands the graph the branch chosen on the map', async () => {
     serveChain(json(chainResponse(largeGoalChain())))
-    const wrapper = await open()
+    const wrapper = await openChain()
     await getButton(wrapper, 'MAIN-900').trigger('click')
     await getButton(wrapper, 'On graph').trigger('click')
     await getButton(wrapper, 'MAIN-900').trigger('click')

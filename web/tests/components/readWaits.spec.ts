@@ -19,13 +19,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
+import InspectorCommitPeek from '@/widgets/work-item-inspector/components/InspectorCommitPeek.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
-import InspectorRefPeek from '@/widgets/work-item-inspector/components/InspectorRefPeek.vue'
 
 import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
 import RequestList from '@/features/input-requests/components/RequestList.vue'
 
-import { resolveRef } from '@/shared/api/api.ts'
+import { fetchCommit } from '@/shared/api/api.ts'
 import type { InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
@@ -40,7 +40,7 @@ import { finderResponse } from '../support/globalFinder.ts'
 
 vi.mock('@/shared/api/api.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/api.ts')>()),
-  resolveRef: vi.fn(),
+  fetchCommit: vi.fn(),
 }))
 vi.mock('@/shared/api/planningGlobalSearchApi.ts', () => ({
   searchGlobalPlanningWorkItems: vi.fn(),
@@ -147,6 +147,7 @@ const surfaces: Surface[] = [
           loading: true,
           readable: true,
           scope: 'chain',
+          space: '',
         },
         global: { plugins: [i18n()] },
       }),
@@ -174,15 +175,25 @@ const surfaces: Surface[] = [
     content: (wrapper) => wrapper.text().includes(messages.en.execution.none),
   },
   {
-    name: 'a commit looked up from a card’s text',
+    name: 'an attached commit looked up from a card',
     start: async () => {
       const read = held<ResolvedRef>()
-      vi.mocked(resolveRef).mockReturnValueOnce(read.promise)
+      vi.mocked(fetchCommit).mockReturnValueOnce(read.promise)
       answerRead = () =>
         read.answer.settle({ kind: 'commit', value: 'abc1234', resolved: true, detail: 'feat' })
-      return mount(InspectorRefPeek, {
+      return mount(InspectorCommitPeek, {
         props: {
-          record: { kind: 'commit', value: 'abc1234', label: '', author: 'claude', at: '' },
+          commit: {
+            repository: 'alpha',
+            display_name: 'Alpha',
+            hash: 'abc1234',
+            subject: 'feat',
+            committed_at: null,
+            session: '',
+            agent: '',
+            attached_by: 'server',
+            label: '',
+          },
         },
         global: { plugins: [i18n()], stubs: { teleport: true } },
       })

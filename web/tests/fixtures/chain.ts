@@ -105,6 +105,23 @@ export function largeGoalChain() {
   }
 }
 
+/** The same goal read as its contents, scope `tree`: its own 273 children, all done. */
+export function largeGoalContents() {
+  const whole = largeGoalChain()
+  return {
+    ...whole,
+    scope: 'tree' as const,
+    members: whole.members.filter((member) => member.parent_reference === 'MAIN-384'),
+    total: 273,
+    closed: 273,
+    open: 0,
+    workable: 0,
+    by_category: { completed: 273 },
+    origins: whole.origins.slice(0, 1),
+    edges: [],
+  }
+}
+
 /** The answer for an item nothing was discovered from and that has no children. */
 export function emptyChain(reference = 'QA-320', id = '00000000-0000-4000-8000-000000000320') {
   return {

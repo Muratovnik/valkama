@@ -189,6 +189,14 @@
    which is the inset of the holder's own control: the dot was a character of the phrase,
    a word's space from «завершил» and twelve pixels from the name, the flex gap and that
    inset added together. As in the identity line, it is room on both sides of a dot. */
+
+/* A step its former holder marked: the holder's lease lapsed, so the mark waits for a fresh
+   one before review or a close. It reads in the holder's line, a shade louder than it. */
+.step-previous {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
 .step-holder-dot {
   flex: none;
   margin-inline-start: var(--space-2);

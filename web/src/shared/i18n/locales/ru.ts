@@ -32,8 +32,10 @@ import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
+import { workItemChainMessages } from '@/shared/i18n/workItemChainMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
+import { workItemFactMessages } from '@/shared/i18n/workItemFactMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 import { workItemNextStepMessages } from '@/shared/i18n/workItemNextStepMessages.ts'
@@ -61,6 +63,7 @@ export const ru = {
   pastedImages: pastedImageMessages.ru.pastedImages,
   ...connectionMessages.ru,
   liveWork: liveWorkMessages.ru.liveWork,
+  commits: workItemFactMessages.ru.commits,
   analytics: analyticsMessages.ru.analytics,
   app: {
     title: 'Valkama',
@@ -711,77 +714,7 @@ export const ru = {
       outgoing: 'От этой задачи',
       incoming: 'К этой задаче',
     },
-    chain: {
-      title: 'Цепочка',
-      scopeLabel: 'Что охватывает цепочка',
-      scopeTree: 'Состав',
-      scopeChain: 'Цепочка',
-      showOnGraph: 'Показать на графе',
-      onGraph: 'На графе',
-      details: 'График и темп',
-      loadFailed: 'Не удалось загрузить цепочку.',
-      primaryOnly: 'Цепочка доступна только для элементов основного хранилища.',
-      refreshFailed: 'Не удалось обновить цепочку; показан последний ответ.',
-      stat: {
-        total: 'Под корнем',
-        open: 'Открыто',
-        noneOpen: 'Открытых нет',
-        workable: 'Можно брать',
-        workableNote: 'включая неразобранное',
-      },
-      part: '{group} {count}',
-      group: {
-        active: 'В работе',
-        review: 'Проверка',
-        ready: 'Готово к работе',
-        triage: 'Не разобрано',
-        deferred: 'Отложено',
-        blocked: 'Заблокировано',
-        containers: 'Цели и этапы',
-        done: 'Выполнено',
-      },
-      groupCount: '{group} · {count}',
-      showAll: 'Показать все · {count}',
-      showFewer: 'Свернуть',
-      forecast: {
-        window: 'За {days}\u{A0}дней',
-        first: 'Первый день | Первые {count}\u{A0}дня | Первые {count}\u{A0}дней',
-        facts: '{period}: {created} добавлено, {closed} выполнено',
-        quiet: 'За {days}\u{A0}дней ничего не добавлено и не выполнено',
-        line: '{facts}. {verdict}',
-        young: 'Для прогноза нужно {days}\u{A0}дней истории',
-        growing:
-          'Новое появляется быстрее, чем закрывается: чтобы сойтись, нужно закрывать больше {rate}\u{A0}в день',
-        steady: 'Открытое не убывает: чтобы сойтись, нужно закрывать больше {rate}\u{A0}в день',
-        about: 'При таком темпе открытое закроется примерно за {span}',
-        aboutBy: 'При таком темпе открытое закроется примерно за {span} (к\u{A0}{date})',
-        range: 'При таком темпе открытое закроется за {span}',
-        rangeOn: 'При таком темпе открытое закроется за {span} ({date})',
-        earliest: 'При таком темпе открытое закроется не раньше чем через {span}: темп неровный',
-        year: 'При таком темпе открытое закроется не раньше чем через год',
-        day: '{count}\u{A0}день | {count}\u{A0}дня | {count}\u{A0}дней',
-        week: '{count}\u{A0}неделю | {count}\u{A0}недели | {count}\u{A0}недель',
-        month: '{count}\u{A0}месяц | {count}\u{A0}месяца | {count}\u{A0}месяцев',
-      },
-      noParent: 'без родителя',
-      map: {
-        summary: 'Карта цепочки: веток — {lanes}, задач — {total}; {parts}.',
-        lane: 'Ветка {name}: задач — {total}; {parts}',
-        hint: 'Стрелки влево и вправо — по задачам, Page Up и Page Down — по участкам одного состояния, Home и End — к краям, Enter — открыть задачу.',
-        task: '{reference} · {title} · {state}',
-        position: '{position} из {total}',
-        filterLane: 'Показать только ветку {name}',
-        filter: 'Ветка {name}',
-        clearFilter: 'Ветка {name}: показать все ветки',
-        openParent: 'Открыть {reference}',
-        countDone: 'выполнено {done} из {total}',
-      },
-      seriesTotal: 'Объём {count}',
-      seriesClosed: 'Выполнено {count}',
-      seriesOpen: 'Открыто {count}',
-      chartSummary:
-        'Объём с {from} по {to}: в начале {start}, сейчас {total}; на {day} выполнено {closed}, открыто {open}.',
-    },
+    chain: workItemChainMessages.ru.chain,
     inspector: 'Единица работы',
     resize: 'Изменить ширину панели',
     sections: 'Разделы единицы работы',
@@ -814,6 +747,7 @@ export const ru = {
     },
     ...workItemFacetMessages.ru,
     ...workItemHeadMessages.ru,
+    ...workItemFactMessages.ru,
     ...workItemNextStepMessages.ru,
     filter: workFilterMessages.ru.filter,
     ...viewMenuMessages.ru,

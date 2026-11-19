@@ -55,8 +55,8 @@ const link = (index: number) => ({
   title: 'Related',
 })
 const ref = (index: number) => ({
-  kind: 'commit',
-  value: `c${index}`,
+  kind: 'url',
+  value: `https://example.com/${index}`,
   label: '',
   author: 'codex',
   at,

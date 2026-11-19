@@ -7,7 +7,6 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { sameCommit } from '@/shared/lib/referenceLinks.ts'
 import { splitReferences, wholeReference } from '@/shared/lib/textReferences.ts'
 
 const values = (text: string) =>
@@ -31,7 +30,7 @@ describe('candidate references', () => {
   })
 
   it('takes a repository-qualified commit by its hash, and no hash glued to a word or an extension', () => {
-    expect(values('assay@89e5d4c')).toEqual(['89e5d4c'])
+    expect(values('atlas@89e5d4c')).toEqual(['89e5d4c'])
     expect(values('x89e5d4c a1b2c3d.ts a1b2c3d_old')).toEqual([])
   })
 
@@ -52,27 +51,5 @@ describe('candidate references', () => {
     expect(wholeReference(' MAIN-12 ')).toEqual({ kind: 'work-item', value: 'MAIN-12' })
     expect(wholeReference('MAIN-12 MAIN-13')).toBeNull()
     expect(wholeReference('npm test')).toBeNull()
-  })
-})
-
-describe('commit names', () => {
-  it('are the same commit when one is a prefix of the other, from seven characters', () => {
-    expect(sameCommit('a1b2c3d', 'a1b2c3d4e5f6')).toBe(true)
-    expect(sameCommit('repo@a1b2c3d4', 'A1B2C3D')).toBe(true)
-    expect(sameCommit('a1b2c3d', 'a1b2c3e')).toBe(false)
-    expect(sameCommit('a1b2c3', 'a1b2c3d')).toBe(false)
-  })
-
-  // The same examples as tests/test_refs.py (CommitValueRuleTests), which hold
-  // the server to this rule.
-  it('compare the revision after a repository name, and a value without one whole', () => {
-    expect(sameCommit('repo@a1b2c3d', 'a1b2c3d')).toBe(true)
-    expect(sameCommit('my-repo a1b2c3d', 'a1b2c3d')).toBe(true)
-    expect(sameCommit('a1b2c3d', 'a1b2c3d')).toBe(true)
-    expect(sameCommit('HEAD@{1234567}', '{1234567}')).toBe(false)
-    expect(sameCommit('HEAD@{1234567}', 'HEAD@{1234567}')).toBe(true)
-    expect(sameCommit('-x@a1b2c3d', 'a1b2c3d')).toBe(false)
-    expect(sameCommit('fix the bug', 'the bug')).toBe(false)
-    expect(sameCommit('repo@--output=x', '--output=x')).toBe(true)
   })
 })

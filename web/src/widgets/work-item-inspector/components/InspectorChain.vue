@@ -15,11 +15,18 @@
  * the primary store alone, so the card asks it nothing for one, and the section
  * of an item with children says where its chain can be read instead of leaving
  * the reader to wonder why there is none.
+ *
+ * It reads in two ways, the Contents and the Chain switch. Contents is the work under the
+ * root, as the tree of rows with its counts by state (`ChainContents`); Chain is what the work
+ * grew into, as the branch map and the members by where they stand. The figures and the pace
+ * stand in both. A goal or a stage opens on Contents and a task on Chain, which the card's read
+ * decides (`useWorkItemChain`); the switch stands where the two would answer differently.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranchMap.vue'
+import ChainContents from '@/widgets/work-item-inspector/components/ChainContents.vue'
 import ChainDetails from '@/widgets/work-item-inspector/components/ChainDetails.vue'
 import ChainMembers from '@/widgets/work-item-inspector/components/ChainMembers.vue'
 import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
@@ -27,6 +34,7 @@ import type { ChainView } from '@/widgets/work-item-inspector/utils/inspectorRet
 import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
 
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
@@ -43,6 +51,8 @@ const props = defineProps<{
   /** The chain read reaches this item: it is in the primary store, not an attached one. */
   readable: boolean
   scope: ChainScope
+  /** The space the root stands in, by its id: the reader's folds of the contents are kept by it. */
+  space: string
 }>()
 
 const emit = defineEmits<{
@@ -71,18 +81,22 @@ const { shown: firstShown, held: firstHeld } = useLoadingPresence(
 /** The word the held line shows: the panel's, once the wait is shown, and nothing before. */
 const firstWord = computed(() => (firstShown.value ? t('platform.states.loading') : ''))
 
+/** The answer on screen is the root's contents, which stand even where nothing is inside. */
+const contents = computed(() => props.chain?.scope === 'tree')
+
 const visible = computed(() => {
   if (!props.readable || firstHeld.value) return true
-  return props.chain ? props.chain.total > 0 : props.loading || props.failed
+  return props.chain ? props.chain.total > 0 || contents.value : props.loading || props.failed
 })
 
 /** Busy only while a read runs; absent otherwise rather than a claim of `false`. */
 const busy = computed(() => (props.loading ? true : undefined))
 
-/** Whether the failure lost the chain or only its latest refresh. */
-const failureText = computed(() =>
-  t(props.chain ? 'workItem.chain.refreshFailed' : 'workItem.chain.loadFailed'),
-)
+/** Whether the failure lost the chain or only its latest refresh, in the words of what was asked. */
+const failureText = computed(() => {
+  const words = props.scope === 'tree' ? 'workItem.chain.contents' : 'workItem.chain'
+  return t(props.chain ? `${words}.refreshFailed` : `${words}.loadFailed`)
+})
 
 const scopes = computed(() => [
   { value: 'tree' as const, label: t('workItem.chain.scopeTree') },
@@ -91,12 +105,15 @@ const scopes = computed(() => [
 
 /**
  * Contents or Chain is a choice only where the two answer differently. Where the work grew
- * nothing past what stands under the root they are the same list, and where nothing stands
- * under it Contents is an empty one, so either way the switch would offer nothing to compare.
+ * nothing past what stands under the root they are the same list. A task holds no work, so
+ * its Contents would be an empty one; a goal or a stage with nothing inside yet still has
+ * Contents, which says so, beside the work found from it.
  */
 const twoScopes = computed(() => {
-  const totals = props.chain?.root.totals
-  return totals !== undefined && totals.tree > 0 && totals.tree !== totals.chain
+  const root = props.chain?.root
+  if (!root) return false
+  const { chain, tree } = root.totals
+  return tree !== chain && (tree > 0 || WORK_ITEM_TREE.isContainer(root))
 })
 
 const groups = computed(() => (props.chain ? groupMembers(props.chain.members) : null))
@@ -123,6 +140,8 @@ const chosenLane = ref<string | null>(null)
 const laneOf = (member: { parent_reference: string | null }) => member.parent_reference ?? ''
 const lane = computed(() => {
   const key = chosenLane.value
+  // A lane is chosen on the map, which Contents does not draw.
+  if (contents.value) return null
   const lanes = new Set(props.chain?.members.map((member) => laneOf(member)))
   return key !== null && lanes.size > 1 && lanes.has(key) ? key : null
 })
@@ -195,6 +214,7 @@ const stats = computed<{ key: string; label: string; value: number | null; note?
 )
 
 const members = ref<InstanceType<typeof ChainMembers> | null>(null)
+const contentsRows = ref<InstanceType<typeof ChainContents> | null>(null)
 
 /** The pace and the chart, one action away. */
 const detailsOpen = ref(false)
@@ -218,7 +238,7 @@ async function restore(next: Omit<ChainView, 'scope'>) {
 
 /** The row of a member, shown, or null when the section does not list it. */
 async function reveal(reference: string) {
-  return (await members.value?.reveal(reference)) ?? null
+  return (await (contentsRows.value ?? members.value)?.reveal(reference)) ?? null
 }
 
 const { pace, verdict } = useChainForecast(() => props.chain)
@@ -293,6 +313,7 @@ defineExpose({ restore, reveal, view })
       class="chain-body"
     >
       <ChainBranchMap
+        v-if="!contents"
         :chain="chain"
         :filter="lane"
         :labels="labels"
@@ -300,7 +321,10 @@ defineExpose({ restore, reveal, view })
         @open="(reference) => emit('open', reference)"
       />
 
-      <div class="chain-summary">
+      <div
+        v-if="chain.total > 0"
+        class="chain-summary"
+      >
         <p class="chain-summary-line">
           <span
             v-for="stat in stats"
@@ -333,8 +357,15 @@ defineExpose({ restore, reveal, view })
         />
       </div>
 
+      <ChainContents
+        v-if="contents"
+        ref="contentsRows"
+        :chain="chain"
+        :space="space"
+        @open="(reference) => emit('open', reference)"
+      />
       <div
-        v-if="lane !== null"
+        v-else-if="lane !== null"
         ref="laneFilter"
         class="chain-lane-filter"
       >
@@ -361,6 +392,7 @@ defineExpose({ restore, reveal, view })
       </div>
 
       <ChainMembers
+        v-if="!contents"
         ref="members"
         :groups="listed"
         :labels="labels"

@@ -1,0 +1,76 @@
+/* The holder's words take one line beside the action; only where they cannot does the name
+   give way. */
+.card-holder-value {
+  flex-wrap: nowrap;
+  grid-column: 2;
+  gap: var(--space-2);
+}
+
+/* The words start where a plain holder's do: the margin takes back the inset its fill keeps
+   under the pointer. The name takes the ink a value has, against the label's quiet one. */
+.card-holder-link {
+  --color-open-action-name: var(--color-text);
+
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
+}
+
+.card-holder-name {
+  flex: 0 1 auto;
+  color: var(--color-text);
+  font: var(--font-detail);
+}
+
+.card-holder-stale {
+  flex: none;
+}
+
+.card-action {
+  grid-column: 3;
+  align-self: center;
+
+  &:empty {
+    display: none;
+  }
+}
+
+/* Who else follows the item. The names wrap between them, never inside one, and a line that
+   wraps starts where the first name does. A name wider than the whole line wraps between its
+   own words and is read whole, with no ellipsis: the line is plain words, which a keyboard or
+   a finger cannot hover for a title. */
+.card-subscriber-list {
+  gap: var(--space-1) var(--space-2);
+  align-content: center;
+  align-items: baseline;
+}
+
+.card-subscriber {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
+}
+
+/* A word moves to the next line whole; only one wider than the line breaks inside itself. */
+.card-subscriber-word {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Who works on a goal or a stage wraps between the sessions, as the followers do. */
+.card-working {
+  flex-wrap: wrap;
+}
+
+/* A phone-wide drawer: the one action stands under everything else, at the full width a thumb
+   reaches. In the document it stays next to the holder it is about. */
+@container drawer (width < 520px) {
+  .card-holder-value {
+    grid-column: 2 / -1;
+  }
+
+  .card-action {
+    grid-column: 1 / -1;
+    order: 1;
+  }
+}

@@ -170,13 +170,17 @@ describe('RichText', () => {
 describe('the card layer of reference links', () => {
   const item = {
     ...workItemFixture('Task', 1),
-    refs: [
+    commits: [
       {
-        kind: 'commit' as const,
-        value: 'repo@a1b2c3d4e5',
-        label: 'fix: one thing',
-        author: 'agent',
-        at: '2026-08-27T18:00:00Z',
+        repository: 'repo',
+        display_name: 'Repo',
+        hash: 'a1b2c3d4e5',
+        subject: 'fix: one thing',
+        committed_at: '2026-08-27T18:00:00Z',
+        session: '',
+        agent: '',
+        attached_by: 'server' as const,
+        label: '',
       },
     ],
   }
@@ -188,7 +192,7 @@ describe('the card layer of reference links', () => {
         default: () =>
           h(InspectorReferenceScope, { item }, { default: () => h(RichText, { source }) }),
       },
-      global: { plugins: [i18n()], stubs: { InspectorRefPeek: true } },
+      global: { plugins: [i18n()], stubs: { InspectorCommitPeek: true } },
     })
   }
 
@@ -200,7 +204,7 @@ describe('the card layer of reference links', () => {
         : null,
     )
     const buttons = wrapper.findAll('.rich-reference')
-    // The card's own reference is not a link; a commit links only as a ref it carries.
+    // The card's own reference is not a link; a hash links only as a commit it carries.
     expect(buttons.map((button) => button.text())).toEqual(['QA-7', 'OTHER-3', 'a1b2c3d'])
     await buttons[0]?.trigger('click')
     expect(shellOpen).not.toHaveBeenCalled()
@@ -208,6 +212,6 @@ describe('the card layer of reference links', () => {
     await buttons[1]?.trigger('click')
     expect(shellOpen).toHaveBeenCalledExactlyOnceWith('OTHER-3')
     await buttons[2]?.trigger('click')
-    expect(wrapper.findComponent({ name: 'InspectorRefPeek' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'InspectorCommitPeek' }).exists()).toBe(true)
   })
 })

@@ -72,7 +72,7 @@ const ACCEPTANCE_BASES = [
 ] as const
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export const LINK_KINDS = ['blocks', 'discovered-from', 'duplicates', 'relates-to'] as const
-const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
+const REF_KINDS = ['memory', 'session', 'url'] as const
 
 /** `MAIN-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u

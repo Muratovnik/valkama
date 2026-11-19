@@ -52,6 +52,7 @@ async function rendered(chain: unknown, locale: 'en' | 'ru') {
       loading: false,
       readable: true,
       scope: 'chain',
+      space: '',
     },
     global: { plugins: [createI18n({ legacy: false, locale, messages, pluralRules })] },
   })

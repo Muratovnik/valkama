@@ -19,7 +19,6 @@ export interface ActivityEntry {
 }
 
 const REF_TITLE_KEYS: Record<Ref['kind'], string> = {
-  commit: 'reference.commit',
   memory: 'reference.memory',
   session: 'reference.session',
   url: 'reference.url',

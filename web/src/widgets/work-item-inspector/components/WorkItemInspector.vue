@@ -31,7 +31,7 @@
  * under it, and moved all of that when the answer came. The bar's controls and the
  * waiting mark are all that stand until then, and a failed read gets the head back.
  */
-import { computed, ref, toRef, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
@@ -156,8 +156,7 @@ const {
 // refresh, never twice for one answer. Like executions, the chain endpoint reads
 // the primary store only, so an attached store's item asks it nothing. It is read
 // ahead of the sections, which offer its tab only where there is a chain.
-const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
-const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
+const chain = useWorkItemChain(item, props)
 
 const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections({
   writable: () => props.writable,
@@ -448,6 +447,7 @@ defineExpose({ close, openFrom })
               :loading="chain.loading.value"
               :readable="writable"
               :scope="chain.scope.value"
+              :space="chain.space.value"
               @scope="chain.setScope"
               @retry="chain.load"
               @graph="(shown, branch) => emit('chain', shown, branch)"

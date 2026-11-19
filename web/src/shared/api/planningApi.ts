@@ -344,14 +344,14 @@ export async function linkWorkItems(input: {
 }
 
 /**
- * Point this item at something outside Planning: a commit, a session, a memory
- * record, a URL. The pointer is Valkama's own act — the provider is not asked
+ * Point this item at something outside Planning: a session, a memory record, a
+ * URL. The pointer is Valkama's own act — the provider is not asked
  * to store anything, which is why a read-only knowledge source can still be
  * attached to a work item.
  */
 export async function attachWorkItemRef(input: {
   id: string
-  kind: 'commit' | 'memory' | 'session' | 'url'
+  kind: 'memory' | 'session' | 'url'
   value: string
   author?: string
   label?: string

@@ -1875,6 +1875,16 @@ of the list shares, on the title's first line with every dot on one edge, and un
 title, at its edge, where the list is a phone's. The state followed its title in a row that
 wrapped, so down a list it jumped between the end of a short title's line and a line of its
 own under a long one, and groups that sized their own columns put it at another edge in each.
+The evidence ends with the item's commits, «Коммиты», newest first: each named by its
+repository and the start of its hash, «valkama · a3cc0de4», the pair that finds it, with its
+subject, then its project's name, when it was committed and, for a commit attached by hand,
+«прикреплён вручную». The server attaches a commit itself when a session makes it, which is
+the norm and says nothing. Its name opens what git says of it in a dialog, asked by that
+repository and hash (`GET /api/commit`) in the repository's registered root alone; a
+commit of no known repository says git has nowhere to be asked. A hash written in the
+card's text opens the same dialog where it names one commit the card carries, and is text
+where it names none or could name two. A commit is not a ref: the refs above it are
+sessions, memory records and links.
 A card's chain is a tab of its own, «Цепочка», in the order Обзор · Агенты · Цепочка ·
 Исполнение · Память · Связи · Системные события, of which a card shows those it offers.
 The card offers it only where there is a chain — an item with children, or one work was
@@ -1884,12 +1894,28 @@ a card on the tab whose next read finds no chain steps back to «Обзор». T
 under every link of a goal; the map and its hundreds of rows had held Overview's first
 screen between the next step and the description before that. The tab names it, so it has
 no heading of its own: it opens on its «Состав | Цепочка» switch and «На графе», and Back from
-the graph opens the card on this tab. The switch stands only where the two answer
-differently, by the counts the chain read gives for both scopes: where the work grew nothing
-past the root's children the two are one list, and a root with no children has no contents
-to read. An item of an attached store has the tab only where it has children, and there it
-says that its chain is read in the primary store.
-The section leads with a branch map: one lane per origin of work,
+the graph opens the card on this tab. A goal or a stage opens on «Состав», what it holds,
+and a task on «Цепочка», what grew from it: a task holds no work. The switch stands only
+where the two answer differently, by the counts the chain read gives for both scopes: where
+the work grew nothing past the root's children the two are one list, and a task with no
+children has no contents to read. A goal or a stage with no children keeps it, since it
+opens on its empty contents and the switch is its one way to its chain. The reader's choice
+holds while the card is open and comes back with it by Back. An item of an attached store
+has the tab only where it has children, and there it says that its chain is read in the
+primary store.
+«Состав» says first how much of the work under the root stands in each state, the chain
+read's counts in scope `tree` and none counted by the interface: tasks by their state's
+category, then, on a line of their own, the goals and stages under it by the state they
+derive, since «В работе» is said by both. Under the counts the work is the list's tree of
+rows: the root's stages and tasks at the top, each stage opening down to its tasks, in the
+order the read gives. A row says its reference, its title on one line, its state and who
+holds it while it is open; at a phone's width the holder gives way. A stage with open work
+opens and one with none starts folded, as in the list, and a fold the reader chose is kept
+with the list's, so a stage folded in one is folded in the other. One Tab stop, ↑ ↓, → and ←
+walk the rows as in the list, and Enter or a press opens a row's card. A root with nothing
+under it says «Внутри пока нет задач.» and draws no tree. «Состав» draws no branch map and
+no groups: its rows are the root's own work, and the map's lanes are origins of a chain.
+In «Цепочка» the section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the
 board's hues — finished green, in progress blue, review amber, ahead grey,
@@ -2198,7 +2224,18 @@ press does — and a warning dot once nobody is behind it; a plate there read as
 sessions that follow the item, each as its claim's holder would print, a name moving to
 the next line whole and one wider than the line wrapping between its own words, read whole
 with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody
-following there is no such row. A label chip only filters, its words in its middle with
+following there is no such row. A goal or a stage is held by nobody, its work being its tasks: its
+state row says the state it derives from them, «Не начато», «В работе» or «Ждёт
+подтверждения», with no menu to move it, and where the read of the item names sessions
+working under it the holder's row is «Работают: N», those sessions printed as the followers
+are, each with the tasks it holds in its tooltip, and no «Взять». A task waiting to be taken
+in «Не разобрано», «Отложено» or «Готово к работе» that was taken before says «начата»
+beside its state, quieter than it; a goal never does, its start being its first task's.
+Accepted work ends the rows with «Принято»: who decided it is to be done, «владелец», «по
+поручению», «как часть цели», «по правилу метки», «решение агента» or «принято до 3.0», and
+when; work nobody accepted has no such row. On Overview a step its former holder marked says
+«отмечено прежним исполнителем» after the one who marked it: that holder's lease lapsed, and
+the mark waits for a fresh one before review or a close. A label chip only filters, its words in its middle with
 the same room at either end, at rest and under the pointer alike. The labels are changed
 in one place, the picker the new-task dialog asks with: the «+» that ends the row, or a
 press on the row beside the chips, opens it in the row's place over the space's labels,
