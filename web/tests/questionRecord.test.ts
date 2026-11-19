@@ -164,10 +164,17 @@ const counted = (label: string, count: number) => `${label}: ${count}`
 describe('the answers of a group of findings', () => {
   const ticks = { field: 'items', initial: ['main-1', 'main-2', 'main-3'], total: 3 }
   const group: KindAnswer[] = [
-    { label: 'Do', answer: { answer: 'do' }, ticks, counts: true },
-    { label: 'Later…', answer: { answer: 'later' }, ticks, later: { field: 'until' } },
+    { label: 'Do', answer: { answer: 'do' }, ticks, counts: true, needsTicked: true },
+    {
+      label: 'Later…',
+      answer: { answer: 'later' },
+      ticks,
+      later: { field: 'until' },
+      needsTicked: true,
+    },
     { label: 'Don’t do', answer: { answer: 'drop' }, ticks, cancels: { field: 'cancels' } },
   ]
+  const UNTICKED = 'Tick a finding first'
   const unticked: RequestDraft = { ...EMPTY_DRAFT, answers: { items: ['main-1', 'main-3'] } }
 
   it('send every finding while none was unticked, and only the ticked ones after', () => {
@@ -194,15 +201,30 @@ describe('the answers of a group of findings', () => {
   })
 
   it('name how many go on Do once a finding is unticked, and on no other answer', () => {
-    expect(answersOver(group, EMPTY_DRAFT, counted).map(({ label }) => label)).toEqual([
+    expect(answersOver(group, EMPTY_DRAFT, counted, UNTICKED).map(({ label }) => label)).toEqual([
       'Do',
       'Later…',
       'Don’t do',
     ])
-    expect(answersOver(group, unticked, counted).map(({ label }) => label)).toEqual([
+    expect(answersOver(group, unticked, counted, UNTICKED).map(({ label }) => label)).toEqual([
       'Do: 2',
       'Later…',
       'Don’t do',
     ])
+  })
+
+  it('block every answer that needs a tick while none is, for the reason given, and no other', () => {
+    const none: RequestDraft = { ...EMPTY_DRAFT, answers: { items: [] } }
+    expect(answersOver(group, none, counted, UNTICKED).map(({ blocked }) => blocked)).toEqual([
+      UNTICKED,
+      UNTICKED,
+      undefined,
+    ])
+    for (const draft of [EMPTY_DRAFT, unticked])
+      expect(answersOver(group, draft, counted, UNTICKED).map(({ blocked }) => blocked)).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ])
   })
 })

@@ -239,7 +239,8 @@
           "family": "",
           "state": "none"
         },
-        "participants": []
+        "participants": [],
+        "parent": null
       }
     }
   }

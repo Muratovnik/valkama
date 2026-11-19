@@ -5,7 +5,7 @@
  *
  * A review shows the task's outcome under what to check, which is the question's own words. A
  * goal shows its description and conditions and how much open work stands under it; a task in a
- * goal, its description, its goal being named by the question. A group of findings shows the
+ * goal, its description and its goal by number and title with the goal's conditions. A group of findings shows the
  * goal it proposes, its findings with a box each, ticked at first (`RequestFindings`), which is
  * part of what the form holds (`draft`), and why the agent answers as it does. A condition shows what is
  * removed, and what each rewritten step was and becomes, with the agent's reason. A cancel shows
@@ -13,7 +13,9 @@
  * return say all they need in their own words: a confirmation adds the outcome the agent wrote.
  *
  * What the question does not carry is read from its card (`useQuestionItem`) when it first comes
- * into view; until it arrives that part takes no room, and a read that fails says so in place.
+ * into view; until it arrives that part takes no room, and a read that fails says so in place. A
+ * task's goal is read after its card, by the reference the card names it by (`useQuestionGoal`);
+ * where that read fails or the task stands in no goal now, a line says so in the goal's place.
  *
  * The root names its kind (`data-kind-subject`) and each part its name (`data-kind-part`), the
  * hooks a check selects them by.
@@ -22,6 +24,7 @@ import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestFindings from '@/features/input-requests/components/RequestFindings.vue'
+import { useQuestionGoal } from '@/features/input-requests/composables/useQuestionGoal.ts'
 import { useQuestionItem } from '@/features/input-requests/composables/useQuestionItem.ts'
 import { closingRows } from '@/features/input-requests/utils/cancelRows.ts'
 import { ticksOf } from '@/features/input-requests/utils/questionKinds.ts'
@@ -59,6 +62,19 @@ const { item, failed } = useQuestionItem(
   () => readsCard.value,
   root,
 )
+const goal = useQuestionGoal(
+  () => props.entry,
+  item,
+  () => props.kind === 'task',
+)
+/** The goal of a task as read, the line that stands in its place, or nothing yet. */
+const goalPart = () => {
+  const read = goal.value
+  if (!read) return null
+  if (read.status === 'ready')
+    return { heading: 'inGoal', rows: [[read.item.reference, read.item.title]] }
+  return { note: t(read.status === 'gone' ? 'requests.kinds.noGoal' : 'requests.kinds.goalUnread') }
+}
 const action = computed(() => props.entry.request.action)
 const proposed = computed(() => action.value?.proposed ?? {})
 const words = (text: string | undefined | null) => text?.trim() ?? ''
@@ -79,9 +95,14 @@ const parts = computed(() => {
       (props.kind === 'goal' || props.kind === 'task') && words(found?.description)
         ? { text: words(found?.description), bare: true }
         : null,
+    goal: goalPart,
     conditions: () => {
       if (props.kind === 'triage' && proposed.value.conditions?.length)
         return { heading: 'proposedGoal', steps: proposed.value.conditions }
+      if (props.kind === 'task' && goal.value?.status === 'ready') {
+        const steps = goal.value.item.checklist.map(({ text }) => text)
+        return steps.length ? { heading: 'goalConditions', steps } : null
+      }
       const steps = props.kind === 'goal' ? (found?.checklist ?? []).map(({ text }) => text) : []
       return steps.length ? { steps } : null
     },

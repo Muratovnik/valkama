@@ -225,8 +225,11 @@ function draftFor(entry: InputRequestEntry) {
 }
 /** A question's answers as its buttons say them over what its form holds now. */
 const answersOf = (entry: InputRequestEntry) =>
-  answersOver(recordOf(entry).answers, draftFor(entry), (answer, n) =>
-    t('requests.kinds.counted', { answer, n }),
+  answersOver(
+    recordOf(entry).answers,
+    draftFor(entry),
+    (answer, n) => t('requests.kinds.counted', { answer, n }),
+    t('requests.kinds.tickFirst', { drop: t('requests.kinds.answers.drop') }),
   )
 /** The blocks that wait in the tab shown, as the records of their kinds. */
 const waitingRecords = computed(() =>

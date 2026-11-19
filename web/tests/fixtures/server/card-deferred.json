@@ -111,7 +111,8 @@
           "opened_host": "",
           "family": "",
           "state": "none"
-        }
+        },
+        "parent": null
       }
     }
   }

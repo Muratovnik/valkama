@@ -2364,24 +2364,32 @@ number, the space before it and the project after. A question its task's closing
 The kind follows the question's purpose: a review shows the task's outcome under what to check
 and answers Accept or Return to work; a group of findings shows the goal it proposes with its
 conditions, its findings and why, and a goal its description, conditions and how much open work
-stands under it, both answering Do, Later… or Don't do; a task in a goal shows its description
-and adds Move out of the goal; a condition shows what is removed and what each rewritten step was
-and becomes, with the reason, and answers Allow or Keep; a cancel shows what closes, who holds it
+stands under it, both answering Do, Later… or Don't do; a task in a goal shows its description,
+its goal by number and title and the goal's conditions, and adds Move out of the goal; a condition
+shows what is removed and what each rewritten step was and becomes, with the reason, and answers Allow or Keep; a cancel shows what closes, who holds it
 and what the sessions at work answered, and answers Cancel or Keep; a confirmation answers I
 confirm or Leave it open, which says both things the server does on that answer, handing the goal
 to the next session in its space or, with nothing under it, only not closing it; and a return
 answers as a goal does. A question of any
 other purpose, or without the field its kind answers in, stays a choice of options. What the
 question does not carry, as a card's outcome or description, is read from its card when the
-record first comes into view.
+record first comes into view. A task's goal is read after that card, by the reference the card
+names it by beside its `parent_id` (`parent`), with the exact read of one item, since that read
+takes a reference and no id; where the read fails, or the task stands in no goal now, one line in
+the goal's place says so, and the question is answered all the same.
 A group's findings are rows with a box each, a question's rows, all ticked at first and none with
 the recommended word, since the server recommends every one. Ticking only ticks. A finding left
 unticked leaves the group and goes back to triage whatever the answer, so every answer sends what
-is ticked, and once any is unticked Do names how many go: «Do: 7».
+is ticked, and once any is unticked Do names how many go: «Do: 7». The server takes Do and
+«Later…» only with a finding ticked, so with none ticked both wait for one: they are unavailable,
+and the reason stands under the answers, as it stands under an unavailable «Put off»; a choice of a
+day already open keeps its «Put off» unavailable for the same reason. «Don't do» stays, and drops
+the whole group.
 «Later…» puts the goal off with the findings ticked, to a day or until a card closes. «Don't do»
 asks first, as every answer that cancels does. Where open work stands under the goal that the
 question did not ask about, the server refuses it with the list of that work; the list stands
-over the answers, what closes with who holds it and what waits on it, focus goes to its first
+over the answers, what closes with who holds it and what waits on it, the reference it waits on
+never split at its hyphen, focus goes to its first
 line, which says the answer cancels that work too, and the asking stands again. Confirming it
 sends that list's token, never the one the question was asked with, which listed the findings the
 answer cancels first; a list that changed meanwhile is refused and shown again the same way.

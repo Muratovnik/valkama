@@ -175,9 +175,16 @@ const workItemBriefShape = {
    */
   last_claim_ref: holderField().nullable().optional(),
 }
+/**
+ * The goal or stage an item stands under, by reference, or null for one under none: the exact
+ * read of one item carries it beside `parent_id`, by which that read cannot read the item over it.
+ * A write's answer and a list's rows do not carry it.
+ */
+const parentField = () => boundedText(WORK_ITEM_REFERENCE, 20).nullable().optional()
 const workItemBriefSchema = recordObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
+  parent: parentField(),
 })
 /**
  * A row of a list read, the board's among them: the brief record and its place in its
@@ -406,6 +413,7 @@ const workItemAgentSchema = strictObject({
 
 const workItemSchema = recordObject({
   ...workItemBriefShape,
+  parent: parentField(),
   agents: z.array(workItemAgentSchema).optional(),
   claim: claimSchema.nullable(),
   /** Who `last_claim_ref` names and what opening them would reach: only the card reads it. */

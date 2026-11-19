@@ -115,6 +115,8 @@ class _Scenario:
         self.root = root
         #: The goal, the stage and the task done under the goal that `tree` files.
         self.tree_refs: dict[str, str] = {}
+        #: The stage under the goal `goal_card` files.
+        self.in_goal = ""
         conn = store.connect()
         try:
             service.create_planning_space(conn, name="Contract", key=SPACE)
@@ -250,7 +252,10 @@ class _Scenario:
             conn.close()
 
     def goal_card(self) -> dict:
-        """A goal's card naming who works on it: its creator, and a holder under a stage."""
+        """A goal's card naming who works on it: its creator, and a holder under a stage.
+
+        The stage under it is kept (`in_goal`), whose brief read names the goal as its parent.
+        """
 
         def who(identity: str, agent: str | None = None) -> calls.Identity:
             return calls.Identity(
@@ -286,6 +291,7 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
+        self.in_goal = str(stage)
         return self.http(f"/api/modules/planning/work-item?{self.scope(reference=goal)}")
 
     def session_gone(self) -> dict:
@@ -1147,6 +1153,10 @@ class _Scenario:
             "request-triage-group": self.triage_group(),
             # Last: its launch place changes the space every answer above reads.
             **self.participation(),
+            # After every other, so the ids it names first take no number another file holds.
+            "card-in-goal-brief": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=self.in_goal, brief='true')}"
+            ),
         }
 
 

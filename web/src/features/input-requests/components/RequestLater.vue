@@ -35,6 +35,8 @@ const props = defineProps<{
   panelId: string
   /** The day or the card's number chosen, as the field holds it; empty while none is. */
   value: string
+  /** Why the answer that opened it cannot be sent now, which keeps the press unavailable too. */
+  blocked?: string
 }>()
 const emit = defineEmits<{ 'put-off': []; 'update:value': [value: string] }>()
 const { t } = useI18n()
@@ -48,6 +50,7 @@ const card = computed(() => (day.value ? '' : props.value))
 const cards = useCardSearch(() => props.entry)
 /** Why it cannot be put off yet; empty once it can. */
 const reason = computed(() => {
+  if (props.blocked) return props.blocked
   if (!props.value) return t('requests.kinds.untilEither')
   return day.value && day.value < today ? t('requests.record.untilPast') : ''
 })

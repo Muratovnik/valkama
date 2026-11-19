@@ -1165,6 +1165,13 @@ preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
 refused with 400; an unknown item is 404 and a space that is not there is 409,
 as for the full read.
 
+**Since 3.0.** Both forms of that read carry `parent` beside `parent_id`: the
+reference of the goal or stage the item stands under, `"MAIN-3"`, or `null` for
+an item under none, as an agent's card names it. The read takes a reference and
+no id, so this is how a reader of one item reads the item over it, as the
+question about a task in a goal reads the goal it shows. A write's answer and the
+rows of a list do not carry it.
+
 ### Commits on no card
 
 **Since 3.0.** A commit a session made that no item holds waits on a list until

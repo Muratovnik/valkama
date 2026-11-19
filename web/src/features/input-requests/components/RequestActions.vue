@@ -54,8 +54,13 @@
  * box beside it says the answer in the danger's ink, and the asking, in its own words, takes the
  * same place. Every box holds room for each word it can come to say, so nothing moves. The
  * answer that puts the question off opens its choice of a day in place (`later`), and says so.
+ *
+ * An answer that cannot be sent yet (`blocked`), as a group's Do and Later… with no finding
+ * ticked, is unavailable, and why stands under the answers at their end, as it stands under an
+ * unavailable Put off. Its box is unavailable only while it says its own answer: as the box an
+ * asking confirms in, it confirms.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { KindAnswer } from '@/features/input-requests/utils/questionRecord.ts'
@@ -96,6 +101,7 @@ const emit = defineEmits<{
   'way-out': []
 }>()
 const { t } = useI18n()
+const blockedId = useId()
 const root = ref<HTMLElement | null>(null)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
@@ -105,6 +111,10 @@ const declines = computed(() => props.waiting && props.declinable)
 const offersWayOut = computed(() => props.changing || props.declinable)
 /** It waits for one of its kind's answers rather than for its form. */
 const byAnswers = computed(() => props.waiting && props.answers.length > 0)
+/** Why an answer cannot be sent yet, under the answers; empty while each can. */
+const blockedWhy = computed(() =>
+  byAnswers.value ? (props.answers.find((answer) => answer.blocked)?.blocked ?? '') : '',
+)
 /** The box an answer's step asks in: the next one, or the one before where it is the last. */
 const confirmAt = (index: number) => (index + 1 < props.answers.length ? index + 1 : index - 1)
 const askedWords = (index: number) =>
@@ -138,14 +148,18 @@ function kindButton(answer: KindAnswer, index: number) {
   const opens = answer.later ? (props.later ?? { controls: '', open: false }) : null
   const box = {
     away: step === index,
+    // Unavailable only while it says its own answer: lent to an asking, it confirms that.
+    blocked: false,
     controls: opens?.open ? opens.controls : undefined,
     expanded: opens ? opens.open : undefined,
     room: words.join('\n'),
+    why: undefined as string | undefined,
   }
   if (step === index) return { ...box, variant: 'secondary' as const, word: t('requests.back') }
   if (step !== null && confirmAt(step) === index)
     return { ...box, variant: 'danger' as const, word: props.answers[step]?.label ?? '' }
-  return { ...box, variant: 'secondary' as const, word: answer.label }
+  const blocked = { blocked: Boolean(answer.blocked), why: answer.blocked ? blockedId : undefined }
+  return { ...box, ...blocked, variant: 'secondary' as const, word: answer.label }
 }
 /** A lone answer that asks has no box beside it, so its asking brings one. */
 const loneStep = computed(() =>
@@ -229,10 +243,11 @@ defineExpose({ focusWayOut })
         class="request-held"
         :class="{ 'request-way-out': kindButton(answer, index).away }"
         :aria-controls="kindButton(answer, index).controls"
+        :aria-describedby="kindButton(answer, index).why"
         :aria-disabled="busyMark"
         :aria-expanded="kindButton(answer, index).expanded"
         :data-room="kindButton(answer, index).room"
-        :disabled="disabled"
+        :disabled="disabled || kindButton(answer, index).blocked"
         :variant="kindButton(answer, index).variant"
         @click="pressKind(index)"
         >{{ kindButton(answer, index).word }}</VButton
@@ -270,6 +285,13 @@ defineExpose({ focusWayOut })
         >{{ onward.word }}</VButton
       >
     </div>
+    <p
+      v-if="blockedWhy"
+      :id="blockedId"
+      class="request-blocked"
+    >
+      {{ blockedWhy }}
+    </p>
     <VButton
       v-if="dismissable"
       variant="ghost"
@@ -405,6 +427,15 @@ defineExpose({ focusWayOut })
   flex: none;
   gap: var(--space-2);
   align-items: center;
+}
+
+/* Why an answer is unavailable: a line of its own under the answers, at their end. */
+.request-blocked {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  text-align: end;
 }
 
 /* A button that holds room for its other word. */
