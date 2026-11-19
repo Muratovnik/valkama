@@ -3,7 +3,11 @@ import { computed } from 'vue'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
-import { isWorkFilterEmpty, matchesWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
+import {
+  isWorkFilterEmpty,
+  lineageIn,
+  matchesWorkFilter,
+} from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -51,7 +55,9 @@ export function usePlanningCensus(input: CensusInput) {
   const scope = computed(() => (input().view === 'graph' ? input().space : counted.value))
   const filtered = computed(() => !isWorkFilterEmpty(input().filter))
 
-  const matches = (item: WorkItemBrief) => matchesWorkFilter(item, input().filter)
+  /** «Goal or stage» reads an item's goal and stages over the whole space, a chain's root's too. */
+  const lineage = computed(() => lineageIn(input().space))
+  const matches = (item: WorkItemBrief) => matchesWorkFilter(item, input().filter, lineage.value)
   const visible = computed(() => scope.value.filter((item) => matches(item)))
   /** The counted items the filter lets through. */
   const matched = computed(() =>

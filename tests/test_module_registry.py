@@ -135,7 +135,21 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertIsNotNone(block)
         written = re.findall(r"'([^']+)'", block.group(1))
         self.assertEqual(
-            ["query", "ready", "held", "cat", "kind", "pri", "labels", "holder"], written
+            [
+                "query",
+                "ready",
+                "held",
+                "asked",
+                "elsewhere",
+                "cat",
+                "kind",
+                "pri",
+                "labels",
+                "holder",
+                "proj",
+                "goal",
+            ],
+            written,
         )
         planning = next(
             item for item in platform_modules.module_manifests() if item["module_id"] == "planning"

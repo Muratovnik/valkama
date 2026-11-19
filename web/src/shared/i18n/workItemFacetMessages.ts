@@ -12,6 +12,9 @@ export const workItemFacetMessages = {
     facet: {
       ready: 'Workable',
       held: 'Has an assignee',
+      asked: 'Waiting for my answer',
+      elsewhere: 'From another space',
+      notElsewhere: 'Not from another space',
       heldBy: 'Held by {holder}',
       heldStale: 'Held by {holder} — the claim is stale',
       heldWorking: 'Held by {holder} — working on it',
@@ -67,6 +70,9 @@ export const workItemFacetMessages = {
     facet: {
       ready: 'Можно брать',
       held: 'Есть исполнитель',
+      asked: 'Ждёт моего ответа',
+      elsewhere: 'Из другого пространства',
+      notElsewhere: 'Не из другого пространства',
       heldBy: 'Держит {holder}',
       heldStale: 'Держит {holder} — захват устарел',
       heldWorking: 'Держит {holder} — работает над ней',

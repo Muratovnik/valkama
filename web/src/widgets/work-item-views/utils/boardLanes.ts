@@ -28,7 +28,7 @@
  * a container is named from the whole space, because a chain can hold an item
  * whose goal is not itself in the chain.
  */
-import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
+import { ancestorsOf, WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -102,19 +102,6 @@ const projectLane = (id: string) => `project:${id}`
  */
 type LaneOf = (item: WorkItemBrief) => string | null | undefined
 
-/** The containers over an item, nearest first, as the space holds them. */
-function ancestorsIn(byId: ReadonlyMap<string, WorkItemBrief>, item: WorkItemBrief) {
-  const found: WorkItemBrief[] = []
-  const seen = new Set([item.work_item_id])
-  let parent = item.parent_id === null ? undefined : byId.get(item.parent_id)
-  while (parent !== undefined && !seen.has(parent.work_item_id)) {
-    found.push(parent)
-    seen.add(parent.work_item_id)
-    parent = parent.parent_id === null ? undefined : byId.get(parent.parent_id)
-  }
-  return found
-}
-
 /** The projects of this space an item names; another space's card names only those. */
 function namedProjects(item: WorkItemBrief, own: ReadonlySet<string> | null): string[] {
   const named = [...new Set(item.projects.map((project) => project.project_id))]
@@ -150,11 +137,11 @@ function laneReader(input: LaneInput, byId: ReadonlyMap<string, WorkItemBrief>):
     if (grouping === 'stage') {
       return isContainer(item)
         ? null
-        : (ancestorsIn(byId, item).find((parent) => isContainer(parent))?.work_item_id ?? NO_PARENT)
+        : (ancestorsOf(item, byId).find((parent) => isContainer(parent))?.work_item_id ?? NO_PARENT)
     }
     // By goal a lane is a root's: a container that is nobody's child.
     if (item.parent_id === null && isContainer(item)) return null
-    const root = ancestorsIn(byId, item).find(
+    const root = ancestorsOf(item, byId).find(
       (parent) => parent.parent_id === null && isContainer(parent),
     )
     return root?.work_item_id ?? NO_PARENT
@@ -182,7 +169,7 @@ function headOf(
   }
   const item = byId.get(id)
   if (item === undefined) return { kind: 'no-goal' }
-  const path = input.grouping === 'stage' ? ancestorsIn(byId, item).reverse() : []
+  const path = input.grouping === 'stage' ? ancestorsOf(item, byId).reverse() : []
   return { kind: 'container', item, path }
 }
 

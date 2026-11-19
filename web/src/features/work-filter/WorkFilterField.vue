@@ -36,7 +36,12 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener } from '@vueuse/core'
 
-import { drawnGroups, filterGroups, stepGroups } from '@/features/work-filter/filterOptions.ts'
+import {
+  drawnGroups,
+  filterGroups,
+  isValueFacet,
+  stepGroups,
+} from '@/features/work-filter/filterOptions.ts'
 import type { FilterStep } from '@/features/work-filter/filterOptions.ts'
 import { useMenuRoom } from '@/features/work-filter/useMenuRoom.ts'
 
@@ -281,7 +286,7 @@ function pick(token: WorkFilterToken, key: string) {
     return
   }
   filter.value = { ...next, text: '' }
-  if (token.facet !== 'ready' && token.facet !== 'held') step.value = token.facet
+  if (isValueFacet(token)) step.value = token.facet as FilterStep
   highlightKey(key)
 }
 

@@ -29,6 +29,7 @@ import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
+import { filterWords } from '@/features/work-filter/filterOptions.ts'
 import WorkFilterChips from '@/features/work-filter/WorkFilterChips.vue'
 import WorkFilterField from '@/features/work-filter/WorkFilterField.vue'
 
@@ -147,6 +148,8 @@ const rowsText = computed(() => {
 
 const tokens = computed(() => filterTokens(filter.value))
 const labelsAny = computed(() => filter.value.labelsMatch === 'any')
+/** A project's name and a goal's title for its chip, from the work the bar counts. */
+const tokenWords = computed(() => filterWords(props.items))
 /** Where focus goes when the last chip on the narrow line is taken out. */
 const field = useTemplateRef<{ focus: () => void }>('field')
 function focusField() {
@@ -235,6 +238,7 @@ function removeChip(token: WorkFilterToken) {
           ref="chips"
           :labels-any="labelsAny"
           :tokens="tokens"
+          :words="tokenWords"
           @leave="focusField"
           @negate="(token) => (filter = negateToken(filter, token))"
           @remove="removeChip"
