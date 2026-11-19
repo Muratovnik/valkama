@@ -11,15 +11,27 @@
  * unless it says, inside each column and each lane: a tile dragged to another column is handed up as the state it
  * goes to, for the page to send. What the move did is said aloud here, because a
  * reader who moved a tile without looking needs to hear where it went.
+ *
+ * A goal or a stage stands as a tile only while nobody has accepted it (`standsAsTile`);
+ * after that it is a lane. A column of work put off starts folded to a strip of its name
+ * and count (`useColumnFolds`), flat and over the lanes alike, and a press on the strip or
+ * on the open column's head moves focus to the control that undoes it.
  */
 import { computed, nextTick, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemColumn from '@/widgets/work-item-views/components/WorkItemColumn.vue'
+import WorkItemColumnFold from '@/widgets/work-item-views/components/WorkItemColumnFold.vue'
 import WorkItemLanes from '@/widgets/work-item-views/components/WorkItemLanes.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
-import { byState, terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
+import { useColumnFolds } from '@/widgets/work-item-views/composables/useColumnFolds.ts'
+import {
+  byState,
+  FOLDED_COLUMN,
+  standsAsTile,
+  terminalLast,
+} from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import { newestClosedFirst } from '@/widgets/work-item-views/utils/boardOrder.ts'
@@ -32,7 +44,12 @@ import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
-import type { PlanningEdge, PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type {
+  PlanningEdge,
+  PlanningWorkflow,
+  WorkflowState,
+  WorkItemBrief,
+} from '@/shared/api/planningModel.ts'
 import { useStandingName, useStateName } from '@/shared/lib/useStateName.ts'
 
 const props = withDefaults(
@@ -89,11 +106,35 @@ const standingName = useStandingName()
  * Done stands newest closed first, as it always has: the queue gives none of it.
  */
 const ordered = computed(() => {
-  const sorted = orderedWork(props.items, props.sort, standingName, props.scopeItems)
+  const tiles = props.items.filter(standsAsTile)
+  const sorted = orderedWork(tiles, props.sort, standingName, props.scopeItems)
   return props.sort.key === 'queue' && !props.sort.descending ? newestClosedFirst(sorted) : sorted
 })
 const columns = computed(() => terminalLast(byState(props.workflow, ordered.value)))
 const states = computed(() => columns.value.map((column) => column.state))
+/** How many tiles each state's column draws, which a folded strip says. */
+const held = computed(
+  () => new Map(columns.value.map((column) => [column.state.state_id, column.items.length])),
+)
+const folds = useColumnFolds({
+  filtered: () => props.filtered,
+  holds: (state) => held.value.get(state.state_id) ?? 0,
+  space: () => props.spaceId,
+})
+const idsWhere = (rule: (state: WorkflowState) => boolean) =>
+  new Set(states.value.filter((state) => rule(state)).map((state) => state.state_id))
+const foldable = computed(() => idsWhere(folds.foldable))
+const folded = computed(() => idsWhere(folds.folded))
+const isFolded = (state: WorkflowState) => folded.value.has(state.state_id)
+const canFold = (state: WorkflowState) => foldable.value.has(state.state_id)
+/** The tracks of the columns: a folded one is its strip, the rest share the width left. */
+const tracks = computed(() =>
+  states.value
+    .map((state) =>
+      folded.value.has(state.state_id) ? `${FOLDED_COLUMN}px` : 'var(--column-width)',
+    )
+    .join(' '),
+)
 /** What each item waits on, judged against the whole space so a filtered-out blocker still counts. */
 const waiting = computed(() => waitingOn(props.links, props.spaceItems ?? props.items))
 const lanes = computed(() =>
@@ -118,7 +159,20 @@ const dragging = ref(false)
 const root = ref<HTMLElement | null>(null)
 /** Flat, the board is its own scroller and its own track; grouped, the lanes size theirs. */
 const flatRoot = computed(() => (grouped.value ? null : root.value))
-const { columnWidth } = useColumnFit(flatRoot, flatRoot, () => columns.value.length)
+const { columnWidth } = useColumnFit(
+  flatRoot,
+  flatRoot,
+  () => columns.value.length - folded.value.size,
+  () => folded.value.size,
+)
+
+/** Fold or open a column, and give focus to what undoes it. */
+function fold(state: WorkflowState) {
+  folds.toggle(state)
+  void nextTick(() =>
+    root.value?.querySelector<HTMLElement>(`[data-column-fold="${state.state_id}"]`)?.focus(),
+  )
+}
 
 const nameOf = useStateName()
 function stateName(key: string): string {
@@ -153,12 +207,18 @@ function placed(move: BoardMove, landing: StackLanding) {
     class="work-item-board"
     :class="{ dragging, grouped }"
     :data-board-row="boardRow"
-    :style="{ '--column-count': columns.length, '--column-width': columnWidth }"
+    :style="{
+      '--column-count': columns.length,
+      '--column-width': columnWidth,
+      '--board-tracks': tracks,
+    }"
   >
     <WorkItemLanes
       v-if="grouped"
       :lanes="lanes"
       :states="states"
+      :foldable="foldable"
+      :folded="folded"
       :waiting="waiting"
       :live="props.live"
       :filter="props.filter"
@@ -169,26 +229,39 @@ function placed(move: BoardMove, landing: StackLanding) {
       @chain="emit('chain', $event)"
       @dragging="dragging = $event"
       @filter="emit('filter', $event)"
+      @fold="fold"
       @open="emit('open', $event)"
       @place="placed"
     />
     <template v-else>
-      <WorkItemColumn
+      <template
         v-for="column in columns"
         :key="column.state.state_id"
-        :state="column.state"
-        :items="column.items"
-        :waiting="waiting"
-        :live="props.live"
-        :filter="props.filter"
-        :hint-id="hintId"
-        :writable="props.writable"
-        :empty-label="t('workItem.columnEmpty')"
-        @dragging="dragging = $event"
-        @filter="emit('filter', $event)"
-        @open="emit('open', $event)"
-        @place="placed"
-      />
+      >
+        <WorkItemColumnFold
+          v-if="isFolded(column.state)"
+          :state="column.state"
+          :count="column.items.length"
+          @unfold="fold(column.state)"
+        />
+        <WorkItemColumn
+          v-else
+          :state="column.state"
+          :items="column.items"
+          :waiting="waiting"
+          :live="props.live"
+          :filter="props.filter"
+          :hint-id="hintId"
+          :writable="props.writable"
+          :empty-label="t('workItem.columnEmpty')"
+          :foldable="canFold(column.state)"
+          @fold="fold(column.state)"
+          @dragging="dragging = $event"
+          @filter="emit('filter', $event)"
+          @open="emit('open', $event)"
+          @place="placed"
+        />
+      </template>
     </template>
     <p
       :id="hintId"
@@ -217,9 +290,12 @@ function placed(move: BoardMove, landing: StackLanding) {
   --column-count: 1;
   --column-width: minmax(208px, 1fr);
 
+  /* One track per column, a folded one at its strip's width: the board says which inline. */
+  --board-tracks: repeat(var(--column-count), var(--column-width));
+
   position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--column-count), var(--column-width));
+  grid-template-columns: var(--board-tracks);
   gap: var(--space-2);
   height: 100%;
   min-height: 0;

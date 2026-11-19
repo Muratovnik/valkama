@@ -3,6 +3,7 @@
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { analyticsMessages } from '@/shared/i18n/analyticsMessages.ts'
+import { boardMessages } from '@/shared/i18n/boardMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
@@ -801,24 +802,7 @@ export const en = {
     countsExclude: {
       laneHeads: '{goals} parent as a row | {goals} parents as rows',
     },
-    columnEmpty: 'Nothing here',
-    lanes: {
-      counts: '{open} open · {closed} closed',
-      fold: 'Fold {lane}',
-      unfold: 'Unfold {lane}',
-      openGoal: 'Open {reference}',
-      showChain: 'Show the chain of {reference} on the board',
-      empty: 'Nothing under it yet.',
-      showAll: 'Show all · {count}',
-      showFewer: 'Show fewer',
-      inState: '{count} in {state}',
-      offLeft: 'To the left:',
-      offRight: 'To the right:',
-    },
-    order: {
-      hint: 'Arrow keys move focus between work items.',
-      moved: '{reference} moved: {position} of {total} in {state}',
-    },
+    ...boardMessages.en,
     listEmpty: 'This space has no work items yet.',
     noSpace: 'This project has no planning space yet.',
     cutoverPending: 'Run `valkama migrate work-model` once, with every session stopped.',

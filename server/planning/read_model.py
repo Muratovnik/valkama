@@ -1102,9 +1102,14 @@ def _record(
         facts.question(identity) if facts.asked is not None and identity in facts.nodes else None
     )
     lease: leases.Lease | None = None
-    if row["claim_ref"]:
-        # Only a held item's lease reads the setting, so only it loads one of its own.
-        snapshot = participation.load(conn) if settings is None else settings
+    # A held item's lease reads the setting, and so does the queue's rule for a task
+    # (`queue.withheld` loads it then); a read of many items loads it once for all.
+    snapshot = (
+        participation.load(conn)
+        if settings is None and (row["claim_ref"] or str(row["kind"]) != model.CONTAINER_KIND)
+        else settings
+    )
+    if row["claim_ref"] and snapshot is not None:
         lease = leases.lease(conn, row, settings=snapshot, asked=asked) if full else None
         record["claim_state"] = (
             (lease.state if lease is not None else None)
@@ -1120,7 +1125,7 @@ def _record(
         record["cancelled_blockers"] = cancelled_blockers
     # The take-next queue's own rule (`queue.withheld`): the queue gives exactly
     # what reads workable, and the codes say why anything else is not given.
-    record["withheld"] = queue.withheld(conn, row, facts, read_space=read_space)
+    record["withheld"] = queue.withheld(conn, row, facts, settings=snapshot, read_space=read_space)
     record["workable"] = not record["withheld"]
     if lapsed is not None:
         record["lapsed_claim"] = lapsed.get(identity)

@@ -697,6 +697,57 @@ class QueueTests(Harness):
         self.conn.commit()
         self.assertEqual(other, self.take_next("BETA")["reference"])
 
+    def test_the_list_read_says_workable_exactly_what_the_queue_gives_on_and_off(self) -> None:
+        task = self.ready()
+        goal = str(
+            service.create_work_item(self.conn, space="ALPHA", title="A goal", kind="goal")[
+                "reference"
+            ]
+        )
+        other = self.ready("BETA")
+        self.conn.commit()
+
+        def listed(key: str) -> dict[str, dict]:
+            rows = service.list_work_items(self.conn, space=key, limit=None)
+            return {str(row["reference"]): row for row in rows}
+
+        def given(key: str) -> str | None:
+            """The reference the queue hands out, or None when it refuses; nothing is kept."""
+
+            with calls.bind(AGENT, "claim_ready_work_item"):
+                try:
+                    answer = service.claim_ready_work_item(self.conn, space=key)
+                except model.QueueOffError:
+                    answer = None
+            self.conn.rollback()
+            return None if answer is None else str(answer["reference"])
+
+        # On: the one task the queue gives reads workable, first in the queue.
+        row = listed("ALPHA")[task]
+        self.assertEqual((True, [], 1), (row["workable"], row["withheld"], row["queue_order"]))
+        self.assertEqual(task, given("ALPHA"))
+        # Off: the queue gives nothing, and the list says so of the same task, in its
+        # record alone too; a goal still says only what it is.
+        self.person(space="ALPHA", set="manual")
+        self.assertIsNone(given("ALPHA"))
+        rows = listed("ALPHA")
+        row = rows[task]
+        self.assertEqual(
+            (False, ["queue_off"], None), (row["workable"], row["withheld"], row["queue_order"])
+        )
+        self.assertEqual(["queue_off"], service.get_work_item(self.conn, task)["withheld"])
+        self.assertEqual(["queue_off"], service.get_work_item_brief(self.conn, task)["withheld"])
+        self.assertEqual(["goal_or_stage"], rows[goal]["withheld"])
+        self.assertEqual([], [ref for ref, entry in rows.items() if entry["workable"]])
+        # Another space's queue still runs, and its list still says so.
+        self.assertEqual((True, other), (listed("BETA")[other]["workable"], given("BETA")))
+        # On again in the space alone: the task is given and reads workable again.
+        self.person(space="ALPHA", key="queue", value="on")
+        self.assertEqual(
+            (True, []), (listed("ALPHA")[task]["workable"], listed("ALPHA")[task]["withheld"])
+        )
+        self.assertEqual(task, given("ALPHA"))
+
     def test_the_queue_holds_back_work_whose_goal_waits_to_be_cancelled(self) -> None:
         self.person(space="ALPHA", set="maximal")
         goal = self.owners("A goal outside the agent's work", kind="goal")

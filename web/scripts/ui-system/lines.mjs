@@ -132,9 +132,11 @@ export const LINE_BUDGET = new Map([
   // A forced palette clears every ground, so a surface told apart by its ground
   // alone draws its edge in the palette's ink there and nowhere else: the panel
   // above, the settings sheet, and the list (beside its sticky rule), its columns,
-  // the cells of an epic's row and its tiles. A border, because an outline drawn
-  // inside lay under an opaque ground the surface holds and was lost.
+  // a column folded to its strip, the cells of an epic's row and its tiles. A border,
+  // because an outline drawn inside lay under an opaque ground the surface holds and
+  // was lost.
   ['widgets/work-item-views/components/WorkItemColumn.vue', 1],
+  ['widgets/work-item-views/components/WorkItemColumnFold.vue', 1],
   ['widgets/work-item-views/components/WorkItemLaneCell.vue', 1],
   ['widgets/work-item-views/components/WorkItemTile.vue', 1],
 ])

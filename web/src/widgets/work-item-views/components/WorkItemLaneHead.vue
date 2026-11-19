@@ -10,10 +10,13 @@
  * It is held at the left edge of what the board shows, and at the top while its
  * lane passes under the row of state names, so a lane in view always says whose
  * it is. The note of work out of sight says on which side: «2 в «Review» →».
+ * What names the lane and folds it is its toggle (`WorkItemLaneToggle`).
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import WorkItemLaneToggle from '@/widgets/work-item-views/components/WorkItemLaneToggle.vue'
 import { useLaneActionsPlace } from '@/widgets/work-item-views/composables/useLaneActionsPlace.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import { laneTitle } from '@/widgets/work-item-views/utils/laneTitle.ts'
@@ -50,11 +53,10 @@ const { t } = useI18n()
 
 const title = computed(() => laneTitle(props.lane.head, t))
 const counts = computed(() =>
-  t('workItem.lanes.counts', { open: props.lane.open, closed: props.lane.closed }),
-)
-const chevron = computed(() => (props.open ? 'chevron-down' : 'chevron-right'))
-const toggleLabel = computed(() =>
-  t(props.open ? 'workItem.lanes.fold' : 'workItem.lanes.unfold', { lane: title.value }),
+  t('workItem.lanes.counts', {
+    closed: props.lane.closed,
+    total: props.lane.open + props.lane.closed,
+  }),
 )
 const away = computed(() => props.left !== '' || props.right !== '')
 const stateShown = computed(() => props.lane.goal && printsFacet('state', 'lane', props.lane.goal))
@@ -63,15 +65,17 @@ const openLabel = computed(() => t('workItem.lanes.openGoal', { reference: refer
 const chainLabel = computed(() => t('workItem.lanes.showChain', { reference: reference.value }))
 
 const head = ref<HTMLElement | null>(null)
-const toggle = ref<HTMLElement | null>(null)
+/** The toggle's own element, which the line's room is measured with. */
+const toggleView = useTemplateRef<ComponentPublicInstance>('toggleView')
+const toggle = computed(() => (toggleView.value?.$el as HTMLElement | undefined) ?? null)
 const tail = ref<HTMLElement | null>(null)
 const actions = ref<HTMLElement | null>(null)
-const parts = { actions, head, tail, toggle }
+const measured = { actions, head, tail, toggle }
 const standingName = useStandingName()
 /** The goal's state as the owner has states named, which the line's room is measured with. */
 const named = () => (props.lane.goal ? standingName(props.lane.goal) : '')
 const words = () => [props.left, props.right, counts.value, stateShown.value, title.value, named()]
-const { layout } = useLaneActionsPlace(parts, () => props.boardWidth, words)
+const { layout } = useLaneActionsPlace(measured, () => props.boardWidth, words)
 const crowded = computed(() => layout.value.place === 'beside')
 const tied = computed(() => layout.value.place === 'tied')
 // The state on the title's line, apart from the counts: one of the two places below says it.
@@ -91,33 +95,16 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
     class="lane-head reach-room reveal-row"
     :class="{ acting: props.lane.goal, away, crowded, tied }"
   >
-    <button
-      ref="toggle"
-      class="lane-toggle"
-      type="button"
-      :aria-expanded="props.open"
-      :aria-controls="props.bodyId"
-      :aria-label="toggleLabel"
-      @click="emit('toggle')"
-    >
-      <VIcon
-        class="lane-chevron"
-        :name="chevron"
-        :size="16"
-      />
-      <span class="lane-words">
-        <span
-          v-if="props.lane.goal"
-          class="lane-reference"
-          >{{ props.lane.goal.reference }}</span
-        >
-        <span
-          v-tooltip.clipped="title"
-          class="lane-title one-line"
-          >{{ title }}</span
-        >
-      </span>
-    </button>
+    <WorkItemLaneToggle
+      ref="toggleView"
+      :lane="props.lane"
+      :title="title"
+      :open="props.open"
+      :body-id="props.bodyId"
+      :crowded="crowded"
+      @toggle="emit('toggle')"
+      @open="emit('open', $event)"
+    />
     <SemanticState
       v-if="props.lane.goal && raised"
       class="lane-state"
@@ -268,72 +255,12 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   }
 }
 
-/* As wide as its words, so the counts follow the title rather than standing at the far end.
-   Where the heading wraps, the line breaks before what follows the title once title and tail no
-   longer fit it whole: the title keeps its words, as a line of its own or the whole line, and the
-   tail goes below. A floor that held the tail beside it cut a long title to a third of its words
-   on a wide board. On a line that cannot wrap the title gives way a thousand times faster. */
-.lane-toggle {
-  display: inline-flex;
-  flex: 0 1000 auto;
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 0;
-  max-width: max-content;
-  min-height: var(--size-control-height-compact);
-  padding: 0 var(--space-2) 0 var(--space-1);
-  margin-inline-start: calc(-1 * var(--space-1) - var(--lane-chevron-size) - var(--space-2));
-  border: 0;
-  color: var(--color-text);
-  text-align: start;
-  background: transparent;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--color-surface-hover);
-  }
-}
-
 /* The board keeps a tile it brings into view clear of a heading held at its top
    (`scroll-padding-block` in `WorkItemLanes`). The heading's own buttons stand in that room, and
-   the keyboard reaching one scrolled the board back to clear it: they count that room as theirs. */
-.lane-toggle,
+   the keyboard reaching one scrolled the board back to clear it: they count that room as theirs
+   (`WorkItemLaneToggle` keeps the same for its own). */
 .lane-action {
   scroll-margin-block-start: calc(-1 * (var(--size-control-height-compact) + var(--space-2)));
-}
-
-.lane-chevron {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-}
-
-.lane-words {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 0;
-
-  /* Beside the actions, the words end short of them: the row less the toggle's insets, the
-     chevron, its gap and the actions. */
-  .crowded & {
-    max-width: calc(
-      var(--board-visible-width) - var(--space-1) - var(--lane-chevron-size) - 3 * var(--space-2) -
-        var(--lane-actions-width)
-    );
-  }
-}
-
-.lane-reference {
-  flex: 0 0 auto;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The title gives way: the reference and the state beside it are shorter and say whose it is. */
-.lane-title {
-  font: var(--font-row-title);
 }
 
 /* The state, the counts, the note of work out of sight and a goal's actions: beside the title
