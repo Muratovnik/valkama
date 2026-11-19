@@ -49,15 +49,15 @@ test('the head says the whole, and each figure says what it counts', async ({ pa
   const head = section.locator('.work-usage-figures')
   const figure = (name: RegExp) => head.getByRole('button', { name })
   await expect(head.getByRole('button')).toHaveText([
-    'Work ≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min',
-    'All agents ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
+    'Work on the clock ≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min',
+    'Agent time ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
     'Cost ≈\u{A0}$240.67',
     // A kind nobody reported adds nothing, and the cached reads stay apart.
     'Tokens 17.9M',
   ])
   // What each figure counts is its description and its why, and not a line under the figures.
   await expect(figure(/^Work/u)).toHaveAccessibleDescription(/history is rebuilt from transcripts/u)
-  await expect(figure(/^All agents/u)).toHaveAccessibleDescription(/Agents worked in parallel/u)
+  await expect(figure(/^Agent time/u)).toHaveAccessibleDescription(/Agents worked in parallel/u)
   await expect(figure(/^Cost/u)).toHaveAccessibleDescription(/at API prices and not a bill/u)
   await expect(figure(/^Tokens/u)).toHaveAccessibleDescription(/Reads from the cache are counted/u)
   await expect(section.locator('.work-usage-note')).toHaveCount(0)
@@ -249,7 +249,7 @@ test('an epic’s tab lists its own agents, and its counter counts only them', a
   await expect(section).not.toContainText('a58241d0')
   // The summary keeps the whole of the epic, the children's time included.
   await expect(section.locator('.work-usage-figures').getByRole('button').nth(1)).toHaveText(
-    'All agents ≈\u{A0}16\u{A0}h\u{A0}40\u{A0}min',
+    'Agent time ≈\u{A0}16\u{A0}h\u{A0}40\u{A0}min',
   )
   expect(asked).toEqual(expect.arrayContaining(['epic', 'item']))
 })

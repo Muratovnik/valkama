@@ -1,6 +1,7 @@
 /**
- * The head of an item's Agents tab, mounted on its own the way the inspector provides it: the
- * item's read has answered with the usage a spec hands it and never reads again.
+ * The head of an item's Agents tab, or the usage line of its card (`InspectorUsageLine`), mounted
+ * on its own the way the inspector provides it: the item's read has answered with the usage a spec
+ * hands it and never reads again.
  */
 import { computed, defineComponent, h, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
@@ -8,6 +9,7 @@ import { createI18n } from 'vue-i18n'
 import { mount } from '@vue/test-utils'
 
 import AgentsUsageSummary from '@/widgets/work-item-inspector/components/AgentsUsageSummary.vue'
+import InspectorUsageLine from '@/widgets/work-item-inspector/components/InspectorUsageLine.vue'
 import { provideInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import type { InspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 
@@ -15,9 +17,16 @@ import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 const settled = () => Promise.resolve()
-const drawSummary = () => h(AgentsUsageSummary)
+const PARTS = {
+  summary: () => h(AgentsUsageSummary),
+  line: () => h(InspectorUsageLine),
+}
 
-export function mountSummary(usage: ItemUsage) {
+export function mountSummary(
+  usage: ItemUsage,
+  part: keyof typeof PARTS = 'summary',
+  locale: 'en' | 'ru' = 'en',
+) {
   const answer = ref<ItemUsage | null>(usage)
   const read = {
     failed: ref(false),
@@ -37,9 +46,9 @@ export function mountSummary(usage: ItemUsage) {
         readable: () => true,
         reference: () => usage.reference,
       })
-      return drawSummary
+      return PARTS[part]
     },
   })
-  const i18n = createI18n({ legacy: false, locale: 'en', messages, pluralRules })
+  const i18n = createI18n({ legacy: false, locale, messages, pluralRules })
   return mount(Host, { attachTo: document.body, global: { plugins: [i18n] } })
 }

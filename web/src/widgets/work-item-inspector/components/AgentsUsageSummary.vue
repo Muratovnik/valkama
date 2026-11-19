@@ -31,7 +31,15 @@ import VButton from '@/shared/ui/VButton.vue'
 import WhyWords from '@/shared/ui/WhyWords.vue'
 
 const { t } = useI18n()
-const { cost, explanations, figures: rowFigures, span, time, tokenFigure } = useUsageWords()
+const {
+  agentTime,
+  cost,
+  explanations,
+  figures: rowFigures,
+  sideBySide,
+  time,
+  tokenFigure,
+} = useUsageWords()
 const inspector = injectInspectorUsage()
 const read = inspector?.read
 const runs = inspector?.runs
@@ -67,7 +75,6 @@ const figures = computed(() => {
   const why = explained.value
   if (!shown || !why) return []
   const estimated = isEstimated(shown)
-  const parallel = span(shown.elapsed_seconds) !== span(shown.agent_seconds)
   const incomplete = shown.unpriced_models.length > 0
   return [
     {
@@ -76,12 +83,12 @@ const figures = computed(() => {
       value: time(shown.elapsed_seconds, estimated),
       why: [t('workItem.usage.lineMeaning'), ...why.work],
     },
-    ...(parallel
+    ...(sideBySide(shown)
       ? [
           {
             key: 'agents',
             label: t('workItem.usage.allAgents'),
-            value: time(shown.agent_seconds, estimated),
+            value: agentTime(shown),
             why: why.agents,
           },
         ]

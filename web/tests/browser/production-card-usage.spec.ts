@@ -50,8 +50,13 @@ test('the line says the time, the estimated cost and the tokens processed anew',
   await installBackend(page)
   const asked = await serveUsage(page, fulfil(richUsage()))
   await page.goto(CARD)
-  await expect(line(page)).toContainText('Work')
-  await expect(line(page)).toContainText('≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min')
+  // The time on the clock, and beside it the agents' time that ran side by side, each named.
+  await expect(line(page).locator('[data-fact="time"]')).toHaveText(
+    'Work on the clock ≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min',
+  )
+  await expect(line(page).locator('[data-fact="agents"]')).toHaveText(
+    'Agent time ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
+  )
   await expect(line(page)).toContainText('≈\u{A0}$240.67')
   await expect(line(page)).toContainText('18.3M\u{A0}tokens')
   expect(asked.map((url) => url.searchParams.get('scope'))).toEqual(['item'])
@@ -60,7 +65,7 @@ test('the line says the time, the estimated cost and the tokens processed anew',
   const said = await line(page).getAttribute('aria-description')
   expect(said).toContain('not a bill')
   expect(said).toContain('rebuilt from transcripts')
-  expect(said).toContain('All agents together: 11\u{A0}h\u{A0}14\u{A0}min.')
+  expect(said).toContain('Agents worked in parallel')
 })
 
 test('an item nobody worked on has no line, no zeros and no room for one', async ({ page }) => {
@@ -420,8 +425,8 @@ test.describe('under a finger', () => {
     const section = await openAgents(page)
     const figures = section.locator('.work-usage-figures')
     await expect(figures.getByRole('button')).toHaveText([
-      'Work ≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min',
-      'All agents ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
+      'Work on the clock ≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min',
+      'Agent time ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
       'Cost ≈\u{A0}$240.67',
       /^Tokens /u,
     ])

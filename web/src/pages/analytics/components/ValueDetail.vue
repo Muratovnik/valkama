@@ -10,12 +10,14 @@
  *
  * - its figures under a heading that names their period as the page names one, «Figures · Nov 9 –
  *   11»: the agent time, the tokens and the cost, its share of the whole the page shows in the
- *   page's measure and, for a task, its cost of all time as its card says it (`useTaskAllTime`),
- *   with what qualifies them — the time of agents at once added up, the cost an estimate at API
+ *   page's measure, with what qualifies them — the time of agents at once added up, the cost an estimate at API
  *   prices, what the tokens count and, read by the minute, that a minute's figures are shared out
  *   (`useSectionCaveats`, of the value's own read) — said once in the «ⓘ» that ends their
  *   heading's line, «About these figures», never as a line of the panel: the section's «ⓘ» that
  *   says them on the page stands under the panel;
+ * - for a task, its figures of all time, the agents' time and the cost, as its card says them and
+ *   by the card's names for them (`useTaskAllTime`): the agents' time is the card's «Agent time»,
+ *   never its «Work on the clock»;
  * - its period step by step, with the period before marked (`ValueDays`);
  * - the models and the accounts it ran on, ranked in the page's measure, each in its hue of the
  *   page with its share of the value's own figure after its amount (`RankedBars`, dense); a value
@@ -27,8 +29,8 @@
  * page's bar does (`RefreshFailed`). A value with nothing in the period says that.
  *
  * What a reader of the panel selects it by: the content is `data-detail="value"`, each part of it
- * `data-part` (`actions`, `figures`, `days`, `model`, `account`) and each figure `data-figure`
- * (`time`, `tokens`, `cost`, `share`, `all-time`).
+ * `data-part` (`actions`, `figures`, `all-time`, `days`, `model`, `account`) and each figure
+ * `data-figure` (`time`, `tokens`, `cost`, `share`; of all time `agents`, `cost` or `failed`).
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -36,6 +38,7 @@ import { useI18n } from 'vue-i18n'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
 import ValueDays from '@/pages/analytics/components/ValueDays.vue'
+import ValueFigures from '@/pages/analytics/components/ValueFigures.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
@@ -166,8 +169,8 @@ const shows = computed(() => {
   return usage.rows.length ? 'spent' : 'empty'
 })
 
-/** A task's cost of all time, as its card says it (`useTaskAllTime`). */
-const allTimeFigure = useTaskAllTime({
+/** A task's figures of all time, as its card says them (`useTaskAllTime`). */
+const allTime = useTaskAllTime({
   reference: () => (card.value ? (named.value.reference ?? null) : null),
   readAt: () => props.readAt,
 })
@@ -190,7 +193,6 @@ const figures = computed(() => {
     text: words.lineFigure(measure, own),
   }))
   const ratio = share.value
-  const whole = allTimeFigure.value
   return [
     ...each,
     ...(ratio === null
@@ -205,7 +207,6 @@ const figures = computed(() => {
             }),
           },
         ]),
-    ...(whole ? [whole] : []),
   ]
 })
 /** The figures' heading, with the period they are of as the page names a period. */
@@ -372,17 +373,15 @@ const narrow = useNarrowCharts(body)
           :about="about"
           :about-label="t('analytics.detail.about')"
         >
-          <dl class="value-figures">
-            <div
-              v-for="figure in figures"
-              :key="figure.key"
-              class="value-figure"
-              :data-figure="figure.key"
-            >
-              <dt class="value-figure-name">{{ figure.name }}</dt>
-              <dd class="value-figure-text">{{ figure.text }}</dd>
-            </div>
-          </dl>
+          <ValueFigures :figures="figures" />
+        </PanelLevel>
+        <PanelLevel
+          v-if="allTime"
+          level="block"
+          data-part="all-time"
+          :title="t('analytics.detail.allTime')"
+        >
+          <ValueFigures :figures="allTime" />
         </PanelLevel>
         <ValueDays
           v-if="steps"
@@ -455,28 +454,5 @@ const narrow = useNarrowCharts(body)
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
   align-items: center;
-}
-
-/* The figures, a name and its figure to a line, the figures in one column of tabular numbers. */
-.value-figures {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-1) var(--space-4);
-  margin: 0;
-  font: var(--font-detail);
-}
-
-.value-figure {
-  display: contents;
-
-  & .value-figure-name {
-    color: var(--color-text-muted);
-  }
-
-  & .value-figure-text {
-    margin: 0;
-    color: var(--color-text);
-    font-variant-numeric: tabular-nums;
-  }
 }
 </style>

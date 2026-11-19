@@ -2576,6 +2576,14 @@ a refresh of the same view dims nothing. Records reach the store in batches, so 
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,
 and say «no data yet» in their hint rather than being drawn as a drop.
 
+An item's work has two times, and each has one name wherever it stands. «Work on the clock»
+(«Работа по часам») is the time that passed while agents worked, which agents working side by
+side share; «Agent time» («Время агентов») adds up each agent's own, the time Analytics counts.
+A card's line says the first and, where agents worked side by side and the two differ, the
+second beside it; the card's Agents tab names them alike, and a task's side panel in Analytics
+says the second of all time. Under one name, «Work», a card's 7 h 38 min beside the 11 h 14 min
+Analytics gave the same task read as two answers to one question.
+
 Words are said once, where they belong. A value carries a short label, never a sentence. A
 caveat common to a section is said once, in an «ⓘ» at the section's heading, never per block:
 that the time of agents working at once adds up, two agents for an hour each making two hours,
@@ -2869,8 +2877,9 @@ page under it is held, and the focus returns to what opened it. On a narrow wind
 whole width. It names the value in full, and for a task «Open the card» opens the card over the
 page as any reference to the task does. Its figures are the time, the tokens, the cost and the
 value's share of the whole in the page's measure, under a heading that names their period as the
-page names one, «Figures · Nov 9 – 11»; a task's end on its cost of all time, «All time ≈ $120.00»,
-read and said as its card's line reads and says it, of the item's own work. Without either, a
+page names one, «Figures · Nov 9 – 11»; under them a task has its figures of all time, «All
+time», its agent time and its cost, «Agent time 11 h 14 min» and «Cost ≈ $120.00», read and said
+as its card's line reads and says them and by its names, of the item's own work. Without either, a
 week's cost in the panel beside the card's larger one read as two answers to one question. What
 qualifies them — that the cost is an
 estimate at API prices, what the tokens count and, read by the minute, that a minute's figures

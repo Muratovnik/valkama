@@ -1,10 +1,11 @@
 /**
  * What a value's side panel says its figures are of. The oracle is the requirement: the heading of
  * the figures names the period they cover, in the words the page names a period by — its first
- * and last day, «Nov 9 – 11» — and follows the page's period when it changes; a task's figures end
- * with its cost of all time, read as its card reads it (the item's own work, by its reference) and
- * said as the card's line says a cost. A value that is no task has no such row, and a read that
- * failed says so in the row's place.
+ * and last day, «Nov 9 – 11» — and follows the page's period when it changes; a task has its
+ * figures of all time under them, «All time», read as its card reads them (the item's own work, by
+ * its reference): the agents' time, by the name and in the words the card's line gives the
+ * agents' time («Agent time», never its time on the clock), and the cost as the line says it. A
+ * value that is no task has none, and a read that failed says so in their place.
  */
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
@@ -14,6 +15,7 @@ import { serveUsage, task } from '../fixtures/analytics.ts'
 import { richUsage, usageAnswer } from '../fixtures/usage.ts'
 import { stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { detailOf, mountPage, panelOf, pressEachTest, WORLD } from '../support/valuePresses.ts'
+import { mountSummary } from './usageSummaryHost.ts'
 
 vi.mock('@/shared/api/analyticsUses.ts', () => ({ reportAnalyticsUse: vi.fn() }))
 
@@ -52,11 +54,11 @@ const words = (text: string) => text.replaceAll(/\s+/gu, ' ').trim()
 const heading = (host: VueWrapper) =>
   words(panelOf(host).get('[data-part="figures"]').findAll('h2, h3, h4, h5')[0]?.text() ?? '')
 
-/** Each figure of the panel by its `data-figure`: its name and its words. */
-const figures = (host: VueWrapper) =>
+/** Each figure of a part of the panel by its `data-figure`: its name and its words. */
+const figures = (host: VueWrapper, part = 'all-time') =>
   Object.fromEntries(
     panelOf(host)
-      .findAll('[data-figure]')
+      .findAll(`[data-part="${part}"] [data-figure]`)
       .map((one) => [
         one.attributes('data-figure'),
         [words(one.get('dt').text()), words(one.get('dd').text())],
@@ -90,32 +92,59 @@ describe('the period a value’s figures are of', () => {
   })
 })
 
-describe('a task’s cost of all time', () => {
-  it('reads the task as its card does and says its cost as the card’s line does', async () => {
-    const asked = serveWith(richUsage({ reference: 'MAIN-1', estimated_api_cost_usd: 1234.5 }))
+describe('a task’s figures of all time', () => {
+  it('reads the task as its card does and says them as the card’s line does', async () => {
+    const asked = serveWith(
+      richUsage({ reference: 'MAIN-1', estimated_api_cost_usd: 1234.5, quality: 'observed' }),
+    )
     const host = await mountPage({ by: 'work_item', detail: TASK })
     expect(asked.map((query) => Object.fromEntries(query))).toEqual([
       { id: 'MAIN-1', scope: 'item' },
     ])
-    expect(figures(host)['all-time']).toEqual(['All time', '≈ $1,234.50'])
+    expect(
+      words(panelOf(host).get('[data-part="all-time"]').findAll('h2, h3, h4, h5')[0]?.text() ?? ''),
+    ).toBe('All time')
+    expect(figures(host)).toEqual({
+      agents: ['Agent time', '11 h 14 min'],
+      cost: ['Cost', '≈ $1,234.50'],
+    })
+  })
+
+  it('names the agents’ time and gives it as the card’s line does, for the same task', async () => {
+    const usage = richUsage({ reference: 'MAIN-1', quality: 'estimated' })
+    serveWith(usage)
+    const host = await mountPage({ by: 'work_item', detail: TASK })
+    const line = mountSummary(usage, 'line')
+    const fact = line.get('[data-fact="agents"]')
+    const label = words(fact.get('.usage-fact-label').text())
+    const value = words(fact.text()).slice(label.length).trim()
+    expect(figures(host).agents).toEqual([label, value])
+    // The card's line starts with the time on the clock, another figure by another name.
+    expect(words(line.get('[data-fact="time"]').text())).not.toContain(value)
   })
 
   it('marks a cost that leaves models out, in Russian', async () => {
-    serveWith(richUsage({ estimated_api_cost_usd: 9.5, unpriced_models: ['model-x'] }))
+    serveWith(
+      richUsage({ estimated_api_cost_usd: 9.5, unpriced_models: ['model-x'], quality: 'observed' }),
+    )
     const host = await mountPage({ by: 'work_item', detail: TASK }, 'ru')
-    expect(figures(host)['all-time']).toEqual(['За всё время', '≈ 9,50 $+'])
+    expect(figures(host)).toEqual({
+      agents: ['Время агентов', '11 ч 14 мин'],
+      cost: ['Стоимость', '≈ 9,50 $+'],
+    })
   })
 
-  it('says a read that failed in the row’s place', async () => {
+  it('says a read that failed in their place', async () => {
     serveWith('refused')
     const host = await mountPage({ by: 'work_item', detail: TASK })
-    expect(figures(host)['all-time']).toEqual(['All time', 'Could not be read'])
+    expect(figures(host)).toEqual({ failed: ['Could not be read', ''] })
   })
 
-  it('has no row, and asks nothing, for a value that is no task', async () => {
+  it('has none, and asks nothing, for a value that is no task', async () => {
     const asked = serveWith(richUsage())
     const host = await mountPage({ by: 'model', detail: detailOf('model', 'model-01') })
-    expect(Object.keys(figures(host))).toEqual(['time', 'tokens', 'cost', 'share'])
+    expect(Object.keys(figures(host, 'figures'))).toEqual(['time', 'tokens', 'cost', 'share'])
+    expect(panelOf(host).find('[data-part="all-time"]').exists()).toBe(false)
     expect(asked).toEqual([])
   })
 })

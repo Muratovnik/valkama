@@ -88,7 +88,7 @@ describe('what a value’s panel shows', () => {
     const panel = panelOf(host)
     const figures = Object.fromEntries(
       panel
-        .findAll('[data-figure]')
+        .findAll('[data-part="figures"] [data-figure]')
         .map((one) => [
           one.attributes('data-figure'),
           one.get('dd').text().replaceAll(/\s/gu, ' '),
@@ -96,13 +96,13 @@ describe('what a value’s panel shows', () => {
     )
     // Task 1 spent eleven hours on Monday and one on Tuesday, of the week's 67 hours and 40 minutes
     // the ten tasks, no task and unknown work spent: 12 / 67.67 is 17.7 %, said as 18 %.
-    // A task has its cost of all time after them; this stand-in answers no read of the card, so
-    // the row says the read failed (`analyticsValueFigures.spec.ts` reads it).
-    expect(Object.keys(figures)).toEqual(['time', 'tokens', 'cost', 'share', 'all-time'])
+    // A task has its figures of all time under them, a part of their own
+    // (`analyticsValueFigures.spec.ts` reads them).
+    expect(Object.keys(figures)).toEqual(['time', 'tokens', 'cost', 'share'])
     expect(figures.time).toBe('12 h')
     expect(figures.share).toBe('18% · Agent time')
     // The panel's parts, in the order they stand; a chart's legend names its own parts inside.
-    const named = ['actions', 'figures', 'days', 'model', 'seat']
+    const named = ['actions', 'figures', 'all-time', 'days', 'model', 'seat']
     const parts = panel
       .findAll(named.map((part) => `[data-part="${part}"]`).join(', '))
       .map((one) => one.attributes('data-part'))

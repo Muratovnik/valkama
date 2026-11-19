@@ -98,12 +98,23 @@ export function useUsageWords() {
   }
 
   /**
+   * Whether agents worked side by side, so that the time on the clock and the agents' time say
+   * two figures: where they say one, the agents' time is not said again.
+   */
+  const sideBySide = (usage: Pick<ItemUsage, 'agent_seconds' | 'elapsed_seconds'>) =>
+    span(usage.elapsed_seconds) !== span(usage.agent_seconds)
+
+  /** The agents' time, the sum of each one's, in the one way the card, its tab and Analytics say it. */
+  const agentTime = (usage: Pick<ItemUsage, 'agent_seconds' | 'quality'>) =>
+    time(usage.agent_seconds, isEstimated(usage))
+
+  /**
    * What the figures of a read are, one sentence each and only those that apply, by the figure
    * each explains, and apart from them what a missing price does to the cost, or nothing.
    */
   function explanations(usage: ItemUsage) {
     const models = usage.unpriced_models.join(', ')
-    const parallel = span(usage.elapsed_seconds) !== span(usage.agent_seconds)
+    const parallel = sideBySide(usage)
     const work: string[] = []
     if (usage.quality === 'estimated') work.push(t('workItem.usage.estimated'))
     if (usage.quality === 'mixed')
@@ -138,5 +149,17 @@ export function useUsageWords() {
     return cost(usd, unpriced.length > 0)
   }
 
-  return { cost, explanations, figures, itemCost, notes, span, time, tokenFigure, tokens }
+  return {
+    agentTime,
+    cost,
+    explanations,
+    figures,
+    itemCost,
+    notes,
+    sideBySide,
+    span,
+    time,
+    tokenFigure,
+    tokens,
+  }
 }
