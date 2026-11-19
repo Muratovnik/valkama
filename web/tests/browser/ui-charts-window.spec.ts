@@ -5,8 +5,8 @@
  * end, its tick stands where steady use would be and crosses the bar, and the fill, the track and
  * the tick stand apart from each other and the fill from the ground by a contrast a reader can see
  * — a contrast of lightness, so the bar reads in grayscale too; the share spent is solid, silent
- * or fresh, and the forecast alone is hatched, a tail inside the track from a surface gap past
- * the fill, parted where its slower pace ends; no word is cut. The step line draws only flat and
+ * or fresh, and the forecast alone is hatched, one tail inside the track from a surface gap past
+ * the fill to the forecast's high end, with no gap inside it; no word is cut. The step line draws only flat and
  * upright strokes, a mark at each reading where its moment and value put it, painted only for the
  * reading under the pointer or the keyboard's focus, and that reading says itself in a hint over
  * the plot without moving anything. Past its readings «now» and the
@@ -155,29 +155,21 @@ for (const colorScheme of ['light', 'dark'] as const)
     // The share spent is solid, silent or fresh: only the forecast is hatched.
     for (const bar of bars.filter((one) => one.used !== null))
       expect(bar.mask, `${bar.case}: the fill`).toBe('none')
-    // The tail, hatched inside the track: from 2px past the fill to the slower pace's end, and
-    // 2px on to the faster's; from the track's start at 0 %; to its end where the window runs
-    // out; none past 100 % or with no figure. Each end at its share, to the whole percent.
+    // The tail, hatched inside the track: one, from 2px past the fill to the faster pace's end,
+    // nothing drawn where the slower ends; from the track's start at 0 %; to its end where the
+    // window runs out; none past 100 % or with no figure. Each end at its share, to the whole
+    // percent.
     const tails = Object.fromEntries(
       bars.map((bar) => [bar.case, bar.tail.map(({ from, to, gap }) => [from, to, gap])]),
     )
     expect(tails).toEqual({
-      spent: [
-        [62, 70, 2],
-        [70, 84, 2],
-      ],
+      spent: [[62, 84, 2]],
       over: [],
       zero: [[0, 12, null]],
-      stale: [
-        [88, 97, 2],
-        [97, 100, 2],
-      ],
+      stale: [[88, 100, 2]],
       runs: [[74, 100, 2]],
       none: [],
-      compact: [
-        [74, 86, 2],
-        [86, 95, 2],
-      ],
+      compact: [[74, 95, 2]],
     })
     for (const bar of bars)
       for (const part of bar.tail) {

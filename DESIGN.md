@@ -1188,10 +1188,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   use as a thin diagonal in the text ink. The share spent is a reading, final however old, so
   its fill is solid whether the window is fresh or silent, and a silent one says how long in
   words. What the window's forecast says it reaches by the reset is not final, so both draw it
-  hatched, in the series hue of the share it continues. On the bar it is a tail inside the
-  track from the share spent to the forecast's share at the reset, 2px of ground past the fill: a
-  week's range as two parts parted by the same 2px where its slower pace ends, since both paces
-  spend at least that much and only the faster spends the rest; five hours that last to the
+  hatched, in the series hue of the share it continues. On the bar it is one tail inside the
+  track from the share spent to the forecast's share at the reset, 2px of ground past the fill
+  and none inside the tail: a week's range to its high end, the faster pace's, its low end said
+  in the words under the bar and not drawn on it, since a second gap inside the tail read as a
+  break in the forecast; five hours that last to the
   share their answer says they spend by the reset, and five hours that run out to the track's
   end; from the track's start at 0 %; and no tail where the forecast names no share past the
   share spent — a pace that spends nothing more, a window too new for a forecast, one spent or
@@ -2721,9 +2722,10 @@ and none of their words disagree; a window past its reset by the page's clock fo
 more, so none of them is drawn and its words say when it reset where they said its forecast.
 Its state is judged by the same clock: a reading older than the answer's `fresh_for_seconds`
 reads silent, on the tile and in the panel, though the answer called it fresh.
-Where steady use would stand is drawn — the bar's tick, the line's diagonal — and said in their
-hints, the bar's with how old the latest reading is and who read it, which its words for a
-screen reader say too, with the forecast. As a table, where no hint shows, the account's table
+Where steady use from the window's start would stand now is drawn — the bar's tick, the line's
+diagonal — and said in their hints, the bar's naming its tick, «Pace tick · steady use since the
+window started would be at 57% now», with how old the latest reading is and who read it, which its
+words for a screen reader say too, with the forecast. As a table, where no hint shows, the account's table
 holds each window's forecast, the readings' table ends with it, and the window says its latest
 reading in words under its reset, and that it has no pace where it has none. A window's step
 line is on no period of the page, so its scale is its own: it opens on «To now and the forecast»

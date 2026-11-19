@@ -4,8 +4,8 @@
  * hatch: a figure not final yet is hatched and named, a final one never is.
  *
  * Every window's share spent is solid, a silent one's too, which says in words how long it has
- * been silent. Its forecast is a hatched tail inside the track, from the share spent: a week's
- * range in two parts, parted where its slower pace ends; five hours that last to the share their
+ * been silent. Its forecast is one hatched tail inside the track, from the share spent: a week's
+ * range to its high end, with no gap inside it; five hours that last to the share their
  * answer says they spend by the reset; five hours that run out to the track's end; none for a
  * window too new for a forecast, for one spent or read past 100 %; and from the track's start at
  * 0 %. The
@@ -86,10 +86,7 @@ const FIVE_HOURS: Record<string, Drawn> = {
 const WEEKS: Record<string, Drawn> = {
   'Work week': {
     fill: 41,
-    tail: [
-      [41, 57],
-      [57, 61],
-    ],
+    tail: [[41, 61]],
     corridor: true,
     places: ['now', 'reset'],
   },
@@ -97,10 +94,7 @@ const WEEKS: Record<string, Drawn> = {
   // Silent, its share as solid as a fresh one's, and a range that may run out, cut at the end.
   '7e6d5c4b week': {
     fill: 88,
-    tail: [
-      [88, 97.5],
-      [97.5, 100],
-    ],
+    tail: [[88, 100]],
     corridor: true,
     places: ['now', 'reset'],
   },
@@ -110,10 +104,7 @@ const WEEKS: Record<string, Drawn> = {
   // A fresh 0 %: no fill, the tail from the track's start.
   'Edge week_model': {
     fill: null,
-    tail: [
-      [0, 4],
-      [4, 9],
-    ],
+    tail: [[0, 9]],
     corridor: true,
     places: ['now', 'reset'],
   },
@@ -354,9 +345,8 @@ for (const lang of ['en', 'ru'] as const)
           // The share spent is solid, silent or fresh; a silent window says for how long.
           expect(one.solid, `${one.key}: its fill solid`).toBe(true)
           expect(one.lead, `${one.key}: its state`).toMatch(states[one.state] ?? /^$/u)
-          // Every part of the tail inside the track, 2px of ground past the fill or the part
-          // before; the forecast after its name wherever there is one; the legend names the
-          // corridor where one is drawn.
+          // The one tail inside the track, 2px of ground past the fill; the forecast after its
+          // name wherever there is one; the legend names the corridor where one is drawn.
           expect(
             one.tail.every(({ inside }) => inside),
             `${one.key}: its tail in its track`,

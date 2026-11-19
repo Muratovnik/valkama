@@ -42,8 +42,8 @@ export interface WindowWords {
 
 /**
  * The share a window's forecast says it stands at by its reset, in percent: its slower pace's
- * (`low`) and its faster's (`high`), alike for a forecast of one value. `WindowBar` draws it as a
- * hatched tail past the share spent.
+ * (`low`) and its faster's (`high`), alike for a forecast of one value. `WindowBar` draws it as one
+ * hatched tail past the share spent, to the high end; its words say both.
  */
 export interface WindowAhead {
   high: number

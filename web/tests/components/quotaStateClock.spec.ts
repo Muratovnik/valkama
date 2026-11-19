@@ -79,7 +79,9 @@ describe('a quota window’s state by the panel’s clock', () => {
     const silent = workWeek(page)
     expect(silent).toMatchObject({ state: 'silent', lead: '41% used · no data for 10 min' })
     expect(silent.latest).toMatch(/^No change since \d{2}:\d{2}, 10 min ago, from the poll$/u)
-    expect(silent.label).toMatch(/^Week: 41% used, steady use \d+%, no data for 10 min\. /u)
+    expect(silent.label).toMatch(
+      /^Week: 41% used, steady use since the window started would be at \d+% now, no data for 10 min\. /u,
+    )
   })
 
   it('names on the tile the fresh window of two at the same share, by the clock', async () => {

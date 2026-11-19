@@ -97,13 +97,13 @@ describe('the quota tiles', () => {
       aside: '88%',
       count: 'no data for 3\u{A0}h',
     })
-    // Silent or fresh, the share spent is solid; each forecast is a hatched tail past it, the
-    // week's range parted where its slower pace ends, and the bar's words name the hatch.
+    // Silent or fresh, the share spent is solid; each forecast is one hatched tail past it, the
+    // week's range to its high end, and the bar's words name the hatch.
     expect(tile(page, 'quota_week').get('.window-fill').classes()).toEqual(['window-fill'])
-    expect(tile(page, 'quota_week').findAll('.window-ahead')).toHaveLength(2)
+    expect(tile(page, 'quota_week').findAll('.window-ahead')).toHaveLength(1)
     expect(tile(page, 'quota_five_hour').findAll('.window-ahead')).toHaveLength(1)
     expect(tile(page, 'quota_five_hour').get('.window-track').attributes('aria-label')).toBe(
-      'Five hours: 74% used, steady use 70%, up to date. Forecast · Limit runs out at 15:10',
+      'Five hours: 74% used, steady use since the window started would be at 70% now, up to date. Forecast · Limit runs out at 15:10',
     )
   })
 
@@ -210,15 +210,15 @@ describe('the quota panel', () => {
     expect(fresh).toMatchObject({
       state: 'fresh',
       lead: '41% used · up to date',
-      tail: 2,
+      tail: 1,
       // The forecast, then the reset: the pace and the reading's age are the bar's hint.
       facts: ['forecast', 'reset'],
-      even: 'Steady use would be at 57% now',
+      even: 'Pace tick · steady use since the window started would be at 57% now',
       more: [],
     })
     expect(fresh.latest).toBe('Read 2 min ago from the poll')
     expect(fresh.label).toBe(
-      'Week: 41% used, steady use 57%, up to date. Forecast · By the reset: 57% to 61%. Read 2 min ago from the poll',
+      'Week: 41% used, steady use since the window started would be at 57% now, up to date. Forecast · By the reset: 57% to 61%. Read 2 min ago from the poll',
     )
     const silent = windowOf(accountNamed(week, 'Work'), 'week_model')
     expect(silent).toMatchObject({

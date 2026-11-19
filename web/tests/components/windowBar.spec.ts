@@ -4,8 +4,8 @@
  * its end past 100 %, stands its pace tick where steady use would be and says it all in words; a
  * fresh 0 % draws the track and its tick and no fill, a window that is not fresh is as solid as a
  * fresh one and says so in its words, and one with no figure the track alone. Its forecast is a
- * hatched tail from the share spent to the share at the reset, parted where the slower pace ends,
- * never past the track's end; with nothing ahead it has none. The table holds every figure the
+ * hatched tail from the share spent to the share at the reset, one tail to a range's high end
+ * with no gap inside it, never past the track's end; with nothing ahead it has none. The table holds every figure the
  * bar draws, the forecast too.
  */
 import { mount } from '@vue/test-utils'
@@ -17,14 +17,12 @@ import WindowBarTable from '@/shared/ui/WindowBarTable.vue'
 const style = (element: { attributes: (name: string) => string | undefined }) =>
   element.attributes('style') ?? ''
 
-/** The parts of a bar's tail: which, where it starts and how long, and whether it rounds an end. */
+/** A bar's tails: where each starts and how long, and whether it rounds the track's start. */
 const tail = (bar: ReturnType<typeof mount>) =>
-  bar.findAll('.window-ahead').map((part) => ({
-    part: part.attributes('data-part'),
+  bar.findAll('[data-mark="ahead"]').map((part) => ({
     style: style(part),
     hatched: part.classes('hatched'),
     start: part.classes('window-ahead-start'),
-    end: part.classes('window-ahead-end'),
   }))
 
 describe('the window bar', () => {
@@ -72,27 +70,17 @@ describe('the window bar', () => {
     expect(none.find('.window-words').exists()).toBe(false)
   })
 
-  it('draws a range ahead as a hatched tail from the share spent, parted where the slower pace ends', () => {
-    // Both paces spend to 70 %, so that much is one part; the faster spends 14 more, the second.
+  it('draws a range ahead as one hatched tail from the share spent to its high end', () => {
+    // From 62 % spent, past the fill's gap, to the faster pace's 84 %: 22 % long, nothing at 70 %.
     const bar = mount(WindowBar, {
       props: { label: 'Week', used: 62, even: 40, forecast: { low: 70, high: 84 } },
     })
     expect(tail(bar)).toEqual([
       {
-        part: 'near',
         style:
-          'inset-inline-start: calc(62% + var(--space-half)); inline-size: calc(8% - var(--space-half));',
+          'inset-inline-start: calc(62% + var(--space-half)); inline-size: calc(22% - var(--space-half));',
         hatched: true,
         start: false,
-        end: false,
-      },
-      {
-        part: 'far',
-        style:
-          'inset-inline-start: calc(70% + var(--space-half)); inline-size: calc(14% - var(--space-half));',
-        hatched: true,
-        start: false,
-        end: true,
       },
     ])
     // The share spent stays solid: the tail is drawn beside it, not over it.
@@ -104,13 +92,7 @@ describe('the window bar', () => {
       props: { label: 'Five hours', used: 0, forecast: { low: 12, high: 12 } },
     })
     expect(tail(zero)).toEqual([
-      {
-        part: 'near',
-        style: 'inset-inline-start: 0%; inline-size: 12%;',
-        hatched: true,
-        start: true,
-        end: true,
-      },
+      { style: 'inset-inline-start: 0%; inline-size: 12%;', hatched: true, start: true },
     ])
     const runs = mount(WindowBar, {
       props: { label: 'Five hours', used: 74, forecast: { low: 100, high: 100 } },
@@ -124,9 +106,9 @@ describe('the window bar', () => {
     const past = mount(WindowBar, {
       props: { label: 'Week', used: 90, forecast: { low: 97.5, high: 104 } },
     })
-    expect(tail(past).at(-1)?.style).toBe(
-      'inset-inline-start: calc(97.5% + var(--space-half)); inline-size: calc(2.5% - var(--space-half));',
-    )
+    expect(tail(past).map(({ style: drawn }) => drawn)).toEqual([
+      'inset-inline-start: calc(90% + var(--space-half)); inline-size: calc(10% - var(--space-half));',
+    ])
     const none = [
       { used: 104, forecast: { low: 104, high: 104 } },
       { used: 100, forecast: { low: 100, high: 100 } },

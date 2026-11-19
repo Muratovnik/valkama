@@ -61,7 +61,7 @@ describe('five hours that last to the reset', () => {
     expect(tileTail).toHaveLength(1)
     expect(tileTail[0]?.attributes('style')).toContain('inline-size: 35%')
     expect(tile(page, 'quota_five_hour').get('.window-track').attributes('aria-label')).toBe(
-      'Five hours: 0% used, steady use 20%, up to date. Forecast · By the reset: 35%',
+      'Five hours: 0% used, steady use since the window started would be at 20% now, up to date. Forecast · By the reset: 35%',
     )
     const window = accountNamed(page, '7e6d5c4b').get('.quota-window[data-window="five_hour"]')
     const tail = window.findAll('[data-mark="ahead"]')
