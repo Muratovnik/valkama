@@ -2617,7 +2617,11 @@ question did not ask about, the server refuses it with the list of that work; th
 over the answers, what closes with who holds it and what waits on it, the reference it waits on
 never split at its hyphen, focus goes to its first
 line, which says the answer cancels that work too, and the asking stands again, its buttons
-brought back into view. Confirming it
+brought back into view. A list taller than the room the panel leaves over the answers, under the
+block's head, is held to that room and scrolls inside itself, stopping at its ends, so its first
+line and the answers both stay in view and scrolling it moves no answer; the keys scroll it from
+that line, and while it scrolls it is a stop of the keyboard. A scroll of the panel the reader
+makes still moves the answers and ends the asking. Confirming it
 sends that list's token, never the one the question was asked with, which listed the findings the
 answer cancels first; a list that changed meanwhile is refused and shown again the same way.
 Where the list holds more than one kind, tabs over it offer All and each kind it holds, each with
