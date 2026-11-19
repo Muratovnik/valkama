@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { usePlanningCensus } from '@/pages/planning/composables/usePlanningCensus.ts'
 
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
+import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import { boardItem } from './fixtures/board.ts'
 
@@ -19,10 +20,14 @@ const SPACE = [
   boardItem(4, 'todo'),
 ]
 
-const census = (view: 'graph' | 'kanban', grouping: 'goal' | 'none' = 'none') =>
+const census = (
+  view: 'graph' | 'kanban' | 'list',
+  grouping: 'goal' | 'none' = 'none',
+  filter: WorkFilter = EMPTY_WORK_FILTER,
+) =>
   usePlanningCensus(() => ({
     chain: null,
-    filter: EMPTY_WORK_FILTER,
+    filter,
     grouping,
     space: SPACE,
     view,
@@ -35,5 +40,13 @@ describe('what a view leaves out of the counts', () => {
 
   it('still names the goals the grouped board draws as rows', () => {
     expect(census('kanban', 'goal').exclusion.value).toEqual({ kind: 'lane-heads', count: 1 })
+  })
+})
+
+describe('the counts of a tree under a filter', () => {
+  it('count what matched, not the goal the list by goal draws as its path', () => {
+    // MAIN-2 alone matches; the tree draws its goal above it as a path row.
+    const counts = census('list', 'goal', { text: 'Item 2' }).counts.value
+    expect(counts).toMatchObject({ matchedOpen: 1, matchedClosed: 0, open: 3, total: 4 })
   })
 })
