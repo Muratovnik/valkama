@@ -149,12 +149,13 @@ const fileOf = (rows: readonly (readonly string[])[]) =>
   `${BYTE_ORDER_MARK}${rows.map((row) => row.join(',')).join(LINE_END)}${LINE_END}`
 
 /**
- * What a value is called apart from its id: a task's title, a project's name, or the page's
- * words for it where the read gives none — «No task», a role's name. Empty where the page names
- * a value by its id alone, as a model.
+ * What a value is called: a task's title, a project's name, or the page's words for it where the
+ * read gives none — «No task», a role's name, a model by its id, as the page shows it. A script
+ * reading the file finds every value's name in the one column, whatever the dimension: left
+ * empty where the page names a value by its id, a model's row had no name at all.
  */
 function nameOf(value: UsageGroupValue, named: string) {
-  return value.title ?? value.name ?? (named === value.id ? '' : named)
+  return value.title ?? value.name ?? named
 }
 
 /** The cells that say which value a row is of: its id, reference, name and kind. */
