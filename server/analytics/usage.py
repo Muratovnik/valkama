@@ -40,6 +40,10 @@ session's own run, which is launched by no one, and work on an item that names n
 are groups of their own too, and are not unknown: there is nothing to know. So is work on
 an item that names several projects: counted to one group rather than to each, so the
 groups still add up to the total. Nothing is collected here.
+
+A space narrows the read to the work it holds (`space_scope`): its board's items, as a
+project filter narrows them, and work on no item whose session stands in one of its
+projects.
 """
 
 from __future__ import annotations
@@ -58,6 +62,7 @@ from ..planning import usage as item_usage
 from ..planning.usage import MAX_STEPS, STEPS, UsageQueryError, Value
 from ..projects import project_registry
 from ..quota import accounts, seats
+from . import space_scope
 
 ACCOUNT = "account"
 PROJECT = "project"
@@ -156,6 +161,8 @@ class UsageQuery:
     #: The values each filtered dimension admits; `None` admits work with none.
     filters: Mapping[str, frozenset[Value]] = field(default_factory=dict)
     compare: bool = False
+    #: The space the work is narrowed to, by its key, id or name; `None` reads every space.
+    space: str | None = None
 
 
 def _dimensions(names: Iterable[str], parameter: str) -> list[str]:
@@ -192,8 +199,10 @@ def query(
     filters: Mapping[str, Sequence[str]] | None = None,
     none: Sequence[str] = (),
     compare: bool = False,
+    space: str | None = None,
 ) -> UsageQuery:
-    """A request checked whole, or a refusal naming the first thing wrong in it."""
+    """A request checked whole, or a refusal naming the first thing wrong in it; a space the
+    store does not hold is refused when the request is read."""
 
     begins, ends = item_usage.period(start, end, step=step, utc_offset=utc_offset, compare=compare)
     grouped = _dimensions(group_by, "group_by")
@@ -213,6 +222,7 @@ def query(
         group_by=tuple(grouped),
         filters={dimension: frozenset(values) for dimension, values in admitted.items()},
         compare=compare,
+        space=space,
     )
 
 
@@ -511,6 +521,25 @@ def _filters(
     return [held_in(dimension, admitted) for dimension, admitted in filters.items()]
 
 
+def _in_space(
+    request: UsageQuery,
+    listing: project_registry.RegistryResult,
+    project_reads: _ProjectReads,
+    conn: sqlite3.Connection,
+) -> Callable[[Sequence], bool]:
+    """The test of the space a request names: work on an item it holds, or on no item in a
+    place of one of its projects."""
+
+    held = space_scope.holding(conn, str(request.space), request.filters.get(PROJECT), listing)
+
+    def admits(row: Sequence) -> bool:
+        if row[_ITEM] is None:
+            return held.admits_place(project_reads.of(row))
+        return row[_ITEM_HELD] is not None and held.admits_item(str(row[_ITEM]))
+
+    return admits
+
+
 def _launch_class(row: Sequence) -> Value:
     """How the run was launched, by the item read's rule (`planning.usage.launch_class`)."""
 
@@ -671,12 +700,16 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     seat_names: dict[str, dict] = {}
     if SEAT in needed:
         rows, seat_names = _with_seats(conn, rows)
-    listing = project_registry.read_registry() if PROJECT in needed else None
+    listing = (
+        project_registry.read_registry() if PROJECT in needed or request.space is not None else None
+    )
     projects = [] if listing is None else listing["projects"]
     project_reads = None if listing is None else _ProjectReads(conn, rows, listing)
     readers = _readers(project_reads, needed)
     grouping = [readers[dimension] for dimension in request.group_by]
     filters = _filters(readers, project_reads, request.filters)
+    if request.space is not None and listing is not None and project_reads is not None:
+        filters.append(_in_space(request, listing, project_reads, conn))
     several = (
         request.group_by.index(PROJECT)
         if project_reads is not None and PROJECT in request.group_by
