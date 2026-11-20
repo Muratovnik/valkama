@@ -99,12 +99,19 @@ const FULL_FROM = { both: 1240, one: 1100 }
 /**
  * The fit for a list `width` pixels wide, `both` where it draws «Goal and stage» and
  * «Project»; unmeasured, the list is wide. The thresholds are where the columns
- * that stay leave the title room for a typical title on two lines, 36 characters.
+ * that stay leave the title room for a typical title on two lines, 36 characters,
+ * beside a flat list's first column. A tree's first column is wider by its `lead`,
+ * the arrow and the indent of its deepest row, so it is the width less the lead that
+ * meets them: measured on the list's width alone, a tree three levels deep stood every
+ * column but two beside a first column 222px wide, left its title 131px and ran 24px
+ * past the list's frame at 1280px.
  */
-export function fitFor(width: number, both = false): Fit {
-  if (width === 0 || width >= FULL_FROM[both ? 'both' : 'one']) return 'full'
-  if (width >= 900) return 'wide'
-  return width >= 560 ? 'medium' : 'narrow'
+export function fitFor(width: number, both = false, lead = 0): Fit {
+  if (width === 0) return 'full'
+  const room = width - lead
+  if (room >= FULL_FROM[both ? 'both' : 'one']) return 'full'
+  if (room >= 900) return 'wide'
+  return room >= 560 ? 'medium' : 'narrow'
 }
 
 const urgency = new Map(PRIORITIES.map((priority, index) => [priority, PRIORITIES.length - index]))

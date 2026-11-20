@@ -100,6 +100,37 @@ for (const width of [1280, 390] as const) {
   })
 }
 
+/**
+ * The task's number in a block's head is one word: narrowed a pixel at a time, the head never
+ * stands it on two lines. On a phone a head ended one line on «MAIN-» and began the next on
+ * the number, where the browser offers a break after the hyphen.
+ */
+test('the task’s number in a block’s head never breaks at its hyphen', async ({ page }) => {
+  const { dialog } = await openList(page, blocks(), 390)
+  const context = block(dialog, 'Third block').locator('.request-context')
+  await expect(context.getByRole('link', { name: /MAIN-264/u })).toBeVisible()
+  const split = await context.evaluate((element) => {
+    const line = element as HTMLElement
+    const reference = line.querySelector('.rich-reference')
+    if (!reference) return ['no reference']
+    const found: string[] = []
+    line.style.flex = '0 0 auto'
+    for (let room = Math.floor(line.getBoundingClientRect().width); room >= 80; room -= 1) {
+      line.style.width = `${room}px`
+      const tops = new Set(
+        [...reference.getClientRects()]
+          .filter((part) => part.width > 0)
+          .map((part) => Math.round(part.top)),
+      )
+      if (tops.size > 1) found.push(`${room}px`)
+    }
+    line.style.flex = ''
+    line.style.width = ''
+    return found
+  })
+  expect(split).toEqual([])
+})
+
 test('the next block’s head takes the place of the one before as its block comes up', async ({
   page,
 }) => {

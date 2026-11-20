@@ -271,10 +271,11 @@ const parts = computed(() => {
   font: var(--font-detail);
 }
 
+/* A list with no marks stands on the column's edge, under its label: indented, a goal's
+   conditions started 20px in from «Proposed goal» and 8px past the findings' boxes under it. */
 .kind-list {
   display: grid;
   gap: var(--space-1);
-  padding-inline-start: var(--space-5);
   margin: 0;
 }
 

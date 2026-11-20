@@ -122,10 +122,14 @@ function projectsLine(space: PortfolioSpace): string {
   gap: var(--space-3);
 }
 
+/* A column whose foot is the card's: a row of cards is as tall as its tallest, and each
+   card's way in stands on that foot, whatever the card says above it. Stood after its
+   words instead, «Open space» of one row stood 78px apart at 1280px, where one card's
+   projects ran to three lines and another's to one. */
 .portfolio-space {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
-  align-content: start;
   padding: var(--space-4);
   background: var(--color-surface);
   border-radius: var(--radius-card);
@@ -195,6 +199,7 @@ function projectsLine(space: PortfolioSpace): string {
 
 /* The action stands at the foot of the card rather than filling it. */
 .open-space {
-  justify-self: start;
+  align-self: start;
+  margin-block-start: auto;
 }
 </style>

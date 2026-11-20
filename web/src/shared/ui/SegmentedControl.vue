@@ -273,12 +273,6 @@ function move(event: KeyboardEvent) {
     text-align: start;
     white-space: normal;
   }
-
-  /* A tile's words keep their own inks, so the ink a segment takes under the pointer would change
-     nothing on one: a tile not pressed takes the hovered ground instead, and nothing moves. */
-  .segmented-option:hover:not(:disabled, .active) {
-    background: var(--color-surface-hover);
-  }
 }
 
 /* A row that must stand inside what holds it (`fit`) is never wider than that: its words wrap
@@ -296,8 +290,13 @@ function move(event: KeyboardEvent) {
   }
 }
 
+/* A segment not pressed takes the hovered ground under the pointer as well as the main ink,
+   a step under the pressed one's, and nothing moves. The ink alone was a step of grey on two
+   short words, which a reader pointing at «Agent» in Participation did not see change; a tile's
+   words keep their own inks, so on a tile the ground was all that changed. */
 .segmented-option:hover:not(:disabled, .active) {
   color: var(--color-text);
+  background: var(--color-surface-hover);
 }
 
 .segmented-option.active {

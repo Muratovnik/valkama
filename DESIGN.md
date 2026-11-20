@@ -766,11 +766,13 @@ and only fades the end of a strip that scrolls on past it.
   stands on the edge and the target reaches outward. Inside a panel with a surface of its
   own, a menu, the headings take the rows' inset instead. A chain's rows once stood 8px in
   from their headings, a session 8px in from its label and a step's box 6px in from the
-  checklist's heading, three edges in one column. `production-card-list-edges.spec.ts`
+  checklist's heading, three edges in one column; a list without marks is no indent either,
+  where a question's conditions stood 20px in from their label. `production-card-list-edges.spec.ts`
   measures them. A row whose box is laid out in every state, as Analytics' rail entries,
   ranked rows and table rows are, draws that box first: the box stands on the edge and its
   words take the inset inside it, since a box that reached past the column in one state read
-  as an entry pushed out of it (Analytics).
+  as an entry pushed out of it (Analytics). A question's options and findings are such rows,
+  on a ground in every state: the ground stands on the edge and the box is 12px inside it.
 - A disclosure's chevron is the icon layer's `disclosure-closed` and `disclosure-open`: the
   set's chevron drawn from its square's start edge, so the square stands on the column's
   edge, the stroke starts there in both states, and the words after the square keep their
@@ -826,7 +828,9 @@ shows four numbers under the space's name, counted as the space's Volumes page c
 its cards in triage, its tasks ready and in progress, and the questions waiting for the owner.
 They stand in two rows of two, since a card is never wide enough for four whole names in a
 row, a number never narrower than its longest word. A space without them shows each as «—», never 0, and says why: an
-earlier build wrote its store, which is «No data», or its store could not be read. The
+earlier build wrote its store, which is «No data», or its store could not be read. «Open
+space» stands at the card's foot: a row of cards is as tall as its tallest, and its ways in
+stand on one line, where after each card's own words one row's stood 78px apart. The
 second stands only in a space with more than one project to choose, and an address that
 narrows to a project keeps it on show: «All projects», the space's own projects, then the
 projects of other spaces that its items name, each with its own space's key beside its
@@ -1382,7 +1386,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   arrows show a panel as they reach its tab where it shows at once, and only
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
-  same control built again, and `check:ui-system` rejects one.
+  same control built again, and `check:ui-system` rejects one. A segment not
+  pressed takes the hovered ground and the main ink under the pointer, a step
+  under the pressed one's ground; the ink alone was a step of grey a reader
+  pointing at a two-segment row did not see. A row of choices wider than half a
+  settings row is a wide row (`SettingsRow`'s `wide`): the choice stands beside
+  the name in the half every row's control stands in where its words fit there,
+  and under the name, as every row of a narrow workspace does, where they do not;
+  it wraps only where that line cannot hold it either, its segments then sharing
+  each line evenly. Held to the half, Participation's set wrapped onto a second
+  line at 1280px; reaching toward the name instead, the choices of one column
+  started at three edges at 1024px.
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
@@ -1486,8 +1500,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the next line whole, left the line before a long path half empty and could leave the
   comma after it alone on a line. So it breaks with the words, a path also after each
   `/`, which a browser does not offer by itself, and what is written against it stays
-  on its last line; padding that takes no room in the line gives its words a pointer
-  target as tall as their line, 24px in reading text, without reaching the words above. One
+  on its last line. A work item's number is the exception: one word of a few letters, it
+  breaks around itself and never at its hyphen, as in a title, linked or not, since a
+  question's head on a phone ended one line on «MAIN-» and began the next on «314».
+  Padding that takes no room in the line gives its words a pointer target as tall as
+  their line, 24px in reading text, without reaching the words above. One
   that leads to a card or a document is a link to that address (`/open/<number>`, the
   document's page): a plain press opens it in place through its owner, and a press with
   a modifier or the middle button is the browser's, as on any link. The desktop app has
@@ -1879,6 +1896,15 @@ names it. It folds with «Goal and stage» and follows the path wherever that le
 saying nothing for work naming none. Each of the two is at most 10rem wide, and side by
 side at that measure they left the title of a 1100px list 21 characters, so where the list
 draws both they stand from 1240px, where it keeps 38.
+These widths, 1100 and 1240 for every column, 900 for all but those two and 560 for
+more than the reference and the title, are met by the room beside a flat list's first
+column. A tree's first column is wider by its lead, the arrow and the indent of its
+deepest row, 24px a level up to the fifth, so a tree meets them with that lead taken
+out of its width: measured on the width alone, a list by goal three levels deep at
+1280px stood every column but two, left its title 131px with words broken inside and ran
+24px past its frame. A group's row wraps between words and keeps each count whole, its
+wrapped lines starting under its name: held to one line, a project's long name stood the
+table 574px wide in a list of 302 on a phone.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
 list's sort order. Grouped «By project», it is a tree of one level: a row per group, as
