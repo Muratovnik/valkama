@@ -3248,7 +3248,14 @@ attached stores too: the eight categories and «Waiting for me» count them all,
 portfolio's cards count each of them. What only this service writes — what work spent, the
 owner's decisions and the commits — is counted in its own store alone, so the goals, the work
 outside goals, the flow, the estimates and «Commits on no card» are that store's, as Analytics
-and Agent decisions read it. Its own filters are the period — the period strip Analytics
+and Agent decisions read it. While a store attached beside it holds work, which the numbers count
+and those sections do not, one line over the goals says so, nearer the goals than the numbers:
+«Goals, work outside goals, the flow and the estimates count the main store's spaces only.»; with
+no such store nothing is said. A store the numbers could not read is said over them as the
+questions window says one it skipped, from the same list of sources and in the same words:
+«Results are incomplete. Some sources are unavailable.» and, for each space not read, its name
+and why («BETA: Store could not be opened»). A read with no work that left a source out shows its
+zeros under those words rather than «There is no work in this scope». Its own filters are the period — the period strip Analytics
 stands on, today, this week, the past four weeks or days of the reader's own — and the kind and the label
 of a task, «All kinds» and «All labels» until one is chosen. The label's choice offers the
 labels the page's read itself names, and the one chosen: there is no read of labels of its own,

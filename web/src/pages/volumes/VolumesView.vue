@@ -16,9 +16,11 @@
  * Done's and Cancelled's the Work list narrowed to what closed so in the page's period,
  * «Waiting for me» the questions window narrowed to the page's space, project, kind and label
  * (`requests`), so it lists the questions the number counts, and «Commits on no card» shows their
- * list under the numbers (`VolumesCommits`), where an attach reads the page again. Under them the
- * goals' tree (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
- * (`VolumesFlow`) and the estimates (`VolumesEstimates`).
+ * list under the numbers (`VolumesCommits`), where an attach reads the page again. Over them a
+ * source the read could not reach is said as the questions window says it (`VolumesCoverage`).
+ * Under them the goals' tree (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
+ * (`VolumesFlow`) and the estimates (`VolumesEstimates`), which count the main store alone and say
+ * so while an attached store the numbers count holds work (`VolumesOwnStore`).
  *
  * The first wait, a failure and a scope with no work are the product's shared state panel under
  * the bar: «There is no work in this scope». A read of another view dims the last one until its
@@ -30,11 +32,13 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import VolumesCommits from '@/pages/volumes/components/VolumesCommits.vue'
+import VolumesCoverage from '@/pages/volumes/components/VolumesCoverage.vue'
 import VolumesEstimates from '@/pages/volumes/components/VolumesEstimates.vue'
 import VolumesFlow from '@/pages/volumes/components/VolumesFlow.vue'
 import VolumesGoals from '@/pages/volumes/components/VolumesGoals.vue'
 import VolumesNumbers from '@/pages/volumes/components/VolumesNumbers.vue'
 import VolumesOutside from '@/pages/volumes/components/VolumesOutside.vue'
+import VolumesOwnStore from '@/pages/volumes/components/VolumesOwnStore.vue'
 import { useVolumesRead } from '@/pages/volumes/composables/useVolumesRead.ts'
 import type { VolumesTarget } from '@/pages/volumes/utils/volumesTargets.ts'
 import { readView, writeView } from '@/pages/volumes/utils/volumesView.ts'
@@ -265,6 +269,7 @@ function refresh() {
       >
         <template #default="{ payload }">
           <div class="volumes-shown">
+            <VolumesCoverage :coverage="payload.coverage" />
             <VolumesNumbers
               :commits-open="commitsOpen"
               :commits-unread="commitsUnread"
@@ -282,6 +287,7 @@ function refresh() {
               @attached="refresh"
               @unread="hearUnread"
             />
+            <VolumesOwnStore v-if="payload.attached_work" />
             <VolumesGoals
               :goals="payload.goals"
               :measured-from="payload.measured_from"
