@@ -1,7 +1,8 @@
 /**
  * The Volumes page in the real app, against a double of the server's read (`volumesDouble`), at
  * 1280px in English and at 390px in English and in Russian. The oracle is the page's contract in
- * DESIGN.md («Volumes»): the ten numbers stand in one row, or in two rows of five on a phone; a
+ * DESIGN.md («Volumes»): the ten numbers stand in one row where every name has room and in as
+ * many rows as the names need on a phone, never scrolling sideways or breaking a word; a
  * goal's volume and what it has left are read on its row of the goals' tree, a goal of five
  * levels among them; an open category's number opens the board narrowed to it; a space without
  * goals says so and counts its work outside goals; and the page's states — spending not counted,
@@ -213,6 +214,19 @@ const numberTops = (page: Page) =>
     .locator('[data-number]')
     .evaluateAll((numbers) => numbers.map((one) => Math.round(one.getBoundingClientRect().top)))
 
+/** Where each number stands, to the pixel: its left, its top and its width. */
+const numberBoxes = (page: Page) =>
+  page.locator('[data-number]').evaluateAll((numbers) =>
+    numbers.map((one) => {
+      const box = one.getBoundingClientRect()
+      return [Math.round(box.left), Math.round(box.top), Math.round(box.width)]
+    }),
+  )
+
+/** How far the numbers run past their width: above zero they scroll sideways. */
+const numbersSideways = (page: Page) =>
+  page.locator('.volumes-numbers').evaluate((list) => list.scrollWidth - list.clientWidth)
+
 /** How far the panel's content runs past its width: above zero the page scrolls sideways. */
 const overflow = (page: Page) =>
   page.locator('.volumes-panel').evaluate((panel) => panel.scrollWidth - panel.clientWidth)
@@ -230,14 +244,14 @@ for (const size of SIZES) {
       const numbers = page.locator('[data-number]')
       await expect(numbers).toHaveCount(10)
       const tops = await numberTops(page)
-      // Ten numbers in one row, or two rows of five on a phone.
-      expect(new Set(tops).size, JSON.stringify(tops)).toBe(phone ? 2 : 1)
-      expect(tops.filter((top) => top === tops[0])).toHaveLength(phone ? 5 : 10)
+      // Ten numbers in one row where every name has room; on a phone, as many rows as they need.
+      expect(new Set(tops).size > 1, JSON.stringify(tops)).toBe(phone)
 
-      // No word of a number is cut or broken: where five have no room, the row scrolls instead.
+      // No word of a number is cut or broken, and the numbers never scroll sideways.
       const parts = await shortfalls(page, '[data-number] [data-part]')
       expect(parts).toHaveLength(30)
       expect(parts.filter((part) => part.short > 0.5)).toEqual([])
+      expect(await numbersSideways(page)).toBeLessThanOrEqual(0)
       const row = page.locator('tr[data-reference="MAIN-10"]')
       await expect(row.locator('[data-figure="closed"]')).toHaveText(words.closed)
       await expect(row.locator('[data-figure="remaining"]')).toContainText(words.left)
@@ -253,7 +267,12 @@ for (const size of SIZES) {
       await expect(spent).toHaveAttribute('aria-description', words.unknown)
       expect(await overflow(page)).toBeLessThanOrEqual(0)
       await shoot(page, info, `ready-${tag}`)
-      await record(info, `volumes ready ${tag}`, { tops, overflow: await overflow(page) })
+      await record(info, `volumes ready ${tag}`, {
+        tops,
+        parts,
+        numbersSideways: await numbersSideways(page),
+        overflow: await overflow(page),
+      })
     })
 
     test('an open category’s number opens the board narrowed to it', async ({ page }, info) => {
@@ -275,10 +294,14 @@ for (const size of SIZES) {
       const server = await routeCommits(page, commits)
       const number = page.locator('[data-number="commits"]')
       await expect(number.locator('[data-part="figure"]')).toHaveText('1')
+      await number.scrollIntoViewIfNeeded()
+      const before = await numberBoxes(page)
       await number.click()
       await expect(number).toHaveAttribute('aria-expanded', 'true')
       const row = page.locator('[data-commit="abcdef0123"]')
       await expect(row.locator('th')).toHaveText('abcdef01')
+      // The list opens under the numbers and moves none of them.
+      expect(await numberBoxes(page)).toEqual(before)
       await expect(row.getByText('Fix the parser of the volumes read')).toBeVisible()
       await row.getByRole('button', { name: words.attach }).click()
       await row.getByRole('combobox').fill('volumes')

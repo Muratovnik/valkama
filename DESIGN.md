@@ -3230,9 +3230,11 @@ its oldest card, under «Waiting for me» that of the question asked first; Done
 count what came to a close in the period and say «in the period». A category's number counts
 its tasks, goals and stages, as the board's filter by category shows them, and its hint says
 how many of each; under a filter it counts the matching tasks alone. The numbers stand in one
-row; a phone's page takes them in two rows of five, and where two rows have no room for a word
-of a name, which is never broken, they scroll sideways in their own frame, as a table does on a
-phone.
+row while the page has room for every name, and in as many rows as the names need where it has
+not, as on a phone, a row sharing its width among its numbers. A number is never narrower than
+the longest word of its name, which is never broken, and the numbers never scroll sideways: in
+a frame of their own they did on a phone, and opening the commits' list under them scrolled the
+frame to the pressed number, moving every other one. Opening that list moves nothing over it.
 
 A number opens the place that shows exactly what it counts. An open category's opens the board
 of the same scope narrowed to the category, with the page's kind and label; a label alone names

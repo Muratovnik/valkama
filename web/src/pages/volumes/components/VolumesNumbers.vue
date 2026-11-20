@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * The numbers on top of the Volumes page: one for each of the eight categories, in the model's
- * order, then «Waiting for me» and «Commits on no card», ten in a row that goes to two rows of
- * five where the page is a phone's width. Under an open category's number stands the age of its
+ * order, then «Waiting for me» and «Commits on no card», ten in a row where the page has room for
+ * every name and in as many rows as the names need where it has not, as on a phone; they never
+ * scroll sideways. Under an open category's number stands the age of its
  * oldest card, under «Waiting for me» that of the question asked first; a closed category counts
  * what came to stand there in the period and says so.
  *
@@ -35,7 +36,6 @@ import { UNKNOWN } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import type { Volumes } from '@/shared/api/volumesReadApi.ts'
-import { keyScroll } from '@/shared/lib/keyScroll.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -56,7 +56,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const words = useVolumesWords()
-const vKeyScroll = keyScroll
 
 /** What a number's press does, in words, or why it does nothing. */
 function opensWords(target: VolumesTarget): string {
@@ -150,100 +149,87 @@ function press(number: VolumesNumber) {
 </script>
 
 <template>
-  <div
-    v-key-scroll="t('volumes.numbers.label')"
-    class="volumes-numbers-frame"
+  <ul
+    class="volumes-numbers"
+    :aria-label="t('volumes.numbers.label')"
   >
-    <ul
-      class="volumes-numbers"
-      :aria-label="t('volumes.numbers.label')"
+    <li
+      v-for="number in numbers"
+      :key="number.key"
+      class="volumes-number-place"
     >
-      <li
-        v-for="number in numbers"
-        :key="number.key"
-        class="volumes-number-place"
+      <button
+        v-if="number.opens"
+        v-tooltip.detail="number.hint"
+        type="button"
+        class="volumes-number volumes-number-press"
+        :data-number="number.key"
+        :aria-description="number.description"
+        :aria-expanded="number.expanded"
+        @click="press(number)"
       >
-        <button
-          v-if="number.opens"
-          v-tooltip.detail="number.hint"
-          type="button"
-          class="volumes-number volumes-number-press"
-          :data-number="number.key"
-          :aria-description="number.description"
-          :aria-expanded="number.expanded"
-          @click="press(number)"
+        <span
+          class="volumes-number-label"
+          data-part="label"
+          >{{ number.label }}</span
         >
-          <span
-            class="volumes-number-label"
-            data-part="label"
-            >{{ number.label }}</span
-          >
-          <span
-            class="volumes-number-figure"
-            data-part="figure"
-            >{{ number.figure }}</span
-          >
-          <span
-            class="volumes-number-under"
-            data-part="under"
-            >{{ number.under }}</span
-          >
-        </button>
-        <div
-          v-else
-          v-tooltip.detail="number.hint"
-          class="volumes-number"
-          :data-number="number.key"
-          :aria-description="number.description"
+        <span
+          class="volumes-number-figure"
+          data-part="figure"
+          >{{ number.figure }}</span
         >
-          <span
-            class="volumes-number-label"
-            data-part="label"
-            >{{ number.label }}</span
-          >
-          <span
-            class="volumes-number-figure"
-            data-part="figure"
-            >{{ number.figure }}</span
-          >
-          <span
-            class="volumes-number-under"
-            data-part="under"
-            >{{ number.under }}</span
-          >
-        </div>
-      </li>
-    </ul>
-  </div>
+        <span
+          class="volumes-number-under"
+          data-part="under"
+          >{{ number.under }}</span
+        >
+      </button>
+      <div
+        v-else
+        v-tooltip.detail="number.hint"
+        class="volumes-number"
+        :data-number="number.key"
+        :aria-description="number.description"
+      >
+        <span
+          class="volumes-number-label"
+          data-part="label"
+          >{{ number.label }}</span
+        >
+        <span
+          class="volumes-number-figure"
+          data-part="figure"
+          >{{ number.figure }}</span
+        >
+        <span
+          class="volumes-number-under"
+          data-part="under"
+          >{{ number.under }}</span
+        >
+      </div>
+    </li>
+  </ul>
 </template>
 
 <style scoped>
-/* Ten numbers in one row, a phone's page taking them in two rows of five. A column is never
-   narrower than its longest word, which is never broken: where two rows of five have no room for
-   that, as on a phone in Russian, the numbers scroll sideways in their own frame, as a table does
-   on a phone, and Tab reaches the frame while it scrolls (`keyScroll`). */
-.volumes-numbers-frame {
-  min-width: 0;
-  overflow-x: auto;
-}
-
+/* The numbers stand in one row while the page has room for every name, and in as many rows as
+   the names need where it has not, a row sharing its width among its numbers. A number is never
+   narrower than its longest word, which is never broken, and the numbers never scroll sideways:
+   in a frame of their own they did on a phone, and opening the commits' list under them scrolled
+   the frame to the pressed number, moving every other one. */
 .volumes-numbers {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(min-content, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-@container volumes-page (width <= 40rem) {
-  .volumes-numbers {
-    grid-template-columns: repeat(5, minmax(min-content, 1fr));
-  }
-}
-
 .volumes-number-place {
   display: flex;
+  flex: 1 1 0;
+  min-width: min-content;
 }
 
 /* A number: its name over its figure over its age, the figure in the ink of the figures. */
