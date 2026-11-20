@@ -1222,7 +1222,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   use as a thin diagonal in the text ink. The share spent is a reading, final however old, so
   its fill is solid whether the window is fresh or silent, and a silent one says how long in
   words. What the window's forecast says it reaches by the reset is not final, so both draw it
-  hatched, in the series hue of the share it continues. On the bar it is one tail inside the
+  apart from the share spent, in the series hue of the share it continues: the bar as a hatched
+  tail, the line as a dashed line. On the bar it is one tail inside the
   track from the share spent to the forecast's share at the reset, 2px of ground past the fill
   and none inside the tail: a week's range to its high end, the faster pace's, its low end said
   in the words under the bar and not drawn on it, since a second gap inside the tail read as a
@@ -1242,15 +1243,25 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   where the line ends, a ring, its share, when the latest reading was and how long the window has
   been silent, which takes the pointer from the line's end on and leaves the latest reading its
   own dot; and, while the window stands and its forecast has a share to draw to, the end of the
-  forecast's corridor at the reset, its share there, what that leaves out and when the reset is.
-  Its mark is no ring: for a week's range a bar at the reset, or at the plot's end where the span
-  ends before it, from the range's high end to its low, capped at each end by a stroke as wide as
-  a dot, so a range a pixel or two tall is a short dash and never a dot; for five hours' one
-  value a dash at that value; each in the corridor's hue with a rim of the ground, and in a forced
-  palette's ink. The corridor runs from now to the reset in
-  the readings' hue under the same hatch, a band between the slower and the faster pace for a
-  week and a ribbon to 100 % at the run-out and flat on for five hours, and the legend names it
-  «Forecast». Where the window's count restarted inside it, its reset unchanged, the line falls
+  forecast's line, its share at the reset, what that leaves out and when the reset is. The
+  forecast is a line, not a band: 2px like the readings' line, in their hue, dashed, the
+  conventional cue for a projection, from where the readings' line ends at now. For a week's
+  range it follows the high end, the faster pace, the one that decides a run-out, as the bar's
+  tail does; the range down to the low end is a quiet solid fill of the hue at low opacity under
+  that line, with no hatch and no outline, and none where the range is under about three pixels,
+  where it would read as a second edge of the line. Where the forecast runs out before the reset
+  the line ends at the run-out, on the 100 % level, and nothing is drawn after it: the run-out is
+  the fact the card's words say, «runs out … before the reset», and a stretch flat along 100 % to
+  the reset only thickened the level. Where it does not run out it ends at the reset at its share;
+  a window spent already ran out at now, so no line runs on from there. Its end is a round dot, a
+  reading's dot across and as tall as it is wide, in the line's hue ringed in the ground, the place
+  the pointer and the keyboard find, with its hint; never a dash. A forced palette draws the line,
+  the fill and the dot in its ink and the ring in its ground. The forecast was a hatched corridor
+  to the reset, a band between the two paces for a week and for five hours a ribbon to 100 % at
+  the run-out that lay along the level to the reset as a thick hatched bar, its end's mark at
+  100 % a flat dash; the owner found the band thick and the dot on hover flat. The legend names
+  the line «Forecast» beside a short dashed line, a key that turns the layer off and on as the
+  pace's does. Where the window's count restarted inside it, its reset unchanged, the line falls
   at a reading, and the restart is a place on the line at that moment with its hint, painted only
   while pointed at or focused as the others are: a ring around the fall, «Counter
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
@@ -1260,18 +1271,27 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   what they are: «start 11:30» and «resets 16:30», or «reset at 16:30» once that has passed, each
   dated where it is not the page's day, and the moment alone where the window named none.
   Opened on its start to now and a third past it, a running line ended on a bare time, and a
-  finished one on its reset said as bare, and either read as now. While the window runs, its
+  finished one on its reset said as bare, and either read as now. A line may hold the windows
+  before its current one, each whole from its start to its reset, one after another, the count
+  falling to nothing at each reset, a place on the line with its hint, «Window reset» and the
+  share the window ended at; those windows' line and dots are drawn in the neutral ink of marks at
+  rest, which the legend names «Earlier windows», and the pace runs over the current window alone.
+  The axis then names the first window's start and the current reset. Lines that share a scale
+  longer than what one holds stand inside it, empty where they hold no window, the axis's words
+  under the moments they name, moved out toward the empty part whole where the two would not fit
+  beside each other. While the window runs, its
   line marks now: a hairline up the plot in the quiet ink, upright where the pace runs across,
   which the legend names «Now» beside a hair of it, and no word stands over the plot. The top of its scale, «100%» or the
   highest reading past it, is written once beside the plot, centred on a hairline in the rule's
   ink at its level, so a line at 100 % meets the line its figure names: written over the plot
   with nothing at its level, a line at 100 % read as stopping under the mark. A frame dragged
   along the plot, or stretched with Shift and an arrow, narrows that line alone to the moments
-  it covers, its axis then naming them alone, and «Whole window», a compact button at the head's
-  start while the frame holds, takes it back, the keyboard's place kept; where the frame ends
-  before the reset the corridor runs to the plot's edge, and the forecast's hint says the reset
-  stands past it. A window past its reset by the page's clock, even one read before it, draws
-  neither the corridor nor the places past its readings nor now, its line held to the moment it
+  it covers, its axis then naming them alone, and «Whole span», a compact button at the head's
+  start while the frame holds, takes it back to every window the line holds, the keyboard's place
+  kept; where the frame ends before the forecast's end the line runs to the plot's edge, its dot
+  there, and the forecast's hint says the reset stands past it. A window past its reset by the
+  page's clock, even one read before it, draws
+  neither the forecast nor the places past its readings nor now, its line held to the moment it
   was read or to its reset where it was fresh then, and ended at its last reading where it was
   silent by then, its restarts still marked on it; its readings, their marks and their key in
   the legend are drawn in the neutral ink of marks at rest, as its bar is, which a forced palette
@@ -1279,9 +1299,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the share spent now. A 0 % has no fill,
   and a window with no figure draws the track alone; the fill stands apart from the ground and
   the track by lightness, so both read in grayscale and under a forced palette in its inks,
-  where the hatch and the marks take its ink too. Their table twins are `WindowBarTable` and
-  `StepLineTable`, each holding the forecast as well, and the second each restart as a row
-  before the reading at its moment.
+  where the hatch, the forecast's line and fill and the marks take its ink too. Their table twins
+  are `WindowBarTable` and `StepLineTable`, each holding the forecast as well, and the second each
+  restart and each reset between the windows it holds as a row before the reading at its moment.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, is held to about the
@@ -2684,7 +2704,8 @@ caveat common to a section is said once, in an «ⓘ» at the section's heading,
 that the time of agents working at once adds up, two agents for an hour each making two hours,
 so a period's agent time may be longer than the period; that a cost is an estimate at API prices
 and not a bill, that a minute's figures share each
-stretch of work out by its time in each minute, that the quota is on no period. A block does
+stretch of work out by its time in each minute, that the period reaches the quota's step lines
+alone. A block does
 not say again what the bar or its section says, and detail — an id, a source, how old a
 reading is, how a figure was reached — is in the hints of the marks and values it belongs to.
 Each block used to say its caveats whole: the quota opened on two sentences of what does not
@@ -2834,10 +2855,15 @@ figure counts add up to it and are the sectors of its ring, or its ranked bars, 
 ring; cache reads close the chart under its legend or its bars, no part of any share, and
 reasoning is part of output.
 
-The quota's two sections read where each account's quota stands now, which no period or
-filter changes, and read it again on the live interval whatever the period; that the period and
-the filters do not reach it, that it is the whole account's whatever project is chosen, and that
-its shares do not add up, the section's «ⓘ» says once.
+The quota's two sections read where each account's quota stands now, which no filter changes,
+and read it again on the live interval whatever the period. The period reaches each window's step
+line alone: the read asks from the period's start (`from`), and the answer gives each window the
+windows before it that the period overlaps (`earlier`), so a line over «4 weeks» holds four weeks;
+the figures, the bars, the forecast and the tiles stay on the current window. That the filters do
+not reach it, that the period reaches only the lines, that it is the whole account's whatever
+project is chosen, and that its shares do not add up, the section's «ⓘ» says once. With the
+period set to «4 weeks» the owner asked why the charts still showed one week: the lines stood on
+no period, each its current window alone.
 Each tile names the tightest window of its kind across accounts — of those whose reset is still
 ahead, the one nearest its limit by its forecast: first one that runs out before its reset, the
 earliest run-out first; then the one whose forecast ends highest at the reset; then the one most
@@ -2890,7 +2916,7 @@ menu said.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · up to date», «13% used · no data for 5 h», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the
-name the step line's legend gives the hatch, its words starting where the lines under it do and
+name the step line's legend gives its dashed line, its words starting where the lines under it do and
 nothing of it in the card's inset — the five hours a point, lasting to the reset with the share spent by
 then, or running out at a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
 end there says the week runs out before its reset and about when its slower pace spends it, a
@@ -2901,7 +2927,7 @@ time, «Limit runs out at 14:05», and a week by its day and the part of the day
 page's offset — night to 06:00, morning to 12:00, day to 18:00, evening to midnight — «by the
 evening of Nov 24», never to the minute: a week's forecast moves by hours from one reading to the
 next, and its minute claimed what it could not know. The bar's tail, the tile's and the step
-line's corridor are drawn from one mapping of the forecast (`forecastCourses`), so none of them
+line's forecast are drawn from one mapping of the forecast (`forecastCourses`), so none of them
 and none of their words disagree; a window past its reset by the page's clock forecasts nothing
 more, so none of them is drawn and its words say when it reset where they said its forecast.
 Such a window, with no reading since its reset, leads with that, «Reset at 21:20, no new
@@ -2920,10 +2946,24 @@ window started would be at 57% now», with how old the latest reading is and who
 words for a screen reader say too, with the forecast. As a table, where no hint shows, the account's table
 holds each window's forecast, the readings' table ends with it, and the window says its latest
 reading in words under its reset, and that it has no pace where it has none. A window's step
-line is on no period of the page, so its scale is its own: it shows the whole window, its axis
-naming the window's start and its reset (Charts), marks now while the window runs, points at
-«now» and at its forecast by the reset past its readings, and a frame dragged along it narrows
-that line alone. An account no source read says so and draws no window; a silent window is as solid as a fresh one, says how long it
+line covers the page's period, never less than the current window: every window of its kind and
+account the period overlaps, each whole from its start to its reset, one after another, the count
+falling to nothing at each reset, the earlier ones in the neutral ink and the current one at the
+right end (Charts); at «Now», «Today» and «This week» a window longer than the period shows its
+one window whole, as it always did. A period of the reader's own that ends before now changes
+nothing of that: the line still ends at the current window, the one the figures over it say, and
+only reaches further back. Every line of a section runs over as long a time as the longest of
+them, to its own reset, the same time to a pixel in every card, so the two windows of an account
+side by side, which reset together, stand moment for moment as they stand row for row, and a line
+that holds less is empty before its first window. Accounts whose resets differ stand apart by that
+difference, as their windows always did: a scale from the earliest start to the latest reset
+would align those too, but it would also have shrunk every line inside its plot at a period no
+longer than a window. Its axis names the start of the first window it holds and the current
+window's reset, under the moments they stand at; it marks now while the window runs, points at
+«now» and at its forecast past its readings, and a frame dragged along it narrows that line alone,
+«Whole span» taking it back. Its words for a screen reader end with the windows before it, «Before
+it: Oct 10, 14:30 – Oct 17, 14:30, 27%; …», and its table holds their readings and a row for each
+reset between them. An account no source read says so and draws no window; a silent window is as solid as a fresh one, says how long it
 has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
 empty track and says «0% used · up to date». A window of money past a limit is a line of its name and
 its state, its age and its source in the line's hint as a window of a share keeps them in its
@@ -2961,7 +3001,9 @@ anyone asked.
 Under every window of a share stands one quiet line of how the window before it ended, as the
 answer's `previous` says: «Previous window: until Nov 7, 14:30 — 9%», the moment it reset and its
 last share, with «ran out» where it did; or «Previous window: no readings» where
-the store keeps none, which is words and no control. The line is one row, never wrapped or cut,
+the store keeps none, which is words and no control. Where the step line over it holds that window
+already, as it does over a period longer than the window, no such line stands: it named a window
+drawn right above it. The line is one row, never wrapped or cut,
 at 1440 and 1024 pixels. The line with a window is a button that shows that window in the card,
 read when asked (`GET /api/analytics/quota/window`) and never for a window nobody opened. While a
 past window is open, nothing of the current window stands in the card — its share, its bar, its
