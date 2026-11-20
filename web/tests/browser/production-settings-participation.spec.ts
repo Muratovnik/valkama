@@ -256,3 +256,51 @@ test('the longest Russian words fit a phone, with a refused save', async ({ page
   )
   await expectNoSilentClipping(page, 'Participation in Russian at 390px')
 })
+
+/**
+ * A choice wider than half its row reaches toward the name rather than wrapping: held to half
+ * the row, the set's four segments put the last on a second line at 1280px, and the scope's
+ * and the launch place's two did at 1024px.
+ */
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [1280, 1024] as const)
+    test(`the scope, the set and the launch place each stand on one line at ${width}px in ${locale}`, async ({
+      page,
+    }) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      await installBackend(page)
+      await installParticipation(page)
+      await open(page, width)
+      await expect(row(page, 'launch').getByRole('radio').first()).toBeVisible()
+      const lines = await page.evaluate(() =>
+        Object.fromEntries(
+          [
+            ['scope', '.settings-row:has(.settings-scope-segments)'],
+            ['set', '[data-participation-row="set"]'],
+            ['launch', '[data-participation-row="launch"]'],
+          ].map(([name, selector]) => {
+            const segments = document.querySelector(selector)?.querySelectorAll('[role="radio"]')
+            const tops = [...(segments ?? [])].map((one) =>
+              Math.round(one.getBoundingClientRect().top),
+            )
+            return [name, new Set(tops).size]
+          }),
+        ),
+      )
+      expect(lines).toEqual({ scope: 1, set: 1, launch: 1 })
+    })
+
+const ground = (place: Locator) => place.evaluate((one) => getComputedStyle(one).backgroundColor)
+
+/** A segment not pressed takes a ground under the pointer, a step under the pressed one's. */
+test('a segment under the pointer takes the hovered ground', async ({ page }) => {
+  await installBackend(page)
+  await installParticipation(page)
+  await open(page, 1280)
+  const set = row(page, 'set')
+  const segment = set.locator('[role="radio"][aria-checked="false"]').first()
+  const rest = await ground(segment)
+  await segment.hover()
+  await expect.poll(() => ground(segment)).not.toBe(rest)
+  expect(await ground(segment)).not.toBe(await ground(checked(set)))
+})
