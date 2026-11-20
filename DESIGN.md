@@ -2917,7 +2917,10 @@ An account with no name of its own has «Name» beside the menu, a button that o
 field, and no «Rename» in the menu; once it has a name the button is gone and «Rename» is in the
 menu. One naming action stands for each state: found only inside the menu, the rename went unseen
 while every account stood as the start of its id, and with both at once «Name» said again what the
-menu said.
+menu said. The menu and «Name» are one unit on one centre line at every width: beside the name
+while both fit there, and on the next line together where they do not, the name keeping its own;
+as two items of the heading's row, a phone's wrapped «Name» alone, 40px under the menu at the
+name's end.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · up to date», «13% used · no data for 5 h», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the

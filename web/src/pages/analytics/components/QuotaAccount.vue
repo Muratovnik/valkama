@@ -30,7 +30,9 @@
  * An account with no name of its own — the start of an id, a time its week resets — is no account
  * a person recognizes, so beside its menu stands «Name», which opens the field, and its menu has
  * no «Rename»; once the account has a name the button is gone and «Rename» is in the menu. One
- * naming action stands for each state: both at once said the same thing twice.
+ * naming action stands for each state: both at once said the same thing twice. The menu and
+ * «Name» are one unit of the heading row, on one centre line at every width: beside the name while
+ * both fit there, and on the next line together where they do not, the name keeping its own.
  */
 import { computed, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -177,31 +179,33 @@ const lineOf = (window: QuotaShareWindow) => props.lines?.get(lineKey(props.acco
         @keydown="actions.press"
         @focusout="actions.save"
       />
-      <span
-        ref="menuBox"
-        class="quota-account-menu"
-        data-account-head="menu"
-      >
-        <VMenu
+      <span class="quota-account-controls">
+        <span
+          ref="menuBox"
+          class="quota-account-menu"
+          data-account-head="menu"
+        >
+          <VMenu
+            size="compact"
+            align="start"
+            :label="menuLabel"
+            :entries="entries"
+          />
+          <IdentityNote
+            :failed="noteFailed"
+            :text="note"
+          />
+        </span>
+        <VButton
+          v-if="unnamed && !renaming"
           size="compact"
-          align="start"
-          :label="menuLabel"
-          :entries="entries"
-        />
-        <IdentityNote
-          :failed="noteFailed"
-          :text="note"
-        />
+          data-account-head="name-it"
+          :aria-label="nameItLabel"
+          @click="actions.rename"
+        >
+          {{ t('analytics.quota.actions.nameIt') }}
+        </VButton>
       </span>
-      <VButton
-        v-if="unnamed && !renaming"
-        size="compact"
-        data-account-head="name-it"
-        :aria-label="nameItLabel"
-        @click="actions.rename"
-      >
-        {{ t('analytics.quota.actions.nameIt') }}
-      </VButton>
       <p
         v-if="account.plan || account.shared"
         class="quota-account-facts"
@@ -298,6 +302,17 @@ const lineOf = (window: QuotaShareWindow) => props.lines?.get(lineKey(props.acco
   .quota-account-window:not(:nth-child(3n + 1 of .quota-account-window))::before {
     display: block;
   }
+}
+
+/* The account's controls, its menu and «Name», are one item of the heading row: on the name's line
+   while both fit beside it, and on the next line together where they do not, centred on one line
+   at the row's gap apart. As two items of the row, a phone's wrapped «Name» alone and left the menu
+   at the name's end, 40px above it. */
+.quota-account-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-3);
+  align-items: center;
 }
 
 /* The menu at the name, with a copy's note after it on the name's line. */

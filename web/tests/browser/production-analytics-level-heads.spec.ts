@@ -8,7 +8,10 @@
  * Every heading row (`data-level-head`) of the quota's week and of a dimension's section is
  * measured at 1440, 1024 and 390 pixels: the controls (by role) that stand on its heading's line,
  * and their centres against the heading's. An account with no name of its own, «Name» beside its
- * menu, is the case reported. Each run attaches what it measured.
+ * menu, is the case reported. Its menu and «Name» are one unit (`DESIGN.md`, the quota's accounts):
+ * on the name's line where both fit beside it, and on the next line together where they do not,
+ * as a phone's 390 pixels leave the night account's name; as two items of the row, «Name» alone
+ * wrapped there, 40px under the menu. Each run attaches what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
@@ -22,9 +25,32 @@ const NEAR = 0.5
 
 /**
  * The controls on the line of the night account's heading at each width: its menu and «Name» on
- * a wide panel, the menu alone where a phone's wraps «Name» under the name.
+ * a wide panel, neither where a phone's has no room for both beside the name.
  */
-const NIGHT_ON_LINE: Record<number, number> = { 1440: 2, 1024: 2, 390: 1 }
+const NIGHT_ON_LINE: Record<number, number> = { 1440: 2, 1024: 2, 390: 0 }
+
+/**
+ * The night account's menu and «Name», by the hooks of its head (`QuotaAccount`): the centre of
+ * each, the top of each, and the foot of its name.
+ */
+async function nightControls(where: Locator) {
+  const account = where.locator(`[data-account="${NIGHT_NAME}"]`)
+  const menu = account.locator('[data-account-head="menu"]').getByRole('button')
+  await expect(menu, 'the night account’s menu').toHaveCount(1)
+  const nameIt = account.locator('[data-account-head="name-it"]')
+  await expect(nameIt, 'its «Name»').toHaveCount(1)
+  const box = async (control: Locator) => {
+    const found = await control.boundingBox()
+    if (!found) throw new Error('a control of the night account stands nowhere')
+    return { top: found.y, centre: found.y + found.height / 2 }
+  }
+  const name = await account.locator('[data-account-head="name"]').boundingBox()
+  return {
+    menu: await box(menu),
+    nameIt: await box(nameIt),
+    nameFoot: name ? name.y + name.height : Number.NaN,
+  }
+}
 
 /**
  * Each heading row: the account its level is, where the level is an account, its heading's centre and the
@@ -70,6 +96,17 @@ for (const width of [1440, 1024, 390])
     expect(night[0]?.controls, 'its controls on the heading’s line').toHaveLength(
       NIGHT_ON_LINE[width] ?? 0,
     )
+    // Its menu and «Name» are one unit: on one centre line, the name's or the next one together.
+    const controls = await nightControls(quota)
+    seen.night = controls
+    expect(
+      Math.abs(controls.menu.centre - controls.nameIt.centre),
+      'the menu and «Name» on one centre line',
+    ).toBeLessThan(NEAR)
+    // Under the name where neither stands on its line, on the name's line where both do.
+    const wrapped = NIGHT_ON_LINE[width] === 0
+    for (const top of [controls.menu.top, controls.nameIt.top])
+      expect(top >= controls.nameFoot, 'a control under the name').toBe(wrapped)
 
     const dimension = await openPanel(page, pageAt({ by: 'account' }))
     await expect(dimension.locator('.spending-days')).toBeVisible()
