@@ -101,6 +101,7 @@ class DecisionTableTests(unittest.TestCase):
         app_exists: bool,
         *,
         listener_owner: str | None = None,
+        listener_detail: str | None = None,
     ) -> dict:
         argv = [
             self.pwsh,
@@ -117,6 +118,8 @@ class DecisionTableTests(unittest.TestCase):
         ]
         if running is not None:
             argv += ["-ListenerJson", running]
+        if listener_detail is not None:
+            argv += ["-ListenerDetail", listener_detail]
         if app_exists:
             argv.append("-AppExists")
         done = subprocess.run(argv, capture_output=True, check=False)
@@ -188,6 +191,14 @@ class DecisionTableTests(unittest.TestCase):
         plan = self.plan(EXPECTED, app_exists=False, listener_owner="foreign")
         self.assertEqual("refuse", plan["action"])
         self.assertIn("left it untouched", plan["reason"])
+
+    def test_a_refused_stranger_is_named_as_the_launcher_named_it(self) -> None:
+        # The launcher's reading names the program and process; the tray says
+        # that instead of a refusal that leaves the person to find the holder.
+        detail = "port 8642 is held by other.exe (process 77) that was not started"
+        plan = self.plan(None, app_exists=False, listener_owner="foreign", listener_detail=detail)
+        self.assertEqual("refuse", plan["action"])
+        self.assertEqual(detail, plan["reason"])
 
     def test_missing_ownership_data_cannot_turn_an_unused_probe_into_start_authority(
         self,

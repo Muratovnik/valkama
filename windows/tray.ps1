@@ -49,6 +49,7 @@ param(
     [Parameter(ParameterSetName = "Plan")]
     [ValidateSet("free", "managed", "foreign", "unavailable")]
     [string]$ListenerOwner = "free",
+    [Parameter(ParameterSetName = "Plan")][string]$ListenerDetail = "",
     # A switch, not a [bool]: `pwsh -File` hands every argument over as a string
     # and [bool]"false" is $true, so a bool here would silently answer the wrong
     # half of the table for the caller that matters most, the test.
@@ -250,7 +251,7 @@ function Get-StaleReason($Expected, $Actual) {
     return "The running Valkama server is out of date: $($parts -join '; ')."
 }
 
-function Resolve-OpenPlan($Expected, $Listener, [string]$Ownership, [bool]$AppIsInstalled) {
+function Resolve-OpenPlan($Expected, $Listener, [string]$Ownership, [bool]$AppIsInstalled, [string]$OwnershipDetail = "") {
     <#
     The whole decision, as a pure function of runtime, ownership and app
     availability. Six actions:
@@ -261,6 +262,10 @@ function Resolve-OpenPlan($Expected, $Listener, [string]$Ownership, [bool]$AppIs
       in-transition     the two readings disagree: the port is changing hands
       restart-required  a managed server is stale and may be stopped safely
       refuse            managed launcher ownership could not be proven
+
+    A refusal of a foreign owner says what the launcher said about it, which
+    names the program and process holding the port; the text here is only for
+    a reading that carries none.
 
     `restart-required` is separate from `refuse` on purpose: only one of them
     has a remedy this script may carry out, and stopping a stranger's process
@@ -275,7 +280,7 @@ function Resolve-OpenPlan($Expected, $Listener, [string]$Ownership, [bool]$AppIs
     if ($Ownership -eq "foreign") {
         return [pscustomobject]@{
             action = "refuse"
-            reason = "Port $Port is held by a process not started by the managed Valkama launcher. Valkama left it untouched. Stop that process or choose another port, then click again."
+            reason = if ($OwnershipDetail) { $OwnershipDetail } else { "Port $Port is held by a process not started by the managed Valkama launcher. Valkama left it untouched. Stop that process or choose another port, then click again." }
         }
     }
     if ($Ownership -notin @("free", "managed")) {
@@ -355,14 +360,14 @@ function Open-ValkamaWithoutApp {
         $expected = Measure-Step $steps "runtime" { Get-ExpectedRuntime $launcher }
         $listener = Measure-Step $steps "http" { Get-ListenerRuntime }
         $ownership = Measure-Step $steps "owner" { Get-ListenerOwnership $launcher }
-        $plan = Resolve-OpenPlan $expected $listener $ownership.state $false
+        $plan = Resolve-OpenPlan $expected $listener $ownership.state $false $ownership.detail
         if ($plan.action -eq "in-transition") {
             # Read both again, once. A start or stop in progress settles within
             # a moment; a reading that still disagrees is said, not acted on.
             Start-Sleep -Milliseconds 400
             $listener = Measure-Step $steps "http-again" { Get-ListenerRuntime }
             $ownership = Measure-Step $steps "owner-again" { Get-ListenerOwnership $launcher }
-            $plan = Resolve-OpenPlan $expected $listener $ownership.state $false
+            $plan = Resolve-OpenPlan $expected $listener $ownership.state $false $ownership.detail
         }
         $trace = { "$($steps -join ' ') plan=$($plan.action)" }
         switch ($plan.action) {
@@ -425,7 +430,7 @@ if ($PrintLauncher) {
 if ($PrintPlan) {
     $expected = if ($ExpectedJson) { $ExpectedJson | ConvertFrom-Json } else { $null }
     $listener = if ($ListenerJson) { $ListenerJson | ConvertFrom-Json } else { $null }
-    Resolve-OpenPlan $expected $listener $ListenerOwner $AppExists.IsPresent | ConvertTo-Json -Compress
+    Resolve-OpenPlan $expected $listener $ListenerOwner $AppExists.IsPresent $ListenerDetail | ConvertTo-Json -Compress
     return
 }
 

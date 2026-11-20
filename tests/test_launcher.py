@@ -480,6 +480,9 @@ class LauncherTests(unittest.TestCase):
             process_reader=reader,
         )
         self.assertEqual("foreign", ownership["state"])
+        # The refusal names the program and the process, so the person who
+        # must stop it can tell which application holds the port.
+        self.assertIn("held by foreign-python.exe (process 4321)", str(ownership["detail"]))
         stopped: list[int] = []
         result = launcher.stop_listener(
             self.directory,

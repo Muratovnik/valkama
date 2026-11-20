@@ -666,13 +666,18 @@ def _classify_listener_processes(
             "detail": f"port {port} is owned by managed launcher process {pid}",
             **({"on_demand": True} if _names_on_demand(str(owner["command_line"])) else {}),
         }
-    listed = ", ".join(str(pid) for pid in sorted(unique))
+    # Named by program and process, so the person deciding what to stop can tell
+    # which application holds the port without looking the number up.
+    listed = ", ".join(
+        f"{ntpath.basename(str(unique[pid]['executable_path']))} (process {pid})"
+        for pid in sorted(unique)
+    )
     return {
         "state": "foreign",
         "port": port,
         "pid": next(iter(unique)) if len(unique) == 1 else None,
         "detail": (
-            f"port {port} is held by process {listed} that was not started by the managed "
+            f"port {port} is held by {listed} that was not started by the managed "
             "Valkama launcher; Valkama left it untouched. Stop that process or choose "
             "another port, then try again."
         ),
