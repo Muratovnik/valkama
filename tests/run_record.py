@@ -1,12 +1,15 @@
-"""The record a run of `tests/isolated.py gates` leaves, and the check of one against a tree.
+"""The record a run of checks leaves, and the check of one against a tree.
 
+    python tests/run_record.py run --out DIR [--name NAME] [--cwd DIR] -- COMMAND ...
     python tests/run_record.py check RECORD [--tree DIR]
 
 A report that says which checks passed is a claim; a record is what the runner
 wrote while it ran them. Each `gates` run writes `record.json` into its result
-directory, beside `gates.txt` and the step logs: the working tree it ran in, the
-commit and the uncommitted changes it ran on, each step's command and exit code,
-the tests each test step ran, and the versions of the tools. `check` accepts a
+directory, beside `gates.txt` and the step logs, and `run` writes one for checks
+no gate step is, such as a targeted test run, a command at a time: the working
+tree it ran in, the commit and the uncommitted changes it ran on, each step's
+command and exit code, the tests each test step ran, and the versions of the
+tools. A report cites the record instead of retelling it. `check` accepts a
 record made in DIR, by default this checkout, at the state DIR is in now, and
 refuses one made in another working tree, at another commit or on other
 uncommitted changes, naming each difference. Its exit code tells an accepted
@@ -16,7 +19,7 @@ record of a run that passed from one of a run that failed and from a refusal;
 A record lives where the run's results live, so the result directory must be
 outside the tree or ignored by it, as `tmp/` is: one the tree's status sees
 changes the tree the record describes, and no record of it can match. `gates`
-says so before its first step. A record is evidence for a reader and not an
+says so before its first step, and `run` before its step. A record is evidence for a reader and not an
 input to anything, so it is never tracked.
 """
 
@@ -25,10 +28,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import platform
 import re
+import shutil
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -178,6 +183,14 @@ def tests_run(name: str, log: Path) -> int | None:
     return int(found[-1]) if found else None
 
 
+def tests_said(log: Path) -> int | None:
+    """How many tests a command no gate step names ran, by the first runner its log speaks as."""
+
+    return next(
+        (found for name in TEST_COUNTS if (found := tests_run(name, log)) is not None), None
+    )
+
+
 def step(
     name: str, argv: Sequence[str], cwd: Path, log: Path, code: int | None
 ) -> dict[str, object]:
@@ -234,45 +247,157 @@ def differences(recorded: Mapping[str, object], current: Mapping[str, object]) -
 #: tree and its run failed, or it is not a record of this tree as it is now. 2 is left to
 #: argparse, which exits with it on a command line it cannot read.
 PASSED, FAILED, REFUSED = 0, 1, 3
+RUN_HELP = """Run COMMAND as a step of the record in DIR and exit with its exit code.
+
+The step joins the record in DIR while this checkout is as that record says, and
+a new record replaces it otherwise, so the checks one state of the tree needs,
+run one after another, make one record. A report cites DIR/record.json:
+
+  python tests/run_record.py run --out tmp/rec -- python -m unittest tests.test_x
+  python tests/run_record.py run --out tmp/rec --cwd web -- npm run lint
+  python tests/run_record.py check tmp/rec/record.json"""
 CHECK_CODES = f"""exit codes:
   {PASSED}  accepted, and the run it records passed
   {FAILED}  accepted, and the run it records failed; the failed steps are named
   {REFUSED}  refused: not a readable record of this format, or not of this tree as it is now"""
 
 
-def check(path: Path, tree: Path) -> tuple[int, str]:
-    """Whether the record at `path` was made in `tree` as it is now and passed, and what to say."""
+def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
+    """The record at `path` when it describes `tree` as it is now, or None and why it does not."""
 
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
-        recorded, steps, result = record["tree"], record["steps"], record["result"]
+        record["tree"], record["steps"], record["result"]
     except (OSError, ValueError, KeyError, TypeError) as error:
-        return REFUSED, f"refused: {path} is not a readable run record: {error}"
+        return None, f"{path} is not a readable run record: {error}"
     if record.get("format") != FORMAT:
-        return REFUSED, (
-            f"refused: {path} is a run record of format {record.get('format')},"
+        return None, (
+            f"{path} is a run record of format {record.get('format')},"
             f" and this check compares a tree as format {FORMAT} records it"
         )
-    found = differences(recorded, tree_state(tree))
+    found = differences(record["tree"], tree_state(tree))
     if found:
-        return REFUSED, f"refused: {path} does not describe {tree} as it is now: " + "; ".join(
-            found
-        )
+        return None, f"{path} does not describe {tree} as it is now: " + "; ".join(found)
+    return record, ""
+
+
+def check(path: Path, tree: Path) -> tuple[int, str]:
+    """Whether the record at `path` was made in `tree` as it is now and passed, and what to say."""
+
+    record, why = _describing(path, tree)
+    if record is None:
+        return REFUSED, f"refused: {why}"
+    recorded, steps = record["tree"], record["steps"]
     ran = ", ".join(
         f"{entry['name']} exit={entry['exit']}"
         + (f" tests={entry['tests']}" if "tests" in entry else "")
         for entry in steps
     )
     said = f"accepted: {path} was made in {recorded['worktree']} at {recorded['head']}"
-    if result == 0:
+    if record["result"] == 0:
         return PASSED, f"{said}; passed: {ran}"
     failed = [entry["name"] for entry in steps if entry["exit"] != 0] or ["no step ran"]
     return FAILED, f"{said}; failed: {', '.join(failed)}; ran: {ran}"
 
 
+def _resolved(command: Sequence[str]) -> list[str]:
+    """`command` with its program found, as `gates` finds it: `python` is this interpreter."""
+
+    program, *arguments = command
+    if program == "python":
+        return [sys.executable, *arguments]
+    # On Windows `npm` is `npm.cmd`, which a process can start only by its whole name.
+    return [shutil.which(program) or program, *arguments]
+
+
+def _step_name(words: str, taken: Collection[str]) -> str:
+    """A name for a step and its log, from `words`, that no step of the record has yet."""
+
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", words).strip("-.")[:60] or "command"
+    count = 1
+    found = name
+    while found in taken:
+        count += 1
+        found = f"{name}-{count}"
+    return found
+
+
+def run(
+    out: Path,
+    command: Sequence[str],
+    *,
+    cwd: Path,
+    name: str | None,
+    environment: Mapping[str, str],
+    root: Path = ROOT,
+) -> int:
+    """Run `command` in `cwd` as `gates` runs a step, record it in `out`, and return its exit code.
+
+    The step joins the record already in `out` while `root` is as that record says;
+    otherwise a new record replaces it, and this says why. The command gets
+    `environment` as it is: no throwaway profile and no lock, so a targeted test run
+    stays a targeted run, and a failed one says who holds the heavy-test lock.
+    """
+
+    # Imported here, not at the top, for the reason `tests/isolated.py` gives `_refusal`.
+    from tests import isolated, machine_lock
+
+    warning = placement_warning(root, out)
+    if warning is not None:
+        _say(warning)
+    path = out / NAME
+    record, why = _describing(path, root)
+    steps: list[Mapping[str, object]] = []
+    if record is None:
+        if path.is_file():
+            _say(f"a new record replaces {why}")
+        record = begin(root, tool_versions(release.running_interpreter(), npm=True))
+    else:
+        steps = list(record["steps"])
+    words = name or " ".join([Path(command[0]).stem, *command[1:]])
+    label = _step_name(words, {str(entry["name"]) for entry in steps})
+    logs = out / isolated.LOGS
+    logs.mkdir(parents=True, exist_ok=True)
+    log = logs / f"{label}.log"
+    argv = _resolved(command)
+    code = isolated._run_step(isolated.Run(label, argv, cwd), log, environment)
+    entry = step(label, argv, cwd, log, code)
+    if "tests" not in entry and (counted := tests_said(log)) is not None:
+        entry["tests"] = counted
+    steps.append(entry)
+    result = 0 if all(entry["exit"] == 0 for entry in steps) else 1
+    _say(f"{label:<14} exit={code}  {isolated._tail(log)}")
+    note = machine_lock.load_note() if code != 0 else None
+    if note is not None:
+        _say(note)
+    _say(f"record: {write(out, record, steps, result)}")
+    return code
+
+
+def _say(line: str) -> None:
+    sys.stdout.write(f"{line}\n")
+    sys.stdout.flush()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Check a gates run record against a tree.")
+    # Read before anything imports the `tests` package, which changes it for the suite.
+    environment = dict(os.environ)
+    parser = argparse.ArgumentParser(
+        description="Run a check under a record, or check a record against a tree."
+    )
     commands = parser.add_subparsers(dest="command", required=True)
+    running = commands.add_parser(
+        "run",
+        help="run COMMAND and add it to the record in DIR, or start one there",
+        description=RUN_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    running.add_argument("--out", type=Path, required=True, help="where the record and logs go")
+    running.add_argument("--name", help="the step's name in the record; by default its words")
+    running.add_argument(
+        "--cwd", type=Path, default=Path.cwd(), help="where COMMAND runs; by default here"
+    )
+    running.add_argument("argv", nargs=argparse.REMAINDER, metavar="-- COMMAND ...")
     checking = commands.add_parser(
         "check",
         help="accept a record made in this tree as it is now",
@@ -284,8 +409,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--tree", type=Path, default=ROOT, help="the tree; by default this checkout"
     )
     options = parser.parse_args(argv)
+    if options.command == "run":
+        command = options.argv[1:] if options.argv[:1] == ["--"] else options.argv
+        if not command:
+            parser.error("name the command to run after --")
+        return run(
+            options.out.resolve(),
+            command,
+            cwd=options.cwd.resolve(),
+            name=options.name,
+            environment=environment,
+        )
     code, said = check(options.record, options.tree)
-    sys.stdout.write(f"{said}\n")
+    _say(said)
     return code
 
 

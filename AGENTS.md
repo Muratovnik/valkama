@@ -3,10 +3,9 @@
 This is an independent Git repository holding one product, Valkama, and it ships
 on its own.
 
-What must hold in every session lives in this file. The deep halves — why each
-gate exists, the subprocess boundary, the store's names and migrations, the web
-grammar — live one topic per file under `.agents/rules/`, and the pointers below
-say when a topic stops being optional.
+What must hold in every session lives in this file. The deep halves live one
+topic per file under `.agents/rules/`, and the pointers below say when a topic
+stops being optional.
 
 A machine may carry a local overlay as `AGENTS.local.md`. It is not tracked
 here, it never contradicts this file, and its absence changes nothing: this file
@@ -75,8 +74,9 @@ explicitly authorizes that hook mutation and its rollback:
 When the work is split across parallel worktrees of this repository, the checks
 split with it:
 
-- The worker of one worktree runs, right after each commit, the targeted tests
-  of what the commit changed and `python tests/commit_subjects.py`;
+- The worker of one worktree runs, right after each commit and each through
+  `python tests/run_record.py run`, whose record its report cites: the targeted
+  tests of what the commit changed and `python tests/commit_subjects.py`;
   when the commit touches `web/`, also `npm run lint`, `npm run typecheck` and
   `npm run check:ui-system` there. The worker does not run the whole browser
   suite, nor `python .github/relkit.pyz audit --history` after each commit: the
