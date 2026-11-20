@@ -1,11 +1,12 @@
 /**
  * What a step line draws and points at past its readings, in the browser on the panel's ground:
- * the harness's five hours, read at 14:30, its forecast's corridor running from «now» to the reset
- * at 16:00, over the whole window. The corridor's every corner stands inside the plot; «now» and
- * the forecast at the reset paint their marks only while pointed at or focused, each saying itself
- * in a hint beside its mark and level with it, clear of the line's head, with nothing of the line
- * moving; the keyboard walks on from the latest reading, the line's one Tab stop, to both. The
- * spec attaches what it measured. Each part is read by the hook `StepLine` documents for it.
+ * the harness's five hours, read at 14:30, which may run out before the reset at 16:00, over the
+ * whole window. Its forecast is one dashed line from «now» that ends at the run-out on the level of
+ * the whole window, its every corner inside the plot; «now» and the forecast's end paint their
+ * marks only while pointed at or focused, the forecast's a round dot, each saying itself in a hint
+ * beside its mark and level with it, clear of the line's head, with nothing of the line moving;
+ * the keyboard walks on from the latest reading, the line's one Tab stop, to both. The spec
+ * attaches what it measured. Each part is read by the hook `StepLine` documents for it.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -32,7 +33,7 @@ const RESET_HINT = [
   'Resets 16:00, in 1 h 30 min',
 ]
 
-test('over the whole window, a step line points at now and at its forecast, each hinted at its mark, its corridor inside the plot', async ({
+test('over the whole window, a step line points at now and at its forecast, each hinted at its mark, its line inside the plot', async ({
   page,
 }, testInfo) => {
   const hints = { now: NOW_HINT, reset: RESET_HINT }
@@ -41,15 +42,27 @@ test('over the whole window, a step line points at now and at its forecast, each
   const figure = page.locator(LINE)
   await figure.scrollIntoViewIfNeeded()
   await page.mouse.move(1, 1)
-  // The legend names the hatch of the corridor.
+  // The legend names the forecast's dashed line.
   await expect(figure.locator('[data-key="ahead"]')).toHaveText('Forecast')
+  await expect(figure.locator('[data-key="ahead"] [data-mark="dash"]')).toHaveCount(1)
   const rest = await aheadOfLine(page)
   await testInfo.attach('ahead-whole', {
     body: JSON.stringify(rest, null, 2),
     contentType: 'application/json',
   })
-  // The corridor's every corner inside the plot's field, to half a pixel.
-  expect(rest.corners.length).toBeGreaterThanOrEqual(4)
+  // One dashed line, from now to the run-out on the top of the drawing, the level of the whole
+  // window, and every corner of it and of its range inside the field, to half a pixel.
+  expect(rest.forecasts, 'one forecast line').toBe(1)
+  const course = rest.forecast?.corners ?? []
+  expect(course.length).toBeGreaterThanOrEqual(2)
+  expect(
+    Math.abs((course.at(-1)?.top ?? 0) - (rest.drawing?.top ?? 0)),
+    'the run-out at 100 %',
+  ).toBeLessThanOrEqual(0.5)
+  expect(
+    (course.at(-1)?.left ?? 0) < (rest.field?.right ?? 0) - 2,
+    'the run-out before the reset',
+  ).toBe(true)
   expect(cornersOutside(rest), 'corners outside the field').toEqual([])
   // At rest neither place paints its mark.
   expect(rest.places.map(({ kind, painted }) => [kind, painted])).toEqual([
@@ -80,6 +93,11 @@ test('over the whole window, a step line points at now and at its forecast, each
     const pointed = await aheadOfLine(page)
     const place = pointed.places[index]
     expect(place?.painted, `${aim.kind}: its mark painted`).toBe(true)
+    // Every mark pointed at is round, as wide as it is tall.
+    expect(
+      Math.abs((place?.mark?.width ?? 0) - (place?.mark?.height ?? 1)),
+      `${aim.kind}: its mark round`,
+    ).toBeLessThanOrEqual(0.5)
     expect(
       pointed.places.filter((one) => one.painted),
       `${aim.kind}: one mark painted`,

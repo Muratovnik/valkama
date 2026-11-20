@@ -2,11 +2,12 @@
 /**
  * The head of a window's step line (`StepLine`): the legend that names what the plot draws by how
  * each is drawn — the readings a heavier line in the chart's hue, or the neutral ink of a window
- * past its reset (`muted`), the pace a hairline in the quiet ink, and, where the plot shows one,
- * the forecast's corridor by its hatch (`hatch.css`), and now, while the plot marks it (`now`), a
- * hair upright as its line is drawn — so none is told by a hue alone, in
- * grayscale too; and, while a frame narrows the line, the button that takes it back to its whole
- * window, at the row's start, sent out as `whole`.
+ * past its reset (`muted`), the windows before the current one in that ink where the line holds
+ * them (`earlier`), the pace a hairline in the quiet ink, and, where the plot shows one, the
+ * forecast by a short dashed line, as the plot draws it, and now, while the plot marks it (`now`),
+ * a hair upright as its line is drawn — so none is told by a hue alone, in grayscale too; and,
+ * while a frame narrows the line, the button that takes it back to its whole span, at the row's
+ * start, sent out as `whole`.
  *
  * The pace and the forecast are layers beside the readings, and their keys are toggles: a press,
  * by the pointer or by Enter or Space, turns that layer off on every chart that draws it and the
@@ -22,8 +23,9 @@
  * One row as tall as a compact control whether the button stands there or not, so the plot never
  * moves when it comes or goes. The legend's keys wrap, each whole, rather than run past the plot.
  * The row is the line's `data-region="head"`; the button is `data-step="whole"`; the forecast's
- * key is `data-key="ahead"`, its swatch of the hatch `data-mark="hatch"`; the pace's key is
- * `data-key="even"` and now's `data-key="now"`, each swatch the key's first child.
+ * key is `data-key="ahead"`, its swatch of a dashed line `data-mark="dash"`; the pace's key is
+ * `data-key="even"`, now's `data-key="now"` and the earlier windows' `data-key="earlier"`, each
+ * swatch the key's first child.
  */
 import LayerKey from '@/shared/ui/LayerKey.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -31,12 +33,14 @@ import VButton from '@/shared/ui/VButton.vue'
 defineProps<{
   /** Whether a frame narrows the line, so the button that takes it back stands. */
   framed: boolean
-  /** The legend's names of the two lines and of the forecast's corridor. */
-  legend: { line: string; ahead?: string; even?: string }
-  /** The button's words: «Whole window». */
+  /** The legend's names of the two lines, of the forecast and of the windows before the current. */
+  legend: { line: string; ahead?: string; earlier?: string; even?: string }
+  /** The button's words: «Whole span». */
   whole: string
-  /** Whether the span shown has the forecast's corridor, drawn or turned off, and so names it. */
+  /** Whether the span shown has the forecast, drawn or turned off, and so names it. */
   ahead?: boolean
+  /** Whether the span shown draws windows before the current one, and so names them. */
+  earlier?: boolean
   /** Whether the window has a pace, drawn or turned off, and so names it. */
   even?: boolean
   /** Whether the readings are drawn in the neutral ink of a window past its reset. */
@@ -70,6 +74,13 @@ const emit = defineEmits<{ whole: [] }>()
           :class="{ 'swatch-muted': muted }"
         />{{ legend.line }}</span
       >
+      <span
+        v-if="earlier && legend.earlier"
+        class="step-key"
+        aria-hidden="true"
+        data-key="earlier"
+        ><span class="step-swatch swatch-line swatch-muted" />{{ legend.earlier }}</span
+      >
       <LayerKey
         v-if="even && legend.even"
         class="step-key"
@@ -88,9 +99,9 @@ const emit = defineEmits<{ whole: [] }>()
         data-key="ahead"
       >
         <span
-          class="step-swatch swatch-ahead hatched"
+          class="step-swatch swatch-ahead"
           aria-hidden="true"
-          data-mark="hatch"
+          data-mark="dash"
         />{{ legend.ahead }}
       </LayerKey>
       <span
@@ -103,8 +114,6 @@ const emit = defineEmits<{ whole: [] }>()
     </span>
   </div>
 </template>
-
-<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped>
 .step-head {
@@ -134,7 +143,7 @@ const emit = defineEmits<{ whole: [] }>()
 }
 
 /* Each key drawn as its mark is: the readings heavier in the hue, or in the neutral ink past the
-   reset, the pace a hairline, the forecast a small block of its hatch. */
+   reset, the pace a hairline, the forecast a short dashed line of the readings' width. */
 .step-swatch {
   display: inline-block;
   inline-size: var(--space-3);
@@ -177,13 +186,17 @@ const emit = defineEmits<{ whole: [] }>()
     }
   }
 
+  /* Two dashes and the gap between them, as the plot dashes the forecast's line: a mask over the
+     line's paint, as the hatch is one, so a forced palette's ink takes it alike. */
   &.swatch-ahead {
-    block-size: var(--space-2);
+    inline-size: calc(var(--space-3) + var(--space-half));
+    block-size: var(--space-half);
     background: var(--color-series-1);
+    border-radius: 0;
+    mask-image: repeating-linear-gradient(to right, black 0 5px, transparent 5px 9px);
 
     @media (forced-colors: active) {
       background: CanvasText;
-      forced-color-adjust: none;
     }
   }
 

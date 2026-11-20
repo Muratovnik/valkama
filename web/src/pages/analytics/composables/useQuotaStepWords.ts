@@ -4,7 +4,8 @@
  * 16:30», dated against the answer's day as every moment of the answer is — «Now», what takes a
  * frame back to the whole window, its table's columns, and what it says with no readings or a
  * reset past a frame. The current window and a past window shown in its place
- * (`QuotaPastWindow`) name theirs alike.
+ * (`QuotaPastWindow`) name theirs alike; a line that holds windows before the current one names the
+ * start of the first of them (`start`).
  */
 import { useI18n } from 'vue-i18n'
 
@@ -21,11 +22,14 @@ export function useQuotaStepWords() {
   return (
     window: QuotaShareWindow,
     points: readonly StepPoint[],
-    /** The answer's moment at its offset, and whether the window is past its reset. */
-    read: { ended: boolean; today: string },
+    /**
+     * The answer's moment at its offset, whether the window is past its reset, and the start the
+     * axis names where it is not the window's own: the first window's of a line of several.
+     */
+    read: { ended: boolean; today: string; start?: string },
   ): StepWords => {
     const { today, ended } = read
-    const start = window.started_at
+    const start = read.start ?? window.started_at
     const reset = window.resets_at
     return {
       whole: t('analytics.quota.readings.whole'),

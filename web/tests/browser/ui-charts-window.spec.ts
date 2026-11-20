@@ -10,9 +10,9 @@
  * upright strokes, a mark at each reading where its moment and value put it, painted only for the
  * reading under the pointer or the keyboard's focus, and that reading says itself in a hint over
  * the plot without moving anything. Past its readings «now» and the
- * forecast at the reset each say themselves in a hint at their mark, off the line's head, the
- * corridor between them inside the plot, and nothing moves. A forced palette draws them in its
- * inks, the focused reading and the tail too.
+ * forecast's end each say themselves in a hint at their mark, off the line's head, and nothing
+ * moves. A forced palette draws them in its inks, the forecast's line, its range and its dot, the
+ * focused reading and the tail too.
  * Each theme attaches what it measured. Every part is read by the hook its component documents
  * (`WindowBar`, `StepLine`, their tables) or the harness gives it (`data-case`).
  */
@@ -419,7 +419,9 @@ test('in a forced palette a window bar and a step line keep their marks in the p
       mark: found('[data-harness="step"] [data-mark="reading"]').backgroundColor,
       tail: found('[data-case="spent"] [data-mark="ahead"]').backgroundColor,
       ring: found('[data-harness="step"] [data-target="now"] [data-mark="place"]').boxShadow,
-      corridor: found('[data-harness="step"] [data-mark="corridor"]').backgroundColor,
+      forecast: found('[data-harness="step"] [data-mark="forecast"]').stroke,
+      range: found('[data-harness="step"] [data-mark="range"]').fill,
+      dot: found('[data-harness="step"] [data-target="reset"] [data-mark="place"]').backgroundColor,
       grayText: system('GrayText'),
       now: found('[data-harness="step"] [data-mark="now"]').stroke,
       nowKey: found('[data-harness="step"] [data-key="now"] > :first-child').backgroundColor,
@@ -436,7 +438,12 @@ test('in a forced palette a window bar and a step line keep their marks in the p
   expect(paints.path).toBe(paints.canvasText)
   expect(paints.mark).toBe(paints.canvasText)
   expect(paints.tail).toBe(paints.canvasText)
-  expect(paints.corridor).toBe(paints.canvasText)
+  // The forecast's line, the fill of its range and the dot at its end, all in the palette's ink.
+  expect([paints.forecast, paints.range, paints.dot]).toEqual([
+    paints.canvasText,
+    paints.canvasText,
+    paints.canvasText,
+  ])
   expect(paints.ring).toContain(paints.canvasText)
   // The pace and now are drawn in the palette's inactive ink, and their keys say that ink: kept
   // in their own colours, the keys showed a grey the palette does not have.

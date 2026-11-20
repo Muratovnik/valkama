@@ -1,6 +1,7 @@
 /**
- * The page's subscription quota: its read (`useQuotaRead`), the clock its ages and the time left
- * to each reset are counted to, and its two tiles on the rail (`useQuotaTiles`).
+ * The page's subscription quota: its read (`useQuotaRead`) with the windows before the current ones
+ * since the start of the page's period (`from`), the clock its ages and the time left to each reset
+ * are counted to, and its two tiles on the rail (`useQuotaTiles`).
  *
  * The clock moves every few seconds, as the bar's age of the figures does, so a window whose
  * reset passed stops counting toward its tile without a read again.
@@ -19,8 +20,8 @@ import { provideQuotaStanding } from '@/pages/analytics/composables/useReadStand
 
 const TICK_MS = 5000
 
-export function useQuota() {
-  const { read, refresh } = useQuotaRead()
+export function useQuota(options: { from: () => string | null }) {
+  const { read, refresh } = useQuotaRead(options)
   const clock = useNow({ scheduler: (tick) => useIntervalFn(tick, TICK_MS) })
   const now = computed(() => clock.value.getTime())
   const { tiles } = useQuotaTiles({ read: () => read.value, now: () => now.value })

@@ -116,7 +116,7 @@ export const stepPoints = readingsAt([
   [3, 58],
 ])
 export const stepWords: StepWords = {
-  whole: 'Whole window',
+  whole: 'Whole span',
   now: 'Now',
   start: 'start 11:00',
   reset: 'resets 16:00',

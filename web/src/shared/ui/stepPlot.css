@@ -2,9 +2,11 @@
  * The plot of a step line (`StepLine`), read as its own scoped style: the top's figure beside the
  * field, the field a frame is dragged along, the axis under it, and the drawing over the field —
  * the SVG, inset in it so a mark at 0 % and one at the top stand whole inside the plot, and its
- * lines: the floor, the top's level its figure names, now while the window runs, the pace and the
- * readings, each in its ink, and every one in a forced palette's. A window past its reset
- * (`step-muted`) draws its readings and their marks in the neutral ink its bar is drawn in.
+ * lines: the floor, the top's level its figure names, now while the window runs, the pace, the
+ * readings and the forecast's dashed line over the quiet fill of its range, each in its ink, and
+ * every one in a forced palette's. A window past its reset (`step-muted`), and the windows before
+ * the current one on a line of several (`step-path-earlier`, `step-earlier`), draw their readings
+ * and their marks in the neutral ink a bar past its reset is drawn in.
  */
 
 /* The plot: the top's figure in a column of its own before the field, and the axis under the
@@ -63,14 +65,33 @@
   inset-block: 0;
 }
 
+/* The two ends' words, each under the moment it names: the columns before the first and after the
+   second (`--axis-start`, `--axis-end`) hold what a shared scale runs past the line's windows, and
+   take only the room the words leave, so where the two would not fit beside each other the first
+   moves out toward the empty scale, and where they would not fit at all each wraps, as both did
+   at the plot's ends; they never cover each other or run past the plot. */
 .step-axis {
-  display: flex;
+  --axis-start: 0%;
+  --axis-end: 0%;
+
+  display: grid;
+  grid-template-columns:
+    minmax(0, var(--axis-start)) auto 1fr auto
+    minmax(0, var(--axis-end));
   grid-row: 2;
   grid-column: 2;
-  gap: var(--space-3);
-  justify-content: space-between;
   margin-block-start: var(--space-2);
   color: var(--color-text-tertiary);
+
+  > [data-moment='from'] {
+    grid-column: 2;
+    margin-inline-end: var(--space-3);
+  }
+
+  > [data-moment='to'] {
+    grid-column: 4;
+    text-align: end;
+  }
 }
 
 .step-svg {
@@ -134,22 +155,51 @@
   }
 }
 
-/* A window past its reset: its readings and their marks in the neutral ink of marks at rest, as
-   its bar is drawn, which a forced palette draws in its inactive ink. */
-.step-muted {
-  & .step-path {
-    stroke: var(--color-text-tertiary);
+/* The forecast: a dashed line of the readings' width in their hue, the conventional cue of a
+   projection, from the readings' end at now; its dashes are pixels, as its width is. */
+.step-forecast {
+  fill: none;
+  stroke: var(--color-series-1);
+  stroke-dasharray: 5 4;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  stroke-width: 2;
 
-    @media (forced-colors: active) {
-      stroke: GrayText;
-    }
+  @media (forced-colors: active) {
+    stroke: CanvasText;
   }
+}
 
-  & .step-mark {
-    background: var(--color-text-tertiary);
+/* A week's range under the forecast's line, down to its slower pace: a quiet solid fill of the
+   hue, no hatch and no outline. */
+.step-range {
+  fill: var(--color-series-1);
+  fill-opacity: 0.16;
+  stroke: none;
 
-    @media (forced-colors: active) {
-      background: GrayText;
-    }
+  @media (forced-colors: active) {
+    fill: CanvasText;
+    fill-opacity: 0.25;
+  }
+}
+
+/* A window past its reset, and the windows before the current one on a line of several: their
+   readings and their marks in the neutral ink of marks at rest, as a bar past its reset is drawn,
+   which a forced palette draws in its inactive ink. */
+.step-muted .step-path,
+.step-path-earlier {
+  stroke: var(--color-text-tertiary);
+
+  @media (forced-colors: active) {
+    stroke: GrayText;
+  }
+}
+
+.step-muted .step-mark,
+.step-mark.step-earlier {
+  background: var(--color-text-tertiary);
+
+  @media (forced-colors: active) {
+    background: GrayText;
   }
 }

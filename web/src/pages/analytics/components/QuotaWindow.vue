@@ -27,10 +27,15 @@
  * (`forecastCourses`). A window too new for a forecast says so in the quiet ink and draws no
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
  * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
- * is a bar with no fill that says «0% used» and «up to date». Its step line shows the whole window,
- * from its start to its reset, which the axis names as such (`StepLine`). While the window stands,
- * the line marks now, points at where it stands now and runs its forecast's corridor to the
- * reset. A window past its reset by the panel's moment (`ended`) has neither, even where its
+ * is a bar with no fill that says «0% used» and «up to date». The bar and the figures over it are
+ * the current window's; the step line under them covers the page's period, never less than the
+ * current window (`quotaLine`): every window of its kind and account the period overlaps, each
+ * whole from its start to its reset, its count falling to nothing at each reset (`lineRestarts`),
+ * the earlier ones in the neutral ink of a window past its reset and the current one at the right
+ * end, on the one time scale the section's lines share (`scale`): as long as the longest of them,
+ * to its own reset. Its axis names the start of the first window it holds and the current window's
+ * reset, each under the moment it stands at (`StepLine`'s `holds`). While the window stands, the
+ * line marks now, points at where it stands now and runs its forecast's line to its end. A window past its reset by the panel's moment (`ended`) has neither, even where its
  * answer was read before the reset; it leads with that it reset with no reading since, its share
  * before the reset a quieter line under that, over its bar drawn in the neutral ink with no tick
  * (`WindowBar`'s `muted`), and its line in the same ink: led by its share in the series' hue, the
@@ -49,8 +54,9 @@
  * when the answer came turns silent once it is older than the answer's `fresh_for_seconds`.
  *
  * Under the window stands how its previous window ended, a line that opens that window in the
- * card's place and steps back from there (`QuotaPastWindow`); while one is open, nothing of this
- * window stands beside it — its lead, bar, facts, readings and «Breakdown» are hidden.
+ * card's place and steps back from there (`QuotaPastWindow`), where the step line does not hold
+ * that window already (`holdsPrevious`); while one is open, nothing of this window stands beside
+ * it — its lead, bar, facts, readings and «Breakdown» are hidden.
  *
  * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
  * at the panel's moment in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
@@ -73,6 +79,12 @@ import {
   stateAt,
   windowKey,
 } from '@/pages/analytics/utils/quotaFigures.ts'
+import {
+  holdsPrevious,
+  lineSpan,
+  scaledSpan,
+  windowSpan,
+} from '@/pages/analytics/utils/quotaLine.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
@@ -94,6 +106,11 @@ const props = defineProps<{
   /** The answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
   window: QuotaShareWindow
+  /**
+   * How long every line of the section runs over, in ms (`sectionLength`), each to its own reset;
+   * unset, the line's own: the first window it holds to the current window's reset.
+   */
+  scale?: number | null
 }>()
 
 const { t } = useI18n()
@@ -145,8 +162,8 @@ const bar = computed(() => {
 })
 /** Whether the window has a pace: it named its start and its reset. */
 const paced = computed(() => props.window.even_percent !== null)
-const points = computed(() => words.points(props.window, props.today))
-const restarts = computed(() => words.restarts(props.window, props.today))
+const points = computed(() => words.linePoints(props.window, props.today))
+const restarts = computed(() => words.lineRestarts(props.window, props.today))
 /** Whether what used the window can be read: the account has a seat and the window a start. */
 const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
 /** What opens the side panel on what used the window; none outside the page. */
@@ -182,17 +199,16 @@ const facts = computed(() => {
 })
 
 /**
- * The span the line runs over, the whole window: its start to its reset. A window that has named
- * neither runs from its first reading to the answer's moment.
+ * The current window's own span, its start to its reset; the span its line holds, from the first
+ * window it holds to that reset; and the span the line runs over, the section's scale, or else the
+ * one it holds. A window that has named neither runs from its first reading to the answer's moment.
  */
-const span = computed(() => {
-  const { window, today } = props
-  const start = window.started_at ?? window.readings[0]?.at ?? today
-  const reset = window.resets_at ?? today
-  const from = Date.parse(start)
-  const to = Math.max(Date.parse(reset), from + 1)
-  return { from, to, end: Math.min(Date.parse(today), to) }
-})
+const current = computed(() => windowSpan(props.window, props.today))
+const holds = computed(() => lineSpan(props.window, props.today))
+const span = computed(() => ({
+  ...scaledSpan(props.window, props.today, props.scale ?? null),
+  end: Math.min(Date.parse(props.today), current.value.to),
+}))
 
 /**
  * A moment of the line's axis, said as the answer's own times are: at the answer's offset, the
@@ -209,16 +225,24 @@ const stepWordsOf = useQuotaStepWords()
  */
 const WINDOW_ROWS = 5
 
+/** The line's words: its axis names the start of the first window it holds and the reset. */
 const stepWords = computed(() =>
-  stepWordsOf(props.window, points.value, { today: props.today, ended: ended.value }),
+  stepWordsOf(props.window, points.value, {
+    today: props.today,
+    ended: ended.value,
+    start: props.window.earlier?.[0]?.started_at,
+  }),
 )
 /** Whether a past window stands in this one's place (`QuotaPastWindow`). */
 const past = ref(false)
 const legend = computed(() => ({
   line: t('analytics.quota.readings.line'),
   ahead: t('analytics.quota.forecastKey'),
+  earlier: t('analytics.quota.readings.earlier'),
   ...(props.window.even_percent === null ? {} : { even: t('analytics.quota.readings.even') }),
 }))
+/** Whether the line holds the window before this one, which then needs no line of its own. */
+const held = computed(() => holdsPrevious(props.window))
 
 /**
  * What the line draws past its readings while the window stands: where it stands now, and the
@@ -332,6 +356,8 @@ const readingsCaption = computed(() =>
         :from="span.from"
         :to="span.to"
         :end="span.end"
+        :current="current"
+        :holds="holds"
         :points="points"
         :words="stepWords"
         :moment="stepMoment"
@@ -354,6 +380,7 @@ const readingsCaption = computed(() =>
     </div>
     <QuotaPastWindow
       v-model:open="past"
+      :held="held"
       :account="account"
       :fresh-for="freshFor"
       :now="now"

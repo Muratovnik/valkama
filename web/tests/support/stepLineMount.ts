@@ -20,7 +20,7 @@ export const point = (key: string, hours: number, value: number): StepPoint => (
   noteText: 'the poll',
 })
 export const WORDS: StepWords = {
-  whole: 'Whole window',
+  whole: 'Whole span',
   now: 'Now',
   start: 'start h0',
   reset: 'resets h5',

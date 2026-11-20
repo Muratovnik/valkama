@@ -11,7 +11,9 @@
  * fall, so it never reads as a reading's dot. The pointer finds it at its ring, and at the moment itself before
  * the reading it restarted at, which keeps its step past the ring; its box, which the keyboard's
  * ring is drawn on, is the least width of a box (`--step-reach`) centred on its moment; it covers
- * its moment alone. A restart outside the span shown stands nowhere.
+ * its moment alone. A restart outside the span shown stands nowhere. The reset between two
+ * windows of a line of several is a restart of the same kind (`zero`): the count falls to nothing
+ * at the reset, with no reading there, and its ring stands around that fall.
  */
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
@@ -58,10 +60,11 @@ export function useStepWalk(
     return all
       .filter((restart) => restart.at >= from && restart.at <= to)
       .map((restart) => {
-        const fall = restartFall(points, restart.at)
+        const fall = restartFall(points, restart.at, restart.zero)
         const moment = { from: restart.at, to: restart.at }
         return {
           kind: 'restart',
+          zero: restart.zero,
           key: restart.key,
           at: restart.at,
           hint: targetHint(restart, 1),

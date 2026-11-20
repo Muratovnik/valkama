@@ -6,7 +6,8 @@
  * figures are and a read of them again over the whole of it; under that a rail of the page's
  * sections — the overview, the tokens by kind, the subscription quota's five hours and week, then
  * a dimension each — and the panel of the section on show. The quota's two sections read where
- * each account's quota stands now (`QuotaPanel`), which no period or filter changes. The rail
+ * each account's quota stands now (`QuotaPanel`), which no filter changes; the period reaches only
+ * each window's step line, which draws every window of its kind the period overlaps. The rail
  * and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
@@ -68,6 +69,7 @@ import { useSectionFocus } from '@/pages/analytics/composables/useSectionFocus.t
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
+import { periodStart } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import {
@@ -259,8 +261,11 @@ const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
   view: () => view.value,
 })
 
-/** The quota of each account now, read whatever the view, on its own interval (`useQuota`). */
-const quota = useQuota()
+/**
+ * The quota of each account now, read whatever the view, on its own interval (`useQuota`), with
+ * each window's earlier windows since the start of the period on show, which its line draws.
+ */
+const quota = useQuota({ from: () => periodStart(view.value, new Date()) })
 
 /** The side panel over the page: what opens and closes it, and what it asks of the page. */
 const detail = useDetail({
