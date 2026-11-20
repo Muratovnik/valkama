@@ -488,7 +488,7 @@ class OwnerAnswerTests(GroupHarness):
         ).fetchone()
         self.assertEqual(f"triage: moved out of {goal}: owner: not in this group", moved["detail"])
         [waiting] = triage.waiting(self.conn, self.space, items=[self.id(tasks[1])])
-        self.assertEqual((moved["created_at"], None), (waiting.entered_at, waiting.seen_at))
+        self.assertEqual((moved["created_at"], None), (waiting.since, waiting.seen_at))
         # The answer is the agent's, so the action ends carried out, and the question with it.
         self.assertEqual("carried_out", self.action(action.id)["outcome"])
         self.assertEqual("answered", self.request(question)["status"])

@@ -33,9 +33,7 @@ const CLOSED: Record<string, string> = {
 /** The labelled space, its finished cards come to a close at the moments above. */
 export const closedSpace = (): Brief[] =>
   boardSpace().map((item) =>
-    CLOSED[item.reference]
-      ? { ...item, entered_at: CLOSED[item.reference], closed_at: CLOSED[item.reference] }
-      : item,
+    CLOSED[item.reference] ? { ...item, closed_at: CLOSED[item.reference] } : item,
   )
 
 /** The space's read, laid over the backend's: these items, in this workflow when one is given. */

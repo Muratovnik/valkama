@@ -41,7 +41,6 @@ from . import (
     queue,
     read_model,
     request_model,
-    standing,
     states,
     store,
     subscriptions,
@@ -333,7 +332,6 @@ def list_work_items(
         queue.of_spaces(conn, {str(row["planning_space_id"]) for row in rows}, tree)
     )
     closed = read_model.closings(conn, rows)
-    entered = standing.entered(conn, rows)
     lapsed = read_model.lapsed_claims(conn, rows)
     projects = item_projects.of_items(conn, rows)
     # A read of one space asks another space's item of that space's queue, which
@@ -346,7 +344,6 @@ def list_work_items(
             conn,
             row,
             closed=closed,
-            entered=entered,
             lapsed=lapsed,
             tree=tree,
             projects=projects,

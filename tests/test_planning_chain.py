@@ -111,8 +111,9 @@ class ChainFixture(unittest.TestCase):
             self.conn, self.refs["F"], "done", force=True, acceptance="assignment"
         )
 
-        # Controlled clocks: when each item was created, when each transition
-        # happened, and the one terminal item that has no transition at all.
+        # Controlled clocks: when each item was created, its history's `created` with it,
+        # when each transition happened, and the one terminal item that has no transition
+        # at all, which closed when it was created.
         for name, day in {
             "C1": "2026-10-10",
             "C2": "2026-10-10",
@@ -128,6 +129,11 @@ class ChainFixture(unittest.TestCase):
             self.conn.execute(
                 "UPDATE work_items SET created_at = ?, updated_at = ? WHERE work_item_id = ?",
                 (f"{day}T08:00:00Z", f"{day}T09:30:00Z", self.ids[name]),
+            )
+            self.conn.execute(
+                "UPDATE work_item_events SET created_at = ?"
+                " WHERE work_item_id = ? AND action = 'created'",
+                (f"{day}T08:00:00Z", self.ids[name]),
             )
         for name, stamps in {
             "C3": ["2026-10-12T10:00:00Z"],
@@ -282,7 +288,7 @@ class ChainBoundaryTests(ChainFixture):
                 "C1": "2026-10-20T10:00:00Z",  # the newest of its two transitions
                 "E1": "2026-10-29T10:00:00Z",
                 "F": "2026-10-31T07:00:00Z",
-                "D2": "2026-10-30T09:30:00Z",  # no transition: its last update
+                "D2": "2026-10-30T08:00:00Z",  # no transition: when it was created
             },
             {name: m["closed_at"] for name, m in members.items() if m["closed_at"] is not None},
         )

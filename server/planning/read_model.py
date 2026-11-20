@@ -288,9 +288,20 @@ def acceptance(row: sqlite3.Row) -> dict | None:
     return {"basis": row["acceptance"], "at": row["accepted_at"]}
 
 
-#: A closing fact: when the item's latest transition was written, and the
-#: detail of the newest named release after it; None for an item never moved.
-_Closed = tuple[str, str | None] | None
+#: Each of a JSON array of items: when it came to stand where it is (`standing.ENTERED_AT`),
+#: and the detail of the newest named release after its latest transition, null when it
+#: never moved. The ids travel as one JSON array, twice, so the statement is the same text
+#: for any number of them and no build's limit on parameters applies.
+_CLOSINGS = (
+    f"SELECT i.work_item_id, {standing.ENTERED_AT}, (SELECT e.detail"  # noqa: S608 - constant text
+    "  FROM work_item_events e WHERE e.work_item_id = i.work_item_id"
+    "  AND e.action = 'released' AND e.id > t.id AND e.detail != ''"
+    "  ORDER BY e.id DESC LIMIT 1)"
+    " FROM work_items i LEFT JOIN (SELECT work_item_id, MAX(id) AS id FROM work_item_events"
+    "  WHERE action = 'transitioned' AND work_item_id IN (SELECT value FROM json_each(?))"
+    "  GROUP BY work_item_id) t ON t.work_item_id = i.work_item_id"
+    " WHERE i.work_item_id IN (SELECT value FROM json_each(?))"
+)
 
 
 def closing(
@@ -298,27 +309,18 @@ def closing(
 ) -> tuple[str | None, str | None]:
     """When a finished item closed, and who held it then; both null for open work.
 
-    It closed at its latest transition, the rule a chain's `closed_at` uses, or
-    when it was last written if it never moved. Whoever held it then is the
-    claim still on it, for an item closed before a close ended its claim, or
-    else the holder the newest release since that transition names: the one
-    the close itself wrote, or the separate release that used to follow it.
-    No such release means it closed unheld. A read of many items asks
-    `closings` once instead.
+    It closed when it last entered its finished state (`standing.ENTERED_AT`), the
+    moment every read gives it. Whoever held it then is the claim still on it,
+    for an item closed before a close ended its claim, or else the holder the
+    newest release since its latest transition names: the one the close itself
+    wrote, or the separate release that used to follow it. No such release, or
+    no transition, means it closed unheld. A read of many items asks `closings`
+    once instead.
     """
 
     if not terminal:
         return None, None
-    identity = str(row["work_item_id"])
-    found = conn.execute(
-        "SELECT t.created_at, (SELECT e.detail FROM work_item_events e"
-        "  WHERE e.work_item_id = ? AND e.action = 'released' AND e.id > t.id"
-        "  AND e.detail != '' ORDER BY e.id DESC LIMIT 1)"
-        " FROM (SELECT id, created_at FROM work_item_events WHERE work_item_id = ?"
-        "  AND action = 'transitioned' ORDER BY id DESC LIMIT 1) t",
-        (identity, identity),
-    ).fetchone()
-    return _closed(row, (str(found[0]), found[1]) if found is not None else None)
+    return _closings(conn, [row])[str(row["work_item_id"])]
 
 
 def triage_stacks(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict[str, dict]:
@@ -352,25 +354,24 @@ def closings(
         str(state[0])
         for state in conn.execute("SELECT state_id FROM workflow_states WHERE is_terminal = 1")
     }
-    finished = [row for row in rows if str(row["state_id"]) in terminal]
-    found: dict[str, _Closed] = {}
-    # The ids travel as one JSON array, so the statement is the same text for
-    # any number of them and no build's limit on parameters applies.
-    for identity, closed_at, detail in conn.execute(
-        "SELECT t.work_item_id, c.created_at, (SELECT e.detail FROM work_item_events e"
-        "  WHERE e.work_item_id = t.work_item_id AND e.action = 'released'"
-        "  AND e.id > t.id AND e.detail != '' ORDER BY e.id DESC LIMIT 1)"
-        " FROM (SELECT work_item_id, MAX(id) AS id FROM work_item_events"
-        "  WHERE action = 'transitioned'"
-        "  AND work_item_id IN (SELECT value FROM json_each(?))"
-        "  GROUP BY work_item_id) t JOIN work_item_events c ON c.id = t.id",
-        (json.dumps([str(row["work_item_id"]) for row in finished]),),
-    ):
-        found[str(identity)] = (str(closed_at), detail)
-    return {
-        str(row["work_item_id"]): _closed(row, found.get(str(row["work_item_id"])))
-        for row in finished
-    }
+    return _closings(conn, [row for row in rows if str(row["state_id"]) in terminal])
+
+
+def _closings(
+    conn: sqlite3.Connection, finished: Sequence[sqlite3.Row]
+) -> dict[str, tuple[str | None, str | None]]:
+    """When each of `finished` closed and who held it then, by item id (`_CLOSINGS`)."""
+
+    by_id = {str(row["work_item_id"]): row for row in finished}
+    identities = json.dumps(list(by_id))
+    found: dict[str, tuple[str | None, str | None]] = {}
+    for identity, closed_at, detail in conn.execute(_CLOSINGS, (identities, identities)):
+        row = by_id[str(identity)]
+        holder = str(row["claim_ref"]) if row["claim_ref"] else None
+        if holder is None and detail:
+            holder = leases.released_holder(str(detail)) or None
+        found[str(identity)] = (str(closed_at), holder)
+    return found
 
 
 #: The newest release an expiry wrote on each item since its last claim. The event's
@@ -446,17 +447,6 @@ def _lapsed_of_one(conn: sqlite3.Connection, identity: str) -> dict | None:
         if not str(error).startswith("no such table: execution_events"):
             raise
         return None
-
-
-def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
-    """A finished item's closing time and last holder, from what its history says."""
-
-    closed_at = found[0] if found is not None else str(row["updated_at"])
-    if row["claim_ref"]:
-        return closed_at, str(row["claim_ref"])
-    detail = found[1] if found is not None else None
-    holder = leases.released_holder(str(detail)) if detail else ""
-    return closed_at, holder or None
 
 
 #: How much of a thread's newest reply its root carries; `thread` reads it whole.
@@ -860,7 +850,6 @@ def present(
     unresolved: bool = False,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
-    entered: Mapping[str, str] | None = None,
     lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
@@ -881,8 +870,8 @@ def present(
     mark, carrying the same and `truncated`, the next page after `comments_after`.
     None given is the whole history, which is what every write answers with and
     what a screen draws from. `closed` is what `closings` loaded for a read of
-    many items, `entered` what `standing.entered` did, and `lapsed` what
-    `lapsed_claims` did; absent, the item asks itself. `tree` is what such a read
+    many items, and `lapsed` what `lapsed_claims` did; absent, the item asks
+    itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
     under it. `projects` is what `item_projects.of_items` read for such a read in
     one walk; absent, the item reads its own. `read_space` is the space, by id, a
@@ -902,7 +891,6 @@ def present(
         row,
         full=full,
         closed=closed,
-        entered=entered,
         lapsed=lapsed,
         tree=tree,
         projects=projects,
@@ -1033,7 +1021,6 @@ def _record(
     *,
     full: bool,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
-    entered: Mapping[str, str] | None = None,
     lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
@@ -1097,13 +1084,6 @@ def _record(
         closing(conn, row, bool(state["is_terminal"]))
         if closed is None
         else closed.get(identity, (None, None))
-    )
-    # When a finished item came to stand where it is, the moment the Volumes read counts it
-    # closed at; null for open work, which asks nothing for it.
-    record["entered_at"] = (
-        (standing.entered(conn, [row]) if entered is None else entered).get(identity)
-        if state["is_terminal"]
-        else None
     )
     facts = tree if tree is not None else item_tree.of_item(conn, row, str(state["category"]))
     # Read, never written: a stale lease stays on the record until a write
@@ -1216,11 +1196,9 @@ CARD_STATE = ("key", "name", "category")
 #: card's `reference` and `parent` stand for, the summary's comment, the counts
 #: and marks of a cut history, which the table of contents and the parts carry, and
 #: what became of steps no longer on the item as they were (`conditions_changed`),
-#: which entering review and completing answer with, and when a finished item came to
-#: stand where it is (`entered_at`), which the board's «Closed in a period» reads.
+#: which entering review and completing answer with.
 OFF_CARD = (
     "conditions_changed",
-    "entered_at",
     "work_item_id",
     "planning_space_id",
     "number",

@@ -204,6 +204,11 @@ and no compatibility layer.
      store that does not open or answer no longer fails the whole directory:
      each of its spaces is listed by what is known without it, with
      `work_item_count` `null`, where the field was always a number;
+   - a finished item's `closed_at`, on its record, its brief and a chain
+     member, is when it last entered its finished state: its last `created`,
+     `transitioned` or `opened` event in history order, or its creation. An
+     item that never moved closed when it was filed, where 2.9 gave its last
+     write;
    - the handshake text describes this model.
 
    Every other tool, argument and answer field stays as it was, apart from

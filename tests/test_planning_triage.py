@@ -189,7 +189,7 @@ class SelectionTests(Stack):
         self.assertEqual(
             {bare: T2, moved: T3},
             {
-                f"{found.space_key}-{found.number}": found.entered_at
+                f"{found.space_key}-{found.number}": found.since
                 for found in triage.waiting(self.conn, self.space)
             },
         )

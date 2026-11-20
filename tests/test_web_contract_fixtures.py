@@ -1266,7 +1266,7 @@ def _everything_but_cursor() -> url_schemes.Installed:
 
 #: The files whose scenario writes these fields' moments and days itself, so they stay as
 #: written: a card's own moment, and the days of a period the scenario names.
-_KEPT_MOMENTS = {"closed-in-period": frozenset({"entered_at", "day"})}
+_KEPT_MOMENTS = {"closed-in-period": frozenset({"closed_at", "day"})}
 
 
 def generate() -> dict[str, str]:
