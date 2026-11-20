@@ -29,7 +29,7 @@ const DAY = 24 * HOUR
 /** How far the line's end may stand from where it should: the drawing's rounding, a pixel. */
 const NEAR = 1
 
-/** The quota fixture with «Work»'s two windows and the seated account's five hours past their reset. */
+/** The quota fixture with «Work»'s three windows and the seated account's five hours past their reset. */
 function ended(): Quota {
   const quota = quotaAt(NOW)
   const moment = NOW.getTime()
@@ -55,6 +55,16 @@ function ended(): Quota {
       [6.5 * DAY, 5],
       [6 * DAY + 2 * HOUR, 9],
     ],
+    forecast: null,
+  })
+  // A week silent by its reset beside a live window of its account stands on that window's span
+  // with none of its readings (`quotaLine`); «Work»'s model week ends too, so its week keeps its own.
+  work.windows[2] = window({
+    kind: 'week_model',
+    model: 'model-a',
+    left: -2 * HOUR,
+    source: 'poll',
+    readings: [[6 * DAY + 4 * HOUR, 3]],
     forecast: null,
   })
   seated.windows[0] = window({
