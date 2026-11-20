@@ -2,9 +2,9 @@
  * «Project» in the built list, on a space of two projects with «All projects» chosen,
  * at the list's widths. Where the list stands every column it names what each row
  * changes after «Goal and stage»; narrower it folds with that column and follows the
- * path on the line under the title. At 1240px of list, the narrowest that stands both,
- * the title keeps 36 characters beside both at their widest, and nothing is pushed past
- * the edge.
+ * path on the line under the title. At 1270px of list, the narrowest that stands both,
+ * the title keeps 36 characters beside both at their widest in either language, and nothing
+ * is pushed past the edge.
  */
 import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
@@ -39,7 +39,8 @@ const items = [
   brief(5, stateOf(1)),
 ]
 
-async function open(page: Page, width: number) {
+async function open(page: Page, width: number, locale = 'en') {
+  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.setViewportSize({ width, height: 800 })
   await installBackend(page)
   await page.route('**/api/planning?*', async (route) => {
@@ -112,41 +113,44 @@ for (const [width, fit] of [
   })
 }
 
-test('from 1240px «Project» stands beside «Goal and stage», and the title keeps 36 characters', async ({
-  page,
-}, info) => {
-  await open(page, 1600)
-  // Both at their widest: the names run past the column's measure.
-  const sized = async (width: number) => {
-    await list(page).evaluate((element, inline) => {
-      element.style.inlineSize = `${inline}px`
-    }, width)
-    return list(page).evaluate((element) => {
-      const title = element.querySelector<HTMLElement>(
-        'tbody tr.list-row:not(.list-row-held) .list-title',
-      )
-      const probe = document.createElement('span')
-      probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
-      title?.append(probe)
-      const characters =
-        (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
-      probe.remove()
-      return { characters, overflow: element.scrollWidth - element.clientWidth }
-    })
-  }
-  const room = await sized(1240)
-  await expect(list(page)).toHaveAttribute('data-fit', 'full')
-  const heads = list(page).locator('thead th .list-sort:not(.folded)')
-  await expect(heads.nth(2)).toHaveText('Goal and stage')
-  await expect(heads.nth(3)).toHaveText('Project')
-  expect(room.characters).toBeGreaterThanOrEqual(36)
-  expect(room.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
-  await page.screenshot(shot(info, 'list-project-1240-of-list.png'))
-  // A pixel narrower, the two fold together and the rest of the columns stand.
-  await sized(1239)
-  await expect(list(page)).toHaveAttribute('data-fit', 'wide')
-  await expect(list(page).locator('thead th .list-sort.folded')).toHaveText([
-    'Goal and stage',
-    'Project',
-  ])
-})
+// In both languages: beside «Conditions» the title of a list 1240px wide kept 34.2 characters
+// in English and 32.8 in Russian.
+for (const [locale, goal, project] of [
+  ['en', 'Goal and stage', 'Project'],
+  ['ru', 'Цель и этап', 'Проект'],
+] as const)
+  test(`from 1270px «Project» stands beside «Goal and stage», and the title keeps 36 characters in ${locale}`, async ({
+    page,
+  }, info) => {
+    await open(page, 1600, locale)
+    // Both at their widest: the names run past the column's measure.
+    const sized = async (width: number) => {
+      await list(page).evaluate((element, inline) => {
+        element.style.inlineSize = `${inline}px`
+      }, width)
+      return list(page).evaluate((element) => {
+        const title = element.querySelector<HTMLElement>(
+          'tbody tr.list-row:not(.list-row-held) .list-title',
+        )
+        const probe = document.createElement('span')
+        probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
+        title?.append(probe)
+        const characters =
+          (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
+        probe.remove()
+        return { characters, overflow: element.scrollWidth - element.clientWidth }
+      })
+    }
+    const room = await sized(1270)
+    await expect(list(page)).toHaveAttribute('data-fit', 'full')
+    const heads = list(page).locator('thead th .list-sort:not(.folded)')
+    await expect(heads.nth(2)).toHaveText(goal)
+    await expect(heads.nth(3)).toHaveText(project)
+    expect(room.characters).toBeGreaterThanOrEqual(36)
+    expect(room.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
+    await page.screenshot(shot(info, `list-project-1270-of-list-${locale}.png`))
+    // A pixel narrower, the two fold together and the rest of the columns stand.
+    await sized(1269)
+    await expect(list(page)).toHaveAttribute('data-fit', 'wide')
+    await expect(list(page).locator('thead th .list-sort.folded')).toHaveText([goal, project])
+  })

@@ -80,6 +80,15 @@ export function isFolded(fit: Fit, key: SortKey): boolean {
 export const labelsUnder = (fit: Fit): boolean => fit === 'full' || fit === 'wide'
 
 /**
+ * Whether the title's heading offers the folded columns' sorts as one choice rather than as a
+ * run of buttons after its own: wherever the state, the priority and the holder fold, so the
+ * head folds before it wraps. The run of «Goal and stage» and «Project» is short; that of the
+ * five took a second line of a list 703px wide in English and a third of one 585px wide in
+ * Russian once «Steps» became «Conditions».
+ */
+export const sortsChosen = (fit: Fit): boolean => fit === 'medium' || fit === 'narrow'
+
+/**
  * The columns a list draws: «Goal and stage» where `goal`, since the tree by goal shows it
  * by a row's place, and «Project» where `project`, by the rule of a tile's project mark.
  */
@@ -90,17 +99,24 @@ export const drawnColumns = ({ goal, project }: { goal: boolean; project: boolea
 
 /**
  * Where every column stands: «Goal and stage» or «Project» from 1100px of list, both of
- * them from 1240px. Each is 10rem at most, and the two at that measure left the title of
- * a list 1100px wide 21 characters; from 1240px it keeps 38, where one alone keeps 43
- * from 1100px.
+ * them from 1270px. Each is 10rem at most, and the two at that measure left the title of
+ * a list 1100px wide 21 characters; from 1270px it keeps 37 in English and 36 in Russian,
+ * as one alone does from 1100px.
  */
-const FULL_FROM = { both: 1240, one: 1100 }
+const FULL_FROM = { both: 1270, one: 1100 }
+
+/**
+ * Where every column but «Goal and stage» and «Project» stands: from 920px, where the title
+ * keeps 38 characters in English and 36 in Russian. From 900px, where it kept 36 beside
+ * «Steps», it kept 35.6 and 34.2 beside «Conditions» and «Условия».
+ */
+const WIDE_FROM = 920
 
 /**
  * The fit for a list `width` pixels wide, `both` where it draws «Goal and stage» and
  * «Project»; unmeasured, the list is wide. The thresholds are where the columns
  * that stay leave the title room for a typical title on two lines, 36 characters,
- * beside a flat list's first column. A tree's first column is wider by its `lead`,
+ * in either language, beside a flat list's first column. A tree's first column is wider by its `lead`,
  * the arrow and the indent of its deepest row, so it is the width less the lead that
  * meets them: measured on the list's width alone, a tree three levels deep stood every
  * column but two beside a first column 222px wide, left its title 131px and ran 24px
@@ -110,7 +126,7 @@ export function fitFor(width: number, both = false, lead = 0): Fit {
   if (width === 0) return 'full'
   const room = width - lead
   if (room >= FULL_FROM[both ? 'both' : 'one']) return 'full'
-  if (room >= 900) return 'wide'
+  if (room >= WIDE_FROM) return 'wide'
   return room >= 560 ? 'medium' : 'narrow'
 }
 
