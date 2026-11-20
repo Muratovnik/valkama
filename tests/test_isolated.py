@@ -308,6 +308,18 @@ class GateTests(Workspace):
         self.assertEqual(subprocess.STDOUT, keywords["stderr"])
         self.assertTrue(keywords["stdout"].name.endswith("stdio.log"))
 
+    def test_a_step_runs_with_its_own_programs_directory_first_on_path(self) -> None:
+        # semgrep comes from an environment of its own, and its launcher finds
+        # pysemgrep through PATH: a copy an older `.venv` holds must not win.
+        elsewhere = str(self.root / "elsewhere")
+        run = self.run_python("path", "import os; print(os.environ['PATH'])")
+
+        code, _ = quietly(isolated.run_gates, [run], self.out, {**os.environ, "PATH": elsewhere})
+
+        self.assertEqual(0, code)
+        printed = (self.out / isolated.LOGS / "path.log").read_text(encoding="utf-8").strip()
+        self.assertEqual([str(Path(sys.executable).parent), elsewhere], printed.split(os.pathsep))
+
     def test_undecodable_output_does_not_lose_the_summary(self) -> None:
         run = self.run_python("bytes", r"import sys; sys.stdout.buffer.write(b'\xff\xfe bytes')")
 

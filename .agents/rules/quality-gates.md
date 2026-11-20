@@ -61,14 +61,30 @@ scans only files Git knows about: a new module that is not yet staged is
 skipped without a word, so stage new files (`git add -N` is enough) before
 reading its result as covering them.
 
-Run the Python gates from the ignored `.venv`, built from
-`requirements-dev.txt` (`uv venv .venv --python 3.11`, then
+Run the Python gates from the ignored `.venv`, built on Python 3.15 — the
+interpreter the installed launcher runs, so the suite meets the SQLite the
+service does — from `requirements-dev.txt` (`uv venv .venv --python 3.15`, then
 `uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt`),
-with `.venv/Scripts` first on `PATH`. A shared interpreter drifts: an
-unpinned semgrep and mcp 2.x there broke the gate, because semgrep imports
-`mcp.server.fastmcp` at start and mcp 2 removed it. `PATH` matters even with
-the venv present, since the `semgrep` launcher finds `pysemgrep` through it
-and otherwise runs the shared copy.
+with `.venv/Scripts` first on `PATH`. The minimum the code supports stays
+Python 3.11 (`target-version` and `python_version` in `pyproject.toml`). A
+shared interpreter drifts: an unpinned semgrep and mcp 2.x there broke the gate,
+because semgrep imports `mcp.server.fastmcp` at start and mcp 2 removed it.
+
+A tool whose own dependencies do not install on the Python `.venv` is built on
+gets an environment of its own beside it, with its own requirements file, and
+the gates run it and check its pin there; `OwnEnvironment` in
+`windows/release.py` declares each one, its directory, its requirements and the
+Python to build it on. semgrep is the one today: every release since 1.137.0
+pins `pywin32==311`, which has no wheel for Python 3.15. Build the ignored
+`.venv-semgrep` from `requirements-semgrep.txt` on the newest Python it installs
+on (`uv venv .venv-semgrep --python 3.14`, then
+`uv pip install --python .venv-semgrep/Scripts/python.exe -r requirements-semgrep.txt`),
+and run `semgrep` with `.venv-semgrep/Scripts` first on `PATH`: the launcher
+finds `pysemgrep` through it, so an older `.venv` that still holds one would
+otherwise run that copy. Both runners put the directory of each step's own
+program first on `PATH` for that step (`release.program_environment`). When
+semgrep installs on the Python of `.venv` again, its pin can move back into
+`requirements-dev.txt` and its declaration go.
 
 `python tests/isolated.py gates --out DIR` runs the `AGENTS.md` list from that
 venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,

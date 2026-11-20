@@ -5,6 +5,7 @@ __pycache__/
 *.sqlite3-wal
 *.sqlite3-shm
 .venv/
+.venv-semgrep/
 node_modules/
 *.tsbuildinfo
 test-results/
