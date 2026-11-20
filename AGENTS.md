@@ -85,9 +85,9 @@ split with it:
 - The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
-  The runner, `npm test` and the whole `unittest` suite enforce it with one lock
-  for every checkout on the machine: a second run waits, and says whose
-  run it waits for, when it starts and every minute until it gets the lock.
+  The runner, `npm test` and the whole `unittest` suite go through one gate for
+  every checkout on the machine, each declaring its CPUs, the runner all: a run
+  waits until it fits, saying why when it starts and every minute.
   A defect that depends on a neighbouring worktree shows up only at this run.
 
 How to run one browser spec, a probe spec kept outside the suite, or the whole
