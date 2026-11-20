@@ -167,7 +167,9 @@ for (const lang of ['en', 'ru'] as const)
         // No room held between the bar and the numbers for days nobody chose.
         const band = await page.evaluate(() => {
           const controls = [
-            ...document.querySelectorAll('[role="radiogroup"], [role="combobox"]'),
+            ...document.querySelectorAll(
+              '.period-bar :is([role="radiogroup"], [role="combobox"], button)',
+            ),
           ].map((one) => one.getBoundingClientRect().bottom)
           const first = document.querySelector('[data-number]')?.getBoundingClientRect().top ?? 0
           return first - Math.max(...controls)

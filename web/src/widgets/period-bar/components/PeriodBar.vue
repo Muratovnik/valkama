@@ -26,7 +26,9 @@
  * they need, each line shared among its periods, so every period stands whole; under it the
  * filters and the line's end. The reader's own days take a third row once they are chosen. The
  * line's end lends its parts to the second row, where the page places them on the bar's grid of
- * four columns.
+ * four columns. A page whose second row has no room for its news on the narrowest phone stands a
+ * part of it at the end of the periods' row there instead (`beside`), on the third and fourth
+ * columns the periods leave it.
  *
  * A filter the page could not set says why under the bar (`refused`).
  */
@@ -58,6 +60,11 @@ const props = withDefaults(
     today: string
     /** The periods' name, the own days' fields' names and what a reversed period says. */
     words: { from: string; label: string; reversed: string; to: string }
+    /**
+     * Whether the page stands a part of the line's end beside the periods on the narrowest phone,
+     * where the row under them has no room for all of it.
+     */
+    beside?: boolean
     /** What else changes what the line holds, which it is fitted again for. */
     holds?: readonly unknown[]
     /** Why the last filter asked for was not set; empty otherwise. */
@@ -67,7 +74,7 @@ const props = withDefaults(
     /** Whether words on the line that may wrap short of room took a second line to stand in. */
     wrapped?: (line: HTMLElement) => boolean
   }>(),
-  { holds: () => [], refused: '', spanName: null, wrapped: undefined },
+  { beside: false, holds: () => [], refused: '', spanName: null, wrapped: undefined },
 )
 /** A period chosen, or a day of the reader's own set anew. */
 const emit = defineEmits<{
@@ -139,6 +146,7 @@ defineExpose({ gave: room.gave })
     :class="{
       'period-bar-tight': tight,
       'period-bar-rows': twoRows,
+      'period-bar-beside': beside,
     }"
   >
     <div
@@ -286,6 +294,16 @@ defineExpose({ gave: room.gave })
 
   .period-bar-own {
     grid-area: 3 / 1 / 4 / -1;
+  }
+}
+
+/* The narrowest phone, a window of about 375px or less, where the page asks for it (`beside`):
+   the periods leave the third and fourth columns of their row to a part of the line's end, and
+   wrap in what they keep. At 360px a failed refresh in Russian, beside the filter, the freshness
+   and the read again, had room only for three lines and ran 2px past the row's end. */
+@container (width < 18rem) {
+  .period-bar-beside .period-bar-periods {
+    grid-area: 1 / 1 / 2 / 3;
   }
 }
 

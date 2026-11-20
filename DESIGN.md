@@ -2962,20 +2962,23 @@ the reader's own period at the start of the second row and the
 freshness with the refresh at its end. One row cannot hold them there: at 1024px the line is
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
-panel moved down 44px when a span of days was chosen. On a phone the bar is two rows: the
-periods across the whole first row, wrapping onto a second line of their track where one has no
-room for them, each line shared among its periods; then the filter, a failure, the freshness and
-the refresh. The reader's own days take a third row once chosen, which moves the panel down by
-it. The periods scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past
-the edge, and a row held for the reader's own days under every other period stood as an empty
-band of 72px over the panel; the period bar of Agent decisions and Volumes is the same bar. A
-refresh that fails keeps what is shown and says so in words before the age at every width, «Could
-not refresh» with a retry: given up
-on a short line, its words had left a red disc with no hint. The retry is reached at every width
-too: where the line has no room for «· Retry», the words themselves are the retry, named
-«Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
-Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
-refresh beside it. Reading another space, period or filter dims what is shown until its answer comes, after a moment so that a quick answer does not flicker;
+panel moved down 44px when a span of days was chosen. On a phone the bar is two rows: the periods
+across the whole first row, wrapping onto a second line of their track where one has no room for
+them, each line shared among its periods; then the filter, a failure, the freshness and the refresh.
+The reader's own days take a third row once chosen, which moves the panel down by it. The periods
+scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past the edge, and a row
+held for the reader's own days under every other period stood as an empty band of 72px over the
+panel; the period bar of Agent decisions and Volumes is the same bar. On the narrowest phone, a
+window of about 375px or less, Analytics' freshness stands at the end of the periods' row instead,
+the periods wrapping in what it leaves: beside the filter, the freshness and the refresh, a failed
+refresh in Russian had room only for three lines there and ran 2px past the row's end. A refresh
+that fails keeps what is shown and says so in words before the age at every width, «Could not
+refresh» with a retry: given up on a short line, its words had left a red disc with no hint. The
+retry is reached at every width too: where the line has no room for «· Retry», the words themselves
+are the retry, named «Could not refresh · Retry» with «Retry» as their hint, and take no room the
+words did not. Dropped there, a phone and a span of days in Russian offered no retry of its own,
+only the refresh beside it. Reading another space, period or filter dims what is shown until its
+answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,
 and say «no data yet» in their hint rather than being drawn as a drop.

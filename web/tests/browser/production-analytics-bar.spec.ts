@@ -6,7 +6,8 @@
  * At 1440 and 1920 the bar keeps one height with none to four filters and with a span of days,
  * the filters it has no room for counted in «Filters: N»; the list of filters opens over the
  * panel, moving nothing, and a chip taken out leaves the focus in the bar. On a phone the bar is
- * three rows, its periods one row that scrolls sideways, with the rail right under it. «Today»,
+ * two rows, every period whole on the lines of the first and nothing scrolled sideways, with the
+ * rail right under it; a span of days adds its own row under them, moving nothing above. «Today»,
  * chosen in the bar, is the day's hours 0 to 23 with the one running hatched, compared with the
  * same hours of yesterday, and its address gives the view back.
  */
@@ -108,7 +109,7 @@ test('the age of the newest record counting up moves nothing in the bar, one row
   await record(info, 'bar-steady', seen)
 })
 
-test('on a phone the bar is three rows, its periods one row, and the rail right under it', async ({
+test('on a phone every period stands whole in the bar, and the rail right under it', async ({
   page,
 }, info) => {
   await serve(page)
@@ -119,21 +120,31 @@ test('on a phone the bar is three rows, its periods one row, and the rail right 
   const measured = await page.evaluate(() => {
     const bar = document.querySelector('.analytics-bar')?.getBoundingClientRect()
     const rail = document.querySelector('.analytics-rail')?.getBoundingClientRect()
-    const options = [...document.querySelectorAll('.period-bar-periods .segmented-option')].map(
-      (option) => option.getBoundingClientRect().y,
-    )
-    return { bar: bar?.height ?? 0, gap: (rail?.y ?? 0) - (bar?.bottom ?? 0), options }
+    const strip = document.querySelector('.period-bar-periods') as HTMLElement
+    const row = strip.getBoundingClientRect()
+    const options = [...strip.querySelectorAll('.segmented-option')].map((option) => {
+      const own = option.getBoundingClientRect()
+      return Math.max(row.left - own.left, own.right - row.right, 0)
+    })
+    return {
+      bar: bar?.height ?? 0,
+      gap: (rail?.y ?? 0) - (bar?.bottom ?? 0),
+      options,
+      refresh: document.querySelector('.analytics-refresh')?.getBoundingClientRect().top ?? 0,
+      sideways: strip.scrollWidth - strip.clientWidth,
+    }
   })
   await record(info, 'bar-phone', measured)
   expect(measured.options).toHaveLength(5)
-  expect(new Set(measured.options).size, 'the periods in one row').toBe(1)
+  for (const past of measured.options)
+    expect(past, 'a period past its row').toBeLessThanOrEqual(0.5)
+  expect(measured.sideways, 'the periods scrolled sideways').toBeLessThanOrEqual(0)
   expect(measured.gap).toBeGreaterThanOrEqual(0)
   expect(measured.gap).toBeLessThan(40)
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible()
 
-  // Three rows of one height whatever period is chosen (DESIGN.md): the periods, the filter with
-  // the read again, and the room of the reader's own days, which a span of days fills without
-  // moving anything.
+  // A span of days takes a row of its own under the filter and the read again (DESIGN.md), the
+  // rows above it where they stood: no row is held for it under every other period.
   await page.goto(pageAt({ period: 'custom', from: '2026-11-09', to: '2026-11-11' }))
   await expect(page.locator('.analytics-bar input[type="date"]')).toHaveCount(2)
   const own = await page.evaluate(() => {
@@ -150,8 +161,9 @@ test('on a phone the bar is three rows, its periods one row, and the rail right 
       ],
     }
   })
-  await record(info, 'bar-phone-own', own)
-  expect(own.bar, 'the bar beside a span of days').toBe(measured.bar)
+  await record(info, 'bar-phone-own', { ...own, before: measured.bar })
+  expect(own.bar, 'the bar beside a span of days').toBeGreaterThan(measured.bar)
+  expect(own.rows[1]?.top, 'the read again where it stood').toBeCloseTo(measured.refresh, 1)
   for (const [index, row] of own.rows.slice(1).entries())
     expect(
       row?.top ?? Number.NaN,

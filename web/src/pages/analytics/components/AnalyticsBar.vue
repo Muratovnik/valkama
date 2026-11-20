@@ -29,7 +29,8 @@
  * height nor its controls.
  *
  * On a phone the periods take the first row whole; under it the filter, a failure, the freshness
- * and the read again, by its icon; and, once chosen, the reader's own days.
+ * and the read again, by its icon; and, once chosen, the reader's own days. On the narrowest
+ * phone the freshness stands at the end of the periods' row, leaving a failure its room.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -163,6 +164,7 @@ const freshHint = computed(() =>
     :today="today"
     :words="barWords"
     :wrapped="wrapped"
+    beside
     @days="(next) => emit('amend', next)"
     @period="choosePeriod"
   >
@@ -285,6 +287,17 @@ const freshHint = computed(() =>
 
   .analytics-refresh {
     grid-area: 2 / 4 / 3 / 5;
+  }
+}
+
+/* The narrowest phone (`PeriodBar`'s `beside`): the freshness at the end of the periods' row, on
+   their first line, so a failure has the row under them beside the filter and the read again. */
+@container (width < 18rem) {
+  .analytics-bar-fresh {
+    grid-area: 1 / 3 / 2 / 5;
+    align-content: center;
+    align-self: start;
+    min-block-size: var(--size-control-height-compact);
   }
 }
 
