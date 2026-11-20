@@ -252,7 +252,7 @@ export const DETAIL_TOOLTIPS = new Map([
     'how a figure is counted, which the figure does not say',
   ],
   [
-    'widgets/work-item-inspector/components/UsageQuota.vue <span> v-tooltip.detail="week.seat"',
+    'widgets/work-item-inspector/components/UsageQuota.vue <span> v-tooltip.detail="week.ids"',
     'the whole seat of a quota week, of which the line prints the starts of its ids',
   ],
   [

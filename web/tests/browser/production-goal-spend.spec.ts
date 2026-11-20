@@ -139,7 +139,7 @@ for (const size of SIZES) {
           weeks: [
             {
               account: { organization: 'org-alpha-0000', account_uuid: 'acct-beta-11111111' },
-              seat: 'org-alpha-0000/acct-beta-11111111',
+              seat: 'week:2030-03-11T09:00Z',
               week_ends_at: '2030-03-11T09:00:00Z',
               share: 0.25,
               week_used_percent: 40,

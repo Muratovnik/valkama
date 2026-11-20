@@ -10,7 +10,7 @@
  *
  * Under the lines, the assumption the figure rests on and that it leans high, and how much of the
  * item's cost is on no account that can be shown, when any is. Each line carries `data-week`:
- * the seat and the day its week ends.
+ * the account and the seat, the week's own name, which together name one line.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -33,12 +33,9 @@ const percentOf = (value: number) =>
 const dayOf = (moment: string) =>
   new Intl.DateTimeFormat(locale.value, { month: 'short', day: 'numeric' }).format(new Date(moment))
 
-/** The account by the starts of its organization and its id, as the card names an agent. */
-const accountOf = (week: Week) =>
-  [week.account.organization, week.account.account_uuid]
-    .filter((part) => part !== null)
-    .map((part) => agentIdStart(part))
-    .join(' · ')
+/** The account's ids, the organization first; a seat no one account can name has no account id. */
+const idsOf = (week: Week) =>
+  [week.account.organization, week.account.account_uuid].filter((part) => part !== null)
 
 function figureOf(week: Week): { hint: string; text: string } {
   if (week.percent === null || week.share === null || week.week_used_percent === null)
@@ -57,9 +54,12 @@ function figureOf(week: Week): { hint: string; text: string } {
 
 const weeks = computed(() =>
   props.quota.weeks.map((week) => ({
-    key: `${week.seat}:${week.week_ends_at}`,
-    account: accountOf(week),
-    seat: week.seat,
+    key: `${idsOf(week).join('/')}:${week.seat}`,
+    /** The account by the starts of its ids, as the card names an agent, and whole in the hint. */
+    account: idsOf(week)
+      .map((part) => agentIdStart(part))
+      .join(' · '),
+    ids: idsOf(week).join(' · '),
     ends: t('workItem.usage.quotaWeek', { date: dayOf(week.week_ends_at) }),
     ...figureOf(week),
   })),
@@ -89,7 +89,7 @@ const unknown = computed(() => {
         :data-week="week.key"
       >
         <span
-          v-tooltip.detail="week.seat"
+          v-tooltip.detail="week.ids"
           class="usage-quota-account"
           >{{ week.account }}</span
         >

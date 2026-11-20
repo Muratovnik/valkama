@@ -9,7 +9,9 @@
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { richUsage } from '../fixtures/usage.ts'
+import { validateItemUsageAnswer } from '@/shared/api/planningUsageApi.ts'
+
+import { richUsage, usageAnswer } from '../fixtures/usage.ts'
 import { mountSummary } from './usageSummaryHost.ts'
 
 afterEach(() => {
@@ -25,17 +27,22 @@ const week = (seat: string, ends: string, share: number | null, used: number | n
   percent: share === null || used === null ? null : Math.round(share * used * 100) / 100,
 })
 
-const usage = richUsage({
-  sessions: 3,
-  quota: {
-    weeks: [
-      week('org-alpha-0000/acct-beta-11111111', '2030-03-11T09:00:00Z', 0.25, 40),
-      week('org-alpha-0000/acct-beta-11111111', '2030-03-04T09:00:00Z', 0.5, null),
-      week('org-alpha-0000/acct-beta-11111111', '2030-02-25T09:00:00Z', null, 10),
-    ],
-    unknown_share: 0.1,
-  },
-})
+// Through the contract, so a week the server could not send fails here and not on the card.
+const usage = validateItemUsageAnswer(
+  usageAnswer(
+    richUsage({
+      sessions: 3,
+      quota: {
+        weeks: [
+          week('week:2030-03-11T09:00Z', '2030-03-11T09:00:00Z', 0.25, 40),
+          week('week:2030-03-04T09:00Z', '2030-03-04T09:00:00Z', 0.5, null),
+          week('week:2030-02-25T09:00Z', '2030-02-25T09:00:00Z', null, 10),
+        ],
+        unknown_share: 0.1,
+      },
+    }),
+  ),
+)
 
 const weeks = () =>
   [...document.querySelectorAll<HTMLElement>('[data-week]')].map((line) => {

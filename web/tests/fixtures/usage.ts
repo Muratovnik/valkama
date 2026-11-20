@@ -76,9 +76,10 @@ export function noUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
   }
 }
 
-/** One agent and the session's own run, one model of them called on the side. */
+/** One agent and the session's own run, one model of them called on the side: one session. */
 export function richUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
   return noUsage({
+    sessions: 1,
     elapsed_seconds: 27_520,
     agent_seconds: 40_480,
     tokens: SPENT,
