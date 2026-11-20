@@ -8,12 +8,12 @@ export const inputRequestMessages = {
   en: {
     requests: {
       title: 'Needs my answer',
-      scope: 'Pending blocks of questions across mapped projects',
-      scopeSpace: 'Pending blocks of questions on the board of {space}',
-      scopeProject: 'Pending blocks of questions on the board of {space}, project {project}',
+      scopeSpace: 'On the board of {space}',
+      scopeProject: 'On the board of {space}, project {project}',
       scopeAll: 'Show every space’s questions, not only those of {space}',
       scopeAllTasks: 'Show every space’s questions, not only those on the chosen tasks',
       scopeTasks: '{scope}, only on tasks {tasks}',
+      scopeTasksOnly: 'Only on tasks {tasks}',
       tasksOfKind: 'of kind {kind}',
       tasksLabelled: 'with the label {label}',
       close: 'Close questions',
@@ -115,12 +115,12 @@ export const inputRequestMessages = {
   ru: {
     requests: {
       title: 'Ждут моего ответа',
-      scope: 'Открытые блоки вопросов во всех связанных проектах',
-      scopeSpace: 'Открытые блоки вопросов на доске пространства {space}',
-      scopeProject: 'Открытые блоки вопросов на доске пространства {space}, проект {project}',
+      scopeSpace: 'На доске пространства {space}',
+      scopeProject: 'На доске пространства {space}, проект {project}',
       scopeAll: 'Показать вопросы всех пространств, а не только {space}',
       scopeAllTasks: 'Показать вопросы всех пространств, а не только на выбранных задачах',
       scopeTasks: '{scope}, только на задачах {tasks}',
+      scopeTasksOnly: 'Только на задачах {tasks}',
       tasksOfKind: 'вида «{kind}»',
       tasksLabelled: 'с меткой «{label}»',
       close: 'Закрыть вопросы',
