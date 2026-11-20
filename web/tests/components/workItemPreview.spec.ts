@@ -222,7 +222,7 @@ describe('WorkItemPreview', () => {
 describe('what a screen reader hears', () => {
   it('reads the card as sentences, in the order it is drawn', () => {
     expect(spoken({ reference: 'MAIN-1394', item: CLAIMED })).toBe(
-      `Bug. In progress. Show a short card on hover. Held by claude · f5f838f4-74fc. Steps: 1 of 5. Updated ${day(UPDATED, 'en')}.`,
+      `Bug. In progress. Show a short card on hover. Held by claude · f5f838f4-74fc. Conditions: 1 of 5. Updated ${day(UPDATED, 'en')}.`,
     )
   })
 
@@ -237,7 +237,7 @@ describe('what a screen reader hears', () => {
 
   it('names the space of an item from elsewhere, in its order, and never as a project', () => {
     const from = { reference: CLAIMED.reference, item: CLAIMED, space: 'Main' }
-    expect(spoken(from)).toContain(`Steps: 1 of 5. Space Main. Updated ${day(UPDATED, 'en')}.`)
+    expect(spoken(from)).toContain(`Conditions: 1 of 5. Space Main. Updated ${day(UPDATED, 'en')}.`)
     expect(spoken(from)).not.toContain('Project')
     expect(spoken(from, 'ru')).toContain('Пространство Main')
     expect(spoken(from, 'ru')).not.toContain('Проект')

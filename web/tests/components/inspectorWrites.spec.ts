@@ -170,7 +170,7 @@ describe('inspector writes and their refusals', () => {
     await flushPromises()
     expect(wrapper.find('.closing-form').exists()).toBe(false)
     expect(wrapper.get('.refusal').text()).toContain('open checklist step')
-    expect(getButton(wrapper, 'Go to the checklist')).toBeDefined()
+    expect(getButton(wrapper, 'Go to the conditions')).toBeDefined()
     wrapper.unmount()
   })
 

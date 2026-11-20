@@ -2487,13 +2487,13 @@ MAIN-12 из MAIN-3?» names the triage state it lands in at the top level and a
 field first, the caret in it, since the goal keeps that reason. After each the card reads its item
 again. A task that conditions left says where they went in «Связи», under «Условия ушли в»: each
 card that took some, by its number, with how many, a press opening it.
-Overview opens with the next step, when there is one: a quiet line, «Следующий шаг · 3 из
-9», whose number is the step's place in the list and not how many are done, then the step's
-words as a description reads, with no heading over one sentence. «Все шаги» at the end of
-that line goes to the checklist and puts focus on its heading; the only step has neither
-the number nor a way to itself.
+Overview opens with the next condition, when there is one: a quiet line, «Следующее условие
+· 3 из 9», whose number is the condition's place in the list and not how many are done, then
+its words as a description reads, with no heading over one sentence. «Все условия» at the end
+of that line goes to the conditions and puts focus on their heading; the only condition has
+neither the number nor a way to itself.
 A section of a card that holds nothing and offers nothing is absent, rather than a
-heading and a sentence saying so on the first screen: the «Agents» tab and «Checklist»
+heading and a sentence saying so on the first screen: the «Agents» tab and «Conditions»
 stand only while they have something in them, and a step arriving with the live stream's next
 frame brings its section back with no reload.
 What work on a card took stands as one quiet line under its facts: the time, the estimated cost

@@ -328,6 +328,25 @@ test('a replaced answer reads as a line per field that said something', () => {
   ])
 })
 
+test('a label that is a question or ends in a colon takes no colon of ours after it', () => {
+  // An agent often asks a field as a question; a colon after its mark read «аналитики?: Фон строки».
+  const asked: InputRequestField[] = [
+    { id: 'look', label: 'Какой вариант аналитики?', type: 'choice', required: true, options },
+    { id: 'base', label: 'Ветка:', type: 'choice', required: true, options },
+    { id: 'said', label: '«Готово?»', type: 'text', required: false, options: [] },
+  ]
+  const chosen = answers({ look: 'keep', base: 'merge' })
+  expect(unsentChoices(asked, chosen, lastWord)).toEqual([
+    'Какой вариант аналитики? Keep',
+    'Ветка: Merge',
+  ])
+  const version = { answers: { look: 'merge', said: 'Да' }, own: {}, field_notes: {} }
+  expect(versionLines(asked, version, echo)).toEqual([
+    { id: 'look', text: 'Какой вариант аналитики? Merge' },
+    { id: 'said', text: '«Готово?» Да' },
+  ])
+})
+
 /** The real words of a language, filled in as vue-i18n fills a named value. */
 const wordsOf = (locale: 'en' | 'ru') => (key: string, values?: Record<string, unknown>) => {
   const text = String(

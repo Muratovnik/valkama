@@ -7,6 +7,7 @@ import type {
   InputRequestOption,
 } from '@/shared/api/inputRequestModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
+import { endsSentence, labelled } from '@/shared/lib/sentences.ts'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 type Version = InputRequestEntry['request']['history'][number]
@@ -60,7 +61,7 @@ export function versionLines(
       said('requests.ownVariantSaid', version.own[field.id]),
       said('requests.fieldNoteSaid', version.field_notes[field.id]),
     ].filter(Boolean)
-    return parts.length ? [{ id: field.id, text: `${field.label}: ${clauses(parts)}` }] : []
+    return parts.length ? [{ id: field.id, text: labelled(field.label, clauses(parts)) }] : []
   })
 }
 
@@ -77,12 +78,9 @@ export function unsentChoices(
   return fields.flatMap((field) => {
     if (field.type === 'text' || !isShown(field, draft.answers)) return []
     const chosen = displayAnswer(field, draft.answers[field.id], t)
-    return chosen ? [`${field.label}: ${chosen}`] : []
+    return chosen ? [labelled(field.label, chosen)] : []
   })
 }
-
-/** A stop, a question mark or an ellipsis, with any closing quotes or brackets after it. */
-const SENTENCE_END = /[.!?…]["'»”’)\]]*$/u
 
 /**
  * Parts of one line, a semicolon between them. A part that ends its own sentence, as an own
@@ -93,7 +91,7 @@ function clauses([first = '', ...rest]: string[]) {
   let line = first
   for (const part of rest) {
     const sentence = `${part.charAt(0).toLocaleUpperCase()}${part.slice(1)}`
-    line = SENTENCE_END.test(line) ? `${line} ${sentence}` : `${line}; ${part}`
+    line = endsSentence(line) ? `${line} ${sentence}` : `${line}; ${part}`
   }
   return line
 }

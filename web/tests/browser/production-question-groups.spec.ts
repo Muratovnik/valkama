@@ -112,15 +112,16 @@ async function openGroups(page: Page, locale: 'en' | 'ru', width: number, prompt
 
 /**
  * The group's «Don't do» confirmed once, which the server refuses with this list; every later
- * write goes to the questions' server.
+ * write goes to the questions' server. `height` gives the screen a height of its own.
  */
 async function refuse(
   page: Page,
-  { locale, width }: { locale: 'en' | 'ru'; width: number },
+  { locale, width, height }: { locale: 'en' | 'ru'; width: number; height?: number },
   refusal: typeof REFUSED,
 ) {
   const words = WORDS[locale]
   const { group, requests } = await openGroups(page, locale, width, ['The group'])
+  if (height !== undefined) await page.setViewportSize({ width, height })
   const refused: unknown[] = []
   await page.route('**/api/modules/planning/request/answer', async (route) => {
     if (refused.length) return route.fallback()
@@ -275,7 +276,12 @@ for (const locale of ['en', 'ru'] as const) {
   test(`on a phone in ${locale} a scroll the reader makes after the refusal's list came still ends the asking`, async ({
     page,
   }) => {
-    const { one, listed, requests } = await refuse(page, { locale, width: 390 }, WAITING)
+    // A phone's screen shorter than the question and its list, whatever the window's head takes.
+    const { one, listed, requests } = await refuse(
+      page,
+      { locale, width: 390, height: 760 },
+      WAITING,
+    )
     await expect(listed.getByRole('alert')).toBeFocused()
     const asked = one.getByRole('alert').filter({ hasText: words.asked })
     await expect(asked).toBeVisible()

@@ -1,9 +1,10 @@
+import { historyEventMessages } from '@/shared/i18n/historyEventMessages.ts'
 import { mentionMessages } from '@/shared/i18n/mentionMessages.ts'
 
 /**
  * The words of the card's history. `activity` names the history actions a locale takes
- * from here in one spread: the label change, and the mention, whose words
- * `mentionMessages` owns.
+ * from here in one spread: the label change, the mention, whose words `mentionMessages` owns,
+ * and the work model's events, whose words `historyEventMessages` owns.
  */
 export const activityMessages = {
   en: {
@@ -32,9 +33,11 @@ export const activityMessages = {
       labelsAdded: 'Added: {labels}',
       labelsRemoved: 'Removed: {labels}',
       labelName: '“{label}”',
+      event: historyEventMessages.en.event,
     },
     activity: {
       ...mentionMessages.en.activity,
+      ...historyEventMessages.en.activity,
       labels_changed: 'Labels changed',
     },
   },
@@ -64,9 +67,11 @@ export const activityMessages = {
       labelsAdded: 'Добавлено: {labels}',
       labelsRemoved: 'Снято: {labels}',
       labelName: '«{label}»',
+      event: historyEventMessages.ru.event,
     },
     activity: {
       ...mentionMessages.ru.activity,
+      ...historyEventMessages.ru.activity,
       labels_changed: 'Метки изменены',
     },
   },

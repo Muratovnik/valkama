@@ -86,7 +86,7 @@ test('a Tab shows the card at once and describes the reference; leaving takes it
   const opened = await described(page, link)
   expect(opened.name).toBe('MAIN-12')
   expect(opened.description).toContain('Keep the reader in place when a card closes')
-  expect(opened.description).toContain('Steps: 1 of 3')
+  expect(opened.description).toContain('Conditions: 1 of 3')
   await expect(link).toHaveAttribute('aria-describedby', /.+/u)
   // The card holds its words once: those its reference is described by stand apart from it.
   const copy = await link.getAttribute('aria-describedby')

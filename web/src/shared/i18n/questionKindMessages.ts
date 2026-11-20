@@ -1,7 +1,8 @@
 /**
  * The words of the kinds of question in «Needs my answer»: the tabs over the list, each kind's
  * answers by the server's option id, the headings of each kind's content, a task's goal, the put-off until a
- * card closes, and the open work an answer would cancel that its question did not ask about.
+ * card closes, the open work an answer would cancel that its question did not ask about, and a
+ * closed question's fields as the fold shows them.
  */
 export const questionKindMessages = {
   en: {
@@ -62,6 +63,13 @@ export const questionKindMessages = {
       listed: 'This answer also cancels open work the question did not ask about:',
       dependents: 'Waiting on it',
       waitsOn: 'waits on {reference}',
+      fields: {
+        answer: 'Answer',
+        until: 'Put off until',
+        cancels: 'The list token',
+        items: 'Findings in this group',
+        reason: 'Why you object',
+      },
     },
   },
   ru: {
@@ -122,6 +130,13 @@ export const questionKindMessages = {
       listed: 'Этот ответ отменит и открытую работу, о которой вопрос не спрашивал:',
       dependents: 'Её ждут',
       waitsOn: 'ждёт {reference}',
+      fields: {
+        answer: 'Ответ',
+        until: 'Отложить до',
+        cancels: 'Ключ списка',
+        items: 'Находки группы',
+        reason: 'Причина возражения',
+      },
     },
   },
 }

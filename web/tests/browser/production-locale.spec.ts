@@ -147,7 +147,7 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   const cut = () =>
     choice.locator('.choice-title').evaluate((title) => title.scrollWidth - title.clientWidth)
   expect(await cut(), 'the order the list opens on is whole').toBeLessThanOrEqual(0)
-  for (const order of ['Состояние', 'Приоритет', 'Исполнитель', 'Шаги', 'Обновлено']) {
+  for (const order of ['Состояние', 'Приоритет', 'Исполнитель', 'Условия', 'Обновлено']) {
     await choice.click()
     await page.getByRole('option', { name: order, exact: true }).click()
     await expect(choice).toHaveText(order)

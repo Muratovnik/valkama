@@ -14,13 +14,26 @@
  */
 import { mentionHistoryWords } from '@/widgets/work-item-inspector/utils/mentionLines.ts'
 import type { MentionRecord } from '@/widgets/work-item-inspector/utils/mentionLines.ts'
+import {
+  acceptedWords,
+  childLeftWords,
+  convertedWords,
+  returnedWords,
+  serviceNoteWords,
+  splitWords,
+  triageWords,
+  untilWords,
+} from '@/widgets/work-item-inspector/utils/workEventWords.ts'
+import type { CountedTranslate } from '@/widgets/work-item-inspector/utils/workEventWords.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
+import { standardState } from '@/shared/lib/stateNames.ts'
+import type { NamedState } from '@/shared/lib/stateNames.ts'
 
-type Translate = (key: string, values?: Record<string, unknown>) => string
+type Translate = CountedTranslate
 
 interface RecordedEvent {
   detail: string
@@ -99,21 +112,52 @@ function labelWords(detail: string, t: Translate) {
 type StateNamer = (key: string) => string | null
 
 /**
- * `key` or `key: note`, as a transition writes it: the state named as everywhere else, by the
- * key's state in the card's workflow. A key the workflow no longer has, and a line of another
- * shape, read as recorded.
+ * A transition's key named through the card's workflow; a key it does not hold, or a card read
+ * with none, by the standard state of that key, so `ready` reads «Готово к работе» there too. A
+ * key of neither stays unnamed.
  */
-function moveWords(detail: string, nameState: StateNamer) {
+export function stateNamer(
+  states: readonly NamedState[] | undefined,
+  name: (state: NamedState) => string,
+): StateNamer {
+  return (key) => {
+    const state = states?.find((one) => one.key === key) ?? standardState(key)
+    return state ? name(state) : null
+  }
+}
+
+/** A day or a time work is put off until, as the reader reads it. */
+type DaySayer = (value: string) => string
+
+/**
+ * A transition's note in words where the service wrote it: `until X: why` for work put off,
+ * `returned, date 2026-12-01` for work that came back. Any other note is the writer's own.
+ */
+function noteWords(note: string, t: Translate, day: DaySayer) {
+  const said = untilWords(note, t, day) ?? serviceNoteWords(note, t)
+  if (said !== null) return said
+  const [, came] = /^returned, ([\s\S]+)$/u.exec(note) ?? []
+  return came === undefined ? note : returnedWords(came, t, day)
+}
+
+/**
+ * `key` or `key: note`, as a transition writes it: the state named as everywhere else, by the
+ * key's state in the card's workflow, and the service's own note in words. A key no state is
+ * named by, and a line of another shape, read as recorded.
+ */
+function moveWords(detail: string, nameState: StateNamer, t: Translate, day: DaySayer) {
   const [, key, note] = /^([a-z][a-z0-9-]*)(?:: ([\s\S]*))?$/u.exec(detail) ?? []
   const name = key === undefined ? null : nameState(key)
   if (name === null) return detail
-  return note === undefined ? name : `${name}: ${note}`
+  return note === undefined ? name : `${name}: ${noteWords(note, t, day)}`
 }
 
 /** What the card already holds that names the things an event's line refers to. */
 interface EventContext {
   comments: WorkItem['comments']
   t: Translate
+  /** Says a day work is put off until; with none, the day stays as recorded. */
+  day?: DaySayer
   /** The records of texts naming this item that the card's read brought. */
   mentions?: readonly MentionRecord[]
   /** Names a transition's state; with none, the line stays as recorded. */
@@ -123,9 +167,35 @@ interface EventContext {
 
 export function eventWords(event: RecordedEvent, context: EventContext) {
   const { comments, t, questions = [], mentions = [], nameState = () => null } = context
+  const { day = (value: string) => value } = context
   switch (event.action) {
+    // Both name the state an item came to stand in by its key.
+    case 'created':
     case 'transitioned': {
-      return moveWords(event.detail, nameState)
+      return moveWords(event.detail, nameState, t, day)
+    }
+    // An acceptance, a return, a triage mark, a card leaving, a split and a change of kind:
+    // what the service writes in their lines, in words; an agent's own words as written.
+    case 'accepted': {
+      return acceptedWords(event.detail, t)
+    }
+    case 'opened': {
+      return serviceNoteWords(event.detail, t) ?? event.detail
+    }
+    case 'returned': {
+      return returnedWords(event.detail, t, day)
+    }
+    case 'triage_seen': {
+      return triageWords(event.detail, t)
+    }
+    case 'child_left': {
+      return childLeftWords(event.detail, t)
+    }
+    case 'split_off': {
+      return splitWords(event.detail, t)
+    }
+    case 'converted': {
+      return convertedWords(event.detail, t)
     }
     case 'comment_resolved':
     case 'comment_reopened': {

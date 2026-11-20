@@ -135,9 +135,7 @@ describe('the questions window narrowed to a space', () => {
     expect(chip()?.getAttribute('aria-label')).toBe(
       'Show every space’s questions, not only those of Requests space',
     )
-    expect(document.body.textContent).toContain(
-      'Pending blocks of questions on the board of Requests space',
-    )
+    expect(document.body.textContent).toContain('On the board of Requests space')
     expect(counts.at(-1)).toEqual({ value: 2, incomplete: false })
   })
 
@@ -148,9 +146,7 @@ describe('the questions window narrowed to a space', () => {
     expect(asked).toContainEqual(ALPHA)
     expect(shown()).toEqual(['Confirm deployment'])
     expect(chip()?.textContent.trim()).toBe('Requests space · Alpha app')
-    expect(document.body.textContent).toContain(
-      'Pending blocks of questions on the board of Requests space, project Alpha app',
-    )
+    expect(document.body.textContent).toContain('On the board of Requests space, project Alpha app')
     // The rail's count is every space's, whatever the window is narrowed to.
     expect(counts.at(-1)).toEqual({ value: 2, incomplete: false })
   })
@@ -164,9 +160,8 @@ describe('the questions window narrowed to a space', () => {
     expect(shown()).toHaveLength(2)
     expect(shown()).toContain('Pick a region')
     expect(chip()).toBeNull()
-    expect(document.body.textContent).toContain(
-      'Pending blocks of questions across mapped projects',
-    )
+    // Every space's questions are what the window lists unless told otherwise: no line says so.
+    expect(document.body.textContent).not.toContain('On the board of')
   })
 
   it('opened from no space lists every space’s questions with no chip', async () => {
@@ -186,7 +181,7 @@ describe('the questions window narrowed to a space', () => {
       'Показать вопросы всех пространств, а не только Requests space · Alpha app',
     )
     expect(document.body.textContent).toContain(
-      'Открытые блоки вопросов на доске пространства Requests space, проект Alpha app',
+      'На доске пространства Requests space, проект Alpha app',
     )
   })
 
@@ -209,8 +204,8 @@ describe('the questions window under the Volumes page’s kind and label', () =>
     expect(asked).toContainEqual(BUGS)
     expect(chip()?.textContent.trim()).toBe('Requests space · Alpha app · Bug · ui')
     expect(document.body.textContent).toContain(
-      'Pending blocks of questions on the board of Requests space, project Alpha app, only on' +
-        ' tasks of kind Bug with the label ui',
+      'On the board of Requests space, project Alpha app, only on tasks of kind Bug with the' +
+        ' label ui',
     )
   })
 
@@ -219,8 +214,8 @@ describe('the questions window under the Volumes page’s kind and label', () =>
     await flushPromises()
     expect(chip()?.textContent.trim()).toBe('Requests space · Alpha app · Дефект · ui')
     expect(document.body.textContent).toContain(
-      'Открытые блоки вопросов на доске пространства Requests space, проект Alpha app, только на' +
-        ' задачах вида «Дефект» с меткой «ui»',
+      'На доске пространства Requests space, проект Alpha app, только на задачах вида «Дефект»' +
+        ' с меткой «ui»',
     )
   })
 
@@ -234,10 +229,7 @@ describe('the questions window under the Volumes page’s kind and label', () =>
     expect(chip()?.getAttribute('aria-label')).toBe(
       'Show every space’s questions, not only those on the chosen tasks',
     )
-    expect(document.body.textContent).toContain(
-      'Pending blocks of questions across mapped projects, only on tasks of kind Bug with the' +
-        ' label ui',
-    )
+    expect(document.body.textContent).toContain('Only on tasks of kind Bug with the label ui')
     expect(counts.at(-1)).toEqual({ value: 2, incomplete: false })
     chip()?.click()
     await flushPromises()

@@ -17,11 +17,11 @@ import { test } from './test.ts'
 for (const [width, headings, foldedSorts, choice] of [
   [
     1440,
-    ['Ref', 'Title', 'Goal and stage', 'State', 'Priority', 'Assignee', 'Steps', 'Updated'],
+    ['Ref', 'Title', 'Goal and stage', 'State', 'Priority', 'Assignee', 'Conditions', 'Updated'],
     0,
     false,
   ],
-  [1024, ['Ref', 'Title', 'Steps', 'Updated'], 4, false],
+  [1024, ['Ref', 'Title', 'Conditions', 'Updated'], 4, false],
   [390, ['Ref', 'Title'], 0, true],
 ] as const) {
   test(`the list fits its columns at ${width}px and gives the title the rest`, async ({

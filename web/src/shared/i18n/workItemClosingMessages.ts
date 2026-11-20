@@ -73,7 +73,7 @@ export const workItemClosingMessages = {
       },
       mark: {
         confirm: 'Confirm',
-        confirmStep: 'Confirm the step {step}',
+        confirmStep: 'Confirm the condition {step}',
       },
       deferred: {
         label: 'Put off',
@@ -146,7 +146,7 @@ export const workItemClosingMessages = {
       },
       mark: {
         confirm: 'Подтвердить',
-        confirmStep: 'Подтвердить шаг {step}',
+        confirmStep: 'Подтвердить условие {step}',
       },
       deferred: {
         label: 'Отложено',

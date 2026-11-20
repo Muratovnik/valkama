@@ -2,7 +2,7 @@ export const workItemAgentMessages = {
   en: {
     agents: {
       tab: 'Agents {count}',
-      holdsStep: 'Holds step:',
+      holdsStep: 'Holds condition:',
       started: 'Started',
       ended: 'ended',
       lastActivity: 'last activity',
@@ -18,7 +18,7 @@ export const workItemAgentMessages = {
   ru: {
     agents: {
       tab: 'Агенты {count}',
-      holdsStep: 'Держит шаг:',
+      holdsStep: 'Держит условие:',
       started: 'Запущен',
       ended: 'завершён',
       lastActivity: 'последняя активность',

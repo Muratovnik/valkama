@@ -377,7 +377,7 @@ for (const width of [1280, 390]) {
     })
     const row = drawer.locator('.step-row').filter({ hasText: CONDITIONS[2].text })
     await expect(row.locator('[data-mark="by-previous-holder"]')).toBeVisible()
-    const confirm = row.getByRole('button', { name: `Confirm the step ${CONDITIONS[2].text}` })
+    const confirm = row.getByRole('button', { name: `Confirm the condition ${CONDITIONS[2].text}` })
     await fitsWindow(page, confirm)
     // The holder's line never wraps: what stands in it must leave the holder's name its room.
     const holder = row.locator('.step-holder')
