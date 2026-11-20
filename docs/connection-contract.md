@@ -1588,7 +1588,8 @@ its own form: `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
 `condition` and `triage`, each answered once, by the owner, and carried out in
 the same write ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
 
-The read names its scope. `scope_kind=global` reads every source; `scope_kind=space`
+The read names its scope. `scope_kind=global` reads every source, the set
+`counts.waiting_owner` of the Volumes read counts for `global`; `scope_kind=space`
 with `data_scope_id` and `space_key` reads one: the questions on that space's own
 cards, and with `reference` those of one of them. A space is read as a source on
 purpose, since a card's question is opened and answered in its own space and the
@@ -1612,7 +1613,7 @@ filter. They go with `scope_kind=global` and with a space, read as a source or a
 board holds it, and not with `reference`. A kind that is no task's, an empty value or
 `reference` beside them is refused with `invalid_request` (400). A label no card
 carries keeps nothing and is not refused, since a read of every source reads several
-stores, while the Volumes read refuses a label its one store does not hold.
+stores, while the Volumes read refuses a label no store it counts holds.
 
 The MCP tool `list_work_item_requests` takes none of these four parameters: its
 `space` reads the space's own cards.
@@ -2134,7 +2135,7 @@ these answers. No MCP tool reads them: the numbers would cost an agent context.
 
 | Parameter | What it takes |
 | --- | --- |
-| `scope_kind` | required: `global`, every space of the store this service writes, or `space` |
+| `scope_kind` | required: `global`, every space of the store this service writes and of each store attached beside it, as the answer's parts say below, or `space` |
 | `data_scope_id`, `space_key` | with `space`, required: the space, named exactly as the shell names it |
 | `project_id` | with `space`, optional: a project, which narrows the space to the items that name it |
 | `from`, `to` | required: a date or a time with its offset, as in [What agent work spent in a period](#what-agent-work-spent-in-a-period). The period holds at most 2,400 days |
@@ -2248,8 +2249,16 @@ name, each as `{"id", "name"}`, which the other rows hold as `null`. `by_label` 
 task the row of each of its labels, and a task with none the row whose `label` is `null`,
 so those rows add up to no total.
 
-The read counts the store this service writes, where usage is counted. A space of an
-attached store is refused rather than counted short.
+Read for `global`, `counts.categories` and `counts.waiting_owner` count every space «All
+spaces» lists: those of the store this service writes and of each attached store that
+opens, as the directory of spaces and the read of every source's questions take them
+([The panel of open questions](#the-panel-of-open-questions)). Each `oldest` is chosen
+across the stores. A store an earlier build wrote counts its questions alone, since its
+states stand in the categories of before. The rest of the answer, `measured_from`,
+`counts.unattached_commits`, `goals`, `outside`, `flow` and `estimates`, counts the store
+this service writes alone, where usage, the owner's decisions and the commits are
+written, as Analytics and the agents' decisions read it. A space of an attached store is
+refused rather than counted short.
 
 | Refusal (`400`, `invalid_request`) | When |
 | --- | --- |
@@ -2260,7 +2269,7 @@ attached store is refused rather than counted short.
 | `no planning space <KEY>` | the store holds no such space, or the `data_scope_id` is no store this service knows |
 | `no project <id>` | neither the projects registry nor any item of the store names the project |
 | `kind filters tasks: task, bug or improvement` | a `kind` that is no kind of a task, `goal` and `stage` among them |
-| `no work item carries label <label>` | a `label` no item of the store carries; a label the store holds but the scope does not gives an empty answer instead |
+| `no work item carries label <label>` | a `label` no item of the store carries, or for `global` no item of any store it counts; a label they hold but the scope does not gives an empty answer instead |
 | the period's refusals of [What agent work spent in a period](#what-agent-work-spent-in-a-period), in its words: `from must be a date or a time with its offset` (and the same of `to`), `to must be later than from`, `from and to must lie between 1970 and 9999, …`, `the period holds more than 2400 steps of one day`, `utc_offset must be from -840 to 840 minutes` | the period |
 | `utc_offset must be a whole number of minutes`, `<name> is required`, `<name> must occur at most once`, `<name> is not a parameter` | a parameter missing, repeated or not one of these |
 
