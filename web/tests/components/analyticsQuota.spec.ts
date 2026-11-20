@@ -313,7 +313,7 @@ describe('the quota panel', () => {
     const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
     const work = accountNamed(page, 'Work')
     expect(work.get('.step-line').attributes('aria-label')).toMatch(
-      /^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+\. Forecast · Limit runs out at \d{2}:\d{2}$/u,
+      /^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+\. Forecast · Limit runs out at \d{2}:\d{2}\.$/u,
     )
     // The line shows the whole window, its axis naming its start and its reset two hours after
     // 14:30, on the reader's clock: the right end is never a bare time that reads as now.
@@ -342,7 +342,7 @@ describe('the quota panel', () => {
     const readings = String.raw`^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+\.`
     // Drawn, the forecast closes the line's name, as it does by default.
     expect(line().attributes('aria-label')).toMatch(
-      new RegExp(String.raw`${readings} Forecast · Limit runs out at \d{2}:\d{2}$`, 'u'),
+      new RegExp(String.raw`${readings} Forecast · Limit runs out at \d{2}:\d{2}\.$`, 'u'),
     )
     // Turned off from its key, the line names its readings alone, as it draws them.
     await line().get('[data-key="ahead"]').trigger('click')
@@ -363,7 +363,7 @@ describe('the quota panel', () => {
     // in the account's table is `quotaEndedRow.spec.ts`'s.
     stubAnalyticsReads(usage, () => quotaAnswer(quotaAt(NOW.getTime() - 5 * HOUR)))
     const page = await mountAnalytics({ routeState: { by: 'quota_five_hour' } })
-    const reset = expect.stringMatching(/Window reset at \d{2}:\d{2}, no new readings$/u)
+    const reset = expect.stringMatching(/Window reset at \d{2}:\d{2}, no new readings\.$/u)
     const window = accountNamed(page, 'Work').get('.quota-window[data-window="five_hour"]')
     // It leads with the reset, its share before it a quieter line, and says no fact under its bar
     // (DESIGN.md § Analytics): led by its 62 %, it read as the share spent now.

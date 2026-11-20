@@ -146,7 +146,7 @@ export const analyticsQuotaMessages = {
       failedAgain: 'Could not refresh; data as of {to} may be out of date.',
     },
     readings: {
-      label: '{window} of {account} from {from} to {to}: {readings}. {forecast}',
+      label: '{window} of {account} from {from} to {to}: {readings}. {forecast}.',
       labelNoForecast: '{window} of {account} from {from} to {to}: {readings}.',
       labelEmpty: '{window} of {account} from {from} to {to}: {empty}.',
       reading: '{share} at {at}',
@@ -326,7 +326,7 @@ export const analyticsQuotaMessages = {
       failedAgain: 'Не удалось обновить; данные на {to} могут быть устаревшими.',
     },
     readings: {
-      label: '{window}, {account}, с {from} до {to}: {readings}. {forecast}',
+      label: '{window}, {account}, с {from} до {to}: {readings}. {forecast}.',
       labelNoForecast: '{window}, {account}, с {from} до {to}: {readings}.',
       labelEmpty: '{window}, {account}, с {from} до {to}: {empty}.',
       reading: '{share} в {at}',

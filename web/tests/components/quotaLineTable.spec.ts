@@ -235,3 +235,17 @@ describe('the two windows of one account on one time axis', () => {
     expect(axisOf(gamma.line).at(-1)).toMatch(/^reset at /u)
   })
 })
+
+describe('the words of a line for a reader who cannot see it', () => {
+  it('end every sentence with a full stop before the next, a muted card’s as well', async () => {
+    const { page } = await pageOver(quotaTable(NOW), { by: 'quota_week', period: 'weeks4' })
+    // «Gamma»'s week is past its reset and its line holds the weeks before it: its name says it
+    // reset with no new readings, then the weeks before, two sentences.
+    const gamma = lineOf(page, 'Gamma', 'week').line.attributes('aria-label') ?? ''
+    expect(gamma).toMatch(/no new readings\. Before it: .+\.$/u)
+    // A live card's: its forecast, then the weeks before.
+    const alpha = lineOf(page, 'Alpha', 'week').line.attributes('aria-label') ?? ''
+    expect(alpha).toMatch(/\. Forecast · .+\. Before it: .+\.$/u)
+    for (const label of [gamma, alpha]) expect(label).not.toMatch(/[^.] Before it:/u)
+  })
+})
