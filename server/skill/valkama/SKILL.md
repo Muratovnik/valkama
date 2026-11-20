@@ -161,16 +161,19 @@ by [the triage procedure](references/triage.md).
 ## Work the item
 
 **Checklist.** Each step is a condition the item must meet to close; the steps
-of your plan stay in your client. Send them with the claim in one
-call: `apply_work_item_changes` with `claim: true` and
-`checklist: ["first condition", {"text": "…", "done": true}]`, a step already done
-sent as that object. `{"items": [...], "force": true}` sends the same steps when
-`force` must carry a refusal through. A step sent with
-the text of one the item has keeps its id, claim and tick, so add steps by
-sending the existing ones first and the new ones after; the acknowledgement
-lists every step's `item_id`. Tick a step by its `item_id` in the batch's
-`checklist_ticks`, and `done: false` reopens it. Leaving out a
-claimed or completed step is refused unless `force`, which discards its state.
+of your plan stay in your client. A `checklist` you send is the item's whole
+list: an open step left out of it is taken off. An item you found may have its
+conditions already, and neither a search nor a claim's acknowledgement shows
+them: read it with `get_work_item`, keep its conditions and tick those you meet.
+Send your steps with the claim in one call: `apply_work_item_changes` with
+`claim: true` and `checklist: ["first condition", {"text": "…", "done": true}]`,
+a step already done sent as that object. `{"items": [...], "force": true}` sends
+the same steps when `force` must carry a refusal through. A step sent with the
+text of one the item has keeps its id, claim and tick, so add steps by sending
+the existing ones first and the new ones after; the acknowledgement lists every
+step's `item_id`. Tick a step by its `item_id` in the batch's `checklist_ticks`,
+and `done: false` reopens it. Leaving out a claimed or completed step is refused
+unless `force`, which discards its state.
 
 **Shared items.** When agents split one item, each claims its step with
 `claim_work_item_checklist_item` before working on it and ticks it when done.

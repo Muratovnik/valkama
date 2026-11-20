@@ -1024,7 +1024,10 @@ TOOLS = [
                 "description": "Set the steps, after the claim and before the ticks:"
                 ' the list alone, ["first condition", {"text": "…", "done": true}], or'
                 ' {"items": [...], "force": true} when force must carry a refusal'
-                " through. A step sent with the text of one the item has keeps that"
+                " through. The list replaces the item's: an open step left out is taken"
+                " off, and entering review or completing names it in conditions_changed;"
+                " read the item first to keep its steps. A step sent with the text of"
+                " one the item has keeps that"
                 " step's item_id, claim, tick and by_previous_holder, so appending is"
                 " sending the old steps"
                 " and then the new ones; a new step gets a new item_id, which"
