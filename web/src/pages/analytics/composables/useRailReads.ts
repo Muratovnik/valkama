@@ -1,6 +1,6 @@
 /**
  * The reads behind the rail's tiles: the period by each dimension of the rail, one read a
- * dimension, with the page's filters and within the scope's project.
+ * dimension, with the page's filters and within the scope: its space, and its project.
  *
  * They depend on the period, the filters and the scope, and on nothing else: choosing a section
  * or a measure asks nothing again, since the tiles draw every measure from the same rows. A new
@@ -22,7 +22,7 @@ import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { provideRailStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import { scopeFilters } from '@/pages/analytics/composables/useSharedUsage.ts'
-import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
+import type { SharedUsage, UsageScope } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
@@ -44,8 +44,8 @@ export function useRailReads(options: {
   shared: SharedUsage
   /** The dimensions of the rail, a read each. */
   dimensions: () => readonly UsageDimension[]
-  /** The project the page is scoped to, which every read is filtered to; null at the top. */
-  projectId: () => string | null
+  /** The space and project the page is scoped to, which every read is narrowed to. */
+  scope: () => UsageScope
   view: () => AnalyticsView
 }) {
   const { now } = options.shared
@@ -63,12 +63,20 @@ export function useRailReads(options: {
   /** The filters the reads carry: the page's, and the scope's project over its own. */
   const filters = computed<UsageFilters>(() => ({
     ...options.view().filters,
-    ...scopeFilters(options.projectId()),
+    ...scopeFilters(options.scope()),
   }))
 
   const asked = computed(() => {
     const { period, from, to } = options.view()
-    return JSON.stringify({ period, from, to, filters: filters.value, by: options.dimensions() })
+    const { space } = options.scope()
+    return JSON.stringify({
+      period,
+      from,
+      to,
+      filters: filters.value,
+      space,
+      by: options.dimensions(),
+    })
   })
 
   let reading: AbortController | null = null
