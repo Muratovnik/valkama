@@ -826,7 +826,9 @@ shows four numbers under the space's name, counted as the space's Volumes page c
 its cards in triage, its tasks ready and in progress, and the questions waiting for the owner.
 They stand in two rows of two, since a card is never wide enough for four whole names in a
 row, a number never narrower than its longest word. A space without them shows each as «—», never 0, and says why: an
-earlier build wrote its store, which is «No data», or its store could not be read. The
+earlier build wrote its store, which is «No data», or its store could not be read. «Open
+space» stands at the card's foot: a row of cards is as tall as its tallest, and its ways in
+stand on one line, where after each card's own words one row's stood 78px apart. The
 second stands only in a space with more than one project to choose, and an address that
 narrows to a project keeps it on show: «All projects», the space's own projects, then the
 projects of other spaces that its items name, each with its own space's key beside its
