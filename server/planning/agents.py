@@ -29,7 +29,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from .. import sessions
+from .. import sessions, transcript_roots
 from . import calls, executors
 
 EXACT = "exact"
@@ -331,7 +331,9 @@ def _on_item(
             row = conn.execute(
                 "SELECT transcript_path FROM sessions WHERE id = ?", (session_id,)
             ).fetchone()
-            transcripts[session_id] = str(row[0] or "") if row is not None else ""
+            path = str(row[0] or "") if row is not None else ""
+            # A subagent's file sits beside it; outside the roots neither is looked at.
+            transcripts[session_id] = path if transcript_roots.readable(path) else ""
         return transcripts[session_id]
 
     chosen: dict[tuple[str, str], _Agent] = {}

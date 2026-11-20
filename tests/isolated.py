@@ -69,6 +69,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from server import processes, store
+from server.ops import configuration
 from server.projects import project_registry, registry_owner
 from windows import release
 
@@ -76,6 +77,8 @@ HOME = "home"
 LOGS = "logs"
 STATE = "serve.json"
 STOP = "serve.stop"
+#: The configuration file a caller gives the server, before the supervisor copies it in.
+CONFIG = "serve-config.json"
 SUMMARY = "gates.txt"
 SUPERVISE = "supervise"
 
@@ -703,8 +706,17 @@ def copy_registry(home: Path, source: Path | None = None) -> None:
             shutil.copy2(path, target / path.name)
 
 
-def supervise(out: Path, source: Path | None, command: Sequence[str] | None = None) -> None:
-    """Own one server from start to cleanup; the last thing written says how it went."""
+def supervise(
+    out: Path,
+    source: Path | None,
+    command: Sequence[str] | None = None,
+    config: Path | None = None,
+) -> None:
+    """Own one server from start to cleanup; the last thing written says how it went.
+
+    `config` is a configuration file the server's profile takes as its own
+    `~/.valkama/config.json`: the caller's `VALKAMA_*` never reach the server.
+    """
 
     home, stop_file = out / HOME, out / STOP
     stop_file.unlink(missing_ok=True)
@@ -717,6 +729,9 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
     problems = []
     try:
         prepare_home(home)
+        if config is not None:
+            (home / configuration.CONFIG_DIRECTORY).mkdir(parents=True, exist_ok=True)
+            shutil.copy2(config, home / configuration.CONFIG_DIRECTORY / configuration.CONFIG_FILE)
         if source is not None:
             copy_store(source, store_path(home))
             copy_registry(home)
@@ -788,12 +803,18 @@ def _clear_state(out: Path) -> None:
     (out / STOP).unlink(missing_ok=True)
 
 
-def start(out: Path, source: Path | None, environment: Mapping[str, str] | None = None) -> int:
+def start(
+    out: Path,
+    source: Path | None,
+    environment: Mapping[str, str] | None = None,
+    config: Mapping[str, str] | None = None,
+) -> int:
     """Start a supervisor, wait until it says how the start went, and return.
 
     The supervisor starts in `environment`, by default the caller's own. The
     project registry a store copy brings along is the one its `LOCALAPPDATA`
-    names, so a caller with a registry of its own names it there.
+    names, so a caller with a registry of its own names it there. `config` is
+    the server's configuration file, by setting.
     """
 
     if _read_state(out) is not None:
@@ -803,6 +824,10 @@ def start(out: Path, source: Path | None, environment: Mapping[str, str] | None 
     argv = [sys.executable, __file__, SUPERVISE, "--out", str(out)]
     if source is not None:
         argv += ["--store-copy", str(source)]
+    if config is not None:
+        settings = out / CONFIG
+        settings.write_text(json.dumps(dict(config)), encoding="utf-8", newline="\n")
+        argv += ["--config", str(settings)]
     supervisor_log = out / LOGS / "supervisor.log"
     with supervisor_log.open("wb") as output:
         supervisor = subprocess.Popen(
@@ -949,6 +974,7 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("stop", help="stop that server and remove its profile")
     supervise_command = commands.add_parser(SUPERVISE)
     supervise_command.add_argument("--store-copy")
+    supervise_command.add_argument("--config", type=Path)
     for command in commands.choices.values():
         command.add_argument("--out", type=Path, required=True, help="where everything is written")
     return parser
@@ -970,7 +996,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # environment. Nothing else in this file names the live store.
     source = None if copy is None else Path(copy or store.db_path())
     if options.command == SUPERVISE:
-        supervise(out, source)
+        supervise(out, source, config=options.config)
         return 0
     warning = bundle_warning(ROOT)
     if warning is not None:

@@ -190,7 +190,31 @@ def make_user(root: Path) -> dict[str, Path]:
     (local / "Valkama" / "project-registry.toml").write_bytes(former_inventory(entries))
     (local / "Valkama" / "projects.json").write_bytes(former_projection(entries))
     work_model.build(str(root / ".valkama" / "valkama.sqlite3"))
+    # A session of the user's that ended before its transcript could be copied: the
+    # copy's sweep finds it owed and would read the user's client file it names.
+    live = claude / "projects" / "app" / f"{LIVE_SESSION}.jsonl"
+    live.parent.mkdir(parents=True)
+    live.write_bytes(b'{"type": "user"}\n')
+    with contextlib.closing(sqlite3.connect(root / ".valkama" / "valkama.sqlite3")) as conn:
+        conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " client, session_id, transcript_path) VALUES (?,?,?,?,?,?,?)",
+            (
+                str(LIVE_SESSION),
+                "session_end",
+                "confirmed",
+                "hook",
+                "claude",
+                LIVE_SESSION,
+                str(live),
+            ),
+        )
+        conn.commit()
     return {"claude": claude, "codex": codex, "coordinator": coordinator}
+
+
+#: The user's own session whose transcript a probe's servers must never read.
+LIVE_SESSION = "0c0ffee0-0000-4000-8000-00000000live"
 
 
 class RunCase(unittest.TestCase):
@@ -505,6 +529,26 @@ class RunTests(RunCase):
     def test_the_users_files_registrations_and_store_are_unchanged(self) -> None:
         self.assertEqual(self.before, tree_digest(self.user))
         self.assertEqual([0], list(set(new_sidecars(self.user, self.before).values()) or {0}))
+
+    def test_no_server_of_the_run_archives_a_transcript_of_the_users(self) -> None:
+        # The copy owes the user's session a copy of a transcript in the user's own
+        # client directory; every server of the run is kept to the profile's.
+        roots = os.pathsep.join([str(self.home / ".claude"), str(self.home / ".codex")])
+        self.assertEqual(
+            {"transcript_roots": roots},
+            json.loads((self.home / ".valkama" / "config.json").read_text("utf-8")),
+        )
+        for scenario in ("alpha", "beta"):
+            for client in agent_probes.CLIENTS:
+                with self.subTest(scenario=scenario, client=client):
+                    record = self.record(scenario, client)
+                    self.assertEqual([], record.session["foreign_transcripts"])
+                    with contextlib.closing(record.store()) as conn:
+                        rows = conn.execute(
+                            "SELECT kind FROM execution_events WHERE session_id = ?",
+                            (LIVE_SESSION,),
+                        ).fetchall()
+                    self.assertEqual([("session_end",)], rows)
 
 
 class OldReleaseHookTests(RunCase):

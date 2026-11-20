@@ -92,6 +92,15 @@ SETTINGS: tuple[dict[str, str], ...] = (
         "environment": "VALKAMA_CODEX_ROLLOUT_ROOT",
         "description": "where Codex keeps its rollout journals",
     },
+    # Every transcript the server reads is one a row of the store names. A server
+    # on a copy of another installation's store would read that installation's
+    # clients' files; this keeps it to the directories it names.
+    {
+        "key": "transcript_roots",
+        "environment": "VALKAMA_TRANSCRIPT_ROOTS",
+        "description": "the only directories transcripts are read from, separated by"
+        f" {os.pathsep!r}; by default wherever a client says its transcript is",
+    },
     {
         "key": "author",
         "environment": "VALKAMA_AUTHOR",

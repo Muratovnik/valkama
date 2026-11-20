@@ -18,6 +18,11 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
   store copy the probe server serves, `CLAUDE_CONFIG_DIR` and `CODEX_HOME` in the
   home, `GIT_CONFIG_GLOBAL` on a file of the profile, and the launcher directory
   first in `PATH`;
+- a Valkama configuration, `.valkama/config.json`, whose `transcript_roots` are
+  the profile's two client directories, given to the probe server too: a store
+  copy's rows name the user's clients' transcripts, and no server of the run
+  reads one. A session whose servers archived one anyway is the environment's
+  failure, its sessions named in `foreign_transcripts`;
 - copies of the user's `CLAUDE.md`, Codex `AGENTS.md` and coordinator files,
   with the sections of `--sections` put in place of those with the same heading;
 - hook registrations for both clients. The user's own run an installed release,
@@ -75,6 +80,7 @@ sys.path.insert(0, str(ROOT))
 
 from server import processes, store
 from server.projects import project_registry
+from server.transcripts import ARCHIVED
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -690,6 +696,8 @@ class Profile:
     coordinator: tuple[Path, Path]
     #: The user's skills Codex would read beside the profile's, turned off in its configuration.
     codex_hidden_skills: tuple[Path, ...] = ()
+    #: The configuration of every Valkama server the run starts, by setting.
+    server_config: dict[str, str] = dataclasses.field(default_factory=dict)
 
     @property
     def claude_dir(self) -> Path:
@@ -920,6 +928,13 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
     )
     _write_launcher(launcher, python)
     _write_git_config(home / ".gitconfig", python, environment)
+    server_config = {
+        # A store copy's rows name the user's own clients' transcripts; every server
+        # of the run, the probe server and each client's MCP server, reads only the
+        # profile's.
+        "transcript_roots": os.pathsep.join([str(claude_dir), str(codex_dir)]),
+    }
+    _write_json(home / ".valkama" / "config.json", server_config)
 
     live_claude, live_codex = inputs.claude_dir, inputs.codex_dir
     _copy_skills(live_claude / "skills", claude_dir / "skills")
@@ -950,6 +965,7 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
         codex_config=codex_text.read_text(encoding="utf-8") if codex_text.is_file() else "",
         coordinator=(inputs.coordinator, coordinator),
         codex_hidden_skills=hidden_skills,
+        server_config=server_config,
     )
 
 
@@ -1308,6 +1324,8 @@ class Session:
     setup_last_event: int = 0
     environment: dict[str, str] = dataclasses.field(default_factory=dict)
     dropped_hooks: dict[str, dict[str, int]] = dataclasses.field(default_factory=dict)
+    #: Sessions the run did not start whose transcript its servers archived.
+    foreign_transcripts: list[str] = dataclasses.field(default_factory=list)
 
     def fail(self, stage: str, detail: str) -> None:
         self.failures.append({"stage": stage, "detail": detail})
@@ -1372,6 +1390,31 @@ def _last_event(store_file: Path) -> int:
     return int(found[0])
 
 
+def foreign_transcripts(store_file: Path, after: int, home: Path) -> list[str]:
+    """The sessions whose transcript a run's servers archived from outside the run's home.
+
+    Every session a run starts keeps its transcript in the profile's client
+    directories. A `transcript_archived` row written after the store was copied
+    that names any other file is a session of the user's, read by a server of the
+    run: the copy's rows name the user's clients' files.
+    """
+
+    uri = f"{store_file.resolve().as_uri()}?mode=ro"
+    own = os.path.normcase(os.path.abspath(home)) + os.sep
+    with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
+        rows = conn.execute(
+            "SELECT session_id, transcript_path FROM execution_events WHERE kind = ? AND id > ?",
+            (ARCHIVED, after),
+        ).fetchall()
+    return sorted(
+        {
+            str(session)
+            for session, path in rows
+            if not os.path.normcase(os.path.abspath(path or "")).startswith(own)
+        }
+    )
+
+
 class SessionRunner:
     """One scenario on one client, from its server's start to the copy of its store."""
 
@@ -1394,6 +1437,7 @@ class SessionRunner:
         self.names: dict[str, str] = {}
         self.environment: dict[str, str] = {}
         self.store_file = Path()
+        self.copied_last_event = 0
 
     def run(self) -> Session:
         isolated = _isolated()
@@ -1408,6 +1452,7 @@ class SessionRunner:
             try:
                 self._session()
             finally:
+                self._check_transcripts()
                 self._keep_store()
                 isolated.stop(self.serve_out)
         except ProbeError as error:
@@ -1419,7 +1464,14 @@ class SessionRunner:
     def _serve(self) -> bool:
         isolated = _isolated()
         environment = {**os.environ, "LOCALAPPDATA": str(self.profile.local)}
-        if isolated.start(self.serve_out, self.base_store, environment=environment) != 0:
+        self.copied_last_event = _last_event(self.base_store)
+        started = isolated.start(
+            self.serve_out,
+            self.base_store,
+            environment=environment,
+            config=self.profile.server_config,
+        )
+        if started != 0:
             self.record.fail("server", f"the probe server did not start; see {self.serve_out}")
             return False
         state = json.loads((self.serve_out / isolated.STATE).read_text(encoding="utf-8"))
@@ -1624,6 +1676,24 @@ class SessionRunner:
         if self.record.session_id is None:
             self.record.session_id = session_id(self.client, output)
         return True
+
+    def _check_transcripts(self) -> None:
+        """The session is the environment's failure when a server read a user's transcript."""
+
+        if not self.store_file.is_file():
+            return
+        try:
+            found = foreign_transcripts(self.store_file, self.copied_last_event, self.profile.home)
+        except sqlite3.Error as error:
+            self.record.fail("isolation", f"the archived transcripts could not be read: {error}")
+            return
+        self.record.foreign_transcripts = found
+        if found:
+            self.record.fail(
+                "isolation",
+                f"the servers archived the transcripts of {len(found)} session(s)"
+                " this run did not start",
+            )
 
     def _keep_store(self) -> None:
         """The session's store, spool and project registry, kept beside its record.
