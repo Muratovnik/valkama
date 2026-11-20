@@ -160,13 +160,13 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   expect(box?.y ?? Infinity).toBeLessThan((sort?.y ?? 0) + (sort?.height ?? 0))
 })
 
-test('Russian Work bar keeps its controls on one row, and the former presets are conditions of its menu', async ({
+test('Russian Work bar keeps its controls on one row, and the former presets are filters of its menu', async ({
   page,
 }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
-  const conditions = page.getByRole('group', { name: 'Условия' })
+  const conditions = page.getByRole('group', { name: 'Фильтры' })
   const field = page.getByRole('combobox', { name: 'Фильтр работы' })
 
   for (const [width, height] of [

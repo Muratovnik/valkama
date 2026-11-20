@@ -51,7 +51,7 @@ test('there is no Filter button; a press in the field opens the facets, a facet 
 
   await field(page).click()
   await expanded(page, 'true')
-  for (const group of ['Conditions', 'Filter by'])
+  for (const group of ['Filters', 'Filter by'])
     await expect(menu(page).getByRole('group', { name: group, exact: true })).toBeVisible()
   await expect(menu(page).getByRole('group')).toHaveCount(2)
   await expect(field(page)).toBeFocused()
@@ -313,7 +313,7 @@ test('a press on a group’s name stays in the menu, and the caret stays in the 
 }) => {
   await board(page)
   await field(page).click()
-  await menu(page).getByText('Conditions', { exact: true }).click()
+  await menu(page).getByText('Filters', { exact: true }).click()
   await expect(menu(page)).toBeVisible()
   await expect(field(page)).toBeFocused()
 })

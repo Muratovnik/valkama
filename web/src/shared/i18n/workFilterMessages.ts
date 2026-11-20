@@ -41,7 +41,8 @@ export const workFilterMessages = {
           join: 'or',
         },
       },
-      conditions: 'Conditions',
+      // The filters ready-made, over «Filter by»: a condition is a point of a card's acceptance.
+      conditions: 'Filters',
       // «Closed in a period»: its periods in the menu, its chip, and its days' fields.
       closedIn: {
         name: 'Closed in a period',
@@ -113,7 +114,7 @@ export const workFilterMessages = {
           join: 'или',
         },
       },
-      conditions: 'Условия',
+      conditions: 'Фильтры',
       closedIn: {
         name: 'Закрыто за период',
         today: 'Сегодня',
