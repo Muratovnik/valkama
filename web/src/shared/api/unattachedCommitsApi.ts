@@ -55,13 +55,20 @@ export async function readUnattachedCommits(
   return parseContract(listSchema, payload, 'planning.commits.unattached', invalid)
 }
 
-/** The card at its revision, the commit as its record lists it now, and whether anything changed. */
+/**
+ * The card at its revision, the commit as its record lists it now, and whether anything changed.
+ * A card nobody wrote to since it was filed stands at revision 0, as every revision a card reads.
+ */
 const attachedSchema = strictObject({
   reference: boundedText(WORK_ITEM_REFERENCE, 20),
-  revision: positiveInt(),
+  revision: positiveInt(true),
   commit: attachedCommitSchema.nullable(),
   changed: z.boolean(),
 })
+
+/** The answer of an attach, as the strict schema reads it. */
+export const validateAttachedCommit = (payload: unknown) =>
+  parseContract(attachedSchema, payload, 'planning.work-item.commit', invalid)
 
 /** Attach a commit to the card `reference`; whether the write changed anything. */
 export async function attachCommit(input: {
@@ -79,5 +86,5 @@ export async function attachCommit(input: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  return parseContract(attachedSchema, payload, 'planning.work-item.commit', invalid).changed
+  return validateAttachedCommit(payload).changed
 }

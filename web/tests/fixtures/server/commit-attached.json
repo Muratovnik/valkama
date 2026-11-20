@@ -1,0 +1,16 @@
+{
+  "reference": "MAIN-35",
+  "revision": 0,
+  "commit": {
+    "repository": "example-project",
+    "display_name": "example-project",
+    "hash": "dddddddddddddddddddddddddddddddddddddddd",
+    "subject": "fix: attached by hand",
+    "committed_at": "2026-01-02T03:04:05Z",
+    "session": "sess-attach",
+    "agent": null,
+    "attached_by": "manual",
+    "label": ""
+  },
+  "changed": true
+}

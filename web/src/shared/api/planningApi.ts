@@ -13,8 +13,12 @@ import { readCancelList } from '@/shared/api/inputRequestAction.ts'
 import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
 import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
-import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
-import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
+import {
+  validateMovedItem,
+  validateReadModel,
+  validateWorkItemRecord,
+} from '@/shared/api/planningModel.ts'
+import type { MovedItem, PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
 import { readPending, readRefusal } from '@/shared/api/planningRefusal.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
@@ -316,8 +320,8 @@ export async function transitionWorkItem(input: {
   expected_revision?: number
   force?: boolean
   reason?: string
-}): Promise<WorkItem> {
-  return validateWorkItemRecord(await write('/api/planning/work-item/transition', { ...input }))
+}): Promise<MovedItem> {
+  return validateMovedItem(await write('/api/planning/work-item/transition', { ...input }))
 }
 
 export async function claimWorkItem(input: {

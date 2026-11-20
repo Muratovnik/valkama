@@ -19,6 +19,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
+import cancelRefused from '../fixtures/server/refusal-cancel-list.json'
 import { workItemFixture } from '../fixtures/workItem.ts'
 import { requestBody, requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -40,7 +41,9 @@ const mountOf = <T>(component: T, props: Record<string, unknown>) =>
 type Answer = (body: Record<string, unknown>, url: URL) => Response
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } })
-const guard = (message: string) => json({ error: { code: 'workflow_guard', message } }, 409)
+/** A guard's refusal as the batch route words it: on the step it refused. */
+const guard = (message: string) =>
+  json({ error: { code: 'workflow_guard', message, step: { group: 'transition', index: 0 } } }, 409)
 
 /** Every request the window makes, answered by its path. */
 function serve(answers: Record<string, Answer>) {
@@ -193,6 +196,26 @@ describe("a goal's cancel whose list could not be read", () => {
     expect(
       wrapper.findAll('[data-reference]').map((row) => row.attributes('data-reference')),
     ).toEqual(['QA-2'])
+  })
+})
+
+describe("a goal's cancel as the real server refuses it", () => {
+  it('lists what closes and what waits on it from the refusal of its batch step', async () => {
+    // The server's own answer (`tests/test_web_contract_fixtures.py`): the batch names its step.
+    serve({
+      '/api/planning/work-item/apply': () => json(cancelRefused, 409),
+    })
+    const wrapper = mountOf(CancelGoalDialog, {
+      item: goal({ reference: 'MAIN-31', container_state: 'in_progress' }),
+      state: 'cancelled',
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('What closes could not be read.')
+    expect(
+      wrapper.findAll('[data-reference]').map((row) => row.attributes('data-reference')),
+    ).toEqual(['MAIN-32', 'MAIN-33'])
+    expect(wrapper.text()).toContain('waits on MAIN-32')
+    expect(wrapper.get('button[type="submit"]').text()).toBe('Cancel 1 card')
   })
 })
 

@@ -114,6 +114,9 @@ export const descriptionGoal = goalCard('awaiting_confirmation', {
   confirmation: { ...CONFIRMATION, steps: 0 },
 })
 
+/** The step of the batch a card's close or cancel is refused on, as the server names it. */
+const STEP = { group: 'transition', index: 0 }
+
 /** The refusal of a goal's close once a task opened under it, as the server words it. */
 export const CHILDREN_OPEN = {
   error: {
@@ -121,6 +124,7 @@ export const CHILDREN_OPEN = {
     message:
       'transition: [children] MAIN-264 has 1 open item(s) under it: MAIN-275; close, cancel or' +
       ' move out what is open under it, and it awaits confirmation once nothing is',
+    step: STEP,
   },
 }
 
@@ -136,11 +140,14 @@ const row = (n: number, title: string, holder: string[], state = 'Dev') => ({
   holder,
 })
 
-/** The refusal a goal's cancel answers with until `cancels` is this list's token. */
+/** The refusal a goal's cancel answers with until `cancels` is this list's token, as worded. */
 export const cancelList = (token: string, cancels: ReturnType<typeof row>[]) => ({
   error: {
     code: 'cancel_list',
-    message: `Cancelling MAIN-264 closes ${cancels.length} open items under it.`,
+    message:
+      `transition: [cancel_list] MAIN-264 has ${cancels.length} open item(s) under it, and` +
+      ' cancelling it cancels them all: read the list, then send the same transition with' +
+      ` cancels set to list_token ${token}`,
     cancels,
     dependents: [
       {
@@ -152,6 +159,7 @@ export const cancelList = (token: string, cancels: ReturnType<typeof row>[]) => 
       },
     ],
     list_token: token,
+    step: STEP,
   },
 })
 /** The list as the window first reads it. */

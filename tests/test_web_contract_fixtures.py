@@ -173,18 +173,23 @@ class _Scenario:
             raise AssertionError(f"{path} answered {response.status}: {answer}")
         return answer
 
-    def refusal(self, path: str) -> dict:
-        """A call the server must refuse, as the browser makes it."""
+    def refusal(self, path: str, payload: dict | None = None) -> dict:
+        """A call the server must refuse, as the browser makes it; a write when `payload`."""
 
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        headers = {
+            "Origin": f"http://127.0.0.1:{self.server.server_port}",
+            "Sec-Fetch-Site": "same-origin",
+        }
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+            headers["X-Valkama-Session"] = self.server.security_context.browser_session_token
         try:
             client.request(
-                "GET",
+                "GET" if payload is None else "POST",
                 path,
-                headers={
-                    "Origin": f"http://127.0.0.1:{self.server.server_port}",
-                    "Sec-Fetch-Site": "same-origin",
-                },
+                body=None if payload is None else json.dumps(payload),
+                headers=headers,
             )
             response = client.getresponse()
             answer = json.loads(response.read())
@@ -1019,6 +1024,67 @@ class _Scenario:
             },
         }
 
+    def written(self) -> dict[str, object]:
+        """Writes of a card as the interface sends them, and what the server answers.
+
+        A goal's cancel through the batch route is refused with the list of what it closes,
+        named by its step as every refused batch step is; a close without a summary is
+        refused by its guard the same way; and a commit attached to a card nobody wrote to
+        since it was filed answers that card at revision 0.
+        """
+
+        conn = store.connect()
+        try:
+
+            def item(title: str, **fields: object) -> str:
+                return str(
+                    service.create_work_item(conn, space=SPACE, title=title, **fields)["reference"]
+                )
+
+            goal = item("Goal to cancel", kind="goal", acceptance="assignment")
+            under = item("Work under the goal to cancel", parent=goal)
+            waiting = item("Work outside that waits on it")
+            service.link_work_items(conn, under, waiting, "blocks")
+            unsummarized = item("Work closed without a summary")
+            fresh = item("Card a commit is attached to")
+            closed = item("Work closed on the board")
+            service.set_summary(conn, closed, {"done": "Closed.", "next": "Nothing."})
+            put_off = item("Work put off until the closed one")
+            service.defer_work_item(conn, put_off, until=closed, reason="After it")
+            made = "2026-01-02T03:04:05Z"
+            conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, committed_at, session_id, client,"
+                " reported_at) VALUES (?, ?, 'fix: attached by hand', ?, 'sess-attach', 'claude',"
+                " ?)",
+                (PROJECT, "d" * 40, made, made),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        apply = "/api/planning/work-item/apply"
+        return {
+            "refusal-cancel-list": self.refusal(
+                apply,
+                {
+                    "author": "user",
+                    "id": goal,
+                    "summary": {"done": "Cancelled.", "next": "Nothing: it was cancelled."},
+                    "transition": {"state": "cancelled", "reason": "The plan changed"},
+                },
+            ),
+            "refusal-apply-step": self.refusal(
+                apply, {"author": "user", "id": unsummarized, "transition": {"state": "done"}}
+            ),
+            "commit-attached": self.http(
+                "/api/planning/work-item/commit",
+                {"reference": fresh, "repository": PROJECT, "hash": "d" * 40},
+            ),
+            "transition-returned": self.http(
+                "/api/planning/work-item/transition",
+                {"author": "user", "id": closed, "state": "done"},
+            ),
+        }
+
     def answers(self) -> dict[str, object]:
         """Build the discussion and the questions, then read them as each reader does."""
 
@@ -1187,6 +1253,8 @@ class _Scenario:
             "closed-in-period": closed_in_period(
                 self.http, self.space_ref["data_scope_id"], _settle
             ),
+            # After them all too: the cards it files take numbers no answer above holds.
+            **self.written(),
         }
 
 
