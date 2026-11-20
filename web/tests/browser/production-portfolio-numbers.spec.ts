@@ -17,10 +17,10 @@ import { dataScopeId, globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SIZES = [
-  { lang: 'en', width: 1280, height: 800 },
-  { lang: 'en', width: 390, height: 844 },
-  { lang: 'ru', width: 1280, height: 800 },
-  { lang: 'ru', width: 390, height: 844 },
+  { lang: 'en', width: 1280, height: 800, rows: 1 },
+  { lang: 'en', width: 390, height: 844, rows: 3 },
+  { lang: 'ru', width: 1280, height: 800, rows: 1 },
+  { lang: 'ru', width: 390, height: 844, rows: 3 },
 ] as const
 
 const WORDS = {
@@ -122,12 +122,36 @@ for (const size of SIZES) {
       })
       expect(sideways.page, JSON.stringify(sideways)).toBeLessThanOrEqual(0)
       expect(sideways.frame, JSON.stringify(sideways)).toBeLessThanOrEqual(0)
+
+      // Each card's «Open space» stands on its foot, so the cards of one row, whose words
+      // differ in length, hold theirs on one line: after their own words they stood 78px apart.
+      const feet = await cards.evaluateAll((all) =>
+        all.map((card) => {
+          const box = card.getBoundingClientRect()
+          const button = card.querySelector('.open-space')?.getBoundingClientRect()
+          return {
+            row: Math.round(box.top),
+            top: button?.top ?? Number.NaN,
+            below: button ? box.bottom - button.bottom : Number.NaN,
+          }
+        }),
+      )
+      const rows = new Map<number, typeof feet>()
+      for (const foot of feet) rows.set(foot.row, [...(rows.get(foot.row) ?? []), foot])
+      for (const row of rows.values()) {
+        const tops = row.map((foot) => foot.top)
+        expect(Math.max(...tops) - Math.min(...tops), JSON.stringify(feet)).toBeLessThanOrEqual(0.5)
+      }
+      const below = feet.map((foot) => foot.below)
+      expect(Math.max(...below) - Math.min(...below), JSON.stringify(feet)).toBeLessThanOrEqual(0.5)
+      // Three cards stand in one row at 1280px, one to a row on a phone.
+      expect(rows.size, JSON.stringify(feet)).toBe(size.rows)
       await page.screenshot({
         path: info.outputPath(`portfolio-${tag}.png`),
         animations: 'disabled',
         fullPage: true,
       })
-      await record(info, `portfolio ${tag}`, { parts, sideways })
+      await record(info, `portfolio ${tag}`, { parts, sideways, feet })
     })
   })
 }

@@ -274,6 +274,20 @@ for (const { width, locale } of [
       'Deliver the exact project vertical slice.',
     )
     await expect(one.locator('.request-pair').getByRole('button')).toHaveText(words.answers)
+    // A list with no marks starts where its label does, on the column's edge: indented, the
+    // conditions stood 20px in from their label, a third edge beside the findings' boxes.
+    const edges = await subject.evaluate((element) =>
+      [...element.querySelectorAll('[data-kind-part]')].flatMap((part) => {
+        const label = part.querySelector('.kind-label')?.getBoundingClientRect().left
+        return [...part.querySelectorAll('li')].map((item) => {
+          const words = document.createRange()
+          words.selectNodeContents(item)
+          return Math.round((words.getBoundingClientRect().left - (label ?? Number.NaN)) * 10) / 10
+        })
+      }),
+    )
+    expect(edges).toHaveLength(3)
+    for (const edge of edges) expect(Math.abs(edge), JSON.stringify(edges)).toBeLessThanOrEqual(0.5)
     // Nothing of it runs past the record's edge.
     const overflow = await subject.evaluate((element) => element.scrollWidth - element.clientWidth)
     expect(overflow).toBeLessThanOrEqual(0)

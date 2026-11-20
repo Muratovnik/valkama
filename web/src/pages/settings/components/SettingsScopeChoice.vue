@@ -48,6 +48,7 @@ function choose(next: SettingsScope) {
   <SettingsRow
     :label="t('settings.scoped.scope.label')"
     :stack="allSpaces"
+    wide
   >
     <SegmentedControl
       class="settings-scope-segments"
