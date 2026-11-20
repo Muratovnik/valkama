@@ -20,6 +20,8 @@ the pull request.
 git clone <your fork>
 cd valkama
 pip install -r requirements-dev.txt     # the gate toolchain; the server needs none of it
+python -m venv .venv-semgrep            # semgrep's own environment, see below
+.venv-semgrep/Scripts/python -m pip install -r requirements-semgrep.txt
 python valkama.py serve                 # http://127.0.0.1:8642/
 ```
 
@@ -62,7 +64,12 @@ npm test
 ```
 
 The toolchain is pinned in `requirements-dev.txt` and configured in
-`pyproject.toml`. Do not loosen a pin to make a gate pass.
+`pyproject.toml`. Do not loosen a pin to make a gate pass. semgrep is pinned in
+`requirements-semgrep.txt` instead and lives in `.venv-semgrep`, an environment of
+its own: its releases pin `pywin32==311`, which has no wheel for Python 3.15, the
+Python the project's `.venv` is built on. Build that environment on the newest
+Python it installs on (3.14 today) and put its `Scripts` (or `bin`) directory
+first on `PATH` when you run `semgrep`.
 
 The history audit reads every commit and needs a clean tracked tree, so it runs
 on the clean head before publication, not between commits. Before each commit,
@@ -221,8 +228,10 @@ with the project's virtual environment, not whatever `python` comes first on
 `PATH`:
 
 ```powershell
-uv venv .venv --python 3.11              # or: python -m venv .venv
+uv venv .venv --python 3.15              # or: python -m venv .venv
 uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
+uv venv .venv-semgrep --python 3.14
+uv pip install --python .venv-semgrep/Scripts/python.exe -r requirements-semgrep.txt
 .venv/Scripts/python .github/relkit.pyz release prepare <version>
 ```
 
@@ -231,7 +240,9 @@ Python tool from that interpreter's environment — as `python -m <tool>`, or as
 the console script in its own `Scripts` (or `bin`) directory, which it also puts
 first on `PATH` for each stage — and never a same-named tool found elsewhere on
 `PATH`. Before the first stage it verifies that every package
-`requirements-dev.txt` pins is installed there at that version, and refuses at
+`requirements-dev.txt` pins is installed there at that version, and that the
+semgrep `requirements-semgrep.txt` pins is installed in `.venv-semgrep`, which is
+where it runs semgrep from, with that environment's scripts first on `PATH`; it refuses at
 once, naming the interpreter, each missing or mismatched package and what to
 run, when one is not. It then runs `npm ci` for `web` and `desktop`, so it verifies
 what the lockfiles pin and needs the network or an npm cache. It installs into a

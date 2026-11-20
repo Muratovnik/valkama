@@ -165,8 +165,10 @@ the owner their previous binary. A browser an agent drives against a real listen
 opens a card through its route or `/open/<number>?in=browser`, because `/open/<number>`
 alone starts the desktop app on the person's screen.
 
-Every tool above is a development dependency pinned in `requirements-dev.txt`,
-configured in `pyproject.toml`. The server itself imports nothing outside the
+Every tool above is a development dependency pinned in `requirements-dev.txt`
+(semgrep in `requirements-semgrep.txt`, for an environment of its own that
+`.agents/rules/quality-gates.md` describes), configured in `pyproject.toml`.
+The server itself imports nothing outside the
 standard library and must keep it that way, because the desktop app launches the
 system Python with no virtualenv.
 

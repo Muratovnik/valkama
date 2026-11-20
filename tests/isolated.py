@@ -386,7 +386,9 @@ def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
             return subprocess.run(
                 run.argv,
                 cwd=run.cwd,
-                env=dict(environment),
+                # A tool from an environment of its own needs that environment's
+                # scripts first, as `release.program_environment` says.
+                env=release.program_environment(run.argv, environment),
                 stdin=subprocess.DEVNULL,
                 stdout=output,
                 stderr=subprocess.STDOUT,
@@ -508,7 +510,9 @@ def gates(steps: Sequence[Step], out: Path) -> int:
     interpreter = release.running_interpreter()
     requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
     try:
-        tools = release.require_toolchain(interpreter, release.pins(requirements))
+        tools = release.require_toolchain(
+            interpreter, release.pins(requirements), release.own_environments()
+        )
     except release.ToolchainError as error:
         _say(str(error))
         _say("no gate step ran")
