@@ -29,8 +29,12 @@
    line tall: a filtering glyph's 28px reaches into the row's padding. A filled
    slot stands on the row's baseline, which puts its glyph on the middle of the
    reference's letters; an empty one on that middle, or it would heighten the row.
-   Its width is the list's `--list-slot-size`, which the head reads as well. */
+   Its width is the list's `--list-slot-size`, which the head reads as well. The
+   box is declared here, not left to the glyph's: a group's slot is a bare span,
+   which as an inline box had no width and stood its name 28px short of where its
+   cards' arrows start. */
 .list-slot {
+  display: inline-flex;
   place-content: center center;
   vertical-align: baseline;
   inline-size: var(--list-slot-size);
@@ -55,11 +59,18 @@
 }
 
 /* A group's row (`listGroupCell`): its name is a heading of the cards under it, in
-   a row title's type, and its counts are quieter, as a lane's heading has them. */
+   a row title's type, and its counts are quieter, as a lane's heading has them. The
+   row wraps between its words and keeps each count whole: held to one line, a
+   project's long name stood the table 574px wide in a list of 302 on a phone. A
+   wrapped line starts under the name, past the slot and the arrow of a group's row,
+   which always stands at the tree's first level, as a hanging indent. */
 .list-group-cell {
+  --list-group-lead: calc(var(--list-slot-size) + var(--space-1) + var(--space-4) + var(--space-2));
+
   vertical-align: baseline;
   padding: var(--space-2) var(--space-3);
-  white-space: nowrap;
+  padding-inline-start: calc(var(--space-3) + var(--list-group-lead));
+  text-indent: calc(-1 * var(--list-group-lead));
 }
 
 .list-group-name {
@@ -68,9 +79,14 @@
   font: var(--font-row-title);
 }
 
+/* A box of its own: the row's spans have no space between them, and as plain
+   text a count was glued to the name's last word and took it to the next line. */
 .list-group-counts {
+  display: inline-block;
   margin-inline-end: var(--space-2);
   color: var(--color-text-tertiary);
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
+  text-indent: 0;
+  white-space: nowrap;
 }

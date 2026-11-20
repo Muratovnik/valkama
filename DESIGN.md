@@ -1878,6 +1878,15 @@ names it. It folds with «Goal and stage» and follows the path wherever that le
 saying nothing for work naming none. Each of the two is at most 10rem wide, and side by
 side at that measure they left the title of a 1100px list 21 characters, so where the list
 draws both they stand from 1240px, where it keeps 38.
+These widths, 1100 and 1240 for every column, 900 for all but those two and 560 for
+more than the reference and the title, are met by the room beside a flat list's first
+column. A tree's first column is wider by its lead, the arrow and the indent of its
+deepest row, 24px a level up to the fifth, so a tree meets them with that lead taken
+out of its width: measured on the width alone, a list by goal three levels deep at
+1280px stood every column but two, left its title 131px with words broken inside and ran
+24px past its frame. A group's row wraps between words and keeps each count whole, its
+wrapped lines starting under its name: held to one line, a project's long name stood the
+table 574px wide in a list of 302 on a phone.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
 list's sort order. Grouped «By project», it is a tree of one level: a row per group, as

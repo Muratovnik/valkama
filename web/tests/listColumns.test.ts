@@ -70,6 +70,19 @@ describe('the list columns as the list narrows', () => {
     expect(fitFor(0, true)).toBe('full')
   })
 
+  it("meet a tree's lead out of the width before choosing", () => {
+    // A list of 956px at 1280 whose tree stands four levels deep leads by 96px:
+    // the room beside it is 860, where a flat list of that width would be wide.
+    expect(fitFor(956, true)).toBe('wide')
+    expect(fitFor(956, true, 96)).toBe('medium')
+    expect(fitFor(1196, false, 96)).toBe('full')
+    expect(fitFor(1195, false, 96)).toBe('wide')
+    expect(fitFor(656, false, 96)).toBe('medium')
+    expect(fitFor(655, false, 96)).toBe('narrow')
+    // Unmeasured, the list stays wide whatever its lead.
+    expect(fitFor(0, true, 96)).toBe('full')
+  })
+
   it('leave the reference and the title on a phone', () => {
     expect(standing(559)).toEqual(['reference', 'title'])
     expect(standing(292)).toEqual(['reference', 'title'])

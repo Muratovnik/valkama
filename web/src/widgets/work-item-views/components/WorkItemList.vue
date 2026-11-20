@@ -125,7 +125,10 @@ const drawsProject = Boolean(projects())
 const columns = drawnColumns({ goal: drawsGoal, project: drawsProject })
 
 const root = ref<HTMLElement | null>(null)
-const { fit, measured, narrow, width } = useListFit(root, drawsGoal && drawsProject)
+// The tree's first column is wider by its lead, which the other columns do not have.
+const { fit, measured, narrow, width } = useListFit(root, drawsGoal && drawsProject, () =>
+  tree.lead(),
+)
 
 const tree = useListTreeRows({
   items: () => props.items,

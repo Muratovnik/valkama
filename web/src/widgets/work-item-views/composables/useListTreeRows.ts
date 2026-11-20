@@ -47,6 +47,10 @@ interface ListTreeRows {
   tree: () => ListTreeScope | null
 }
 
+/** The indent's levels and step, on a list and on a narrow one. */
+const WIDE = { levels: 5, step: 24 }
+const NARROW = { levels: 3, step: 16 }
+
 export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTreeRows) {
   const { t } = useI18n()
   const matched = computed(() =>
@@ -69,8 +73,8 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
       })
     : null
 
-  const levels = computed(() => (narrow() ? 3 : 5))
-  const step = computed(() => (narrow() ? 16 : 24))
+  const levels = computed(() => (narrow() ? NARROW.levels : WIDE.levels))
+  const step = computed(() => (narrow() ? NARROW.step : WIDE.step))
 
   const treeOf = (item: WorkItemBrief) => tree?.rowOf(item)
   const ids = useId()
@@ -88,6 +92,12 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
       : { kind: 'opener' }) satisfies ListFocus as ListFocus,
     indentOf: (item: WorkItemBrief) =>
       tree ? Math.min(tree.depthOf(item), levels.value - 1) * step.value : 0,
+    /**
+     * What the first column takes before its widest reference beyond a flat list's: the
+     * arrow's step and the deepest row's indent, as a list too wide to be narrow draws
+     * them, which is the list the room decides about (`fitFor`).
+     */
+    lead: () => (tree ? (Math.min(tree.deepest(), WIDE.levels - 1) + 1) * WIDE.step : 0),
     /** What a group's row counts, as a lane's heading does. */
     groupCounts(item: WorkItemBrief): string {
       const { open, closed } = groups.value?.counts.get(item.work_item_id) ?? { open: 0, closed: 0 }
