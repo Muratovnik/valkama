@@ -152,7 +152,7 @@ describe('a row', () => {
         agent({ steps: [{ id: '00000000-0000-4000-8000-000000000001', text: 'Write the hook' }] }),
       ]),
     )
-    expect(text).toContain('Holds step: Write the hook')
+    expect(text).toContain('Holds condition: Write the hook')
   })
 
   it('a label is text and never markup', () => {

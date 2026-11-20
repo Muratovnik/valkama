@@ -167,7 +167,7 @@ for (const input of INPUTS) {
     expect(await edge()).toEqual(shown)
   })
 
-  test(`the checklist's head takes focus from All steps, ringed only after a key: ${input}`, async ({
+  test(`the checklist's head takes focus from All conditions, ringed only after a key: ${input}`, async ({
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
@@ -186,7 +186,7 @@ for (const input of INPUTS) {
     )
     const drawer = page.locator('.drawer')
     await expect(drawer).toHaveCSS('transform', 'none')
-    await act(drawer.getByRole('button', { name: 'All steps', exact: true }), input)
+    await act(drawer.getByRole('button', { name: 'All conditions', exact: true }), input)
     expect(await landing(page, drawer.locator('.checklist-head'), input)).toEqual(RING_AFTER[input])
   })
 

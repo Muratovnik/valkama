@@ -34,7 +34,7 @@ export const boardMessages = {
       moved: '{reference} moved: {position} of {total} in {state}',
     },
     withheld: {
-      held: 'The queue does not give it: it or a step of it is held',
+      held: 'The queue does not give it: it or a condition of it is held',
       waits: 'The queue does not give it: unfinished work blocks it',
       question: 'The queue does not give it: it waits for the owner’s answer',
       no_start: 'The queue does not give it: its workflow leads nowhere into work from here',

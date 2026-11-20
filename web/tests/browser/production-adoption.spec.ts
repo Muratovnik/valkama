@@ -237,7 +237,7 @@ for (const status of [409, 503]) {
   })
 }
 
-test('Discuss step reveals the composer and retains a frozen quote after rename and deletion', async ({
+test('Discuss condition reveals the composer and retains a frozen quote after rename and deletion', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 })
@@ -246,7 +246,7 @@ test('Discuss step reveals the composer and retains a frozen quote after rename 
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   const discuss = drawer.getByRole('button', {
-    name: 'Discuss step “Frontend contract”',
+    name: 'Discuss condition “Frontend contract”',
     exact: true,
   })
   // An icon-only ghost has no label to read as a control, so it stays bare at rest.
@@ -269,11 +269,15 @@ test('Discuss step reveals the composer and retains a frozen quote after rename 
   })
   backend.item.checklist[0].text = 'Renamed criterion'
   await page.reload()
-  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Step text has changed')
+  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText(
+    'Condition text has changed',
+  )
   await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Frontend contract')
   backend.item.checklist = []
   await page.reload()
-  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Step has been removed')
+  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText(
+    'Condition has been removed',
+  )
   await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Frontend contract')
   await expectNoSilentClipping(page, 'Frozen checklist discussion at 390px')
 })
