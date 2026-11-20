@@ -55,6 +55,18 @@ class ReadableTests(RootsCase):
             # A sibling whose name starts with the root's is not under it.
             self.assertFalse(transcript_roots.readable(self.own + "-copy" + os.sep + "x.jsonl"))
             self.assertFalse(transcript_roots.readable(""))
+        # A configuration file that cannot be read leaves the variable in force and
+        # fails no reader: a hook copies transcripts.
+        with (
+            mock.patch.dict(os.environ, {VARIABLE: self.own}),
+            mock.patch.object(
+                transcript_roots.configuration,
+                "read_file",
+                side_effect=transcript_roots.configuration.ConfigurationError("unreadable"),
+            ),
+        ):
+            self.assertTrue(transcript_roots.readable(os.path.join(self.own, "x.jsonl")))
+            self.assertFalse(transcript_roots.readable(os.path.join(self.foreign, "x.jsonl")))
         if os.name == "nt":
             with self.bounded():
                 prefixed = "\\\\?\\" + os.path.join(self.own, "x.jsonl")

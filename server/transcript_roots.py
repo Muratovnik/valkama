@@ -26,7 +26,16 @@ SETTING = "transcript_roots"
 def read_roots() -> tuple[str, ...]:
     """The directories transcripts may be read from, as `readable` compares them; none bounds nothing."""
 
-    raw = configuration.configured(SETTING) or ""
+    try:
+        raw = configuration.configured(SETTING) or ""
+    except configuration.ConfigurationError:
+        # A hook copies an ending session's transcript, and a configuration file it
+        # cannot read must not fail that hook: the variable still bounds, and the
+        # file's fault is the doctor's to report, as before this setting.
+        variable = next(
+            item["environment"] for item in configuration.SETTINGS if item["key"] == SETTING
+        )
+        raw = os.environ.get(variable, "")
     return tuple(
         os.path.normcase(os.path.abspath(os.path.expanduser(part.strip())))
         for part in raw.split(os.pathsep)
