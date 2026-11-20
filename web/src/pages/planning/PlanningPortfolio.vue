@@ -145,18 +145,17 @@ function projectsLine(space: PortfolioSpace): string {
   font: var(--font-detail);
 }
 
-/* Four numbers in a row, two rows of two where the card has no room for four: a number is never
-   narrower than its longest word, which is never broken. */
+/* Four numbers in two rows of two, as a card is never wide enough for four in a row of whole
+   words: a column is never narrower than its longest word, which is never broken. */
 .space-numbers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(min-content, 1fr));
+  gap: var(--space-2) var(--space-3);
   margin: 0;
 }
 
 .space-number {
   display: grid;
-  flex: 1 1 5rem;
   gap: var(--space-half);
   align-content: start;
 }
