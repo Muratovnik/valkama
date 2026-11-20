@@ -2,9 +2,11 @@
 /**
  * The questions waiting for an answer, every space's, or those on what one space's board holds
  * when the window was opened from a place narrowed to it (`scope`), narrowed to its project too
- * when the place was. The narrowing stands as a chip over the list naming the space and the
- * project, and the chip is the way back to every space's questions (`all`). The rail's count is
- * always every space's: a second reader keeps it while the list is narrowed.
+ * when the place was, and to the tasks of the Volumes page's kind and label when the page has
+ * them. The narrowing stands as a chip over the list naming the space, the project by its name
+ * as the context bar names it, the kind and the label, and the subtitle says it; the chip is the
+ * way back to every space's questions (`all`). The rail's count is always every space's: a
+ * second reader keeps it while the list is narrowed.
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -13,6 +15,7 @@ import RequestNavigator from '@/features/input-requests/components/RequestNaviga
 import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
+import { questionScopeWords } from '@/features/input-requests/utils/questionScopeWords.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 import { requestListView } from '@/features/input-requests/utils/requestListView.ts'
 import { hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
@@ -23,7 +26,7 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { DIALOG_ROOM_BESIDE_DOCUMENT } from '@/shared/lib/shellLayout.ts'
-import { spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
+import { useSpaceNames } from '@/shared/lib/spaceNames.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
 import ScopeChip from '@/shared/ui/ScopeChip.vue'
@@ -31,7 +34,7 @@ import ScopeChip from '@/shared/ui/ScopeChip.vue'
 const props = defineProps<{
   open: boolean
   pane?: OverlayPaneNames | null
-  /** The space, and its project, whose board's questions the list shows; none shows every space's. */
+  /** The space and its project, or every space, and the tasks whose questions the list shows. */
   scope?: QuestionScope | null
 }>()
 const emit = defineEmits<{
@@ -81,18 +84,7 @@ const waiting = computed(
     ),
 )
 const spaces = useSpaceNames()
-const scopeName = computed(() => {
-  if (!props.scope) return ''
-  const space = spaceName(spaces.value, props.scope.space)
-  return props.scope.project ? `${space} · ${props.scope.project}` : space
-})
-const subtitle = computed(() => {
-  if (!props.scope) return t('requests.scope')
-  const space = spaceName(spaces.value, props.scope.space)
-  return props.scope.project
-    ? t('requests.scopeProject', { space, project: props.scope.project })
-    : t('requests.scopeSpace', { space })
-})
+const words = computed(() => questionScopeWords(props.scope ?? null, spaces.value, t))
 function refresh() {
   void shown.value.refresh()
 }
@@ -121,7 +113,7 @@ watch(
     placement="start"
     :open="open"
     :title="t('requests.title')"
-    :subtitle="subtitle"
+    :subtitle="words.subtitle"
     :close-label="t('requests.close')"
     :pane="pane"
     :pane-room="DIALOG_ROOM_BESIDE_DOCUMENT"
@@ -134,8 +126,8 @@ watch(
       v-if="scope"
       class="requests-scope"
       data-part="scope"
-      :label="scopeName"
-      :exit-label="t('requests.scopeAll', { space: scopeName })"
+      :label="words.chip"
+      :exit-label="words.exit"
       @exit="emit('all')"
     />
     <RequestList

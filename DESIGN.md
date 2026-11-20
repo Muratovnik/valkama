@@ -3271,14 +3271,19 @@ page's period, which keeps exactly the cards they count and names the period on 
 top they stay figures, as every category does there. «Waiting for me» counts
 questions, two questions on one card being two, so it opens the questions window, in a space
 and at the top alike, rather than the board, where two questions on one card would be one row.
-Opened from a space, the window lists the questions the number counts while no kind or label
-is chosen: those on the cards the space's board holds, its own and other spaces' cards that
-name one of its projects, read narrowed so by the server; opened from a project, those of them
-on the cards that name the project. The page's kind and label do not narrow the window, so
-under them it lists more than the number, which then counts the questions on the matching tasks
-alone. Its subtitle says the scope, a chip over the list names the space, and the project after
-it («Main · alpha»), and removing the chip lists every space's questions again. At the top it
-lists every space's. The rail's count stays every space's while the list is narrowed, and the
+The window lists exactly the questions the number counts, read narrowed so by the server.
+Opened from a space, those on the cards the space's board holds, its own and other spaces'
+cards that name one of its projects; opened from a project, those of them on the cards that
+name the project. Under the page's kind and label the window takes them too and keeps the
+questions on the matching tasks alone, by the one rule the number counts by, so a question on
+a goal or a stage is never among them; at the top, where it otherwise lists every space's,
+the kind and label narrow every space's questions the same way. Its subtitle says the scope
+and the filter («…, only on tasks of kind Bug with the label ui»), and a chip over the list
+names the space, the project after it by the name the context bar gives it, and then the kind
+and the label («Main · Alpha app · Bug · ui»; at the top «Bug · ui»). A project the bar does
+not offer in the space is named by its id, as the bar names it. Removing the chip lists every
+space's questions again, with no filter. At the top with no kind or label it lists every
+space's, with no chip. The rail's count stays every space's while the list is narrowed, and the
 narrowing ends when the window closes, so the rail opens it on every space's.
 A number that opens nothing is a figure, not a control, and its hint says why: every space has
 no board of its own, the portfolio standing there, so at the top no category opens. «Commits

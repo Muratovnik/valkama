@@ -4,8 +4,8 @@
  * first question's with their age; an open category's number opens the board of the scope
  * narrowed to it with the page's kind and label, Done and Cancelled the Work list with the page's
  * kind, label and «Closed in a period» for its period, «Waiting for me» the questions window in
- * either scope, and a number that opens nothing — every category in every space — is a figure
- * whose hint says why.
+ * either scope with the page's kind and label, so it lists what the number counts, and a number
+ * that opens nothing — every category in every space — is a figure whose hint says why.
  */
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -118,12 +118,44 @@ describe('the Volumes page’s numbers', () => {
       page.unmount()
     }
     const main = { data_scope_id: VOLUMES_STORE, space_key: 'MAIN' }
+    const none = { kinds: [], labels: [] }
     expect(shell.questions).toEqual([
-      { space: main, project: null },
-      { space: main, project: 'alpha' },
+      { space: main, project: null, ...none },
+      { space: main, project: 'alpha', ...none },
       null,
     ])
     expect(went).toEqual([])
+  })
+
+  it('opens the questions window with the page’s kind and label, in a space and at the top', async () => {
+    const views: Record<string, string>[] = [
+      { kind: 'bug' },
+      { label: 'ui' },
+      { kind: 'bug', label: 'ui' },
+    ]
+    for (const scope of [PROJECT, GLOBAL])
+      for (const state of views) {
+        const page = mountPage(
+          volumesDouble(() =>
+            volumesAnswer({ waiting: 1, space: scope.kind === 'space' ? 'MAIN' : null }),
+          ),
+          scope,
+          { state },
+        )
+        await flushPromises()
+        await number(page, 'waiting').trigger('click')
+        page.unmount()
+      }
+    const main = { data_scope_id: VOLUMES_STORE, space_key: 'MAIN' }
+    const filters = [
+      { kinds: ['bug'], labels: [] },
+      { kinds: [], labels: ['ui'] },
+      { kinds: ['bug'], labels: ['ui'] },
+    ]
+    expect(shell.questions).toEqual([
+      ...filters.map((filter) => ({ space: main, project: 'alpha', ...filter })),
+      ...filters.map((filter) => ({ space: null, project: null, ...filter })),
+    ])
   })
 
   it('opens the Work list from Done and Cancelled, with «Closed in a period» for the page’s preset', async () => {

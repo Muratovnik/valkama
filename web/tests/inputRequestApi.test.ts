@@ -57,8 +57,9 @@ describe('input request wire contract', () => {
   it('reads a scope as its board holds it, with the project it is narrowed to', async () => {
     const space = requestEntry().target.space_ref
     const fetchMock = serve(requestList())
-    await fetchInputRequests({ scope: { space, project: 'alpha' } })
-    await fetchInputRequests({ scope: { space, project: null } })
+    const none = { kinds: [], labels: [] }
+    await fetchInputRequests({ scope: { space, project: 'alpha', ...none } })
+    await fetchInputRequests({ scope: { space, project: null, ...none } })
     const queries = fetchMock.mock.calls
       .map(([input]) => new URL(requestUrl(input), 'https://test.example'))
       .filter((url) => url.pathname === '/api/modules/planning/requests')
@@ -80,6 +81,40 @@ describe('input request wire contract', () => {
         ...space_fields,
         other_spaces: 'true',
       },
+    ])
+  })
+
+  it('sends the Volumes filter of tasks, of a space or of every space, each value once', async () => {
+    const space = requestEntry().target.space_ref
+    const fetchMock = serve(requestList())
+    const filter = { kinds: ['bug', 'task'], labels: ['ui'] }
+    await fetchInputRequests({ scope: { space, project: 'alpha', ...filter } })
+    await fetchInputRequests({ scope: { space: null, project: null, ...filter } })
+    const queries = fetchMock.mock.calls
+      .map(([input]) => new URL(requestUrl(input), 'https://test.example'))
+      .filter((url) => url.pathname === '/api/modules/planning/requests')
+      .map((url) => [...url.searchParams])
+    expect(queries).toEqual([
+      [
+        ['scope_kind', 'space'],
+        ['status', 'pending'],
+        ['limit', '200'],
+        ['data_scope_id', space.data_scope_id],
+        ['space_key', space.space_key],
+        ['other_spaces', 'true'],
+        ['project_id', 'alpha'],
+        ['task_kind', 'bug'],
+        ['task_kind', 'task'],
+        ['task_label', 'ui'],
+      ],
+      [
+        ['scope_kind', 'global'],
+        ['status', 'pending'],
+        ['limit', '200'],
+        ['task_kind', 'bug'],
+        ['task_kind', 'task'],
+        ['task_label', 'ui'],
+      ],
     ])
   })
 

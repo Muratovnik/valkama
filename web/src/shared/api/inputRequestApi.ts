@@ -52,13 +52,19 @@ async function request(url: string, init?: RequestInit): Promise<unknown> {
 
 /**
  * What the questions window is narrowed to: a space read as its board holds it — its cards and
- * other spaces' cards that name one of its projects — and the one project it is narrowed to, if
- * any. It holds what the Volumes page's «Waiting for me» counts for the same scope.
+ * other spaces' cards that name one of its projects — or every space, the one project the space
+ * is narrowed to, if any, and the Volumes page's filter of tasks. It holds what the page's
+ * «Waiting for me» counts for the same scope and filter.
  */
 export interface QuestionScope {
+  /** Kinds of task whose questions are kept, by the Volumes filter's rule; empty for any. */
+  kinds: readonly string[]
+  /** Labels a task carries, every one of them, for its questions to be kept; empty for any. */
+  labels: readonly string[]
   /** A project's id, which keeps the cards that name it; null for the whole space. */
   project: string | null
-  space: PlanningSpaceRef
+  /** The space whose board's questions are kept; null for every space's. */
+  space: PlanningSpaceRef | null
 }
 
 /** The most questions one page of the server's list holds. */
@@ -77,7 +83,10 @@ const entryIdentity = (entry: InputRequestEntry) =>
  */
 export async function fetchInputRequests(
   options: {
-    /** A space as its board holds it, and its project: `other_spaces` and `project_id`. */
+    /**
+     * A space as its board holds it, and its project: `other_spaces` and `project_id`; the
+     * filter of tasks, of a space or of every space: `task_kind` and `task_label`.
+     */
     scope?: QuestionScope
     signal?: AbortSignal
     status?: InputRequestEntry['request']['status'] | 'all'
@@ -85,22 +94,26 @@ export async function fetchInputRequests(
   } = {},
 ): Promise<InputRequestList> {
   const { target, signal } = options
-  const scope = options.scope
-  const space = scope ? validatePlanningSpaceRef(scope.space) : undefined
+  const scope = target ? undefined : options.scope
+  const space = scope?.space ? validatePlanningSpaceRef(scope.space) : undefined
   const status = options.status ?? 'pending'
-  const query = {
-    scope_kind: target || space ? 'space' : 'global',
-    ...(status === 'all' ? {} : { status }),
-    limit: String(PAGE),
-    ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
-    ...(space && !target ? { ...space, other_spaces: 'true' } : {}),
-    ...(scope?.project && !target ? { project_id: scope.project } : {}),
-  }
+  const query = [
+    ...Object.entries({
+      scope_kind: target || space ? 'space' : 'global',
+      ...(status === 'all' ? {} : { status }),
+      limit: String(PAGE),
+      ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
+      ...(space ? { ...space, other_spaces: 'true' } : {}),
+      ...(space && scope?.project ? { project_id: scope.project } : {}),
+    }),
+    ...(scope?.kinds ?? []).map((kind) => ['task_kind', kind]),
+    ...(scope?.labels ?? []).map((label) => ['task_label', label]),
+  ]
   const read = async (offset: number) => {
-    const parameters = new URLSearchParams({
+    const parameters = new URLSearchParams([
       ...query,
-      ...(offset ? { offset: String(offset) } : {}),
-    })
+      ...(offset ? [['offset', String(offset)]] : []),
+    ])
     return validateInputRequestList(
       await request(`/api/modules/planning/requests?${parameters}`, { signal }),
     )

@@ -220,8 +220,7 @@ export function useInputRequests(
     () => {
       const selected = source()
       if (selected === null || selected === 'all') return String(selected)
-      if ('space' in selected)
-        return `space:${selected.space.data_scope_id}/${selected.space.space_key}/${selected.project ?? ''}`
+      if ('space' in selected) return `scope:${JSON.stringify(selected)}`
       return `${targetIdentity(selected)}:${selected.writable}`
     },
     () => {

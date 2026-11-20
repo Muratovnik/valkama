@@ -14,8 +14,9 @@
  *
  * On top stand the numbers (`VolumesNumbers`); an open category's opens the board narrowed to it,
  * Done's and Cancelled's the Work list narrowed to what closed so in the page's period,
- * «Waiting for me» the questions window narrowed to the page's space and project (`requests`), and «Commits on no card» shows their list
- * under the numbers (`VolumesCommits`), where an attach reads the page again. Under them the
+ * «Waiting for me» the questions window narrowed to the page's space, project, kind and label
+ * (`requests`), so it lists the questions the number counts, and «Commits on no card» shows their
+ * list under the numbers (`VolumesCommits`), where an attach reads the page again. Under them the
  * goals' tree (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
  * (`VolumesFlow`) and the estimates (`VolumesEstimates`).
  *
@@ -65,7 +66,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** The board or the list a number opens, in the page's scope. */
   go: [route: PlatformRoute]
-  /** «Waiting for me» pressed: the questions window opens on the page's scope, or on every space. */
+  /** «Waiting for me» pressed: the questions window opens on the page's scope and filter, or on every space's. */
   requests: [scope: QuestionScope | null]
   /** The view's new address, in place of the one in hand. */
   state: [state: Record<string, string>]
@@ -109,6 +110,12 @@ function chooseKind(value: string) {
   change({ kind: TASK_KINDS.find((kind) => kind === value) ?? null })
 }
 
+/** The page's filter of tasks, which its read and the questions window it opens both take. */
+const tasks = computed(() => ({
+  kinds: view.value.kind ? [view.value.kind] : [],
+  labels: view.value.label ? [view.value.label] : [],
+}))
+
 /** What the line gives up while it has no room for all it holds. */
 const ORDER = ['words', 'gaps', 'span'] as const
 
@@ -119,8 +126,7 @@ const read = useVolumesRead({
     if (!days) return null
     return {
       ...days,
-      kinds: view.value.kind ? [view.value.kind] : [],
-      labels: view.value.label ? [view.value.label] : [],
+      ...tasks.value,
       project: project.value,
       space: space.value,
     }
@@ -170,7 +176,12 @@ function open(target: VolumesTarget) {
       break
     }
     case 'questions': {
-      emit('requests', space.value && { space: space.value, project: project.value })
+      const { kinds, labels } = tasks.value
+      const narrowed = space.value !== null || kinds.length > 0 || labels.length > 0
+      emit(
+        'requests',
+        narrowed ? { space: space.value, project: project.value, kinds, labels } : null,
+      )
       break
     }
     case 'commits': {
