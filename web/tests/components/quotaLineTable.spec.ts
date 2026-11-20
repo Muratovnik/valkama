@@ -201,7 +201,7 @@ describe('the two windows of one account on one time axis', () => {
         ).toBe(true)
       // Past its last reset nothing was read: the line stops, and its axis says so at its end.
       expect(model.now).toBeNull()
-      expect(axisOf(model.line).at(-1)).toMatch(/^no new readings since /u)
+      expect(axisOf(model.line).at(-1)).toMatch(/^no readings since /u)
       expect(axisOf(week.line).at(-1)).toMatch(/^resets /u)
     })
 

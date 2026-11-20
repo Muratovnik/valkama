@@ -6,7 +6,7 @@
  * reset past a frame. The current window and a past window shown in its place
  * (`QuotaPastWindow`) name theirs alike. A card's line names what the section decided it draws
  * (`line`, `quotaLine`): the start of the first window it holds; past a reset with nothing read
- * since, «no new readings since» it at the line's end; and where the line is the account's current
+ * since, «no readings since» it at the line's end; and where the line is the account's current
  * window with none of the card's readings, that window's start and reset, its empty plot saying
  * what the card's lead says, «Reset at 14:30, no new readings».
  */

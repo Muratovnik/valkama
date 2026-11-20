@@ -65,31 +65,44 @@
   inset-block: 0;
 }
 
-/* The two ends' words, each under the moment it names: the columns before the first and after the
-   second (`--axis-start`, `--axis-end`) hold what a shared scale runs past the line's windows, and
-   take only the room the words leave, so where the two would not fit beside each other the first
-   moves out toward the empty scale, and where they would not fit at all each wraps, as both did
-   at the plot's ends; they never cover each other or run past the plot. */
+/* The two ends' words, each under the moment it names: the room before the first and after the
+   second (`--axis-start`, `--axis-end`) holds what a shared scale runs past the line's windows.
+   That room grows from nothing up to its share and only into what the words leave, so it gives way
+   before either word does: where the two would not fit beside each other the first moves out
+   toward the empty scale, whole, and only where they would not fit at all does each wrap, as both
+   do at the plot's ends; they never cover each other or run past the plot. A grid whose first
+   column was that room shared the width with the words' columns alike, so a start word under the
+   first window wrapped while the empty part beside it stayed, and its plot stood taller than its
+   neighbour's. */
 .step-axis {
   --axis-start: 0%;
   --axis-end: 0%;
 
-  display: grid;
-  grid-template-columns:
-    minmax(0, var(--axis-start)) auto 1fr auto
-    minmax(0, var(--axis-end));
+  display: flex;
   grid-row: 2;
   grid-column: 2;
   margin-block-start: var(--space-2);
   color: var(--color-text-tertiary);
 
+  /* The room grows ahead of anything else in the axis, so it takes what the words leave, to its
+     share at most; the rest stands between the words. */
+  &::before,
+  &::after {
+    content: '';
+    flex: 1000 1 0;
+    max-inline-size: var(--axis-start);
+  }
+
+  &::after {
+    max-inline-size: var(--axis-end);
+  }
+
   > [data-moment='from'] {
-    grid-column: 2;
     margin-inline-end: var(--space-3);
   }
 
   > [data-moment='to'] {
-    grid-column: 4;
+    margin-inline-start: auto;
     text-align: end;
   }
 }

@@ -2967,7 +2967,7 @@ owner's decision, even where that leaves a card's plot empty until its readings 
 account's weekly windows reset together. Over the period every line of an account ends at one
 moment, the latest reset among its windows in the section, each window at its real time, and a
 window with nothing read since its last reset stops there, the line empty from it to that end and
-its axis's last word «no new readings since …» at the end. At a period no longer than a window, a
+its axis's last word «no readings since …» at the end. At a period no longer than a window, a
 card whose window reset with nothing read since, beside a live window of its account, shows the
 account's current window: the live one's span and moments, now marked where the live one marks
 it, its plot empty and saying what the card's lead says, «Reset at …, no new readings», and the
