@@ -75,10 +75,10 @@ class TreeCase(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-m", subject)
 
-    def record_of(self, tree: Path) -> Path:
-        """A record of a one-step run made in `tree` as it is now, kept in its ignored `tmp/`."""
+    def record_of(self, tree: Path, run: str = "run") -> Path:
+        """A record of a one-step run made in `tree` as it is now, kept in its ignored `tmp/run`."""
 
-        out = tree / "tmp" / "run"
+        out = tree / "tmp" / run
         out.mkdir(parents=True, exist_ok=True)
         log = out / "only.log"
         log.write_bytes(b"one\n")
@@ -161,6 +161,62 @@ class CheckTests(TreeCase):
                 self.assertIn("it was made on other uncommitted changes than this tree has", said)
                 (self.repo / name).write_bytes(kept)
         self.assertEqual(0, self.checked(record, self.repo)[0])
+
+    def test_staging_what_is_on_disk_leaves_a_record_of_it_accepted(self) -> None:
+        self.write("server/app.py", "print('edited')\n")
+        self.write("server/new.py", "print('new')\n")
+        record = self.record_of(self.repo)
+
+        for staging in (("add", "server/app.py"), ("add", "-N", "server/new.py"), ("add", "-A")):
+            with self.subTest(git=staging):
+                self.git(*staging)
+                code, said = self.checked(record, self.repo)
+                self.assertEqual(0, code, said)
+        # Staged in a clean tree too: taking a file out of the index leaves it on disk as committed.
+        self.git("reset", "-q")
+        self.write("server/app.py", "print('one')\n")
+        (self.repo / "server" / "new.py").unlink()
+        clean = self.record_of(self.repo, "clean")
+        self.git("rm", "-q", "--cached", "server/app.py")
+        self.assertEqual(0, self.checked(clean, self.repo)[0])
+        # The control: what is staged differs from the record once the content on disk does.
+        self.git("reset", "-q")
+        self.write("server/app.py", "print('edited')\n")
+        record = self.record_of(self.repo)
+        self.write("server/app.py", "print('edited again')\n")
+        self.git("add", "server/app.py")
+        code, said = self.checked(record, self.repo)
+        self.assertEqual(1, code)
+        self.assertIn("it was made on other uncommitted changes than this tree has", said)
+
+    def test_an_untracked_file_counts_where_git_status_hides_untracked_files(self) -> None:
+        self.git("config", "status.showUntrackedFiles", "no")
+        record = self.record_of(self.repo)
+        self.write("tests/test_new.py", "print('new')\n")
+
+        code, said = self.checked(record, self.repo)
+
+        self.assertEqual(1, code)
+        self.assertIn("it was made in a clean tree, and this tree has uncommitted changes", said)
+        made = self.record_of(self.repo, "with-file")
+        self.write("tests/test_new.py", "print('other')\n")
+        self.assertIn("other uncommitted changes", self.checked(made, self.repo)[1])
+        # The control: without the file the tree is the clean one the first record was made in.
+        (self.repo / "tests" / "test_new.py").unlink()
+        self.assertEqual(0, self.checked(record, self.repo)[0])
+
+    def test_a_record_of_another_format_is_refused_with_its_format(self) -> None:
+        record = self.record_of(self.repo)
+        older = json.loads(record.read_text(encoding="utf-8"))
+        record.write_text(json.dumps({**older, "format": 1}), encoding="utf-8")
+
+        code, said = self.checked(record, self.repo)
+
+        self.assertEqual(1, code)
+        self.assertIn(
+            f"is a run record of format 1, and this check compares a tree as format {run_record.FORMAT}",
+            said,
+        )
 
     def test_what_is_not_a_record_or_not_a_tree_is_refused(self) -> None:
         broken = self.root / "broken.json"
