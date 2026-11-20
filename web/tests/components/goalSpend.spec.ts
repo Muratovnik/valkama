@@ -20,7 +20,8 @@ import { boardItem } from '../fixtures/board.ts'
 import { noUsage } from '../fixtures/usage.ts'
 import {
   goalRow,
-  goalVolumesAnswer,
+  goalVolumesDouble,
+  serveGoalVolumes,
   spentOf,
   volumesAnswer,
   volumesDouble,
@@ -54,29 +55,11 @@ const stage = goalRow({
 })
 const ROWS = [goal, stage]
 
-/** The goal-volumes reads asked, by their ids. */
-const asked: string[][] = []
-
-/** The server's `goal-volumes`, answering each id with its row. */
-function goalVolumes(url: URL) {
-  if (url.pathname !== '/api/planning/goal-volumes') return null
-  const ids = url.searchParams.getAll('id')
-  asked.push(ids)
-  return json(
-    goalVolumesAnswer(
-      ids.flatMap((id) => ROWS.filter((row) => row.work_item_id === id || row.reference === id)),
-    ),
-  )
-}
-
-function serveGoalVolumes() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn<typeof fetch>(async (input) => {
-      const url = new URL(input as string, 'http://valkama.test')
-      return goalVolumes(url) ?? json({}, 404)
-    }),
-  )
+/** The server's `goal-volumes` beside the Volumes page's read, answering each id with its row. */
+const served = goalVolumesDouble(ROWS)
+const goalVolumes = (url: URL) => {
+  const answer = served.answer(url)
+  return answer && json(answer)
 }
 
 /** The list's items: the goal, its stage and two tasks, each named by its row's id. */
@@ -123,7 +106,6 @@ const spendOfRows = () =>
 
 describe('a goal’s row of the Work list', () => {
   it('says both numbers of the goal, as the Volumes page says the same goal', async () => {
-    asked.length = 0
     const page = mountPage(
       volumesDouble(() => volumesAnswer({ goals: [{ ...goal, children: [stage] }] })),
       undefined,
@@ -157,16 +139,14 @@ describe('a goal’s row of the Work list', () => {
   })
 
   it('asks for the rows of the goals it draws in one read, and for no task', async () => {
-    asked.length = 0
-    serveGoalVolumes()
+    const asked = serveGoalVolumes(ROWS)
     await list()
     // One read naming both, the goal's id before the stage's as the double numbers them.
     expect(asked).toEqual([[goal.work_item_id, stage.work_item_id]])
   })
 
   it('asks nothing where its work is not in the store the read answers for', async () => {
-    asked.length = 0
-    serveGoalVolumes()
+    const asked = serveGoalVolumes(ROWS)
     await list('en', false)
     expect(asked).toEqual([])
     expect(document.querySelectorAll('[data-spend]')).toHaveLength(0)
@@ -174,7 +154,7 @@ describe('a goal’s row of the Work list', () => {
   })
 
   it('names both numbers in Russian', async () => {
-    serveGoalVolumes()
+    serveGoalVolumes(ROWS)
     await list('ru')
     expect(spendOfRows()['MAIN-1']).toEqual([
       ['spent', 'Потрачено 2\u{A0}ч · 30\u{A0}тыс.'],
@@ -192,8 +172,7 @@ const figures = () =>
 
 describe('a goal’s card', () => {
   it('says both numbers of the goal, read by its reference', async () => {
-    asked.length = 0
-    serveGoalVolumes()
+    const asked = serveGoalVolumes(ROWS)
     mountSummary(noUsage({ reference: 'MAIN-1', scope: 'tree' }), {
       container: true,
       part: GoalSpendLine,
@@ -207,8 +186,7 @@ describe('a goal’s card', () => {
   })
 
   it('asks nothing and says nothing on a task’s card', async () => {
-    asked.length = 0
-    serveGoalVolumes()
+    const asked = serveGoalVolumes(ROWS)
     mountSummary(noUsage({ reference: 'MAIN-3' }), { part: GoalSpendLine })
     await flushPromises()
     expect(asked).toEqual([])

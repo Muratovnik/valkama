@@ -9,7 +9,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h, nextTick, shallowRef } from 'vue'
 import { createI18n } from 'vue-i18n'
 
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
@@ -23,6 +23,7 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { boardGoal, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { emptyChain } from '../fixtures/chain.ts'
+import { goalRow, serveGoalVolumes, spentOf } from '../support/volumesDouble.ts'
 
 /** The graph as the workspace hands it over: the chain's name and the number on its chip. */
 vi.mock('@/pages/planning/utils/graphView.ts', () => {
@@ -86,7 +87,15 @@ const model: PlanningReadModel = {
   stale_claims: [],
 }
 
+/** What each goal spent, as the server's `goal-volumes` gives it. */
+const GOAL_ROWS = [
+  goalRow({ reference: 'MAIN-1', id: goal.work_item_id, spent: spentOf(7200, 30_000) }),
+  goalRow({ reference: 'MAIN-2', id: closedGoal.work_item_id }),
+]
+
+/** The workspace writes its own store, so its list reads what the goals it draws spent. */
 function workspace(props: Partial<InstanceType<typeof PlanningWorkspace>['$props']>) {
+  serveGoalVolumes(GOAL_ROWS)
   const wrapper = mount(PlanningWorkspace, {
     attachTo: document.body,
     props: {
@@ -112,12 +121,22 @@ function workspace(props: Partial<InstanceType<typeof PlanningWorkspace>['$props
 const figures = (wrapper: ReturnType<typeof workspace>) =>
   wrapper.findAll('.workspace-figures, .workspace-left-out').map((figure) => figure.text())
 const countsLine = (wrapper: ReturnType<typeof workspace>) => figures(wrapper).join(' · ')
+/** The figure the list's row of MAIN-1 says the goal spent, once the read has answered. */
+async function goalSpent(wrapper: ReturnType<typeof workspace>) {
+  await flushPromises()
+  // A flat list's row names its card by the reference it prints, not on the row itself.
+  const row = wrapper
+    .findAll('tbody tr')
+    .find((tr) => tr.find('[data-reference="MAIN-1"]').exists())
+  return row?.find('[data-spend="spent"]').text()
+}
 
 beforeEach(() => {
   localStorage.clear()
   setActivePinia(createPinia())
 })
 afterEach(() => {
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
@@ -170,9 +189,11 @@ describe('one population above the stage', () => {
     expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
   })
 
-  it('leaves nothing out of the flat board, the list or a chain graph', () => {
+  it('leaves nothing out of the flat board, the list or a chain graph', async () => {
     expect(countsLine(workspace({ view: 'kanban' }))).toBe('5 open of 7')
-    expect(countsLine(workspace({ view: 'list' }))).toBe('5 open of 7')
+    const list = workspace({ view: 'list' })
+    expect(countsLine(list)).toBe('5 open of 7')
+    expect(await goalSpent(list)).toBe('Spent 2\u{A0}h · 30K')
     expect(countsLine(workspace({ view: 'graph', chain: chain() }))).toBe('3 open of 3')
   })
 })
@@ -192,6 +213,7 @@ describe('one filter for every view', () => {
     list.vm.$emit('filter', { facet: 'kind', value: 'goal' })
     await nextTick()
     expect(list.props('items')).toHaveLength(space.length)
+    expect(await goalSpent(wrapper)).toBe('Spent 2\u{A0}h · 30K')
   })
 
   it('hands the board the filter, and takes a mark from the card beside the views', async () => {
@@ -215,5 +237,6 @@ describe('one filter for every view', () => {
     await wrapper.setProps({ routeState: { view: 'list' } })
     expect(wrapper.find('.data-empty').exists()).toBe(false)
     expect(wrapper.getComponent(WorkItemList).props('items')).toHaveLength(space.length)
+    expect(await goalSpent(wrapper)).toBe('Spent 2\u{A0}h · 30K')
   })
 })

@@ -6,6 +6,8 @@
  *
  * Each read's query is kept, so a test can say what the page asked.
  */
+import { vi } from 'vitest'
+
 import { validateGoalVolumesAnswer, validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 
 const CATEGORIES = [
@@ -65,6 +67,8 @@ export interface GoalRowInput {
   /** The rows of the stages under it, as `goalRow` writes them. */
   children?: GoalRow[]
   closed?: number
+  /** The work item id of a card the test already has; a made-up one otherwise. */
+  id?: string
   kind?: 'goal' | 'stage'
   parent?: string | null
   remaining?: {
@@ -88,7 +92,7 @@ export function goalRow(input: GoalRowInput): GoalRow {
   const absent = input.baselineAbsent ?? (input.baseline === null ? 'not_accepted' : null)
   const left = input.remaining
   return {
-    work_item_id: uuid(1000 + rowNumber),
+    work_item_id: input.id ?? uuid(1000 + rowNumber),
     reference: input.reference,
     title: input.title ?? `Work of ${input.reference}`,
     kind: input.kind ?? ('goal' as const),
@@ -271,4 +275,42 @@ export function goalVolumesAnswer(rows: readonly GoalRow[]) {
   }
   validateGoalVolumesAnswer(answer)
   return answer
+}
+
+/**
+ * `GET /api/planning/goal-volumes` over these rows: each id asked is answered with the row of that
+ * work item id or reference. Any other address is not this read's: `answer` gives `null` for it.
+ * Each read's ids are kept.
+ */
+export function goalVolumesDouble(rows: readonly GoalRow[]) {
+  const asked: string[][] = []
+  return {
+    asked,
+    answer(url: URL) {
+      if (url.pathname !== '/api/planning/goal-volumes') return null
+      const ids = url.searchParams.getAll('id')
+      asked.push(ids)
+      return goalVolumesAnswer(
+        ids.flatMap((id) => rows.filter((row) => row.work_item_id === id || row.reference === id)),
+      )
+    },
+  }
+}
+
+/**
+ * The double as `fetch`, the reads it was asked returned. A request to any other address goes on
+ * to the `fetch` it replaced, so a read the test did not mean to make is refused there.
+ */
+export function serveGoalVolumes(rows: readonly GoalRow[]) {
+  const double = goalVolumesDouble(rows)
+  const before = globalThis.fetch
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const address = input instanceof Request ? input.url : input
+      const answer = double.answer(new URL(address, 'http://valkama.test'))
+      return answer ? new Response(JSON.stringify(answer)) : before(input, init)
+    }),
+  )
+  return double.asked
 }
