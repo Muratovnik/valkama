@@ -18,6 +18,11 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
   store copy the probe server serves, `CLAUDE_CONFIG_DIR` and `CODEX_HOME` in the
   home, `GIT_CONFIG_GLOBAL` on a file of the profile, and the launcher directory
   first in `PATH`;
+- a Valkama configuration, `.valkama/config.json`, whose `transcript_roots` are
+  the profile's two client directories, given to the probe server too: a store
+  copy's rows name the user's clients' transcripts, and no server of the run
+  reads one. A session whose servers archived one anyway is the environment's
+  failure, its sessions named in `foreign_transcripts`;
 - copies of the user's `CLAUDE.md`, Codex `AGENTS.md` and coordinator files,
   with the sections of `--sections` put in place of those with the same heading;
 - hook registrations for both clients. The user's own run an installed release,
@@ -28,10 +33,16 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
   user runs. The commit hooks and the `MessageDisplay` hook are added;
 - the MCP registration of this checkout, a launcher `valkama.cmd` that runs it,
   this checkout's skill, copies of the user's other skills and plugins, and a
-  Git configuration with the commit hooks;
+  Git configuration with the commit hooks. Codex on Windows reads the user's
+  `.agents/skills` whatever the profile's home is, so it gets the profile's in
+  its `$CODEX_HOME/skills` and has each of the user's turned off by path;
 - per scenario: the sample workspace with its overlay and repositories, its
   projects in the profile's registry, and a store copy migrated by this
   checkout, served by `tests/isolated.py serve --store-copy`.
+
+A run holds the home's lock, `<client-home>.lock` beside it, from clearing the
+home to its last session: a second run on the same home waits for the first
+and says whose run it waits for, rather than clearing the home under it.
 
 The user's files, hook registrations and store are only read, and the store
 only through a connection that cannot write. Each session's record goes to
@@ -69,6 +80,7 @@ sys.path.insert(0, str(ROOT))
 
 from server import processes, store
 from server.projects import project_registry
+from server.transcripts import ARCHIVED
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -552,8 +564,14 @@ def _toml(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def codex_config(live: str, registration: Mapping[str, Any]) -> str:
-    """The user's Codex configuration with `registration` as its only MCP server."""
+def codex_config(
+    live: str, registration: Mapping[str, Any], hidden_skills: Sequence[Path] = ()
+) -> str:
+    """The user's Codex configuration with `registration` as its only MCP server.
+
+    Each of `hidden_skills`, a `SKILL.md` of the user's that Codex would read
+    whatever the profile's home, is turned off by its path.
+    """
 
     lines = [
         without_mcp_servers(live).rstrip("\n"),
@@ -566,10 +584,20 @@ def codex_config(live: str, registration: Mapping[str, Any]) -> str:
         *(f"{name} = {_toml(value)}" for name, value in sorted(registration["env"].items())),
         "",
     ]
+    for path in hidden_skills:
+        lines += ["[[skills.config]]", f"path = {_toml(str(path))}", "enabled = false", ""]
     text = "\n".join(lines)
-    servers = tomllib.loads(text).get("mcp_servers")
+    try:
+        parsed = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise ProbeError(f"the Codex configuration does not take the profile's: {error}") from None
+    servers = parsed.get("mcp_servers")
     if not isinstance(servers, dict) or set(servers) != {"valkama"}:
         raise ProbeError("the Codex configuration names MCP servers outside its tables")
+    entries = parsed.get("skills", {}).get("config", [])
+    off = {entry.get("path") for entry in entries if entry.get("enabled") is False}
+    if not {str(path) for path in hidden_skills} <= off:
+        raise ProbeError("the Codex configuration turns the user's skills back on")
     return text
 
 
@@ -600,6 +628,60 @@ class Inputs:
         return Path.home() / ".agents" / "skills"
 
 
+#: Windows' known folder of the user's profile, `FOLDERID_Profile`.
+_FOLDERID_PROFILE = uuid.UUID("5E6C858F-0E22-4760-9AFE-EA3317B67173")
+
+
+def codex_user_home() -> Path | None:
+    """The home whose `.agents/skills` Codex reads here, when the profile cannot move it.
+
+    Codex 0.166 reads its user's skills from `$CODEX_HOME/skills` and from
+    `.agents/skills` under the home `dirs::home_dir` names
+    (`codex-rs/ext/skills/src/host_roots.rs`). On Windows that is the shell's
+    profile folder, `SHGetKnownFolderPath(FOLDERID_Profile)` in `dirs-sys`,
+    whatever `HOME` and `USERPROFILE` say, so a probe's Codex read the user's own
+    installed skill there. Elsewhere it is `HOME`, which the profile sets: None.
+    """
+
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    folder = ctypes.create_string_buffer(_FOLDERID_PROFILE.bytes_le, 16)
+    found = ctypes.c_wchar_p()
+    result = ctypes.WinDLL("shell32").SHGetKnownFolderPath(folder, 0, None, ctypes.byref(found))
+    try:
+        return Path(found.value) if result == 0 and found.value else None
+    finally:
+        ctypes.WinDLL("ole32").CoTaskMemFree(found)
+
+
+def _codex_skills(home: Path, codex_dir: Path, user_home: Path | None) -> tuple[Path, ...]:
+    """Codex's user skills, all from the profile; the user's `SKILL.md` files it must pass over.
+
+    Codex reads the profile's `$CODEX_HOME/skills`, and `.agents/skills` under
+    `user_home` when the profile cannot move that home. The profile's own
+    `.agents/skills`, this checkout's skill and the copies of the user's others,
+    goes into the first where it has no skill of that name, and every skill under
+    the second is returned to be turned off by its path.
+    """
+
+    target = codex_dir / "skills"
+    for child in sorted((home / ".agents" / "skills").iterdir()):
+        if (target / child.name).exists():
+            continue
+        if child.is_dir():
+            shutil.copytree(child, target / child.name, symlinks=True)
+        else:
+            shutil.copy2(child, target / child.name)
+    if user_home is None:
+        return ()
+    users = user_home / ".agents" / "skills"
+    if not users.is_dir() or users.resolve() == (home / ".agents" / "skills").resolve():
+        return ()
+    return tuple(sorted(users.rglob("SKILL.md")))
+
+
 @dataclasses.dataclass
 class Profile:
     """The client home a run built, and the environment its clients run in."""
@@ -612,6 +694,10 @@ class Profile:
     codex_hooks: Mapping[str, Any]
     codex_config: str
     coordinator: tuple[Path, Path]
+    #: The user's skills Codex would read beside the profile's, turned off in its configuration.
+    codex_hidden_skills: tuple[Path, ...] = ()
+    #: The configuration of every Valkama server the run starts, by setting.
+    server_config: dict[str, str] = dataclasses.field(default_factory=dict)
 
     @property
     def claude_dir(self) -> Path:
@@ -842,6 +928,13 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
     )
     _write_launcher(launcher, python)
     _write_git_config(home / ".gitconfig", python, environment)
+    server_config = {
+        # A store copy's rows name the user's own clients' transcripts; every server
+        # of the run, the probe server and each client's MCP server, reads only the
+        # profile's.
+        "transcript_roots": os.pathsep.join([str(claude_dir), str(codex_dir)]),
+    }
+    _write_json(home / ".valkama" / "config.json", server_config)
 
     live_claude, live_codex = inputs.claude_dir, inputs.codex_dir
     _copy_skills(live_claude / "skills", claude_dir / "skills")
@@ -850,6 +943,7 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
     _copy_plugins(live_claude / "plugins", claude_dir / "plugins", live_claude, claude_dir)
     _copy_plugins(live_codex / "plugins", codex_dir / "plugins", live_codex, codex_dir)
     _valkama(environment, "skill", "install", "--client", "claude", "--client", "codex")
+    hidden_skills = _codex_skills(home, codex_dir, codex_user_home())
 
     settings = _read_json(live_claude / "settings.json")
     claude_hooks = {"hooks": settings.pop("hooks", None) or {}}
@@ -870,6 +964,8 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
         codex_hooks=_read_json(live_codex / "hooks.json"),
         codex_config=codex_text.read_text(encoding="utf-8") if codex_text.is_file() else "",
         coordinator=(inputs.coordinator, coordinator),
+        codex_hidden_skills=hidden_skills,
+        server_config=server_config,
     )
 
 
@@ -924,7 +1020,9 @@ def write_client_configs(
     )
     _write_json(profile.codex_dir / "hooks.json", {"hooks": codex.hooks})
     config = codex_config(
-        profile.codex_config, mcp_registration(profile, mode, store_file, "codex")
+        profile.codex_config,
+        mcp_registration(profile, mode, store_file, "codex"),
+        profile.codex_hidden_skills,
     )
     (profile.codex_dir / "config.toml").write_text(config, encoding="utf-8", newline="\n")
     dropped["claude"], dropped["codex"] = claude.dropped, codex.dropped
@@ -1226,6 +1324,8 @@ class Session:
     setup_last_event: int = 0
     environment: dict[str, str] = dataclasses.field(default_factory=dict)
     dropped_hooks: dict[str, dict[str, int]] = dataclasses.field(default_factory=dict)
+    #: Sessions the run did not start whose transcript its servers archived.
+    foreign_transcripts: list[str] = dataclasses.field(default_factory=list)
 
     def fail(self, stage: str, detail: str) -> None:
         self.failures.append({"stage": stage, "detail": detail})
@@ -1290,6 +1390,31 @@ def _last_event(store_file: Path) -> int:
     return int(found[0])
 
 
+def foreign_transcripts(store_file: Path, after: int, home: Path) -> list[str]:
+    """The sessions whose transcript a run's servers archived from outside the run's home.
+
+    Every session a run starts keeps its transcript in the profile's client
+    directories. A `transcript_archived` row written after the store was copied
+    that names any other file is a session of the user's, read by a server of the
+    run: the copy's rows name the user's clients' files.
+    """
+
+    uri = f"{store_file.resolve().as_uri()}?mode=ro"
+    own = os.path.normcase(os.path.abspath(home)) + os.sep
+    with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
+        rows = conn.execute(
+            "SELECT session_id, transcript_path FROM execution_events WHERE kind = ? AND id > ?",
+            (ARCHIVED, after),
+        ).fetchall()
+    return sorted(
+        {
+            str(session)
+            for session, path in rows
+            if not os.path.normcase(os.path.abspath(path or "")).startswith(own)
+        }
+    )
+
+
 class SessionRunner:
     """One scenario on one client, from its server's start to the copy of its store."""
 
@@ -1312,6 +1437,7 @@ class SessionRunner:
         self.names: dict[str, str] = {}
         self.environment: dict[str, str] = {}
         self.store_file = Path()
+        self.copied_last_event = 0
 
     def run(self) -> Session:
         isolated = _isolated()
@@ -1326,6 +1452,7 @@ class SessionRunner:
             try:
                 self._session()
             finally:
+                self._check_transcripts()
                 self._keep_store()
                 isolated.stop(self.serve_out)
         except ProbeError as error:
@@ -1337,7 +1464,14 @@ class SessionRunner:
     def _serve(self) -> bool:
         isolated = _isolated()
         environment = {**os.environ, "LOCALAPPDATA": str(self.profile.local)}
-        if isolated.start(self.serve_out, self.base_store, environment=environment) != 0:
+        self.copied_last_event = _last_event(self.base_store)
+        started = isolated.start(
+            self.serve_out,
+            self.base_store,
+            environment=environment,
+            config=self.profile.server_config,
+        )
+        if started != 0:
             self.record.fail("server", f"the probe server did not start; see {self.serve_out}")
             return False
         state = json.loads((self.serve_out / isolated.STATE).read_text(encoding="utf-8"))
@@ -1543,6 +1677,24 @@ class SessionRunner:
             self.record.session_id = session_id(self.client, output)
         return True
 
+    def _check_transcripts(self) -> None:
+        """The session is the environment's failure when a server read a user's transcript."""
+
+        if not self.store_file.is_file():
+            return
+        try:
+            found = foreign_transcripts(self.store_file, self.copied_last_event, self.profile.home)
+        except sqlite3.Error as error:
+            self.record.fail("isolation", f"the archived transcripts could not be read: {error}")
+            return
+        self.record.foreign_transcripts = found
+        if found:
+            self.record.fail(
+                "isolation",
+                f"the servers archived the transcripts of {len(found)} session(s)"
+                " this run did not start",
+            )
+
     def _keep_store(self) -> None:
         """The session's store, spool and project registry, kept beside its record.
 
@@ -1601,6 +1753,36 @@ def run(options: argparse.Namespace, source: Path | None, registry: Path | None 
         coordinator=options.claude_coordinator.resolve(),
     )
     home, out = options.client_home.resolve(), options.out.resolve()
+    from tests import machine_lock
+
+    with machine_lock.held(
+        f"a probe run into {out}", path=home_lock(home), say=_say, name="probe-home lock"
+    ):
+        return _run_locked(options, chosen, scenarios, inputs, home, out, source, registry)
+
+
+def home_lock(home: Path) -> Path:
+    """The lock of one client home: beside it, since a run clears everything in it.
+
+    A run clears the home before it builds the profile, so a second run beside the
+    first would take the profile, the logins aside, from under the first's clients.
+    It waits for the lock instead, saying whose run holds it, as the heavy test runs
+    of `tests/machine_lock.py` do with the same primitive.
+    """
+
+    return home.with_name(f"{home.name}.lock")
+
+
+def _run_locked(
+    options: argparse.Namespace,
+    chosen: Sequence[str],
+    scenarios: Sequence[Scenario],
+    inputs: Inputs,
+    home: Path,
+    out: Path,
+    source: Path | None,
+    registry: Path | None,
+) -> int:
     profile = build_profile(home, inputs)
     programs = _programs(chosen, options.client_program or (), profile.environment["PATH"])
     base, prepared = prepare_store(source, profile.work, registry)

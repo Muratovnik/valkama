@@ -112,11 +112,14 @@ def held(
     pid: int | None = None,
     say: Callable[[str], None] = _say,
     report_every: float = REPORT_SECONDS,
+    name: str = "heavy-test lock",
 ) -> Iterator[None]:
     """Hold the machine's heavy-test lock for `run`, waiting as long as another run holds it.
 
     `pid` is the process the run belongs to, which is this one unless a caller
-    started this process to hold the lock for it.
+    started this process to hold the lock for it. `name` is what a waiter calls
+    the lock: another tool that serializes its own runs takes the same protocol
+    with a lock file of its own, as `tests/agent_probes.py` does for its home.
     """
 
     path = path or lock_path()
@@ -124,7 +127,7 @@ def held(
     with path.open("a+b") as handle:
         if not store_lock.try_lock(handle):
             started = time.monotonic()
-            say(f"waiting for the heavy-test lock {path}: it is held by {holder(path)}")
+            say(f"waiting for the {name} {path}: it is held by {holder(path)}")
             next_report = started + report_every
             while not store_lock.try_lock(handle):
                 time.sleep(min(POLL_SECONDS, report_every))
@@ -132,7 +135,7 @@ def held(
                     waited = _duration(time.monotonic() - started)
                     say(f"still waiting after {waited}: the lock is held by {holder(path)}")
                     next_report += report_every
-            say(f"took the heavy-test lock after {_duration(time.monotonic() - started)}")
+            say(f"took the {name} after {_duration(time.monotonic() - started)}")
         try:
             record = {
                 "checkout": ROOT.as_posix(),

@@ -43,7 +43,7 @@ import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from .. import sessions
+from .. import sessions, transcript_roots
 from . import live_work
 
 _TAIL_BYTES = 1024 * 1024
@@ -124,7 +124,7 @@ def _title_in(tail: bytes) -> str | None:
 def _title(path: str) -> str | None:
     """The session's name as its transcript has it now; the last one known when it says none."""
 
-    if not path:
+    if not path or not transcript_roots.readable(path):
         return None
     known = _titles.get(path)
     try:

@@ -10,6 +10,7 @@ makes the calls its prompt lists; no model and no network are involved.
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import hashlib
 import io
@@ -21,6 +22,8 @@ import sqlite3
 import stat
 import sys
 import tempfile
+import threading
+import time
 import tomllib
 import unittest
 from pathlib import Path
@@ -29,7 +32,7 @@ from unittest import mock
 
 from server import store
 from server.store_identity.refs import planning_space_entity
-from tests import agent_probes, agent_probes_judge
+from tests import agent_probes, agent_probes_judge, machine_lock
 from tests import test_planning_work_model_migration as work_model
 from tests.test_registry_owner import _former_inventory as former_inventory
 from tests.test_registry_owner import _former_projection as former_projection
@@ -187,7 +190,31 @@ def make_user(root: Path) -> dict[str, Path]:
     (local / "Valkama" / "project-registry.toml").write_bytes(former_inventory(entries))
     (local / "Valkama" / "projects.json").write_bytes(former_projection(entries))
     work_model.build(str(root / ".valkama" / "valkama.sqlite3"))
+    # A session of the user's that ended before its transcript could be copied: the
+    # copy's sweep finds it owed and would read the user's client file it names.
+    live = claude / "projects" / "app" / f"{LIVE_SESSION}.jsonl"
+    live.parent.mkdir(parents=True)
+    live.write_bytes(b'{"type": "user"}\n')
+    with contextlib.closing(sqlite3.connect(root / ".valkama" / "valkama.sqlite3")) as conn:
+        conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " client, session_id, transcript_path) VALUES (?,?,?,?,?,?,?)",
+            (
+                str(LIVE_SESSION),
+                "session_end",
+                "confirmed",
+                "hook",
+                "claude",
+                LIVE_SESSION,
+                str(live),
+            ),
+        )
+        conn.commit()
     return {"claude": claude, "codex": codex, "coordinator": coordinator}
+
+
+#: The user's own session whose transcript a probe's servers must never read.
+LIVE_SESSION = "0c0ffee0-0000-4000-8000-00000000live"
 
 
 class RunCase(unittest.TestCase):
@@ -257,7 +284,12 @@ class RunCase(unittest.TestCase):
             *arguments,
         ]
         output = io.StringIO()
-        with mock.patch.dict(os.environ, patched), contextlib.redirect_stdout(output):
+        with (
+            mock.patch.dict(os.environ, patched),
+            # The home Codex takes `.agents/skills` from whatever the profile sets.
+            mock.patch.object(agent_probes, "codex_user_home", lambda: user),
+            contextlib.redirect_stdout(output),
+        ):
             for name in ("VALKAMA_DB", "CLAUDE_CONFIG_DIR", "CODEX_HOME"):
                 os.environ.pop(name, None)
             code = agent_probes.main(argv)
@@ -409,7 +441,7 @@ class RunTests(RunCase):
 
     def test_the_mcp_registration_launcher_skill_plugins_and_git(self) -> None:
         claude = json.loads((self.home / ".claude" / ".claude.json").read_text("utf-8"))
-        self.assertEqual(["mcp_servers", "model", "windows"], sorted(self.codex_config()))
+        self.assertEqual(["mcp_servers", "model", "skills", "windows"], sorted(self.codex_config()))
         servers = {"claude": claude["mcpServers"], "codex": self.codex_config()["mcp_servers"]}
         for client, registered in servers.items():
             with self.subTest(client=client):
@@ -436,11 +468,14 @@ class RunTests(RunCase):
         self.assertEqual(str(launcher), path.split(os.pathsep)[0])
         self.assertIn(str(agent_probes.ENTRY), (launcher / "valkama.cmd").read_text("utf-8"))
         head_skill = (ROOT / "server" / "skill" / "valkama" / "SKILL.md").read_bytes()
-        for skills in (self.home / ".claude" / "skills", self.home / ".agents" / "skills"):
+        for skills in (
+            self.home / ".claude" / "skills",
+            self.home / ".agents" / "skills",
+            self.home / ".codex" / "skills",
+        ):
             with self.subTest(skills=skills):
                 self.assertEqual(head_skill, (skills / "valkama" / "SKILL.md").read_bytes())
                 self.assertEqual("help\n", (skills / "helper" / "SKILL.md").read_text("utf-8"))
-        self.assertFalse((self.home / ".codex" / "skills" / "valkama").exists())
         installed = json.loads(
             (self.home / ".claude" / "plugins" / "installed_plugins.json").read_text("utf-8")
         )
@@ -454,6 +489,22 @@ class RunTests(RunCase):
         self.assertEqual(
             str(self.home / ".gitconfig"),
             self.record("alpha", "codex").session["environment"]["GIT_CONFIG_GLOBAL"],
+        )
+
+    def test_codex_reads_the_profiles_skills_and_none_of_the_users(self) -> None:
+        # Codex 0.166 reads `$CODEX_HOME/skills`, and `.agents/skills` under the home
+        # Windows names whatever HOME says: there it found the user's installed skill.
+        users = self.user / ".agents" / "skills"
+        self.assertEqual(
+            [
+                {"path": str(users / "helper" / "SKILL.md"), "enabled": False},
+                {"path": str(users / "valkama" / "SKILL.md"), "enabled": False},
+            ],
+            self.codex_config()["skills"]["config"],
+        )
+        self.assertEqual(
+            (ROOT / "server" / "skill" / "valkama" / "SKILL.md").read_bytes(),
+            (self.home / ".codex" / "skills" / "valkama" / "SKILL.md").read_bytes(),
         )
 
     def codex_config(self) -> dict[str, Any]:
@@ -478,6 +529,26 @@ class RunTests(RunCase):
     def test_the_users_files_registrations_and_store_are_unchanged(self) -> None:
         self.assertEqual(self.before, tree_digest(self.user))
         self.assertEqual([0], list(set(new_sidecars(self.user, self.before).values()) or {0}))
+
+    def test_no_server_of_the_run_archives_a_transcript_of_the_users(self) -> None:
+        # The copy owes the user's session a copy of a transcript in the user's own
+        # client directory; every server of the run is kept to the profile's.
+        roots = os.pathsep.join([str(self.home / ".claude"), str(self.home / ".codex")])
+        self.assertEqual(
+            {"transcript_roots": roots},
+            json.loads((self.home / ".valkama" / "config.json").read_text("utf-8")),
+        )
+        for scenario in ("alpha", "beta"):
+            for client in agent_probes.CLIENTS:
+                with self.subTest(scenario=scenario, client=client):
+                    record = self.record(scenario, client)
+                    self.assertEqual([], record.session["foreign_transcripts"])
+                    with contextlib.closing(record.store()) as conn:
+                        rows = conn.execute(
+                            "SELECT kind FROM execution_events WHERE session_id = ?",
+                            (LIVE_SESSION,),
+                        ).fetchall()
+                    self.assertEqual([("session_end",)], rows)
 
 
 class OldReleaseHookTests(RunCase):
@@ -607,6 +678,70 @@ class ScenarioFormatTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(agent_probes.ProbeError, "no scenario"):
             agent_probes.load_cases(self.cases, ["Z9"])
+
+
+class HomeLockTests(unittest.TestCase):
+    """A run waits for another run on the same home instead of clearing it under that run.
+
+    Each run clears the home before it builds its profile, so a second run started
+    beside the first took the profile from under the first one's clients.
+    """
+
+    def test_a_second_run_waits_for_the_first_and_leaves_its_home_alone(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            base = Path(name)
+            home = base / "home"
+            marker = home / agent_probes.WORK_DIR / "profile.txt"
+            marker.parent.mkdir(parents=True)
+            marker.write_text("the first run's profile", encoding="utf-8")
+            options = argparse.Namespace(
+                client="claude",
+                cases=SAMPLES / "cases",
+                only=["A1"],
+                sections=SAMPLES / "sections.md",
+                claude_md=base / "CLAUDE.md",
+                codex_agents=base / "AGENTS.md",
+                claude_coordinator=base / "coordinator",
+                client_home=home,
+                out=base / "second",
+                client_program=None,
+            )
+            said: list[str] = []
+            built: list[tuple[Path, bool]] = []
+
+            def build(target: Path, _inputs: object) -> agent_probes.Profile:
+                built.append((target, marker.is_file()))
+                raise agent_probes.ProbeError("stopped after the profile would be built")
+
+            def second() -> None:
+                with contextlib.suppress(agent_probes.ProbeError):
+                    agent_probes.run(options, None)
+
+            waiter = threading.Thread(target=second, daemon=True, name="second-probe-run")
+            with (
+                mock.patch.object(agent_probes, "_say", said.append),
+                mock.patch.object(agent_probes, "build_profile", build),
+            ):
+                with machine_lock.held(
+                    "the first probe run",
+                    path=agent_probes.home_lock(home),
+                    say=lambda _line: None,
+                ):
+                    waiter.start()
+                    deadline = time.monotonic() + 15.0
+                    while not said and time.monotonic() < deadline:
+                        time.sleep(0.05)
+                    time.sleep(0.3)
+                    self.assertEqual([], built)
+                    self.assertTrue(marker.is_file())
+                waiter.join(15.0)
+
+            self.assertRegex(
+                said[0],
+                r"^waiting for the probe-home lock .*home\.lock: it is held by the first probe run"
+                r" in .*, process \d+, since ",
+            )
+            self.assertEqual([(home.resolve(), True)], built)
 
 
 class ProgramTests(unittest.TestCase):
@@ -759,6 +894,27 @@ class StoreCopyRegistryTests(unittest.TestCase):
                 self.assertEqual(content, (copied / file).read_bytes(), file)
             self.assertIn(("projects", "upgrade"), calls)
             self.assertEqual("migrated", prepared["migration"])
+
+
+class CodexSkillConfigTests(unittest.TestCase):
+    """The user's skills stay off, or the run is refused, whatever the user's own configuration."""
+
+    REGISTRATION: ClassVar[dict[str, Any]] = {"command": "python", "args": [], "env": {}}
+
+    def test_a_later_rule_of_the_users_cannot_turn_a_skill_back_on(self) -> None:
+        hidden = Path("C:/user/.agents/skills/valkama/SKILL.md")
+        live = f'[[skills.config]]\npath = "{hidden.as_posix()}"\nenabled = true\n'
+
+        text = agent_probes.codex_config(live, self.REGISTRATION, [hidden])
+
+        entries = tomllib.loads(text)["skills"]["config"]
+        self.assertEqual({"path": str(hidden), "enabled": False}, entries[-1])
+
+    def test_a_skills_table_that_cannot_take_the_rules_refuses_the_run(self) -> None:
+        live = "skills = { config = [] }\n"
+
+        with self.assertRaisesRegex(agent_probes.ProbeError, "does not take the profile's"):
+            agent_probes.codex_config(live, self.REGISTRATION, [Path("C:/u/SKILL.md")])
 
 
 class SectionTests(unittest.TestCase):
