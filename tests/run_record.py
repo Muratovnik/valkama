@@ -218,6 +218,11 @@ def write(
         "steps": list(steps),
         "result": result,
     }
+    tree = record.get("tree")
+    if isinstance(tree, Mapping) and tree.get("head"):
+        # A step that rewrites tracked files, as `web-build` does `web/dist`, leaves a tree
+        # no check accepts this record for, and this is what then says why.
+        finished["changed_by_run"] = differences(tree, tree_state(Path(str(tree["worktree"]))))
     path.write_text(json.dumps(finished, indent=2) + "\n", encoding="utf-8", newline="\n")
     return path
 
@@ -277,7 +282,11 @@ def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
         )
     found = differences(record["tree"], tree_state(tree))
     if found:
-        return None, f"{path} does not describe {tree} as it is now: " + "; ".join(found)
+        changed = record.get("changed_by_run")
+        left = (
+            f"; the run it records changed the tree itself: {'; '.join(changed)}" if changed else ""
+        )
+        return None, f"{path} does not describe {tree} as it is now: " + "; ".join(found) + left
     return record, ""
 
 

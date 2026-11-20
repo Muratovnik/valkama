@@ -178,6 +178,7 @@ class CheckTests(TreeCase):
 
         self.assertEqual(run_record.REFUSED, code)
         self.assertIn("it was made in a clean tree, and this tree has uncommitted changes", said)
+        self.assertNotIn("changed the tree itself", said, "it changed after the run, not in it")
         self.write("server/app.py", "print('one')\n")
         self.assertEqual(0, self.checked(record, self.repo)[0])
 
@@ -346,6 +347,20 @@ class RunTests(TreeCase):
         self.assertEqual(["second"], [entry["name"] for entry in self.recorded()["steps"]])
         self.assertTrue(self.recorded()["tree"]["dirty"])
         self.assertEqual(run_record.PASSED, self.checked(self.out / run_record.NAME, self.repo)[0])
+
+    def test_a_run_that_changes_the_tree_says_so_and_check_names_it_when_it_refuses(self) -> None:
+        self.ran("python", "-c", "pass", name="reads")
+        self.assertEqual([], self.recorded()["changed_by_run"])
+        rewrite = "open('server/app.py', 'w').write('built\\n')"
+
+        self.ran("python", "-c", rewrite, name="builds")
+
+        said = self.checked(self.out / run_record.NAME, self.repo)[1]
+        self.assertIn(
+            "; the run it records changed the tree itself: it was made in a clean tree,"
+            " and this tree has uncommitted changes",
+            said,
+        )
 
     def test_a_failed_command_says_who_holds_the_heavy_test_lock_and_a_passing_one_does_not(
         self,
