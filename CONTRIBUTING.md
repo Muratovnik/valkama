@@ -102,6 +102,31 @@ older than `web/src`; rebuild before you look at the interface it serves. A stor
 the profile when the server stops or dies. It stays on disk while the server is
 running, however long that is: run `stop` when you are done.
 
+Between commits, `tests/affected.py` picks the Python test modules a change
+reaches and runs them:
+
+```powershell
+# After a commit: the modules HEAD's change reaches, run with unittest.
+.venv/Scripts/python tests/affected.py HEAD~1..HEAD
+
+# The same for the index or, with neither, the working tree; --why says
+# why each module was picked, --list only names them.
+.venv/Scripts/python tests/affected.py --staged --list --why
+```
+
+A test module is picked when it imports a changed module of `server/` or
+`tests/`, directly or through other modules (the import graph `lint-imports`
+checks), when it names a changed file outside that graph, such as a document,
+a fixture or `valkama.py`, or when it is one of the modules that hold a whole
+surface of the server, which run on every change under `server/`. A change to
+a central module reaches most of the suite, because the tests that import the
+MCP or HTTP surface import nearly all of the server through it. For a change
+under `web/` the script prints the `npx vitest related` command to run from
+`web/` and runs no node itself. It picks no browser spec: those are chosen by
+the route, fixture or page helper they rely on, not by import. It is the
+targeted run between commits, not the gates: every change still runs the full
+list above before a pull request.
+
 ## Rules that will send a pull request back
 
 These are not style preferences. Each one is here because breaking it cost
