@@ -50,11 +50,12 @@ const WORDS = {
 /** What the line's action and the condition it opens the board with are called. */
 const SHOW = { en: 'Show findings', ru: 'Показать находки' } as const
 const AWAITING = { en: 'Awaiting triage', ru: 'Ждёт разбора' } as const
+/** Where the line's action stands: beside its words, or, at a phone's width, under them. */
 const CASES = [
-  { width: 1280, locale: 'en' },
-  { width: 620, locale: 'en' },
-  { width: 390, locale: 'en' },
-  { width: 390, locale: 'ru' },
+  { width: 1280, locale: 'en', under: false },
+  { width: 620, locale: 'en', under: false },
+  { width: 390, locale: 'en', under: true },
+  { width: 390, locale: 'ru', under: true },
 ] as const
 
 /** Where an element stands on the screen; it must be there. */
@@ -62,6 +63,16 @@ async function box(locator: Locator) {
   const found = await locator.boundingBox()
   if (!found) throw new Error('Not on screen')
   return found
+}
+
+/** Where an element's text stands: the box of its text alone, without the element's padding. */
+function textEdge(locator: Locator) {
+  return locator.evaluate((element) => {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    const { left, top, bottom } = range.getBoundingClientRect()
+    return { left, top, bottom }
+  })
 }
 
 /** The read of everything waiting carries these lines; every other read is the backend's. */
@@ -80,7 +91,7 @@ async function serveLines(page: Page, entries: Parameters<typeof requestList>[0]
   })
 }
 
-for (const { width, locale } of CASES) {
+for (const { width, locale, under } of CASES) {
   test(`at ${width}px in ${locale} a due space's line stands over the questions, whole in the window`, async ({
     page,
   }, testInfo) => {
@@ -110,6 +121,13 @@ for (const { width, locale } of CASES) {
       expect(await line.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       )
+      // The action stands beside the words, or under them with its words starting on theirs.
+      const [words, show] = await Promise.all([
+        textEdge(line.locator('[data-triage-due-words]')),
+        textEdge(line.getByRole('button')),
+      ])
+      expect(show.top >= words.bottom, 'the action stands under the words').toBe(under)
+      expect(Math.abs(show.left - words.left) <= 1, 'the action starts on the words').toBe(under)
     }
     await dialog.screenshot({ path: testInfo.outputPath(`triage-due-${width}-${locale}.png`) })
   })

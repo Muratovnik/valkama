@@ -62,6 +62,7 @@ const rows = computed(() => {
         {{ row.text }}
       </span>
       <VButton
+        class="request-due-show"
         variant="text"
         size="inline"
         :aria-label="row.name"
@@ -103,5 +104,11 @@ const rows = computed(() => {
   flex: 1 1 16rem;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Bare, its words on the line's edge where it wraps under the line's words: the margin takes
+   back the inset its fill keeps under the pointer. */
+.request-due-show {
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 </style>
