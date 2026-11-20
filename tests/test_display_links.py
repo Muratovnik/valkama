@@ -19,7 +19,7 @@ from unittest import mock
 from urllib.parse import urlsplit
 
 from server import http_surface, store
-from server.planning import acknowledgements, display_links, interactions
+from server.planning import acknowledgements, display_links, references_present
 from tests.test_work_item_link import LinkedStoreCase
 
 MESSAGE_ID = "5b2a9c8e-1f63-4d8a-b7c4-9e0d2a6f1c3b"
@@ -202,13 +202,13 @@ class AnswerTests(ListenerCase):
         self.assertEqual(1, sum("work_items" in statement for statement in statements), statements)
 
     def test_an_attached_store_is_not_opened_for_a_key_only_the_primary_holds(self) -> None:
-        with mock.patch.object(interactions.scopes, "open_readonly") as opened:
+        with mock.patch.object(references_present.scopes, "open_readonly") as opened:
             self.assertIn("[DOCS-1](", self.displayed(batch("DOCS-1\n")) or "")
         opened.assert_not_called()
 
     def test_an_attached_store_that_cannot_be_read_costs_only_its_own_links(self) -> None:
         with mock.patch.object(
-            interactions.scopes, "open_readonly", side_effect=sqlite3.OperationalError("gone")
+            references_present.scopes, "open_readonly", side_effect=sqlite3.OperationalError("gone")
         ):
             self.assertEqual(
                 f"[MAIN-1]({acknowledgements.work_item_url('MAIN-1')}) MAIN-2\n",

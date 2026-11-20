@@ -8,6 +8,7 @@ import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
 import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
 
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
@@ -37,8 +38,8 @@ const emit = defineEmits<{
   'notice': [message: string]
   'open-space': [space: PlanningSpaceRef]
   'question-taken': []
-  /** The questions window, asked for by a page: narrowed to the page's space, or not at all. */
-  'requests': [space: PlanningSpaceRef | null]
+  /** The questions window, asked for by a page: narrowed to the page's scope, or not at all. */
+  'requests': [scope: QuestionScope | null]
   'state': [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
 }>()
 const SettingsView = settingsView.component
@@ -126,7 +127,7 @@ defineExpose({ openCardId, refresh })
       :route-state="route.state"
       :scope="scope"
       @go="(next) => emit('go', next)"
-      @requests="(space) => emit('requests', space)"
+      @requests="(asked) => emit('requests', asked)"
       @state="(state) => emit('state', state)"
     />
   </ModuleFrame>

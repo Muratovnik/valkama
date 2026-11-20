@@ -3,9 +3,9 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { requestIdentity, targetIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 
 import { fetchInputRequest, fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 
 /**
  * The questions still waiting, and whether they are all of them: a source that
@@ -22,10 +22,10 @@ export type PendingCount = { incomplete: boolean; value: number } | 'unknown'
 const confirmedWrites = ref(0)
 
 /**
- * What a reader reads: one card's questions, those waiting on one space's own cards, those
- * waiting everywhere, or nothing at all.
+ * What a reader reads: one card's questions, those waiting on what one space's board holds,
+ * narrowed to a project or not, those waiting everywhere, or nothing at all.
  */
-export type RequestSource = PlanningTarget | { space: PlanningSpaceRef } | 'all' | null
+export type RequestSource = PlanningTarget | QuestionScope | 'all' | null
 
 /**
  * What to read, as `RequestSource` names it.
@@ -122,14 +122,14 @@ export function useInputRequests(
     const chosen = source()
     if (chosen === null) return
     const selected = chosen === 'all' || 'space' in chosen ? undefined : chosen
-    const space = chosen !== 'all' && 'space' in chosen ? chosen.space : undefined
+    const scope = chosen !== 'all' && 'space' in chosen ? chosen : undefined
     const current = ++generation
     controller = new AbortController()
     loading.value = true
     try {
       const response = await fetchInputRequests({
         target: selected,
-        space,
+        scope,
         status: selected ? 'all' : 'pending',
         signal: controller.signal,
       })
@@ -221,7 +221,7 @@ export function useInputRequests(
       const selected = source()
       if (selected === null || selected === 'all') return String(selected)
       if ('space' in selected)
-        return `space:${selected.space.data_scope_id}/${selected.space.space_key}`
+        return `space:${selected.space.data_scope_id}/${selected.space.space_key}/${selected.project ?? ''}`
       return `${targetIdentity(selected)}:${selected.writable}`
     },
     () => {

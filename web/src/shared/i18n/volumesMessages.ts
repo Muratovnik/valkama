@@ -38,12 +38,12 @@ export const volumesMessages = {
       inPeriod: 'in the period',
       parts: '{tasks} tasks, {goals} goals, {stages} stages',
       openBoard: 'Open on the board',
+      openList: 'Open in the list',
       openQuestions: 'Open the questions',
       openCommits: 'Show the commits on no card',
       closeCommits: 'Hide the commits on no card',
       none: {
         global: 'All spaces have no board of their own: choose a space to open its cards.',
-        period: 'Counts the cards closed in the period, which no filter of Work narrows to.',
       },
       commitsUnknown: 'The commits on no card cannot be read for this scope.',
     },
@@ -176,13 +176,13 @@ export const volumesMessages = {
       inPeriod: 'за период',
       parts: 'задач {tasks}, целей {goals}, этапов {stages}',
       openBoard: 'Открыть на доске',
+      openList: 'Открыть в списке',
       openQuestions: 'Открыть вопросы',
       openCommits: 'Показать коммиты без карточки',
       closeCommits: 'Скрыть коммиты без карточки',
       none: {
         global:
           'У «Всех пространств» нет своей доски: выберите пространство, чтобы открыть карточки.',
-        period: 'Считает карточки, закрытые за период, а фильтр «Работы» по периоду не сужает.',
       },
       commitsUnknown: 'Коммиты без карточки для этого охвата не читаются.',
     },

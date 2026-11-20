@@ -13,7 +13,8 @@
  * narrow nothing. The view is the page's address: a reload or a pasted link reads it back.
  *
  * On top stand the numbers (`VolumesNumbers`); an open category's opens the board narrowed to it,
- * «Waiting for me» the questions window narrowed to the page's space (`requests`), and «Commits on no card» shows their list
+ * Done's and Cancelled's the Work list narrowed to what closed so in the page's period,
+ * «Waiting for me» the questions window narrowed to the page's space and project (`requests`), and «Commits on no card» shows their list
  * under the numbers (`VolumesCommits`), where an attach reads the page again. Under them the
  * goals' tree (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
  * (`VolumesFlow`) and the estimates (`VolumesEstimates`).
@@ -40,7 +41,7 @@ import type { VolumesView } from '@/pages/volumes/utils/volumesView.ts'
 
 import PeriodBar from '@/widgets/period-bar/components/PeriodBar.vue'
 
-import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { TASK_KINDS } from '@/shared/api/volumesReadApi.ts'
 import type { Volumes } from '@/shared/api/volumesReadApi.ts'
@@ -62,10 +63,10 @@ const props = withDefaults(
   { routeState: undefined },
 )
 const emit = defineEmits<{
-  /** The board a number opens, in the page's scope. */
+  /** The board or the list a number opens, in the page's scope. */
   go: [route: PlatformRoute]
-  /** «Waiting for me» pressed: the questions window opens, on the page's space's own. */
-  requests: [space: PlanningSpaceRef | null]
+  /** «Waiting for me» pressed: the questions window opens on the page's scope, or on every space. */
+  requests: [scope: QuestionScope | null]
   /** The view's new address, in place of the one in hand. */
   state: [state: Record<string, string>]
 }>()
@@ -163,12 +164,13 @@ function hearUnread(unread: boolean) {
 
 function open(target: VolumesTarget) {
   switch (target.kind) {
-    case 'board': {
+    case 'board':
+    case 'list': {
       emit('go', target.route)
       break
     }
     case 'questions': {
-      emit('requests', space.value)
+      emit('requests', space.value && { space: space.value, project: project.value })
       break
     }
     case 'commits': {
