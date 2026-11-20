@@ -223,9 +223,9 @@ test('the keyboard steps into a facet and back out of it', async ({ page }) => {
   await board(page)
   await field(page).focus()
   await page.keyboard.press('ArrowDown')
-  // The last facet: no holder works here, so the walk is the four conditions and six facets.
-  await expect(menu(page).getByRole('option')).toHaveCount(10)
-  for (let step = 0; step < 9; step += 1) await page.keyboard.press('ArrowDown')
+  // The last facet: no holder works here, so the walk is the six conditions and six facets.
+  await expect(menu(page).getByRole('option')).toHaveCount(12)
+  for (let step = 0; step < 11; step += 1) await page.keyboard.press('ArrowDown')
   // The row the field names as active, the one a screen reader is told of.
   const isActive = async (name: string) =>
     expect(field(page)).toHaveAttribute(

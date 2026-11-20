@@ -6,10 +6,11 @@ import {
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
-const spaceRefSchema = fromValidator(validatePlanningSpaceRef)
+/** A space as a route names it: the store it lies in and its key. */
+export const planningSpaceRefSchema = fromValidator(validatePlanningSpaceRef)
 
 export const planningTargetSchema = strictObject({
-  space_ref: spaceRefSchema,
+  space_ref: planningSpaceRefSchema,
   reference: z.string().min(1).max(18),
   writable: z.boolean(),
 }).superRefine((target, context) => {
@@ -27,7 +28,7 @@ export const planningTargetSchema = strictObject({
 export type PlanningTarget = z.infer<typeof planningTargetSchema>
 
 export const planningCoverageSchema = strictObject({
-  space_ref: spaceRefSchema,
+  space_ref: planningSpaceRefSchema,
   status: z.enum(['searched', 'unavailable']),
   reason: z.string().min(1).max(240).nullable(),
 })

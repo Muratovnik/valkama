@@ -5,17 +5,10 @@
  *
  * The read is asked for the period's two moments with their offset, both ends taken in.
  */
-import {
-  dayFrom,
-  localDay,
-  presetStart,
-  readPeriod,
-  writePeriod,
-} from '@/widgets/period-bar/utils/periodDays.ts'
-import type { PeriodView } from '@/widgets/period-bar/utils/periodDays.ts'
-
 import type { DecisionPoint } from '@/shared/api/planningDecisionPoints.ts'
 import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
+import { dayFrom, localDay, presetStart, readPeriod, writePeriod } from '@/shared/lib/periodDays.ts'
+import type { PeriodView } from '@/shared/lib/periodDays.ts'
 
 export interface DecisionsView extends PeriodView {
   /** The point the decisions are of; null for every point. */

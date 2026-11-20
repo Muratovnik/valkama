@@ -42,7 +42,8 @@
  *
  * Over the questions of «All» and of the triage tab stands the line of each space whose stack
  * waits for a triage review past its thresholds (`RequestTriageDue`), as the read carries it. It is
- * a line of the window and no question: nothing answers it, and focus never moves on to it.
+ * a line of the window and no question: nothing answers it, and focus never moves on to it. Its
+ * «Show findings» asks for that space's board (`open`), which the shell opens over the window.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -68,6 +69,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { grantFocus, NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
@@ -102,6 +104,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   dismiss: [entry: InputRequestEntry]
   draft: [key: string, value: RequestDraft]
+  open: [route: PlatformRoute]
   refresh: []
   select: [target: PlanningTarget]
   updated: [entry: InputRequestEntry]
@@ -362,6 +365,7 @@ defineExpose({ holdsFocus, holdsReader })
         <RequestTriageDue
           v-if="dueLines.length"
           :lines="dueLines"
+          @open="emit('open', $event)"
         />
         <RequestRecommendedAll
           v-if="recommendAll"

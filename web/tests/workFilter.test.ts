@@ -147,6 +147,7 @@ describe('changing the filter', () => {
       { facet: 'ready' },
       { facet: 'held' },
       { facet: 'asked' },
+      { facet: 'triage' },
       { facet: 'elsewhere', value: 'other' },
     ])
     const [ready, held] = WORK_FILTER_CONDITIONS
@@ -381,6 +382,8 @@ describe('the route state', () => {
       labels: ['ui'],
       holder: ['claude'],
       asked: true,
+      triage: true,
+      closed: { period: 'custom', from: '2026-11-12', to: '2026-11-18' },
       elsewhere: ['other'],
       project: ['alpha'],
       goal: ['MAIN-1'],

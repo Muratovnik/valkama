@@ -1,8 +1,9 @@
 /**
  * The line «time to triage» in «Needs my answer»: one per space the read says is due, with how
  * many of its stack's cards wait unmarked and how long the oldest has waited; none when the read
- * says none is due; over «All» and the triage tab, not over another kind's; and no question,
- * so it holds nothing to answer and focus does not go to it after an answer.
+ * says none is due; over «All» and the triage tab, not over another kind's; no question, so it
+ * holds nothing to answer and focus does not go to it after an answer; and its «Show findings»,
+ * which asks for the board of the line's own space narrowed to the cards it counts.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -34,12 +35,15 @@ const NOW = Date.parse('2026-11-19T12:00:00Z')
 const NBSP = '\u{A0}'
 /** Past MAIN's count, its oldest card three days and four hours in the stack. */
 const MAIN = {
+  space_ref: { data_scope_id: '11111111-1111-4111-8111-111111111111', space_key: 'MAIN' },
   space: { key: 'MAIN', name: 'Main' },
   count: 120,
   oldest_at: '2026-11-16T08:00:00Z',
 }
 /** Past ALPHA's age alone, its oldest card two hours and five minutes in the stack. */
 const ALPHA = {
+  // Another store's space, as an attached store's is.
+  space_ref: { data_scope_id: '22222222-2222-4222-8222-222222222222', space_key: 'ALPHA' },
   space: { key: 'ALPHA', name: 'Alpha' },
   count: 1,
   oldest_at: '2026-11-19T09:55:00Z',
@@ -63,7 +67,7 @@ function hub(list: InputRequestList, locale: 'en' | 'ru' = 'en') {
 const lines = (wrapper: VueWrapper) =>
   wrapper
     .findAll('[data-triage-due]')
-    .map((line) => [line.attributes('data-triage-due'), line.text()])
+    .map((line) => [line.attributes('data-triage-due'), line.get('[data-triage-due-words]').text()])
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW })
@@ -132,7 +136,10 @@ describe('the line «time to triage»', () => {
     const wrapper = hub({ ...requestList([entry]), triage_due: [MAIN] })
     await flushPromises()
     const line = wrapper.get('[data-triage-due]')
-    expect(line.findAll('button, a, input, [tabindex]')).toHaveLength(0)
+    // Its one control opens the board; nothing in it answers.
+    expect(line.findAll('button, a, input, [tabindex]').map((one) => one.text())).toEqual([
+      'Show findings',
+    ])
     expect(line.attributes('data-request-waiting')).toBeUndefined()
 
     vi.mocked(answerInputRequest).mockResolvedValueOnce(answered(entry))
@@ -148,5 +155,40 @@ describe('the line «time to triage»', () => {
     expect(card.get('.request-state').text()).toMatch(/^You answered/u)
     expect(document.activeElement).toBe(card.element)
     expect(line.element.contains(document.activeElement)).toBe(false)
+  })
+
+  it('asks for the board of its own space, narrowed to the cards it counts, in either language', async () => {
+    const wrapper = hub({ ...requestList(), triage_due: [MAIN, ALPHA] })
+    await flushPromises()
+    const show = (key: string) => wrapper.get(`[data-triage-due="${key}"] button`)
+    expect(show('ALPHA').text()).toBe('Show findings')
+    expect(show('ALPHA').attributes('aria-label')).toBe('Show findings of Alpha')
+    await show('ALPHA').trigger('click')
+    await show('MAIN').trigger('click')
+    // The space is the line's, in the store the read found it in, whatever the window shows.
+    expect(wrapper.emitted('open')).toEqual([
+      [
+        {
+          module_id: 'planning',
+          scope: { kind: 'space', space_ref: ALPHA.space_ref },
+          state: { triage: true },
+        },
+      ],
+      [
+        {
+          module_id: 'planning',
+          scope: { kind: 'space', space_ref: MAIN.space_ref },
+          state: { triage: true },
+        },
+      ],
+    ])
+
+    const ru = hub({ ...requestList(), triage_due: [MAIN] }, 'ru')
+    await flushPromises()
+    const button = ru.get('[data-triage-due="MAIN"] button')
+    expect([button.text(), button.attributes('aria-label')]).toEqual([
+      'Показать находки',
+      'Показать находки пространства Main',
+    ])
   })
 })

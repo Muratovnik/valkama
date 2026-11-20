@@ -124,6 +124,11 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
       'ready',
       'held',
       'asked',
+      'triage',
+      // «Closed in a period», by the keys the period pages write theirs with.
+      'period',
+      'from',
+      'to',
       'elsewhere',
       'cat',
       'kind',

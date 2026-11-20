@@ -32,9 +32,9 @@ export function useGlobalWorkActions(
   const requestsScope = ref<PlanningSpaceRef | null>(null)
   const pendingRequestCount = ref<PendingCount | null>(null)
 
-  /** A task's card: over the module on show where it opens one, else on the task's board. */
-  function openTarget(target: PlanningTarget) {
-    writeRoute(inPlace(target) ?? planningTargetRoute(target))
+  /** A place a surface over the module asks for, which that surface gives way to. */
+  function openRoute(route: PlatformRoute) {
+    writeRoute(route)
     finderOpen.value = false
     requestsOpen.value = false
   }
@@ -48,6 +48,10 @@ export function useGlobalWorkActions(
   watch(requestsOpen, (open) => {
     if (!open) requestsScope.value = null
   })
+
+  /** A task's card: over the module on show where it opens one, else on the task's board. */
+  const openTarget = (target: PlanningTarget) =>
+    openRoute(inPlace(target) ?? planningTargetRoute(target))
 
   /** The finder, searching for text a surface hands it: the board filter's last row. */
   function findText(text: string) {
@@ -100,6 +104,7 @@ export function useGlobalWorkActions(
     requestsScope,
     openRequests,
     pendingRequestCount,
+    openRoute,
     openTarget,
   }
 }

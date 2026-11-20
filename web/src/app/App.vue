@@ -90,6 +90,7 @@ const {
   requestsScope,
   openRequests,
   pendingRequestCount,
+  openRoute,
   openTarget,
 } = useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
   cardInPlace(activeManifest.value, route.value, target),
@@ -395,6 +396,7 @@ usePlatformEntryRestore({
     @all="requestsScope = null"
     @close="requestsOpen = false"
     @select="openTarget"
+    @open="openRoute"
     @count="(count) => (pendingRequestCount = count)"
   />
   <DocumentDrawer

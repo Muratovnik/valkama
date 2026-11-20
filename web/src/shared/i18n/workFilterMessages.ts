@@ -42,6 +42,23 @@ export const workFilterMessages = {
         },
       },
       conditions: 'Conditions',
+      // «Closed in a period»: its periods in the menu, its chip, and its days' fields.
+      closedIn: {
+        name: 'Closed in a period',
+        today: 'Today',
+        week: 'This week',
+        weeks4: 'Past 4 weeks',
+        custom: 'Days of my own',
+        chip: {
+          today: 'Closed today',
+          week: 'Closed this week',
+          weeks4: 'Closed in 4 weeks',
+          custom: 'Closed on my days',
+        },
+        from: 'Closed from',
+        to: 'Closed to',
+        reversed: 'The last day comes before the first.',
+      },
       tokens: 'Picked facets',
       facet: {
         category: 'State',
@@ -97,6 +114,22 @@ export const workFilterMessages = {
         },
       },
       conditions: 'Условия',
+      closedIn: {
+        name: 'Закрыто за период',
+        today: 'Сегодня',
+        week: 'Эта неделя',
+        weeks4: '4 недели',
+        custom: 'Свои дни',
+        chip: {
+          today: 'Закрыто сегодня',
+          week: 'Закрыто на этой неделе',
+          weeks4: 'Закрыто за 4 недели',
+          custom: 'Закрыто за свои дни',
+        },
+        from: 'Закрыто с',
+        to: 'Закрыто по',
+        reversed: 'Последний день стоит раньше первого.',
+      },
       tokens: 'Выбранные признаки',
       facet: {
         category: 'Состояние',

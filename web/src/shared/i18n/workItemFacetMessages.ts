@@ -13,6 +13,8 @@ export const workItemFacetMessages = {
       ready: 'Workable',
       held: 'Has an assignee',
       asked: 'Waiting for my answer',
+      // A card of the space's triage stack no review has marked, as «time to triage» counts it.
+      triage: 'Awaiting triage',
       elsewhere: 'From another space',
       notElsewhere: 'Not from another space',
       heldBy: 'Held by {holder}',
@@ -71,6 +73,7 @@ export const workItemFacetMessages = {
       ready: 'Можно брать',
       held: 'Есть исполнитель',
       asked: 'Ждёт моего ответа',
+      triage: 'Ждёт разбора',
       elsewhere: 'Из другого пространства',
       notElsewhere: 'Не из другого пространства',
       heldBy: 'Держит {holder}',

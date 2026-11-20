@@ -13,12 +13,14 @@ import type { PendingCount } from '@/features/input-requests/composables/useInpu
 
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 defineProps<{ open: boolean; scope?: PlanningSpaceRef | null }>()
 const emit = defineEmits<{
   all: []
   close: []
   count: [value: PendingCount | null]
+  open: [route: PlatformRoute]
   select: [target: PlanningTarget]
 }>()
 
@@ -34,6 +36,7 @@ const documentBeside = useDocumentPane('hub', () => t('requests.title'))
     @all="emit('all')"
     @close="emit('close')"
     @select="(target) => emit('select', target)"
+    @open="(route) => emit('open', route)"
     @count="(count) => emit('count', count)"
     @pane-close="documentBeside.close"
     @pane-fit="documentBeside.stand"

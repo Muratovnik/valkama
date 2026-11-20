@@ -56,6 +56,7 @@ describe('input request wire contract', () => {
 
   it('takes the line that triage is due from the first page, which alone carries it', async () => {
     const line = {
+      space_ref: requestEntry().target.space_ref,
       space: { key: 'TASK', name: 'Tasks' },
       count: 120,
       oldest_at: '2026-11-02T09:12:00Z',
@@ -82,6 +83,9 @@ describe('input request wire contract', () => {
     expect(() =>
       validateInputRequestList({ ...requestList(), triage_due: [{ ...line, unknown: true }] }),
     ).toThrow()
+    // Without its source's ref the line could not open that space's board.
+    const unplaced = { space: line.space, count: line.count, oldest_at: line.oldest_at }
+    expect(() => validateInputRequestList({ ...requestList(), triage_due: [unplaced] })).toThrow()
   })
 
   it('uses the request revision and sends a required boolean false without coercion', async () => {

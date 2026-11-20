@@ -20,6 +20,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { DIALOG_ROOM_BESIDE_DOCUMENT } from '@/shared/lib/shellLayout.ts'
 import { spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -36,6 +37,7 @@ const emit = defineEmits<{
   'all': []
   'close': []
   'count': [value: PendingCount | null]
+  'open': [route: PlatformRoute]
   'pane-close': []
   'pane-fit': [fit: PaneFit | null]
   'select': [target: PlanningTarget]
@@ -145,6 +147,7 @@ watch(
       @dismiss="remove"
       @draft="(key, value) => (drafts[key] = value)"
       @select="emit('select', $event)"
+      @open="emit('open', $event)"
     />
     <template #actions="{ scroller }">
       <RequestNavigator :scroller="scroller" />

@@ -2,7 +2,11 @@ import { boundedList, boundedText, positiveInt, strictObject, z } from '@/shared
 import { ACTION_OUTCOMES, actionSchema } from '@/shared/api/inputRequestAction.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { otherSpaceSchema } from '@/shared/api/planningSpaceModel.ts'
-import { planningCoverageSchema, planningTargetSchema } from '@/shared/api/planningTarget.ts'
+import {
+  planningCoverageSchema,
+  planningSpaceRefSchema,
+  planningTargetSchema,
+} from '@/shared/api/planningTarget.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
 const FIELD_ID = /^[a-z][a-z0-9_-]{0,63}$/u
@@ -233,10 +237,12 @@ const listSchema = strictObject({
   has_more: z.boolean(),
   /**
    * One line per space read whose triage stack waits past its thresholds: no question, so
-   * in no count or page. The age is the reader's to count from `oldest_at`.
+   * in no count or page. The age is the reader's to count from `oldest_at`; `space_ref` is
+   * the source's, which opens that space's board.
    */
   triage_due: z.array(
     strictObject({
+      space_ref: planningSpaceRefSchema,
       space: otherSpaceSchema,
       count: positiveInt(),
       oldest_at: boundedText(ISO, 96),
