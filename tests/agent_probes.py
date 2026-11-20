@@ -45,7 +45,12 @@ home to its last session: a second run on the same home waits for the first
 and says whose run it waits for, rather than clearing the home under it.
 
 The user's files, hook registrations and store are only read, and the store
-only through a connection that cannot write. Each session's record goes to
+only through a connection that cannot write. The run holds itself to that:
+`LiveFiles` digests the user's instruction files, client settings, hook
+registrations, Git configuration, project registry and installed skill when the
+run starts, once the profile is built and after each session, `run.json` keeps
+the first and last digests, and a change is an isolation failure, a session's
+own when it happened during one. Each session's record goes to
 `--out/<scenario>/<client>/`: the client's output of every turn, the handshake,
 the setup's bindings, a copy of the store, its spool and the profile's project
 registry after the session, and the failures of the environment, which say why
@@ -58,6 +63,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import dataclasses
+import hashlib
 import json
 import os
 import re
@@ -1718,6 +1724,78 @@ class SessionRunner:
                 shutil.copy2(path, kept / path.name)
 
 
+# --- the user's files -------------------------------------------------------------------
+
+
+def _sha256(path: Path) -> str | None:
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+
+
+class LiveFiles:
+    """The user's files a run reads and must leave as they were, digested as the run goes.
+
+    The instruction files, each client's settings and hook registration, the global
+    Git configuration with its hooks, the project registry, the coordinator files and
+    the installed Valkama skill. Their digests are taken when the run starts, again
+    once the profile and the store are ready, and after each session, and a change is
+    the isolation failure of the stage it happened in. `~/.claude.json` is not among
+    them: the user's running Claude Code sessions rewrite it whatever a run does. Nor
+    is the store, which the user's own service writes: the run reads it only through a
+    connection that cannot write.
+    """
+
+    def __init__(self, files: Sequence[Path], trees: Sequence[Path]) -> None:
+        self.files = tuple(dict.fromkeys(path.resolve() for path in files))
+        self.trees = tuple(dict.fromkeys(path.resolve() for path in trees))
+        self.before = self.digest()
+        self.after = self.before
+        #: Each stage that changed a file: its name and the files' paths.
+        self.changes: list[dict[str, Any]] = []
+
+    @classmethod
+    def of(cls, inputs: Inputs, registry: Path | None, git_config: Path | None) -> LiveFiles:
+        claude, codex = inputs.claude_dir, inputs.codex_dir
+        files = [
+            claude / "settings.json",
+            inputs.claude_md,
+            claude / "CLAUDE.md",
+            codex / "config.toml",
+            codex / "hooks.json",
+            inputs.codex_agents,
+            codex / "AGENTS.md",
+        ]
+        if git_config is not None:
+            files.append(git_config)
+        if registry is not None:
+            files += [registry / "projects.json", registry / "project-registry.toml"]
+        skills = [base / "valkama" for base in (claude / "skills", inputs.agents_skills)]
+        return cls(files, [inputs.coordinator, *skills, codex / "skills" / "valkama"])
+
+    def digest(self) -> dict[str, str | None]:
+        """Each file by its path, with the SHA-256 of its bytes, or None where there is none."""
+
+        paths = list(self.files)
+        for tree in self.trees:
+            if tree.is_dir():
+                paths += sorted(path for path in tree.rglob("*") if path.is_file())
+        return {str(path): _sha256(path) for path in dict.fromkeys(paths)}
+
+    def check(self, stage: str) -> list[str]:
+        """The files that changed since the last check, recorded as `stage`'s change."""
+
+        now = self.digest()
+        changed = sorted(
+            path for path in {*self.after, *now} if self.after.get(path) != now.get(path)
+        )
+        self.after = now
+        if changed:
+            self.changes.append({"stage": stage, "changed": changed})
+        return changed
+
+    def record(self) -> dict[str, Any]:
+        return {"before": self.before, "after": self.after, "changes": self.changes}
+
+
 # --- the run ----------------------------------------------------------------------------
 
 
@@ -1741,8 +1819,17 @@ def _programs(chosen: Sequence[str], given: Sequence[str], path: str) -> dict[st
     return programs
 
 
-def run(options: argparse.Namespace, source: Path | None, registry: Path | None = None) -> int:
-    """Every chosen scenario on every chosen client; 0 when no session met a failure."""
+def run(
+    options: argparse.Namespace,
+    source: Path | None,
+    registry: Path | None = None,
+    git_config: Path | None = None,
+) -> int:
+    """Every chosen scenario on every chosen client; 0 when no session met a failure.
+
+    `registry` and `git_config` are the user's project registry directory and global
+    Git file, found by `main` before the `tests` package moved where they are looked for.
+    """
 
     chosen = list(CLIENTS) if options.client == "both" else [options.client]
     scenarios = load_cases(options.cases.resolve(), options.only)
@@ -1758,7 +1845,8 @@ def run(options: argparse.Namespace, source: Path | None, registry: Path | None 
     with machine_lock.held(
         f"a probe run into {out}", path=home_lock(home), say=_say, name="probe-home lock"
     ):
-        return _run_locked(options, chosen, scenarios, inputs, home, out, source, registry)
+        live = LiveFiles.of(inputs, registry, git_config)
+        return _run_locked(options, chosen, scenarios, inputs, home, out, source, registry, live)
 
 
 def home_lock(home: Path) -> Path:
@@ -1782,6 +1870,7 @@ def _run_locked(
     out: Path,
     source: Path | None,
     registry: Path | None,
+    live: LiveFiles,
 ) -> int:
     profile = build_profile(home, inputs)
     programs = _programs(chosen, options.client_program or (), profile.environment["PATH"])
@@ -1792,12 +1881,18 @@ def _run_locked(
     }
     head = _run_command(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], os.environ)
     sessions = []
-    for scenario in scenarios:
+    # A profile that changed the user's files runs no session on them.
+    prepared_ok = not live.check("profile")
+    for scenario in scenarios if prepared_ok else ():
         for client in (item for item in chosen if item in scenario.clients):
             _say(f"{scenario.id} {client}")
             record = SessionRunner(
                 profile, scenario, client, programs[client], out / scenario.name / client, base
             ).run()
+            changed = live.check(f"{scenario.id} {client}")
+            if changed:
+                record.fail("isolation", f"the user's files changed: {', '.join(changed)}")
+                record.write()
             for failure in record.failures:
                 _say(f"  environment failure at {failure['stage']}: {failure['detail']}")
             sessions.append(
@@ -1817,11 +1912,15 @@ def _run_locked(
             "store": prepared,
             "versions": versions,
             "sessions": sessions,
+            "live_files": live.record(),
         },
     )
+    for change in live.changes:
+        _say(f"isolation failure: {change['stage']} changed {', '.join(change['changed'])}")
+    _say(f"the user's files: {len(live.after)} checked, {len(live.changes)} stage(s) changed them")
     failed = sum(1 for item in sessions if item["failures"])
     _say(f"{len(sessions)} session(s), {failed} with an environment failure; record in {out}")
-    return 1 if failed or not sessions else 0
+    return 1 if failed or live.changes or not sessions else 0
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1871,7 +1970,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         # and moves `LOCALAPPDATA`, where the registry the copy migrates with is.
         source = None if copy is None else Path(copy or store.db_path())
         registry = Path(project_registry.registry_path()).parent
-        return run(options, source, registry)
+        git_config = Path(os.environ.get("GIT_CONFIG_GLOBAL") or Path.home() / ".gitconfig")
+        return run(options, source, registry, git_config)
     except ProbeError as error:
         _say(f"refused: {error}")
         return 2

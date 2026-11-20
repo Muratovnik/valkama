@@ -145,6 +145,7 @@ def make_user(root: Path) -> dict[str, Path]:
         },
     }
     (claude / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    (root / ".gitconfig").write_text("[user]\n\tname = The user\n", encoding="utf-8")
     codex_line = f'"{sys.executable}" -I -S "{launcher}" hook codex session-start'
     codex_hooks = {
         "hooks": {
@@ -256,6 +257,12 @@ class RunCase(unittest.TestCase):
         return {}
 
     @classmethod
+    def cases(cls) -> Path:
+        """The scenario directory of the run, made once the user is."""
+
+        return SAMPLES / "cases"
+
+    @classmethod
     def main(cls, *arguments: str) -> tuple[int, str]:
         user = cls.user
         patched = {
@@ -263,12 +270,13 @@ class RunCase(unittest.TestCase):
             "HOME": str(user),
             "LOCALAPPDATA": str(user / "AppData" / "Local"),
             "APPDATA": str(user / "AppData" / "Roaming"),
+            "GIT_CONFIG_GLOBAL": str(user / ".gitconfig"),
             **cls.environment(),
         }
         argv = [
             "run",
             "--cases",
-            str(SAMPLES / "cases"),
+            str(cls.cases()),
             "--sections",
             str(SAMPLES / "sections.md"),
             "--claude-md",
@@ -530,6 +538,37 @@ class RunTests(RunCase):
         self.assertEqual(self.before, tree_digest(self.user))
         self.assertEqual([0], list(set(new_sidecars(self.user, self.before).values()) or {0}))
 
+    def test_the_run_digests_the_users_files_it_must_not_touch_and_finds_them_as_they_were(
+        self,
+    ) -> None:
+        live = json.loads((self.out / "run.json").read_text(encoding="utf-8"))["live_files"]
+        user = self.user.resolve()
+        self.assertEqual(
+            [
+                ".agents/skills/valkama/SKILL.md",
+                ".claude/CLAUDE.md",
+                ".claude/coordinator/coordination.md",
+                ".claude/coordinator/questions.md",
+                ".claude/settings.json",
+                ".claude/skills/valkama/SKILL.md",
+                ".codex/AGENTS.md",
+                ".codex/config.toml",
+                ".codex/hooks.json",
+                ".codex/skills/valkama/SKILL.md",
+                ".gitconfig",
+                "AppData/Local/Valkama/project-registry.toml",
+                "AppData/Local/Valkama/projects.json",
+            ],
+            sorted(
+                Path(path).relative_to(user).as_posix()
+                for path, digest in live["before"].items()
+                if digest is not None
+            ),
+        )
+        self.assertEqual(live["before"], live["after"])
+        self.assertEqual([], live["changes"])
+        self.assertIn("the user's files: 13 checked, 0 stage(s) changed them", self.said)
+
     def test_no_server_of_the_run_archives_a_transcript_of_the_users(self) -> None:
         # The copy owes the user's session a copy of a transcript in the user's own
         # client directory; every server of the run is kept to the profile's.
@@ -586,6 +625,66 @@ class OldReleaseHookTests(RunCase):
     def test_the_users_files_registrations_and_store_are_unchanged(self) -> None:
         self.assertEqual(self.before, tree_digest(self.user))
         self.assertEqual([0], list(set(new_sidecars(self.user, self.before).values()) or {0}))
+
+
+class LiveFileTests(RunCase):
+    """A session that writes one of the user's hook registrations fails the run's isolation.
+
+    The client here writes the user's Codex hook registration as one of its file
+    edits, as an agent outside a sandbox could.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.run_probes("--client", "claude")
+
+    @classmethod
+    def cases(cls) -> Path:
+        cases = Path(cls.directory.name) / "cases"
+        cases.mkdir()
+        target = cls.paths["codex"] / "hooks.json"
+        prompt = {"files": {target.as_posix(): '{"hooks": {}}'}, "answer": "Rewrote it."}
+        scenario = {
+            "id": "W1",
+            "clients": ["claude"],
+            "workspace": str(SAMPLES / "workspace"),
+            "overlay": None,
+            "repos": ["."],
+            "registry": None,
+            "mcp": "failing",
+            "setup": [],
+            "turns": [{"prompt": json.dumps(prompt)}],
+            "expect": {
+                "start": [{"check": "session", "event": "session_start", "client": "{{client}}"}]
+            },
+            "rubric": {},
+        }
+        (cases / "writer.json").write_text(json.dumps(scenario), encoding="utf-8")
+        return cases
+
+    def test_the_session_that_wrote_it_fails_its_isolation_and_the_run_with_it(self) -> None:
+        target = str((self.paths["codex"] / "hooks.json").resolve())
+        self.assertEqual(1, self.code, self.said)
+        self.assertIn(f"isolation failure: W1 claude changed {target}", self.said)
+        live = json.loads((self.out / "run.json").read_text(encoding="utf-8"))["live_files"]
+        self.assertEqual([{"stage": "W1 claude", "changed": [target]}], live["changes"])
+        self.assertNotEqual(live["before"][target], live["after"][target])
+        self.assertEqual(
+            {path: digest for path, digest in live["before"].items() if path != target},
+            {path: digest for path, digest in live["after"].items() if path != target},
+        )
+        record = self.record("writer", "claude")
+        self.assertEqual(
+            [("isolation", True)],
+            [(item["stage"], target in item["detail"]) for item in record.session["failures"]],
+        )
+        judged = agent_probes_judge.judge_session(
+            record,
+            agent_probes.load_scenario(self.out.parent / "cases" / "writer.json"),
+            self.out / agent_probes_judge.WORK / "writer" / "claude",
+            self.out / agent_probes_judge.REVIEW / "writer" / "claude",
+        )
+        self.assertEqual(["environment failure"], [probe["verdict"] for probe in judged["probes"]])
 
 
 class ScenarioFormatTests(unittest.TestCase):
@@ -849,7 +948,9 @@ class StoreCopyRegistryTests(unittest.TestCase):
     Run as a script, the runner imports the `tests` package after `main` has started,
     and that import moves `LOCALAPPDATA` into the suite's directory. The copy then
     found no registry, skipped its upgrade, and the migration refused the owner's
-    store with «Valkama project registry is absent».
+    store with «Valkama project registry is absent». The same import moves
+    `GIT_CONFIG_GLOBAL`, so the global Git file whose digest the run keeps is found
+    there too.
     """
 
     def test_the_migration_takes_the_registry_main_found_before_the_package_moved_it(
@@ -873,17 +974,22 @@ class StoreCopyRegistryTests(unittest.TestCase):
                 calls.append(arguments)
                 return '"status": "migrated"'
 
-            def run(_options: object, store: Path, registry: Path) -> int:
+            def run(_options: object, store: Path, registry: Path, git_config: Path) -> int:
                 # What importing the `tests` package does to a script's environment.
                 os.environ["LOCALAPPDATA"] = str(moved)
+                os.environ["GIT_CONFIG_GLOBAL"] = str(moved / "gitconfig")
                 prepared.update(agent_probes.prepare_store(store, work, registry)[1])
+                prepared["git_config"] = git_config
                 return 0
 
             argv = ["run", "--cases", "c", "--sections", "s", "--claude-md", "m"]
             argv += ["--claude-coordinator", "k", "--codex-agents", "a", "--client", "both"]
             argv += ["--client-home", "h", "--out", "o", "--store-copy", str(source)]
             with (
-                mock.patch.dict(os.environ, {"LOCALAPPDATA": str(caller)}),
+                mock.patch.dict(
+                    os.environ,
+                    {"LOCALAPPDATA": str(caller), "GIT_CONFIG_GLOBAL": str(caller / "gitconfig")},
+                ),
                 mock.patch.object(agent_probes, "_valkama", valkama),
                 mock.patch.object(agent_probes, "run", run),
             ):
@@ -894,6 +1000,7 @@ class StoreCopyRegistryTests(unittest.TestCase):
                 self.assertEqual(content, (copied / file).read_bytes(), file)
             self.assertIn(("projects", "upgrade"), calls)
             self.assertEqual("migrated", prepared["migration"])
+            self.assertEqual(caller / "gitconfig", prepared["git_config"])
 
 
 class CodexSkillConfigTests(unittest.TestCase):
