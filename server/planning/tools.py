@@ -494,7 +494,9 @@ TOOLS = [
             "acceptance": _ACCEPTANCE,
             "split_from": {
                 **WORK_ITEM_REFERENCE,
-                "description": "An open task to split a part off: the new item stands beside"
+                "description": "An open task to split a part off. A part of the task at hand"
+                " that another project, another holder or a later time takes is split off"
+                " it, not filed apart: the new item stands beside"
                 " it under the same parent, accepted as it is, and takes the steps named in"
                 " steps with their ids and ticks. Refused for a task in review and with a"
                 " parent, state or acceptance of its own. The answer names split_from and"
