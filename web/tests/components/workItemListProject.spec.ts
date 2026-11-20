@@ -19,6 +19,7 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
 
@@ -71,12 +72,13 @@ const projectCells = () =>
   )
 
 async function list(props: Partial<InstanceType<typeof WorkItemList>['$props']>) {
-  mount(WorkItemList, {
+  const wrapper = mount(WorkItemList, {
     attachTo: document.body,
     global: { plugins: [i18n()] },
     props: { items: space, links: [], sort: BY_REFERENCE, ...props },
   })
   await flushPromises()
+  return wrapper
 }
 
 /** The list at `width` pixels of its own, as the list reads its box. */
@@ -134,7 +136,7 @@ describe('the project column', () => {
   ] as const) {
     it(`folds with «Goal and stage» and follows the path under the title of a ${fit} list`, () =>
       at(width, async () => {
-        await list({ projects: PROJECTS })
+        const wrapper = await list({ projects: PROJECTS })
         expect(document.querySelector<HTMLElement>('.work-item-list')?.dataset.fit).toBe(fit)
         expect(heads()).not.toContain('Project')
         expect(document.querySelector('.list-project')).toBeNull()
@@ -144,12 +146,17 @@ describe('the project column', () => {
         expect(project?.textContent?.trim()).toBe('Alpha app')
         // Work naming none says nothing there: the dash is the column's word.
         expect(rowOf('MAIN-4')?.querySelector('.list-title')?.textContent).not.toContain('—')
-        // Its sort rides the title's heading, after the goal's.
-        const folded = [...document.querySelectorAll('thead .list-sort.folded')]
-        expect(folded.slice(0, 2).map((sort) => sort.textContent?.trim())).toEqual([
-          'Goal and stage',
-          'Project',
-        ])
+        // Its sort rides the title's heading, after the goal's: a button where the two fold
+        // alone, an option of the one choice where the state, the priority and the holder fold too.
+        const sorts =
+          fit === 'wide'
+            ? [...document.querySelectorAll('thead .list-sort.folded')].map((sort) =>
+                sort.textContent?.trim(),
+              )
+            : (
+                wrapper.getComponent(ChoiceSelect).props() as { options: { label: string }[] }
+              ).options.map((option) => option.label)
+        expect(sorts.slice(0, 2)).toEqual(['Goal and stage', 'Project'])
       }))
   }
 })

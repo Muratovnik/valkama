@@ -316,7 +316,7 @@ describe('the list head on a narrow list', () => {
       props: {
         columns: LIST_COLUMNS.filter((column) => !folded.includes(column)),
         folded,
-        narrow: true,
+        choice: true,
         sort: { key: sortKey, descending: true },
       },
       global: { plugins: [i18n()] },

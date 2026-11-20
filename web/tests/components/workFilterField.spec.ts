@@ -100,7 +100,7 @@ describe('the Work filter field', () => {
     const wrapper = field()
     await input(wrapper).trigger('click')
     expect(input(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(groupNames(wrapper)).toEqual(['Conditions', 'Filter by'])
+    expect(groupNames(wrapper)).toEqual(['Filters', 'Filter by'])
     // The held condition says how many it lets through, as its preset did.
     expect(options(wrapper)).toEqual([
       'Workable',

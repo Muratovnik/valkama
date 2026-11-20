@@ -13,6 +13,7 @@ import {
   isFolded,
   LIST_COLUMNS,
   sortedRows,
+  sortsChosen,
 } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import { boardItem } from './fixtures/board.ts'
@@ -38,25 +39,26 @@ describe('the list columns as the list narrows', () => {
     expect(standing(0)).toEqual(all)
   })
 
-  it('fold the goal and stage and the project first, keeping the rest down to 900px', () => {
+  it('fold the goal and stage and the project first, keeping the rest down to 920px', () => {
     const rest = ['reference', 'title', 'state', 'priority', 'claim', 'checklist', 'updated']
     expect(standing(1099)).toEqual(rest)
-    expect(standing(900)).toEqual(rest)
+    expect(standing(920)).toEqual(rest)
   })
 
-  it('then fold the state, the priority and the holder, keeping the steps and the date', () => {
-    expect(standing(899)).toEqual(['reference', 'title', 'checklist', 'updated'])
+  it('then fold the state, the priority and the holder, keeping the conditions and the date', () => {
+    expect(standing(919)).toEqual(['reference', 'title', 'checklist', 'updated'])
+    expect(standing(900)).toEqual(['reference', 'title', 'checklist', 'updated'])
     expect(standing(703)).toEqual(['reference', 'title', 'checklist', 'updated'])
     expect(standing(560)).toEqual(['reference', 'title', 'checklist', 'updated'])
   })
 
-  it('stand «Goal and stage» and «Project» together from 1240px, and fold them together', () => {
+  it('stand «Goal and stage» and «Project» together from 1270px, and fold them together', () => {
     const both = (width: number) =>
       LIST_COLUMNS.filter((column) => !isFolded(fitFor(width, true), column.key)).map(
         (column) => column.key,
       )
-    expect(both(1240).slice(2, 4)).toEqual(['goal', 'project'])
-    expect(both(1239)).toEqual([
+    expect(both(1270).slice(2, 4)).toEqual(['goal', 'project'])
+    expect(both(1269)).toEqual([
       'reference',
       'title',
       'state',
@@ -65,8 +67,8 @@ describe('the list columns as the list narrows', () => {
       'checklist',
       'updated',
     ])
-    expect(fitFor(1239, true)).toBe('wide')
-    expect(fitFor(899, true)).toBe('medium')
+    expect(fitFor(1269, true)).toBe('wide')
+    expect(fitFor(919, true)).toBe('medium')
     expect(fitFor(0, true)).toBe('full')
   })
 
@@ -86,6 +88,21 @@ describe('the list columns as the list narrows', () => {
   it('leave the reference and the title on a phone', () => {
     expect(standing(559)).toEqual(['reference', 'title'])
     expect(standing(292)).toEqual(['reference', 'title'])
+  })
+
+  it('offer the folded sorts as one choice wherever the state, the priority and the holder fold', () => {
+    // A run of five sorts after the title's took a second line of the head; of two it holds one.
+    expect([1440, 1100, 920].map((width) => sortsChosen(fitFor(width)))).toEqual([
+      false,
+      false,
+      false,
+    ])
+    expect([919, 703, 560, 292].map((width) => sortsChosen(fitFor(width)))).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ])
   })
 })
 

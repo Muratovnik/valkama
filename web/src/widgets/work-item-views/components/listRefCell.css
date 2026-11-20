@@ -53,8 +53,11 @@
   }
 }
 
-/* The priority's glyph after the reference, where its column has folded away. */
+/* The priority's glyph after the reference, where its column has folded away. Its column
+   counts it: counted as nothing, an urgent row five levels deep at 390px stood it 6px past
+   its cell, over the title's inset. */
 .list-after {
+  min-width: max-content;
   margin-inline-start: var(--space-1);
 }
 
@@ -68,8 +71,8 @@
   --list-group-lead: calc(var(--list-slot-size) + var(--space-1) + var(--space-4) + var(--space-2));
 
   vertical-align: baseline;
-  padding: var(--space-2) var(--space-3);
-  padding-inline-start: calc(var(--space-3) + var(--list-group-lead));
+  padding: var(--space-2) var(--space-list-inset);
+  padding-inline-start: calc(var(--space-list-inset) + var(--list-group-lead));
   text-indent: calc(-1 * var(--list-group-lead));
 }
 

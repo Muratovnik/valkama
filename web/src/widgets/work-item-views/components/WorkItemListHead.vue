@@ -26,10 +26,10 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
+  /** The folded sorts as one choice rather than a run of buttons (`sortsChosen`). */
+  choice: boolean
   columns: readonly ListColumn[]
   folded: readonly ListColumn[]
-  /** The folded sorts as one choice rather than a run of buttons. */
-  narrow: boolean
   /** The order in force: by a column's key, or by one no column shows, such as the queue's. */
   sort: ViewSort
 }>()
@@ -57,7 +57,7 @@ const holdsTitle = (column: ListColumn) => column.key === 'title'
 
 /** The sorts a heading offers as buttons: its own, and on the title's those folded under it. */
 function sortsIn(column: ListColumn): readonly ListColumn[] {
-  return !holdsTitle(column) || props.narrow ? [column] : [column, ...props.folded]
+  return !holdsTitle(column) || props.choice ? [column] : [column, ...props.folded]
 }
 
 function headClass(column: ListColumn) {
@@ -99,7 +99,7 @@ function choose(value: string) {
   <thead>
     <tr
       aria-rowindex="1"
-      :class="{ narrow }"
+      :class="{ choice }"
     >
       <th
         v-for="column in columns"
@@ -130,7 +130,7 @@ function choose(value: string) {
             />
           </button>
           <ChoiceSelect
-            v-if="narrow && holdsTitle(column) && folded.length"
+            v-if="choice && holdsTitle(column) && folded.length"
             class="list-sort-choice"
             size="heading"
             :label="t('workItem.list.sortBy')"
@@ -173,7 +173,7 @@ function choose(value: string) {
 
 /* The longest order may take a line of its own under the title's sort, and the
    other sorts stay on the first line. */
-.narrow .list-head {
+.choice .list-head {
   vertical-align: top;
 }
 
@@ -194,7 +194,7 @@ function choose(value: string) {
   flex: 1 1 auto;
   gap: var(--space-1);
   align-items: center;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-list-inset);
   border: 0;
   color: var(--color-text-muted);
   font: var(--font-column-head);
@@ -214,12 +214,6 @@ function choose(value: string) {
 
   .list-sorts:has(> :nth-child(2)) > & {
     flex: 0 0 auto;
-  }
-
-  /* On a phone the sorts give up half their inset, which is the width the
-     longest order's name needs beside the title's. */
-  .narrow & {
-    padding-inline: var(--space-2);
   }
 
   /* The choice beside the title's sort is a filled control with an inset of
@@ -243,9 +237,10 @@ function choose(value: string) {
 
 /* The reference's heading starts over the reference rather than over the
    glyphs that lead it, at the start the list declares; it is the cell's inset
-   where no list declares one. */
+   where no list declares one. A sort's inset is the list's cells'
+   (`--space-list-inset`), so a heading's word starts where its column's words do. */
 .list-head-reference > .list-sorts > .list-sort {
-  padding-inline-start: max(var(--space-3), var(--list-reference-start, 0px));
+  padding-inline-start: max(var(--space-list-inset), var(--list-reference-start, 0px));
 }
 
 .list-sort-choice {

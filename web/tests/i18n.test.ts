@@ -207,3 +207,18 @@ test('a point of acceptance is a condition in both languages, never a step of a 
   assert.equal(messages.ru.workItem.nextStep.label, 'Следующее условие')
   assert.equal(messages.en.workItem.checklist, 'Conditions')
 })
+
+test('the filter calls nothing of its own a condition, the word for a point of acceptance', () => {
+  // Its group of ready-made filters was «Условия», "Conditions", beside a card's «Условия».
+  const word = { ru: /услови/iu, en: /condition/iu }
+  for (const locale of ['en', 'ru'] as const) {
+    const said = texts(messages[locale].workItem.filter)
+    assert.ok(said.length > 20, locale)
+    assert.deepEqual(
+      said.filter(([, text]) => word[locale].test(text)),
+      [],
+      locale,
+    )
+  }
+  assert.equal(messages.ru.workItem.filter.conditions, 'Фильтры')
+})

@@ -60,7 +60,7 @@ import { useListTreeRows } from '@/widgets/work-item-views/composables/useListTr
 import type { ListTreeScope } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
 import type { SpaceProject } from '@/widgets/work-item-views/utils/boardLanes.ts'
-import { drawnColumns, isFolded } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { drawnColumns, isFolded, sortsChosen } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 import { ROW_FACETS } from '@/widgets/work-item-views/utils/listRowWords.ts'
 import { orderedWork, QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
@@ -268,7 +268,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
         <WorkItemListHead
           :columns="shownColumns"
           :folded="foldedColumns"
-          :narrow="narrow"
+          :choice="sortsChosen(fit)"
           :sort="props.sort"
           @sort="emit('sort', $event)"
         />
@@ -387,10 +387,12 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
 /* A row focused from the keyboard stops below the sticky head rather than
    under it. Where a reference starts in its cell — the cell's inset and the
    two glyph slots before it — is declared here for the head, which starts the
-   reference's heading there rather than over the glyphs. */
+   reference's heading there; the cells and the sorts share one inset, halved on a
+   narrow list, as DESIGN.md says under «Work». */
 .work-item-list {
+  --space-list-inset: var(--space-3);
   --list-slot-size: var(--size-control-inline);
-  --list-reference-start: calc(var(--space-3) + var(--list-slot-size) + var(--space-1));
+  --list-reference-start: calc(var(--space-list-inset) + var(--list-slot-size) + var(--space-1));
 
   height: 100%;
   min-height: 0;
@@ -406,6 +408,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
   }
 
   &[data-fit='narrow'] {
+    --space-list-inset: var(--space-2);
     --list-slot-size: var(--space-4);
   }
 }
@@ -452,7 +455,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
 
 .list-cell {
   vertical-align: baseline;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-list-inset);
   color: var(--color-text-muted);
   font: var(--font-line);
   white-space: nowrap;
@@ -471,14 +474,11 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
   color: var(--color-text-muted);
 }
 
-/* An open blocker and the labels, on their own line under the title. */
-.list-under {
+/* An open blocker and the labels, on their own line under the title; empty, an inline
+   box that takes no room. */
+.list-under:not(:empty) {
   display: block;
   padding-top: var(--space-1);
-
-  &:empty {
-    display: none;
-  }
 }
 
 /* The columns folded under the title, as one muted line of facts that wraps
@@ -503,13 +503,10 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
 /* The columns whose values run long stop at a measure, and the cell's padding is
    outside it; the cell is one line (`.one-line`), and the whole name or path is its
    hover while the cell cuts it. */
-.list-holder {
-  max-width: calc(10rem + 2 * var(--space-3));
-}
-
+.list-holder,
 .list-goal,
 .list-project {
-  max-width: calc(10rem + 2 * var(--space-3));
+  max-width: calc(10rem + 2 * var(--space-list-inset));
 }
 
 .list-claim {

@@ -1,7 +1,7 @@
 /**
  * The list grouped by goal on a space as large as a long-lived one, at the list's
  * widths: 1280 and 1024, where its indent steps 24px to the fifth level, and 390,
- * a phone's, where it steps 16px to the third (`listTreePage.ts`).
+ * a phone's, where it steps 16px to the second (`listTreePage.ts`).
  *
  * A goal five levels deep stands as five rows, each a level deeper, its
  * references stepping in by the indent until the indent's last level. Under a
@@ -23,7 +23,7 @@ import { test } from './test.ts'
 const WIDTHS = [
   { width: 1280, height: 900, step: 24, levels: 5 },
   { width: 1024, height: 800, step: 24, levels: 5 },
-  { width: 390, height: 844, step: 16, levels: 3 },
+  { width: 390, height: 844, step: 16, levels: 2 },
 ] as const
 
 /** The deepest task's title, which no other card's begins: «Work item 110 …» does not. */

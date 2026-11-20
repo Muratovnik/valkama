@@ -998,8 +998,8 @@
           "open": 1,
           "recent": {
             "days": 7,
-            "created": 4,
-            "closed": 4,
+            "created": 0,
+            "closed": 0,
             "trend": "steady"
           },
           "series": [
@@ -1262,8 +1262,8 @@
           "open": 0,
           "recent": {
             "days": 7,
-            "created": 2,
-            "closed": 2,
+            "created": 0,
+            "closed": 0,
             "trend": "steady"
           },
           "series": [

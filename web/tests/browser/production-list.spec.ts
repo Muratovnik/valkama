@@ -12,8 +12,10 @@ import { openList, serve, shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
-// A phone's width folds five columns, and their sorts as a run of buttons took
-// three lines of it; there they are one choice instead.
+// Where the state, the priority and the holder fold, the folded sorts are one choice: as a
+// run of buttons after the title's they took three lines of a phone's head, and a second
+// line of the head at 1024px once «Steps» became «Conditions». At 1280px two fold, a run
+// that holds one line.
 for (const [width, headings, foldedSorts, choice] of [
   [
     1440,
@@ -21,7 +23,8 @@ for (const [width, headings, foldedSorts, choice] of [
     0,
     false,
   ],
-  [1024, ['Ref', 'Title', 'Conditions', 'Updated'], 4, false],
+  [1280, ['Ref', 'Title', 'State', 'Priority', 'Assignee', 'Conditions', 'Updated'], 1, false],
+  [1024, ['Ref', 'Title', 'Conditions', 'Updated'], 0, true],
   [390, ['Ref', 'Title'], 0, true],
 ] as const) {
   test(`the list fits its columns at ${width}px and gives the title the rest`, async ({
@@ -222,89 +225,106 @@ test('a phone-width list offers the folded orders as one choice that turns them 
   await expect(page.locator('.drawer')).toHaveCount(1)
 })
 
-test('at the fold the title keeps 36 characters, the references align and nobody reads as workable', async ({
-  page,
-}, info) => {
-  await page.setViewportSize({ width: 1440, height: 800 })
-  await installBackend(page)
-  await serve(page)
-  await openList(page)
-  const list = page.locator('.work-item-list')
-  await expect(list.locator('tbody tr').first()).toBeVisible()
-  // The narrowest list that still stands every column side by side.
-  await list.evaluate((element) => {
-    element.style.inlineSize = '900px'
-  })
-  await expect(list).toHaveAttribute('data-fit', 'wide')
-  const measured = await list.evaluate((element) => {
-    const title = element.querySelector<HTMLElement>('tbody .list-title')
-    const probe = document.createElement('span')
-    probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
-    title?.append(probe)
-    const characters =
-      (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
-    probe.remove()
-    const starts = [...element.querySelectorAll('tbody .list-open')].map((open) =>
-      Math.round(open.getBoundingClientRect().left),
-    )
-    const glyphs = [...element.querySelectorAll('tbody .list-ref-cell')].map(
-      (cell) => cell.querySelectorAll('.facet-glyph').length,
-    )
-    return { characters, starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
-  })
-  // A row says its priority once: while its column is shown, the column says the
-  // word in its tone, and the reference leads with the kind alone.
-  const priority = await list.evaluate((element) =>
-    [...element.querySelectorAll('tbody tr')].map((row) => {
-      const column = row.querySelector<HTMLElement>(
-        'td:not(.list-ref-cell) .facet-mark[data-facet="priority"]',
+// In both languages, so a longer word for a heading in either shows here: «Conditions» took
+// the title of a list 900px wide down to 35.6 characters in English and «Условия» to 34.2.
+for (const [locale, workable] of [
+  ['en', 'Workable'],
+  ['ru', 'Можно брать'],
+] as const)
+  test(`at the fold the title keeps 36 characters in ${locale}, the references align and nobody reads as workable`, async ({
+    page,
+  }, info) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await installBackend(page)
+    await serve(page)
+    await openList(page)
+    const list = page.locator('.work-item-list')
+    await expect(list.locator('tbody tr').first()).toBeVisible()
+    // The narrowest list that still stands every column but «Goal and stage» side by side.
+    await list.evaluate((element) => {
+      element.style.inlineSize = '920px'
+    })
+    await expect(list).toHaveAttribute('data-fit', 'wide')
+    const measured = await list.evaluate((element) => {
+      const title = element.querySelector<HTMLElement>('tbody .list-title')
+      const probe = document.createElement('span')
+      probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
+      title?.append(probe)
+      const characters =
+        (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
+      probe.remove()
+      const starts = [...element.querySelectorAll('tbody .list-open')].map((open) =>
+        Math.round(open.getBoundingClientRect().left),
       )
-      return {
-        glyphs: row.querySelectorAll('.facet-mark[data-facet="priority"] .facet-glyph').length,
-        tone: column?.dataset.tone ?? null,
-        word: column ? getComputedStyle(column).color : null,
-      }
-    }),
-  )
-  expect(Math.max(...priority.map((row) => row.glyphs))).toBe(0)
-  const hued = priority.filter((row) => row.tone === 'warning' || row.tone === 'danger')
-  const plain = priority.find((row) => row.word && !hued.includes(row))
-  expect(hued.length).toBeGreaterThan(0)
-  for (const row of hued) expect(row.word).not.toBe(plain?.word)
-  expect(measured.characters).toBeGreaterThanOrEqual(36)
-  // Rows with and without glyphs, and every reference starts at one edge.
-  expect(measured.glyphs.length).toBeGreaterThan(1)
-  expect(measured.starts).toHaveLength(1)
-  await expect(list.locator('tbody')).not.toContainText('Workable')
-  await expectNoSilentClipping(page, 'list at 900px of list')
-  await page.screenshot(shot(info, 'w-list-900.png'))
-})
+      const glyphs = [...element.querySelectorAll('tbody .list-ref-cell')].map(
+        (cell) => cell.querySelectorAll('.facet-glyph').length,
+      )
+      return { characters, starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
+    })
+    // A row says its priority once: while its column is shown, the column says the
+    // word in its tone, and the reference leads with the kind alone.
+    const priority = await list.evaluate((element) =>
+      [...element.querySelectorAll('tbody tr')].map((row) => {
+        const column = row.querySelector<HTMLElement>(
+          'td:not(.list-ref-cell) .facet-mark[data-facet="priority"]',
+        )
+        return {
+          glyphs: row.querySelectorAll('.facet-mark[data-facet="priority"] .facet-glyph').length,
+          tone: column?.dataset.tone ?? null,
+          word: column ? getComputedStyle(column).color : null,
+        }
+      }),
+    )
+    expect(Math.max(...priority.map((row) => row.glyphs))).toBe(0)
+    const hued = priority.filter((row) => row.tone === 'warning' || row.tone === 'danger')
+    const plain = priority.find((row) => row.word && !hued.includes(row))
+    expect(hued.length).toBeGreaterThan(0)
+    for (const row of hued) expect(row.word).not.toBe(plain?.word)
+    expect(measured.characters).toBeGreaterThanOrEqual(36)
+    // Rows with and without glyphs, and every reference starts at one edge.
+    expect(measured.glyphs.length).toBeGreaterThan(1)
+    expect(measured.starts).toHaveLength(1)
+    await expect(list.locator('tbody')).not.toContainText(workable)
+    await expectNoSilentClipping(page, `list at 920px of list in ${locale}`)
+    await page.screenshot(shot(info, `w-list-920-${locale}.png`))
+    // A pixel narrower, the state, the priority and the holder fold under the title.
+    await list.evaluate((element) => {
+      element.style.inlineSize = '919px'
+    })
+    await expect(list).toHaveAttribute('data-fit', 'medium')
+  })
 
-test('from 1100px «Goal and stage» stands too, and the title still keeps 36 characters', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 800 })
-  await installBackend(page)
-  await serve(page)
-  await openList(page)
-  const list = page.locator('.work-item-list')
-  await expect(list.locator('tbody tr').first()).toBeVisible()
-  // The narrowest list that stands every column, «Goal and stage» with them.
-  await list.evaluate((element) => {
-    element.style.inlineSize = '1100px'
+for (const [locale, goal] of [
+  ['en', 'Goal and stage'],
+  ['ru', 'Цель и этап'],
+] as const)
+  test(`from 1100px «Goal and stage» stands too, and the title still keeps 36 characters in ${locale}`, async ({
+    page,
+  }) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await installBackend(page)
+    await serve(page)
+    await openList(page)
+    const list = page.locator('.work-item-list')
+    await expect(list.locator('tbody tr').first()).toBeVisible()
+    // The narrowest list that stands every column, «Goal and stage» with them.
+    await list.evaluate((element) => {
+      element.style.inlineSize = '1100px'
+    })
+    await expect(list).toHaveAttribute('data-fit', 'full')
+    await expect(list.locator('thead th .list-sort:not(.folded)').nth(2)).toHaveText(goal)
+    const room = await list.evaluate((element) => {
+      const title = element.querySelector<HTMLElement>('tbody .list-title')
+      const probe = document.createElement('span')
+      probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
+      title?.append(probe)
+      const characters =
+        (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
+      probe.remove()
+      return { characters, overflow: element.scrollWidth - element.clientWidth }
+    })
+    expect(room.characters).toBeGreaterThanOrEqual(36)
+    expect(room.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
   })
-  await expect(list).toHaveAttribute('data-fit', 'full')
-  await expect(list.locator('thead th .list-sort:not(.folded)').nth(2)).toHaveText('Goal and stage')
-  const room = await list.evaluate((element) => {
-    const title = element.querySelector<HTMLElement>('tbody .list-title')
-    const probe = document.createElement('span')
-    probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
-    title?.append(probe)
-    const characters =
-      (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
-    probe.remove()
-    return { characters, overflow: element.scrollWidth - element.clientWidth }
-  })
-  expect(room.characters).toBeGreaterThanOrEqual(36)
-  expect(room.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
-})
