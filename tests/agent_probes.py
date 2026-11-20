@@ -33,6 +33,10 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
   projects in the profile's registry, and a store copy migrated by this
   checkout, served by `tests/isolated.py serve --store-copy`.
 
+A run holds the home's lock, `<client-home>.lock` beside it, from clearing the
+home to its last session: a second run on the same home waits for the first
+and says whose run it waits for, rather than clearing the home under it.
+
 The user's files, hook registrations and store are only read, and the store
 only through a connection that cannot write. Each session's record goes to
 `--out/<scenario>/<client>/`: the client's output of every turn, the handshake,
@@ -1601,6 +1605,36 @@ def run(options: argparse.Namespace, source: Path | None, registry: Path | None 
         coordinator=options.claude_coordinator.resolve(),
     )
     home, out = options.client_home.resolve(), options.out.resolve()
+    from tests import machine_lock
+
+    with machine_lock.held(
+        f"a probe run into {out}", path=home_lock(home), say=_say, name="probe-home lock"
+    ):
+        return _run_locked(options, chosen, scenarios, inputs, home, out, source, registry)
+
+
+def home_lock(home: Path) -> Path:
+    """The lock of one client home: beside it, since a run clears everything in it.
+
+    A run clears the home before it builds the profile, so a second run beside the
+    first would take the profile, the logins aside, from under the first's clients.
+    It waits for the lock instead, saying whose run holds it, as the heavy test runs
+    of `tests/machine_lock.py` do with the same primitive.
+    """
+
+    return home.with_name(f"{home.name}.lock")
+
+
+def _run_locked(
+    options: argparse.Namespace,
+    chosen: Sequence[str],
+    scenarios: Sequence[Scenario],
+    inputs: Inputs,
+    home: Path,
+    out: Path,
+    source: Path | None,
+    registry: Path | None,
+) -> int:
     profile = build_profile(home, inputs)
     programs = _programs(chosen, options.client_program or (), profile.environment["PATH"])
     base, prepared = prepare_store(source, profile.work, registry)
