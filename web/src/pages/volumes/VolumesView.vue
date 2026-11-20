@@ -13,9 +13,10 @@
  * narrow nothing. The view is the page's address: a reload or a pasted link reads it back.
  *
  * On top stand the numbers (`VolumesNumbers`); an open category's opens the board narrowed to it,
- * «Waiting for me» the questions window (`requests`). Under them the goals' tree
- * (`VolumesGoals`), the work outside goals
- * (`VolumesOutside`), the flow (`VolumesFlow`) and the estimates (`VolumesEstimates`).
+ * «Waiting for me» the questions window (`requests`), and «Commits on no card» shows their list
+ * under the numbers (`VolumesCommits`), where an attach reads the page again. Under them the
+ * goals' tree (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
+ * (`VolumesFlow`) and the estimates (`VolumesEstimates`).
  *
  * The first wait, a failure and a scope with no work are the product's shared state panel under
  * the bar: «There is no work in this scope». A read of another view dims the last one until its
@@ -26,6 +27,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import VolumesCommits from '@/pages/volumes/components/VolumesCommits.vue'
 import VolumesEstimates from '@/pages/volumes/components/VolumesEstimates.vue'
 import VolumesFlow from '@/pages/volumes/components/VolumesFlow.vue'
 import VolumesGoals from '@/pages/volumes/components/VolumesGoals.vue'
@@ -149,9 +151,34 @@ function chooseLabel(value: string) {
   change({ label: value === ALL ? null : value })
 }
 
+/** Whether the commits on no card are shown, and whether their list could not be read. */
+const commitsOpen = ref(false)
+const commitsUnread = ref(false)
+/** The list is read again for another scope. */
+const commitsScope = computed(() => `${space.value?.space_key ?? ''}:${project.value ?? ''}`)
+function hearUnread(unread: boolean) {
+  commitsUnread.value = unread
+}
+
 function open(target: VolumesTarget) {
-  if (target.kind === 'board') emit('go', target.route)
-  else if (target.kind === 'questions') emit('requests')
+  switch (target.kind) {
+    case 'board': {
+      emit('go', target.route)
+      break
+    }
+    case 'questions': {
+      emit('requests')
+      break
+    }
+    case 'commits': {
+      commitsOpen.value = !commitsOpen.value
+      commitsUnread.value = false
+      break
+    }
+    case 'none': {
+      break
+    }
+  }
 }
 
 /** Read the view again as of now. */
@@ -225,11 +252,21 @@ function refresh() {
         <template #default="{ payload }">
           <div class="volumes-shown">
             <VolumesNumbers
+              :commits-open="commitsOpen"
+              :commits-unread="commitsUnread"
               :counts="payload.counts"
               :now="now"
               :scope="scope"
               :view="view"
               @open="open"
+            />
+            <VolumesCommits
+              v-if="commitsOpen"
+              :key="commitsScope"
+              :project="project"
+              :space="space"
+              @attached="refresh"
+              @unread="hearUnread"
             />
             <VolumesGoals
               :goals="payload.goals"

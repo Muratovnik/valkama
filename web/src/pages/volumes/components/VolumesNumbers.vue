@@ -11,8 +11,9 @@
  * opens the place that shows exactly what it counts (`volumesTargets`): an open category the board
  * with the page's filter, «Waiting for me» the questions window. A number that opens nothing is a
  * figure whose hint says why: every space has no board, and Done and Cancelled count the period's.
- * «Commits on no card» counts the commits on no card of the scope's projects; where their list
- * cannot be read for the scope its number is «—».
+ * «Commits on no card» counts the commits on no card of the scope's projects and shows or hides
+ * their list under the numbers, saying which (`commitsOpen`); where their list cannot be read for
+ * the scope, or could not be read when it was opened (`commitsUnread`), its number is «—».
  *
  * Each number carries `data-number`: the category, `waiting` or `commits`; its name, figure and
  * what stands under it carry `data-part`: `label`, `figure` and `under`.
@@ -21,7 +22,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { UNKNOWN, useVolumesWords } from '@/pages/volumes/composables/useVolumesWords.ts'
-import { categoryTarget, CLOSED, WAITING_TARGET } from '@/pages/volumes/utils/volumesTargets.ts'
+import {
+  categoryTarget,
+  CLOSED,
+  COMMITS_TARGET,
+  WAITING_TARGET,
+} from '@/pages/volumes/utils/volumesTargets.ts'
 import type { VolumesTarget } from '@/pages/volumes/utils/volumesTargets.ts'
 import type { VolumesView } from '@/pages/volumes/utils/volumesView.ts'
 
@@ -31,6 +37,10 @@ import { keyScroll } from '@/shared/lib/keyScroll.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
+  /** Whether the list of the commits on no card is shown. */
+  commitsOpen: boolean
+  /** Whether that list could not be read, which its number says as «—». */
+  commitsUnread: boolean
   counts: Volumes['counts']
   /** The moment the ages are counted to. */
   now: Date
@@ -49,6 +59,8 @@ const vKeyScroll = keyScroll
 /** What a number's press does, in words, or why it does nothing. */
 function opensWords(target: VolumesTarget): string {
   if (target.kind === 'none') return t(`volumes.numbers.none.${target.reason}`)
+  if (target.kind === 'commits')
+    return t(props.commitsOpen ? 'volumes.numbers.closeCommits' : 'volumes.numbers.openCommits')
   return t(target.kind === 'board' ? 'volumes.numbers.openBoard' : 'volumes.numbers.openQuestions')
 }
 
@@ -64,8 +76,8 @@ interface VolumesNumber {
   hint: string
   key: string
   label: string
-  /** What its press opens; null for the commits on no card. */
-  target: VolumesTarget | null
+  /** What its press opens. */
+  target: VolumesTarget
   under: string
 }
 
@@ -87,7 +99,7 @@ const counted = computed<VolumesNumber[]>(() => {
     }
   })
   const waiting = props.counts.waiting_owner
-  const commits = props.counts.unattached_commits
+  const commits = props.commitsUnread ? null : props.counts.unattached_commits
   return [
     ...categories,
     {
@@ -105,26 +117,33 @@ const counted = computed<VolumesNumber[]>(() => {
       label: t('volumes.numbers.commits'),
       figure: commits === null ? UNKNOWN : String(commits),
       under: '',
-      hint: commits === null ? t('volumes.numbers.commitsUnknown') : '',
-      target: null,
+      hint: [
+        commits === null ? t('volumes.numbers.commitsUnknown') : '',
+        opensWords(COMMITS_TARGET),
+      ]
+        .filter(Boolean)
+        .join(' '),
+      target: COMMITS_TARGET,
     },
   ]
 })
 
 /**
  * Each number as it is drawn: a button where it opens a place, a figure where it opens nothing,
- * and its hint as its description, absent with none so nothing empty is read out.
+ * and its hint as its description, absent with none so nothing empty is read out. The commits'
+ * button says whether their list is shown.
  */
 const numbers = computed(() =>
   counted.value.map((number) => ({
     ...number,
-    opens: number.target !== null && number.target.kind !== 'none',
+    opens: number.target.kind !== 'none',
     description: number.hint || undefined,
+    expanded: number.target.kind === 'commits' ? props.commitsOpen : undefined,
   })),
 )
 
 function press(number: VolumesNumber) {
-  if (number.target !== null) emit('open', number.target)
+  emit('open', number.target)
 }
 </script>
 
@@ -149,6 +168,7 @@ function press(number: VolumesNumber) {
           class="volumes-number volumes-number-press"
           :data-number="number.key"
           :aria-description="number.description"
+          :aria-expanded="number.expanded"
           @click="press(number)"
         >
           <span
@@ -245,6 +265,10 @@ function press(number: VolumesNumber) {
 
   &:hover {
     background: var(--color-surface-hover);
+  }
+
+  &[aria-expanded='true'] {
+    background: var(--color-surface-active);
   }
 
   &:focus-visible {

@@ -32,18 +32,23 @@ export const GLOBAL: OperatingScope = { kind: 'global' }
 
 type Double = ReturnType<typeof volumesDouble>
 
-function json(body: unknown, status = 200) {
+export function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status })
 }
 
-/** The server: the double's read, failed for the first `fail` reads. */
-function serve(double: Double, fail = 0) {
+/** Another route of the server: its answer, or null where it is not one of its paths. */
+export type Route = (url: URL, init?: RequestInit) => Response | null
+
+/** The server: the double's read, failed for the first `fail` reads, and `other` routes. */
+function serve(double: Double, fail = 0, other: Route = () => null) {
   let failed = 0
   vi.stubGlobal(
     'fetch',
-    vi.fn<typeof fetch>(async (input) => {
+    vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(input as string, 'http://valkama.test')
       if (url.pathname === '/api/security/bootstrap') return json({ session_token: 'x'.repeat(64) })
+      const answered = other(url, init)
+      if (answered) return answered
       if (url.pathname !== '/api/planning/volumes') return json({}, 404)
       if (failed < fail) {
         failed += 1
@@ -62,9 +67,14 @@ export const shell = { questions: 0 }
 export function mountPage(
   double: Double,
   scope: OperatingScope = SPACE,
-  options: { fail?: number; locale?: 'en' | 'ru'; state?: Record<string, string> } = {},
+  options: {
+    fail?: number
+    locale?: 'en' | 'ru'
+    other?: Route
+    state?: Record<string, string>
+  } = {},
 ) {
-  serve(double, options.fail)
+  serve(double, options.fail, options.other)
   const i18n = createI18n({
     legacy: false,
     locale: options.locale ?? 'en',

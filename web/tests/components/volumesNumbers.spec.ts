@@ -155,7 +155,7 @@ describe('the Volumes page’s numbers', () => {
 
     expect(number(page, 'commits').text()).toBe('Commits on no card—')
     expect(number(page, 'commits').attributes('aria-description')).toBe(
-      'The commits on no card cannot be read for this scope.',
+      'The commits on no card cannot be read for this scope. Show the commits on no card',
     )
   })
 })

@@ -87,6 +87,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'which place «the place» is, the last one a session was open in; it stood as a paragraph over the group',
   ],
   [
+    'pages/volumes/components/VolumesCommits.vue <td> v-tooltip.detail="row.sessionWhole"',
+    'the whole session id, of which the row prints the start',
+  ],
+  [
     'pages/volumes/components/VolumesGoals.vue <td> v-tooltip.detail="figure.hint"',
     "how a goal's figure is counted, or why it is «—», which the figure does not say",
   ],

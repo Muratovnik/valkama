@@ -11,7 +11,7 @@
  * portfolio standing there instead (`global`); and Done and Cancelled count what came to a close
  * in the period, which no filter of Work can narrow to (`period`). «Waiting for me» counts
  * questions rather than cards, two questions on one card being two, so it opens the questions
- * window in either scope.
+ * window in either scope. «Commits on no card» shows their list on the page itself (`commits`).
  */
 import { writeWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
@@ -27,6 +27,7 @@ type Category = (typeof STATE_CATEGORIES)[number]
 export type VolumesTarget =
   | { kind: 'board'; route: PlatformRoute }
   | { kind: 'none'; reason: 'global' | 'period' }
+  | { kind: 'commits' }
   | { kind: 'questions' }
 
 /** The page's filter of tasks, as the read was asked for it. */
@@ -71,3 +72,6 @@ export function categoryTarget(
 
 /** What «Waiting for me» opens, in either scope. */
 export const WAITING_TARGET: VolumesTarget = { kind: 'questions' }
+
+/** What «Commits on no card» opens: their list, under the numbers. */
+export const COMMITS_TARGET: VolumesTarget = { kind: 'commits' }

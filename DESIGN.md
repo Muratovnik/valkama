@@ -3207,6 +3207,19 @@ no board of its own, the portfolio standing there, so at the top no category ope
 Cancelled count the period's closed cards, and no filter of Work narrows to a period. «Commits
 on no card» is «—» where their list cannot be read for the scope.
 
+«Commits on no card» shows their list under the numbers and hides it again, the number saying
+which. A row is a commit, the newest first: its hash as its short form, held at the row's start
+while a phone's table scrolls sideways, its subject, the repository, the session as its short
+form with the whole one in the hint, and when it was committed. «Attach
+to a card» opens a line under the row where the card is found by its number or the words of its
+title: the scope's space's cards, closed ones too, since a commit belongs to the card it was
+made for, and every space's at the top. «Attach» is the person's attach, the module's own
+action: the commit leaves the list, the attach is said aloud, and the page reads its numbers
+again, so the number drops by the commit. An attach the server refuses keeps the row and its
+line, the server's reason under the field. Past the most one read answers, the list shows the
+newest and says how many there are; a list that could not be read says so with a retry, and the
+number says «—» until it is read.
+
 The goals are a tree in the section table: each goal, its stages under it to any depth, on the
 tree's rows, folded as every tree folds them. One Tab stop holds the table: ↑ and ↓ move through
 the rows, → opens a folded row, ← folds an open one or goes to its parent, and Enter or a press

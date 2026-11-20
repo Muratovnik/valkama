@@ -5,9 +5,11 @@
  * goal's volume and what it has left are read on its row of the goals' tree, a goal of five
  * levels among them; an open category's number opens the board narrowed to it; a space without
  * goals says so and counts its work outside goals; and the page's states — spending not counted,
- * no work, a refresh that failed — say so in its words. A long tree's frame is held to the
- * panel's height, so the table never runs past the window, whatever the bar's rows. Each run
- * prints what it measured and keeps a picture of each state.
+ * no work, a refresh that failed — say so in its words. «Commits on no card» opens their list,
+ * where a commit is attached to a card found by its words; it leaves the list and the number
+ * drops. A long tree's frame is held to the panel's height, so the table never runs past the
+ * window, whatever the bar's rows. Each run prints what it measured and keeps a picture of each
+ * state.
  */
 import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
@@ -17,7 +19,7 @@ import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platfor
 import { goalRow, spentOf, volumesAnswer } from '../support/volumesDouble.ts'
 import { record, shortfalls } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
-import { spaceScope } from './planningFixtures.ts'
+import { spaceRef, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const WORDS = {
@@ -30,6 +32,9 @@ const WORDS = {
     basis: 'by 7 tasks',
     unknown: 'Not counted: its tasks began before usage was counted.',
     outside: '3 tasks outside goals',
+    attach: 'Attach to a card',
+    send: 'Attach',
+    attached: 'abcdef01 attached to MAIN-41',
   },
   ru: {
     noGoals: 'В этом охвате нет целей',
@@ -40,6 +45,9 @@ const WORDS = {
     basis: 'по 7 задачам',
     unknown: 'Не посчитано: её задачи начаты до начала учёта расхода.',
     outside: '3 задачи вне целей',
+    attach: 'Прикрепить к карточке',
+    send: 'Прикрепить',
+    attached: 'abcdef01 прикреплён к MAIN-41',
   },
 } as const
 
@@ -142,6 +150,59 @@ async function openPage(
   return asked
 }
 
+/** The commits on no card, the search and the attach, as the server answers them. */
+async function routeCommits(page: Page, commits: { left: number }) {
+  const items = [
+    {
+      repository: 'alpha',
+      display_name: 'Alpha',
+      hash: 'abcdef0123',
+      subject: 'Fix the parser of the volumes read',
+      committed_at: '2026-03-02T10:00:00Z',
+      session: 'c0ffee00-1111-4222-8333-444455556666',
+      agent: null,
+      client: 'claude',
+      reported_at: '2026-03-02T10:00:05Z',
+    },
+  ]
+  const attaches: unknown[] = []
+  await page.route('**/api/planning/commits/unattached?*', (route) =>
+    route.fulfill({ json: { total: items.length, items } }),
+  )
+  await page.route('**/api/modules/planning/search?*', (route) => {
+    const query = new URL(route.request().url()).searchParams
+    const item = {
+      work_item_id: '00000000-0000-4000-8000-000000000041',
+      planning_space_id: '00000000-0000-4000-8000-000000000001',
+      reference: 'MAIN-41',
+      title: 'Read the volumes',
+      state: { name: 'Done' },
+      open: false,
+      container_state: null,
+      claim_ref: '',
+    }
+    return route.fulfill({
+      json: {
+        interface_version: 'valkama-planning-search',
+        query: query.get('q'),
+        limit: 50,
+        has_more: false,
+        items: [{ target: { space_ref: spaceRef, reference: 'MAIN-41', writable: true }, item }],
+        coverage: [],
+      },
+    })
+  })
+  await page.route('**/api/planning/work-item/commit', (route) => {
+    attaches.push(route.request().postDataJSON())
+    items.length = 0
+    commits.left = 0
+    return route.fulfill({
+      json: { reference: 'MAIN-41', revision: 4, commit: null, changed: true },
+    })
+  })
+  return { attaches }
+}
+
 async function shoot(page: Page, info: TestInfo, name: string) {
   await page.screenshot({ path: info.outputPath(`${name}.png`), animations: 'disabled' })
 }
@@ -203,6 +264,37 @@ for (const size of SIZES) {
       expect(opened.state).toMatchObject({ cat: 'active', kind: 'bug' })
       expect(opened.scope).toEqual(spaceScope)
       await shoot(page, info, `board-${tag}`)
+    })
+
+    test('a commit on no card is attached to a card found by its words', async ({ page }, info) => {
+      const commits = { left: 1 }
+      await openPage(page, size, () =>
+        volumesAnswer({ ...READY, goals: goals(), unattached: commits.left }),
+      )
+      // Routed after the backend's own, so these answer; the list is read once it is opened.
+      const server = await routeCommits(page, commits)
+      const number = page.locator('[data-number="commits"]')
+      await expect(number.locator('[data-part="figure"]')).toHaveText('1')
+      await number.click()
+      await expect(number).toHaveAttribute('aria-expanded', 'true')
+      const row = page.locator('[data-commit="abcdef0123"]')
+      await expect(row.locator('th')).toHaveText('abcdef01')
+      await expect(row.getByText('Fix the parser of the volumes read')).toBeVisible()
+      await row.getByRole('button', { name: words.attach }).click()
+      await row.getByRole('combobox').fill('volumes')
+      await page.getByRole('option', { name: /MAIN-41/u }).click()
+      await row.locator('.volumes-commit-attach').scrollIntoViewIfNeeded()
+      expect(await overflow(page)).toBeLessThanOrEqual(0)
+      await shoot(page, info, `commits-open-${tag}`)
+
+      await row.getByRole('button', { name: words.send, exact: true }).click()
+      await expect(row).toHaveCount(0)
+      await expect(page.getByRole('status').filter({ hasText: words.attached })).toHaveCount(1)
+      expect(server.attaches).toEqual([
+        { reference: 'MAIN-41', hash: 'abcdef0123', repository: 'alpha' },
+      ])
+      await expect(number.locator('[data-part="figure"]')).toHaveText('0')
+      await shoot(page, info, `commits-attached-${tag}`)
     })
 
     test('a space without goals says so and counts its work outside goals', async ({
