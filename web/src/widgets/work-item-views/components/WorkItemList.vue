@@ -54,6 +54,7 @@ import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListF
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import WorkItemListTreeWords from '@/widgets/work-item-views/components/WorkItemListTreeWords.vue'
 import { useListFit } from '@/widgets/work-item-views/composables/useListFit.ts'
+import { useListGoalSpend } from '@/widgets/work-item-views/composables/useListGoalSpend.ts'
 import { useListRuns } from '@/widgets/work-item-views/composables/useListRuns.ts'
 import { useListTreeRows } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import type { ListTreeScope } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
@@ -84,6 +85,8 @@ const props = withDefaults(
     links: PlanningEdge[]
     /** The filter in force, so a mark already in it offers to come out. */
     filter?: WorkFilter
+    /** A goal's row says what it spent: the list's work is in the store the read answers for. */
+    goalVolumes?: boolean
     /**
      * The space's projects where a row names its own; null where the list draws no
      * «Project». Read as the list is made, as `tree` is: its host makes it again to change it.
@@ -153,6 +156,8 @@ const list = useWindowRows<WorkItemBrief>({
 })
 const entries = computed(() => (measured.value ? list.entries.value : []))
 const { rowCount } = list
+const spend = useListGoalSpend(props, entries, tree)
+const spendLine = spend.line
 
 const runs = useListRuns({
   filter: () => props.filter,
@@ -186,6 +191,7 @@ function memo(entry: ListEntry<WorkItemBrief>): unknown[] {
     goalOf(item),
     list.held(item),
     tabStop(item),
+    spend.memoOf(item),
     waiting.value.get(item.work_item_id),
     fit.value,
     readWidth.value,
@@ -231,7 +237,7 @@ const underTitle = listUnderTitle({
 })
 
 /** A row's words for the list's find, as the template below draws them. */
-const said = listFindWords({ drawsGoal, drawsProject, fit, runs, tree, words })
+const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, words })
 </script>
 
 <template>
@@ -303,6 +309,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, tree, words })
                   :parent="underOf(entry.row)"
                 />
                 <component :is="underTitle(entry.row)" />
+                <component :is="spendLine(entry.row)" />
               </td>
               <td
                 v-if="drawsGoal && !folded('goal')"

@@ -1,6 +1,5 @@
-import { tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
-
 import type { UsageRole, UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 
 /**
  * Who did an item's work, as its Agents tab lists it: the read's rows by role, launch class and

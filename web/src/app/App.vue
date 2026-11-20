@@ -87,6 +87,8 @@ const {
   finderText,
   findText,
   requestsOpen,
+  requestsScope,
+  openRequests,
   pendingRequestCount,
   openRoute,
   openTarget,
@@ -305,7 +307,7 @@ usePlatformEntryRestore({
       :live-target="liveTarget"
       @find="finderOpen = true"
       @go="(next) => writeRoute(next)"
-      @requests="requestsOpen = true"
+      @requests="openRequests()"
       @navigate="switchModule"
       @prefetch="prefetchModule"
       @home="goHome"
@@ -366,7 +368,7 @@ usePlatformEntryRestore({
           @notice="(message) => say(message, 'refused')"
           @open-space="openSpace"
           @question-taken="cardQuestionTaken"
-          @requests="requestsOpen = true"
+          @requests="openRequests"
           @state="updateModuleState"
           @locale="selectLocale"
         />
@@ -390,6 +392,8 @@ usePlatformEntryRestore({
   <AppRequestsHub
     v-if="documentPage === null"
     :open="requestsOpen"
+    :scope="requestsScope"
+    @all="requestsScope = null"
     @close="requestsOpen = false"
     @select="openTarget"
     @open="openRoute"

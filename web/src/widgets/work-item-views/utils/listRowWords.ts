@@ -51,6 +51,8 @@ export interface RowReading {
    * folded the project alone, after the goal; absent where the list does not draw it.
    */
   project?: { cell: string; named: string }
+  /** What a goal's or a stage's row spent, under the lines under its title (`useListGoalSpend`). */
+  spend?: readonly string[]
   /**
    * What a tree prints after the title (`WorkItemListTreeWords.vue`): how much
    * under the row matched and the parent the indent no longer shows; none in a
@@ -96,6 +98,7 @@ export function rowWords(item: WorkItemBrief, reading: RowReading): string[] {
     item.title,
     ...tree,
     ...underTitle(item, reading),
+    ...(reading.spend ?? []),
     ...(goal?.cell && shown('goal') ? [goal.cell] : []),
     ...(project && shown('project') ? [project.cell] : []),
     ...(shown('state') ? runWords(marksOf(item, ROW_FACETS.STATE), words) : []),

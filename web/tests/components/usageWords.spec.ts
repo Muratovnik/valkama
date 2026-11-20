@@ -8,13 +8,10 @@ import { createI18n } from 'vue-i18n'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import {
-  saysAnything,
-  tokensAnew,
-  useUsageWords,
-} from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+import { saysAnything, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
+import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 
 import { NO_TOKENS, noUsage, richUsage, SPENT } from '../fixtures/usage.ts'
 

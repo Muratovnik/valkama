@@ -4,9 +4,11 @@
  * the agents spent together, the cost and the tokens processed anew, and right under them the
  * way to the same work on the Analytics page, which breaks it down by model, effort and kind of
  * token. What a figure counts is its why: pointing at it, focusing it or pressing it says so,
- * since a finger has no hover hint. One line under them says what a missing price does to the
- * cost, and only when one is missing. Then who did the work — the session's own agent, a
- * subagent by the class it was launched with, an adviser — and under which organization.
+ * since a finger has no hover hint; beside them how many sessions worked on it. One line under
+ * them says what a missing price does to the cost, and only when one is missing. Then who did
+ * the work — the session's own agent, a subagent by the class it was launched with, an
+ * adviser — under which organization, and what it took of each account's weekly quota
+ * (`UsageQuota`).
  *
  * A cost nobody reported says so and is never a zero. A read that failed says that it failed,
  * because not knowing is not the same as there being nothing, and offers to read again.
@@ -16,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 
 import UsageAccounts from '@/widgets/work-item-inspector/components/UsageAccounts.vue'
 import UsageFacts from '@/widgets/work-item-inspector/components/UsageFacts.vue'
+import UsageQuota from '@/widgets/work-item-inspector/components/UsageQuota.vue'
 import { itemAnalyticsLink } from '@/widgets/work-item-inspector/utils/analyticsLink.ts'
 import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import {
@@ -97,6 +100,12 @@ const figures = computed(() => {
       label: t('workItem.usage.tokensLabel'),
       value: tokenFigure(shown.tokens),
       why: [t('workItem.usage.processedNote')],
+    },
+    {
+      key: 'sessions',
+      label: t('workItem.usage.sessions'),
+      value: String(shown.sessions),
+      why: [t('workItem.usage.sessionsNote')],
     },
   ].map((figure) => {
     const value = figure.value || noData.value
@@ -189,6 +198,7 @@ const who = computed(() =>
         :estimated="isEstimated(usage)"
       />
     </div>
+    <UsageQuota :quota="usage.quota" />
   </section>
   <p
     v-if="failed || runsFailed"

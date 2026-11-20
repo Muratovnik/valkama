@@ -1,7 +1,7 @@
 /**
  * The Volumes page mounted under a shell of its own, against a double of the server's read
  * (`volumesDouble`): the shell writes back the address the page gives it, keeps the boards the
- * page opened (`went`) and counts the times it asked for the questions window (`questions`).
+ * page opened (`went`) and the space each ask for the questions window named (`questions`).
  */
 import { defineComponent, h, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
@@ -11,6 +11,7 @@ import { vi } from 'vitest'
 
 import VolumesView from '@/pages/volumes/VolumesView.vue'
 
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
@@ -61,7 +62,7 @@ function serve(double: Double, fail = 0, other: Route = () => null) {
 
 /** What the page asked of the shell: the boards it opened, and the questions window. */
 export const went: PlatformRoute[] = []
-export const shell = { questions: 0 }
+export const shell = { questions: [] as (PlanningSpaceRef | null)[] }
 
 /** The page in `locale` under a shell of its own, which writes back the address it is given. */
 export function mountPage(
@@ -96,7 +97,7 @@ export function mountPage(
           routeState: state.value,
           onState: (next: Record<string, string>) => (state.value = next),
           onGo: (route: PlatformRoute) => went.push(route),
-          onRequests: () => (shell.questions += 1),
+          onRequests: (space: PlanningSpaceRef | null) => shell.questions.push(space),
         })
     },
   })
@@ -112,5 +113,5 @@ export const figure = (page: Page, reference: string, key: string) =>
 /** Forget what the shell was asked, for the next test. */
 export function forgetShell() {
   went.length = 0
-  shell.questions = 0
+  shell.questions = []
 }

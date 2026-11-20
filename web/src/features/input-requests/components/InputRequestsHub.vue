@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+/**
+ * The questions waiting for an answer, every space's, or one space's own when the window was
+ * opened from a place narrowed to it (`scope`). The narrowing stands as a chip over the list
+ * naming the space, and the chip is the way back to every space's questions (`all`). The rail's
+ * count is always every space's: a second reader keeps it while the list is narrowed.
+ */
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestNavigator from '@/features/input-requests/components/RequestNavigator.vue'
@@ -13,13 +19,22 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { DIALOG_ROOM_BESIDE_DOCUMENT } from '@/shared/lib/shellLayout.ts'
+import { spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
+import ScopeChip from '@/shared/ui/ScopeChip.vue'
 
-const props = defineProps<{ open: boolean; pane?: OverlayPaneNames | null }>()
+const props = defineProps<{
+  open: boolean
+  pane?: OverlayPaneNames | null
+  /** The one space whose own questions the list shows; none shows every space's. */
+  scope?: PlanningSpaceRef | null
+}>()
 const emit = defineEmits<{
+  'all': []
   'close': []
   'count': [value: PendingCount | null]
   'open': [route: PlatformRoute]
@@ -46,38 +61,50 @@ function settles(entry: InputRequestEntry) {
   const kept = Boolean(draft && (draft.changing !== null || hasDraft(draft)))
   return !kept && !(list.value?.holdsReader?.(entry) ?? false)
 }
-const {
-  result,
-  loading,
-  failed,
-  partial,
-  entries,
-  count,
-  settled,
-  waits,
-  refresh,
-  changed,
-  dismiss,
-} = useInputRequests(() => 'all', holding, settles)
+const everywhere = reactive(useInputRequests(() => 'all', holding, settles))
+const within = reactive(
+  useInputRequests(() => (props.scope ? { space: props.scope } : null), holding, settles),
+)
+/** The reader the list shows: the space's while the window is narrowed to one. */
+const shown = computed(() => (props.scope ? within : everywhere))
 const inPlace = computed(() =>
-  entries.value.filter((entry) => !(requestIdentity(entry) in settled.value)),
+  shown.value.entries.filter((entry) => !(requestIdentity(entry) in shown.value.settled)),
 )
 const answered = computed(() =>
-  entries.value.filter((entry) => requestIdentity(entry) in settled.value),
+  shown.value.entries.filter((entry) => requestIdentity(entry) in shown.value.settled),
 )
 const waiting = computed(
   () =>
-    new Set(entries.value.filter((entry) => waits(entry)).map((entry) => requestIdentity(entry))),
+    new Set(
+      shown.value.entries
+        .filter((entry) => shown.value.waits(entry))
+        .map((entry) => requestIdentity(entry)),
+    ),
 )
+const spaces = useSpaceNames()
+const scopeName = computed(() => (props.scope ? spaceName(spaces.value, props.scope) : ''))
+const subtitle = computed(() =>
+  props.scope ? t('requests.scopeSpace', { space: scopeName.value }) : t('requests.scope'),
+)
+function refresh() {
+  void shown.value.refresh()
+}
+function changed(entry: InputRequestEntry) {
+  shown.value.changed(entry)
+}
 function remove(entry: InputRequestEntry) {
   delete drafts.value[requestIdentity(entry)]
-  dismiss(entry)
+  shown.value.dismiss(entry)
 }
-watch(count, (value) => emit('count', value), { immediate: true })
+watch(
+  () => everywhere.count,
+  (value) => emit('count', value),
+  { immediate: true },
+)
 watch(
   () => props.open,
   (open) => {
-    if (open) void refresh()
+    if (open) refresh()
   },
 )
 </script>
@@ -87,7 +114,7 @@ watch(
     placement="start"
     :open="open"
     :title="t('requests.title')"
-    :subtitle="t('requests.scope')"
+    :subtitle="subtitle"
     :close-label="t('requests.close')"
     :pane="pane"
     :pane-room="DIALOG_ROOM_BESIDE_DOCUMENT"
@@ -96,15 +123,23 @@ watch(
     @pane-close="emit('pane-close')"
     @pane-fit="(fit) => emit('pane-fit', fit)"
   >
+    <ScopeChip
+      v-if="scope"
+      class="requests-scope"
+      data-part="scope"
+      :label="scopeName"
+      :exit-label="t('requests.scopeAll', { space: scopeName })"
+      @exit="emit('all')"
+    />
     <RequestList
       ref="list"
       :entries="inPlace"
       :answered="answered"
       :waiting="waiting"
-      :result="result"
-      :loading="loading"
-      :failed="failed"
-      :partial="partial"
+      :result="shown.result"
+      :loading="shown.loading"
+      :failed="shown.failed"
+      :partial="shown.partial"
       :drafts="drafts"
       recommend-all
       @refresh="refresh"
@@ -122,3 +157,10 @@ watch(
     </template>
   </DialogFrame>
 </template>
+
+<style scoped>
+/* The body is a grid, which would stretch the chip across the window. */
+.requests-scope {
+  justify-self: start;
+}
+</style>

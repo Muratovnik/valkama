@@ -6,7 +6,7 @@
  *
  * Each read's query is kept, so a test can say what the page asked.
  */
-import { validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
+import { validateGoalVolumesAnswer, validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 
 const CATEGORIES = [
   'triage',
@@ -248,4 +248,14 @@ export function volumesDouble(answer: (query: URLSearchParams) => object) {
       return answer(query)
     },
   }
+}
+
+/** The answer of `GET /api/planning/goal-volumes` for these rows, without their children. */
+export function goalVolumesAnswer(rows: readonly GoalRow[]) {
+  const answer = {
+    interface_version: 'valkama-planning-api',
+    goals: rows.map(({ children: _children, ...row }) => row),
+  }
+  validateGoalVolumesAnswer(answer)
+  return answer
 }

@@ -34,6 +34,17 @@ const spaces: PlatformPlanningReady['spaces'] = [
   },
 ]
 
+/** A space the directory lists with no numbers, and why. */
+const absent = (key: string, reason: 'old_store' | 'unreadable') => ({
+  space_ref: { data_scope_id: STORE, space_key: key },
+  title: key,
+  work_item_count: reason === 'unreadable' ? null : 5,
+  numbers: null,
+  numbers_absent: reason,
+  default_project: null,
+  projects: [],
+})
+
 function portfolio(locale: 'en' | 'ru' = 'en', shown = spaces) {
   return mount(PlanningPortfolio, {
     props: { spaces: shown },
@@ -78,6 +89,64 @@ describe('«All spaces»', () => {
     expect(card?.get('.space-title').text()).toBe('FAR')
     expect(card?.find('.space-count').exists()).toBe(false)
     expect(card?.text()).not.toContain('null')
+  })
+
+  it('shows the four numbers of each space, named as the categories and the questions', () => {
+    const numbers = portfolio()
+      .findAll('.portfolio-space')
+      .map((card) =>
+        card
+          .findAll('[data-number]')
+          .map((number) => [
+            number.attributes('data-number'),
+            number.get('[data-part="label"]').text(),
+            number.get('[data-part="figure"]').text(),
+          ]),
+      )
+    expect(numbers).toEqual([
+      [
+        ['triage', 'Triage', '4'],
+        ['ready', 'Ready', '3'],
+        ['active', 'In progress', '2'],
+        ['waiting_owner', 'Waiting for me', '1'],
+      ],
+      [
+        ['triage', 'Triage', '0'],
+        ['ready', 'Ready', '0'],
+        ['active', 'In progress', '0'],
+        ['waiting_owner', 'Waiting for me', '0'],
+      ],
+    ])
+    expect(portfolio().find('[data-part="absent"]').exists()).toBe(false)
+  })
+
+  it('names the four numbers in Russian', () => {
+    const [card] = portfolio('ru').findAll('.portfolio-space')
+    expect(card?.findAll('[data-part="label"]').map((label) => label.text())).toEqual([
+      'Не разобрано',
+      'Готово к работе',
+      'В работе',
+      'Ждут меня',
+    ])
+  })
+
+  it('shows «—» for each number a space has none for, and says why', () => {
+    const cards = portfolio('en', [
+      absent('OLD', 'old_store'),
+      absent('FAR', 'unreadable'),
+    ]).findAll('.portfolio-space')
+    expect(cards).toHaveLength(2)
+    expect(
+      cards.map((card) => card.findAll('[data-part="figure"]').map((figure) => figure.text())),
+    ).toEqual([
+      ['—', '—', '—', '—'],
+      ['—', '—', '—', '—'],
+    ])
+    expect(cards.map((card) => card.get('[data-part="absent"]').text())).toEqual([
+      'No data: an earlier build wrote this space’s store.',
+      'The space could not be read.',
+    ])
+    expect(cards[0]?.get('.space-count').text()).toBe('5 work items')
   })
 
   it('opens the whole space a card stands for, an empty one as well', async () => {

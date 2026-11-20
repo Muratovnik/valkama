@@ -1,7 +1,7 @@
 import { pairKey, pairKind, valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
 
-import { LEAST_COST, tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+import { LEAST_COST } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 /**
  * The figures the Analytics page draws from a usage answer, kept apart from the words so a test
@@ -20,6 +20,7 @@ import type {
   UsageRow,
 } from '@/shared/api/analyticsApi.ts'
 import { MINUTE } from '@/shared/lib/timeSpan.ts'
+import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 
 /** What a line spent: seconds of agent work, tokens anew, an estimated cost and what it leaves out. */
 export interface Spent {

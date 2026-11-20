@@ -9,7 +9,7 @@
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { volumesAnswer, volumesDouble } from '../support/volumesDouble.ts'
+import { VOLUMES_STORE, volumesAnswer, volumesDouble } from '../support/volumesDouble.ts'
 import {
   forgetShell,
   GLOBAL,
@@ -102,7 +102,7 @@ describe('the Volumes page’s numbers', () => {
     expect(went[0].state).toEqual({ cat: 'ready', kind: 'task,bug,improvement', labels: 'ui' })
   })
 
-  it('opens the questions window from «Waiting for me» in a space and in every space', async () => {
+  it('opens the questions window on the space from «Waiting for me», and on every space at the top', async () => {
     for (const scope of [SPACE, GLOBAL]) {
       const page = mountPage(
         volumesDouble(() =>
@@ -114,7 +114,7 @@ describe('the Volumes page’s numbers', () => {
       await number(page, 'waiting').trigger('click')
       page.unmount()
     }
-    expect(shell.questions).toBe(2)
+    expect(shell.questions).toEqual([{ data_scope_id: VOLUMES_STORE, space_key: 'MAIN' }, null])
     expect(went).toEqual([])
   })
 

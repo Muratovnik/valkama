@@ -821,7 +821,12 @@ same way, not a record that could not be loaded.
 
 The context bar holds the scope in two choices, at its end in fixed positions. The first
 is «All spaces» or one space, named by its key with its name under it; «All spaces» lists
-every space with its work count and its projects, each card opening the whole space. The
+every space with its work count and its projects, each card opening the whole space. A card
+shows four numbers under the space's name, counted as the space's Volumes page counts them:
+its cards in triage, its tasks ready and in progress, and the questions waiting for the owner.
+They stand in two rows of two, since a card is never wide enough for four whole names in a
+row, a number never narrower than its longest word. A space without them shows each as «—», never 0, and says why: an
+earlier build wrote its store, which is «No data», or its store could not be read. The
 second stands only in a space with more than one project to choose, and an address that
 narrows to a project keeps it on show: «All projects», the space's own projects, then the
 projects of other spaces that its items name, each with its own space's key beside its
@@ -1903,6 +1908,13 @@ the focused row moves focus to the folded row. The tree draws its window from
 300 rows it could show, folded rows included, not from the rows it shows. Its
 first column is as wide as the deepest reference needs after its indent, so
 neither a fold nor a scroll moves a column.
+A goal's or a stage's row says under its title what it spent, as its row on the Volumes page
+says it: «Spent», without the cancelled work, and «With cancelled», each agent time and the
+tokens processed anew, «—» with its hint where usage was not counted, never 0. The list reads
+those rows in one read for the goals and stages it draws, a list that draws more as it scrolls
+asking for the new ones, and a row without its figures yet, or whose read failed, has no line:
+the list never waits on them. A space of an attached store, which that read does not answer
+for, draws none.
 The list has a find of its own, because the browser's reached only the rows in
 the page. While the list is what the page shows, with no card, dialog or finder
 over it and no menu, choice list or other popup open, Ctrl+F (⌘F) opens the
@@ -2457,6 +2469,20 @@ A section of a card that holds nothing and offers nothing is absent, rather than
 heading and a sentence saying so on the first screen: the «Agents» tab and «Checklist»
 stand only while they have something in them, and a step arriving with the live stream's next
 frame brings its section back with no reload.
+What work on a card took stands as one quiet line under its facts: the time, the estimated cost
+and the tokens processed anew, the whole tree's on a goal or a stage. A goal's or a stage's card
+adds a line under it with both numbers of its row on the Volumes page, «Spent», without the
+cancelled work, and «With cancelled», read for the card alone and said in that page's words, so a
+goal reads the same on its card, in the list and on the page. The «Agents» tab's head adds the
+sessions that worked on the item, its why saying they count every session that spent on it or
+wrote to it and can be more than the card lists, and, under the organizations, «Weekly quota»:
+one line per account and week, the latest first, the account by the starts of its ids, the day
+its week resets and the item's part of that week, «≈ 10% of the week», whose hint says the share
+of the account's cost that week and how much of the week is spent. A week without a reading of
+it, or whose account's work cost nothing, says so in place of a figure. Lines of different
+weeks are never added up. A line under them says the figure assumes a quota is spent in
+proportion to the API price and leans high, and another how much of the cost is on no account
+that can be shown, when any is.
 A step's discussion stands at the end of its first line and comes up as a row's actions do
 (**Actions that come up**): standing on every step at rest, it repeated one icon down the list.
 A question has no section of its own: it stands in the discussion and reads as a
@@ -3223,15 +3249,25 @@ its oldest card, under «Waiting for me» that of the question asked first; Done
 count what came to a close in the period and say «in the period». A category's number counts
 its tasks, goals and stages, as the board's filter by category shows them, and its hint says
 how many of each; under a filter it counts the matching tasks alone. The numbers stand in one
-row; a phone's page takes them in two rows of five, and where two rows have no room for a word
-of a name, which is never broken, they scroll sideways in their own frame, as a table does on a
-phone.
+row while the page has room for every name, and in as many rows as the names need where it has
+not, as on a phone, a row sharing its width among its numbers. A number is never narrower than
+the longest word of its name, which is never broken, and the numbers never scroll sideways: in
+a frame of their own they did on a phone, and opening the commits' list under them scrolled the
+frame to the pressed number, moving every other one. Opening that list moves nothing over it.
 
 A number opens the place that shows exactly what it counts. An open category's opens the board
 of the same scope narrowed to the category, with the page's kind and label; a label alone names
 the three kinds of a task there, so no goal carrying it comes in. «Waiting for me» counts
 questions, two questions on one card being two, so it opens the questions window, in a space
 and at the top alike, rather than the board, where two questions on one card would be one row.
+Opened from a space, the window lists that space's own questions, read narrowed by the server,
+and says so in its subtitle; a chip over the list names the space, and removing it lists every
+space's questions again. At the top it lists every space's. The rail's count stays every
+space's while the list is narrowed, and the narrowing ends when the window closes, so the rail
+opens it on every space's. The server narrows the questions to the cards of one space and to
+nothing finer, so the window opened from a project shows the whole space's, and the questions
+on another space's cards that name a project of the space, which the number counts, are not
+among them until its read can name them.
 A number that opens nothing is a figure, not a control, and its hint says why: every space has
 no board of its own, the portfolio standing there, so at the top no category opens; Done and
 Cancelled count the period's closed cards, and no filter of Work narrows to a period. «Commits

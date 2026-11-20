@@ -13,7 +13,7 @@
  * narrow nothing. The view is the page's address: a reload or a pasted link reads it back.
  *
  * On top stand the numbers (`VolumesNumbers`); an open category's opens the board narrowed to it,
- * «Waiting for me» the questions window (`requests`), and «Commits on no card» shows their list
+ * «Waiting for me» the questions window narrowed to the page's space (`requests`), and «Commits on no card» shows their list
  * under the numbers (`VolumesCommits`), where an attach reads the page again. Under them the
  * goals' tree (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
  * (`VolumesFlow`) and the estimates (`VolumesEstimates`).
@@ -40,6 +40,7 @@ import type { VolumesView } from '@/pages/volumes/utils/volumesView.ts'
 
 import PeriodBar from '@/widgets/period-bar/components/PeriodBar.vue'
 
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { TASK_KINDS } from '@/shared/api/volumesReadApi.ts'
 import type { Volumes } from '@/shared/api/volumesReadApi.ts'
@@ -63,8 +64,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** The board a number opens, in the page's scope. */
   go: [route: PlatformRoute]
-  /** «Waiting for me» pressed: the questions window opens. */
-  requests: []
+  /** «Waiting for me» pressed: the questions window opens, on the page's space's own. */
+  requests: [space: PlanningSpaceRef | null]
   /** The view's new address, in place of the one in hand. */
   state: [state: Record<string, string>]
 }>()
@@ -167,7 +168,7 @@ function open(target: VolumesTarget) {
       break
     }
     case 'questions': {
-      emit('requests')
+      emit('requests', space.value)
       break
     }
     case 'commits': {
