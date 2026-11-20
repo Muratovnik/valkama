@@ -520,7 +520,7 @@ TOOLS = [
             "checklist": {
                 "type": "object",
                 "description": "The new item's steps, as apply_work_item_changes takes"
-                ' them: the list alone, ["first step", {"text": "…", "done": true}], or'
+                ' them: the list alone, ["first condition", {"text": "…", "done": true}], or'
                 ' {"items": [...]}; applied after the claim and before the links.',
                 "properties": {"items": _STEPS},
                 "required": ["items"],
@@ -1022,7 +1022,7 @@ TOOLS = [
             "checklist": {
                 "type": "object",
                 "description": "Set the steps, after the claim and before the ticks:"
-                ' the list alone, ["first step", {"text": "…", "done": true}], or'
+                ' the list alone, ["first condition", {"text": "…", "done": true}], or'
                 ' {"items": [...], "force": true} when force must carry a refusal'
                 " through. A step sent with the text of one the item has keeps that"
                 " step's item_id, claim, tick and by_previous_holder, so appending is"
@@ -1548,7 +1548,7 @@ REMOVED_TOOLS: dict[str, str] = {
     "transition_work_item": 'apply_work_item_changes with transition: {"id": "MAIN-12",'
     ' "transition": {"state": "done"}}',
     "set_work_item_checklist": 'apply_work_item_changes with checklist: {"id": "MAIN-12",'
-    ' "checklist": ["first step", {"text": "second step", "done": true}]}',
+    ' "checklist": ["first condition", {"text": "second condition", "done": true}]}',
     "tick_work_item_checklist_item": "apply_work_item_changes with checklist_ticks:"
     ' {"id": "MAIN-12", "checklist_ticks": [{"item_id": "…"}]}',
     "link_work_items": 'apply_work_item_changes with links: {"id": "MAIN-12",'

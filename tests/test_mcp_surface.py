@@ -2065,7 +2065,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual(["one"], [step["text"] for step in item["checklist"]])
 
     def test_the_skill_and_the_tool_show_the_same_checklist_list(self) -> None:
-        form = '["first step", {"text": "…", "done": true}]'
+        form = '["first condition", {"text": "…", "done": true}]'
         with open(
             os.path.join(ROOT, "server", "skill", "valkama", "SKILL.md"), encoding="utf-8"
         ) as handle:
@@ -2449,7 +2449,9 @@ class ServerInstructionTests(unittest.TestCase):
         self.assertIn(
             f"[MAIN-12](http://127.0.0.1:{configuration.listener_port()}/open/MAIN-12)", text
         )
-        self.assertIn("never in a Valkama comment or description", text)
+        self.assertIn("Never in a Valkama comment or description", text)
+        # Claude Code's display hook links a plain number; other clients need the address.
+        self.assertIn("Claude Code shows a plain MAIN-12 as a link", text)
 
 
 class RetiredRankTests(WireCallTestCase):
