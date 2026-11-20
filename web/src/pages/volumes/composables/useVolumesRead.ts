@@ -9,19 +9,22 @@
  * with its retry. A newer read stops an older one still under way.
  *
  * A scope with no work in it — no number above zero, no goal and nothing outside goals — is the
- * panel's empty state: «There is no work in this scope».
+ * panel's empty state: «There is no work in this scope», unless a source was not read: then it may
+ * hold work the read could not see, and the page draws its zeros under the words that say so.
  */
 import { computed, ref, shallowRef, watch } from 'vue'
 
+import { coverageIncomplete } from '@/shared/api/planningTarget.ts'
 import { uiDegraded, uiEmpty, uiError, uiLoading, uiReady } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import { readVolumes } from '@/shared/api/volumesReadApi.ts'
 import type { Volumes, VolumesQuery } from '@/shared/api/volumesReadApi.ts'
 
-/** Whether a read holds any work: a number, a goal or a task outside goals. */
+/** Whether a read holds work (a number, a goal, a task outside goals) or may: a source unread. */
 function holdsWork(volumes: Volumes): boolean {
   const { categories, waiting_owner } = volumes.counts
   return (
+    coverageIncomplete(volumes.coverage) ||
     categories.some((row) => row.tasks + (row.goals ?? 0) + (row.stages ?? 0) > 0) ||
     waiting_owner.count > 0 ||
     Boolean(volumes.counts.unattached_commits) ||

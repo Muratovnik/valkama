@@ -13,10 +13,8 @@ import sqlite3
 from collections.abc import Mapping
 from typing import NamedTuple
 
-from ..projects import project_registry
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import (
-    planning_space_ref,
     planning_work_item_entity,
     route_entity_parameter,
     validate_planning_space_ref,
@@ -26,6 +24,7 @@ from . import (
     item_projects,
     model,
     participation,
+    questions,
     read_model,
     requests,
     service,
@@ -90,27 +89,15 @@ def _target(routing: PlanningRouting, space_ref: dict, reference: str) -> dict:
 
 
 def _resources(routing: PlanningRouting) -> list[dict]:
-    """Every source, once: the readable spaces, then the bound spaces no store here holds.
-
-    The primary store's spaces come first, so its item leads a search before an
-    attached store's item of the same reference.
-    """
+    """Every source, once, as the routing lists them (`PlanningRouting.sources`), or a refusal
+    while the registry that binds the spaces no store here holds cannot be read."""
 
     if not routing.registry_available:
         raise api.PlanningHttpError(409, "unavailable", "project_registry_unavailable")
-    result = routing.present_spaces()
-    absent = []
-    for project in routing.projects:
-        binding = project.get("planning_binding")
-        if binding is None:
-            continue
-        try:
-            space_ref = planning_space_ref(project_registry.binding_entity(binding))
-        except (ContractError, KeyError, TypeError) as error:
-            raise api.PlanningHttpError(409, "unavailable", "planning_binding_invalid") from error
-        if routing.unavailable_reason(space_ref) is not None and space_ref not in absent:
-            absent.append(space_ref)
-    return result + sorted(absent, key=lambda ref: (ref["data_scope_id"], ref["space_key"]))
+    try:
+        return routing.sources()
+    except (ContractError, KeyError, TypeError) as error:
+        raise api.PlanningHttpError(409, "unavailable", "planning_binding_invalid") from error
 
 
 def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
@@ -268,12 +255,7 @@ def _request_item(conn: sqlite3.Connection, record: dict, key: str) -> None:
 
 
 def _capability(conn: sqlite3.Connection) -> None:
-    if (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_item_requests'"
-        ).fetchone()
-        is None
-    ):
+    if not questions.kept(conn):
         raise api.PlanningHttpError(409, "unavailable", "requests_unavailable")
 
 

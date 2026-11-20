@@ -2864,7 +2864,8 @@ the page and shifts nothing, and a part that has nothing to say yet keeps the ro
 The page reads within the scope the context bar chose. In a space every figure is the work on
 the items the space's board holds, its own and the items of other spaces that name its projects,
 and the work on no item whose session stands in one of its projects; a project chosen there
-narrows it as it narrows the board, and «All spaces» reads every space. The quota is each
+narrows it as it narrows the board, and «All spaces» reads every space of the store this
+service writes, the one store usage is counted in. The quota is each
 account's and no space's: no scope narrows it.
 
 Each column has one scroll: the rail scrolls, the panel scrolls, and inside the panel only a
@@ -3192,7 +3193,8 @@ It stands in the rail's Understand group beside Analytics and, like it, fills th
 over one table.
 
 Its scope is the context bar's, as on every page that reads a space: a space, a project of it
-or every space at the top. The page has no choice of space or project of its own, so the scope
+or every space at the top, that of the store this service writes, where decisions are recorded.
+The page has no choice of space or project of its own, so the scope
 is chosen once and a page never disagrees with the bar over it.
 
 Its own filters are the period and the point. The bar is the period strip Analytics stands on:
@@ -3241,8 +3243,20 @@ and Agent decisions and, like them, fills the window: a bar over a panel of sect
 scrolls under it, the bar staying where it is.
 
 Its scope is the context bar's, as on Agent decisions: a space, a project of it or every space
-at the top, chosen once. Its own filters are the period — the period strip Analytics stands on,
-today, this week, the past four weeks or days of the reader's own — and the kind and the label
+at the top, chosen once. Every space at the top is every space the bar's picker offers, those of
+attached stores too: the eight categories and «Waiting for me» count them all, as the
+portfolio's cards count each of them. What only this service writes — what work spent, the
+owner's decisions and the commits — is counted in its own store alone, so the goals, the work
+outside goals, the flow, the estimates and «Commits on no card» are that store's, as Analytics
+and Agent decisions read it. While a store attached beside it holds work, which the numbers count
+and those sections do not, one line over the goals says so, nearer the goals than the numbers:
+«Goals, work outside goals, the flow and the estimates count the main store's spaces only.»; with
+no such store nothing is said. A store the numbers could not read is said over them as the
+questions window says one it skipped, from the same list of sources and in the same words:
+«Results are incomplete. Some sources are unavailable.» and, for each space not read, its name
+and why («BETA: Store could not be opened»). A read with no work that left a source out shows its
+zeros under those words rather than «There is no work in this scope». Its own filters are the period — the period strip Analytics
+stands on, today, this week, the past four weeks or days of the reader's own — and the kind and the label
 of a task, «All kinds» and «All labels» until one is chosen. The label's choice offers the
 labels the page's read itself names, and the one chosen: there is no read of labels of its own,
 and a label the read does not name would narrow nothing. Under the kind and label filter only
@@ -3277,7 +3291,8 @@ cards that name one of its projects; opened from a project, those of them on the
 name the project. Under the page's kind and label the window takes them too and keeps the
 questions on the matching tasks alone, by the one rule the number counts by, so a question on
 a goal or a stage is never among them; at the top, where it otherwise lists every space's,
-the kind and label narrow every space's questions the same way. Its subtitle says the scope
+the kind and label narrow every space's questions the same way, an attached store's as the
+number counts them. Its subtitle says the scope
 and the filter («…, only on tasks of kind Bug with the label ui»), and a chip over the list
 names the space, the project after it by the name the context bar gives it, and then the kind
 and the label («Main · Alpha app · Bug · ui»; at the top «Bug · ui»). A project the bar does

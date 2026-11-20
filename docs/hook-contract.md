@@ -1438,8 +1438,11 @@ and the copy stays owed.
 
 A session's copies are kept while any work item that refers to the session is
 not in a terminal state. After that they are kept for at least 90 days, counted
-from the later of the session's `last_seen` and the newest terminal transition
-of any item that refers to it. An item refers to a session when:
+from the later of the session's `last_seen` and the last write to any item that
+refers to it: its `updated_at` or its newest comment, whichever is later. The
+close is such a write, so a copy never goes sooner than 90 days after it, and an
+edit or a comment after the close keeps the copy longer. An item refers to a
+session when:
 
 - it has a `session` ref whose value is the session id, a prefix of it, or
   `<session>:<agent>`;

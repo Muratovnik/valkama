@@ -149,6 +149,8 @@ function categoryLine(category: Category, tasks: number, filtered: boolean) {
 }
 
 export interface VolumesInput {
+  /** Whether a store attached beside the read's holds work; none by default. */
+  attachedWork?: boolean
   /** Tasks in each category; none by default. */
   categories?: Partial<Record<Category, number>>
   /** The filter the read was asked for; null for all work. */
@@ -161,6 +163,8 @@ export interface VolumesInput {
     byLabel?: { label: string | null; tasks: number }[]
     byProject?: { project: string | null; tasks: number; name?: string }[]
   }
+  /** The spaces of other stores the read could not read, each with its reason; none by default. */
+  skipped?: { reason: string; space_ref: { data_scope_id: string; space_key: string } }[]
   /** The space read; null for every space. */
   space?: string | null
   /** Commits on no card; null where their list cannot be read. */
@@ -192,6 +196,15 @@ export function volumesAnswer(input: VolumesInput = {}) {
       },
       filter: input.filter ?? null,
       measured_from: input.measuredFrom === undefined ? SINCE : input.measuredFrom,
+      coverage: [
+        {
+          space_ref: { data_scope_id: VOLUMES_STORE, space_key: space ?? 'MAIN' },
+          status: 'searched',
+          reason: null,
+        },
+        ...(input.skipped ?? []).map((source) => ({ ...source, status: 'unavailable' })),
+      ],
+      attached_work: input.attachedWork ?? false,
       counts: {
         categories: CATEGORIES.map((category) =>
           categoryLine(category, input.categories?.[category] ?? 0, filtered),
