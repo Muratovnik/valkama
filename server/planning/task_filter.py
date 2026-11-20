@@ -57,18 +57,26 @@ def named(kinds: Iterable[str], labels: Iterable[str]) -> WorkFilter | None:
 
 
 def of_store(
-    conn: sqlite3.Connection, kinds: Iterable[str], labels: Iterable[str]
+    conn: sqlite3.Connection,
+    kinds: Iterable[str],
+    labels: Iterable[str],
+    *,
+    beside: Iterable[sqlite3.Connection] = (),
 ) -> WorkFilter | None:
-    """The filter a caller names of one store (`named`), which refuses a label no item of
-    the store carries. A label the store holds but a scope does not gives an empty read,
-    not a refusal."""
+    """The filter a caller names of one store and the stores read `beside` it (`named`),
+    which refuses a label no item of them carries. A label they hold but a scope does not
+    gives an empty read, not a refusal."""
 
     kept = named(kinds, labels)
+    stores = (conn, *beside)
     for label in () if kept is None else kept.labels:
-        carried = conn.execute(
-            "SELECT 1 FROM work_items w, json_each(w.labels) l WHERE l.value = ? LIMIT 1",
-            (label,),
-        ).fetchone()
-        if carried is None:
+        if not any(_carries(store, label) for store in stores):
             raise model.PlanningError(NO_LABEL.format(label=label))
     return kept
+
+
+def _carries(conn: sqlite3.Connection, label: str) -> bool:
+    found = conn.execute(
+        "SELECT 1 FROM work_items w, json_each(w.labels) l WHERE l.value = ? LIMIT 1", (label,)
+    ).fetchone()
+    return found is not None

@@ -197,8 +197,9 @@ async function routeCommits(page: Page, commits: { left: number }) {
     attaches.push(route.request().postDataJSON())
     items.length = 0
     commits.left = 0
+    // A card nobody wrote to since it was filed stands at revision 0, as the server says.
     return route.fulfill({
-      json: { reference: 'MAIN-41', revision: 4, commit: null, changed: true },
+      json: { reference: 'MAIN-41', revision: 0, commit: null, changed: true },
     })
   })
   return { attaches }

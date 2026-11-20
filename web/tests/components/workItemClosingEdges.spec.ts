@@ -19,6 +19,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
+import cancelRefused from '../fixtures/server/refusal-cancel-list.json'
 import { workItemFixture } from '../fixtures/workItem.ts'
 import { requestBody, requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -40,7 +41,9 @@ const mountOf = <T>(component: T, props: Record<string, unknown>) =>
 type Answer = (body: Record<string, unknown>, url: URL) => Response
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } })
-const guard = (message: string) => json({ error: { code: 'workflow_guard', message } }, 409)
+/** A guard's refusal as the batch route words it: on the step it refused. */
+const guard = (message: string) =>
+  json({ error: { code: 'workflow_guard', message, step: { group: 'transition', index: 0 } } }, 409)
 
 /** Every request the window makes, answered by its path. */
 function serve(answers: Record<string, Answer>) {
@@ -178,7 +181,11 @@ describe("a goal's cancel whose list could not be read", () => {
       given: 'The plan changed',
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('What closes could not be read.')
+    // What happened, in the catalogue's words: no status code reaches the owner.
+    expect(wrapper.text()).toContain(
+      'What closes could not be read. The local service did not complete the request.',
+    )
+    expect(wrapper.text()).not.toMatch(/HTTP|503/u)
     expect(wrapper.find('[data-reference]').exists()).toBe(false)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -193,6 +200,67 @@ describe("a goal's cancel whose list could not be read", () => {
     expect(
       wrapper.findAll('[data-reference]').map((row) => row.attributes('data-reference')),
     ).toEqual(['QA-2'])
+  })
+
+  it('says an answer it cannot read is one this build cannot read, and what to do', async () => {
+    serve({
+      '/api/planning/work-item/apply': () =>
+        json({ error: { code: 'cancel_list', message: 'Cancelling QA-1', cancels: 'all' } }, 409),
+    })
+    const wrapper = mountOf(CancelGoalDialog, {
+      item: goal({ container_state: 'in_progress' }),
+      state: 'dropped',
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(
+      'What closes could not be read. This build cannot read the local service response.' +
+        ' Restart or update Valkama, then retry.',
+    )
+    expect(wrapper.text()).not.toMatch(/HTTP|409/u)
+  })
+
+  it('says a cancel the connection lost in the catalogue’s words, under the list', async () => {
+    let calls = 0
+    serve({
+      '/api/planning/work-item/apply': () => {
+        calls += 1
+        if (calls > 1) throw new TypeError('Failed to fetch')
+        return json(cancelRefused, 409)
+      },
+    })
+    const wrapper = mountOf(CancelGoalDialog, {
+      item: goal({ reference: 'MAIN-31', container_state: 'in_progress' }),
+      state: 'cancelled',
+      given: 'The plan changed',
+    })
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(calls).toBe(2)
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'The local service did not complete the request.',
+    )
+    expect(wrapper.findAll('[data-reference]')).toHaveLength(2)
+  })
+})
+
+describe("a goal's cancel as the real server refuses it", () => {
+  it('lists what closes and what waits on it from the refusal of its batch step', async () => {
+    // The server's own answer (`tests/test_web_contract_fixtures.py`): the batch names its step.
+    serve({
+      '/api/planning/work-item/apply': () => json(cancelRefused, 409),
+    })
+    const wrapper = mountOf(CancelGoalDialog, {
+      item: goal({ reference: 'MAIN-31', container_state: 'in_progress' }),
+      state: 'cancelled',
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('What closes could not be read.')
+    expect(
+      wrapper.findAll('[data-reference]').map((row) => row.attributes('data-reference')),
+    ).toEqual(['MAIN-32', 'MAIN-33'])
+    expect(wrapper.text()).toContain('waits on MAIN-32')
+    expect(wrapper.get('button[type="submit"]').text()).toBe('Cancel 1 card')
   })
 })
 

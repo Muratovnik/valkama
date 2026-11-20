@@ -33,6 +33,14 @@ export const planningCoverageSchema = strictObject({
   reason: z.string().min(1).max(240).nullable(),
 })
 
+/** One source a read across spaces names: read, or not read with why. */
+export type PlanningCoverage = z.infer<typeof planningCoverageSchema>
+
+/** Whether a read left a source out: what it shows is then incomplete. */
+export function coverageIncomplete(coverage: readonly PlanningCoverage[]): boolean {
+  return coverage.some((source) => source.status === 'unavailable')
+}
+
 /**
  * Why a source was skipped, by the stable code the server names it with
  * (`PlanningRouting.unavailable_reason`, plus what each listing adds for a store

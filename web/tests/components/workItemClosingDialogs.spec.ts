@@ -18,7 +18,7 @@ import DeferDialog from '@/features/work-item-closing/DeferDialog.vue'
 import UntilChoice from '@/entities/work-item/components/UntilChoice.vue'
 
 import type { CancelList } from '@/shared/api/inputRequestAction.ts'
-import { CancelListError } from '@/shared/api/planningApi.ts'
+import { CancelListError, request } from '@/shared/api/planningApi.ts'
 import {
   cancelWorkItem,
   confirmWorkItemClose,
@@ -28,6 +28,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
+import { withSecurityBootstrap } from '../support/request.ts'
 
 vi.mock('@/shared/api/planningClosingApi.ts', () => ({
   cancelWorkItem: vi.fn(),
@@ -72,6 +73,23 @@ const submitButton = (wrapper: ReturnType<typeof mountOf>) => wrapper.get('butto
 
 beforeEach(() => vi.resetAllMocks())
 
+/** A refusal as the planning boundary throws it: the server's envelope, read by its client. */
+async function refused(message: string): Promise<unknown> {
+  const envelope = { error: { code: 'workflow_guard', message } }
+  vi.stubGlobal(
+    'fetch',
+    withSecurityBootstrap(async () => new Response(JSON.stringify(envelope), { status: 409 })),
+  )
+  try {
+    await request('/api/planning/work-item/apply', { method: 'POST' })
+  } catch (error) {
+    return error
+  } finally {
+    vi.unstubAllGlobals()
+  }
+  throw new Error('the double was not refused')
+}
+
 const defer = () =>
   mountOf(DeferDialog, {
     item: workItemFixture('Tray', 1),
@@ -106,7 +124,7 @@ describe('putting work off', () => {
   })
 
   it('puts it off until a card closes, and keeps the window on a refusal', async () => {
-    vi.mocked(deferWorkItem).mockRejectedValue(new Error('QA-7 is closed'))
+    vi.mocked(deferWorkItem).mockRejectedValue(await refused('QA-7 is closed'))
     const wrapper = defer()
     wrapper.getComponent(UntilChoice).vm.$emit('update:value', 'QA-7')
     await wrapper.get('.defer-reason textarea, .defer-reason input').setValue('Waits on the API')
@@ -281,7 +299,7 @@ describe("confirming a goal's close", () => {
   })
 
   it('keeps the window and the boxes on a refusal', async () => {
-    vi.mocked(confirmWorkItemClose).mockRejectedValue(new Error('QA-8 is open under it'))
+    vi.mocked(confirmWorkItemClose).mockRejectedValue(await refused('QA-8 is open under it'))
     const item = goal({ container_state: 'awaiting_confirmation', checklist: [step(2, false)] })
     const wrapper = mountOf(ConfirmCloseDialog, { item, state: 'done' })
     await wrapper.get('[role="checkbox"]').trigger('click')

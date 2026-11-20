@@ -428,14 +428,12 @@ describe('human input requests', () => {
     })
     const wrapper = hub()
     await flushPromises()
-    const notes = wrapper.findAll('.request-note').map((note) => note.text())
-    expect(notes).toEqual(
-      expect.arrayContaining([
-        'DETACHED: Store not attached',
-        'FAILING: Questions could not be read',
-        'STRANGE: Could not be read',
-      ]),
-    )
+    const notes = wrapper.findAll('[data-coverage-note="source"]').map((note) => note.text())
+    expect(notes).toEqual([
+      'DETACHED: Store not attached',
+      'FAILING: Questions could not be read',
+      'STRANGE: Could not be read',
+    ])
     expect(wrapper.text()).not.toContain('source unavailable')
     expect(wrapper.text()).not.toContain('a raw server sentence')
   })

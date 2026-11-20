@@ -1,0 +1,128 @@
+{
+  "work_item_id": "00000000-0000-4000-8000-000000000080",
+  "planning_space_id": "00000000-0000-4000-8000-000000000002",
+  "reference": "MAIN-36",
+  "number": 36,
+  "title": "Work closed on the board",
+  "kind": "task",
+  "priority": "medium",
+  "state": {
+    "state_id": "00000000-0000-4000-8000-000000000031",
+    "key": "done",
+    "name": "Done",
+    "category": "completed",
+    "is_terminal": true
+  },
+  "open": false,
+  "container_state": null,
+  "acceptance": {
+    "basis": "owner",
+    "at": "2026-01-02T03:04:05Z"
+  },
+  "started_at": "2026-01-02T03:04:05Z",
+  "waits_for": [],
+  "claim_ref": "",
+  "claim_state": null,
+  "parent_id": null,
+  "labels": [],
+  "projects": [],
+  "source": "",
+  "checklist": [],
+  "revision": 2,
+  "created_at": "2026-01-02T03:04:05Z",
+  "updated_at": "2026-01-02T03:04:05Z",
+  "closed_at": "2026-01-02T03:04:05Z",
+  "last_claim_ref": null,
+  "withheld": [
+    "not_ready"
+  ],
+  "workable": false,
+  "lapsed_claim": null,
+  "claim": null,
+  "description": "",
+  "summary": {
+    "done": "Closed.",
+    "next": "Nothing."
+  },
+  "summary_comment_id": 18,
+  "links": [],
+  "refs": [],
+  "commits": [],
+  "comments": [
+    {
+      "id": 18,
+      "kind": "report",
+      "report": {
+        "done": "Closed.",
+        "next": "Nothing."
+      },
+      "checklist_item_id": null,
+      "checklist_item_text": null,
+      "author": "agent",
+      "body": "",
+      "at": "2026-01-02T03:04:05Z",
+      "reply_to": null,
+      "reply_to_request": null,
+      "by_person": null,
+      "resolution": null,
+      "mentions": []
+    }
+  ],
+  "events": [
+    {
+      "action": "created",
+      "detail": "triage",
+      "author": "agent",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "unconfirmed",
+        "source": null,
+        "session_id": null,
+        "agent_id": null
+      }
+    },
+    {
+      "action": "summarized",
+      "detail": "",
+      "author": "agent",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "unconfirmed",
+        "source": null,
+        "session_id": null,
+        "agent_id": null
+      }
+    },
+    {
+      "action": "accepted",
+      "detail": "owner",
+      "author": "user",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "confirmed",
+        "source": "browser",
+        "session_id": null,
+        "agent_id": null
+      }
+    },
+    {
+      "action": "transitioned",
+      "detail": "done",
+      "author": "user",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "confirmed",
+        "source": "browser",
+        "session_id": null,
+        "agent_id": null
+      }
+    }
+  ],
+  "mentions": [],
+  "mentions_total": 0,
+  "subscribers": [],
+  "warnings": [],
+  "returned": [
+    "MAIN-37"
+  ]
+}

@@ -414,7 +414,7 @@ const workItemAgentSchema = strictObject({
   executor: executorSchema.optional(),
 })
 
-const workItemSchema = recordObject({
+const workItemShape = {
   ...workItemBriefShape,
   parent: parentField(),
   agents: z.array(workItemAgentSchema).optional(),
@@ -462,6 +462,15 @@ const workItemSchema = recordObject({
   freed: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
   // The goals and stages a write left with nothing open under them.
   awaiting_confirmation: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
+}
+const workItemSchema = recordObject(workItemShape)
+/**
+ * The record a move answers with. A close that brought back work put off until it names those
+ * references in `returned`; any other answer carries the record's own `returned`, if any.
+ */
+const movedItemSchema = recordObject({
+  ...workItemShape,
+  returned: z.union([returnedField(), z.array(boundedText(WORK_ITEM_REFERENCE, 20))]).optional(),
 })
 
 export const workflowSchema = strictObject({
@@ -566,6 +575,12 @@ export function validateReadModel(value: unknown, path = 'planning'): PlanningRe
 
 export function validateWorkItemRecord(value: unknown, path = 'planning.workItem'): WorkItem {
   return parseContract(workItemSchema, value, path, invalid)
+}
+
+export type MovedItem = z.infer<typeof movedItemSchema>
+/** The answer of a move: the item's record, with what a close brought back. */
+export function validateMovedItem(value: unknown, path = 'planning.workItem'): MovedItem {
+  return parseContract(movedItemSchema, value, path, invalid)
 }
 
 /** The brief record a space's list carries, as one item's preview reads it alone. */

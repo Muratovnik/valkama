@@ -332,10 +332,7 @@ defineExpose({ holdsFocus, holdsReader })
     </div>
     <!-- What the first read found is held back while its wait is shown. -->
     <template v-if="!firstHeld">
-      <RequestListNotes
-        :partial="partial"
-        :result="result"
-      />
+      <RequestListNotes :result="result" />
       <DataEmptyState
         v-if="empty"
         :title="emptyLabel"

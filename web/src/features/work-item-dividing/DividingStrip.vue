@@ -81,7 +81,7 @@ async function send(write: () => Promise<void>) {
     await write()
     emit('done')
   } catch (error_) {
-    failure.value = writeFailure(error_)
+    failure.value = writeFailure(error_, t)
   } finally {
     busy.value = false
   }

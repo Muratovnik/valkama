@@ -1,0 +1,34 @@
+{
+  "error": {
+    "code": "cancel_list",
+    "message": "transition: [cancel_list] MAIN-31 has 1 open item(s) under it, and cancelling it cancels them all: read the list, then send the same transition with cancels set to list_token fd94d2c711714542",
+    "cancels": [
+      {
+        "reference": "MAIN-32",
+        "title": "Work under the goal to cancel",
+        "kind": "task",
+        "state": {
+          "key": "ready",
+          "name": "Ready",
+          "category": "ready"
+        },
+        "container_state": null,
+        "holder": []
+      }
+    ],
+    "dependents": [
+      {
+        "reference": "MAIN-33",
+        "title": "Work outside that waits on it",
+        "kind": "task",
+        "waits_on": "MAIN-32",
+        "how": "blocks"
+      }
+    ],
+    "list_token": "fd94d2c711714542",
+    "step": {
+      "group": "transition",
+      "index": 0
+    }
+  }
+}
