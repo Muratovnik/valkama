@@ -216,19 +216,6 @@ new text only says the same better: it is written at once, at any setting, and t
 summary of decisions shows it. A call whose `transition` closes the item while
 another of its writes waits is refused whole with `close_with_waiting`.
 
-## Claude Code's auto mode
-
-Valkama calls may share a response with any other
-tool. Valkama's hook records which session makes each call and leaves the call as
-you wrote it, so auto mode reviews every call in the response. An older Valkama
-release added your session to the input of each Valkama call instead, and a call
-beside it that needed the review then got no verdict: it failed with "another call
-in this response was changed by a hook", which says nothing about the failed call.
-If you see that failure, the older release is still installed: issue the failed
-call again exactly as it was, and for the rest of the session send Valkama calls in
-a response of their own, with the other tools in the next one. Another client or
-permission mode needs no such care.
-
 ## Creating an item
 
 `create_work_item` takes `title`, and optionally `space`, `projects`,
@@ -320,6 +307,7 @@ resolves its discussion, records its summary and moves its state:
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | edits the fields a transition does not own |
 | `convert` | `{"to": "stage", "leftover": {"title": "…", "steps": ["…"]}, "force": false}`, not with `transition`, `defer` or `move_out` | turns a task into a goal or stage, or one with nothing under it into a task ([work model](work-model.md#goals-and-stages)) |
 | `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
+| `checklist_reason` | `"…"`, at most 500 characters, only with `checklist` | says why a goal's or stage's step is removed or rewritten ([Writes that wait for the owner](#writes-that-wait-for-the-owner)) |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
 | `refs` | `[{"kind": "memory", "value": "…", "label": "…"}]` | attaches pointers: a `memory` record id or a `url` |
 | `commits` | `[{"repository": "alpha", "hash": "3f2a9c1", "label": "…", "remove": false}]` | attaches commits by hand, or detaches them |
