@@ -1538,7 +1538,8 @@ is built in one place. An MCP process cannot ask a listener, so a `serve --port`
 started by hand on another port is not seen unless `VALKAMA_PORT` says so too.
 
 The server's instructions tell an agent to write a number as a markdown link to
-this address in a message to the owner, and not in a Valkama comment or
+this address in a message to the owner, except in Claude Code, where Valkama's
+display hook shows a plain number as that link, and not in a Valkama comment or
 description, where the UI links numbers by itself. Those instructions stay under
 4096 characters, the point where Claude Code 2.1.314 cuts them.
 
