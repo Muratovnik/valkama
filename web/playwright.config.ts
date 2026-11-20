@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import type { ReporterDescription } from '@playwright/test'
 import { defineConfig, devices } from '@playwright/test'
 
 import { appBuild, appPort, harnessPort, runResults } from './tests/browser/browserRun.ts'
@@ -41,6 +42,10 @@ const store = serverStore()
 // is `1`: not by a bare run, not by naming one, not by `--list`. Every project inherits this.
 const testIgnore = clipboardIgnore(process.env)
 
+// A failed run names who holds the heavy-test lock as it ends; a `--reporter` given on the
+// command line replaces both, as the suite runner's does.
+const reporter: ReporterDescription[] = [['line'], [join(specs, 'lockHolderReporter.ts')]]
+
 export default store
   ? defineConfig({
       testDir: specs,
@@ -48,7 +53,7 @@ export default store
       outputDir,
       fullyParallel: false,
       retries: 0,
-      reporter: 'line',
+      reporter,
       use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
       projects: [
         {
@@ -73,7 +78,7 @@ export default store
       globalSetup: join(specs, 'servedApp.setup.ts'),
       fullyParallel: false,
       retries: 0,
-      reporter: 'line',
+      reporter,
       use: {
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
