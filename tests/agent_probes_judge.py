@@ -728,6 +728,9 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
                 if request.get("addressee")
                 else [],
                 "options": [option.get("id") for option in options],
+                # As the owner reads it: each field with its options, their meaning,
+                # the recommendation and why.
+                "fields": fields,
                 "recommended": any(option.get("recommended") for option in options),
                 "every_required_field_recommended": all(
                     field.get("recommended") is not None
@@ -1451,7 +1454,7 @@ def _review_shows(view: View, shows: Sequence[str]) -> list[str]:
                 for comment in _comments(view, reference)
             ]
             fields["questions"] = [
-                {key: request[key] for key in ("kind", "prompt", "options", "answer")}
+                {key: request[key] for key in ("kind", "prompt", "fields", "answer")}
                 for request in card(view, reference)["_requests"]
             ]
             body = json.dumps(fields, ensure_ascii=False, indent=1, default=str)

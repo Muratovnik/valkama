@@ -131,6 +131,10 @@ class JudgedRunTests(RunCase):
                 self.assertIn("README says when", text)
                 self.assertIn("Finished ", text)
                 self.assertIn("Another session read this.", text)
+                # A question shows what the owner reads: each option with its meaning
+                # and whether it is recommended, and why.
+                self.assertIn("Keep the word the docs use.", text)
+                self.assertIn("The docs already say greeting.", text)
                 for word in (
                     RECORD_ONLY,
                     "claim_work_item",
