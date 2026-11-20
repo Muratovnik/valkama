@@ -148,6 +148,7 @@ export const analyticsQuotaMessages = {
     readings: {
       label: '{window} of {account} from {from} to {to}: {readings}. {forecast}',
       labelNoForecast: '{window} of {account} from {from} to {to}: {readings}.',
+      labelEmpty: '{window} of {account} from {from} to {to}: {empty}.',
       reading: '{share} at {at}',
       text: '{at}: {share}, {source}',
       caption: 'Readings of {window} of {account}',
@@ -168,6 +169,7 @@ export const analyticsQuotaMessages = {
       start: 'start {at}',
       resets: 'resets {at}',
       wasReset: 'reset at {at}',
+      quietSince: 'no new readings since {at}',
       now: 'Now',
       last: 'Last reading at {at}, {ago}, from {source}',
       silent: 'No data for {for}; last reading at {at}, from {source}',
@@ -326,6 +328,7 @@ export const analyticsQuotaMessages = {
     readings: {
       label: '{window}, {account}, с {from} до {to}: {readings}. {forecast}',
       labelNoForecast: '{window}, {account}, с {from} до {to}: {readings}.',
+      labelEmpty: '{window}, {account}, с {from} до {to}: {empty}.',
       reading: '{share} в {at}',
       text: '{at}: {share}, {source}',
       caption: 'Показания: {window}, {account}',
@@ -346,6 +349,7 @@ export const analyticsQuotaMessages = {
       start: 'начало {at}',
       resets: 'сброс {at}',
       wasReset: 'сброшено {at}',
+      quietSince: 'новых показаний нет с {at}',
       now: 'Сейчас',
       last: 'Последнее показание в {at}, {ago}, источник: {source}',
       silent: 'Нет данных {for}; последнее показание в {at}, источник: {source}',

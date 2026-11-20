@@ -10,7 +10,12 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { holdsPrevious, lineKey, sectionLines } from '@/pages/analytics/utils/quotaLine.ts'
+import {
+  holdsPrevious,
+  lineKey,
+  namedAfter,
+  sectionLines,
+} from '@/pages/analytics/utils/quotaLine.ts'
 
 import type { Quota, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import { stepParts } from '@/shared/ui/windowGeometry.ts'
@@ -166,6 +171,67 @@ describe('what a quota window’s line holds', () => {
       ).toBe(Math.abs(off) <= 10 * MINUTE)
     }
     expect(holdsPrevious({ ...long.window, previous: null }, long.line)).toBe(false)
+  })
+})
+
+describe('one account’s lines on one time axis', () => {
+  for (const period of ['weeks4', 'custom'] as const)
+    it(`over «${period}» an account’s lines end at its latest reset, each window at its real time`, () => {
+      const { of } = linesOver(quotaTable(NOW, 0), PERIODS[period], 'quota_week')
+      const live = of('Alpha', 'week').line
+      const model = of('Alpha', 'week_model')
+      // The model's week had no reading since its last reset, the live week's start: its line ends
+      // where the live week's does, empty from its reset on, which its words name.
+      expect(model.line.span.to).toBe(NOW + TABLE.alphaReset)
+      expect(live.span.to).toBe(NOW + TABLE.alphaReset)
+      expect(model.line.current).toEqual({
+        from: NOW + TABLE.modelReset - WEEK,
+        to: NOW + TABLE.modelReset,
+      })
+      expect(model.line.quietSince).toBe(model.window.resets_at)
+      expect(model.line.holds.to).toBe(NOW + TABLE.alphaReset)
+      // The section keeps one length, so the pair's spans are one span, moment for moment.
+      expect(model.line.span).toEqual(live.span)
+      // «Beta» resets on another day and ends there, as long; «Gamma», with no reading in any window
+      // since its reset, ends at its own last reset with nothing past it.
+      const beta = of('Beta', 'week').line
+      const gamma = of('Gamma', 'week').line
+      expect(beta.span.to).toBe(NOW + TABLE.betaReset)
+      expect(gamma.span.to).toBe(NOW + TABLE.gammaReset)
+      expect(gamma.quietSince).toBeNull()
+      for (const line of [beta, gamma])
+        expect(line.span.to - line.span.from).toBe(live.span.to - live.span.from)
+    })
+
+  it('at «This week» a week with no reading since its reset beside a live one is the live one’s span, empty', () => {
+    const { of } = linesOver(quotaTable(NOW, 0), PERIODS.week, 'quota_week')
+    const live = of('Alpha', 'week').line
+    const model = of('Alpha', 'week_model')
+    expect(model.line.empty).toBe(true)
+    expect(model.line.span).toEqual(live.span)
+    expect(model.line.current).toEqual(live.current)
+    expect([model.line.start, model.line.reset]).toEqual([live.start, live.reset])
+    expect(model.line.quietSince).toBe(model.window.resets_at)
+    // The line under its card names its last window, which reset where the live week started.
+    const named = namedAfter(model.window, model.line)
+    expect(named.previous?.resets_at).toBe(model.window.resets_at)
+    expect(named.started_at).toBe(model.window.resets_at)
+    expect(holdsPrevious(named, model.line)).toBe(false)
+    // A live window is named after itself.
+    expect(namedAfter(of('Alpha', 'week').window, live)).toBe(of('Alpha', 'week').window)
+  })
+
+  it('keeps the last window whole where no window of the account has a reading since its reset', () => {
+    for (const period of ['now', 'today', 'week'] as const) {
+      const { of } = linesOver(quotaTable(NOW, 0), PERIODS[period], 'quota_week')
+      const { window, line } = of('Gamma', 'week')
+      expect(line.empty, period).toBe(false)
+      expect(line.span, period).toEqual({
+        from: NOW + TABLE.gammaReset - WEEK,
+        to: NOW + TABLE.gammaReset,
+      })
+      expect(namedAfter(window, line), period).toBe(window)
+    }
   })
 })
 

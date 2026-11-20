@@ -34,7 +34,7 @@
  * the window's start and its reset (`words.start`, `words.reset`), dated where they are not on the
  * answer's day, the moment alone where the window did not name one — so its right end is never a
  * bare time that reads as now. While the window runs, now is marked across the plot at the line's
- * end (`end`), an upright hairline in the quiet ink that the legend names «Now» beside a hair of
+ * end (`end`), with no reading in it as well, where a host draws a window nothing was read in yet, an upright hairline in the quiet ink that the legend names «Now» beside a hair of
  * it, as it names every line the plot draws, with no word over the plot: a silent window's
  * line stops well before it. A window past its reset (`ended`)
  * draws nothing past its readings, and its readings, their marks and their key in the legend in
@@ -246,8 +246,16 @@ const {
   frame,
   () => layers.shown('ahead'),
 )
-/** How far along the plot now stands, from 0 to 1, where the line marks it; null where it does not. */
-const nowX = computed(() => (nowShown.value ? stepX(frame.value, props.end) : null))
+/**
+ * How far along the plot now stands, from 0 to 1, where the line marks it; null where it does not.
+ * A running window with no reading in it marks now too: a host's empty current window, on one time
+ * axis with a neighbour that has readings, marks it where that one does.
+ */
+const nowX = computed(() => {
+  const empty = !props.ended && !props.points.length
+  const inside = props.end >= frame.value.from && props.end <= frame.value.to
+  return nowShown.value || (empty && inside) ? stepX(frame.value, props.end) : null
+})
 /** The words of now's key in the legend while the plot marks now. */
 const nowKey = computed(() => (nowX.value === null ? undefined : props.words.now))
 /** Whether a frame narrows the line, so its axis names the frame's moments and the head a way back. */

@@ -48,12 +48,13 @@ function lineOf(page: Awaited<ReturnType<typeof pageOver>>['page'], name: string
     `.quota-window[data-window="${kind}"] [data-chart="steps"]`,
   )
   const now = line.find('[data-mark="now"]')
+  const path = line.find('[data-mark="line"]')
   return {
     line,
     earlier: line.find('[data-mark="earlier"]').exists(),
     drops: line.findAll('[data-target="restart"][data-drop]').length,
     now: now.exists() ? Number(now.attributes('x1')) : null,
-    current: corners(line.find('[data-mark="line"]').attributes('d') ?? ''),
+    current: path.exists() ? corners(path.attributes('d') ?? '') : [],
   }
 }
 
@@ -161,5 +162,76 @@ describe('a quota window’s line at a period further back than its window', () 
     const alpha = lineOf(page, 'Alpha', 'five_hour')
     expect(alpha.earlier).toBe(true)
     expect(alpha.drops).toBe(2)
+  })
+})
+
+/** Where each fall to nothing at a reset stands across a line's drawing, in %, from its box. */
+const resetsOf = (line: ReturnType<typeof lineOf>['line']) =>
+  line
+    .findAll('[data-target="restart"][data-drop]')
+    .map((one) => Number(/calc\(([\d.]+)%/u.exec(one.attributes('style') ?? '')?.[1] ?? 'NaN'))
+
+/** The words of a line's axis, from its start to its end. */
+const axisOf = (line: ReturnType<typeof lineOf>['line']) =>
+  line
+    .findAll('[data-region="axis"] [data-moment]')
+    .map((one) => one.text().replaceAll('\u{A0}', ' '))
+
+describe('the two windows of one account on one time axis', () => {
+  for (const [period, route] of [
+    ['«4 weeks»', { by: 'quota_week', period: 'weeks4' }],
+    [
+      'a custom past range',
+      { by: 'quota_week', period: 'custom', from: '2026-10-26', to: '2026-11-04' },
+    ],
+  ] as const)
+    it(`over ${period} the model week with no reading since its reset stands moment for moment with the live week`, async () => {
+      const { page } = await pageOver(quotaTable(NOW), route)
+      const week = lineOf(page, 'Alpha', 'week')
+      const model = lineOf(page, 'Alpha', 'week_model')
+      // Every reset the model week falls to nothing at, the live week falls at too, at the same x:
+      // both lines end at the live week's reset and run over one length.
+      const weekResets = resetsOf(week.line)
+      const modelResets = resetsOf(model.line)
+      expect(modelResets.length).toBeGreaterThan(0)
+      for (const at of modelResets)
+        expect(
+          weekResets.some((one) => Math.abs(one - at) < 0.01),
+          `${at}% on both`,
+        ).toBe(true)
+      // Past its last reset nothing was read: the line stops, and its axis says so at its end.
+      expect(model.now).toBeNull()
+      expect(axisOf(model.line).at(-1)).toMatch(/^no new readings since /u)
+      expect(axisOf(week.line).at(-1)).toMatch(/^resets /u)
+    })
+
+  it('at «This week» the model week shows the account’s current week, empty, on the live week’s axis', async () => {
+    const { page } = await pageOver(quotaTable(NOW), { by: 'quota_week', period: 'week' })
+    const week = lineOf(page, 'Alpha', 'week')
+    const model = lineOf(page, 'Alpha', 'week_model')
+    // Now and the reset at the same x: the same span, now one day into it.
+    expect(model.now).not.toBeNull()
+    expect(model.now).toBeCloseTo(week.now ?? -1, 5)
+    expect(axisOf(model.line)).toEqual(axisOf(week.line))
+    // Its plot is empty, and says what the card's lead says.
+    expect(model.line.findAll('[data-mark="reading"]')).toHaveLength(0)
+    expect(model.line.find('[data-mark="line"]').exists()).toBe(false)
+    const card = accountNamed(page, 'Alpha').get('.quota-window[data-window="week_model"]')
+    const lead = card.get('[data-lead="ended"]').text()
+    expect(model.line.text()).toContain(lead)
+    expect(model.line.attributes('aria-label')).toContain(lead)
+    // Its «Previous window» names its last window, which reset where the live week started.
+    expect(card.get('[data-past="line"]').text()).toMatch(/^Previous window: until .+ — 15%$/u)
+  })
+
+  it('at «This week» an account with no reading since any reset keeps its last window whole, muted', async () => {
+    const { page } = await pageOver(quotaTable(NOW), { by: 'quota_week', period: 'week' })
+    const gamma = lineOf(page, 'Gamma', 'week')
+    expect(gamma.line.attributes('data-muted')).toBeDefined()
+    expect(gamma.now).toBeNull()
+    // Its two readings from its start: the first three days in.
+    expect(gamma.line.findAll('[data-mark="reading"]')).toHaveLength(2)
+    expect(gamma.current[0]?.[0]).toBeCloseTo((3 * ACROSS) / 7, 1)
+    expect(axisOf(gamma.line).at(-1)).toMatch(/^reset at /u)
   })
 })

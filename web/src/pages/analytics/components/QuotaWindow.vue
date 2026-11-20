@@ -34,7 +34,10 @@
  * account the period overlaps, each whole from its start to its reset, its count falling to
  * nothing at each reset (`lineRestarts`), the earlier ones in the neutral ink of a window past its
  * reset and the current one at the right end; on the one time scale the section's lines share, as
- * long as the longest of them, to its own reset. Its axis names the start of the first window it holds and the current window's
+ * long as the longest of them, an account's lines ending together at its latest reset. A window
+ * reset with nothing read since, beside a live window of its account, shows at a short period the
+ * account's current window, empty (`empty`): no readings, no pace, now marked, its words the
+ * card's lead, and the line under it naming its last window (`namedAfter`). Its axis names the start of the first window it holds and the current window's
  * reset, each under the moment it stands at (`StepLine`'s `holds`). While the window stands, the
  * line marks now, points at where it stands now and runs its forecast's line to its end. A window past its reset by the panel's moment (`ended`) has neither, even where its
  * answer was read before the reset; it leads with that it reset with no reading since, its share
@@ -80,7 +83,7 @@ import {
   stateAt,
   windowKey,
 } from '@/pages/analytics/utils/quotaFigures.ts'
-import { holdsPrevious, ownLine } from '@/pages/analytics/utils/quotaLine.ts'
+import { holdsPrevious, namedAfter, ownLine } from '@/pages/analytics/utils/quotaLine.ts'
 import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
@@ -161,8 +164,13 @@ const bar = computed(() => {
 const paced = computed(() => props.window.even_percent !== null)
 /** What the step line draws: the section's decision, or the window alone. */
 const drawn = computed(() => props.line ?? ownLine(props.window, props.today))
-const points = computed(() => words.linePoints(props.window, props.today, drawn.value.earlier))
-const restarts = computed(() => words.lineRestarts(props.window, props.today, drawn.value.earlier))
+/** The readings and restarts it draws: none where it is the account's current window, empty. */
+const points = computed(() =>
+  drawn.value.empty ? [] : words.linePoints(props.window, props.today, drawn.value.earlier),
+)
+const restarts = computed(() =>
+  drawn.value.empty ? [] : words.lineRestarts(props.window, props.today, drawn.value.earlier),
+)
 /** Whether what used the window can be read: the account has a seat and the window a start. */
 const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
 /** What opens the side panel on what used the window; none outside the page. */
@@ -223,7 +231,7 @@ const stepWords = computed(() =>
   stepWordsOf(props.window, points.value, {
     today: props.today,
     ended: ended.value,
-    start: drawn.value.start,
+    line: drawn.value,
   }),
 )
 /** Whether a past window stands in this one's place (`QuotaPastWindow`). */
@@ -234,8 +242,12 @@ const legend = computed(() => ({
   earlier: t('analytics.quota.readings.earlier'),
   ...(props.window.even_percent === null ? {} : { even: t('analytics.quota.readings.even') }),
 }))
-/** Whether the line holds the window before this one, which then needs no line of its own. */
-const held = computed(() => holdsPrevious(props.window, drawn.value))
+/**
+ * The window whose predecessor the line under the card names (`namedAfter`), and whether the step
+ * line holds that predecessor, which then needs no line of its own.
+ */
+const named = computed(() => namedAfter(props.window, drawn.value))
+const held = computed(() => holdsPrevious(named.value, drawn.value))
 
 /**
  * What the line draws past its readings while the window stands: where it stands now, and the
@@ -254,11 +266,13 @@ const ahead = computed<StepAhead | null>(() => {
   }
 })
 const readingsLabel = computed(() =>
-  words.readingsLabel(props.account, props.window, {
-    now: props.now,
-    today: props.today,
-    earlier: drawn.value.earlier,
-  }),
+  drawn.value.empty
+    ? words.emptyLabel(props.account, props.window, { line: drawn.value, today: props.today })
+    : words.readingsLabel(props.account, props.window, {
+        now: props.now,
+        today: props.today,
+        earlier: drawn.value.earlier,
+      }),
 )
 const readingsCaption = computed(() =>
   t('analytics.quota.readings.caption', {
@@ -358,10 +372,10 @@ const readingsCaption = computed(() =>
         :points="points"
         :words="stepWords"
         :moment="stepMoment"
-        :even="paced"
+        :even="paced && !drawn.empty"
         :legend="legend"
         :ahead="ahead"
-        :ended="ended"
+        :ended="ended && !drawn.empty"
         :silent="silent"
         :restarts="restarts"
       />
@@ -383,7 +397,7 @@ const readingsCaption = computed(() =>
       :now="now"
       :shown="shown"
       :today="today"
-      :window="window"
+      :window="named"
     />
   </PanelLevel>
 </template>

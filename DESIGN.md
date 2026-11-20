@@ -2957,10 +2957,22 @@ holds the period, so a custom day three weeks ago is reached. «This week» once
 where the week reset mid-week, the one before muted in the left half, since the answer holds every
 window that resets after the period's start, and the section's scale doubled with it. A period of the reader's own that ends before now changes
 nothing of that: the line still ends at the current window, the one the figures over it say, and
-only reaches further back. Every line of a section runs over as long a time as the longest of
-them, to its own reset, the same time to a pixel in every card, so the two windows of an account
-side by side, which reset together, stand moment for moment as they stand row for row, and a line
-that holds less is empty before its first window. Accounts whose resets differ stand apart by that
+only reaches further back. The two windows of one account always stand on one time axis, the
+owner's decision, even where that leaves a card's plot empty until its readings come: an
+account's weekly windows reset together. Over the period every line of an account ends at one
+moment, the latest reset among its windows in the section, each window at its real time, and a
+window with nothing read since its last reset stops there, the line empty from it to that end and
+its axis's last word «no new readings since …» at the end. At a period no longer than a window, a
+card whose window reset with nothing read since, beside a live window of its account, shows the
+account's current window: the live one's span and moments, now marked where the live one marks
+it, its plot empty and saying what the card's lead says, «Reset at …, no new readings», and the
+line under it naming its last window, which opens as before. A model's week the source no longer
+reads once ended its line at its own last reset, a week before its neighbour's, the same reset
+85 px apart at 1440 pixels. An account none of whose windows in the section has a reading since
+its reset keeps its last window whole, muted, as before. Every line of a section runs over as long
+a time as the longest of them, the same time to a pixel in every card, so the two windows of an
+account side by side stand moment for moment as they stand row for row, and a line that holds less
+is empty before its first window. Accounts whose resets differ stand apart by that
 difference, as their windows always did: a scale from the earliest start to the latest reset
 would align those too, but it would also have shrunk every line inside its plot at a period no
 longer than a window. Its axis names the start of the first window it holds and the current

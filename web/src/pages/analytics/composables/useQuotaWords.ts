@@ -21,6 +21,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { lastingEnd, runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
+import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
 import { dayOf, momentAtOffset, named, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
@@ -468,8 +469,29 @@ export function useQuotaWords() {
     return before ? `${said} ${before}` : said
   }
 
+  /**
+   * The words for a reader who cannot see it of a line that is the account's current window with
+   * none of the card's readings (`QuotaLine`'s `empty`): its span and what the card's lead says,
+   * that the card's window reset with no reading since.
+   */
+  function emptyLabel(
+    account: QuotaAccount,
+    window: QuotaShareWindow,
+    { line, today }: { line: QuotaLine; today: string },
+  ) {
+    const at = (ms: number) => moment(momentAtOffset(ms, offsetOf(today)), today)
+    return t('analytics.quota.readings.labelEmpty', {
+      window: windowName(window),
+      account: accountName(account),
+      from: at(line.current.from),
+      to: at(line.current.to),
+      empty: t('analytics.quota.ended', { at: moment(line.quietSince ?? '', today) }),
+    })
+  }
+
   return {
     accountName,
+    emptyLabel,
     ago,
     barLabel,
     barRead,
