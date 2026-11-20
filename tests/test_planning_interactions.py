@@ -13,6 +13,7 @@ states, never taken from the read under test.
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from server.planning import api, interactions, participation
@@ -131,6 +132,116 @@ class SpaceQuestionsTests(VolumesCase):
                 self.assertRaises(api.PlanningHttpError) as caught,
             ):
                 self.listed("MAIN", **narrowed)
+            self.assertEqual(400, caught.exception.status)
+
+
+#: The cards of the filter's case: their kind and labels, and the projects they name.
+CARDS = {
+    "MAIN:t": ("task", ("ui", "api"), ()),
+    "MAIN:b": ("bug", ("ui",), ()),
+    "MAIN:c": ("bug", (), ()),
+    "MAIN:G": ("goal", ("ui",), ()),
+    "ALPHA:x": ("bug", ("ui",), ("app",)),
+    "ALPHA:y": ("task", ("ui",), ()),
+}
+
+
+class TaskFilterQuestionsTests(VolumesCase):
+    """A question waits on each card of `CARDS`: tasks that match a filter and tasks that do
+    not, a goal labelled as a matching task is, and ALPHA's cards, one of which MAIN's board
+    holds by naming its project. Under the Volumes page's kind and label the window reads
+    the page's filter too; each expected set is chosen here from `CARDS` by the filter's
+    rule, never taken from the read under test."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.asked: dict[str, str] = {}
+        for day, (name, (kind, labels, projects)) in enumerate(CARDS.items(), start=1):
+            space, _, short = name.partition(":")
+            self.place(space, short, kind=kind, projects=projects)
+            self.conn.execute(
+                "UPDATE work_items SET labels = ? WHERE work_item_id = ?",
+                (json.dumps(labels), *self.ids(name)),
+            )
+            self.asked[name] = self.question(name, f"2026-11-0{day}T09:00:00.000Z")
+        self.conn.commit()
+
+    def listed(self, space: str | None, *, board: bool = True, **narrowed: str | list[str]) -> dict:
+        """The window's read, of every space or of one as its board holds it (`board`)."""
+
+        routing = PlanningRouting(self.conn, str(self.primary))
+        parameters: dict[str, str | list[str]] = {"scope_kind": "global", "status": "pending"}
+        if space is not None:
+            parameters |= {"scope_kind": "space", "data_scope_id": self.scope_id}
+            parameters |= {"space_key": space}
+            if board:
+                parameters["other_spaces"] = "true"
+        parameters |= narrowed
+        return interactions.request_list(
+            routing,
+            {
+                key: value if isinstance(value, list) else [value]
+                for key, value in parameters.items()
+            },
+        )
+
+    def names(self, answer: dict) -> set[str]:
+        by_id = {identity: name for name, identity in self.asked.items()}
+        return {by_id[entry["request"]["request_id"]] for entry in answer["items"]}
+
+    def expected(self, space: str | None, kinds: list[str], labels: list[str]) -> set[str]:
+        held = self.board_set(space)
+        return {
+            name
+            for name, (kind, carried, _projects) in CARDS.items()
+            if self.ids(name) <= held
+            and kind in (kinds or ("task", "bug", "improvement"))
+            and set(labels) <= set(carried)
+        }
+
+    def test_the_window_lists_the_questions_the_filtered_number_counts(self) -> None:
+        for kinds, labels in (
+            (["bug"], []),
+            ([], ["ui"]),
+            (["bug"], ["ui"]),
+            (["bug", "task"], ["ui", "api"]),
+        ):
+            for space in ("MAIN", None):
+                with self.subTest(space=space, kinds=kinds, labels=labels):
+                    answer = self.listed(space, task_kind=kinds, task_label=labels)
+                    read = self.volumes(space, kind=kinds, label=labels)
+                    self.assertEqual(self.expected(space, kinds, labels), self.names(answer))
+                    self.assertEqual(read["counts"]["waiting_owner"]["count"], answer["total"])
+        # The case is what it says: the goal carries `ui` and is never kept, a task without
+        # the label is left out, and MAIN's board holds ALPHA's bug naming its project.
+        self.assertEqual(
+            {"MAIN:t", "MAIN:b", "ALPHA:x"}, self.names(self.listed("MAIN", task_label="ui"))
+        )
+        self.assertEqual(
+            {"MAIN:b", "MAIN:c", "ALPHA:x"}, self.names(self.listed("MAIN", task_kind="bug"))
+        )
+
+    def test_a_label_no_card_carries_keeps_nothing(self) -> None:
+        self.assertEqual(set(), self.names(self.listed("MAIN", task_label="absent")))
+        self.assertEqual(set(), self.names(self.listed(None, task_label="absent")))
+
+    def test_a_space_read_as_a_source_keeps_its_own_cards_under_the_filter(self) -> None:
+        self.assertEqual(
+            {"MAIN:b", "MAIN:c"}, self.names(self.listed("MAIN", board=False, task_kind="bug"))
+        )
+
+    def test_a_filter_that_cannot_be_read_is_refused(self) -> None:
+        for space, narrowed in (
+            ("MAIN", {"task_kind": "goal"}),
+            ("MAIN", {"task_label": ""}),
+            ("MAIN", {"task_kind": "bug", "reference": "MAIN-1"}),
+            (None, {"task_kind": "epic"}),
+        ):
+            with (
+                self.subTest(space=space, narrowed=narrowed),
+                self.assertRaises(api.PlanningHttpError) as caught,
+            ):
+                self.listed(space, board=False, **narrowed)
             self.assertEqual(400, caught.exception.status)
 
 

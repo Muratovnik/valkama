@@ -1602,8 +1602,20 @@ cards that name that project, other spaces' among them only when it is one of th
 space's projects, as `list_work_items` reads a space ([Tool results](#tool-results)). A
 question on another space's card names that space in its `target.space_ref`, where it
 is opened and answered. Neither parameter goes with `reference`, and `other_spaces`
-takes only `true`: otherwise the read is refused with `invalid_request` (400). The MCP
-tool `list_work_item_requests` takes neither: its `space` reads the space's own cards.
+takes only `true`: otherwise the read is refused with `invalid_request` (400).
+
+`task_kind` and `task_label`, each optional and repeatable, keep the questions on the
+tasks the Volumes read's `kind` and `label` keep, by the same rule
+([Filtering by kind and label](#filtering-by-kind-and-label)): a question on a goal or
+a stage is never kept, so the read lists what `counts.waiting_owner` counts under that
+filter. They go with `scope_kind=global` and with a space, read as a source or as its
+board holds it, and not with `reference`. A kind that is no task's, an empty value or
+`reference` beside them is refused with `invalid_request` (400). A label no card
+carries keeps nothing and is not refused, since a read of every source reads several
+stores, while the Volumes read refuses a label its one store does not hold.
+
+The MCP tool `list_work_item_requests` takes none of these four parameters: its
+`space` reads the space's own cards.
 
 Beside the questions, every answer of that read carries `triage_due`: one line
 for each space read whose work waiting for a triage review has grown past the

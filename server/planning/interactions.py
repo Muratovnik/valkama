@@ -21,7 +21,17 @@ from ..store_identity.refs import (
     route_entity_parameter,
     validate_planning_space_ref,
 )
-from . import api, item_projects, model, participation, read_model, requests, service, triage
+from . import (
+    api,
+    item_projects,
+    model,
+    participation,
+    read_model,
+    requests,
+    service,
+    task_filter,
+    triage,
+)
 from .routing import PlanningRouting
 
 READ_PATHS = frozenset(
@@ -290,6 +300,9 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     A space is read as a source: the questions on its own cards. `other_spaces=true` and
     `project_id` read it instead as its board holds it (`_board_held`): the questions a
     count of the space's work counts, each with the target of its card's own space.
+    `task_kind` and `task_label`, in every space's read or one space's, keep only the
+    questions on the tasks the filter keeps (`task_filter`), the one rule the Volumes read
+    counts them by under the same filter.
 
     Beside the questions stands `triage_due`: a line for each space read whose stack
     of triage waits past the owner's thresholds (`triage.due`), with the `space_ref` of
@@ -314,14 +327,16 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     reference = None
     held: _Held | None = None
     if scope_kind == "global":
-        if set(scoped) != {"scope_kind"}:
+        if set(scoped) - _TASK_KEYS != {"scope_kind"}:
             raise api.PlanningHttpError(400, "invalid_request", "global_scope_fields_invalid")
         resources = _resources(routing)
     else:
         reference = _one(scoped, "reference") if "reference" in scoped else None
         held = _held(scoped, reference)
-        space_ref = _exact_parameters(scoped, set(scoped) & {"reference", *_HELD_KEYS})
+        named = {"reference", *_HELD_KEYS, *_TASK_KEYS}
+        space_ref = _exact_parameters(scoped, set(scoped) & named)
         resources = [space_ref]
+    tasks = _tasks(scoped, reference)
     reminds = offset == 0 and status in {None, "pending"} and reference is None
     items: list[dict] = []
     coverage: list[dict] = []
@@ -342,10 +357,8 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         try:
             with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
                 _capability(conn)
-                within = None
-                if held is not None:
-                    within = _board_held(conn, space_ref["space_key"], held, routing)
-                found = _every_request(conn, space_ref["space_key"], status, reference, within)
+                own, within = _narrowed(conn, space_ref["space_key"], held, tasks, routing)
+                found = _every_request(conn, own, status, reference, within)
                 for record in found:
                     identity = (space_ref["data_scope_id"], record["request_id"])
                     if identity not in seen:
@@ -421,6 +434,54 @@ def _held(parameters: Mapping[str, list[str]], reference: str | None) -> _Held |
     return _Held(other_spaces, project)
 
 
+#: The keys that keep the questions on the tasks a filter keeps.
+_TASK_KEYS = frozenset({"task_kind", "task_label"})
+
+
+def _tasks(
+    parameters: Mapping[str, list[str]], reference: str | None
+) -> task_filter.WorkFilter | None:
+    """The filter of tasks a read names (`task_filter.named`), or None for every card.
+
+    A label no card carries keeps nothing rather than being refused: a read of every
+    space reads several stores, and a label is of the store that holds it.
+    """
+
+    if not _TASK_KEYS & set(parameters):
+        return None
+    if reference is not None:
+        raise api.PlanningHttpError(400, "invalid_request", "reference_names_one_item")
+    for name in sorted(_TASK_KEYS & set(parameters)):
+        values = parameters[name]
+        if not isinstance(values, list) or not all(isinstance(v, str) and v for v in values):
+            raise api.PlanningHttpError(400, "invalid_request", f"{name} must not be empty")
+    try:
+        return task_filter.named(parameters.get("task_kind", []), parameters.get("task_label", []))
+    except model.PlanningError as error:
+        raise api.PlanningHttpError(400, "invalid_request", str(error)) from error
+
+
+def _narrowed(
+    conn: sqlite3.Connection,
+    key: str,
+    held: _Held | None,
+    tasks: task_filter.WorkFilter | None,
+    routing: PlanningRouting,
+) -> tuple[str | None, tuple[list[str], list[object]] | None]:
+    """What one source's read keeps: the space whose own cards it reads, None when it reads
+    them as the space's board holds them, and the conditions on the cards it keeps."""
+
+    clauses: list[str] = []
+    values: list[object] = []
+    if held is not None:
+        clauses, values = _board_held(conn, key, held, routing)
+    if tasks is not None:
+        kept, parameters = tasks.condition()
+        clauses, values = [*clauses, *kept], [*values, *parameters]
+    narrowing = held is not None or tasks is not None
+    return (key if held is None else None), ((clauses, values) if narrowing else None)
+
+
 def _board_held(
     conn: sqlite3.Connection, key: str, held: _Held, routing: PlanningRouting
 ) -> tuple[list[str], list[object]]:
@@ -443,7 +504,7 @@ def _board_held(
 
 def _every_request(
     conn: sqlite3.Connection,
-    space: str,
+    space: str | None,
     status: str | None,
     reference: str | None,
     within: tuple[list[str], list[object]] | None = None,
@@ -451,8 +512,9 @@ def _every_request(
     """Every request of one space the filters keep, read a page at a time.
 
     Without an item this is what waits for the person, and a list on a comment
-    waits for nobody: it is read with its item, under its comment. `within` holds the
-    cards read instead of the space's own, as conditions on them.
+    waits for nobody: it is read with its item, under its comment. `space` is the space
+    whose own cards are read, None for those `within` holds alone, and `within` the
+    conditions on the cards kept.
     """
 
     found: list[dict] = []
@@ -460,7 +522,7 @@ def _every_request(
     while True:
         page = requests.list_page(
             conn,
-            space=space if within is None else None,
+            space=space,
             within=within,
             status=status,
             reference=reference,

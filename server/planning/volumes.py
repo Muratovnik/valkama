@@ -25,7 +25,7 @@ each day of the period, the owner's decisions and the commits, with the pace of 
 tasks (`volume_flow`). The estimates close the read: the scope's done work that
 estimates are judged by, described by project, kind and label (`estimates.table`).
 
-A read may also name kinds of task and labels (`WorkFilter`), by the rules of the
+A read may also name kinds of task and labels (`task_filter.WorkFilter`), by the rules of the
 board's filter. It then keeps only the scope's tasks that match, by one condition every
 section takes (`Request.matching`): a goal or stage never matches, so the counts give
 no number of goals and stages, a goal's row adds up only the tasks that match under it,
@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import NamedTuple
 
 from ..projects import project_registry, scopes
@@ -59,6 +59,7 @@ from . import (
     questions,
     read_model,
     standing,
+    task_filter,
     usage,
     volume_flow,
 )
@@ -70,8 +71,6 @@ GLOBAL_NAMES_NOTHING = "a global scope names no space and no project"
 ATTACHED = "volumes read the store this service writes; {key} lives in an attached store"
 NO_SPACE = "no planning space {key}"
 NO_PROJECT = "no project {project}"
-KIND_FILTERS_TASKS = "kind filters tasks: task, bug or improvement"
-NO_LABEL = "no work item carries label {label}"
 
 #: The categories whose work is counted as it stands now; the others when it came there.
 OPEN_CATEGORIES = tuple(
@@ -122,39 +121,16 @@ class Period(NamedTuple):
         }
 
 
-class WorkFilter(NamedTuple):
-    """The tasks a filtered read keeps, by the rules of the board's filter: of any of `kinds`,
-    or of any kind when it names none, and carrying every one of `labels`."""
-
-    kinds: tuple[str, ...]
-    labels: tuple[str, ...]
-
-    def answer(self) -> dict:
-        return {"kinds": list(self.kinds), "labels": list(self.labels)}
-
-    def condition(self) -> tuple[tuple[str, ...], tuple[object, ...]]:
-        """The one rule of a task the filter keeps, as conditions on `work_items i` joined by
-        `AND`, with their parameters in order. A goal or stage never matches: it has no kind
-        of a task, and its labels are not labels of work."""
-
-        kinds = json.dumps(list(self.kinds) or sorted(model.TASK_KINDS))
-        carries = "EXISTS (SELECT 1 FROM json_each(i.labels) WHERE value = ?)"
-        return (
-            ("i.kind IN (SELECT value FROM json_each(?))", *(carries for _ in self.labels)),
-            (kinds, *self.labels),
-        )
-
-
 class Request(NamedTuple):
     """What one read is asked: what it counts, over which period, and which of its tasks."""
 
     scope: Scope
     period: Period
-    work_filter: WorkFilter | None = None
+    work_filter: task_filter.WorkFilter | None = None
 
     def matching(self) -> Scope:
         """The items the sections count: the scope's, or under a filter the scope's tasks
-        it keeps (`WorkFilter.condition`)."""
+        it keeps (`task_filter.WorkFilter.condition`)."""
 
         if self.work_filter is None:
             return self.scope
@@ -285,31 +261,6 @@ def period(start: str, end: str, utc_offset: int) -> Period:
     except usage.UsageQueryError as error:
         raise model.PlanningError(str(error)) from error
     return Period(begins, ends, utc_offset)
-
-
-def work_filter(
-    conn: sqlite3.Connection, kinds: Iterable[str], labels: Iterable[str]
-) -> WorkFilter | None:
-    """The filter a caller names, None when it names no kind and no label, or a refusal.
-
-    A kind is one of a task's; a label is one some item of the store carries. A label
-    the store holds but the scope does not gives an empty read, not a refusal.
-    """
-
-    kept_kinds = tuple(dict.fromkeys(kinds))
-    kept_labels = tuple(dict.fromkeys(labels))
-    if not kept_kinds and not kept_labels:
-        return None
-    if any(kind not in model.TASK_KINDS for kind in kept_kinds):
-        raise model.PlanningError(KIND_FILTERS_TASKS)
-    for label in kept_labels:
-        carried = conn.execute(
-            "SELECT 1 FROM work_items w, json_each(w.labels) l WHERE l.value = ? LIMIT 1",
-            (label,),
-        ).fetchone()
-        if carried is None:
-            raise model.PlanningError(NO_LABEL.format(label=label))
-    return WorkFilter(kept_kinds, kept_labels)
 
 
 def _store_path(conn: sqlite3.Connection) -> str:
