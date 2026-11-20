@@ -6,7 +6,7 @@ import { useEventListener } from '@vueuse/core'
 const CLEARANCE = 8
 
 /** The nearest box that scrolls this element, or the page's own. */
-function scrollerOf(element: HTMLElement): Element | null {
+export function scrollerOf(element: HTMLElement): Element | null {
   for (let node = element.parentElement; node; node = node.parentElement) {
     const { overflowY } = getComputedStyle(node)
     if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight)

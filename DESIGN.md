@@ -2617,7 +2617,11 @@ question did not ask about, the server refuses it with the list of that work; th
 over the answers, what closes with who holds it and what waits on it, the reference it waits on
 never split at its hyphen, focus goes to its first
 line, which says the answer cancels that work too, and the asking stands again, its buttons
-brought back into view. Confirming it
+brought back into view. A list taller than the room the panel leaves over the answers, under the
+block's head, is held to that room and scrolls inside itself, stopping at its ends, so its first
+line and the answers both stay in view and scrolling it moves no answer; the keys scroll it from
+that line, and while it scrolls it is a stop of the keyboard. A scroll of the panel the reader
+makes still moves the answers and ends the asking. Confirming it
 sends that list's token, never the one the question was asked with, which listed the findings the
 answer cancels first; a list that changed meanwhile is refused and shown again the same way.
 Where the list holds more than one kind, tabs over it offer All and each kind it holds, each with
@@ -2625,6 +2629,13 @@ how many of it wait; a kind it holds none of has no tab, and All alone would onl
 kind, so a list of one kind has none. A tab shows only its kind's questions, the answered ones
 put aside among them, and «Question N of M» counts what it shows. When the kind shown empties, as
 its last question is answered elsewhere, the tab goes and the list falls back to All.
+Over All and the triage tab stands the line «time to triage», one for each space whose stack of
+work waiting for a triage review has grown past the owner's thresholds: «Пора разобрать · Main:
+ждут разбора 120, старшая — 3 дн. 4 ч», how many of the stack's cards no review has marked and
+how long the oldest has waited, counted from when it entered, since the read carries no clock of
+the server. It stands on a quiet ground of its own, as a line of the window and no question:
+nothing answers it, no number counts it, and focus never goes to it after an answer. A space
+whose triage reminder is off has no line, since the server leaves it out.
 A review's point is one row: a chevron and the point's label, which are one press that opens the
 point, the three words of the verdict at the row's end and the comment's glyph after them; under
 the label, from its edge to the row's end, one quiet line of what the point comes to. Accepted
