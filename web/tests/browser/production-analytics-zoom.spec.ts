@@ -8,7 +8,7 @@
  *
  * A window of the quota has a span of its own instead. Its step line shows the whole window, and a
  * frame dragged along it narrows that line alone: the page's address, its other lines and its
- * period stay as they were, and «Whole span» takes the line back.
+ * period stay as they were, and «Whole window» takes the line back.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -204,7 +204,7 @@ async function alongFirstLine(page: Page) {
   ] as const
 }
 
-test('a frame along a step line narrows that line alone, and «Whole span» takes it back', async ({
+test('a frame along a step line narrows that line alone, and «Whole window» takes it back', async ({
   page,
 }) => {
   await openQuota(page, 1440, 900)
@@ -216,11 +216,11 @@ test('a frame along a step line narrows that line alone, and «Whole span» take
   await expect.poll(() => firstAxis(page)).not.toEqual(first)
   expect(path(page)).toBe(address)
   expect(await otherAxes(page)).toEqual(others)
-  const back = page.locator('.quota-window').first().getByRole('button', { name: 'Whole span' })
+  const back = page.locator('.quota-window').first().getByRole('button', { name: 'Whole window' })
   await expect(back).toHaveCount(1)
   // Only the framed line offers it; once whole, none does.
-  await expect(page.getByRole('button', { name: 'Whole span' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Whole window' })).toHaveCount(1)
   await back.click()
   await expect.poll(() => firstAxis(page)).toEqual(first)
-  await expect(page.getByRole('button', { name: 'Whole span' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Whole window' })).toHaveCount(0)
 })

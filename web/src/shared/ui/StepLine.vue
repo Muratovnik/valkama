@@ -7,30 +7,15 @@
  * ends there, its round cap on it, with nothing drawn from it to «now» or to the reset, so the
  * line's visible end is a reading, found at its own mark. Beside the steps, where steady use from
  * the window's start would stand at each moment (`even`): a thin line from nothing at the start to
- * the whole at the reset. Past `end`, while the window still runs (`ahead`), its forecast: a dashed
- * line of the readings' width in their hue, the conventional cue of a projection, from where the
- * readings end at now along the faster pace, the one that decides a run-out, as the bar's tail
- * does; where it runs out before the reset the line ends there, on the level of the whole window,
- * and nothing is drawn after it, and where it does not it ends at the reset at its share
- * (`useStepAhead`). A week's range down to its slower pace is a quiet solid fill of the hue under
- * that line, with no hatch and no outline, and none where the range is under a few pixels. The
- * forecast was a hatched band, and five hours that ran out a hatched bar along 100 % to the reset:
- * thick, and read as the level itself.
+ * the whole at the reset. Past `end`, while the window still runs (`ahead`), the corridor of its
+ * forecast: from the share it stands at now to where its slower and its faster pace leave it at
+ * the reset, a band in the readings' hue under the one hatch of a figure not final yet
+ * (`hatch.css`); a forecast of one value is a ribbon of the same hatch, flat along the top from
+ * where it runs out. The band keeps half a ribbon's width outside each edge, so its start at now
+ * and a range said alike are never a hairline.
  *
- * A line may hold windows before the current one (`current`, the current window's span inside the
- * line's): every window of its kind the host's period overlaps, each whole from its start to its
- * reset, one after another, the count falling to nothing at each reset (`restarts` marked `zero`,
- * the mechanism of a count that restarts inside a window), with the current window at the right
- * end. What stands before the current window's start, its line and its readings' marks, is drawn
- * in the neutral ink of a window past its reset, which the legend names apart; the pace runs over
- * the current window alone. Its span (`from`, `to`) may be longer than the windows it holds, a
- * scale a host shares between lines so they are comparable; the line is empty where it holds none,
- * and its axis names the first window's start and the current window's reset under the moments
- * they stand at (`holds`), not the scale's ends, which belong to another line.
- *
- * Every line shows its whole span, from its first window's start to the current window's reset
- * (`from`, `to`), running or past its reset alike (`useStepSpan`), and the axis under it names its
- * two ends for what they are —
+ * Every line shows its whole window, from its start to its reset (`from`, `to`), running or past
+ * its reset alike (`useStepSpan`), and the axis under it names its two ends for what they are —
  * the window's start and its reset (`words.start`, `words.reset`), dated where they are not on the
  * answer's day, the moment alone where the window did not name one — so its right end is never a
  * bare time that reads as now. While the window runs, now is marked across the plot at the line's
@@ -42,19 +27,19 @@
  * window's line is not read as the share spent now. A frame dragged along the plot with a mouse or
  * a pen (`useAxisFrame`), or stretched from the place the keyboard stands on with Shift and an
  * arrow, narrows this line alone to the moments it covers, the axis then naming its ends by their
- * moments alone, a forecast that runs on past its end cut there; the button in the head takes it
- * back to the whole span (`StepLineHead`). Nothing else on the page follows it.
+ * moments alone, a corridor that runs on past its end cut there; the button in the head takes it
+ * back to the whole window (`StepLineHead`). Nothing else on the page follows it.
  *
  * One axis, of percents from 0, its top written once beside the plot, centred on a hairline drawn
  * at its level: 100, or the highest reading where one ran past it, so a line that reaches it meets
  * the line its figure names; written over the plot with nothing at its level, a line at 100 % read
  * as stopping under the mark. What the plot draws is told apart by its drawing — the readings a
- * heavier line in the chart's hue, the pace a hairline in the quiet ink, the forecast a dashed
- * line, now an upright hairline — and a legend names each in the line's head (`StepLineHead`), the
+ * heavier line in the chart's hue, the pace a hairline in the quiet ink, the forecast a hatched
+ * band, now an upright hairline — and a legend names each in the line's head (`StepLineHead`), the
  * forecast while the span shows it and now while it is marked. The pace and the forecast are
  * layers beside the readings, which their keys in the legend turn off and on for every chart at
  * once (`chartLayersStore`): one turned off is not drawn, and no hint or place counts it — the
- * forecast's place goes with its line, and «now» then takes the pointer on to the plot's end —
+ * forecast's place goes with its corridor, and «now» then takes the pointer on to the plot's end —
  * while its key stays. The readings are the data and always show; now and the top's level orient
  * the plot and are no layer.
  *
@@ -71,12 +56,12 @@
  * the readings the line has two more places, each with its own hint, and each paints its mark
  * only while it is pointed at or focused, as a reading does. At `end`, «now» (`ahead.now`): the
  * share it stands at, when its latest reading was and how long the window has been silent; its
- * mark is a ring rather than a reading's dot, so it never reads as a reading. Where the forecast's
- * line ends, its forecast (`ahead.forecast`): what the slower and the faster pace leave, when the
- * reset is and when the window runs out before it; its mark is a round dot in the line's hue
- * ringed in the ground, at least a reading's dot across, at the line's end (`stepMarks.css`). A
- * flat dash once stood there, which read as no dot at all. Where the span ends before the line
- * does, the dot stands at the plot's end and its hint says the reset stands past it
+ * mark is a ring rather than a reading's dot, so it never reads as a reading. Where the corridor
+ * ends, its forecast at the reset (`ahead.forecast`): what the slower and the faster pace leave,
+ * when the reset is and when the window runs out before it; its mark is no ring but a bar at the
+ * band's end from the forecast's high end to its low, or for a forecast of one value a dash at it,
+ * neither a reading's dot (`stepMarks.css`). Where the span ends before the reset, that mark
+ * stands at the plot's end, where the band runs on, and its hint says the reset stands past it
  * (`words.past`).
  *
  * One layer over the whole field takes the pointer for every place (`vHintPick`), and nothing else
@@ -85,7 +70,7 @@
  * and it finds the place under the pointer by its x alone (`aimAt`): a mark within that reach, the
  * nearest of several, wins; elsewhere the place whose stretch holds the pointer — a reading's
  * step, from its moment to the next reading's or to `end`, «now» from `end` to the plot's end
- * where no forecast follows, the forecast along its line. So a reader aims at a moment and not
+ * where no corridor follows, the forecast along the corridor. So a reader aims at a moment and not
  * at a dot, and a reading a few pixels from the next is still found at its own mark.
  *
  * Where the window's count restarted inside it (`restarts`), the line falls at a reading, and the
@@ -100,21 +85,19 @@
  * with the mark's top (`data-hint-mark`), so a forecast that runs out at the top of the plot keeps
  * its hint off the line's head. Every reading is also in the figure's name and in its table twin
  * (`StepLineTable`), and so is the forecast. The drawing stretches to its host's width, so its
- * lines keep their width and their dashes (`vector-effect`), and every word and mark is HTML over
- * it rather than SVG the stretch would squash: a dot drawn in the stretched drawing would be an
- * ellipse at every width but one. A forced palette draws the lines, the fill and the marks in its
- * inks.
+ * lines keep their width (`vector-effect`) and every word, mark and hatch is HTML over it rather
+ * than SVG the stretch would distort. A forced palette draws the lines, the hatch and the marks in
+ * its inks.
  *
  * What a reader of the page selects it by: the figure is `data-chart="steps"`, with
  * `data-muted` past its reset; its regions are `data-region` — `head` (`StepLineHead`), `plot`,
  * the `scale`'s figure at its top, the `field` the marks stand in, the `drawing` of its lines,
  * the `hover` layer that takes the pointer, and the `axis`, whose two ends are `data-moment`
  * `from` and `to`; its marks are `data-mark` — the `ceiling` at the top's level, `now` the
- * hairline up the plot, the pace's `even`, the readings' `line` of the current window and
- * `earlier` of those before it, each `reading`'s dot inside its box (`data-reading`, its order),
- * each `place`'s mark inside its box (`data-target`, `restart`, `now` or `reset`, a restart that is
- * a reset between two windows with `data-drop`), its shape `data-shape` — `ring`, or the
- * forecast's `dot` — the forecast's dashed `forecast` and the `range` filled under it.
+ * hairline up the plot, the pace's `even`, the readings' `line`, each `reading`'s dot inside its
+ * box (`data-reading`, its order), each `place`'s mark inside its box (`data-target`, `restart`,
+ * `now` or `reset`), its shape
+ * `data-shape` — `ring`, or the forecast's `range` or `point` — and the forecast's `corridor`.
  * Each reading's and place's box is its stop (`data-stop`, its order), the element its hint and
  * the keyboard's focus belong to.
  */
@@ -132,47 +115,33 @@ import { useStepAim } from '@/shared/ui/useStepAim.ts'
 import { useStepFrame } from '@/shared/ui/useStepFrame.ts'
 import { useStepSpan } from '@/shared/ui/useStepSpan.ts'
 import { useStepWalk } from '@/shared/ui/useStepWalk.ts'
-import { useStepWindows } from '@/shared/ui/useStepWindows.ts'
 import {
+  evenAt,
   readingsIn,
   STEP_HEIGHT,
   STEP_WIDTH,
   stepAcross,
+  stepPath,
   stepTop,
   stepX,
   stepY,
 } from '@/shared/ui/windowGeometry.ts'
-import type {
-  StepAhead,
-  StepPoint,
-  StepRestart,
-  StepSpan,
-  StepWords,
-} from '@/shared/ui/windowGeometry.ts'
+import type { StepAhead, StepPoint, StepRestart, StepWords } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   /** The moment the last reading holds to: when the answer was read. */
   end: number
-  /**
-   * The span the line runs over, in ms since the epoch: its window's start and its reset, or a
-   * span a host shares between lines, which holds them.
-   */
+  /** The span the window runs over, in ms since the epoch: its start and its reset. */
   from: number
   /** All the line says, in words, for a reader who cannot see it. */
   label: string
-  /** The legend's names of the two lines, of the forecast and of the windows before the current. */
-  legend: { line: string; ahead?: string; earlier?: string; even?: string }
+  /** The legend's names of the two lines and of the forecast's corridor. */
+  legend: { line: string; ahead?: string; even?: string }
   points: readonly StepPoint[]
   to: number
   words: StepWords
   /** What the line draws past its last reading, the window now and its forecast; none past the reset. */
   ahead?: StepAhead | null
-  /**
-   * The current window, its start and its reset, where the line holds windows before it or runs
-   * over a span longer than it: the pace runs over it alone, and what stands before its start is
-   * drawn in the neutral ink of a window past its reset. Unset, the line's span.
-   */
-  current?: StepSpan
   /**
    * Whether the window is past its reset: drawn in the neutral ink, as its bar is, with nothing
    * past its readings.
@@ -180,12 +149,6 @@ const props = defineProps<{
   ended?: boolean
   /** Whether to draw where steady use would stand: from 0 at `from` to 100 at `to`. */
   even?: boolean
-  /**
-   * The moments the line's windows cover, from the first one's start to the current one's reset,
-   * where the span is a scale longer than them: the axis names those two ends under the moments
-   * they stand at. Unset, the line's span.
-   */
-  holds?: StepSpan
   /** Where the window's count restarted inside it, each at the moment of one of `points`. */
   restarts?: readonly StepRestart[]
   /**
@@ -203,12 +166,17 @@ const { framed, shown, whole } = span
 
 const frame = computed(() => ({ ...shown.value, top: stepTop(props.points) }))
 const readings = computed(() => readingsIn(shown.value, props.points))
+/** Where the readings' line ends: at `end`, or at the last reading of a silent window. */
+const lineEnd = computed(() => (props.silent ? (props.points.at(-1)?.at ?? props.end) : props.end))
+const path = computed(() => stepPath(frame.value, readings.value.held, lineEnd.value))
 const layers = useChartLayersStore()
-/** The windows the line holds, its two parts, and the pace over the current one. */
-const { earlier, evenDrawn, evenLine, path, zeros } = useStepWindows(() => props, frame, {
-  evenShown: () => layers.shown('even'),
-  whole,
-})
+/** Whether the pace is drawn: the window has one, and its layer is on. */
+const evenDrawn = computed(() => Boolean(props.even) && layers.shown('even'))
+/** The pace across the span shown: where steady use stands at its start and at its end. */
+const evenLine = computed(() => ({
+  y1: stepY(frame.value, evenAt(whole.value, shown.value.from)),
+  y2: stepY(frame.value, evenAt(whole.value, shown.value.to)),
+}))
 
 /**
  * How far down the drawing a mark stands, as a share of its height: the mark stands in its
@@ -218,28 +186,22 @@ const markStyle = (point: StepPoint) => ({
   '--step-down': stepY(frame.value, point.value) / STEP_HEIGHT,
 })
 
-/**
- * Where the step a reading shown holds ends: at the next reading, or at the reset its window falls
- * to nothing at before it, or at `end` for the last.
- */
+/** Where the step a reading shown holds ends: at the next reading, or at `end` for the last. */
 function stepEnd(index: number) {
   const point = readings.value.inside[index]
   if (!point) return props.end
   const next = props.points[props.points.indexOf(point) + 1]
-  const fall = zeros.value.find((at) => at > point.at)
-  const until = next ? next.at : Math.max(props.end, point.at)
-  return fall === undefined ? until : Math.min(until, fall)
+  return next ? next.at : Math.max(props.end, point.at)
 }
 
 /**
- * The forecast past the readings, its line and the fill of its range, whether the span has one for
- * the legend to name, and the places past them; none of the forecast while its layer is off.
+ * The corridor past the readings, whether the span has one for the legend to name, and the places
+ * past them; neither the corridor nor the forecast's place while its layer is off.
  */
 const {
-  fill: forecastFill,
+  clip: corridorClip,
   named: corridorNamed,
   nowShown,
-  path: forecastPath,
   targets,
 } = useStepAhead(
   () => props,
@@ -262,20 +224,6 @@ const ends = computed(() => ({
   from: (!narrowed.value && props.words.start) || props.moment(shown.value.from),
   to: (!narrowed.value && props.words.reset) || props.moment(shown.value.to),
 }))
-/**
- * Where the axis's two ends stand: under the moments the line's windows start and reset at, inset
- * from the plot's ends by what a shared scale holds past them (`--axis-start`, `--axis-end`, the
- * room before and after them, which gives way where the two words would not fit between); a
- * frame's at the plot's ends.
- */
-const axisStyle = computed(() => {
-  const held = props.holds
-  if (narrowed.value || !held) return {}
-  return {
-    '--axis-start': stepAcross(frame.value, held.from),
-    '--axis-end': `${100 - (stepX(frame.value, held.to) / STEP_WIDTH) * 100}%`,
-  }
-})
 /** Whether «now» stands where the last reading's step ends, and takes the pointer from there on. */
 const nowFollows = computed(() => targets.value.some(({ kind }) => kind === 'now'))
 
@@ -299,7 +247,7 @@ function stepStyle(index: number) {
 /** The box a place past the readings stands in, which the keyboard's ring is drawn on. */
 const reachStyle = ({ reach }: StepTargetPlace) => ({
   insetInlineStart: reach.start ?? 'auto',
-  insetInlineEnd: reach.end ?? (reach.start && reach.size ? 'auto' : '0'),
+  insetInlineEnd: reach.start && reach.size ? 'auto' : '0',
   inlineSize: reach.size ?? 'auto',
 })
 /**
@@ -312,11 +260,14 @@ const PLACE_MARK = {
   restart: 'step-restart-mark',
 } as const
 
-/** A restart's hook where it is a reset between two windows of the line: present, or absent. */
-const dropMark = ({ zero }: StepTargetPlace) => zero || undefined
-
-/** The shape of a place's mark: a ring for «now» and a restart, a round dot for the forecast. */
-const markShape = ({ kind }: StepTargetPlace) => (kind === 'reset' ? 'dot' : 'ring')
+/**
+ * The shape of a place's mark: a ring for «now» and a restart; for the forecast a bar from its
+ * high end to its low, or a dash where its two ends are one value.
+ */
+function markShape({ kind, mark }: StepTargetPlace) {
+  if (kind !== 'reset') return 'ring'
+  return mark.high === mark.low ? 'point' : 'range'
+}
 
 /** Where a place's mark stands, as its style: its top and its foot, at its stretch's side. */
 const targetMark = ({ mark }: StepTargetPlace) => ({
@@ -336,14 +287,10 @@ const { coveredBy, places, readingStop } = walk
 /** The place under the pointer or the keyboard, its mark painted. */
 const pointed = ref<number | null>(null)
 const markClass = (index: number) => ({ 'step-shown': pointed.value === index })
-/** A reading's mark's classes: pointed at, and in the neutral ink before the current window. */
-const readingClass = (point: StepPoint, index: number) => ({
-  ...markClass(index),
-  'step-earlier': earlier(point),
-})
-/** A place's mark's classes: its kind, and pointed at. */
+/** A place's mark's classes: its kind, a dash where the forecast is one value, and pointed at. */
 const placeClass = (target: StepTargetPlace & { stop: number }) => [
   PLACE_MARK[target.kind],
+  { 'step-reset-point': markShape(target) === 'point' },
   markClass(target.stop),
 ]
 
@@ -416,7 +363,6 @@ function stand(index: number) {
       :even="even"
       :muted="ended"
       :now="nowKey"
-      :earlier="Boolean(path.earlier)"
       @whole="takeBack"
     />
     <div
@@ -479,40 +425,27 @@ function stand(index: number) {
             v-if="evenDrawn"
             class="step-even"
             data-mark="even"
+            x1="0"
             vector-effect="non-scaling-stroke"
-            :x1="evenLine.x1"
             :y1="evenLine.y1"
-            :x2="evenLine.x2"
+            :x2="STEP_WIDTH"
             :y2="evenLine.y2"
           />
           <path
-            v-if="forecastFill"
-            class="step-range"
-            data-mark="range"
-            :d="forecastFill"
-          />
-          <path
-            v-if="path.earlier"
-            class="step-path step-path-earlier"
-            data-mark="earlier"
-            vector-effect="non-scaling-stroke"
-            :d="path.earlier"
-          />
-          <path
-            v-if="path.current"
+            v-if="path"
             class="step-path"
             data-mark="line"
             vector-effect="non-scaling-stroke"
-            :d="path.current"
-          />
-          <path
-            v-if="forecastPath"
-            class="step-forecast"
-            data-mark="forecast"
-            vector-effect="non-scaling-stroke"
-            :d="forecastPath"
+            :d="path"
           />
         </svg>
+        <span
+          v-if="corridorClip"
+          class="step-ahead hatched"
+          data-mark="corridor"
+          aria-hidden="true"
+          :style="{ clipPath: corridorClip }"
+        />
         <!-- A reading is a picture of its moment and value, walked with the arrows as one stop. -->
         <!-- Its mark is the point its hint speaks for; the layer below takes the pointer for it. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
@@ -535,7 +468,7 @@ function stand(index: number) {
             class="step-mark"
             aria-hidden="true"
             data-mark="reading"
-            :class="readingClass(point, readingStop(index))"
+            :class="markClass(readingStop(index))"
             :data-key="point.key"
             :style="markStyle(point)"
             data-hint-point
@@ -551,7 +484,6 @@ function stand(index: number) {
           role="img"
           :aria-keyshortcuts="FRAME_KEYS"
           :data-target="target.kind"
-          :data-drop="dropMark(target)"
           :data-stop="target.stop"
           :tabindex="tabOf(target.stop)"
           :style="reachStyle(target)"
@@ -589,7 +521,6 @@ function stand(index: number) {
         class="step-axis"
         aria-hidden="true"
         data-region="axis"
-        :style="axisStyle"
       >
         <span data-moment="from">{{ ends.from }}</span>
         <span data-moment="to">{{ ends.to }}</span>
@@ -599,6 +530,8 @@ function stand(index: number) {
 </template>
 
 <style scoped src="@/shared/ui/axisFrame.css"></style>
+
+<style scoped src="@/shared/ui/hatch.css"></style>
 
 <style scoped src="@/shared/ui/stepMarks.css"></style>
 

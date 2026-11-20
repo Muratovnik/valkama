@@ -5,7 +5,7 @@
  * digits print a figure and which path commands draw a step are how the line is written, not
  * what it draws, so none of them is part of what these read.
  */
-const style = (element: { attributes: (name: string) => string | undefined }) =>
+export const style = (element: { attributes: (name: string) => string | undefined }) =>
   element.attributes('style') ?? ''
 
 /** A figure to the hundredth, so a check holds the number and not how many digits print it. */

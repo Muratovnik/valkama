@@ -10,14 +10,13 @@
  * window too new for a forecast, for one spent or read past 100 %; and from the track's start at
  * 0 %. The
  * forecast's line, right under the tail, leads with «Forecast ·», the name the step line's legend
- * gives its dashed line, and draws nothing but its words: they start where the reset's do, and
- * nothing of the line stands left of them.
+ * gives the hatch, and draws nothing but its words: they start where the reset's do, and nothing of
+ * the line stands left of them.
  * Each step line past its readings points at «now» and, where a forecast has a share to draw to,
- * runs its dashed line on toward the reset and points at its end: the line and its range inside
- * the plot, each place's hint at its mark and clear of the line's head, nothing moving while
- * pointed at; the latest reading keeps its own dot, however close to «now» it was read. A window
- * spent already has run out at now, so no line runs on from there; a window past its reset draws
- * neither. Each run attaches what it measured.
+ * runs its corridor to the reset and points at its end: the corridor inside the plot, each
+ * place's hint at its mark and clear of the line's head, nothing moving while pointed at; the
+ * latest reading keeps its own dot, however close to «now» it was read. A window past its reset
+ * draws neither. Each run attaches what it measured.
  *
  * Every part is read by the hook its component documents (`QuotaAccount`, `QuotaWindow`,
  * `WindowBar`, `StepLine`), and every set is held to the size its case gives before anything is
@@ -53,8 +52,8 @@ const LINES = '[data-window] [data-chart="steps"]'
  * of the track, each part from where its run starts — where the fill or the part before ends.
  */
 interface Drawn {
-  /** Whether the step line runs a forecast's line, and the places past its readings it points at. */
-  ahead: boolean
+  /** Whether the step line runs a corridor, and the places past its readings it points at. */
+  corridor: boolean
   /** Where the fill ends, or null for none. */
   fill: number | null
   places: string[]
@@ -65,7 +64,7 @@ const FIVE_HOURS: Record<string, Drawn> = {
   'Work five_hour': {
     fill: 62,
     tail: [[62, 100]],
-    ahead: true,
+    corridor: true,
     places: ['now', 'reset'],
   },
   // A fresh 0 % that lasts to the reset: the tail from the track's start to the 35 % its answer
@@ -73,21 +72,21 @@ const FIVE_HOURS: Record<string, Drawn> = {
   [`${NIGHT_NAME} five_hour`]: {
     fill: null,
     tail: [[0, 35]],
-    ahead: true,
+    corridor: true,
     places: ['now', 'reset'],
   },
   [`${SEATED_NAME} five_hour`]: {
     fill: 74,
     tail: [[74, 100]],
-    ahead: true,
+    corridor: true,
     places: ['now', 'reset'],
   },
-  // Spent: nothing past the fill, and nothing ahead on the line either: it ran out at now.
+  // Spent: nothing past the fill, and the corridor flat along the top to the reset.
   'Edge five_hour': {
     fill: 100,
     tail: [],
-    ahead: false,
-    places: ['now'],
+    corridor: true,
+    places: ['now', 'reset'],
   },
 }
 
@@ -95,25 +94,25 @@ const WEEKS: Record<string, Drawn> = {
   'Work week': {
     fill: 41,
     tail: [[41, 61]],
-    ahead: true,
+    corridor: true,
     places: ['now', 'reset'],
   },
-  'Work week_model': { fill: 12.5, tail: [], ahead: false, places: ['now'] },
+  'Work week_model': { fill: 12.5, tail: [], corridor: false, places: ['now'] },
   // Silent, its share as solid as a fresh one's, and a range that may run out, cut at the end.
   [`${NIGHT_NAME} week`]: {
     fill: 88,
     tail: [[88, 100]],
-    ahead: true,
+    corridor: true,
     places: ['now', 'reset'],
   },
-  [`${SEATED_NAME} week`]: { fill: 20, tail: [], ahead: false, places: ['now'] },
-  // Read past 100 %: the fill stops at the track's end and nothing is ahead of it, on the line too.
-  'Edge week': { fill: 100, tail: [], ahead: false, places: ['now'] },
+  [`${SEATED_NAME} week`]: { fill: 20, tail: [], corridor: false, places: ['now'] },
+  // Read past 100 %: the fill stops at the track's end and nothing is ahead of it.
+  'Edge week': { fill: 100, tail: [], corridor: true, places: ['now', 'reset'] },
   // A fresh 0 %: no fill, the tail from the track's start.
   'Edge week_model': {
     fill: null,
     tail: [[0, 9]],
-    ahead: true,
+    corridor: true,
     places: ['now', 'reset'],
   },
 }
@@ -161,7 +160,7 @@ const windowsOf = (page: Page) =>
         forecast: (window.querySelector('[data-fact="forecast"]')?.textContent ?? '')
           .replaceAll(/\s+/gu, ' ')
           .trim(),
-        ahead: Boolean(window.querySelector('[data-mark="forecast"]')),
+        corridor: Boolean(window.querySelector('[data-mark="corridor"]')),
         legend: Boolean(window.querySelector('[data-key="ahead"]')),
       }
     }),
@@ -314,7 +313,7 @@ const stateWords = (lang: 'en' | 'ru') => {
 
 for (const lang of ['en', 'ru'] as const)
   for (const width of [1440, 1024, 390])
-    test(`at ${width}px in ${lang} a window's share is solid, its forecast a named hatch, its line and places in the plot`, async ({
+    test(`at ${width}px in ${lang} a window's share is solid, its forecast a named hatch, its corridor and places in the plot`, async ({
       page,
     }, info) => {
       const words = messages[lang].analytics.quota
@@ -339,15 +338,15 @@ for (const lang of ['en', 'ru'] as const)
         expect(await boxes(page), `${section}: the boxes held still`).toHaveLength(
           windows.length * 2 + lines.length * 3,
         )
-        // Each window as its case draws it: the fill, the tail, the forecast's line and the places
-        // past its readings.
+        // Each window as its case draws it: the fill, the tail, the corridor and the places past
+        // its readings.
         const drawn = Object.fromEntries(
           windows.map((one, index) => [
             one.key,
             {
               fill: one.fill,
               tail: one.tail.map(({ from, to }) => [from, to]),
-              ahead: one.ahead,
+              corridor: one.corridor,
               places: lines[index]?.places.map(({ kind }) => kind) ?? [],
             },
           ]),
@@ -358,7 +357,7 @@ for (const lang of ['en', 'ru'] as const)
           expect(one.solid, `${one.key}: its fill solid`).toBe(true)
           expect(one.lead, `${one.key}: its state`).toMatch(states[one.state] ?? /^$/u)
           // The one tail inside the track, 2px of ground past the fill; the forecast after its
-          // name wherever there is one; the legend names the forecast's line where one is drawn.
+          // name wherever there is one; the legend names the corridor where one is drawn.
           expect(
             one.tail.every(({ inside }) => inside),
             `${one.key}: its tail in its track`,
@@ -370,7 +369,7 @@ for (const lang of ['en', 'ru'] as const)
           expect(one.forecast.startsWith(`${words.forecastKey} · `), `${one.key}: the key`).toBe(
             one.forecast !== words.forecast.none,
           )
-          expect(one.legend, `${one.key}: the forecast's line named`).toBe(one.ahead)
+          expect(one.legend, `${one.key}: the corridor named`).toBe(one.corridor)
         }
         // The forecast's line is its words alone, flush with the reset's under them: nothing of
         // it stands left of where they start.
@@ -396,10 +395,10 @@ for (const lang of ['en', 'ru'] as const)
     })
 
 /**
- * How the forecast is painted against what names it, as the browser resolves it: the bar's tail
- * and its fill, whether each is hatched, as the tail is and the fill never is; the step line's
- * forecast, its stroke and its dashes; the forecast's key in the line's head (`StepLineHead`), the
- * paint of its swatch and whether it is a dashed line or a hatch; and the palette's text ink.
+ * How the forecast's key is painted against what it names, as the browser resolves it: the
+ * forecast's key in the window's step line's head (`StepLineHead`) against the first part of the
+ * window's tail; whether each is hatched, as the tail is and the fill never is; and the palette's
+ * text ink.
  */
 const forecastKeys = (page: Page, window: string) =>
   page
@@ -420,16 +419,11 @@ const forecastKeys = (page: Page, window: string) =>
           hatched: style.maskImage.includes('repeating-linear-gradient'),
         }
       }
-      const line = found.querySelector('[data-chart="steps"] [data-mark="forecast"]')
-      const key = found.querySelector('[data-chart="steps"] [data-key="ahead"] [data-mark="dash"]')
-      const paint = line ? getComputedStyle(line) : null
-      const swatch = key ? getComputedStyle(key) : null
       return {
         ink,
         tail: drawn('[data-mark="ahead"]'),
         fill: drawn('[data-mark="fill"]'),
-        line: paint ? { stroke: paint.stroke, dashed: paint.strokeDasharray !== 'none' } : null,
-        legend: swatch ? { paint: swatch.backgroundColor, mask: swatch.maskImage } : null,
+        legend: drawn('[data-chart="steps"] [data-key="ahead"] [data-mark="hatch"]'),
       }
     })
 
@@ -440,7 +434,7 @@ const PALETTES = [
 ] as const
 
 for (const { forcedColors, name, ink } of PALETTES)
-  test(`${name}the bar's tail is hatched, the fill not, and the forecast's key a dashed line painted as the line is`, async ({
+  test(`${name}the forecast's key is hatched and painted as its tail is, the fill not hatched`, async ({
     page,
   }, info) => {
     await page.emulateMedia({ forcedColors })
@@ -448,30 +442,26 @@ for (const { forcedColors, name, ink } of PALETTES)
     await serveQuota(page, quotaOfEdges(NOW))
     await page.setViewportSize({ width: 1440, height: 1000 })
     await openDrawn(page, 'quota_five_hour')
-    // «Work»'s five hours: a fill, a tail to the track's end and its forecast's line named.
+    // «Work»'s five hours: a fill, a tail to the track's end and its corridor named.
     const keys = await forecastKeys(page, 'five_hour')
     await record(info, `forecast keys ${forcedColors}`, keys)
     const tail = keys.tail?.paint ?? 'no tail'
-    const stroke = keys.line?.stroke ?? 'no line'
     expect(
       {
         tail: keys.tail?.hatched,
         fill: keys.fill?.hatched,
-        line: keys.line?.dashed,
+        legend: keys.legend,
       },
-      'what is hatched and what is dashed',
-    ).toEqual({ tail: true, fill: false, line: true })
-    // The key's swatch is a short dashed line of the line's own paint: dashes across, never the
-    // hatch's slant.
-    expect(keys.legend?.paint, "the key in the line's paint").toBe(stroke)
-    expect(keys.legend?.mask, 'the key dashed across').toMatch(
-      /^repeating-linear-gradient\((to right|90deg), /u,
-    )
+      'what is hatched, and the key painted as the tail',
+    ).toEqual({
+      tail: true,
+      fill: false,
+      legend: { paint: tail, hatched: true },
+    })
     expect(tail === keys.ink, 'the tail in the text ink').toBe(ink)
-    expect(stroke === keys.ink, "the forecast's line in the text ink").toBe(ink)
   })
 
-test('a window past its reset draws no tail, no forecast and no place past its readings', async ({
+test('a window past its reset draws no tail, no corridor and no place past its readings', async ({
   page,
 }) => {
   // Read five hours ago: every five hours has reset since, every week still stands.
@@ -481,7 +471,7 @@ test('a window past its reset draws no tail, no forecast and no place past its r
   await openDrawn(page, 'quota_five_hour', 4)
   const windows = await windowsOf(page)
   const lines = await page.evaluate(aheadOfLines, LINES)
-  expect(windows.map(({ key, tail, ahead }) => [key, tail, ahead])).toEqual([
+  expect(windows.map(({ key, tail, corridor }) => [key, tail, corridor])).toEqual([
     ['Work five_hour', [], false],
     [`${NIGHT_NAME} five_hour`, [], false],
     [`${SEATED_NAME} five_hour`, [], false],

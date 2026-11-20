@@ -189,7 +189,7 @@ async function openLines(page: Page, width: number) {
 async function lineLayers(lines: Locator) {
   return lines.evaluateAll((all) =>
     all.map((line) => ({
-      forecast: line.querySelectorAll('[data-mark="forecast"]').length,
+      corridor: line.querySelectorAll('[data-mark="corridor"]').length,
       reset: line.querySelectorAll('[data-target="reset"]').length,
       even: line.querySelectorAll('[data-mark="even"]').length,
       aheadKey:
@@ -216,7 +216,7 @@ test('a quota step line’s forecast and pace turn off on every line from one ke
   // The case holds lines with a forecast and lines with a pace, each drawn and its key pressed.
   expect(forecasting.length, 'lines with a forecast').toBeGreaterThan(1)
   expect(paced.length, 'lines with a pace').toBeGreaterThan(1)
-  for (const line of forecasting) expect(line).toMatchObject({ forecast: 1, aheadKey: 'true' })
+  for (const line of forecasting) expect(line).toMatchObject({ corridor: 1, aheadKey: 'true' })
   for (const line of paced) expect(line).toMatchObject({ even: 1, evenKey: 'true' })
 
   const first = lines.filter({ has: page.locator('[data-key="ahead"]') }).first()
@@ -228,7 +228,7 @@ test('a quota step line’s forecast and pace turn off on every line from one ke
   expect(after).toEqual(
     before.map((line) => ({
       ...line,
-      forecast: 0,
+      corridor: 0,
       reset: 0,
       even: 0,
       aheadKey: line.aheadKey && 'false',
@@ -247,8 +247,8 @@ test('a quota step line’s forecast and pace turn off on every line from one ke
     .locator('[data-region="head"] [data-key="ahead"]')
     .click()
   const back = await lineLayers(again)
-  expect(back.map(({ forecast, reset, aheadKey }) => ({ forecast, reset, aheadKey }))).toEqual(
-    before.map(({ forecast, reset, aheadKey }) => ({ forecast, reset, aheadKey })),
+  expect(back.map(({ corridor, reset, aheadKey }) => ({ corridor, reset, aheadKey }))).toEqual(
+    before.map(({ corridor, reset, aheadKey }) => ({ corridor, reset, aheadKey })),
   )
 })
 

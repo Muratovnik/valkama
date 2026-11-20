@@ -6,9 +6,7 @@
  * Under the window stands one quiet line: «Previous window: until Nov 19, 05:00 — 9%», the moment
  * that window reset and its last share, with «ran out» where a reading of it
  * reached the whole window; or «Previous window: no readings» where the store keeps none, which is
- * text and no control. Where the window's step line holds that window already (`held`), as it does
- * over a period longer than the window, no line stands: it would name a window drawn right above
- * it. The line with a window is a button: it opens that window in the card, read
+ * text and no control. The line with a window is a button: it opens that window in the card, read
  * when asked (`usePastWindow`). While a past window is open, the card holds it and nothing of the
  * current window — its share, its bar, its forecast and its breakdown stand hidden — and says so
  * plainly: «Past window: Nov 12, 05:00 – Nov 19, 05:00», its share at the reset, «Earlier» to step
@@ -49,8 +47,6 @@ const props = defineProps<{
   today: string
   /** The current window, whose predecessor the line names. */
   window: QuotaShareWindow
-  /** Whether the current window's step line holds its predecessor, so no line names it. */
-  held?: boolean
 }>()
 
 /** Whether a past window stands in the current one's place. */
@@ -292,7 +288,7 @@ async function close() {
     </template>
   </section>
   <VButton
-    v-else-if="window.previous && !held"
+    v-else-if="window.previous"
     ref="lineButton"
     class="quota-past-line"
     variant="text"
@@ -303,7 +299,7 @@ async function close() {
     {{ line }}
   </VButton>
   <p
-    v-else-if="!window.previous"
+    v-else
     class="quota-past-quiet quota-past-none"
     data-past="none"
   >

@@ -37,9 +37,6 @@ import type { StepPoint, StepRestart, StepTarget, WindowAhead } from '@/shared/u
 /** The parts of a day a week's run-out is said by, six hours each from midnight. */
 const PARTS = ['night', 'morning', 'day', 'evening'] as const
 
-/** The windows before the current one that its line holds, oldest first (`earlier`). */
-const before = (window: QuotaShareWindow) => window.earlier ?? []
-
 /** Whether a window is silent at `now` (ms), by the answer's threshold `freshFor` (s). */
 const silent = (window: QuotaWindow, now: number, freshFor: number) =>
   stateAt(window, now, freshFor) === 'silent'
@@ -311,21 +308,14 @@ export function useQuotaWords() {
       state: state(window, now, freshFor),
     })
 
-  /**
-   * A window's readings as a step line takes them, each said with its moment and source; `prefix`
-   * keeps the keys of one window of a line of several apart from another's.
-   */
-  const points = (
-    window: Pick<QuotaShareWindow, 'readings'>,
-    today: string,
-    prefix = '',
-  ): StepPoint[] =>
+  /** A window's readings as a step line takes them, each said with its moment and source. */
+  const points = (window: QuotaShareWindow, today: string): StepPoint[] =>
     window.readings.map((reading, index) => {
       const at = moment(reading.at, today)
       const valueText = share(reading.used_percent)
       const noteText = t(`analytics.quota.sources.${reading.source}`)
       return {
-        key: `${prefix}${index}`,
+        key: `${index}`,
         at: Date.parse(reading.at),
         value: reading.used_percent,
         text: t('analytics.quota.readings.text', { at, share: valueText, source: noteText }),
@@ -340,15 +330,11 @@ export function useQuotaWords() {
    * it: «Counter zeroed» with its moment, and that the window's reset did not move. The words
    * name the fact alone, since the samples cannot tell what zeroed it.
    */
-  const restarts = (
-    window: Pick<QuotaShareWindow, 'resets_at' | 'restarts'>,
-    today: string,
-    prefix = '',
-  ): StepRestart[] =>
+  const restarts = (window: QuotaShareWindow, today: string): StepRestart[] =>
     window.restarts.map((restart, index) => {
       const at = moment(restart, today)
       return {
-        key: `${prefix}restart-${index}`,
+        key: `restart-${index}`,
         at: Date.parse(restart),
         timeText: at,
         name: t('analytics.quota.readings.restart'),
@@ -359,65 +345,11 @@ export function useQuotaWords() {
       }
     })
 
-  /** The readings of a window's line: those of each window before it, then its own. */
-  const linePoints = (window: QuotaShareWindow, today: string): StepPoint[] => [
-    ...before(window).flatMap((earlier, index) => points(earlier, today, `w${index}-`)),
-    ...points(window, today),
-  ]
-
-  /**
-   * The restarts of a window's line: those of each window before it, the reset that ends each of
-   * those as a fall of the count to nothing (`zero`), «Window reset» with its moment and the share
-   * the window ended at, and the window's own.
-   */
-  const lineRestarts = (window: QuotaShareWindow, today: string): StepRestart[] => [
-    ...before(window).flatMap((earlier, index): StepRestart[] => {
-      const at = moment(earlier.resets_at, today)
-      const last = earlier.readings.at(-1)?.used_percent ?? 0
-      return [
-        ...restarts(earlier, today, `w${index}-`),
-        {
-          key: `w${index}-reset`,
-          at: Date.parse(earlier.resets_at),
-          timeText: at,
-          name: t('analytics.quota.readings.reset'),
-          figure: at,
-          notes: [t('analytics.quota.readings.resetEnded', { share: share(last) })],
-          zero: true,
-        },
-      ]
-    }),
-    ...restarts(window, today),
-  ]
-
-  /** The windows before the current one in words, each its span and the share it ended at. */
-  function beforeWords(window: QuotaShareWindow, today: string) {
-    const windows = before(window).map((earlier) => {
-      const last = earlier.readings.at(-1)?.used_percent ?? 0
-      const ranOut = earlier.readings.some((one) => one.used_percent >= 100)
-      return t(
-        ranOut
-          ? 'analytics.quota.readings.beforeWindowRanOut'
-          : 'analytics.quota.readings.beforeWindow',
-        {
-          from: moment(earlier.started_at, today),
-          to: moment(earlier.resets_at, today),
-          share: share(last),
-        },
-      )
-    })
-    return windows.length
-      ? t('analytics.quota.readings.before', { windows: windows.join('; ') })
-      : ''
-  }
-
   /**
    * The step line's words for a reader who cannot see it: every reading with its moment, the
    * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`), and
-   * the moments its count restarted, where it did; then, where its line holds windows before it,
-   * each of those by its span and the share it ended at. With the forecast's layer turned off, a
-   * window that still stands is named without its forecast, as the line draws it; its table keeps
-   * it.
+   * the moments its count restarted, where it did. With the forecast's layer turned off, a window
+   * that still stands is named without its forecast, as the line draws it; its table keeps it.
    */
   function readingsLabel(
     account: QuotaAccount,
@@ -444,11 +376,9 @@ export function useQuotaWords() {
             forecast: forecastAt(window, now, today),
           })
     const restarted = restarts(window, today).map((restart) => restart.timeText)
-    const said = restarted.length
+    return restarted.length
       ? `${label} ${t('analytics.quota.readings.restarts', { at: restarted.join(', ') })}`
       : label
-    const earlier = beforeWords(window, today)
-    return earlier ? `${said} ${earlier}` : said
   }
 
   return {
@@ -462,8 +392,6 @@ export function useQuotaWords() {
     forecastLine,
     forecastTarget,
     latest,
-    linePoints,
-    lineRestarts,
     meterHint,
     moment,
     nowTarget,

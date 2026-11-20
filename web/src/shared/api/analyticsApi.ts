@@ -275,33 +275,6 @@ const endedWindowSchema = strictObject({
   ran_out: z.boolean(),
 })
 
-/** Restarts of a window's count, each the moment of one of its readings. */
-function restartsRead(
-  window: { readings: readonly { at: string }[]; restarts: readonly string[] },
-  context: z.RefinementCtx,
-  path: (string | number)[] = [],
-) {
-  const read = new Set(window.readings.map((reading) => reading.at))
-  for (const [index, at] of window.restarts.entries())
-    if (!read.has(at))
-      context.addIssue({
-        code: 'custom',
-        path: [...path, 'restarts', index],
-        message: 'a restart is the moment of one of the readings',
-      })
-}
-
-/**
- * A window before the current one in the page's period, whole from its start to its reset: its
- * readings and where its count restarted, for the step line that draws every window of the period.
- */
-const earlierWindowSchema = strictObject({
-  started_at: moment(),
-  resets_at: moment(),
-  readings: z.array(quotaReadingSchema),
-  restarts: z.array(moment()),
-})
-
 const shareWindowSchema = strictObject({
   kind: enumField(SHARE_KINDS),
   model: boundedText(RUN_TEXT, 200).nullable(),
@@ -318,14 +291,17 @@ const shareWindowSchema = strictObject({
   restarts: z.array(moment()),
   forecast: z.union([pointForecastSchema, rangeForecastSchema]).nullable(),
   previous: endedWindowSchema.nullable(),
-  /** The windows before this one in the period asked for, oldest first; only where one was asked. */
-  earlier: z.array(earlierWindowSchema).optional(),
 }).superRefine((window, context) => {
   if ((window.kind === 'week_model') !== (window.model !== null))
     context.addIssue({ code: 'custom', path: ['model'], message: 'a model only for its week' })
-  restartsRead(window, context)
-  for (const [index, before] of (window.earlier ?? []).entries())
-    restartsRead(before, context, ['earlier', index])
+  const read = new Set(window.readings.map((reading) => reading.at))
+  for (const [index, at] of window.restarts.entries())
+    if (!read.has(at))
+      context.addIssue({
+        code: 'custom',
+        path: ['restarts', index],
+        message: 'a restart is the moment of one of the readings',
+      })
   const { forecast } = window
   if (forecast && 'outcome' in forecast !== (window.kind === 'five_hour'))
     context.addIssue({
@@ -408,8 +384,6 @@ export type QuotaWindow = QuotaAccount['windows'][number]
 export type QuotaShareWindow = Extract<QuotaWindow, { readings: unknown }>
 /** How the window before a window ended. */
 export type QuotaEndedWindow = NonNullable<QuotaShareWindow['previous']>
-/** A window before the current one in the period asked for, whole. */
-export type QuotaEarlierWindow = z.infer<typeof earlierWindowSchema>
 /** A past window's answer: what was asked, and the window, or `null` where none is kept. */
 export type QuotaPastWindow = z.infer<typeof quotaWindowSchema>
 /** A week's forecast: the share its slower and its faster pace spend by the reset. */
@@ -424,19 +398,10 @@ export function validateQuotaAnswer(payload: unknown): Quota {
   return parseContract(quotaAnswerSchema, payload, 'analytics.quota', invalid).quota
 }
 
-/**
- * Each account's quota now, every time in it at `utcOffset` minutes east of UTC, but `now` in UTC;
- * given `from`, the start of the page's period as a time with its offset, each window of a share
- * with the windows before it since then (`earlier`).
- */
-export async function fetchQuota(
-  utcOffset: number,
-  signal?: AbortSignal,
-  from: string | null = null,
-): Promise<Quota> {
+/** Each account's quota now, every time in it at `utcOffset` minutes east of UTC, but `now` in UTC. */
+export async function fetchQuota(utcOffset: number, signal?: AbortSignal): Promise<Quota> {
   const path = '/api/analytics/quota'
   const query = new URLSearchParams({ utc_offset: String(utcOffset) })
-  if (from !== null) query.set('from', from)
   const { response, payload } = await readJsonResponse(`${path}?${query}`, { signal })
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
   return validateQuotaAnswer(payload)

@@ -39,11 +39,6 @@ far back, and never the one a fixed length before. Only the retention is searche
 the retention's start. `past` reads one such window by the moment it reset at or before,
 which is how a reader steps back through the kept windows.
 
-Asked with the start of a page's period, each window of a share also holds the windows
-before it that reset after that start (`earlier`), each whole from its start to its reset,
-so a step line can draw every window the period overlaps; the read then reaches a window's
-length before that start, where the first of them begins, and finds them among its samples.
-
 The read reaches a week further back than its span, so the previous window of a current
 one is found among the samples already read. Further back the samples are looked for by
 their seats (`_Past._search`): a seat names one week, and the seats that may be an
@@ -264,12 +259,6 @@ def _ended(window: dict) -> dict:
     }
 
 
-def _whole(window: dict) -> dict:
-    """A past window as a period's line draws it: its span, its readings and its restarts."""
-
-    return {key: window[key] for key in ("started_at", "resets_at", "readings", "restarts")}
-
-
 class _Past:
     """The past windows of a read: the samples it holds already, read from `known_from` on,
     and the store's retention before them, searched by seat (see the module)."""
@@ -403,28 +392,6 @@ class _Past:
         found = self.samples(owner, series, _millis(start))
         return None if not found else _ended(_window(*series, found, self.clock))
 
-    def earlier(self, owner: _Owner, window: dict, since: int) -> list[dict]:
-        """The windows before `window` that reset after `since`, oldest first, each whole from
-        its start to its reset (`_whole`), from the samples the read holds: it reaches a
-        window's length before `since`, so the first of them starts among them."""
-
-        bound = _millis(window["started_at"] or window["latest"]["at"])
-        series = (window["kind"], window["model"])
-        found = self._ours(self.known.get((owner.key, *series), []), owner, series, bound)
-        # Every sample `_ours` keeps names its reset; one window is the resets within the slack.
-        by_reset = sorted(((_millis(str(one.resets_at)), one) for one in found), key=lambda x: x[0])
-        windows: list[tuple[int, list[seats.AccountSample]]] = []
-        for reset, one in by_reset:
-            if windows and forecast.same_window(reset, windows[-1][0]):
-                windows[-1][1].append(one)
-            else:
-                windows.append((reset, [one]))
-        return [
-            _whole(_window(*series, sorted(kept, key=lambda one: _millis(one.at)), self.clock))
-            for _, kept in windows
-            if max(_millis(str(one.resets_at)) for one in kept) > since
-        ]
-
 
 def _order(series: _Series) -> tuple[int, str]:
     kind, model = series
@@ -438,7 +405,6 @@ def _entry(
     clock: _Clock,
     named: dict[str, str],
     past: _Past,
-    period_from: int | None,
 ) -> dict:
     owner = _Owner.of(account)
     shown = [
@@ -448,8 +414,6 @@ def _entry(
     for window in shown:
         if "readings" in window:
             window["previous"] = past.previous(owner, window)
-            if period_from is not None:
-                window["earlier"] = past.earlier(owner, window, period_from)
     return {
         "account": account.key if windows else accounts.unknown_key(account.organization),
         "organization": account.organization,
@@ -494,30 +458,18 @@ def _at(now: dt.datetime | None, utc_offset: int) -> tuple[_Clock, dt.datetime, 
     return clock, moment, _millis(samples.retained_from(moment))
 
 
-def read(
-    conn: sqlite3.Connection,
-    utc_offset: int,
-    *,
-    now: dt.datetime | None = None,
-    period_from: dt.datetime | None = None,
-) -> dict:
+def read(conn: sqlite3.Connection, utc_offset: int, *, now: dt.datetime | None = None) -> dict:
     """Every account's quota windows at `now`, the times at `utc_offset` minutes from UTC.
 
     Only what the store holds up to `now` is read: a source whose clock runs ahead can date
-    a sample later, and the answer is as of `now`. Given `period_from`, the start of the
-    period a page shows, each window of a share also holds the windows before it that reset
-    after that moment, or after the retention's start where it is earlier (`earlier`).
+    a sample later, and the answer is as of `now`.
     """
 
     clock, moment, retained = _at(now, utc_offset)
     since = samples.instant((moment - LOOKBACK).isoformat())
     until = samples.instant(moment.isoformat())
-    # A week further back as well, where the windows before the current ones are, and a
-    # window's length before the period's start, where the first window it overlaps starts.
+    # A week further back as well, where the windows before the current ones are.
     reach = max(_millis(samples.instant((moment - LOOKBACK - _PAST_REACH).isoformat())), retained)
-    start = None if period_from is None else max(_millis(period_from.isoformat()), retained)
-    if start is not None:
-        reach = max(min(reach, start - _PAST_REACH // dt.timedelta(milliseconds=1)), retained)
     wide = seats.account_samples(conn, _stamp(reach), quota_store.KINDS, until=until)
     found = _by_account(one for one in wide if one.at >= since)
     past = _Past(conn, clock, retained, _by_series(wide), reach)
@@ -528,8 +480,7 @@ def read(
     # Every name an entry may say, read once.
     named = names.names_of(conn, (key for account in found for key in names.keys_of(account)))
     entries = [
-        _entry(conn, account, windows, clock, named, past, start)
-        for account, windows in found.items()
+        _entry(conn, account, windows, clock, named, past) for account, windows in found.items()
     ]
     return {
         "now": clock.time(clock.now),

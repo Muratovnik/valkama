@@ -98,18 +98,6 @@ export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | nul
 }
 
 /**
- * Where a view's period starts at a moment, as a time with its offset, as the quota's read takes
- * it: a day's midnight at the browser's clock, or the span's first moment. Null where the view
- * names no period (`periodBounds`).
- */
-export function periodStart(view: AnalyticsView, now: Date): string | null {
-  const bounds = periodBounds(view, now)
-  if (!bounds) return null
-  const day = /^\d{4}-\d{2}-\d{2}$/u.test(bounds.from)
-  return (day ? dayFrom(bounds.from) : new Date(bounds.from)).toISOString()
-}
-
-/**
  * How a view's period is cut into columns: the live hour by its minutes, today and any other
  * single day by its hours, any longer one by days; a span between moments by its length, by the
  * minute up to two hours, by the hour up to three days and by the day past that.

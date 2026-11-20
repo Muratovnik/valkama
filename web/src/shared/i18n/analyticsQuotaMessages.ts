@@ -102,7 +102,7 @@ export const analyticsQuotaMessages = {
     panel: {
       heading: 'Each account',
       intro:
-        "The period above reaches only each window's line, which shows every window of the period up to the current one; the filters do not apply to the quota, and no two accounts or windows are added.",
+        'The period and the filters above do not apply to the quota, and no two accounts or windows are added.',
       account: "The quota is the whole account's: the chosen project does not change it.",
       noSource: 'No quota data in the past 7 days.',
       noWindow: {
@@ -158,13 +158,7 @@ export const analyticsQuotaMessages = {
       top: '{share}',
       line: 'Used',
       even: 'Steady use',
-      whole: 'Whole span',
-      earlier: 'Earlier windows',
-      before: 'Before it: {windows}.',
-      beforeWindow: '{from} – {to}, {share}',
-      beforeWindowRanOut: '{from} – {to}, {share}, ran out',
-      reset: 'Window reset',
-      resetEnded: 'The window ended at {share}; the next one starts from zero',
+      whole: 'Whole window',
       start: 'start {at}',
       resets: 'resets {at}',
       wasReset: 'reset at {at}',
@@ -279,8 +273,7 @@ export const analyticsQuotaMessages = {
     otherState: '{window}: {state}',
     panel: {
       heading: 'По аккаунтам',
-      intro:
-        'Период выше влияет только на линию окна: она показывает все окна периода до текущего; фильтры к квоте не относятся, аккаунты и окна не складываются.',
+      intro: 'Период и фильтры выше к квоте не относятся; аккаунты и окна не складываются.',
       account: 'Квота — на весь аккаунт: выбранный проект её не меняет.',
       noSource: 'Нет данных квоты за 7 дней.',
       noWindow: {
@@ -336,13 +329,7 @@ export const analyticsQuotaMessages = {
       top: '{share}',
       line: 'Израсходовано',
       even: 'Ровный расход',
-      whole: 'Весь отрезок',
-      earlier: 'Прошлые окна',
-      before: 'До него: {windows}.',
-      beforeWindow: '{from} – {to}, {share}',
-      beforeWindowRanOut: '{from} – {to}, {share}, исчерпано',
-      reset: 'Сброс окна',
-      resetEnded: 'Окно закончилось на {share}; следующее начинается с нуля',
+      whole: 'Всё окно',
       start: 'начало {at}',
       resets: 'сброс {at}',
       wasReset: 'сброшено {at}',

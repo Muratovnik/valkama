@@ -66,8 +66,6 @@ const props = defineProps<{
   shown: 'chart' | 'table'
   /** The answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
-  /** How long every window's line of the section runs over, in ms (`sectionLength`). */
-  scale?: number | null
 }>()
 
 /** The account's name was saved, which the quota's answer says only once it is read again. */
@@ -240,7 +238,6 @@ const tableWords = computed<WindowWords>(() => ({
         :now="now"
         :fresh-for="freshFor"
         :shown="shown"
-        :scale="scale"
       />
     </template>
     <ul

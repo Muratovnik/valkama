@@ -1346,13 +1346,9 @@ where every account's quota windows stand now, from the samples above. It is ans
 the usage read is, to the page and to a local tool alike, and writes nothing. A later
 build only adds fields, kinds and sources to this answer. No MCP tool reads it.
 
-Its parameters are `utc_offset`, the caller's offset from UTC in minutes, from `-840`
-to `840`, `0` by default, at which every time in the answer is written, and `from`, a time
-with its offset: the start of the period a page shows, given so that each window of a share
-holds the windows before it in that period (`earlier`, below). Without `from` the answer is
-as it was before `from` existed, with no `earlier`. Any other parameter, a repeated one, an
-offset out of its range or a `from` that is not a time with its offset (a date alone is
-refused) is refused with `400` and
+Its one parameter is `utc_offset`, the caller's offset from UTC in minutes, from `-840`
+to `840`, `0` by default, at which every time in the answer is written. Any other
+parameter, a repeated one or an offset out of its range is refused with `400` and
 `{"error": {"code": "invalid_request", "message": …}}`, as the usage read refuses it. An
 empty store answers with no account. A sample or a stretch of work dated after `now`, as a
 source whose clock runs ahead could write, is left out until `now` reaches it.
@@ -1426,7 +1422,6 @@ A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
 | `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it, and a source's own reading falls where the window's count restarted |
 | `restarts` | the moments, oldest first, at which the window's count restarted inside it, its reset unchanged: one feed's reading fell ten points or more below that feed's previous reading of the window, and as far below the count. A feed is one session's samples, or the organization's poll and imports. The forecast reads only the readings from the latest restart on. Another feed's lower reading is no restart but a stale one, and is left out of the forecast. Empty where the count never restarted. What zeroed the counter is not said: the samples cannot tell |
 | `previous` | how the window before this one ended: the latest window of the same account, `kind` and `model` whose reset is at or before this one's `started_at`, or, where this one names no start, its latest reading. Five-hour windows are not contiguous, since one starts at the first use after the last reset, so after a gap this is the latest kept window, however far back, never the one a fixed length before. It holds `started_at`, `resets_at`, `latest` as above and `ran_out`, `true` where a reading of that window reached 100. `null` where the store keeps no reading of an earlier window since `retained_from` |
-| `earlier` | only where `from` was given: every window of the same account, `kind` and `model` before this one whose reset is after `from`, or after `retained_from` where that is later, oldest first, so a window that started before `from` and reset after it is in. Each is whole, from its start to its reset: `started_at`, `resets_at`, and `readings` and `restarts` as above, of its own samples. The window itself is never among them, and none of them has a pace or a forecast. Empty where the period starts inside this window, and where the store keeps none |
 | `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts` with `at_reset_percent`, the share of the window its pace will have spent by the reset, at most 100 and rounded to the hundredth as a week's range is; `runs_out` with `runs_out_at`; or `spent`. `runs_out_at` and `at_reset_percent` are `null` for the other outcomes. `basis` is the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
 
 A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,

@@ -145,7 +145,7 @@ describe('the keys of the layers of a period chart', () => {
   })
 })
 
-/** Past a reading of 50 % three hours in: «now», and a forecast to 70 %–100 % by the reset. */
+/** Past a reading of 50 % three hours in: «now», and a corridor to 70 %–100 % by the reset. */
 const AHEAD: StepAhead = {
   value: 50,
   now: { name: 'Now', figure: '50%', notes: [] },
@@ -193,26 +193,26 @@ describe('the keys of the layers of a step line', () => {
       expect(line.findAll('[data-mark="even"]')).toHaveLength(0)
     }
     expect(one.get('[data-mark="line"]').attributes('d')).toBe(readings)
-    expect(one.findAll('[data-mark="forecast"]')).toHaveLength(1)
+    expect(one.findAll('[data-mark="corridor"]')).toHaveLength(1)
 
     await headKey(other, 'even').trigger('click')
     expect(one.findAll('[data-mark="even"]')).toHaveLength(1)
   })
 
-  it('turns the forecast off: its line and its place go, «now» stays, and its key stays to turn it on', async () => {
+  it('turns the forecast off: its corridor and its place go, «now» stays, and its key stays to turn it on', async () => {
     const line = mountLine()
     expect(places(line)).toEqual(['now', 'reset'])
     await headKey(line, 'ahead').trigger('click')
     expect(headKey(line, 'ahead').attributes('aria-pressed')).toBe('false')
-    expect(line.findAll('[data-mark="forecast"]')).toHaveLength(0)
+    expect(line.findAll('[data-mark="corridor"]')).toHaveLength(0)
     expect(places(line)).toEqual(['now'])
-    // With no forecast after it, «now» takes the pointer on to the plot's end.
+    // With no corridor after it, «now» takes the pointer on to the plot's end.
     expect(line.get('[data-target="now"]').attributes('style')).toContain('inset-inline-end: 0')
     expect(line.findAll('[data-mark="now"]')).toHaveLength(1)
     expect(line.findAll('[data-mark="even"]')).toHaveLength(1)
 
     await headKey(line, 'ahead').trigger('click')
-    expect(line.findAll('[data-mark="forecast"]')).toHaveLength(1)
+    expect(line.findAll('[data-mark="corridor"]')).toHaveLength(1)
     expect(places(line)).toEqual(['now', 'reset'])
   })
 

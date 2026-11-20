@@ -5,9 +5,7 @@
  * forecast on a window of money, a point forecast for a week, a sum across accounts, an account
  * with no source that still has windows, an account whose id does not say its own fields. How the
  * window before a window ended is its own object or an explicit `null`, never missing; one past
- * window is asked by the account, the window and the moment it reset by, and nothing else. Over a
- * period the read asks from its start, and each window may hold the windows before it the period
- * overlaps, each whole, its restarts at its own readings.
+ * window is asked by the account, the window and the moment it reset by, and nothing else.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -45,9 +43,6 @@ function withWindow(account: number, window: number, change: (value: object) => 
   )
   return quotaAnswer({ ...quota, accounts } as Quota)
 }
-
-/** The answer with «Work»'s five hours holding `earlier`, the windows before it over a period. */
-const over = (earlier: unknown) => withWindow(0, 0, (window) => ({ ...window, earlier }))
 
 describe('the quota read', () => {
   it('asks for every account at the caller’s offset, and nothing else', async () => {
@@ -232,49 +227,6 @@ describe('the quota read', () => {
     expect(() => validateQuotaAnswer(quotaAnswer(noRetention as Quota))).toThrow(
       /quota\.retained_from/u,
     )
-  })
-
-  it('asks over a period from its start, and the plain read without one', async () => {
-    const fetchMock = answer(quotaAnswer(quotaAt(NOW, 180)))
-    await fetchQuota(180, undefined, '2026-10-14T21:00:00.000Z')
-    const url = new URL(requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? ''), 'https://example.test')
-    expect(Object.fromEntries(url.searchParams)).toEqual({
-      utc_offset: '180',
-      from: '2026-10-14T21:00:00.000Z',
-    })
-    await fetchQuota(180)
-    const plain = new URL(
-      requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? ''),
-      'https://example.test',
-    )
-    expect(Object.fromEntries(plain.searchParams)).toEqual({ utc_offset: '180' })
-  })
-
-  it('takes the windows before a window over a period, each whole, and refuses a field or restart they do not hold', () => {
-    const before = {
-      started_at: '2026-11-11T00:00:00.000+03:00',
-      resets_at: '2026-11-11T05:00:00.000+03:00',
-      readings: [
-        { at: '2026-11-11T01:00:00.000+03:00', used_percent: 40, source: 'poll' },
-        { at: '2026-11-11T03:00:00.000+03:00', used_percent: 10, source: 'poll' },
-      ],
-      restarts: ['2026-11-11T03:00:00.000+03:00'],
-    }
-    expect(validateQuotaAnswer(over([before])).accounts[0]?.windows[0]).toMatchObject({
-      earlier: [{ resets_at: before.resets_at, restarts: before.restarts }],
-    })
-    expect(validateQuotaAnswer(over([])).accounts[0]?.windows[0]).toMatchObject({ earlier: [] })
-    expect(() => validateQuotaAnswer(over([{ ...before, latest: before.readings[1] }]))).toThrow(
-      /earlier\[0\]\.latest: unknown field/u,
-    )
-    expect(() =>
-      validateQuotaAnswer(over([{ ...before, restarts: ['2026-11-11T02:00:00.000+03:00'] }])),
-    ).toThrow('a restart is the moment of one of the readings')
-    // A window before the current one always ran to its reset: one with none fits no window.
-    expect(() => validateQuotaAnswer(over([{ ...before, resets_at: null }]))).toThrow(
-      /accounts\[0\]\.windows\[0\]: unknown value/u,
-    )
-    expect(() => validateQuotaAnswer(over([before]))).not.toThrow()
   })
 })
 

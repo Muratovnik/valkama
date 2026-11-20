@@ -8,10 +8,9 @@
  * line shows its whole window, its axis naming its start and its reset, a running window's now
  * marked across the plot and one past its reset drawn in the neutral ink; a frame stretched with
  * Shift and an arrow, or dragged, narrows the line to the moments it covers, its axis then naming
- * them alone, and «Whole span» takes it back. Past the last reading it points at «now» and at the
- * forecast, each a place with its own hint, walked on after the readings, its mark painted only
- * while pointed at; how the forecast is drawn is held apart (`stepForecast.spec.ts`). Its table
- * holds every reading and the forecast.
+ * them alone, and «Whole window» takes it back. Past the last reading it points at «now» and runs the forecast's corridor to the reset,
+ * each a place with its own hint, walked on after the readings, its mark painted only while
+ * pointed at; the legend names the corridor. Its table holds every reading and the forecast.
  */
 import { nextTick } from 'vue'
 
@@ -19,10 +18,47 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import StepLineTable from '@/shared/ui/StepLineTable.vue'
+import type { StepAhead } from '@/shared/ui/windowGeometry.ts'
 
-import { AHEAD, axisWords, REACH, READ, targets } from '../support/stepAhead.ts'
-import { corners, declared, placement } from '../support/stepDrawing.ts'
-import { HIT, HOUR, openLine, point, pointAt, START, WORDS } from '../support/stepLineMount.ts'
+import { corners, declared, placement, style } from '../support/stepDrawing.ts'
+import {
+  dragFrame,
+  HIT,
+  HOUR,
+  openLine,
+  point,
+  pointAt,
+  START,
+  WORDS,
+} from '../support/stepLineMount.ts'
+
+/**
+ * Past a reading of 50 % three hours in: «now», and a corridor to the reset at five hours, its
+ * slower edge to 70 % and its faster reaching 100 % at four hours and flat on.
+ */
+const AHEAD: StepAhead = {
+  value: 50,
+  now: { name: 'Now', figure: '50%', notes: ['Last reading at h1.5'] },
+  forecast: {
+    name: 'Forecast by the reset',
+    figure: '70%–100%',
+    notes: ['Resets at h5'],
+    high: [
+      { at: START + 3 * HOUR, value: 50 },
+      { at: START + 4 * HOUR, value: 100 },
+      { at: START + 5 * HOUR, value: 100 },
+    ],
+    low: [
+      { at: START + 3 * HOUR, value: 50 },
+      { at: START + 5 * HOUR, value: 70 },
+    ],
+  },
+}
+const READ = [point('12:00', 1, 20), point('12:30', 1.5, 50)]
+
+/** The words at the two ends of a step line's axis. */
+const axisWords = (line: ReturnType<typeof openLine>) =>
+  line.findAll('[data-region="axis"] [data-moment]').map((one) => one.text())
 
 describe('the step line', () => {
   it('draws readings as steps held to the moment read, never a slope between them', async () => {
@@ -191,7 +227,7 @@ describe('the step line', () => {
     line.unmount()
   })
 
-  it('narrows to the readings a frame stretched with Shift covers, and «Whole span» takes it back', async () => {
+  it('narrows to the readings a frame stretched with Shift covers, and «Whole window» takes it back', async () => {
     const line = openLine([point('12:00', 1, 20), point('12:30', 1.5, 50), point('13:00', 2, 60)])
     const first = line.get('[data-reading="0"]')
     ;(first.element as HTMLElement).focus()
@@ -206,7 +242,7 @@ describe('the step line', () => {
     expect(axisWords(line)).toEqual(['h1', 'h2'])
     expect(line.find('.step-span').exists()).toBe(false)
     const back = line.get('[data-step="whole"]')
-    expect(back.text()).toBe('Whole span')
+    expect(back.text()).toBe('Whole window')
     await back.trigger('click')
     expect(axisWords(line)).toEqual(['start h0', 'resets h5'])
     expect(line.find('[data-step="whole"]').exists()).toBe(false)
@@ -239,6 +275,19 @@ describe('the step line', () => {
   })
 })
 
+/** The places past the readings: which, their hint, the stretch they take, whether painted. */
+const targets = (line: ReturnType<typeof openLine>) =>
+  line.findAll('.step-target').map((target) => ({
+    kind: target.attributes('data-target'),
+    stop: target.attributes('data-stop'),
+    hint: target.attributes('data-tooltip'),
+    reach: placement(target),
+    shown: target.get('.step-target-mark').classes('step-shown'),
+  }))
+
+/** The step the reach of «now» takes past its start: the line's own width for a pointer. */
+const REACH = 'var(--step-reach)'
+
 describe('the step line past its readings', () => {
   it('points at now and at the forecast by the reset, each with its own hint, painted only when pointed at', async () => {
     const line = openLine(READ, START + 3 * HOUR)
@@ -256,9 +305,8 @@ describe('the step line past its readings', () => {
         kind: 'reset',
         stop: '3',
         hint: 'Forecast by the reset: 70%–100%\nResets at h5',
-        // From past now's reach to the run-out at four hours of five, 80 % across, where the
-        // forecast's line ends, and never so far on that its own reach passes that end.
-        reach: { start: `min(calc(60% + ${REACH}), calc(80% - ${REACH}))`, end: 20, size: 'auto' },
+        // From past now's reach, and never so far on that its own reach leaves the plot.
+        reach: { start: `min(calc(60% + ${REACH}), calc(100% - ${REACH}))`, end: 0, size: 'auto' },
         shown: false,
       },
     ])
@@ -268,8 +316,8 @@ describe('the step line past its readings', () => {
       undefined,
       0,
     ])
-    // The forecast's dot at the run-out, 240 of 300, pointed at a little past it.
-    await pointAt(line, 240 + HIT - 1)
+    // The forecast's mark at the plot's end, pointed at half a mark past the field's edge.
+    await pointAt(line, 300 + HIT - 1)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
       false,
@@ -277,21 +325,22 @@ describe('the step line past its readings', () => {
     ])
     await pointAt(line, null)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, false])
-    // Along the forecast's line, far from either mark, the forecast; at now's ring, now.
-    await pointAt(line, 210)
+    // Along the corridor, far from either ring, the forecast; at now's ring, now.
+    await pointAt(line, 240)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     await pointAt(line, 180 + HIT - 1)
     expect(targets(line).map(({ shown }) => shown)).toEqual([true, false])
-    // The forecast's mark is a dot at the run-out, on the level of the whole window, one place and
-    // no range; «now» keeps its ring.
+    // The reset's mark spans the corridor's end, from its faster edge at 100 % to its slower at 70 %,
+    // a range rather than a ring; «now» keeps its ring.
     expect(declared(line.get('.step-reset-mark'))).toEqual({
       '--step-high': 0,
-      '--step-low': 0,
+      '--step-low': 0.3,
       '--step-side': 100,
     })
     expect(
       line.findAll('[data-mark="place"]').map((mark) => mark.attributes('data-shape')),
-    ).toEqual(['ring', 'dot'])
+    ).toEqual(['ring', 'range'])
+    expect(line.get('.step-reset-mark').classes()).not.toContain('step-reset-point')
     line.unmount()
   })
 
@@ -322,6 +371,32 @@ describe('the step line past its readings', () => {
     line.unmount()
   })
 
+  it('draws the corridor as a hatch between its edges, which its legend names', async () => {
+    const line = openLine(READ, START + 3 * HOUR)
+    expect(line.find('.step-ahead').exists()).toBe(false)
+    expect(line.find('[data-key="ahead"]').exists()).toBe(false)
+    await line.setProps({ ahead: AHEAD })
+    const corridor = line.get('.step-ahead')
+    expect(corridor.classes()).toContain('hatched')
+    // From now, 60 % across, along the faster edge to 100 % at 80 % across and flat to the end,
+    // then back along the slower edge from 70 % at the end to 50 % at now.
+    const clip = style(corridor)
+    const places = [
+      ...clip.matchAll(
+        /(\d+(?:\.\d+)?)% calc\(var\(--step-inset\) \+ \(100% - 2 \* var\(--step-inset\)\) \* ([\d.]+) ([+-])/gu,
+      ),
+    ].map(([, x, y, side]) => [Number(x), Number(y), side])
+    expect(places).toEqual([
+      [60, 0.5, '-'],
+      [80, 0, '-'],
+      [100, 0, '-'],
+      [100, 0.3, '+'],
+      [60, 0.5, '+'],
+    ])
+    expect(line.get('[data-key="ahead"]').text()).toBe('Forecast')
+    line.unmount()
+  })
+
   it('walks on from the latest reading to now and the forecast, and back', async () => {
     const line = openLine(READ, START + 3 * HOUR)
     await line.setProps({ ahead: AHEAD })
@@ -342,10 +417,49 @@ describe('the step line past its readings', () => {
     line.unmount()
   })
 
+  it('marks a forecast of one value at the reset with a dash at that value, no ring', async () => {
+    const line = openLine(READ, START + 3 * HOUR)
+    // Five hours that last to the reset at 70 %: one course for both edges, so one value there.
+    const course = [
+      { at: START + 3 * HOUR, value: 50 },
+      { at: START + 5 * HOUR, value: 70 },
+    ]
+    const forecast = { ...AHEAD.forecast, high: course, low: course }
+    await line.setProps({ ahead: { ...AHEAD, forecast } as StepAhead })
+    const mark = line.get('[data-target="reset"] [data-mark="place"]')
+    expect(mark.attributes('data-shape')).toBe('point')
+    expect(mark.classes()).toEqual(expect.arrayContaining(['step-reset-mark', 'step-reset-point']))
+    expect(declared(mark)).toEqual({ '--step-high': 0.3, '--step-low': 0.3, '--step-side': 100 })
+    line.unmount()
+  })
+
+  it('narrowed by a frame that ends before the reset, cuts the corridor there and says the reset is past it', async () => {
+    const line = openLine(READ, START + 3 * HOUR, AHEAD)
+    // Whole, the corridor runs to the reset and says nothing past it.
+    expect(targets(line).map(({ hint }) => hint)).toEqual([
+      'Now: 50%\nLast reading at h1.5',
+      'Forecast by the reset: 70%–100%\nResets at h5',
+    ])
+    // Dragged over the first four hours of five, 240 of 300.
+    await dragFrame(line, 0, 240)
+    expect(axisWords(line)).toEqual(['h0', 'h4'])
+    // Four hours across: now at 75 %, the faster edge at 100 % at the plot's end, the slower at 60 %.
+    expect(targets(line).map(({ kind, hint }) => [kind, hint])).toEqual([
+      ['now', 'Now: 50%\nLast reading at h1.5'],
+      ['reset', 'Forecast by the reset: 70%–100%\nResets at h5\nPast the right edge'],
+    ])
+    expect(declared(line.get('.step-reset-mark'))).toEqual({
+      '--step-high': 0,
+      '--step-low': 0.4,
+      '--step-side': 100,
+    })
+    line.unmount()
+  })
+
   it('with no forecast to draw points at now alone, which takes the pointer to the plot’s end', async () => {
     const line = openLine(READ, START + 3 * HOUR)
     await line.setProps({ ahead: { ...AHEAD, forecast: null } })
-    expect(line.find('[data-mark="forecast"]').exists()).toBe(false)
+    expect(line.find('.step-ahead').exists()).toBe(false)
     expect(line.find('[data-key="ahead"]').exists()).toBe(false)
     expect(targets(line).map(({ kind, reach }) => [kind, reach])).toEqual([
       ['now', { start: 60, end: 0, size: 'auto' }],
@@ -361,7 +475,7 @@ describe('the step line past its readings', () => {
   it('with nothing ahead, a window past its reset, draws no place past its readings', () => {
     const line = openLine(READ, START + 5 * HOUR)
     expect(line.findAll('.step-target')).toHaveLength(0)
-    expect(line.find('[data-mark="forecast"]').exists()).toBe(false)
+    expect(line.find('.step-ahead').exists()).toBe(false)
     // With no «now» after it, the last reading is as wide as a pointer can hit, as every other.
     expect(line.findAll('.step-reach')).toHaveLength(READ.length)
     expect(line.findAll('.step-reach').some((one) => 'min-inline-size' in declared(one))).toBe(

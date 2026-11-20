@@ -1,26 +1,18 @@
 /**
  * The forecast's end in the built app, on the step line and on the bar (`StepLine`, `WindowBar`).
  *
- * On the step line the forecast is one dashed line of the readings' width in their hue from where
- * they end at now, along the faster pace. Where that runs out before the reset the line ends at
- * the run-out on the level of the whole window and nothing of the forecast stands past it; where it
- * does not it ends at the reset at its share. A week's range down to the slower pace is a solid
- * fill of low opacity under the line, with no hatch and no outline, and none where it would be
- * under a few pixels tall. The line's end is the forecast's place: pointed at, a round dot at
- * least a reading's dot across, ringed in the ground, never a ring around nothing and never a dash,
- * as wide as it is tall at every width, in a forced palette's ink under one; its hint stands beside
- * it and off the line's head. The owner's complaint it answers: the forecast drawn as a hatched
- * band was thick, and its end's mark at 100 % was a flat dash. On the bar a week's forecast is one
- * hatched tail from the fill's end, past the gap the fill keeps, to the range's high end, with no
- * gap inside it; five hours draw theirs as before, and the bar's hint and its words for a screen
- * reader say what the pace tick stands for.
+ * On the step line the forecast at the reset is no ring. A week forecasts a range, and while its
+ * place is pointed at its mark is a bar at the reset from the range's high end to its low, in the
+ * corridor's hue, a forced palette's ink under one; five hours forecast one value, and its mark is
+ * a dash at that value. Its hint stands beside the mark and off the line's head. On the bar a
+ * week's forecast is one hatched tail from the fill's end, past the gap the fill keeps, to the
+ * range's high end, with no gap inside it; five hours draw theirs as before, and the bar's hint and
+ * its words for a screen reader say what the pace tick stands for.
  *
- * The cases, from the quota fixture: «Work»'s week at 41 %, 56.93 % to 61.2 % by the reset, which
- * lasts, its range three and a half pixels tall; the unnamed account's week at 88 %, 97.5 % to 104.2 %, which
- * may run out before the reset a day off; «Work»'s five hours at 62 %, running out before the
- * reset; the unnamed account's five hours at 0 %, lasting to the reset at 35 %; and «Edge»'s model
- * week at 0 %, 4 % to 9 %, which lasts with a range of five. Each run attaches what it measured and
- * a picture of the window.
+ * The quota fixture's windows: «Work»'s week at 41 %, its forecast 56.93 % to 61.2 % by the reset;
+ * «Work»'s five hours at 62 %, running out before the reset; the unnamed account's five hours at
+ * 0 %, lasting to the reset at 35 %. Each line is shown whole, to its reset, so the mark stands
+ * at the forecast's own ends.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -36,18 +28,9 @@ const NEAR = 1
 /** The surface gap the bar keeps between the fill and the tail (`--space-half`). */
 const GAP = 2
 
-/** Opens the window of `account` of the `kind` in the section `by`, drawn as a chart. */
-async function openWindow(
-  page: Page,
-  {
-    by,
-    account,
-    kind,
-    width = 1440,
-  }: { account: string; by: string; kind: string; width?: number },
-) {
+async function openWindow(page: Page, by: string, account: string, kind: string) {
   await serve(page)
-  await page.setViewportSize({ width, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await openPanel(page, pageAt({ by }))
   const panel = page.locator('.quota-panel')
   await panel.getByRole('radio', { name: 'Chart' }).check()
@@ -60,56 +43,6 @@ const shareAt = (window: Locator, share: number) =>
     const box = drawing.getBoundingClientRect()
     return box.top + box.height * (1 - value / 100)
   }, share)
-
-/** A point on the page. */
-interface Spot {
-  left: number
-  top: number
-}
-
-/**
- * The forecast as the line draws it: how many lines, the corners of the line and of its range's
- * fill where the plot's own mapping puts them on the page, how each is painted, and where the
- * reset of the current window stands across, under the axis word that names it.
- */
-const forecastOf = (window: Locator) =>
-  window.locator('[data-chart="steps"]').evaluate((figure) => {
-    const corners = (path: SVGPathElement | null): Spot[] | null => {
-      const matrix = path?.getScreenCTM()
-      if (!path || !matrix) return null
-      const numbers = (path.getAttribute('d') ?? '').match(/-?[\d.]+(?:e-?\d+)?/gu) ?? []
-      const found: Spot[] = []
-      for (let index = 0; index + 1 < numbers.length; index += 2) {
-        const point = new DOMPoint(Number(numbers[index]), Number(numbers[index + 1]))
-        const { x, y } = point.matrixTransform(matrix)
-        found.push({ left: x, top: y })
-      }
-      return found
-    }
-    const lines = figure.querySelectorAll<SVGPathElement>('[data-mark="forecast"]')
-    const range = figure.querySelector<SVGPathElement>('[data-mark="range"]')
-    const line = lines[0] ?? null
-    const stroke = line ? getComputedStyle(line) : null
-    const fill = range ? getComputedStyle(range) : null
-    const reset = figure.querySelector('[data-region="axis"] [data-moment="to"]')
-    return {
-      count: lines.length,
-      line: corners(line),
-      stroke: stroke && {
-        paint: stroke.stroke,
-        width: Number.parseFloat(stroke.strokeWidth),
-        dash: stroke.strokeDasharray,
-      },
-      range: corners(range),
-      fill: fill && {
-        paint: fill.fill,
-        opacity: Number(fill.fillOpacity),
-        stroke: fill.stroke,
-        mask: fill.maskImage,
-      },
-      reset: reset?.getBoundingClientRect().right ?? null,
-    }
-  })
 
 /** Points at the forecast's place and returns its mark, painted, and the hint it shows. */
 async function pointAtForecast(page: Page, window: Locator) {
@@ -126,29 +59,30 @@ async function pointAtForecast(page: Page, window: Locator) {
   return { mark, hint }
 }
 
-/** The mark as drawn: its box, its shape's hook, its paint and ring, and the forced palette's ink. */
+/** The mark as drawn: its box, its shape's hook and what would make it a ring or a dot. */
 const drawnMark = (mark: Locator) =>
   mark.evaluate((element) => {
     const style = getComputedStyle(element)
+    const cap = getComputedStyle(element, '::before')
     const probe = document.createElement('i')
     document.body.append(probe)
     probe.style.color = 'CanvasText'
     const ink = getComputedStyle(probe).color
-    probe.style.color = 'Canvas'
-    const ground = getComputedStyle(probe).color
     probe.remove()
-    const { top, left, width, height } = element.getBoundingClientRect()
+    const { top, bottom, left, right, width, height } = element.getBoundingClientRect()
     return {
       shape: (element as HTMLElement).dataset.shape ?? '',
-      centre: { left: left + width / 2, top: top + height / 2 },
+      top,
+      bottom,
+      left,
+      right,
+      middle: top + height / 2,
       width,
       height,
-      round: style.borderRadius,
+      ring: style.boxShadow !== 'none' || style.borderRadius !== '0px',
       paint: style.backgroundColor,
-      ring: { width: style.outlineWidth, paint: style.outlineColor, style: style.outlineStyle },
-      inset: style.boxShadow,
+      cap: cap.content === 'none' ? null : { paint: cap.backgroundColor, width: cap.width },
       ink,
-      ground,
     }
   })
 
@@ -168,138 +102,48 @@ async function expectBeside(hint: Locator, mark: Locator, window: Locator) {
   )
 }
 
-/** Whether a range's fill is quiet and solid: a paint at low opacity, no outline, no mask; or none. */
-const quietFill = (fill: Awaited<ReturnType<typeof forecastOf>>['fill']) =>
-  fill === null ||
-  (fill.stroke === 'none' &&
-    fill.mask === 'none' &&
-    !fill.paint.startsWith('url(') &&
-    fill.opacity > 0 &&
-    fill.opacity < 0.5)
+for (const forcedColors of ['none', 'active'] as const)
+  test(`a week's forecast ends in a bar from its high end to its low, no ring (forced colours ${forcedColors})`, async ({
+    page,
+  }, info) => {
+    await page.emulateMedia({ forcedColors })
+    const window = await openWindow(page, 'quota_week', 'Work', 'week')
+    const { mark, hint } = await pointAtForecast(page, window)
+    const drawn = await drawnMark(mark)
+    const high = await shareAt(window, 61.2)
+    const low = await shareAt(window, 56.93)
+    await record(info, `week-forecast-end-${forcedColors}`, { drawn, high, low })
+    expect(drawn.shape).toBe('range')
+    expect(drawn.ring, 'no ring').toBe(false)
+    expect(Math.abs(drawn.top - high), 'its top at the high end').toBeLessThan(NEAR)
+    expect(Math.abs(drawn.bottom - low), 'its bottom at the low end').toBeLessThan(NEAR)
+    // Capped at each end by a stroke as wide as the mark: never a dot, however short the range.
+    expect(drawn.cap?.width, 'its caps as wide as a reading’s dot').toBe('8px')
+    expect(drawn.cap?.paint, 'its caps in its own paint').toBe(drawn.paint)
+    // The corridor's hue, a forced palette's ink under one.
+    expect(drawn.paint === drawn.ink, 'drawn in the forced palette’s ink').toBe(
+      forcedColors === 'active',
+    )
+    await expect(hint).toContainText('Forecast by the reset')
+    await expectBeside(hint, mark, window)
+  })
 
-/** Where the line's top stands at `left` along the forecast's line `line`, between its corners. */
-function lineTopAt(line: readonly Spot[], left: number) {
-  for (const [index, from] of line.entries()) {
-    const to = line[index + 1]
-    if (!to || left > to.left) continue
-    const along = to.left === from.left ? 0 : (left - from.left) / (to.left - from.left)
-    return from.top + (to.top - from.top) * along
-  }
-  return line.at(-1)?.top ?? Number.NaN
-}
-
-/** The cases: a window by its account and kind, its section, and where its forecast's line ends. */
-const CASES = [
-  {
-    name: 'a week that runs out',
-    by: 'quota_week',
-    account: NIGHT_NAME,
-    kind: 'week',
-    ends: { share: 100, before: true },
-    fill: true,
-  },
-  {
-    name: 'a week that lasts',
-    by: 'quota_week',
-    account: 'Work',
-    kind: 'week',
-    ends: { share: 61.2, before: false },
-    // 61.2 less 56.93 is three and a half pixels of the line's 82: a fill, just.
-    fill: true,
-  },
-  {
-    name: 'five hours that run out',
-    by: 'quota_five_hour',
-    account: 'Work',
-    kind: 'five_hour',
-    ends: { share: 100, before: true },
-    fill: false,
-  },
-  {
-    name: 'five hours that last',
-    by: 'quota_five_hour',
-    account: NIGHT_NAME,
-    kind: 'five_hour',
-    ends: { share: 35, before: false },
-    fill: false,
-  },
-] as const satisfies readonly {
-  account: string
-  by: string
-  ends: { before: boolean; share: number }
-  fill: boolean
-  kind: string
-  name: string
-}[]
-
-for (const width of [1440, 1024, 390])
-  for (const one of CASES)
-    test(`at ${width}px ${one.name}: one dashed line to its end, a quiet fill under it, a round dot there`, async ({
-      page,
-    }, info) => {
-      const window = await openWindow(page, { ...one, width })
-      // Pointed at first, so the line, its share and its dot are measured where it stands then.
-      const { mark, hint } = await pointAtForecast(page, window)
-      const drawn = await forecastOf(window)
-      const level = await shareAt(window, one.ends.share)
-      const dot = await drawnMark(mark)
-      await record(info, `forecast ${one.kind} ${one.account} ${width}`, { drawn, level, dot })
-      // One line, 2px and dashed in the readings' hue, from now to its end.
-      expect(drawn.count, 'one forecast line').toBe(1)
-      const line = present(drawn.line, 'the forecast line')
-      const end = present(line.at(-1), 'its end')
-      expect(drawn.stroke?.width, 'as wide as the readings').toBe(2)
-      expect(drawn.stroke?.dash, 'dashed').not.toBe('none')
-      // It ends at the run-out on the level of the whole window, short of the reset, or at the
-      // reset at its share.
-      expect(Math.abs(end.top - level), 'its end at its share').toBeLessThan(NEAR)
-      const reset = present(drawn.reset, 'the reset')
-      expect(end.left < reset - NEAR, 'its end short of the reset').toBe(one.ends.before)
-      expect(Math.abs(end.left - reset) < NEAR, 'its end at the reset').toBe(!one.ends.before)
-      // The range's fill where it is a few pixels tall: solid at low opacity under the line, never
-      // past its end; or none.
-      expect(drawn.range !== null, 'a fill').toBe(one.fill)
-      for (const corner of drawn.range ?? []) {
-        expect(corner.left, 'the fill inside the line across').toBeLessThanOrEqual(end.left + NEAR)
-        expect(corner.top, 'the fill under the line').toBeGreaterThanOrEqual(
-          lineTopAt(line, corner.left) - NEAR,
-        )
-      }
-      expect(quietFill(drawn.fill), 'a quiet solid fill or none').toBe(true)
-      // Its end's mark: a round dot centred on the line's end, at least a reading's dot across, as
-      // wide as it is tall, painted in the line's hue and ringed in the ground; never a ring, never a dash.
-      expect(dot.shape).toBe('dot')
-      expect(Math.abs(dot.width - dot.height), 'round').toBeLessThanOrEqual(0.5)
-      expect(dot.width, 'at least a reading’s dot').toBeGreaterThanOrEqual(8)
-      expect(dot.round).toBe('50%')
-      expect(dot.inset, 'no ring around nothing').toBe('none')
-      expect(dot.paint, 'in the line’s hue').toBe(drawn.stroke?.paint)
-      expect(dot.ring.style, 'ringed').toBe('solid')
-      expect(Math.abs(dot.centre.left - end.left), 'at the line’s end across').toBeLessThan(NEAR)
-      expect(Math.abs(dot.centre.top - end.top), 'at the line’s end up').toBeLessThan(NEAR)
-      await expectBeside(hint, mark, window)
-      // The picture without the hint, which stands over the line it names.
-      await page.mouse.move(1, 1)
-      await expect(page.getByRole('tooltip')).toHaveCount(0)
-      await info.attach(
-        `forecast-${one.kind}-${one.ends.before ? 'runs-out' : 'lasts'}-${width}.png`,
-        {
-          body: await window.screenshot(),
-          contentType: 'image/png',
-        },
-      )
-    })
-
-test('in a forced palette the line, the fill and the dot are drawn in its ink, the ring in its ground', async ({
+test('five hours forecast one value, and its end is a dash at that value, no ring', async ({
   page,
-}) => {
-  await page.emulateMedia({ forcedColors: 'active' })
-  const window = await openWindow(page, { by: 'quota_week', account: NIGHT_NAME, kind: 'week' })
-  const { mark } = await pointAtForecast(page, window)
-  const drawn = await forecastOf(window)
-  const dot = await drawnMark(mark)
-  expect([drawn.stroke?.paint, drawn.fill?.paint, dot.paint]).toEqual([dot.ink, dot.ink, dot.ink])
-  expect(dot.ring.paint).toBe(dot.ground)
+}, info) => {
+  const window = await openWindow(page, 'quota_five_hour', NIGHT_NAME, 'five_hour')
+  const { mark, hint } = await pointAtForecast(page, window)
+  const drawn = await drawnMark(mark)
+  const value = await shareAt(window, 35)
+  await record(info, 'five-hours-forecast-end', { drawn, value })
+  expect(drawn.shape).toBe('point')
+  expect(drawn.ring, 'no ring').toBe(false)
+  expect(drawn.cap, 'no caps: a dash alone').toBeNull()
+  expect(Math.abs(drawn.middle - value), 'the dash at its value').toBeLessThan(NEAR)
+  // A dash: two pixels tall and wider than a reading's dot.
+  expect(drawn.height).toBeCloseTo(2, 0)
+  expect(drawn.width, 'wider than a dot').toBeGreaterThan(8)
+  await expectBeside(hint, mark, window)
 })
 
 test('a week’s bar draws one tail from the fill to the high end; five hours as before', async ({
