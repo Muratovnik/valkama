@@ -34,23 +34,19 @@ const WORDS = {
     title: 'Needs my answer',
     space: 'Main',
     all: 'Show every space’s questions, not only those of Main',
-    narrowed: 'Pending blocks of questions on the board of Main',
-    project: 'Pending blocks of questions on the board of Main, project Example Project',
-    filtered:
-      'Pending blocks of questions on the board of Main, only on tasks of kind Bug with the label ui',
+    narrowed: 'On the board of Main',
+    project: 'On the board of Main, project Example Project',
+    filtered: 'On the board of Main, only on tasks of kind Bug with the label ui',
     bug: 'Bug',
-    every: 'Pending blocks of questions across mapped projects',
   },
   ru: {
     title: 'Ждут моего ответа',
     space: 'Main',
     all: 'Показать вопросы всех пространств, а не только Main',
-    narrowed: 'Открытые блоки вопросов на доске пространства Main',
-    project: 'Открытые блоки вопросов на доске пространства Main, проект Example Project',
-    filtered:
-      'Открытые блоки вопросов на доске пространства Main, только на задачах вида «Дефект» с меткой «ui»',
+    narrowed: 'На доске пространства Main',
+    project: 'На доске пространства Main, проект Example Project',
+    filtered: 'На доске пространства Main, только на задачах вида «Дефект» с меткой «ui»',
     bug: 'Дефект',
-    every: 'Открытые блоки вопросов во всех связанных проектах',
   },
 } as const
 
@@ -147,7 +143,8 @@ for (const size of SIZES) {
       await expect(chip).toHaveCount(0)
       await expect(cards).toHaveCount(2)
       await expect(dialog).toContainText('Pick a region')
-      await expect(dialog).toContainText(words.every)
+      // Every space's questions are what the window lists unless told otherwise: no line says so.
+      await expect(dialog).not.toContainText(words.narrowed)
       await page.screenshot({
         path: info.outputPath(`questions-all-${tag}.png`),
         animations: 'disabled',
@@ -244,7 +241,8 @@ for (const size of SIZES) {
       await chip.click()
       await expect(chip).toHaveCount(0)
       await expect(dialog.locator('[data-request-waiting]')).toHaveCount(2)
-      await expect(dialog).toContainText(words.every)
+      // Every space's questions are what the window lists unless told otherwise: no line says so.
+      await expect(dialog).not.toContainText(words.narrowed)
       await record(info, `questions filtered ${tag}`, { narrowed, parts, sideways })
     })
   })

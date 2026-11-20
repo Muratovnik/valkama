@@ -59,8 +59,8 @@ async function openCard(
 }
 
 for (const [locale, words, all] of [
-  ['ru', 'Следующий шаг · 3 из 9', 'Все шаги'],
-  ['en', 'Next step · 3 of 9', 'All steps'],
+  ['ru', 'Следующее условие · 3 из 9', 'Все условия'],
+  ['en', 'Next condition · 3 of 9', 'All conditions'],
 ] as const) {
   test(`the step says what it is and where it stands in the list, in ${locale}`, async ({
     page,
@@ -82,22 +82,22 @@ for (const [locale, words, all] of [
 
 test('the number is the step’s place in the list and not how many are done', async ({ page }) => {
   const drawer = await openCard(page, list(4, [1, 2]))
-  await expect(drawer.locator('.next-step-label')).toHaveText('Следующий шаг · 1 из 4')
+  await expect(drawer.locator('.next-step-label')).toHaveText('Следующее условие · 1 из 4')
   await expect(drawer.locator('.next-step-text')).toHaveText('The step number 1')
 })
 
 test('the only step has no count and no way to itself', async ({ page }) => {
   const drawer = await openCard(page, list(1))
   const next = drawer.locator('.next-step')
-  await expect(next.locator('.next-step-label')).toHaveText('Следующий шаг')
+  await expect(next.locator('.next-step-label')).toHaveText('Следующее условие')
   await expect(next.getByRole('button')).toHaveCount(0)
 })
 
 test('the last open step of several still counts and still leads to the list', async ({ page }) => {
   const drawer = await openCard(page, list(3, [0, 1]))
   const next = drawer.locator('.next-step')
-  await expect(next.locator('.next-step-label')).toHaveText('Следующий шаг · 3 из 3')
-  await expect(next.getByRole('button', { name: 'Все шаги' })).toBeVisible()
+  await expect(next.locator('.next-step-label')).toHaveText('Следующее условие · 3 из 3')
+  await expect(next.getByRole('button', { name: 'Все условия' })).toBeVisible()
 })
 
 test('with every step done, or on a closed item, there is no next step', async ({ page }) => {
@@ -155,7 +155,7 @@ for (const width of [1280, 390]) {
       const drawer = await openCard(page, list(9, [0, 1]), { longRead: true, width })
       const checklist = drawer.locator('.checklist')
       await expect(checklist).not.toBeInViewport()
-      await press(drawer.getByRole('button', { name: 'Все шаги' }))
+      await press(drawer.getByRole('button', { name: 'Все условия' }))
       const head = drawer.locator('.checklist-head')
       await expect(head).toBeFocused()
       await expect(head).toBeInViewport({ ratio: 1 })

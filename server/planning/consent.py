@@ -157,7 +157,9 @@ def _verdict(conn: sqlite3.Connection, action: pending.Action) -> tuple[str, lis
         answer = json.loads(row["answers_json"])
         label = pending.session_label(row)
         if answer.get(request_model.REVIEW_ANSWER) == request_model.CONSENT_OBJECT:
-            objections.append(f"{label} objects: {answer.get(request_model.CONSENT_REASON)}.")
+            objections.append(
+                f"{label} objects: {model.sentence(answer.get(request_model.CONSENT_REASON))}"
+            )
         else:
             agreed.append(label)
     if objections:

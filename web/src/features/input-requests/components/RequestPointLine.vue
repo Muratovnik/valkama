@@ -20,6 +20,7 @@ import type { PointWay, Verdict } from '@/features/input-requests/utils/reviewFo
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
+import { labelHead } from '@/shared/lib/sentences.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import WhyWords from '@/shared/ui/WhyWords.vue'
@@ -79,7 +80,7 @@ const said = computed(() => props.comment.trim().split('\n')[0] ?? '')
     <span
       v-if="way"
       class="request-point-way"
-      ><span class="request-point-key">{{ way.label }}: </span
+      ><span class="request-point-key">{{ labelHead(way.label) }}</span
       ><span
         v-if="way.missing"
         class="request-point-missing"

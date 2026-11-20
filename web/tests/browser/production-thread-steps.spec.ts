@@ -39,7 +39,7 @@ async function openListed(page: Page, width = 1280, closed = false) {
   return { ...opened, listed: threadOf('What is left'), plain: threadOf('Nothing to list') }
 }
 
-const ACTION = 'Make steps'
+const ACTION = 'Make conditions'
 
 for (const width of [1280, 390]) {
   test(`at ${width} a list becomes steps from the keyboard and joins the checklist`, async ({
@@ -62,9 +62,9 @@ for (const width of [1280, 390]) {
     // The card has «Frontend contract» as a step already: shown, and not to be ticked.
     await expect(box('Frontend contract')).toBeDisabled()
     await expect(box('Frontend contract')).not.toBeChecked()
-    await expect(box('Frontend contract')).toHaveAccessibleDescription('already a step')
+    await expect(box('Frontend contract')).toHaveAccessibleDescription('already a condition')
     await expect(box('Wire the route')).toBeFocused()
-    await expect(form.locator('.steps-count')).toHaveText('Will be 4 steps of 100')
+    await expect(form.locator('.steps-count')).toHaveText('Will be 4 conditions of 100')
 
     await page.keyboard.press('Tab')
     await expect(box('with its test')).toBeFocused()
@@ -72,17 +72,17 @@ for (const width of [1280, 390]) {
     await expect(box('Review the copy')).toBeFocused()
     await page.keyboard.press('Space')
     await expect(box('Review the copy')).not.toBeChecked()
-    await expect(form.locator('.steps-count')).toHaveText('Will be 3 steps of 100')
+    await expect(form.locator('.steps-count')).toHaveText('Will be 3 conditions of 100')
     await page.keyboard.press('Tab')
     await page.keyboard.press('Tab')
-    const add = form.getByRole('button', { name: 'Add 2 steps', exact: true })
+    const add = form.getByRole('button', { name: 'Add 2 conditions', exact: true })
     await expect(add).toBeFocused()
     await expectNoSilentClipping(page, `the steps form at ${width}`)
     const overflow = await drawer.evaluate((node) => node.scrollWidth - node.clientWidth)
     expect(overflow).toBeLessThanOrEqual(0)
 
     await page.keyboard.press('Enter')
-    await expect(listed.locator('.entry-steps-added')).toContainText('Added 2 steps')
+    await expect(listed.locator('.entry-steps-added')).toContainText('Added 2 conditions')
     await expect(action).toBeFocused()
     expect(backend.writes.at(-1)).toEqual({
       author: 'user',
@@ -100,12 +100,12 @@ for (const width of [1280, 390]) {
     // The checklist grew above the discussion after the form went; the line is still in view.
     await expect(listed.locator('.entry-steps-added')).toBeInViewport()
 
-    await listed.getByRole('button', { name: 'Show checklist', exact: true }).click()
+    await listed.getByRole('button', { name: 'Show conditions', exact: true }).click()
     await expect(drawer.locator('.checklist-head')).toBeFocused()
 
     // Opened again, what was added reads as the card's own steps.
     await action.click()
-    await expect(box('Wire the route')).toHaveAccessibleDescription('already a step')
+    await expect(box('Wire the route')).toHaveAccessibleDescription('already a condition')
     await expect(box('Review the copy')).toBeChecked()
     await page.keyboard.press('Escape')
     await expect(form).toHaveCount(0)
@@ -141,12 +141,12 @@ test('a write refused for a newer revision keeps the ticks for the next one', as
   const form = listed.locator('.steps-form')
   await form.getByRole('checkbox', { name: 'with its test' }).uncheck()
   backend.failNextWrite()
-  await form.getByRole('button', { name: 'Add 2 steps', exact: true }).click()
+  await form.getByRole('button', { name: 'Add 2 conditions', exact: true }).click()
   await expect(form.getByRole('alert')).toContainText('The task changed.')
   await form.getByRole('button', { name: 'Refresh task', exact: true }).click()
   await expect(form.getByRole('checkbox', { name: 'with its test' })).not.toBeChecked()
-  await form.getByRole('button', { name: 'Add 2 steps', exact: true }).click()
-  await expect(listed.locator('.entry-steps-added')).toContainText('Added 2 steps')
+  await form.getByRole('button', { name: 'Add 2 conditions', exact: true }).click()
+  await expect(listed.locator('.entry-steps-added')).toContainText('Added 2 conditions')
   expect(backend.writes.at(-1)?.expected_revision).toBe(4)
 })
 

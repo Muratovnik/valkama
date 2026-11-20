@@ -1054,8 +1054,8 @@ def _ask_about_task(
         )
         prompt = (
             f"An agent moves the task {reference}, lying in {goal}, to {move.state}:"
-            f" {row['title']}. Take it on and move it there, put it off, move it out of the"
-            " goal, or drop it."
+            f" {model.sentence(row['title'])} Take it on and move it there, put it off, move it"
+            " out of the goal, or drop it."
         )
     elif moved_from is None:
         # It lies under the goal: moved away before the answer, it is no longer asked about.
@@ -1066,8 +1066,8 @@ def _ask_about_task(
             seen={"parent": goal_id},
         )
         prompt = (
-            f"An agent files the task {reference} in {goal}: {row['title']}. Take it on, put"
-            " it off, move it out of the goal, or drop it."
+            f"An agent files the task {reference} in {goal}: {model.sentence(row['title'])}"
+            " Take it on, put it off, move it out of the goal, or drop it."
         )
     else:
         done = "moved" if moved_from["acceptance"] is not None else "accepted"
@@ -1081,8 +1081,8 @@ def _ask_about_task(
             },
         )
         prompt = (
-            f"An agent moves the task {reference} into {goal}: {row['title']}. Take it on,"
-            " put it off, leave it where it was, or drop it."
+            f"An agent moves the task {reference} into {goal}: {model.sentence(row['title'])}"
+            " Take it on, put it off, leave it where it was, or drop it."
         )
     return pending.ask(
         conn,
@@ -1106,9 +1106,11 @@ def _ask_about_goal(
     row = read_model.item_by_id(conn, identity)
     reference = read_model.reference(conn, row)
     if by_agent:
-        prompt = f"An agent proposes the goal {reference}: {row['title']}."
+        prompt = f"An agent proposes the goal {reference}: {model.sentence(row['title'])}"
     else:
-        prompt = f"The goal {reference} came back from being put off: {row['title']}."
+        prompt = (
+            f"The goal {reference} came back from being put off: {model.sentence(row['title'])}"
+        )
     return pending.ask(
         conn,
         identity,
@@ -2613,8 +2615,9 @@ def _ask_about_put_off(
         ),
         purpose="goal",
         prompt=(
-            f"An agent puts off {reference}, an accepted {_container_word(row)}: {row['title']}."
-            f" Until {until}. Its reason: {why}. Keep it, put it off, or drop it."
+            f"An agent puts off {reference}, an accepted {_container_word(row)}:"
+            f" {model.sentence(row['title'])} Until {until}. Its reason: {model.sentence(why)}"
+            " Keep it, put it off, or drop it."
         ),
         fields=request_model.fields(request_model.put_off_fields(until)),
         author=author,
@@ -2834,7 +2837,7 @@ def cancel_asked(conn: sqlite3.Connection, row: sqlite3.Row, point: str, reason:
 
     return (
         f"An agent cancels {read_model.reference(conn, row)}, {_CANCEL_ASKED[point]}:"
-        f" {row['title']}.{_reason_said(reason)}"
+        f" {model.sentence(row['title'])}{_reason_said(reason)}"
     )
 
 
@@ -2889,8 +2892,9 @@ def _ask_about_cancel(
             action,
             list(gate.busy),
             prompt=f"Another session's agent cancels {read_model.reference(conn, row)}, work"
-            f" you take part in: {row['title']}.{_reason_said(reason)} Answer agree, object with a"
-            " reason, or move your work out of it with move_out and answer moved_out.",
+            f" you take part in: {model.sentence(row['title'])}{_reason_said(reason)} Answer agree,"
+            " object with a reason, or move your work out of it with move_out and answer"
+            " moved_out.",
             author=author,
         )
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
@@ -2907,7 +2911,7 @@ def _ask_about_cancel(
 def _reason_said(reason: str | None) -> str:
     """The agent's reason, as a question about its cancel says it."""
 
-    return f" Its reason: {reason}." if reason else ""
+    return f" Its reason: {model.sentence(reason)}" if reason else ""
 
 
 def cancel_agreed(
@@ -2960,20 +2964,20 @@ def _close_what(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
 
 def _close_asked(reference: str, summary: Mapping[str, object], *, waits: bool) -> str:
     """The first line of the owner's question about an agent's close of a goal: what stands
-    under it, the agent's summary quoted without its own final full stop, and what the
+    under it, the agent's summary quoted with one stop of its own at most, and what the
     answers do. A goal with nothing under it has no period of waiting, so leaving it hands
     it to no session: it stays open."""
 
-    done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN].rstrip().removesuffix(".")
+    done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN].rstrip()
     said = f", and its summary says: {done}" if done else ""
     if waits:
         return (
-            f"An agent confirms {reference}: all work under it is closed{said}."
-            " Confirm it, or leave it to the next session that takes work in this space."
+            model.sentence(f"An agent confirms {reference}: all work under it is closed{said}")
+            + " Confirm it, or leave it to the next session that takes work in this space."
         )
     return (
-        f"An agent closes {reference}, which has nothing under it{said}."
-        " Confirm it, or leave it open."
+        model.sentence(f"An agent closes {reference}, which has nothing under it{said}")
+        + " Confirm it, or leave it open."
     )
 
 
@@ -4394,9 +4398,10 @@ def _ask_about_steps(
     lines += [f"- «{entry['from']}» → «{entry['to']}»" for entry in action.proposed["rewritten"]]
     prompt = "\n".join(
         [
-            f"An agent changes the steps of {reference}, a {_container_word(row)}: {row['title']}.",
+            f"An agent changes the steps of {reference}, a {_container_word(row)}:"
+            f" {model.sentence(row['title'])}",
             *lines,
-            f"Its reason: {action.reason}.{_STEPS_ASKED}",
+            f"Its reason: {model.sentence(action.reason)}{_STEPS_ASKED}",
         ]
     )
     question = pending.ask_owner(

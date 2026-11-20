@@ -259,7 +259,7 @@ describe('put-off work and a marked step on Overview', () => {
     const wrapper = overview(true)
     const confirm = wrapper.get('.step-confirm')
     expect(confirm.text()).toBe('Confirm')
-    expect(confirm.attributes('aria-label')).toBe('Confirm the step Tray icon')
+    expect(confirm.attributes('aria-label')).toBe('Confirm the condition Tray icon')
     await confirm.trigger('click')
     expect(wrapper.emitted('tick')).toEqual([[marked.id, true]])
     expect(overview(false).find('.step-confirm').exists()).toBe(false)

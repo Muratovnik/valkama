@@ -432,6 +432,19 @@ def multiline_field(value: object, field: str, *, limit: int = MAX_DESCRIPTION) 
     return value.strip()
 
 
+#: A stop, a question or exclamation mark or an ellipsis, with any closing quotes or
+#: brackets after it: the end of a sentence a person or an agent wrote.
+_SENTENCE_END = re.compile(r"[.!?…][\"'»\u201d\u2019)\]]*$")
+
+
+def sentence(text: object) -> str:
+    """`text` as a sentence of a composed message: closed by a full stop unless it ends
+    one of its own. A title or a reason often does, and a stop after it read `E11..`."""
+
+    said = str(text).strip()
+    return said if _SENTENCE_END.search(said) else f"{said}."
+
+
 #: The largest integer SQLite binds; a larger one is an error it cannot answer.
 MAX_COUNT = 2**63 - 1
 
