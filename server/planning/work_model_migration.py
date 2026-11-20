@@ -20,16 +20,18 @@ otherwise cascade into them:
 - **items** rebuilds `work_items`: an epic, or any item with children, becomes a
   container; accepted work gets the basis `migrated`; a task gets the time its work
   started. The fresh declaration it takes holds every basis, `agent` among them,
-  though no item gets it here. The events table takes the new actions. `sessions` is rebuilt to the
-  fresh declaration when the Board cutover left it another: that cutover renamed
-  `card_id` to `work_item_id` and kept its type `INTEGER`.
-- **containers** clears every claim on a container and puts each accepted open one in the
-  service state; **task-holders** clears every claim on a task that is not active or blocked,
-  and gives an active task nobody holds back to ready; **children-left** takes each open child
-  out of a closed container into triage.
+  though no item gets it here. The events table is rebuilt once, with the CHECK of
+  every action this build declares, so no later step widens it again. `sessions` is
+  rebuilt to the fresh declaration when the Board cutover left it another: that
+  cutover renamed `card_id` to `work_item_id` and kept its type `INTEGER`.
+- **containers** clears every claim on a container and puts each accepted open one
+  in the service state; **task-holders** clears every claim on a task that is not
+  active or blocked, and gives an active task nobody holds back to ready;
+  **children-left** takes each open child out of a closed container into triage.
 - **checks** creates the trigger that keeps every kind where it may stand.
-- **item-projects** creates the table of the projects each item changes, and the two triggers
-  through which a project gained or lost marks its item for the word index, and
+- **item-projects** creates the table of the projects each item changes, and the
+  two triggers through which a project gained or lost marks its item for the word
+  index, and
   fills it: a task the file `valkama projects map-items` wrote holds projects for
   gets them, every other task its space's former project, `migrated`; a container
   none. The file is the one `store` checked before the first write and left in
@@ -47,9 +49,6 @@ otherwise cascade into them:
 - **addressee** appends the column a request names the agent session it asks with
   (`work_item_requests.addressee`) and its index; every request it finds asks the
   owner, as it did.
-- **waiting-words** creates the table of the words a person left on a goal or stage that no
-  session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
-  which of a person's acts before 3.0 nobody heard cannot be known now.
 - **ended-requests** rebuilds `work_item_requests` from the fresh declaration, with the `purpose`
   a question to the owner may carry, the action waiting for the owner it is about
   (`action_id`, null on every row it carries) and the reasons a close stores: a request still
@@ -58,38 +57,39 @@ otherwise cascade into them:
   in, with no event, as does one that stored `task_closed`. One that had already
   lapsed, past its deadline or on an execution that ended, ends as it lapsed,
   `deadline` or `execution_closed`.
+- **waiting-words** creates the table of the words a person left on a goal or stage
+  that no session heard (`work_item_waiting_notices`) and its two indexes. It starts empty:
+  which of a person's acts before 3.0 nobody heard cannot be known now.
+- **deferred-items** creates the table of the conditions put-off work comes back on
+  (`work_item_deferrals`) and its two indexes, empty: no 2.9 state was deferred. Its
+  postcondition of the same name holds a condition to each item in a deferred state.
 - **confirmations** creates the table of the goals and stages awaiting confirmation
   (`work_item_confirmations`) and gives a row to each accepted open one that, after
   the steps above, has nothing open under it: the wait begins at the migration, with
   no call, no question and no event, and no session follows it. The service's first
   write under such a container, or its confirmation, takes it from there.
-- **deferred-items** creates the table of the conditions put-off work comes back on
-  (`work_item_deferrals`) and its two indexes, empty: no 2.9 state was deferred. Its
-  postcondition of the same name holds a condition to each item in a deferred state.
-- **history-actions** gives the events table the CHECK of every action this build declares, when
-  `items` left one out: `items` widens it already, so on a 2.9 store the step has nothing to do.
-- **commits** creates the tables of the commits Valkama knows (`commits`) and of the items
-  they are attached to (`work_item_commits`), with their indexes.
-- **commit-refs** carries the commit refs over, as the file's `commit_refs` says: each pair
-  of a record not dropped becomes a commit, attached to the ref's item `migrated`,
-  each record that is a url a `url` ref; then every commit ref leaves. Several refs
-  of one item naming one commit give one attachment.
-- **refs-without-commits** rebuilds `work_item_refs` when its CHECK still takes the
-  kind `commit`, as a store before 3.0 declared it: a commit is attached now, never a
-  ref, and `commit-refs` has left none.
 - **participation** creates the owner's participation setting and the rules of the
   labels (`participation_settings`, `label_settings`) and their indexes, empty: with no
   row every space reads the default set. Its postcondition of the same name holds both
   empty and every space at that set.
-- **agent-decisions** creates the summary of the decisions agents took on their own
-  (`agent_decisions`), empty: the 2.9 history knew no points, so no earlier decision
-  can be marked. Its postcondition of the same name holds it empty.
 - **pending-actions** creates the table of the writes that wait for the owner's answer
   (`pending_actions`), its index of the open ones and the index of the requests by their
   action, empty: no 2.9 write waited, and a question asked before keeps asking as it did,
   its answer acted on by the agent. Its postcondition of the same name holds the table
   empty, no request naming an action or carrying a purpose of the owner's
   participation, and no `action_dropped` in the history.
+- **agent-decisions** creates the summary of the decisions agents took on their own
+  (`agent_decisions`), empty: the 2.9 history knew no points, so no earlier decision
+  can be marked. Its postcondition of the same name holds it empty.
+- **commits** creates the tables of the commits Valkama knows (`commits`) and of the
+  items they are attached to (`work_item_commits`), with their indexes.
+- **commit-refs** carries the commit refs over, as the file's `commit_refs` says:
+  each pair of a record not dropped becomes a commit, attached to the ref's item `migrated`,
+  each record that is a url a `url` ref; then every commit ref leaves. Several refs
+  of one item naming one commit give one attachment.
+- **refs-without-commits** rebuilds `work_item_refs` when its CHECK still takes the
+  kind `commit`, as a store before 3.0 declared it: a commit is attached now, never a
+  ref, and `commit-refs` has left none.
 - **baselines** creates the table of how many tasks stood under a goal or stage when
   it was accepted (`work_item_baselines`), empty: every acceptance 2.9 left is
   `migrated`, and that count is not known for one. Its postcondition of the same name
@@ -104,6 +104,27 @@ otherwise cascade into them:
 
 The postcondition **agent-basis** holds that no item stands accepted on an agent's own
 decision (`agent`): before 3.0 no setting let an agent decide, so nothing was.
+
+The place of a step in `STEPS` sets when it runs, not its name, and a name once given
+stays. The order keeps these relations:
+
+- each table is rebuilt once at most: `workflow_states` by states, `work_items`,
+  `sessions` and the events table by items, `planning_spaces` by spaces,
+  `work_item_requests` by ended-requests and `work_item_refs` by
+  refs-without-commits;
+- addressee comes before ended-requests, so the one rebuild of the requests copies a
+  table that already holds every column, and its columns, CHECK and indexes equal a
+  fresh store's;
+- confirmations comes after containers, task-holders, children-left and checks: it
+  writes its rows by what each container derives, which holds only once those steps
+  are done;
+- spaces comes after item-projects, which reads the project each space held;
+- commit-refs comes after commits, which creates the tables it writes, and
+  refs-without-commits after commit-refs, once no commit ref is left;
+- triage-marks comes last: a trigger set up earlier could fire on the migration's own
+  writes to `work_items` and leave marks, and a rebuild sets up again every trigger
+  that stood on the table it replaces;
+- the steps that came in together keep their order.
 
 Every write is recorded the way the service records it, under one author, at the
 moment of the migration and with no call: `released` and `checklist_released` for a
@@ -1982,39 +2003,7 @@ def _check_deferrals(conn: sqlite3.Connection, context: Context) -> None:
         raise UnmetError(f"{_DEFERRALS} is missing")
 
 
-# -- `history-actions`: the actions the history takes --------------------------------------------
-
-
-def _actions_missing(conn: sqlite3.Connection) -> list[str]:
-    """The declared actions the events table's CHECK does not name."""
-
-    found = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'work_item_events'").fetchone()
-    declared = "" if found is None else str(found[0])
-    return [action for action in model.EVENT_ACTIONS if f"'{action}'" not in declared]
-
-
-def _actions_needed(conn: sqlite3.Connection, context: Context) -> bool:
-    del context
-    return bool(_actions_missing(conn))
-
-
-def _widen_actions(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
-    """`history-actions`: the CHECK of every declared action, the table rebuilt with its rows."""
-
-    del context
-    missing = _actions_missing(conn)
-    planning_store.widen_event_actions(conn)
-    return {"added": missing}
-
-
-def _check_actions(conn: sqlite3.Connection, context: Context) -> None:
-    del context
-    missing = _actions_missing(conn)
-    if missing:
-        raise UnmetError(f"the events table refuses the actions {missing}")
-
-
-# -- `commits`: the commits ------------------------------------------------------------
+# -- the commits ---------------------------------------------------------------
 
 #: The tables of the commits Valkama knows and of their attachments.
 COMMIT_TABLES = ("commits", "work_item_commits")
@@ -2493,12 +2482,6 @@ STEPS = (
         _check_left,
     ),
     Step("checks", "checks", _create_trigger, _trigger_needed, _check_trigger),
-    Step("item-projects", "item projects", _create_item_projects, _item_projects_needed, _check_item_projects),
-    Step("labels", "labels", _drop_labels, _labels_needed, _check_labels),
-    Step("spaces", "the space", _rebuild_spaces, _space_needed, _check_space),
-    Step("last-route", "the last route", _drop_project_route, _route_needed, _check_route),
-    Step("addressee", "the session a request asks", _add_addressee, _addressee_needed, _check_addressee),
-    Step("waiting-words", "words that wait for a session", _create_waiting, _waiting_needed, _check_waiting),
     Step(
         "item-projects",
         "item projects",
@@ -2524,11 +2507,11 @@ STEPS = (
         _check_requests,
     ),
     Step(
-        "confirmations",
-        "goals and stages awaiting confirmation",
-        _create_confirmations,
-        _confirmations_needed,
-        _check_confirmations,
+        "waiting-words",
+        "words that wait for a session",
+        _create_waiting,
+        _waiting_needed,
+        _check_waiting,
     ),
     Step(
         DEFERRED_ITEMS,
@@ -2537,15 +2520,12 @@ STEPS = (
         _deferrals_needed,
         _check_deferrals,
     ),
-    Step("history-actions", "the actions the history takes", _widen_actions, _actions_needed, _check_actions),
-    Step("commits", "commits", _create_commits, _commits_needed, _check_commits),
-    Step("commit-refs", "commit refs", _carry_commit_refs, _commit_refs_needed, _check_commit_refs),
     Step(
-        "refs-without-commits",
-        "refs without the kind commit",
-        _rebuild_refs,
-        _ref_kinds_needed,
-        _check_ref_kinds,
+        "confirmations",
+        "goals and stages awaiting confirmation",
+        _create_confirmations,
+        _confirmations_needed,
+        _check_confirmations,
     ),
     Step(
         PARTICIPATION,
@@ -2555,18 +2535,27 @@ STEPS = (
         _check_participation,
     ),
     Step(
+        PENDING_ACTIONS,
+        "the writes that wait for the owner",
+        _create_pending,
+        _pending_needed,
+        _check_pending,
+    ),
+    Step(
         AGENT_DECISIONS,
         "the summary of agent decisions",
         _create_decisions,
         _decisions_needed,
         _check_decisions,
     ),
+    Step("commits", "commits", _create_commits, _commits_needed, _check_commits),
+    Step("commit-refs", "commit refs", _carry_commit_refs, _commit_refs_needed, _check_commit_refs),
     Step(
-        PENDING_ACTIONS,
-        "the writes that wait for the owner",
-        _create_pending,
-        _pending_needed,
-        _check_pending,
+        "refs-without-commits",
+        "refs without the kind commit",
+        _rebuild_refs,
+        _ref_kinds_needed,
+        _check_ref_kinds,
     ),
     Step(
         BASELINES,
@@ -3622,30 +3611,47 @@ def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
 
 
 POSTCONDITIONS = (
-    Postcondition("fresh-shape", "the schema and the shape of a fresh store", _p1),
-    Postcondition("row-counts", "row counts", _p2),
-    Postcondition("integrity", "foreign keys and integrity", _p3),
-    Postcondition("no-epic", "no epic; every container accounted for", _p4),
-    Postcondition("parents", "parents are containers of the same space, with no cycle", _p5),
-    Postcondition("categories", "the eight categories and one service state in every workflow", _p6),
-    Postcondition("history-keys", "the history names only current keys", _p7),
-    Postcondition("containers-unheld", "containers unheld and in place", _p8),
-    Postcondition("holders", "holders and released claims", _p9),
-    Postcondition("acceptance", "acceptance", _p10),
-    Postcondition("started", "started", _p11),
-    Postcondition("derived", "what accepted open containers derive", _p12),
-    Postcondition("indexes", "indexes, triggers and the word index", _p13),
-    Postcondition("identities", "identities and content", _p14),
-    Postcondition("known-exceptions", "known exceptions", _p15),
-    Postcondition("store-identity", "the store and each space keep their identity", _p18),
-    Postcondition("space-projects", "no space holds a project; each launches in itself", _p19),
-    Postcondition("task-projects", "each task names the projects the file and its space give", _p20),
-    Postcondition("labels-kept", "each item keeps its labels but the ones its entry drops", _p21),
-    Postcondition("routes", "no remembered route has a project as its scope", _p22),
-    Postcondition("requests-asked", "every request asks the owner, and none is lost", _p23),
-    Postcondition("no-old-waiting", "no words wait from before 3.0", _p24),
-    Postcondition("request-shapes", "requests and waiting words shaped as a fresh store's", _p25),
-    Postcondition("fresh-tables", "a table the store lacked is declared fresh and empty", _p26),
+    Postcondition("fresh-shape", "the schema and the shape of a fresh store", _holds_fresh_shape),
+    Postcondition("row-counts", "row counts", _holds_row_counts),
+    Postcondition("integrity", "foreign keys and integrity", _holds_integrity),
+    Postcondition("no-epic", "no epic; every container accounted for", _holds_no_epic),
+    Postcondition(
+        "parents", "parents are containers of the same space, with no cycle", _holds_parents
+    ),
+    Postcondition(
+        "categories",
+        "the eight categories and one service state in every workflow",
+        _holds_categories,
+    ),
+    Postcondition("history-keys", "the history names only current keys", _holds_history_keys),
+    Postcondition("containers-unheld", "containers unheld and in place", _holds_containers_unheld),
+    Postcondition("holders", "holders and released claims", _holds_holders),
+    Postcondition("acceptance", "acceptance", _holds_acceptance),
+    Postcondition("started", "started", _holds_started),
+    Postcondition("derived", "what accepted open containers derive", _holds_derived),
+    Postcondition("indexes", "indexes, triggers and the word index", _holds_indexes),
+    Postcondition("identities", "identities and content", _holds_identities),
+    Postcondition("known-exceptions", "known exceptions", _holds_known_exceptions),
+    Postcondition(
+        "store-identity", "the store and each space keep their identity", _holds_store_identity
+    ),
+    Postcondition(
+        "space-projects", "no space holds a project; each launches in itself", _holds_space_projects
+    ),
+    Postcondition(
+        "task-projects",
+        "each task names the projects the file and its space give",
+        _holds_task_projects,
+    ),
+    Postcondition(
+        "labels-kept", "each item keeps its labels but the ones its entry drops", _holds_labels_kept
+    ),
+    Postcondition("routes", "no remembered route has a project as its scope", _holds_routes),
+    Postcondition(
+        "requests-kept",
+        "every request keeps its item, kind and status but those a close ended",
+        _holds_requests_kept,
+    ),
     Postcondition(
         "no-closed-waits",
         "no request waits on a closed item or says task_closed",
@@ -3656,28 +3662,56 @@ POSTCONDITIONS = (
         "a close ended the requests foreseen, each by its item's category",
         _holds_requests_ended,
     ),
-    Postcondition("no-closed-waits", "no request waits on a closed item or says task_closed", _p28),
-    Postcondition("requests-ended", "a close ended the requests foreseen, each by its item's category", _p29),
-    Postcondition("awaiting-rows", "a row for each goal or stage awaiting confirmation", _p30),
     Postcondition(
         DEFERRED_ITEMS, "a condition for each item put off, and for no other", _deferred_items
     ),
-    Postcondition("no-commit-refs", "no commit ref is left; the refs take a fresh store's kinds", _p31),
-    Postcondition("other-refs", "each item keeps its other refs and gains its url records", _p32),
-    Postcondition("record-pairs", "each item holds the pairs its records carry, migrated", _p33),
-    Postcondition("commits-attached", "every commit is attached, with no session and no rewrite", _p34),
-    Postcondition("commit-projects", "every project from commits is one of an attached commit", _p35),
+    Postcondition(
+        "awaiting-rows", "a row for each goal or stage awaiting confirmation", _holds_awaiting_rows
+    ),
+    Postcondition(
+        "requests-asked", "every request asks the owner, and none is lost", _holds_requests_asked
+    ),
+    Postcondition("no-old-waiting", "no words wait from before 3.0", _holds_no_old_waiting),
+    Postcondition(
+        "request-shapes",
+        "requests and waiting words shaped as a fresh store's",
+        _holds_request_shapes,
+    ),
+    Postcondition(
+        "fresh-tables", "a table the store lacked is declared fresh and empty", _holds_fresh_tables
+    ),
     Postcondition(
         PARTICIPATION, "no setting stored; every space at the default set", _participation_default
     ),
-    Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
     Postcondition(PENDING_ACTIONS, "no request waits on an action", _pending_none),
+    Postcondition(AGENT_DECISIONS, "no decision marked", _decisions_empty),
     Postcondition(AGENT_BASIS, "no item accepted on an agent's own decision", _agent_basis_none),
     Postcondition(
-        BASELINES, "a count at acceptance only where an acceptance was not migrated", _baselines
+        TRIAGE_MARKS, "the triage marks declared as a fresh store's, none set", _triage_marks_none
     ),
     Postcondition(
-        TRIAGE_MARKS, "the triage marks declared as a fresh store's, none set", _triage_marks_none
+        "no-commit-refs",
+        "no commit ref is left; the refs take a fresh store's kinds",
+        _holds_no_commit_refs,
+    ),
+    Postcondition(
+        "other-refs", "each item keeps its other refs and gains its url records", _holds_other_refs
+    ),
+    Postcondition(
+        "record-pairs", "each item holds the pairs its records carry, migrated", _holds_record_pairs
+    ),
+    Postcondition(
+        "commits-attached",
+        "every commit is attached, with no session and no rewrite",
+        _holds_commits_attached,
+    ),
+    Postcondition(
+        "commit-projects",
+        "every project from commits is one of an attached commit",
+        _holds_commit_projects,
+    ),
+    Postcondition(
+        BASELINES, "a count at acceptance only where an acceptance was not migrated", _baselines
     ),
     Postcondition("second-run", "a second run changes nothing", _p16),
 )
