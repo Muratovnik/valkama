@@ -29,7 +29,7 @@ from unittest import mock
 
 from server import store
 from server.store_identity.refs import planning_space_entity
-from tests import agent_probes
+from tests import agent_probes, agent_probes_judge
 from tests import test_planning_work_model_migration as work_model
 from tests.test_registry_owner import _former_inventory as former_inventory
 from tests.test_registry_owner import _former_projection as former_projection
@@ -263,12 +263,18 @@ class RunCase(unittest.TestCase):
             code = agent_probes.main(argv)
         return code, output.getvalue()
 
-    def record(self, scenario: str, client: str) -> agent_probes.Record:
-        return agent_probes.Record.read(self.out / scenario / client)
+    def record(self, scenario: str, client: str) -> agent_probes_judge.Record:
+        return agent_probes_judge.Record.read(self.out / scenario / client)
 
     def start_verdict(self, scenario: str, client: str) -> dict[str, Any]:
         loaded = agent_probes.load_scenario(SAMPLES / "cases" / f"{scenario}.json")
-        return agent_probes.judge_start(self.record(scenario, client), loaded.expect["start"])
+        judged = agent_probes_judge.judge_session(
+            self.record(scenario, client),
+            loaded,
+            self.out / agent_probes_judge.WORK / scenario / client,
+            self.out / agent_probes_judge.REVIEW / scenario / client,
+        )
+        return next(probe for probe in judged["probes"] if probe["probe"] == "start")
 
 
 class RunTests(RunCase):
@@ -492,7 +498,8 @@ class OldReleaseHookTests(RunCase):
 
         self.assertEqual("failed", verdict["verdict"])
         self.assertEqual(
-            ["session"], [check["check"] for check in verdict["checks"] if not check["passed"]]
+            ["session"],
+            [check["check"] for check in verdict["checks"] if check["result"] != "passed"],
         )
         # The release spooled each turn's start, and the MCP server the client then
         # started drained it into the copy.

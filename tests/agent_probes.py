@@ -3,6 +3,7 @@
     python tests/agent_probes.py run --cases DIR --sections FILE --claude-md FILE
         --claude-coordinator DIR --codex-agents FILE --client claude|codex|both
         --client-home DIR --out DIR [--store-copy [SOURCE]] [--only ID ...]
+    python tests/agent_probes.py judge --out DIR
 
 A development tool like `tests/isolated.py`, and not part of the product. A probe
 asks whether an agent, given the user's instructions with some sections
@@ -35,9 +36,10 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
 The user's files, hook registrations and store are only read, and the store
 only through a connection that cannot write. Each session's record goes to
 `--out/<scenario>/<client>/`: the client's output of every turn, the handshake,
-the setup's bindings, a copy of the store and of its spool after the session,
-and the failures of the environment, which say why a session could not be
-judged rather than that it failed.
+the setup's bindings, a copy of the store, its spool and the profile's project
+registry after the session, and the failures of the environment, which say why
+a session could not be judged rather than that it failed. `judge` reads them
+back against each scenario's `expect`: `tests/agent_probes_judge.py`.
 """
 
 from __future__ import annotations
@@ -93,6 +95,9 @@ SCENARIO_KEYS = (
 )
 REQUIRED_KEYS = ("id", "clients", "workspace", "turns", "expect")
 REGISTRY_KEYS = ("space", "projects", "default")
+RUBRIC_KEYS = ("shows", "lines")
+#: What a reviewer's file may show: an item by a bound name, the answer, the reports.
+RUBRIC_SHOWS = re.compile(r"answer|subagent_reports|item:\{\{[^{}]+\}\}")
 CALL_KEYS = ("tool", "author", "session", "as", "args")
 TURN_KEYS = ("before", "prompt")
 #: The sessions a setup call may run as: the runner's own, and a foreign one
@@ -140,6 +145,8 @@ CLAUDE_DIR = ".claude"
 CODEX_DIR = ".codex"
 #: Where the run keeps what it builds outside the clients' own directories.
 WORK_DIR = ".probes"
+#: Where a session's record keeps the profile's project registry as the session left it.
+REGISTRY_COPY = "registry"
 
 #: The hooks the commit pickup needs beyond what the user registered: event,
 #: matcher and the `valkama hook` event, per client.
@@ -218,6 +225,7 @@ class Scenario:
     setup: tuple[Mapping[str, Any], ...]
     turns: tuple[Mapping[str, Any], ...]
     expect: Mapping[str, list]
+    rubric: Mapping[str, Mapping[str, Any]] = dataclasses.field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -295,6 +303,12 @@ def load_scenario(path: Path) -> Scenario:
         raise _refuse(path, "expect is not an object of probes")
     for probe, checks in expect.items():
         check_kinds(checks, path, f"expect.{probe}")
+    rubric = _check_keys(path, "rubric", data.get("rubric") or {}, list(expect))
+    for probe, entry in rubric.items():
+        found = _check_keys(path, f"rubric.{probe}", entry, RUBRIC_KEYS)
+        for shown in found.get("shows") or ():
+            if not isinstance(shown, str) or not RUBRIC_SHOWS.fullmatch(shown):
+                raise _refuse(path, f"rubric.{probe} shows an unknown part {shown!r}")
     overlay = data.get("overlay")
     return Scenario(
         path=path,
@@ -308,6 +322,7 @@ def load_scenario(path: Path) -> Scenario:
         setup=_check_calls(path, "setup", data.get("setup", [])),
         turns=tuple(turns),
         expect=expect,
+        rubric=rubric,
     )
 
 
@@ -1529,7 +1544,11 @@ class SessionRunner:
         return True
 
     def _keep_store(self) -> None:
-        """The session's store and spool, kept beside its record before the server goes."""
+        """The session's store, spool and project registry, kept beside its record.
+
+        The registry is kept because the next scenario empties it, and a check
+        reads the projects this session registered.
+        """
 
         if not self.store_file.is_file():
             return
@@ -1540,155 +1559,11 @@ class SessionRunner:
         spool = self.store_file.parent / "spool"
         if spool.is_dir():
             shutil.copytree(spool, self.directory / "spool")
-
-
-# --- the start probe --------------------------------------------------------------------
-#
-# The judge of every kind of check is its own command. These are the kinds a
-# fresh session's probe uses — that the session got the new text, this
-# checkout's hooks and handshake, and a confirmed first call — because whether
-# a profile works at all is the run's own question.
-
-
-@dataclasses.dataclass(frozen=True)
-class Record:
-    """A session's record as `run` left it, read back for judging."""
-
-    directory: Path
-    session: dict[str, Any]
-
-    @classmethod
-    def read(cls, directory: Path) -> Record:
-        return cls(directory, json.loads((directory / "session.json").read_text("utf-8")))
-
-    def lines(self) -> Iterator[dict[str, Any]]:
-        for turn in self.session["turns"]:
-            path = self.directory / turn["output"]
-            for line in path.read_bytes().splitlines() if path.is_file() else ():
-                with contextlib.suppress(ValueError):
-                    record = json.loads(line)
-                    if isinstance(record, dict):
-                        yield record
-
-    def store(self) -> sqlite3.Connection:
-        uri = f"{(self.directory / 'store.sqlite3').resolve().as_uri()}?mode=ro"
-        return sqlite3.connect(uri, uri=True)
-
-    def names(self) -> dict[str, str]:
-        environment = self.session.get("environment") or {}
-        return {
-            "client": self.session["client"],
-            "port": str(self.session.get("port")),
-            "store_dir": str(self.directory),
-            "workspace": str(self.directory / "workspace"),
-            **{f"env.{name}": value for name, value in environment.items()},
-            **(self.session.get("bindings") or {}),
-        }
-
-
-def _hook_output(record: Record, check: Mapping[str, Any]) -> bool:
-    for line in record.lines():
-        if line.get("subtype") == "hook_response" and line.get("hook_event") == check["event"]:
-            text = f"{line.get('stdout') or ''}{line.get('output') or ''}"
-            if check["contains"] in text:
-                return True
-    return False
-
-
-def _file(record: Record, check: Mapping[str, Any]) -> bool:
-    path = Path(check["path"])
-    if not path.is_absolute():
-        path = record.directory / "workspace" / path
-    if not path.is_file():
-        return check.get("exists") is False
-    text = path.read_text(encoding="utf-8", errors="replace")
-    return (
-        check.get("exists", True) is not False
-        and check.get("contains", "") in text
-        and ("not_contains" not in check or check["not_contains"] not in text)
-        and ("matches" not in check or re.search(check["matches"], text) is not None)
-    )
-
-
-def _session(record: Record, check: Mapping[str, Any]) -> bool:
-    """The session's event, written by a hook straight into the copy, and its session row.
-
-    Straight in, because an event a hook could not write waits in the spool only
-    until the next server start drains it: the MCP server a client starts right
-    after its session start does. An empty spool then says nothing about which
-    hook ran; the delivery does.
-    """
-
-    identifier = record.session.get("session_id")
-    if identifier is None:
-        return False
-    with contextlib.closing(record.store()) as conn:
-        event = conn.execute(
-            "SELECT 1 FROM execution_events WHERE kind = ? AND session_id = ?"
-            " AND delivery = 'direct'",
-            (check["event"], identifier),
-        ).fetchone()
-        row = conn.execute(
-            "SELECT 1 FROM sessions WHERE id = ? AND client = ?", (identifier, check["client"])
-        ).fetchone()
-    return event is not None and row is not None
-
-
-def _dir_empty(_record: Record, check: Mapping[str, Any]) -> bool:
-    path = Path(check["path"])
-    return not path.is_dir() or not any(path.iterdir())
-
-
-def _handshake_check(record: Record, check: Mapping[str, Any]) -> bool:
-    found = _read_json(record.directory / "handshake.json").get("answer") or {}
-    return check["contains"] in str(found.get("instructions") or "")
-
-
-def _first_call(record: Record, check: Mapping[str, Any]) -> bool:
-    with contextlib.closing(record.store()) as conn:
-        found = conn.execute(
-            "SELECT identity_state, session_id FROM execution_events"
-            " WHERE id > ? AND tool IS NOT NULL ORDER BY id LIMIT 1",
-            (record.session.get("setup_last_event", 0),),
-        ).fetchone()
-    return (
-        found is not None
-        and found[0] == check["identity"]
-        and found[1] == record.session.get("session_id")
-    )
-
-
-START_CHECKS: dict[str, Callable[[Record, Mapping[str, Any]], bool]] = {
-    "hook_output": _hook_output,
-    "file": _file,
-    "session": _session,
-    "dir_empty": _dir_empty,
-    "handshake": _handshake_check,
-    "first_call": _first_call,
-}
-
-
-def judge_start(record: Record, checks: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The verdict of a probe made of the start's kinds of check, with each check's result.
-
-    A check for another client is not applicable; one that only records does
-    not decide; a session the environment failed is not judged at all.
-    """
-
-    if record.session.get("failures"):
-        return {"verdict": "environment failure", "checks": []}
-    names = record.names()
-    results = []
-    for check in checks:
-        if record.session["client"] not in check.get("clients", CLIENTS):
-            continue
-        kind = check["check"]
-        if kind not in START_CHECKS:
-            raise ProbeError(f"{kind} is not a kind of check of the start")
-        passed = START_CHECKS[kind](record, substitute(dict(check), names))
-        results.append({"check": kind, "passed": passed, "decides": not check.get("record_only")})
-    failed = any(result["decides"] and not result["passed"] for result in results)
-    return {"verdict": "failed" if failed else "passed", "checks": results}
+        kept = self.directory / REGISTRY_COPY
+        kept.mkdir()
+        for path in self.profile.registry.glob("*"):
+            if path.is_file():
+                shutil.copy2(path, kept / path.name)
 
 
 # --- the run ----------------------------------------------------------------------------
@@ -1794,6 +1669,8 @@ def _parser() -> argparse.ArgumentParser:
         metavar="CLIENT=PATH",
         help="start CLIENT with PATH (a .py runs with this interpreter) instead of PATH's",
     )
+    command = commands.add_parser("judge", help="judge the sessions a run recorded")
+    command.add_argument("--out", type=Path, required=True, help="the directory of the run")
     return parser
 
 
@@ -1802,12 +1679,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if reconfigure is not None:
         reconfigure(encoding="utf-8")
     options = _parser().parse_args(argv)
-    copy = options.store_copy
-    # Asked before anything imports the `tests` package, which redirects the store
-    # and moves `LOCALAPPDATA`, where the registry the copy migrates with is.
-    source = None if copy is None else Path(copy or store.db_path())
-    registry = Path(project_registry.registry_path()).parent
     try:
+        if options.command == "judge":
+            from tests import agent_probes_judge
+
+            return agent_probes_judge.judge(options.out.resolve())
+        copy = options.store_copy
+        # Asked before anything imports the `tests` package, which redirects the store
+        # and moves `LOCALAPPDATA`, where the registry the copy migrates with is.
+        source = None if copy is None else Path(copy or store.db_path())
+        registry = Path(project_registry.registry_path()).parent
         return run(options, source, registry)
     except ProbeError as error:
         _say(f"refused: {error}")
@@ -1815,4 +1696,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # The judge imports this module by its name in the package; run as a script,
+    # it is that module, rather than a second copy with classes of its own.
+    sys.modules.setdefault("tests.agent_probes", sys.modules[__name__])
     sys.exit(main())
