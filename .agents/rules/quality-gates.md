@@ -82,7 +82,8 @@ with `PermissionError`.
 
 Two heavy runs on one machine fail tests that pass alone, so each heavy run
 takes one lock itself, `tests/machine_lock.py`, a file in the system's temporary
-directory that no TEMP or profile a run was given moves: the whole unittest suite, from its package's `load_tests` to the end of the process;
+directory that no TEMP or profile a run was given moves: the whole unittest
+suite, from its package's `load_tests` to the end of the process;
 `npm run test:unit` in `npm test`; `npm run test:browser:allowed` but `--list`.
 Targeted runs take none — a unittest module, subpackage, `-p` or `-k`, Vitest
 given files or `-t`, `npx playwright test <file>` — nor do the light gate steps,
