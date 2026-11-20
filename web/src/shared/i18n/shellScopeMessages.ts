@@ -23,6 +23,11 @@ export const shellScopeMessages = {
       projects: 'Projects',
       noProjects: 'No projects',
       openSpace: 'Open space',
+      numbers: 'Where its work stands',
+      numbersAbsent: {
+        old_store: 'No data: an earlier build wrote this space’s store.',
+        unreadable: 'The space could not be read.',
+      },
     },
   },
   ru: {
@@ -48,6 +53,11 @@ export const shellScopeMessages = {
       projects: 'Проекты',
       noProjects: 'Проектов нет',
       openSpace: 'Открыть пространство',
+      numbers: 'Где стоит работа',
+      numbersAbsent: {
+        old_store: 'Нет данных: хранилище пространства записано прежней сборкой.',
+        unreadable: 'Пространство не прочитано.',
+      },
     },
   },
 }

@@ -821,7 +821,12 @@ same way, not a record that could not be loaded.
 
 The context bar holds the scope in two choices, at its end in fixed positions. The first
 is «All spaces» or one space, named by its key with its name under it; «All spaces» lists
-every space with its work count and its projects, each card opening the whole space. The
+every space with its work count and its projects, each card opening the whole space. A card
+shows four numbers under the space's name, counted as the space's Volumes page counts them:
+its cards in triage, its tasks ready and in progress, and the questions waiting for the owner.
+They stand in a row, in two rows of two where the card has no room, a number never narrower
+than its longest word. A space without them shows each as «—», never 0, and says why: an
+earlier build wrote its store, which is «No data», or its store could not be read. The
 second stands only in a space with more than one project to choose, and an address that
 narrows to a project keeps it on show: «All projects», the space's own projects, then the
 projects of other spaces that its items name, each with its own space's key beside its
