@@ -170,12 +170,14 @@ function registerGaps(
 const without = <T>(map: ReadonlyMap<string, T>, key: string) =>
   new Map([...map].filter(([entry]) => entry !== key))
 
+// Reads every test source and the whole corpus: 2 s alone, past the 5 s default
+// on a busy machine.
 test('every class the tests select is written, or is one a library writes', () => {
   assert.deepEqual(registerGaps(deadUses(testSources(), corpusText())), {
     stale: [],
     unregistered: [],
   })
-})
+}, 20_000)
 
 test('the allowance holds library classes only', () => {
   for (const name of LIBRARY_CLASSES.keys())
