@@ -1026,8 +1026,14 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
     )
 
 
-def mcp_registration(profile: Profile, mode: str, store_file: Path, client: str) -> dict[str, Any]:
-    """The MCP server a session's clients start: this checkout's, or one that fails."""
+def mcp_registration(
+    profile: Profile, mode: str, store_file: Path, client: str, *, port: int
+) -> dict[str, Any]:
+    """The MCP server a session's clients start: this checkout's, or one that fails.
+
+    `port` is the probe server's: the links an answer carries name it, and without
+    it they would name the user's own listener.
+    """
 
     if mode == "failing":
         return {"command": profile.python, "args": ["-c", "import sys; sys.exit(3)"], "env": {}}
@@ -1044,6 +1050,7 @@ def mcp_registration(profile: Profile, mode: str, store_file: Path, client: str)
         {
             "VALKAMA_DB": str(store_file),
             "VALKAMA_AUTHOR": client,
+            "VALKAMA_PORT": str(port),
             "PYTHONUTF8": "1",
             "PYTHONIOENCODING": "utf-8",
         }
@@ -1070,7 +1077,7 @@ def write_client_configs(
         profile.claude_dir / "settings.json",
         {**profile.claude_settings, "claudeMdExcludes": excluded, "hooks": claude.hooks},
     )
-    registration = mcp_registration(profile, mode, store_file, "claude")
+    registration = mcp_registration(profile, mode, store_file, "claude", port=port)
     _write_json(
         profile.claude_dir / ".claude.json",
         {"mcpServers": {"valkama": {"type": "stdio", **registration}}},
@@ -1081,7 +1088,7 @@ def write_client_configs(
     _write_json(profile.codex_dir / "hooks.json", {"hooks": codex.hooks})
     config = codex_config(
         profile.codex_config,
-        mcp_registration(profile, mode, store_file, "codex"),
+        mcp_registration(profile, mode, store_file, "codex", port=port),
         profile.codex_hidden_skills,
     )
     (profile.codex_dir / "config.toml").write_text(config, encoding="utf-8", newline="\n")
@@ -1408,6 +1415,7 @@ RECORDED_VARIABLES = (
     "GIT_CONFIG_GLOBAL",
     "GIT_CEILING_DIRECTORIES",
     "VALKAMA_DB",
+    "VALKAMA_PORT",
     "PATH",
 )
 
@@ -1498,6 +1506,7 @@ class SessionRunner:
         self.names: dict[str, str] = {}
         self.environment: dict[str, str] = {}
         self.store_file = Path()
+        self.port = 0
         self.copied_last_event = 0
 
     def run(self) -> Session:
@@ -1544,8 +1553,10 @@ class SessionRunner:
             # Git in the workspace stops at it: above lies the repository the run's
             # output directory may be in, which is not the probe's to read or commit to.
             "GIT_CEILING_DIRECTORIES": str(self.directory),
+            # What the clients and their commands open or call is the probe server.
+            "VALKAMA_PORT": str(port),
         }
-        self.record.port = port
+        self.port = self.record.port = port
         self.record.environment = {
             name: self.environment[name] for name in RECORDED_VARIABLES if name in self.environment
         }
@@ -1609,7 +1620,9 @@ class SessionRunner:
         return self.record.roles[name]
 
     def _mcp(self) -> McpClient:
-        registration = mcp_registration(self.profile, "tip", self.store_file, "codex")
+        registration = mcp_registration(
+            self.profile, "tip", self.store_file, "codex", port=self.port
+        )
         client = McpClient(
             registration["command"],
             registration["args"],
@@ -1685,7 +1698,7 @@ class SessionRunner:
         """What the registered MCP command says to `initialize`, asked before the session."""
 
         registration = mcp_registration(
-            self.profile, self.scenario.mcp, self.store_file, self.client
+            self.profile, self.scenario.mcp, self.store_file, self.client, port=self.port
         )
         result: dict[str, Any]
         try:

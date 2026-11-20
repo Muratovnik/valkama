@@ -472,11 +472,22 @@ class RunTests(RunCase):
                 "tip",
                 Path(record.session["environment"]["VALKAMA_DB"]),
                 client,
+                port=record.session["port"],
             )
             self.assertEqual([str(agent_probes.ENTRY), "mcp"], registration["args"])
             self.assertEqual(
                 record.session["environment"]["VALKAMA_DB"], registration["env"]["VALKAMA_DB"]
             )
+            # A link the client is given names the probe server, never the user's listener.
+            port = str(record.session["port"])
+            self.assertEqual(port, registration["env"]["VALKAMA_PORT"])
+            self.assertEqual(port, record.session["environment"]["VALKAMA_PORT"])
+            claim = next(
+                call
+                for call in agent_probes_judge.read_transcript(record).calls
+                if call.tool == "claim_work_item"
+            )
+            self.assertIn(f"http://127.0.0.1:{port}/open/", json.dumps(claim.result))
             handshake = json.loads((record.directory / "handshake.json").read_text("utf-8"))
             self.assertEqual("valkama", handshake["answer"]["serverInfo"]["name"])
         path = self.record("alpha", "claude").session["environment"]["PATH"]
