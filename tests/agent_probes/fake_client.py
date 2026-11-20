@@ -6,9 +6,17 @@ hooks, starts the registered MCP server, makes the calls its prompt lists and
 writes its output in the client's own structured format, so the run records it
 as it would a real one. The prompt is a JSON object:
 
-    {"calls": [{"tool": "claim_work_item", "args": {...}}], "answer": "..."}
+    {"skill": true, "calls": [{"tool": "claim_work_item", "args": {...}}],
+     "files": {"app/NOTES.md": "text"}, "subagent": {"calls": [...], "report": "..."},
+     "answer": "..."}
 
-A prompt that is not JSON is answered as it stands, with no call.
+Every key is optional. `skill` loads the Valkama skill first, as each client
+does: Claude Code by its Skill tool, Codex by reading the skill's file in a
+shell. `files` are written as each client's edit, `subagent` runs its calls as
+one subagent and returns its report. A prompt that is not JSON is answered as it
+stands, with no call. The output has the shapes the real clients write: the
+`stream-json` lines of Claude Code and the `--json` items of Codex, with each
+turn's tokens.
 
 Claude Code is told apart by `-p`, Codex by `exec`. When
 `PROBE_FAKE_VALKAMA_HOOKS` names another registration in the same client's
@@ -176,33 +184,177 @@ def main(argv: list[str]) -> int:
         if mcp is not None:
             mcp.close()
             mcp = None
-    for call in script.get("calls") or ():
-        call_id = f"call_{uuid.uuid4().hex}"
-        if client == "claude":
-            tool_name = TOOL_PREFIX + call["tool"]
-            payload = {**common, "tool_name": tool_name, "tool_input": call["args"]}
-            run_hooks(client, hooks, "PreToolUse", {**payload, "tool_use_id": call_id}, tool_name)
-            meta = {"claudecode/toolUseId": call_id}
-        else:
-            meta = {"sessionId": session, "threadId": session, "callId": call_id}
-        result, error = mcp.call(call["tool"], call["args"], meta)
-        if client == "claude":
-            use = {"type": "tool_use", "id": call_id, "name": tool_name, "input": call["args"]}
-            emit({"type": "assistant", "message": {"content": [use]}})
-            done = {"type": "tool_result", "tool_use_id": call_id, "content": json.dumps(result)}
-            emit({"type": "user", "message": {"content": [{**done, "is_error": error}]}})
-        else:
-            item = {"type": "mcp_tool_call", "server": "valkama", "tool": call["tool"]}
-            emit({"type": "item.completed", "item": {**item, "result": result, "error": error}})
+    if script.get("skill") and mcp is not None:
+        load_skill(client)
+    turn = Turn(client, hooks, common, mcp)
+    for call in script.get("calls") or () if mcp is not None else ():
+        turn.call(call)
+    for name, text in (script.get("files") or {}).items():
+        turn.write(Path.cwd() / name, text)
+    if script.get("subagent") and mcp is not None:
+        turn.subagent(script["subagent"])
     if mcp is not None:
         mcp.close()
     run_hooks(client, hooks, "Stop", common, None)
     if client == "claude":
-        emit({"type": "result", "subtype": "success", "result": answer, "session_id": session})
+        emit(
+            {
+                "type": "result",
+                "subtype": "success",
+                "result": answer,
+                "session_id": session,
+                "usage": CLAUDE_USAGE,
+            }
+        )
     else:
         emit({"type": "item.completed", "item": {"type": "agent_message", "text": answer}})
-        emit({"type": "turn.completed", "usage": {"input_tokens": 0, "output_tokens": 0}})
+        emit({"type": "turn.completed", "usage": CODEX_USAGE})
     return 0
+
+
+#: The tokens each turn reports, in each client's own words.
+CLAUDE_USAGE = {
+    "input_tokens": 3,
+    "cache_creation_input_tokens": 100,
+    "cache_read_input_tokens": 1000,
+    "output_tokens": 50,
+    "output_tokens_details": {"thinking_tokens": 20},
+}
+CODEX_USAGE = {
+    "input_tokens": 1200,
+    "cached_input_tokens": 1000,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 60,
+    "reasoning_output_tokens": 10,
+}
+
+
+def load_skill(client: str) -> None:
+    if client == "claude":
+        use = {"type": "tool_use", "id": f"toolu_{uuid.uuid4().hex}", "name": "Skill"}
+        emit(
+            {"type": "assistant", "message": {"content": [{**use, "input": {"skill": "valkama"}}]}}
+        )
+        return
+    path = Path(os.environ["HOME"]) / ".agents" / "skills" / "valkama" / "SKILL.md"
+    item = {
+        "id": f"item_{uuid.uuid4().hex}",
+        "type": "command_execution",
+        "command": f"pwsh -Command \"Get-Content -LiteralPath '{path.as_posix()}'\"",
+        "aggregated_output": path.read_text(encoding="utf-8") if path.is_file() else "",
+        "exit_code": 0,
+        "status": "completed",
+    }
+    emit({"type": "item.completed", "item": item})
+
+
+class Turn:
+    """The calls of one turn, made as the client makes them and written as it writes them."""
+
+    def __init__(
+        self, client: str, hooks: dict[str, Any], common: dict[str, Any], mcp: Any
+    ) -> None:
+        self.client, self.hooks, self.common, self.mcp = client, hooks, common, mcp
+        self.session = str(common["session_id"])
+
+    def call(
+        self, call: dict[str, Any], *, parent: str | None = None, thread: str | None = None
+    ) -> None:
+        call_id = f"call_{uuid.uuid4().hex}"
+        tool_name = TOOL_PREFIX + call["tool"]
+        if self.client == "claude":
+            payload = {**self.common, "tool_name": tool_name, "tool_input": call["args"]}
+            if parent is not None:
+                payload["agent_id"] = parent
+            hook = {**payload, "tool_use_id": call_id}
+            run_hooks(self.client, self.hooks, "PreToolUse", hook, tool_name)
+            meta: dict[str, Any] = {"claudecode/toolUseId": call_id}
+        else:
+            session = thread or self.session
+            meta = {"sessionId": session, "threadId": session, "callId": call_id}
+        result, error = self.mcp.call(call["tool"], call["args"], meta)
+        text = json.dumps(result)
+        if self.client == "claude":
+            use = {"type": "tool_use", "id": call_id, "name": tool_name, "input": call["args"]}
+            emit({"type": "assistant", "message": {"content": [use]}, "parent_tool_use_id": parent})
+            done = {"type": "tool_result", "tool_use_id": call_id, "content": text}
+            emit(
+                {
+                    "type": "user",
+                    "message": {"content": [{**done, "is_error": error}]},
+                    "parent_tool_use_id": parent,
+                }
+            )
+        elif thread is None:
+            # A Codex subagent's calls are its own thread's, which the parent's output
+            # does not carry.
+            item = {
+                "id": f"item_{uuid.uuid4().hex}",
+                "type": "mcp_tool_call",
+                "server": "valkama",
+                "tool": call["tool"],
+                "arguments": call["args"],
+                "result": {"content": [{"type": "text", "text": text}]},
+                "error": {"message": text} if error else None,
+                "status": "failed" if error else "completed",
+            }
+            emit({"type": "item.completed", "item": item})
+
+    def write(self, path: Path, text: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        if self.client == "claude":
+            use = {
+                "type": "tool_use",
+                "id": f"toolu_{uuid.uuid4().hex}",
+                "name": "Write",
+                "input": {"file_path": str(path), "content": text},
+            }
+            emit({"type": "assistant", "message": {"content": [use]}, "parent_tool_use_id": None})
+            return
+        changes = [{"path": str(path), "kind": "add"}]
+        item = {"id": f"item_{uuid.uuid4().hex}", "type": "file_change", "changes": changes}
+        emit({"type": "item.completed", "item": {**item, "status": "completed"}})
+
+    def subagent(self, work: dict[str, Any]) -> None:
+        report = str(work.get("report") or "Done.")
+        if self.client == "claude":
+            launch = f"toolu_{uuid.uuid4().hex}"
+            use = {
+                "type": "tool_use",
+                "id": launch,
+                "name": "Task",
+                "input": {"description": "a part of the work", "prompt": "Do the part."},
+            }
+            emit({"type": "assistant", "message": {"content": [use]}, "parent_tool_use_id": None})
+            for call in work.get("calls") or ():
+                self.call(call, parent=launch)
+            done = {"type": "tool_result", "tool_use_id": launch, "content": report}
+            emit({"type": "user", "message": {"content": [done]}, "parent_tool_use_id": None})
+            return
+        thread = str(uuid.uuid4())
+        start = {**self.common, "session_id": thread, "source": "startup"}
+        run_hooks(self.client, self.hooks, "SessionStart", start, "startup")
+        spawn = {
+            "id": f"item_{uuid.uuid4().hex}",
+            "type": "collab_tool_call",
+            "tool": "spawn_agent",
+            "sender_thread_id": self.session,
+            "receiver_thread_ids": [thread],
+            "prompt": "Do the part.",
+            "agents_states": {thread: {"status": "running", "message": None}},
+            "status": "completed",
+        }
+        emit({"type": "item.completed", "item": spawn})
+        for call in work.get("calls") or ():
+            self.call(call, thread=thread)
+        waited = {
+            **spawn,
+            "id": f"item_{uuid.uuid4().hex}",
+            "tool": "wait",
+            "agents_states": {thread: {"status": "completed", "message": report}},
+        }
+        emit({"type": "item.completed", "item": waited})
 
 
 if __name__ == "__main__":
