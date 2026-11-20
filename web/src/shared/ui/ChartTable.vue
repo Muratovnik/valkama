@@ -5,7 +5,8 @@
  * the table under a caption only a screen reader reads. A table wider than its column, as a
  * phone makes one of a period table, scrolls in its own frame instead of widening the page,
  * and Tab reaches that frame, named as the table, only while it scrolls (`keyScroll`). The frame
- * is `data-region="table-frame"`, for a reader of the page to measure it by.
+ * is `data-region="table-frame"` and the empty state `data-region="table-empty"`, for a reader of
+ * the page to measure either by.
  */
 import { keyScroll } from '@/shared/lib/keyScroll.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -24,6 +25,7 @@ const vKeyScroll = keyScroll
 <template>
   <DataEmptyState
     v-if="empty"
+    data-region="table-empty"
     :title="words.empty"
     :description="words.emptyDescription"
     compact

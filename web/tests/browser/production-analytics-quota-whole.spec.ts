@@ -6,12 +6,13 @@
  * bare time that reads as now; a running window marks now on its line, an upright hairline inside the
  * plot that the legend names «Now»; a window past its reset is drawn in the neutral ink its bar
  * is, with no now; and the top of the scale, «100%», is centred on a hairline at its level, where
- * a line at 100 % runs.
+ * a line at 100 % runs. A window that reset with nothing read since, beside a running window of
+ * its account, stands on that window's axis: its span, its now, no line yet.
  *
  * The panel's moment is 14:30 on Nov 11 (`NOW`). On the week's panel: «Work»'s week, fresh, four
  * days in; the unnamed account's week, silent three hours, six days in; «Work»'s model's week, made
- * here to have reset two hours ago; and the seated account's week, fresh, three days in. Each run
- * attaches what it measured.
+ * here to have reset two hours ago; and the seated account's week, made here to have reset three
+ * hours ago, the account's one window on the panel. Each run attaches what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -29,11 +30,25 @@ const DAY = 24 * HOUR
 /** How far a drawn edge may stand from where it should: the drawing's rounding, a pixel. */
 const NEAR = 1
 
-/** The quota fixture with «Work»'s model's week past its reset by two hours. */
+/**
+ * The quota fixture with «Work»'s model's week past its reset by two hours, and the seated
+ * account's week past its own by three.
+ */
 function withEnded(): Quota {
   const quota = quotaAt(NOW)
   const work = quota.accounts[0]
-  if (!work) throw new Error('«Work» is first')
+  const seated = quota.accounts.at(-1)
+  if (!work || !seated) throw new Error('«Work» is first, the seated account last')
+  seated.windows[1] = share(NOW.getTime(), quota.utc_offset, {
+    kind: 'week',
+    left: -3 * HOUR,
+    source: 'mod',
+    readings: [
+      [5 * DAY, 8],
+      [4 * HOUR, 20],
+    ],
+    forecast: null,
+  })
   work.windows[2] = share(NOW.getTime(), quota.utc_offset, {
     kind: 'week_model',
     model: 'model-a',
@@ -84,9 +99,9 @@ const linesOf = (page: Page) =>
 /** The words at the two ends of each line's axis, and whether the line is muted, by window. */
 const EXPECTED = {
   'Work week': ['start Nov 7, 14:30', 'resets Nov 14, 14:30', false],
-  'Work week_model': ['start Nov 4, 12:30', 'reset at 12:30', true],
+  'Work week_model': ['start Nov 7, 14:30', 'resets Nov 14, 14:30', false],
   [`${NIGHT_NAME} week`]: ['start Nov 5, 14:30', 'resets Nov 12, 14:30', false],
-  [`${SEATED_NAME} week`]: ['start Nov 8, 14:30', 'resets Nov 15, 14:30', false],
+  [`${SEATED_NAME} week`]: ['start Nov 4, 11:30', 'reset at 11:30', true],
 }
 
 for (const width of [1440, 1024, 390])
@@ -111,6 +126,7 @@ for (const width of [1440, 1024, 390])
 
     const running = lines.filter((one) => !one.muted)
     expect(running).toHaveLength(3)
+    expect(running.map((one) => one.key)).toContain('Work week_model')
     for (const line of running) {
       const field = line.field ?? new DOMRect()
       const rule = line.nowRule ?? new DOMRect(Number.NaN)
@@ -129,8 +145,19 @@ for (const width of [1440, 1024, 390])
     )
     expect((night?.nowRule?.left ?? 0) - (night?.lineRight ?? Number.NaN)).toBeGreaterThan(0)
 
-    // Past its reset: no now, and its line in the ink its bar is drawn in.
-    const ended = byKey['Work week_model']
+    // Reset beside a running week of its account: that week's now, and no line until it is read.
+    const model = byKey['Work week_model']
+    const nowIn = (one: typeof model) =>
+      ((one?.nowRule?.left ?? Number.NaN) - (one?.field?.left ?? 0)) / (one?.field?.width ?? 1)
+    expect(model?.stroke, 'nothing read since its reset').toBe('')
+    expect(
+      Math.abs(nowIn(model) - nowIn(work)) * (work?.field?.width ?? 0),
+      'now where the running week marks it',
+    ).toBeLessThan(NEAR + 1)
+
+    // Past its reset with no window of its account running: no now, and its line in the ink its
+    // bar is drawn in.
+    const ended = byKey[`${SEATED_NAME} week`]
     expect([ended?.nowRule, ended?.nowKey]).toEqual([undefined, ''])
     expect(ended?.stroke).toBe(ended?.fill)
     expect(work?.stroke, 'the control: a running line in its own hue').not.toBe(ended?.stroke)

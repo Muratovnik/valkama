@@ -11,9 +11,10 @@
  * its forecast and its reset stand under its bar. The model's week is made here to have reset two
  * hours ago: two lines lead it, that it reset and its share before, and it forecasts nothing. So
  * what stands over the two plots differs by more than a line, the control that each card laid out
- * on its own starts its plot at another height. The model's week shows its past window too,
- * opened in its place beside the running week. As tables, the readings' tables start level. Each
- * run attaches what it measured.
+ * on its own starts its plot at another height. Its line is the account's current week, the
+ * running week's, with nothing read in it yet; it shows its past window too, opened in its place
+ * beside the running week. As tables, the week's readings' table and the model's words that its
+ * week has none start level. Each run attaches what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -98,7 +99,8 @@ async function servePast(page: Page) {
 /**
  * Where each part of «Work»'s two weeks starts and ends, by the hooks the components document:
  * the heading row, what stands now (its leading lines and its bar, or a past window's heading),
- * the step line's head and field and its axis, the readings' table, and the line under it all.
+ * the step line's head and field and its axis, the readings' table or the words that there is
+ * none, and the line under it all.
  */
 const partsOf = (page: Page) =>
   page.locator('[data-account="Work"] [data-window]').evaluateAll((windows) =>
@@ -129,7 +131,7 @@ const partsOf = (page: Page) =>
         field: field?.top ?? Number.NaN,
         axisBottom: axis?.bottom ?? Number.NaN,
         under: under?.top ?? Number.NaN,
-        table: shown('table')?.top ?? Number.NaN,
+        table: shown('[data-region="table-frame"], [data-region="table-empty"]')?.top ?? Number.NaN,
       }
     }),
   )
@@ -198,7 +200,13 @@ test('as tables, two windows side by side start their readings’ tables level',
 }, info) => {
   const panel = await open(page)
   await panel.getByRole('radio', { name: 'Table' }).check()
-  await expect(page.locator('[data-account="Work"] [data-window] table')).toHaveCount(2)
+  const work = page.locator('[data-account="Work"]')
+  await expect(work.locator('[data-window="week"] [data-region="table-frame"] table')).toHaveCount(
+    1,
+  )
+  await expect(work.locator('[data-window="week_model"] [data-region="table-empty"]')).toHaveCount(
+    1,
+  )
   const { week, model } = await pairOf(page)
   await record(info, 'quota pair, tables', { week, model })
   for (const part of ['head', 'table', 'under'] as const)
