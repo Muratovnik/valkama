@@ -335,6 +335,26 @@ class PlanningRouting:
         raise PlatformHttpError(409, "unavailable", "Exact attached store is unavailable")
 
     @contextlib.contextmanager
+    def attached_stores(self) -> Iterator[tuple[sqlite3.Connection, ...]]:
+        """Each attached store `present_spaces` lists a space of, opened once for a read
+        across every space, in its order. A store that went away since this routing was
+        built is left out, as a read of every space skips its spaces."""
+
+        primary = self.metadata["data_scope_id"]
+        first: dict[str, dict] = {}
+        for space_ref in self.present_spaces():
+            if space_ref["data_scope_id"] != primary:
+                first.setdefault(space_ref["data_scope_id"], space_ref)
+        with contextlib.ExitStack() as held:
+            opened = []
+            for space_ref in first.values():
+                try:
+                    opened.append(held.enter_context(self.store_connection(space_ref)))
+                except (PlatformHttpError, scopes.ScopeError, ScopeError, sqlite3.Error):
+                    continue
+            yield tuple(opened)
+
+    @contextlib.contextmanager
     def planning_store(
         self, parameters: Mapping[str, list[str]]
     ) -> Iterator[tuple[sqlite3.Connection, str]]:

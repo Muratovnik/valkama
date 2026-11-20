@@ -25,7 +25,7 @@ from server.planning import api, interactions, participation
 from server.planning.routing import PlanningRouting
 from server.projects import scopes
 from tests.planning_tree import Tree
-from tests.test_planning_volumes import VolumesCase
+from tests.test_planning_volumes import PERIOD, VolumesCase
 
 
 class SpaceQuestionsTests(VolumesCase):
@@ -252,25 +252,37 @@ class TaskFilterQuestionsTests(VolumesCase):
             self.assertEqual(400, caught.exception.status)
 
 
+#: The cards of the attached case, each with a question waiting on it: its kind and labels.
+SIDE_CARDS = {
+    "MAIN:b": ("bug", ["ui"]),
+    "BETA:b": ("bug", ["ui"]),
+    "BETA:t": ("task", ["api"]),
+}
+
+
 class AttachedStoreQuestionsTests(VolumesCase):
-    """A question waits on a bug labelled `ui` in the primary store's MAIN, and on a bug
-    labelled `ui` and a task without a label in BETA, a space of a store attached beside it.
+    """MAIN is a space of the primary store and BETA one of a store attached beside it; a
+    question waits on each card of `SIDE_CARDS`, every card in triage, BETA's asked first.
     «Waiting for me» at the top of Volumes opens the questions window at the top, under the
-    page's kind and label or with none: the window lists what the number counts."""
+    page's kind and label or with none: the window lists what the number counts, and every
+    number at the top counts both stores. Each expected count is chosen here from
+    `SIDE_CARDS`, never taken from a read under test."""
 
     def setUp(self) -> None:
         super().setUp()
         main = self.place("MAIN", "b", kind="bug")
-        self.label(self.conn, main)
-        self.question("MAIN:b", "2026-11-01T09:00:00.000Z")
+        self.label(self.conn, main, SIDE_CARDS["MAIN:b"][1])
+        self.question("MAIN:b", "2026-11-03T09:00:00.000Z")
+        self.conn.commit()
         self.side = self.root / "side.sqlite3"
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.side)}):
             other = store.connect()
         try:
             beta = Tree(other, "BETA")
-            bug = beta.add("b", kind="bug")
-            self.label(other, bug)
-            for day, identity in ((2, bug), (3, beta.add("t"))):
+            for day, short in enumerate(("b", "t"), start=1):
+                kind, labels = SIDE_CARDS[f"BETA:{short}"]
+                identity = beta.add(short, kind=kind)
+                self.label(other, identity, labels)
                 other.execute(
                     "INSERT INTO work_item_requests(request_id, work_item_id, kind, prompt,"
                     " fields_json, status, author, created_at)"
@@ -280,14 +292,15 @@ class AttachedStoreQuestionsTests(VolumesCase):
             other.commit()
         finally:
             other.close()
+
+    def attach(self) -> None:
         scopes.attach(str(self.primary), "side", str(self.side))
-        self.conn.commit()
 
     @staticmethod
-    def label(conn: sqlite3.Connection, identity: str) -> None:
+    def label(conn: sqlite3.Connection, identity: str, labels: list[str]) -> None:
         conn.execute(
             "UPDATE work_items SET labels = ? WHERE work_item_id = ?",
-            (json.dumps(["ui"]), identity),
+            (json.dumps(labels), identity),
         )
 
     def listed(self, **narrowed: list[str]) -> dict:
@@ -298,21 +311,67 @@ class AttachedStoreQuestionsTests(VolumesCase):
         parameters = {"scope_kind": ["global"], "status": ["pending"], **kept}
         return interactions.request_list(routing, parameters)
 
-    # The two reads part here: the number counts the store this service writes, the window
-    # every source. Which set «every space» is at the top waits for the owner's choice.
-    @unittest.expectedFailure
-    def test_the_window_at_the_top_lists_what_the_number_counts(self) -> None:
+    @staticmethod
+    def expected(kinds: list[str], labels: list[str], *, attached: bool = True) -> int:
+        return sum(
+            1
+            for name, (kind, carried) in SIDE_CARDS.items()
+            if (attached or name.startswith("MAIN:"))
+            and (not kinds or kind in kinds)
+            and set(labels) <= set(carried)
+        )
+
+    def triage_tasks(self, read: dict) -> int:
+        (triage,) = [row for row in read["categories"] if row["category"] == "triage"]
+        return int(triage["tasks"])
+
+    def test_every_number_at_the_top_counts_the_attached_store_too(self) -> None:
+        self.attach()
         # The case is what it says: the attached store holds open questions of its own.
         with closing(sqlite3.connect(self.side)) as side:
             waiting = side.execute(
                 "SELECT COUNT(*) FROM work_item_requests WHERE status = 'pending'"
             ).fetchone()[0]
         self.assertEqual(2, waiting)
+        for kinds, labels in (([], []), (["bug"], []), ([], ["ui"]), ([], ["api"])):
+            with self.subTest(kinds=kinds, labels=labels):
+                answer = self.listed(task_kind=kinds, task_label=labels)
+                counts = self.volumes(kind=kinds, label=labels)["counts"]
+                self.assertEqual(self.expected(kinds, labels), answer["total"])
+                self.assertEqual(answer["total"], counts["waiting_owner"]["count"])
+                self.assertEqual(self.expected(kinds, labels), self.triage_tasks(counts))
+        # The question asked first is the attached store's, and it is said by its card.
+        oldest = self.volumes()["counts"]["waiting_owner"]["oldest"]
+        self.assertEqual(("side-1", "BETA-1"), (oldest["request_id"], oldest["reference"]))
+
+    def test_a_space_counts_its_own_store_alone(self) -> None:
+        self.attach()
+        counts = self.volumes("MAIN")["counts"]
+        self.assertEqual(1, counts["waiting_owner"]["count"])
+        self.assertEqual(1, self.triage_tasks(counts))
+        # A label only the attached store carries is no label of MAIN's store.
+        self.assertEqual(
+            "no work item carries label api",
+            self.refused(
+                {
+                    **PERIOD,
+                    "scope_kind": "space",
+                    "data_scope_id": self.scope_id,
+                    "space_key": "MAIN",
+                    "label": "api",
+                }
+            ),
+        )
+
+    def test_without_an_attached_store_the_top_counts_the_primary_alone(self) -> None:
         for kinds, labels in (([], []), (["bug"], []), ([], ["ui"])):
             with self.subTest(kinds=kinds, labels=labels):
                 answer = self.listed(task_kind=kinds, task_label=labels)
-                read = self.volumes(kind=kinds, label=labels)
-                self.assertEqual(read["counts"]["waiting_owner"]["count"], answer["total"])
+                counts = self.volumes(kind=kinds, label=labels)["counts"]
+                expected = self.expected(kinds, labels, attached=False)
+                self.assertEqual(expected, answer["total"])
+                self.assertEqual(expected, counts["waiting_owner"]["count"])
+                self.assertEqual(expected, self.triage_tasks(counts))
 
 
 if __name__ == "__main__":
