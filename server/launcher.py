@@ -552,6 +552,32 @@ def _names_on_demand(command_line: str) -> bool:
         return False
 
 
+def _base_interpreter(python: Path) -> Path:
+    """The interpreter a process started as `python` runs as.
+
+    A virtual environment's python.exe on Windows is a redirector: it starts the
+    interpreter its `pyvenv.cfg` names as `home` as a child, and that child is the
+    process that holds a port. The server runs on the system Python with no
+    third-party imports, so that interpreter is the one to record, and the one a
+    listener of this launcher is known by. Anything else is returned as it is.
+    """
+
+    if not python.is_absolute():
+        return python
+    for folder in (python.parent, python.parent.parent):
+        try:
+            lines = (folder / "pyvenv.cfg").read_text(encoding="utf-8").splitlines()
+        except (OSError, ValueError):
+            continue
+        for line in lines:
+            key, separator, value = line.partition("=")
+            if separator and key.strip().lower() == "home":
+                base = Path(value.strip()) / python.name
+                return base.resolve() if base.is_absolute() and base.is_file() else python
+        return python
+    return python
+
+
 def _classify_listener_processes(
     port: int,
     python: str | os.PathLike[str],
@@ -609,7 +635,14 @@ def _classify_listener_processes(
         }
     # Autostart runs the windowed interpreter that sits beside the recorded one, so
     # a listener started at login has no console window. That is the same Python.
-    interpreters = (python, ntpath.join(ntpath.dirname(os.fspath(python)), WINDOWED_PYTHON))
+    # An install from before `_base_interpreter` may have recorded a virtual
+    # environment's redirector, whose listener runs as the base interpreter: known
+    # by that, it is the one the next install stops and starts again as the base.
+    recorded = (
+        os.fspath(python),
+        ntpath.join(ntpath.dirname(os.fspath(python)), WINDOWED_PYTHON),
+    )
+    interpreters = (*recorded, *(str(_base_interpreter(Path(path))) for path in recorded))
     managed = [
         pid
         for pid, owner in unique.items()
@@ -1062,7 +1095,8 @@ def install(
 
     origin = Path(checkout).expanduser().resolve() if checkout else default_checkout()
     commit = checkout_revision(origin, revision)
-    interpreter = Path(python).expanduser().resolve() if python else Path(sys.executable).resolve()
+    chosen = Path(python).expanduser().resolve() if python else Path(sys.executable).resolve()
+    interpreter = _base_interpreter(chosen)
     if not interpreter.is_file():
         raise LauncherError(f"Python interpreter is missing: {interpreter}")
     release_root = Path(releases).expanduser().resolve() if releases else default_releases(platform)

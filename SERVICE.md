@@ -27,7 +27,10 @@ Python shim and a hash manifest. The command itself contains no checkout path.
 The manifest records the release's `valkama.py`, the commit it was pinned from
 (`revision`), the checkout it came from (`checkout`), the exact Python
 interpreter and the hashes that let every local surface verify the command and
-shim before use.
+shim before use. Run from a virtual environment, `launcher install` records the
+interpreter that environment was made from (`home` in its `pyvenv.cfg`): on
+Windows the environment's `python.exe` only starts that interpreter as a child,
+so a listener never runs as the environment's own.
 
 ## Pinned releases
 
@@ -141,7 +144,10 @@ $launcher = (python .\valkama.py launcher status | ConvertFrom-Json).command
 
 Listener ownership requires both the exact normalized interpreter path from the
 launcher manifest, or the `pythonw.exe` beside it, and the exact managed shim path
-as that process's script argument. Comparison is Win32-style ordinal case-insensitive; Unicode folding
+as that process's script argument. A manifest that still records a virtual
+environment's interpreter, written before installs recorded its base, also owns
+a listener running as that base interpreter, so the next `launcher install` can
+stop it and start it again as the base. Comparison is Win32-style ordinal case-insensitive; Unicode folding
 cannot turn a different path into the managed path. A Valkama-shaped HTTP
 response or runtime JSON is never stop authority.
 
