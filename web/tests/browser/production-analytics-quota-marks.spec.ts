@@ -71,7 +71,7 @@ async function placesOf(line: Locator) {
 const strokeOf = (line: Locator, mark: string) =>
   line.locator(`[data-mark="${mark}"]`).evaluate((path) => getComputedStyle(path).stroke)
 
-for (const width of [1440, 390])
+for (const width of [1440, 1024, 390])
   test(`at ${width}px every place’s mark is round, and muted on a window past its reset`, async ({
     page,
   }, info) => {
