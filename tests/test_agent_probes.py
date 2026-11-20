@@ -237,6 +237,11 @@ class RunCase(unittest.TestCase):
         base = Path(cls.directory.name)
         cls.user, cls.home, cls.out = base / "user", base / "home", base / "out"
         cls.paths = make_user(cls.user)
+        # The run's output lies in a project of its own, as it does in the user's
+        # private directory: a repository with instructions no probe is to follow.
+        agent_probes._run_command(["git", "init", "-q"], os.environ, cwd=base)
+        for name in ("CLAUDE.md", "AGENTS.md"):
+            (base / name).write_text("# The project around the run\n", encoding="utf-8")
         cls.home.mkdir()
         (cls.home / ".claude").mkdir()
         (cls.home / ".claude" / ".credentials.json").write_text('{"login": 1}', "utf-8")
@@ -449,7 +454,10 @@ class RunTests(RunCase):
 
     def test_the_mcp_registration_launcher_skill_plugins_and_git(self) -> None:
         claude = json.loads((self.home / ".claude" / ".claude.json").read_text("utf-8"))
-        self.assertEqual(["mcp_servers", "model", "skills", "windows"], sorted(self.codex_config()))
+        self.assertEqual(
+            ["mcp_servers", "model", "project_root_markers", "skills", "windows"],
+            sorted(self.codex_config()),
+        )
         servers = {"claude": claude["mcpServers"], "codex": self.codex_config()["mcp_servers"]}
         for client, registered in servers.items():
             with self.subTest(client=client):
@@ -569,6 +577,29 @@ class RunTests(RunCase):
         self.assertEqual([], live["changes"])
         self.assertIn("the user's files: 13 checked, 0 stage(s) changed them", self.said)
 
+    def test_the_clients_read_nothing_of_the_project_the_run_lies_in(self) -> None:
+        around = self.out.parent.resolve()
+        settings = json.loads((self.home / ".claude" / "settings.json").read_text("utf-8"))
+        excluded = settings["claudeMdExcludes"]
+        for name in ("CLAUDE.md", "AGENTS.md", ".claude/rules/**"):
+            self.assertIn((around / name).as_posix(), excluded)
+        own = (self.home / ".claude").resolve().as_posix()
+        self.assertEqual([], [pattern for pattern in excluded if pattern.startswith(own)])
+        self.assertEqual([], self.codex_config()["project_root_markers"])
+        record = self.record("alpha", "claude")
+        environment = {**os.environ, **record.session["environment"]}
+        workspace = record.directory / "workspace"
+        self.assertEqual(str(record.directory), environment["GIT_CEILING_DIRECTORIES"])
+        found = agent_probes._run_command(
+            ["git", "rev-parse", "--show-toplevel"], environment, cwd=workspace
+        )
+        self.assertNotEqual(0, found[0], found[1])
+        self.assertIn("not a git repository", found[1])
+        code, top = agent_probes._run_command(
+            ["git", "rev-parse", "--show-toplevel"], environment, cwd=workspace / "app"
+        )
+        self.assertEqual((0, (workspace / "app").resolve()), (code, Path(top.strip()).resolve()))
+
     def test_no_server_of_the_run_archives_a_transcript_of_the_users(self) -> None:
         # The copy owes the user's session a copy of a transcript in the user's own
         # client directory; every server of the run is kept to the profile's.
@@ -685,6 +716,28 @@ class LiveFileTests(RunCase):
             self.out / agent_probes_judge.REVIEW / "writer" / "claude",
         )
         self.assertEqual(["environment failure"], [probe["verdict"] for probe in judged["probes"]])
+
+
+class AncestorInstructionTests(unittest.TestCase):
+    """Claude Code reads `.claude/CLAUDE.md` in every directory above its working one.
+
+    A probe whose output lay under the user's home read the user's own
+    `~/.claude/CLAUDE.md` that way, as a project's, beside the profile's copy with
+    the sections under test: two contradicting texts.
+    """
+
+    def test_the_users_own_file_above_the_workspace_goes_and_the_profiles_stays(self) -> None:
+        user = Path(tempfile.gettempdir()).resolve() / "user"
+        home = user / "work" / "probes" / "home"
+        for workspace in (user / "work" / "runs" / "s01" / "claude" / "W", home / "run" / "W"):
+            with self.subTest(workspace=workspace):
+                patterns = agent_probes.ancestor_instructions(workspace, home / ".claude")
+
+                self.assertIn((user / ".claude" / "CLAUDE.md").as_posix(), patterns)
+                self.assertIn((user / "work" / "AGENTS.md").as_posix(), patterns)
+                own = (home / ".claude").as_posix()
+                self.assertEqual([], [path for path in patterns if path.startswith(own)])
+                self.assertEqual([], [path for path in patterns if workspace.as_posix() in path])
 
 
 class CallerSessionTests(unittest.TestCase):

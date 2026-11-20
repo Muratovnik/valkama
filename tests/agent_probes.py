@@ -38,7 +38,12 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
   its `$CODEX_HOME/skills` and has each of the user's turned off by path;
 - per scenario: the sample workspace with its overlay and repositories, its
   projects in the profile's registry, and a store copy migrated by this
-  checkout, served by `tests/isolated.py serve --store-copy`.
+  checkout, served by `tests/isolated.py serve --store-copy`. The workspace is
+  a boundary: Git stops at it, Codex takes it for its project's root, and
+  Claude Code passes over the instruction files of every directory above it,
+  which it would read as a project's: those of the repository the output
+  directory lies in, and the user's own `~/.claude/CLAUDE.md` when the output
+  is under the user's home.
 
 A run holds the home's lock, `<client-home>.lock` beside it, from clearing the
 home to its last session: a second run on the same home waits for the first
@@ -583,10 +588,16 @@ def codex_config(
     """The user's Codex configuration with `registration` as its only MCP server.
 
     Each of `hidden_skills`, a `SKILL.md` of the user's that Codex would read
-    whatever the profile's home, is turned off by its path.
+    whatever the profile's home, is turned off by its path. Codex reads the
+    `AGENTS.md` files from its project's root down to its working directory, and
+    takes for that root the nearest directory above with a `.git`: from a
+    workspace in a run's output directory, the repository that directory lies in,
+    whose instructions the probe would then follow. With no markers the root is
+    the workspace itself.
     """
 
     lines = [
+        "project_root_markers = []",
         without_mcp_servers(live).rstrip("\n"),
         "",
         "[mcp_servers.valkama]",
@@ -612,6 +623,35 @@ def codex_config(
     if not {str(path) for path in hidden_skills} <= off:
         raise ProbeError("the Codex configuration turns the user's skills back on")
     return text
+
+
+#: The instruction files Claude Code reads in a directory above its working one.
+ANCESTOR_INSTRUCTIONS = (
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    "AGENTS.md",
+    ".claude/CLAUDE.md",
+    ".claude/AGENTS.md",
+    ".claude/rules/**",
+)
+
+
+def ancestor_instructions(workspace: Path, own: Path) -> list[str]:
+    """The instruction files above `workspace`, as Claude Code's `claudeMdExcludes` patterns.
+
+    Claude Code reads the instruction files of every directory above its working
+    one, and a run's workspaces lie in its output directory, inside whatever
+    project holds that: a probe would follow that project's instructions as its
+    own. The files under `own`, the profile's client directory, stay.
+    """
+
+    own = own.resolve()
+    return [
+        (directory / name).as_posix()
+        for directory in workspace.resolve().parents
+        for name in ANCESTOR_INSTRUCTIONS
+        if own != directory / name and own not in (directory / name).parents
+    ]
 
 
 # --- the profile -------------------------------------------------------------------
@@ -1012,7 +1052,7 @@ def mcp_registration(profile: Profile, mode: str, store_file: Path, client: str)
 
 
 def write_client_configs(
-    profile: Profile, *, port: int, mode: str, store_file: Path
+    profile: Profile, *, port: int, mode: str, store_file: Path, workspace: Path
 ) -> dict[str, dict[str, int]]:
     """Each client's hooks and MCP registration for one session; what was left out, by client."""
 
@@ -1024,8 +1064,11 @@ def write_client_configs(
         coordinator=profile.coordinator,
         port=port,
     )
+    excluded = list(profile.claude_settings.get("claudeMdExcludes") or [])
+    excluded += ancestor_instructions(workspace, profile.claude_dir)
     _write_json(
-        profile.claude_dir / "settings.json", {**profile.claude_settings, "hooks": claude.hooks}
+        profile.claude_dir / "settings.json",
+        {**profile.claude_settings, "claudeMdExcludes": excluded, "hooks": claude.hooks},
     )
     registration = mcp_registration(profile, mode, store_file, "claude")
     _write_json(
@@ -1363,6 +1406,7 @@ RECORDED_VARIABLES = (
     "CLAUDE_CONFIG_DIR",
     "CODEX_HOME",
     "GIT_CONFIG_GLOBAL",
+    "GIT_CEILING_DIRECTORIES",
     "VALKAMA_DB",
     "PATH",
 )
@@ -1494,7 +1538,13 @@ class SessionRunner:
         state = json.loads((self.serve_out / isolated.STATE).read_text(encoding="utf-8"))
         port = int(state["port"])
         self.store_file = isolated.store_path(self.serve_out / isolated.HOME)
-        self.environment = {**self.profile.environment, "VALKAMA_DB": str(self.store_file)}
+        self.environment = {
+            **self.profile.environment,
+            "VALKAMA_DB": str(self.store_file),
+            # Git in the workspace stops at it: above lies the repository the run's
+            # output directory may be in, which is not the probe's to read or commit to.
+            "GIT_CEILING_DIRECTORIES": str(self.directory),
+        }
         self.record.port = port
         self.record.environment = {
             name: self.environment[name] for name in RECORDED_VARIABLES if name in self.environment
@@ -1510,7 +1560,11 @@ class SessionRunner:
             }
         )
         self.record.dropped_hooks = write_client_configs(
-            self.profile, port=port, mode=self.scenario.mcp, store_file=self.store_file
+            self.profile,
+            port=port,
+            mode=self.scenario.mcp,
+            store_file=self.store_file,
+            workspace=self.workspace,
         )
         return True
 
