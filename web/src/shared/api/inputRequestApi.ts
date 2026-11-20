@@ -50,6 +50,17 @@ async function request(url: string, init?: RequestInit): Promise<unknown> {
   return payload
 }
 
+/**
+ * What the questions window is narrowed to: a space read as its board holds it — its cards and
+ * other spaces' cards that name one of its projects — and the one project it is narrowed to, if
+ * any. It holds what the Volumes page's «Waiting for me» counts for the same scope.
+ */
+export interface QuestionScope {
+  /** A project's id, which keeps the cards that name it; null for the whole space. */
+  project: string | null
+  space: PlanningSpaceRef
+}
+
 /** The most questions one page of the server's list holds. */
 const PAGE = 200
 
@@ -66,22 +77,24 @@ const entryIdentity = (entry: InputRequestEntry) =>
  */
 export async function fetchInputRequests(
   options: {
+    /** A space as its board holds it, and its project: `other_spaces` and `project_id`. */
+    scope?: QuestionScope
     signal?: AbortSignal
-    /** One space's own cards: the server's `scope_kind=space` with no card named. */
-    space?: PlanningSpaceRef
     status?: InputRequestEntry['request']['status'] | 'all'
     target?: PlanningTarget
   } = {},
 ): Promise<InputRequestList> {
   const { target, signal } = options
-  const space = options.space ? validatePlanningSpaceRef(options.space) : undefined
+  const scope = options.scope
+  const space = scope ? validatePlanningSpaceRef(scope.space) : undefined
   const status = options.status ?? 'pending'
   const query = {
     scope_kind: target || space ? 'space' : 'global',
     ...(status === 'all' ? {} : { status }),
     limit: String(PAGE),
     ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
-    ...(space && !target ? space : {}),
+    ...(space && !target ? { ...space, other_spaces: 'true' } : {}),
+    ...(scope?.project && !target ? { project_id: scope.project } : {}),
   }
   const read = async (offset: number) => {
     const parameters = new URLSearchParams({

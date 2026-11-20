@@ -26,7 +26,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from . import (
@@ -368,6 +368,7 @@ def list_page(
     lists: bool = True,
     addressed: bool = False,
     session: str | None = None,
+    within: tuple[Sequence[str], Sequence[object]] | None = None,
 ) -> dict:
     """One page of requests, at most `PAGE` of them, and whether more follow.
 
@@ -383,6 +384,8 @@ def list_page(
     session the call in progress proved, and refuses a call that proved none.
     `session` names that session instead, for a reader with no call of its own, the
     note a session start gets (`waiting_items`); no surface passes it.
+    `within` keeps the requests on the items that conditions on `work_items i` hold,
+    with their parameters, such as the items a read of a space holds as its board does.
     """
 
     if status is not None:
@@ -404,6 +407,9 @@ def list_page(
             raise model.PlanningError("work item is outside the exact planning space")
         clauses.append("r.work_item_id=?")
         parameters.append(item["work_item_id"])
+    if within is not None:
+        clauses.extend(within[0])
+        parameters.extend(within[1])
     after = request_model.timestamp(answered_after, "answered_after")
     if after is not None:
         # `resolved_at` of an answered row is when its current answer was given,

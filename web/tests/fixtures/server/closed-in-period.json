@@ -465,7 +465,9 @@
         "claim_ref": "",
         "claim_state": null,
         "parent_id": null,
-        "labels": [],
+        "labels": [
+          "ui"
+        ],
         "projects": [],
         "source": "",
         "checklist": [],
@@ -557,7 +559,9 @@
         "claim_ref": "",
         "claim_state": null,
         "parent_id": null,
-        "labels": [],
+        "labels": [
+          "ui"
+        ],
         "projects": [],
         "source": "",
         "checklist": [],
@@ -603,7 +607,9 @@
         "claim_ref": "",
         "claim_state": null,
         "parent_id": null,
-        "labels": [],
+        "labels": [
+          "ui"
+        ],
         "projects": [],
         "source": "",
         "checklist": [],
@@ -646,7 +652,9 @@
         "claim_ref": "",
         "claim_state": null,
         "parent_id": null,
-        "labels": [],
+        "labels": [
+          "ui"
+        ],
         "projects": [],
         "source": "",
         "checklist": [],
@@ -898,6 +906,19 @@
         ],
         "by_label": [
           {
+            "label": "ui",
+            "categories": {
+              "triage": 0,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 2,
+              "blocked": 0,
+              "cancelled": 1
+            }
+          },
+          {
             "label": null,
             "categories": {
               "triage": 1,
@@ -905,9 +926,9 @@
               "ready": 0,
               "active": 0,
               "review": 0,
-              "completed": 3,
+              "completed": 1,
               "blocked": 0,
-              "cancelled": 1
+              "cancelled": 0
             }
           }
         ]
@@ -1027,6 +1048,231 @@
               "closed": 1,
               "total": 7,
               "closed_total": 6
+            }
+          ]
+        }
+      },
+      "estimates": {
+        "min_basis": 5,
+        "basis": 0,
+        "rows": []
+      }
+    }
+  },
+  "volumes_labelled": {
+    "interface_version": "valkama-planning-api",
+    "volumes": {
+      "scope": {
+        "kind": "space",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "ALPHA"
+        },
+        "project_ref": null
+      },
+      "period": {
+        "from": "2026-01-02T03:04:05+03:00",
+        "to": "2026-01-02T03:04:05+03:00",
+        "utc_offset": 180
+      },
+      "filter": {
+        "kinds": [],
+        "labels": [
+          "ui"
+        ]
+      },
+      "measured_from": "2026-01-02T03:04:05.000Z",
+      "counts": {
+        "categories": [
+          {
+            "category": "triage",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "deferred",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "ready",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "active",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "review",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "completed",
+            "tasks": 2,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "blocked",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "cancelled",
+            "tasks": 1,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          }
+        ],
+        "waiting_owner": {
+          "count": 0,
+          "oldest": null
+        },
+        "unattached_commits": 0
+      },
+      "goals": [],
+      "outside": {
+        "tasks": 3,
+        "by_project": [
+          {
+            "project": {
+              "id": null,
+              "unknown": false,
+              "name": null,
+              "combinations": null
+            },
+            "categories": {
+              "triage": 0,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 2,
+              "blocked": 0,
+              "cancelled": 1
+            }
+          }
+        ],
+        "by_label": [
+          {
+            "label": "ui",
+            "categories": {
+              "triage": 0,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 2,
+              "blocked": 0,
+              "cancelled": 1
+            }
+          }
+        ]
+      },
+      "flow": {
+        "days": [
+          {
+            "day": "2026-11-12",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-13",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-14",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-15",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-16",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-17",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-18",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          }
+        ],
+        "totals": {
+          "created": 3,
+          "closed": 3,
+          "decisions": 0,
+          "commits": 0
+        },
+        "pace": {
+          "open": 0,
+          "recent": {
+            "days": 7,
+            "created": 2,
+            "closed": 2,
+            "trend": "steady"
+          },
+          "series": [
+            {
+              "day": "2026-11-12",
+              "created": 1,
+              "closed": 1,
+              "total": 1,
+              "closed_total": 1
+            },
+            {
+              "day": "2026-11-14",
+              "created": 1,
+              "closed": 1,
+              "total": 2,
+              "closed_total": 2
+            },
+            {
+              "day": "2026-11-15",
+              "created": 1,
+              "closed": 1,
+              "total": 3,
+              "closed_total": 3
             }
           ]
         }

@@ -2,12 +2,15 @@
  * The Volumes page's numbers against a double of the server's read (`volumesDouble`). The oracle
  * is the page's contract in DESIGN.md («Volumes»): ten numbers on top, an open category's and the
  * first question's with their age; an open category's number opens the board of the scope
- * narrowed to it with the page's kind and label, «Waiting for me» the questions window in either
- * scope, and a number that opens nothing — Done and Cancelled, and every category in every space —
- * is a figure whose hint says why.
+ * narrowed to it with the page's kind and label, Done and Cancelled the Work list with the page's
+ * kind, label and «Closed in a period» for its period, «Waiting for me» the questions window in
+ * either scope, and a number that opens nothing — every category in every space — is a figure
+ * whose hint says why.
  */
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { readWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import { VOLUMES_STORE, volumesAnswer, volumesDouble } from '../support/volumesDouble.ts'
 import {
@@ -102,8 +105,8 @@ describe('the Volumes page’s numbers', () => {
     expect(went[0].state).toEqual({ cat: 'ready', kind: 'task,bug,improvement', labels: 'ui' })
   })
 
-  it('opens the questions window on the space from «Waiting for me», and on every space at the top', async () => {
-    for (const scope of [SPACE, GLOBAL]) {
+  it('opens the questions window on the scope from «Waiting for me», and on every space at the top', async () => {
+    for (const scope of [SPACE, PROJECT, GLOBAL]) {
       const page = mountPage(
         volumesDouble(() =>
           volumesAnswer({ waiting: 1, space: scope.kind === 'space' ? 'MAIN' : null }),
@@ -114,23 +117,104 @@ describe('the Volumes page’s numbers', () => {
       await number(page, 'waiting').trigger('click')
       page.unmount()
     }
-    expect(shell.questions).toEqual([{ data_scope_id: VOLUMES_STORE, space_key: 'MAIN' }, null])
+    const main = { data_scope_id: VOLUMES_STORE, space_key: 'MAIN' }
+    expect(shell.questions).toEqual([
+      { space: main, project: null },
+      { space: main, project: 'alpha' },
+      null,
+    ])
     expect(went).toEqual([])
   })
 
-  it('draws Done and Cancelled as figures that say the period’s cards open nowhere', async () => {
+  it('opens the Work list from Done and Cancelled, with «Closed in a period» for the page’s preset', async () => {
+    // The page reads no period as this week; the filter reads none as no condition, so it is written.
+    const cases: [Record<string, string>, string][] = [
+      [{}, 'week'],
+      [{ period: 'today' }, 'today'],
+      [{ period: 'weeks4' }, 'weeks4'],
+    ]
+    for (const [state, period] of cases) {
+      const page = mountPage(
+        volumesDouble(() => volumesAnswer({ categories: { completed: 3, cancelled: 1 } })),
+        PROJECT,
+        { state },
+      )
+      await flushPromises()
+      expect(number(page, 'completed').attributes('aria-description')).toBe(
+        '3 tasks, 0 goals, 0 stages Open in the list',
+      )
+      await number(page, 'completed').trigger('click')
+      await number(page, 'cancelled').trigger('click')
+      page.unmount()
+      expect(went.splice(0)).toEqual([
+        {
+          module_id: 'planning',
+          scope: PROJECT,
+          state: { cat: 'completed', period, view: 'list' },
+        },
+        {
+          module_id: 'planning',
+          scope: PROJECT,
+          state: { cat: 'cancelled', period, view: 'list' },
+        },
+      ])
+    }
+  })
+
+  it('opens the Work list for days of the reader’s own, the last one taken in', async () => {
+    const days = { period: 'custom', from: '2026-02-23', to: '2026-03-01' }
     const page = mountPage(
-      volumesDouble(() => volumesAnswer({ categories: { active: 1, completed: 3, cancelled: 1 } })),
+      volumesDouble(() => volumesAnswer({ categories: { cancelled: 2 } })),
+      SPACE,
+      { state: days },
     )
     await flushPromises()
 
-    expect(number(page, 'active').element.tagName).toBe('BUTTON')
-    for (const key of ['completed', 'cancelled']) {
-      expect(number(page, key).element.tagName).toBe('DIV')
-      expect(number(page, key).attributes('aria-description')).toContain(
-        'no filter of Work narrows to',
-      )
-    }
+    await number(page, 'cancelled').trigger('click')
+    expect(went).toEqual([
+      { module_id: 'planning', scope: SPACE, state: { cat: 'cancelled', ...days, view: 'list' } },
+    ])
+    expect(readWorkFilter(went[0].state).closed).toEqual(days)
+  })
+
+  it('opens the Work list from Done with the page’s kind and label beside the period', async () => {
+    const page = mountPage(
+      volumesDouble(() =>
+        volumesAnswer({ categories: { completed: 1 }, filter: { kinds: ['bug'], labels: ['ui'] } }),
+      ),
+      SPACE,
+      { state: { kind: 'bug', label: 'ui', period: 'today' } },
+    )
+    await flushPromises()
+
+    await number(page, 'completed').trigger('click')
+    expect(went[0].state).toEqual({
+      cat: 'completed',
+      period: 'today',
+      kind: 'bug',
+      labels: 'ui',
+      view: 'list',
+    })
+  })
+
+  it('opens the Work list from Done under a label alone with the three kinds of a task', async () => {
+    const page = mountPage(
+      volumesDouble(() =>
+        volumesAnswer({ categories: { completed: 1 }, filter: { kinds: [], labels: ['ui'] } }),
+      ),
+      SPACE,
+      { state: { label: 'ui' } },
+    )
+    await flushPromises()
+
+    await number(page, 'completed').trigger('click')
+    expect(went[0].state).toEqual({
+      cat: 'completed',
+      period: 'week',
+      kind: 'task,bug,improvement',
+      labels: 'ui',
+      view: 'list',
+    })
   })
 
   it('draws every category as a figure in every space, which has no board of its own', async () => {

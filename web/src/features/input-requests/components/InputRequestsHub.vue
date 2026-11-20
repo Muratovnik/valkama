@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * The questions waiting for an answer, every space's, or one space's own when the window was
- * opened from a place narrowed to it (`scope`). The narrowing stands as a chip over the list
- * naming the space, and the chip is the way back to every space's questions (`all`). The rail's
- * count is always every space's: a second reader keeps it while the list is narrowed.
+ * The questions waiting for an answer, every space's, or those on what one space's board holds
+ * when the window was opened from a place narrowed to it (`scope`), narrowed to its project too
+ * when the place was. The narrowing stands as a chip over the list naming the space and the
+ * project, and the chip is the way back to every space's questions (`all`). The rail's count is
+ * always every space's: a second reader keeps it while the list is narrowed.
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -17,9 +18,9 @@ import { requestListView } from '@/features/input-requests/utils/requestListView
 import { hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { DIALOG_ROOM_BESIDE_DOCUMENT } from '@/shared/lib/shellLayout.ts'
 import { spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
@@ -30,8 +31,8 @@ import ScopeChip from '@/shared/ui/ScopeChip.vue'
 const props = defineProps<{
   open: boolean
   pane?: OverlayPaneNames | null
-  /** The one space whose own questions the list shows; none shows every space's. */
-  scope?: PlanningSpaceRef | null
+  /** The space, and its project, whose board's questions the list shows; none shows every space's. */
+  scope?: QuestionScope | null
 }>()
 const emit = defineEmits<{
   'all': []
@@ -62,9 +63,7 @@ function settles(entry: InputRequestEntry) {
   return !kept && !(list.value?.holdsReader?.(entry) ?? false)
 }
 const everywhere = reactive(useInputRequests(() => 'all', holding, settles))
-const within = reactive(
-  useInputRequests(() => (props.scope ? { space: props.scope } : null), holding, settles),
-)
+const within = reactive(useInputRequests(() => props.scope ?? null, holding, settles))
 /** The reader the list shows: the space's while the window is narrowed to one. */
 const shown = computed(() => (props.scope ? within : everywhere))
 const inPlace = computed(() =>
@@ -82,10 +81,18 @@ const waiting = computed(
     ),
 )
 const spaces = useSpaceNames()
-const scopeName = computed(() => (props.scope ? spaceName(spaces.value, props.scope) : ''))
-const subtitle = computed(() =>
-  props.scope ? t('requests.scopeSpace', { space: scopeName.value }) : t('requests.scope'),
-)
+const scopeName = computed(() => {
+  if (!props.scope) return ''
+  const space = spaceName(spaces.value, props.scope.space)
+  return props.scope.project ? `${space} · ${props.scope.project}` : space
+})
+const subtitle = computed(() => {
+  if (!props.scope) return t('requests.scope')
+  const space = spaceName(spaces.value, props.scope.space)
+  return props.scope.project
+    ? t('requests.scopeProject', { space, project: props.scope.project })
+    : t('requests.scopeSpace', { space })
+})
 function refresh() {
   void shown.value.refresh()
 }

@@ -10,8 +10,9 @@
  * A category's number counts its tasks, goals and stages, which the board's filter by category
  * shows together; under a filter only tasks match, and the number counts them alone. A number
  * opens the place that shows exactly what it counts (`volumesTargets`): an open category the board
- * with the page's filter, «Waiting for me» the questions window. A number that opens nothing is a
- * figure whose hint says why: every space has no board, and Done and Cancelled count the period's.
+ * with the page's filter, Done and Cancelled the Work list with the page's filter and the
+ * condition «Closed in a period» for its period, «Waiting for me» the questions window. A number
+ * that opens nothing is a figure whose hint says why: every space has no board.
  * «Commits on no card» counts the commits on no card of the scope's projects and shows or hides
  * their list under the numbers, saying which (`commitsOpen`); where their list cannot be read for
  * the scope, or could not be read when it was opened (`commitsUnread`), its number is «—».
@@ -62,6 +63,7 @@ function opensWords(target: VolumesTarget): string {
   if (target.kind === 'none') return t(`volumes.numbers.none.${target.reason}`)
   if (target.kind === 'commits')
     return t(props.commitsOpen ? 'volumes.numbers.closeCommits' : 'volumes.numbers.openCommits')
+  if (target.kind === 'list') return t('volumes.numbers.openList')
   return t(target.kind === 'board' ? 'volumes.numbers.openBoard' : 'volumes.numbers.openQuestions')
 }
 
@@ -83,9 +85,8 @@ interface VolumesNumber {
 }
 
 const counted = computed<VolumesNumber[]>(() => {
-  const filter = { kind: props.view.kind, label: props.view.label }
   const categories = props.counts.categories.map((row) => {
-    const target = categoryTarget(props.scope, row.category, filter)
+    const target = categoryTarget(props.scope, row.category, props.view)
     const parts =
       row.goals === null || row.stages === null
         ? ''

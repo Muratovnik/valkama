@@ -9,33 +9,9 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { boardSpace } from './boardFixtures.ts'
-import type { Brief } from './boardFixtures.ts'
-import { addressState, boxOf, chips, openSpace, shownTiles } from './filterPage.ts'
+import { addressState, boxOf, chips, closedSpace, openSpace, shownTiles } from './filterPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
-
-/** A moment on the reader's own clock, the browser's and this runner's alike. */
-const at = (day: number, hours: number, minutes = 0) =>
-  new Date(2026, 9, day, hours, minutes).toISOString()
-
-/**
- * The space's finished work, each card come to stand in Done at its moment: MAIN-406 at the first
- * moment of 21 October, MAIN-422 at the last minute of the 25th, MAIN-421 at the first of the
- * 26th and the goal MAIN-420 at the last minute of the 20th.
- */
-const CLOSED: Record<string, string> = {
-  'MAIN-406': at(21, 0),
-  'MAIN-422': at(25, 23, 59),
-  'MAIN-421': at(26, 0),
-  'MAIN-420': at(20, 23, 59),
-}
-const closedSpace = (): Brief[] =>
-  boardSpace().map((item) =>
-    CLOSED[item.reference]
-      ? { ...item, entered_at: CLOSED[item.reference], closed_at: CLOSED[item.reference] }
-      : item,
-  )
 
 const DAYS = { cat: 'completed', period: 'custom', from: '2026-10-21', to: '2026-10-25' }
 const WORDS = {

@@ -74,8 +74,12 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   // A space's board and its Volumes read over one period (`workFilterClosed.test.ts`).
   'closed-in-period.json': (value) => {
-    const { board, volumes } = value as Record<string, unknown>
-    return { board: validateReadModel(board), volumes: validateVolumesAnswer(volumes) }
+    const { board, volumes, volumes_labelled: labelled } = value as Record<string, unknown>
+    return {
+      board: validateReadModel(board),
+      volumes: validateVolumesAnswer(volumes),
+      volumes_labelled: validateVolumesAnswer(labelled),
+    }
   },
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-in-goal-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),

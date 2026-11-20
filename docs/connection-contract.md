@@ -1588,6 +1588,23 @@ its own form: `review`, `confirm`, `return`, `goal`, `task`, `cancel`,
 `condition` and `triage`, each answered once, by the owner, and carried out in
 the same write ([Writes that wait for the owner](#writes-that-wait-for-the-owner)).
 
+The read names its scope. `scope_kind=global` reads every source; `scope_kind=space`
+with `data_scope_id` and `space_key` reads one: the questions on that space's own
+cards, and with `reference` those of one of them. A space is read as a source on
+purpose, since a card's question is opened and answered in its own space and the
+global read takes each space once. Two optional parameters read a space instead as
+its board holds it, the set a count of the space's work counts, such as
+`counts.waiting_owner` of the Volumes read
+([How much work stands and what it took](#how-much-work-stands-and-what-it-took)):
+`other_spaces=true` adds the questions on other spaces' cards that name one of the
+projects the registry binds to the space, and `project_id` keeps the questions on the
+cards that name that project, other spaces' among them only when it is one of the
+space's projects, as `list_work_items` reads a space ([Tool results](#tool-results)). A
+question on another space's card names that space in its `target.space_ref`, where it
+is opened and answered. Neither parameter goes with `reference`, and `other_spaces`
+takes only `true`: otherwise the read is refused with `invalid_request` (400). The MCP
+tool `list_work_item_requests` takes neither: its `space` reads the space's own cards.
+
 Beside the questions, every answer of that read carries `triage_due`: one line
 for each space read whose work waiting for a triage review has grown past the
 owner's thresholds, such as
@@ -1610,7 +1627,9 @@ The lines belong to the whole list, not to a page, so only the first page
 carries them: `triage_due` is empty when `offset` is above 0, and a reader that
 reads on while `has_more` holds takes them from that first page. It is empty too
 when `status` names anything but `pending` and when `reference` names one item.
-A source the read could not reach is named in `coverage` and has no line.
+A source the read could not reach is named in `coverage` and has no line. A space read
+as its board holds it has its own line, its stack whole: a card stands in its own space's
+stack, and the line links to the space's board, not to one project of it.
 
 ### The card's waiting question
 
