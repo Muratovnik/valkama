@@ -687,6 +687,56 @@ class LiveFileTests(RunCase):
         self.assertEqual(["environment failure"], [probe["verdict"] for probe in judged["probes"]])
 
 
+class CallerSessionTests(unittest.TestCase):
+    """A run started in an agent's shell starts its clients as fresh sessions.
+
+    The variables a client session gives its shell carried that session's effort,
+    entry point, plugin directories and subagent depth into a probe's Claude Code,
+    which then ran as the caller's child.
+    """
+
+    def test_the_clients_environment_carries_nothing_of_the_callers_session(self) -> None:
+        caller = {
+            "CLAUDECODE": "1",
+            "CLAUDE_CODE_SESSION_ID": "caller-session",
+            "CLAUDE_CODE_ENTRYPOINT": "an-editor",
+            "CLAUDE_CODE_PLUGIN_DIRS": "C:/mods",
+            "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "1",
+            "CLAUDE_EFFORT": "max",
+            "CODEX_THREAD_ID": "caller-thread",
+            "MCP_TIMEOUT": "60000",
+        }
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            user, home = Path(name) / "user", Path(name) / "home"
+            paths = make_user(user)
+            inputs = agent_probes.Inputs(
+                sections=SAMPLES / "sections.md",
+                claude_md=paths["claude"] / "CLAUDE.md",
+                codex_agents=paths["codex"] / "AGENTS.md",
+                coordinator=paths["coordinator"],
+            )
+            patched = {
+                "USERPROFILE": str(user),
+                "HOME": str(user),
+                "LOCALAPPDATA": str(user / "AppData" / "Local"),
+                "APPDATA": str(user / "AppData" / "Roaming"),
+                "KEPT_FROM_THE_CALLER": "1",
+                **caller,
+            }
+            with (
+                mock.patch.dict(os.environ, patched),
+                mock.patch.object(agent_probes, "codex_user_home", lambda: user),
+            ):
+                for variable in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
+                    os.environ.pop(variable, None)
+                environment = agent_probes.build_profile(home, inputs).environment
+
+            self.assertEqual([], sorted(set(caller) & set(environment)))
+            self.assertEqual("1", environment["KEPT_FROM_THE_CALLER"])
+            self.assertEqual(str(home / ".claude"), environment["CLAUDE_CONFIG_DIR"])
+            self.assertEqual(str(home / ".codex"), environment["CODEX_HOME"])
+
+
 class ScenarioFormatTests(unittest.TestCase):
     """A scenario is refused for what the runner would otherwise pass over in silence."""
 

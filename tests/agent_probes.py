@@ -50,7 +50,9 @@ only through a connection that cannot write. The run holds itself to that:
 registrations, Git configuration, project registry and installed skill when the
 run starts, once the profile is built and after each session, `run.json` keeps
 the first and last digests, and a change is an isolation failure, a session's
-own when it happened during one. Each session's record goes to
+own when it happened during one. The clients run without the variables a client
+session hands its children (`CALLER_SESSION`), so a run started in an agent's
+shell does not run them as that agent's children. Each session's record goes to
 `--out/<scenario>/<client>/`: the client's output of every turn, the handshake,
 the setup's bindings, a copy of the store, its spool and the profile's project
 registry after the session, and the failures of the environment, which say why
@@ -158,6 +160,11 @@ CHECK_KINDS = frozenset(
 
 #: What survives the clearing of the home between runs: the clients' logins.
 KEPT_LOGINS = (Path(".claude") / ".credentials.json", Path(".codex") / "auth.json")
+#: The variables a client session gives every process it starts: its session, effort,
+#: entry point, plugin directories, subagent depth and MCP timeouts. A run started in
+#: an agent's shell would hand them on, and its clients would run as children of that
+#: session rather than as fresh sessions of their own.
+CALLER_SESSION = re.compile(r"CLAUDE|CODEX_|MCP_TIMEOUT$|MCP_CONNECTION_NONBLOCKING$", re.I)
 #: Directories of the home the run builds in, under the names the clients read.
 CLAUDE_DIR = ".claude"
 CODEX_DIR = ".codex"
@@ -921,7 +928,11 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
             f"no instruction file has a section headed {', '.join(unplaced)}: nothing would test it"
         )
 
-    environment = isolated.isolated_environment(home)
+    environment = {
+        name: value
+        for name, value in isolated.isolated_environment(home).items()
+        if not CALLER_SESSION.match(name)
+    }
     environment.pop("VALKAMA_DB", None)
     launcher = local / "Valkama" / "bin"
     environment.update(
