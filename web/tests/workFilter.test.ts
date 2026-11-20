@@ -383,6 +383,7 @@ describe('the route state', () => {
       holder: ['claude'],
       asked: true,
       triage: true,
+      closed: { period: 'custom', from: '2026-11-12', to: '2026-11-18' },
       elsewhere: ['other'],
       project: ['alpha'],
       goal: ['MAIN-1'],

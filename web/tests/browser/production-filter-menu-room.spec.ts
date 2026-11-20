@@ -51,10 +51,10 @@ function inSight(page: Page) {
 
 const ALL_IN_SIGHT = ['all: in sight', 'any: in sight']
 
-/** The facets' step: five conditions and seven facets, whatever the space holds. */
+/** The facets' step: six conditions and seven facets, whatever the space holds. */
 async function facetRows(page: Page) {
   const rows = menu(page).getByRole('option')
-  await expect(rows).toHaveCount(12)
+  await expect(rows).toHaveCount(13)
   return rows.all()
 }
 

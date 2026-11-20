@@ -27,6 +27,7 @@ import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
+import { customDays, PERIODS } from '@/shared/lib/periodDays.ts'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 type StateCategory = NonNullable<WorkItemBrief['state']>['category']
@@ -38,7 +39,7 @@ type ValueFacet = Exclude<
 
 /** Whether a picked token's facet is one the menu steps into, so a pick can stay there. */
 export const isValueFacet = (token: WorkFilterToken) =>
-  (GROUP_ORDER as readonly string[]).includes(token.facet)
+  token.facet === 'closed' || (GROUP_ORDER as readonly string[]).includes(token.facet)
 
 /**
  * What a project or a goal is called where its id or reference alone would say less: a
@@ -137,6 +138,9 @@ function tokenValue(token: WorkFilterToken, t: Translate, words?: FilterWords): 
     case 'elsewhere': {
       return t(`workItem.facet.${token.facet}`)
     }
+    case 'closed': {
+      return t(`workItem.filter.closedIn.${token.closed.period}`)
+    }
     case 'project': {
       return token.value === NO_PROJECT
         ? t('workItem.filter.noProject')
@@ -163,6 +167,7 @@ function tokenValue(token: WorkFilterToken, t: Translate, words?: FilterWords): 
 /** What a chip says: «Метка: coordinator», «Метка: не coordinator»; a condition by its own name. */
 export function tokenName(token: WorkFilterToken, t: Translate, words?: FilterWords): string {
   if (isFlag(token)) return tokenValue(token, t)
+  if (token.facet === 'closed') return t(`workItem.filter.closedIn.chip.${token.closed.period}`)
   if (token.facet === 'elsewhere')
     return token.not ? t('workItem.facet.notElsewhere') : tokenValue(token, t)
   return t(token.not ? 'workItem.filter.chipNot' : 'workItem.filter.chip', {
@@ -284,6 +289,8 @@ export function filterGroups(input: {
   held: number | null
   items: readonly WorkItemBrief[]
   t: Translate
+  /** The day days of the reader's own first stand at, the week up to it; today by default. */
+  now?: Date
 }): ValueGroup[] {
   const { t } = input
   const words = filterWords(input.items)
@@ -298,11 +305,24 @@ export function filterGroups(input: {
       ...(token.facet === 'held' && input.held !== null ? { detail: String(input.held) } : {}),
     })),
   }
+  // The period chosen keeps its days; days of the reader's own first stand at the past week.
+  const days = customDays(input.now ?? new Date())
+  const closed: ValueGroup = {
+    id: 'closed',
+    name: t('workItem.filter.closedIn.name'),
+    options: PERIODS.map((period) => {
+      const chosen = input.filter.closed?.period === period ? input.filter.closed : undefined
+      const own = period === 'custom' ? days : { from: '', to: '' }
+      const token: WorkFilterToken = { facet: 'closed', closed: chosen ?? { period, ...own } }
+      return { key: `closed:${period}`, action: pick(token), text: tokenValue(token, t) }
+    }),
+  }
   const picked = filterTokens(input.filter)
   const groups = GROUP_ORDER.map((facet) => {
     const values = valuesOf(facet, input.items, input.categories)
     for (const token of picked)
-      if (token.facet === facet && !values.includes(token.value)) values.push(token.value)
+      if ('value' in token && token.facet === facet && !values.includes(token.value))
+        values.push(token.value)
     return {
       id: facet,
       name: t(`workItem.filter.facet.${facet}`),
@@ -322,7 +342,7 @@ export function filterGroups(input: {
       ...choicesOf(facet, values, t),
     }
   })
-  return [conditions, ...groups].filter((group) => group.options.length)
+  return [conditions, closed, ...groups].filter((group) => group.options.length)
 }
 
 /**
@@ -389,20 +409,27 @@ export function stepGroups(
     return [{ ...values, back }, ...everywhere]
   }
   if (needle) return [...narrowGroups(groups, needle), ...everywhere]
-  const conditions = groups.filter((group) => group.id === 'conditions')
+  // «Closed in a period» is a condition whose row steps into its periods, as a facet's does.
+  const periods = groups.filter((group) => group.id === 'closed').map((group) => stepInto(group))
+  const conditions = groups
+    .filter((group) => group.id === 'conditions')
+    .map((group) => ({ ...group, options: [...group.options, ...periods] }))
   const steps: FilterGroup = {
     id: 'facets',
     name: t('workItem.filter.facets'),
     options: groups
-      .filter((group) => group.id !== 'conditions')
-      .map((group) => ({
-        key: `open:${group.id}`,
-        text: group.name,
-        action: { do: 'open', facet: group.id as ValueFacet },
-      })),
+      .filter((group) => group.id !== 'conditions' && group.id !== 'closed')
+      .map((group) => stepInto(group)),
   }
   return [...conditions, steps]
 }
+
+/** The row that steps into a group's values. */
+const stepInto = (group: FilterGroup): FilterOption => ({
+  key: `open:${group.id}`,
+  text: group.name,
+  action: { do: 'open', facet: group.id as ValueFacet },
+})
 
 /** Whether a value row's token is in the filter; a row that is no value is not chosen at all. */
 const picked = (filter: WorkFilter, option: FilterOption) =>

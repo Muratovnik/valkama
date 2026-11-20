@@ -34,6 +34,7 @@ from . import (
     participation,
     queue,
     sections,
+    standing,
     states,
     subscriptions,
     triage,
@@ -859,6 +860,7 @@ def present(
     unresolved: bool = False,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
+    entered: Mapping[str, str] | None = None,
     lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
@@ -879,8 +881,8 @@ def present(
     mark, carrying the same and `truncated`, the next page after `comments_after`.
     None given is the whole history, which is what every write answers with and
     what a screen draws from. `closed` is what `closings` loaded for a read of
-    many items, and `lapsed` what `lapsed_claims` did; absent, the item asks
-    itself. `tree` is what such a read
+    many items, `entered` what `standing.entered` did, and `lapsed` what
+    `lapsed_claims` did; absent, the item asks itself. `tree` is what such a read
     loaded of its spaces (`item_tree.of_spaces`); absent, the item loads what is
     under it. `projects` is what `item_projects.of_items` read for such a read in
     one walk; absent, the item reads its own. `read_space` is the space, by id, a
@@ -900,6 +902,7 @@ def present(
         row,
         full=full,
         closed=closed,
+        entered=entered,
         lapsed=lapsed,
         tree=tree,
         projects=projects,
@@ -1030,6 +1033,7 @@ def _record(
     *,
     full: bool,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
+    entered: Mapping[str, str] | None = None,
     lapsed: Mapping[str, dict] | None = None,
     tree: item_tree.Tree | None = None,
     projects: Mapping[str, list[dict]] | None = None,
@@ -1093,6 +1097,13 @@ def _record(
         closing(conn, row, bool(state["is_terminal"]))
         if closed is None
         else closed.get(identity, (None, None))
+    )
+    # When a finished item came to stand where it is, the moment the Volumes read counts it
+    # closed at; null for open work, which asks nothing for it.
+    record["entered_at"] = (
+        (standing.entered(conn, [row]) if entered is None else entered).get(identity)
+        if state["is_terminal"]
+        else None
     )
     facts = tree if tree is not None else item_tree.of_item(conn, row, str(state["category"]))
     # Read, never written: a stale lease stays on the record until a write
@@ -1205,9 +1216,11 @@ CARD_STATE = ("key", "name", "category")
 #: card's `reference` and `parent` stand for, the summary's comment, the counts
 #: and marks of a cut history, which the table of contents and the parts carry, and
 #: what became of steps no longer on the item as they were (`conditions_changed`),
-#: which entering review and completing answer with.
+#: which entering review and completing answer with, and when a finished item came to
+#: stand where it is (`entered_at`), which the board's «Closed in a period» reads.
 OFF_CARD = (
     "conditions_changed",
+    "entered_at",
     "work_item_id",
     "planning_space_id",
     "number",

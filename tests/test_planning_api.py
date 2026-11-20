@@ -166,8 +166,8 @@ class PlanningApiTests(unittest.TestCase):
         self.assertEqual(
             {
                 "acceptance", "checklist", "claim", "claim_ref", "claim_state", "closed_at",
-                "comments", "commits", "container_state", "created_at", "description", "events",
-                "kind", "labels", "lapsed_claim", "last_claim_ref", "links", "mentions",
+                "comments", "commits", "container_state", "created_at", "description",
+                "entered_at", "events", "kind", "labels", "lapsed_claim", "last_claim_ref", "links", "mentions",
                 "mentions_total", "number", "open", "parent_id", "planning_space_id",
                 "priority", "projects", "reference", "refs", "revision", "source",
                 "started_at", "state", "subscribers", "summary", "summary_comment_id",

@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { CensusExclusion } from '@/pages/planning/composables/usePlanningCensus.ts'
 import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import PlanningClosedDays from '@/pages/planning/PlanningClosedDays.vue'
 import PlanningViewMenu from '@/pages/planning/PlanningViewMenu.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
@@ -255,6 +256,7 @@ function removeChip(token: WorkFilterToken) {
           @negate="(token) => (filter = negateToken(filter, token))"
           @remove="removeChip"
         />
+        <PlanningClosedDays v-model:filter="filter" />
       </div>
       <p
         class="workspace-figures"
@@ -357,8 +359,13 @@ function removeChip(token: WorkFilterToken) {
   max-width: 100%;
 }
 
-/* The picked facets, first on the line they explain; gone with the last one. */
+/* The picked facets, first on the line they explain, and the days of «Closed in a period» of the
+   reader's own after them; gone with the last one. */
 .workspace-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
   min-width: 0;
 
   &:empty {

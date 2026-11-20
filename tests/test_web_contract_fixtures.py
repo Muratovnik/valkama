@@ -30,7 +30,6 @@ import sys
 import tempfile
 import threading
 import unittest
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
@@ -48,6 +47,7 @@ from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
 from tests.test_planning_questions import BOOLEAN, CHOICE, MULTI, TEXT
+from tests.web_fixture_closed import closed_in_period
 
 FIXTURES = Path(__file__).resolve().parents[1] / "web" / "tests" / "fixtures" / "server"
 PROJECT = "example-project"
@@ -69,11 +69,16 @@ class _Normalizer:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.uuids: dict[str, str] = {}
+        #: The fields whose moments the file being written keeps, as its scenario wrote them.
+        self.kept: frozenset[str] = frozenset()
 
     def __call__(self, value: object) -> object:
         if isinstance(value, dict):
             # A key can be an id too: the read model's live work is keyed by its items' ids.
-            return {self.text(key): self(found) for key, found in value.items()}
+            return {
+                self.text(key): found if key in self.kept else self(found)
+                for key, found in value.items()
+            }
         if isinstance(value, list):
             return [self(found) for found in value]
         if isinstance(value, str):
@@ -834,8 +839,7 @@ class _Scenario:
         # items naming it.
         model = self.http(f"/api/planning?{urlencode(self.space_ref)}")
         # A digest of the whole answer, ids and instants included, which change run to run.
-        model["revision"] = "0" * 64
-        _order_moves(model["workflow"])
+        _settle(model)
         due = self.triage_due()
         found = self.http(f"/api/modules/planning/search?{urlencode({'q': 'Tree', 'limit': '50'})}")
         # Equal matches stand in the order of their ids, which change run to run.
@@ -1179,7 +1183,18 @@ class _Scenario:
             "card-in-goal-brief": self.http(
                 f"/api/modules/planning/work-item?{self.scope(reference=self.in_goal, brief='true')}"
             ),
+            # A space of its own, after them all, so it changes no answer above.
+            "closed-in-period": closed_in_period(
+                self.http, self.space_ref["data_scope_id"], _settle
+            ),
         }
+
+
+def _settle(model: dict) -> None:
+    """A board's read as its file holds it: its digest, which changes run to run, as zeros."""
+
+    model["revision"] = "0" * 64
+    _order_moves(model["workflow"])
 
 
 _QUOTA_CHECK = re.compile(r"quota-(?:statusline|mod|poll)")
@@ -1249,6 +1264,11 @@ def _everything_but_cursor() -> url_schemes.Installed:
     )
 
 
+#: The files whose scenario writes these fields' moments and days itself, so they stay as
+#: written: a card's own moment, and the days of a period the scenario names.
+_KEPT_MOMENTS = {"closed-in-period": frozenset({"entered_at", "day"})}
+
+
 def generate() -> dict[str, str]:
     """Every fixture as the server answers now, by file name, as the file's text."""
 
@@ -1272,11 +1292,14 @@ def generate() -> dict[str, str]:
                 answers = scenario.answers()
             finally:
                 scenario.close()
-        normalize: Callable[[object], object] = _Normalizer(root)
-        return {
-            f"{name}.json": json.dumps(normalize(answer), indent=2, ensure_ascii=False) + "\n"
-            for name, answer in answers.items()
-        }
+        normalize = _Normalizer(root)
+        written: dict[str, str] = {}
+        for name, answer in answers.items():
+            normalize.kept = _KEPT_MOMENTS.get(name, frozenset())
+            written[f"{name}.json"] = (
+                json.dumps(normalize(answer), indent=2, ensure_ascii=False) + "\n"
+            )
+        return written
 
 
 def write() -> None:

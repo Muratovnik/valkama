@@ -1630,7 +1630,18 @@ the space's own triage stack that no review has marked, exactly the cards the li
 triage» of «Needs my answer» counts for the space, and «From another space», a
 card another space holds; that one is a value, so its chip's «≠» keeps every such card
 out instead. «Awaiting triage» reads the mark the list read gives each stack card: a card
-another space holds stands in that space's stack, so it is not taken. «Workable» is the list read's own answer for each card, the one the queue
+another space holds stands in that space's stack, so it is not taken. The last condition,
+«Closed in a period», is a row with a chevron that steps into its periods, those of the
+period bar — «Today», «This week», «Past 4 weeks» and «Days of my own» — one at a time: a
+card that came to be completed or cancelled within the period's days, each whole on the
+reader's calendar, a preset to the end of today. It keeps exactly the cards the Volumes read
+counts as Done and Cancelled for those days, by the moment the read counts by, when the card
+came to stand where it is, so with the state beside it «Done in a period» and «Cancelled in a
+period» are each one address. Its chip says the period, «Closed this week»; for days of the
+reader's own the chip says «Closed on my days» and the period bar's two day fields stand after
+the chips, the first and the last day taken in, a day set anew narrowing the work at once.
+The address keeps it as the period pages keep theirs: `period`, and `from` and `to` for days of
+the reader's own. «Workable» is the list read's own answer for each card, the one the queue
 gives by, so the filter lets through what claim-ready hands out and follows a rule the
 server adds without a copy of it here: where the owner hands out work by hand, the queue gives
 nothing and no card there reads workable. A usable filter is as wide as a

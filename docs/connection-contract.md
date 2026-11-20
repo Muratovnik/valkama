@@ -3954,12 +3954,20 @@ Who held the item is still on the record. The card (`get_work_item`, a
 reads (`GET /api/planning`, `GET /api/planning/work-items`) and the nodes of
 `GET /api/planning/graph` carry two fields
 that are `null` for open work; the compact rows of `list_work_items` and
-`search_work_items` do not:
+`search_work_items` do not. The full record and the briefs also carry a third, `entered_at`,
+which the card does not:
 
 | Field | For a closed item |
 | --- | --- |
 | `closed_at` | when its latest transition happened, the rule a chain member's `closed_at` follows; when it was last written if it never moved |
 | `last_claim_ref` | who held it when it closed, as `claim_ref` names a holder; `null` when it closed unheld |
+| `entered_at` | when it came to stand in its finished state: its last `created`, `transitioned` or `opened` event in history order, or its creation when the history holds none. It is the moment `GET /api/planning/volumes` counts it closed at; `closed_at` differs from it for an item that never moved |
+
+The Work filter's «Closed in a period» reads `entered_at`, and keeps exactly the cards
+`GET /api/planning/volumes` counts as completed or cancelled for the same days. The board's
+address names that condition by the planning module's state keys `period` (`today`, `week`,
+`weeks4` or `custom`) and, for `custom`, `from` and `to`, the first and the last day taken
+in, `2026-11-12`; with `cat=completed` or `cat=cancelled` it is one category's closed work.
 
 `last_claim_ref` is the claim still on the item, for one a build before this
 rule closed with its claim left live; otherwise the holder named by the newest
