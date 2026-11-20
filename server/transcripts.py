@@ -63,8 +63,8 @@ HOOK_SECONDS = 1.2
 ORPHAN_GRACE_SECONDS = 600
 
 #: Retention: kept while an open item refers to the session, and for at least this
-#: long after the later of the session's last sign of life and the newest
-#: terminal transition of any item that refers to it.
+#: long after the later of the session's last sign of life and the last write to
+#: any item that refers to it.
 RETENTION_DAYS = 90
 
 CHUNK_BYTES = 1024 * 1024
@@ -430,9 +430,11 @@ def _newest(conn: sqlite3.Connection) -> dict[str, Archive | None]:
     return newest
 
 
-#: Every item that refers to session `:s`, whether it is open, and the moment
-#: its newest terminal transition happened (its last update when no transition
-#: was recorded).
+#: Every item that refers to session `:s`, whether it is open, and its last
+#: write: the later of its `updated_at` and its newest comment, which does not
+#: touch `updated_at`. This is the item's last activity, not a moment of
+#: closing: the close is a write too, so a copy never goes before 90 days after
+#: it, and an edit or a comment after it keeps the copy longer.
 #:
 #: An item refers to the session through a session ref naming it (exactly, by a
 #: prefix of it, or as one of its subagents), through any Planning write call
@@ -460,10 +462,9 @@ WITH referring(work_item_id) AS (
     SELECT work_item_id FROM sessions WHERE id = :s AND work_item_id IS NOT NULL
 )
 SELECT w.work_item_id, st.is_terminal,
-       julianday(COALESCE(
-           (SELECT MAX(ev.created_at) FROM work_item_events ev
-            WHERE ev.work_item_id = w.work_item_id AND ev.action = 'transitioned'),
-           w.updated_at))
+       MAX(julianday(w.updated_at),
+           COALESCE((SELECT MAX(julianday(c.created_at)) FROM work_item_comments c
+                     WHERE c.work_item_id = w.work_item_id), 0))
 FROM work_items w JOIN workflow_states st ON st.state_id = w.state_id
 WHERE w.work_item_id IN referring
 """
@@ -479,7 +480,7 @@ SELECT COALESCE(
 
 
 def _referring(conn: sqlite3.Connection, session_id: str) -> list[tuple[str, bool, float | None]]:
-    """(item, open, newest terminal moment) for every item that refers to the session."""
+    """(item, open, last write) for every item that refers to the session."""
 
     return [
         (str(row[0]), not row[1], row[2]) for row in conn.execute(_REFERRING_SQL, {"s": session_id})
@@ -491,7 +492,7 @@ def purgeable(conn: sqlite3.Connection, session_id: str, *, now: str) -> bool:
 
     Not while an item that refers to the session is open; otherwise once 90
     days have passed since the later of the session's last activity and the
-    newest terminal transition of a referring item.
+    last write to a referring item.
     """
 
     items = _referring(conn, session_id)

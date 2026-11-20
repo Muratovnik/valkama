@@ -36,6 +36,8 @@ LAST_SEEN = "2026-01-01T00:00:00Z"
 #: Exactly 90 days after `LAST_SEEN`, and one second short of it.
 BOUNDARY = "2026-04-01T00:00:00Z"
 BEFORE_BOUNDARY = "2026-03-31T23:59:59Z"
+#: When an item closed long before the test runs, after `LAST_SEEN`.
+CLOSED_THEN = "2026-02-01T00:00:00Z"
 
 
 def synthetic(lines: int, marker: str = "synthetic") -> bytes:
@@ -488,12 +490,53 @@ class RetentionTests(ArchiveCase):
                 self.conn.commit()
         self.assertEqual(1, self.sweep(now=later).purged)
 
-    def test_the_newest_terminal_transition_restarts_the_clock(self) -> None:
+    def test_the_close_restarts_the_clock(self) -> None:
         reference = self.item()
         planning.attach_ref(self.conn, reference, "session", SESSION)
         closed = self.close(reference)
         self.assertEqual(0, self.sweep(now=self.after(closed, "+89 days")).purged)
         self.assertEqual(1, self.sweep(now=self.after(closed, "+90 days")).purged)
+
+    def closed_then(self) -> str:
+        """An item that refers to the session, closed on `CLOSED_THEN` and not touched since."""
+
+        reference = self.item()
+        planning.attach_ref(self.conn, reference, "session", SESSION)
+        self.close(reference)
+        item = self.item_id(reference)
+        self.conn.execute(
+            "UPDATE work_items SET updated_at = ? WHERE work_item_id = ?", (CLOSED_THEN, item)
+        )
+        self.conn.execute(
+            "UPDATE work_item_events SET created_at = ? WHERE work_item_id = ?", (CLOSED_THEN, item)
+        )
+        self.conn.commit()
+        return reference
+
+    def assert_kept_until(self, written: str) -> None:
+        """Kept 90 days after the close, and after it until 90 days after `written`."""
+
+        self.assertEqual(0, self.sweep(now=self.after(CLOSED_THEN, "+90 days")).purged)
+        self.assertEqual(0, self.sweep(now=self.after(written, "+89 days")).purged)
+        self.assertEqual(1, self.sweep(now=self.after(written, "+90 days")).purged)
+
+    def test_an_edit_after_the_close_keeps_the_copy_longer(self) -> None:
+        reference = self.closed_then()
+        planning.update_work_item(self.conn, reference, title="edited after the close")
+        self.conn.commit()
+        (edited,) = self.conn.execute(
+            "SELECT updated_at FROM work_items WHERE work_item_id = ?", (self.item_id(reference),)
+        ).fetchone()
+        self.assert_kept_until(str(edited))
+
+    def test_a_comment_after_the_close_keeps_the_copy_longer(self) -> None:
+        reference = self.closed_then()
+        written = planning.comment_work_item(self.conn, reference, "a note after the close")
+        self.conn.commit()
+        (commented,) = self.conn.execute(
+            "SELECT created_at FROM work_item_comments WHERE id = ?", (written["comment_id"],)
+        ).fetchone()
+        self.assert_kept_until(str(commented))
 
     def test_an_unrelated_open_item_does_not_keep_the_copy(self) -> None:
         reference = self.item()
