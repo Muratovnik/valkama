@@ -8,7 +8,7 @@ earlier build.
 
 ## Migrating an older store
 
-This build opens only a store at its own schema, 23, and migrates none as it opens
+This build opens only a store at its own schema, 24, and migrates none as it opens
 it. A store Valkama 2.9 left -- schema 18 with its word index, or 17 with it from a
 2.9 build before schema 18 -- is refused with "run `valkama migrate work-model` once"
 and left as it was. An older store, or one at 17 without the index, is refused with
@@ -94,7 +94,7 @@ the store, delete the `-wal` and `-shm` files beside it, put the `pre3.0` snapsh
 place of the database and its `.images` folder in place of `images`, as
 [Restoring a snapshot](#restoring-a-snapshot) describes, and only then pin the 2.9
 release with `launcher install --revision <commit>`; everything written since the
-migration is lost. A 2.9 build refuses a store at 23.
+migration is lost. A 2.9 build refuses a store at 24.
 
 The sections below describe the snapshots the earlier upgrades took and how to go
 back from them.

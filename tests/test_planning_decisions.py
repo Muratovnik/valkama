@@ -96,7 +96,10 @@ class Harness(unittest.TestCase):
         return status, body["error"]
 
     def marks(self) -> list[tuple]:
-        return [tuple(row) for row in self.conn.execute("SELECT * FROM agent_decisions")]
+        return [
+            tuple(row)
+            for row in self.conn.execute("SELECT event_id, point, what FROM agent_decisions")
+        ]
 
 
 class SummaryTests(Harness):
