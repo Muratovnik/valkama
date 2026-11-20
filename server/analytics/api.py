@@ -126,12 +126,14 @@ def _uses(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict
 
 
 def _quota(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """Each account's quota windows now, its times at `utc_offset`."""
+    """Each account's quota windows now, its times at `utc_offset`; given `from`, the start
+    of a page's period, each window of a share with the windows before it since then."""
 
-    _refuse_unknown(parameters, frozenset({"utc_offset"}))
+    _refuse_unknown(parameters, frozenset({"utc_offset", "from"}))
+    period_from = None if _first(parameters, "from") is None else _time(parameters, "from")
     return {
         "interface_version": ANALYTICS_API_INTERFACE,
-        "quota": quota.read(conn, _offset(parameters)),
+        "quota": quota.read(conn, _offset(parameters), period_from=period_from),
     }
 
 
@@ -139,16 +141,17 @@ def _quota(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
 _MODEL_LENGTH = 64
 
 
-def _before(parameters: Mapping[str, list[str]]) -> dt.datetime:
-    text = query_params.required(parameters, "before", error=AnalyticsHttpError)
+def _time(parameters: Mapping[str, list[str]], name: str) -> dt.datetime:
+    """The parameter `name`, required, as a time with its offset."""
+
+    text = query_params.required(parameters, name, error=AnalyticsHttpError)
+    refusal = f"{name} must be a time with its offset"
     try:
         moment = dt.datetime.fromisoformat(text)
     except ValueError as error:
-        raise AnalyticsHttpError(
-            400, "invalid_request", "before must be a time with its offset"
-        ) from error
+        raise AnalyticsHttpError(400, "invalid_request", refusal) from error
     if moment.tzinfo is None:
-        raise AnalyticsHttpError(400, "invalid_request", "before must be a time with its offset")
+        raise AnalyticsHttpError(400, "invalid_request", refusal)
     return moment
 
 
@@ -182,7 +185,7 @@ def _quota_window(conn: sqlite3.Connection, parameters: Mapping[str, list[str]])
             account=account,
             kind=kind,
             model=model,
-            before=_before(parameters),
+            before=_time(parameters, "before"),
         ),
     }
 
