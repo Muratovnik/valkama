@@ -12,6 +12,8 @@ import type {
 import { readRefusal } from '@/shared/api/planningRefusal.ts'
 import { serializePlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { validatePlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 import { WEB_AUTHOR } from '@/shared/api/webAuthor.ts'
 
@@ -65,17 +67,21 @@ const entryIdentity = (entry: InputRequestEntry) =>
 export async function fetchInputRequests(
   options: {
     signal?: AbortSignal
+    /** One space's own cards: the server's `scope_kind=space` with no card named. */
+    space?: PlanningSpaceRef
     status?: InputRequestEntry['request']['status'] | 'all'
     target?: PlanningTarget
   } = {},
 ): Promise<InputRequestList> {
   const { target, signal } = options
+  const space = options.space ? validatePlanningSpaceRef(options.space) : undefined
   const status = options.status ?? 'pending'
   const query = {
-    scope_kind: target ? 'space' : 'global',
+    scope_kind: target || space ? 'space' : 'global',
     ...(status === 'all' ? {} : { status }),
     limit: String(PAGE),
     ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
+    ...(space && !target ? space : {}),
   }
   const read = async (offset: number) => {
     const parameters = new URLSearchParams({

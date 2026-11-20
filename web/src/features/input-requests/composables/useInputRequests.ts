@@ -5,6 +5,7 @@ import { requestIdentity, targetIdentity } from '@/features/input-requests/utils
 import { fetchInputRequest, fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 
 /**
  * The questions still waiting, and whether they are all of them: a source that
@@ -21,7 +22,13 @@ export type PendingCount = { incomplete: boolean; value: number } | 'unknown'
 const confirmedWrites = ref(0)
 
 /**
- * What to read: one card's questions, those waiting everywhere, or nothing at all.
+ * What a reader reads: one card's questions, those waiting on one space's own cards, those
+ * waiting everywhere, or nothing at all.
+ */
+export type RequestSource = PlanningTarget | { space: PlanningSpaceRef } | 'all' | null
+
+/**
+ * What to read, as `RequestSource` names it.
  *
  * `keep` names a question the host holds something in — words, a choice, the keyboard.
  * A read that no longer brings such a question, because it was answered or closed
@@ -37,7 +44,7 @@ const confirmedWrites = ref(0)
  * question. A host that gives none keeps them where they stand.
  */
 export function useInputRequests(
-  source: () => PlanningTarget | 'all' | null,
+  source: () => RequestSource,
   keep: (entry: InputRequestEntry) => boolean = () => false,
   settles: (entry: InputRequestEntry) => boolean = () => false,
 ) {
@@ -114,13 +121,15 @@ export function useInputRequests(
     if (loading.value || document.visibilityState === 'hidden') return
     const chosen = source()
     if (chosen === null) return
-    const selected = chosen === 'all' ? undefined : chosen
+    const selected = chosen === 'all' || 'space' in chosen ? undefined : chosen
+    const space = chosen !== 'all' && 'space' in chosen ? chosen.space : undefined
     const current = ++generation
     controller = new AbortController()
     loading.value = true
     try {
       const response = await fetchInputRequests({
         target: selected,
+        space,
         status: selected ? 'all' : 'pending',
         signal: controller.signal,
       })
@@ -210,9 +219,10 @@ export function useInputRequests(
   watch(
     () => {
       const selected = source()
-      return selected === null || selected === 'all'
-        ? String(selected)
-        : `${targetIdentity(selected)}:${selected.writable}`
+      if (selected === null || selected === 'all') return String(selected)
+      if ('space' in selected)
+        return `space:${selected.space.data_scope_id}/${selected.space.space_key}`
+      return `${targetIdentity(selected)}:${selected.writable}`
     },
     () => {
       generation++

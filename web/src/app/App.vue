@@ -82,10 +82,18 @@ const {
 watch(activeModule, prefetchModule, { immediate: true })
 
 // A task opened from the finder, the questions or a text: see the composable.
-const { finderOpen, finderText, findText, requestsOpen, pendingRequestCount, openTarget } =
-  useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
-    cardInPlace(activeManifest.value, route.value, target),
-  )
+const {
+  finderOpen,
+  finderText,
+  findText,
+  requestsOpen,
+  requestsScope,
+  openRequests,
+  pendingRequestCount,
+  openTarget,
+} = useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
+  cardInPlace(activeManifest.value, route.value, target),
+)
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
   mainContent.value?.focus()
@@ -298,7 +306,7 @@ usePlatformEntryRestore({
       :live-target="liveTarget"
       @find="finderOpen = true"
       @go="(next) => writeRoute(next)"
-      @requests="requestsOpen = true"
+      @requests="openRequests()"
       @navigate="switchModule"
       @prefetch="prefetchModule"
       @home="goHome"
@@ -359,7 +367,7 @@ usePlatformEntryRestore({
           @notice="(message) => say(message, 'refused')"
           @open-space="openSpace"
           @question-taken="cardQuestionTaken"
-          @requests="requestsOpen = true"
+          @requests="openRequests"
           @state="updateModuleState"
           @locale="selectLocale"
         />
@@ -383,6 +391,8 @@ usePlatformEntryRestore({
   <AppRequestsHub
     v-if="documentPage === null"
     :open="requestsOpen"
+    :scope="requestsScope"
+    @all="requestsScope = null"
     @close="requestsOpen = false"
     @select="openTarget"
     @count="(count) => (pendingRequestCount = count)"

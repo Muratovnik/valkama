@@ -9,6 +9,8 @@ export const inputRequestMessages = {
     requests: {
       title: 'Needs my answer',
       scope: 'Pending blocks of questions across mapped projects',
+      scopeSpace: 'Pending blocks of questions on the cards of {space}',
+      scopeAll: 'Show every space’s questions, not only those of {space}',
       close: 'Close questions',
       error: 'Questions could not be refreshed. Your drafts are kept.',
       errorBare: 'Questions could not be refreshed.',
@@ -109,6 +111,8 @@ export const inputRequestMessages = {
     requests: {
       title: 'Ждут моего ответа',
       scope: 'Открытые блоки вопросов во всех связанных проектах',
+      scopeSpace: 'Открытые блоки вопросов в карточках пространства {space}',
+      scopeAll: 'Показать вопросы всех пространств, а не только {space}',
       close: 'Закрыть вопросы',
       error: 'Не удалось обновить вопросы. Черновики сохранены.',
       errorBare: 'Не удалось обновить вопросы.',

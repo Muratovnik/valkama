@@ -3239,6 +3239,14 @@ of the same scope narrowed to the category, with the page's kind and label; a la
 the three kinds of a task there, so no goal carrying it comes in. «Waiting for me» counts
 questions, two questions on one card being two, so it opens the questions window, in a space
 and at the top alike, rather than the board, where two questions on one card would be one row.
+Opened from a space, the window lists that space's own questions, read narrowed by the server,
+and says so in its subtitle; a chip over the list names the space, and removing it lists every
+space's questions again. At the top it lists every space's. The rail's count stays every
+space's while the list is narrowed, and the narrowing ends when the window closes, so the rail
+opens it on every space's. The server narrows the questions to the cards of one space and to
+nothing finer, so the window opened from a project shows the whole space's, and the questions
+on another space's cards that name a project of the space, which the number counts, are not
+among them until its read can name them.
 A number that opens nothing is a figure, not a control, and its hint says why: every space has
 no board of its own, the portfolio standing there, so at the top no category opens; Done and
 Cancelled count the period's closed cards, and no filter of Work narrows to a period. «Commits
