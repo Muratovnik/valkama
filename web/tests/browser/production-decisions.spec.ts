@@ -6,8 +6,9 @@
  * decisions stand in one table that scrolls inside its own frame while the bar stays where it
  * was; an empty period says so in the page's words. On the card's System events the event the
  * decision was recorded by carries the decision's mark, the point in the page's words, and an
- * event with no point carries none. Each run prints what it measured and keeps a picture of each
- * state.
+ * event with no point carries none. On a phone a decision stands as one block whose every part is
+ * in the table's frame, its headings still sorting (Rows and tables). Each run prints what it
+ * measured and keeps a picture of each state.
  */
 import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
@@ -31,6 +32,7 @@ const WORDS = {
     point: 'Participation point',
     pointWord: 'Goal closed',
     weeks4: 'Past 4 weeks',
+    when: 'When',
   },
   ru: {
     count: (count: number) => `${count} решений`,
@@ -41,6 +43,7 @@ const WORDS = {
     point: 'Точка участия',
     pointWord: 'Закрытие цели',
     weeks4: '4 недели',
+    when: 'Когда',
   },
 } as const
 
@@ -250,6 +253,45 @@ for (const size of SIZES) {
         '800',
       ])
     })
+
+    if (size.width < 600)
+      test('on a phone a decision stands as one block, every part of it in the frame', async ({
+        page,
+      }, info) => {
+        await openPage(page, size, withSought())
+        const rows = page.locator('.decisions-table tbody tr[data-event]')
+        await expect(rows).toHaveCount(30)
+        const frame = page.locator('.decisions-table [data-region="table-frame"]')
+        const measured = await frame.evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          const past = (one: Element) => {
+            const own = one.getBoundingClientRect()
+            return Math.max(box.left - own.left, own.right - box.right, 0)
+          }
+          const row = element.querySelector('tbody tr[data-event]')
+          const headings = [...element.querySelectorAll('thead th')]
+          return {
+            sideways: element.scrollWidth - element.clientWidth,
+            cells: [...(row?.children ?? [])].map((one) => past(one)),
+            headings: headings.map((one) => past(one)),
+          }
+        })
+        await record(info, `decisions phone ${tag}`, measured)
+        // The when, the point, the card, the session and what was decided: all five in the frame,
+        // and every heading's sort with them, with nothing to scroll sideways.
+        expect(measured.cells).toHaveLength(5)
+        expect(measured.headings).toHaveLength(5)
+        for (const past of [...measured.cells, ...measured.headings])
+          expect.soft(past).toBeLessThanOrEqual(0.5)
+        expect(measured.sideways).toBeLessThanOrEqual(0)
+        // A heading still sorts: the oldest first.
+        await page.getByRole('button', { name: words.when }).click()
+        await expect(page.locator('.decisions-table thead th').first()).toHaveAttribute(
+          'aria-sort',
+          'ascending',
+        )
+        await shoot(page, info, `phone-${tag}`)
+      })
 
     test('an empty period says so in the page’s words', async ({ page }, info) => {
       await openPage(page, size, [])

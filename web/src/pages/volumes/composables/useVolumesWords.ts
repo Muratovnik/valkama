@@ -11,7 +11,11 @@
  */
 import { useI18n } from 'vue-i18n'
 
-import { UNKNOWN, useGoalSpendWords } from '@/entities/work-item/composables/useGoalSpendWords.ts'
+import {
+  PARTS,
+  UNKNOWN,
+  useGoalSpendWords,
+} from '@/entities/work-item/composables/useGoalSpendWords.ts'
 import type { Figure } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 
 import type { Volumes, VolumesGoal, VolumesSpent } from '@/shared/api/volumesReadApi.ts'
@@ -76,7 +80,7 @@ export function useVolumesWords() {
     }
     const hours = Math.max(1, Math.round(left.agent_seconds / HOUR))
     const anew = tokensAnew(left.tokens)
-    const text = [span(hours * HOUR), anew ? compact(anew) : ''].filter(Boolean).join(' · ')
+    const text = [span(hours * HOUR), anew ? compact(anew) : ''].filter(Boolean).join(PARTS)
     const basis = t('volumes.goals.basis', { count: left.basis }, left.basis)
     const hint =
       left.unestimated > 0

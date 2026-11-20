@@ -609,7 +609,11 @@ and only fades the end of a strip that scrolls on past it.
   `production-density.spec.ts` holds this where it is drawn.
 - A KPI figure is the one step above the scale, at 28px, and every figure in a
   strip is the same size. Which one leads is said by order and column width; a
-  second larger figure only adds a third size to a row of four numbers.
+  second larger figure only adds a third size to a row of four numbers. Every
+  figure of a row of tiles stands at one height, in both languages and at every
+  width: where a tile's name may take more lines than another's, the figure
+  stands over the name, at the tile's top. Under names of one, two and three
+  lines, Volumes' figures stood up to 34px apart in one row.
 - The module is named once, by the context bar. A page does not repeat that
   name in a display heading, and a section heading inside a page is a section
   size, not a page size.
@@ -948,7 +952,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 ## Shared component grammar
 
 - **Rows and tables:** repeated comparable records use aligned columns. The
-  whole row is the disclosure target when it opens a detail surface.
+  whole row is the disclosure target when it opens a detail surface. A row's
+  action stands under the words that name the row, in the columns read first,
+  never in a column of its own at the row's end: a table wider than its frame
+  scrolls that column out of sight, and «Attach to a card» stood past the frame
+  at 1280px and three frames' width away on a phone. A table of records read as
+  words rather than compared as figures, as Agent decisions', stands on a phone
+  as one block a record, its cells on lines one after another and its headings
+  a line of sort buttons over them (`SectionTable`'s `stack`): as columns, a
+  phone's frame showed two of its five before a sideways scroll. A table of
+  figures keeps its columns and scrolls sideways in its frame, its names held
+  at the frame's start.
 - **Status:** one semantic-state primitive owns label, dot/badge geometry, and
   palette across work items, executions, references, and Settings.
 - **Choice controls:** one accessible custom control owns search, icons,
@@ -2948,11 +2962,15 @@ the reader's own period at the start of the second row and the
 freshness with the refresh at its end. One row cannot hold them there: at 1024px the line is
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
-panel moved down 44px when a span of days was chosen. On a phone the bar is three rows of one
-height whatever period is chosen: the periods, scrolling sideways, with the freshness at their
-end; the filter, a failure and the refresh; and the room of the reader's own days, which took a
-row of their own and moved the panel 44px when chosen. A refresh that fails keeps what is shown
-and says so in words before the age at every width, «Could not refresh» with a retry: given up
+panel moved down 44px when a span of days was chosen. On a phone the bar is two rows: the
+periods across the whole first row, wrapping onto a second line of their track where one has no
+room for them, each line shared among its periods; then the filter, a failure, the freshness and
+the refresh. The reader's own days take a third row once chosen, which moves the panel down by
+it. The periods scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past
+the edge, and a row held for the reader's own days under every other period stood as an empty
+band of 72px over the panel; the period bar of Agent decisions and Volumes is the same bar. A
+refresh that fails keeps what is shown and says so in words before the age at every width, «Could
+not refresh» with a retry: given up
 on a short line, its words had left a red disc with no hint. The retry is reached at every width
 too: where the line has no room for «· Retry», the words themselves are the retry, named
 «Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
@@ -3241,6 +3259,9 @@ column, the moment newest first and words A to Z first. Over the table a line co
 decisions. The page reads them page by page of 200, the first page drawn as soon as it lands
 with «Read 200 of 1000…» over it, so a long period of a thousand decisions shows its newest at
 once and ends as one table; past 5000 it shows the newest and says how many there are in all.
+On a phone a decision is a block of its own: when and the point on its first line, the card
+under them, then the session and what was decided, with the headings a line of sort buttons over
+the blocks (Rows and tables).
 
 Its states are the shared panel's. The first read waits in it and, failing, is its error with
 «Retry»; a period with no decision says «The agents decided nothing on their own in this
@@ -3292,8 +3313,9 @@ stands as «—» with its reason, since it was taken of the whole goal. The per
 label and the days are the page's address; a choice rewrites it in place.
 
 On top stand ten numbers: one for each of the eight categories, in the model's order, then
-«Waiting for me» and «Commits on no card». Under an open category's number stands the age of
-its oldest card, under «Waiting for me» that of the question asked first; Done and Cancelled
+«Waiting for me» and «Commits on no card». A number is its figure over its name, so the figures
+of a row stand at one height whatever lines the names take. Under an open category's name stands the
+age of its oldest card, under «Waiting for me» that of the question asked first; Done and Cancelled
 count what came to a close in the period and say «in the period». A category's number counts
 its tasks, goals and stages, as the board's filter by category shows them, and its hint says
 how many of each; under a filter it counts the matching tasks alone. The numbers stand in one
@@ -3334,9 +3356,12 @@ on no card» is «—» where their list cannot be read for the scope.
 «Commits on no card» shows their list under the numbers and hides it again, the number saying
 which. A row is a commit, the newest first: its hash as its short form, held at the row's start
 while a phone's table scrolls sideways, its subject, the repository, the session as its short
-form with the whole one in the hint, and when it was committed. «Attach
-to a card» opens a line under the row where the card is found by its number or the words of its
-title: the scope's space's cards, closed ones too, since a commit belongs to the card it was
+form with the whole one in the hint, and when it was committed. «Attach to a card» stands under the
+subject, so it is in view wherever the frame is scrolled to the commit, and the repository's name
+wraps between its words. On a phone the subject's column is what the frame has beside the hash and
+the action's name takes two lines there: on one, «Прикрепить к карточке» held the column past the
+frame's edge. It opens a line under the row where the card is found by its number or the words of
+its title: the scope's space's cards, closed ones too, since a commit belongs to the card it was
 made for, and every space's at the top. «Attach» is the person's attach, the module's own
 action: the commit leaves the list, the attach is said aloud, and the page reads its numbers
 again, so the number drops by the commit. An attach the server refuses keeps the row and its
@@ -3353,8 +3378,15 @@ cancelled and with them — agent time and the tokens processed anew, the server
 everything under it — and what its open tasks have left by their estimates, rounded and marked
 «≈», with the done tasks the estimate is judged by under it. A heading sorts the rows that share
 a parent by its column. A row past the fifth level stands at the fifth indent and names its
-parent. The table's frame is held to the panel's height, which the page's layout gives it, so a
-long tree scrolls in its frame under a heading row that stays, whatever rows the bar takes.
+parent. A row's name is its reference over its title, and what the row says of itself, the
+parent it names among it, stands under the title on the title's edge; the words keep a width of
+their own whatever the indent takes, so a deep goal's title reads on lines as long as a shallow
+one's. Beside the reference, a goal six levels down kept some 54px of a 276px column and broke
+into six lines, and its parent stood at the cell's start, 182px left of its title. Where the
+table is too narrow for its headings on one line, a spend stands on two, its time over its
+tokens, and the column of names takes the room that gives. The table's frame is held to the panel's
+height, which the page's layout gives it, so a long tree scrolls in its frame under a heading row
+that stays, whatever rows the bar takes.
 
 Under the goals, the work outside goals: the scope's tasks under no goal, by project and by
 label, each row saying how many stand in each category, the count of them beside the heading.

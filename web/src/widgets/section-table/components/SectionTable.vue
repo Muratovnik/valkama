@@ -22,6 +22,12 @@
  *
  * The frame's height is the window's less what stands over the table, which the page says on the
  * table with `--size-section-table-over`.
+ *
+ * A table of records read as words rather than compared as figures, as Agent decisions' (`stack`),
+ * stands on a phone (a table 30rem wide or narrower) as one block a record: the cells of a row
+ * flow on lines one after another, a cell the page gives a line of its own taking it, and the
+ * heading row is a line of its sort buttons over them, held at the frame's top. As columns its
+ * frame showed two of five cells of a row before a sideways scroll.
  */
 import { ref } from 'vue'
 
@@ -48,12 +54,14 @@ const props = withDefaults(
     held?: boolean
     /** What changes what the table holds, which its headings' lines are measured again for. */
     holds?: readonly unknown[]
+    /** On a phone each row stands as a block of its cells rather than as columns. */
+    stack?: boolean
     /** The rows are a tree's, every one of them drawn (`ChartTable`). */
     tree?: boolean
     /** What a heading's press does, in words, for each column's words. */
     sortWords: (column: string) => string
   }>(),
-  { held: false, holds: () => [], tree: false },
+  { held: false, holds: () => [], stack: false, tree: false },
 )
 /** A column's heading pressed to sort by it. */
 const emit = defineEmits<{ sort: [column: string] }>()
@@ -90,6 +98,7 @@ defineExpose({ reveal })
     ref="root"
     class="section-table"
     tabindex="-1"
+    :class="{ 'section-table-stack': stack }"
     :data-headings="headingLines"
     :aria-label="label"
   >
@@ -107,7 +116,7 @@ defineExpose({ reveal })
       :words="emptyWords"
       :tree="tree"
     >
-      <thead>
+      <thead class="section-table-head">
         <tr class="table-head">
           <th
             v-for="column in columns"
@@ -136,7 +145,7 @@ defineExpose({ reveal })
           </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="section-table-body">
         <slot name="rows" />
       </tbody>
       <slot name="foot" />
@@ -237,5 +246,48 @@ defineExpose({ reveal })
 .section-table[data-headings='two'] .chart-heading[data-numeric='true'] {
   min-inline-size: 7em;
   white-space: normal;
+}
+
+/* A table of records as words on a phone (`stack`): each row a block whose cells flow on lines,
+   the heading row a line of its sort buttons that stays at the frame's top. */
+@container (width <= 30rem) {
+  .section-table-stack :is(.section-table-head, .section-table-body) {
+    display: block;
+  }
+
+  .section-table-stack .section-table-head {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 3;
+    background: var(--color-chart-table-ground, var(--color-canvas));
+    box-shadow: inset 0 -1px var(--color-rule);
+  }
+
+  .section-table-stack .table-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    padding: var(--space-2) var(--space-3);
+
+    & .chart-cell {
+      position: static;
+      padding: 0;
+      box-shadow: none;
+    }
+  }
+
+  .section-table-stack .section-table-body > :slotted(*) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .section-table-stack :slotted(.chart-cell) {
+    position: static;
+    min-inline-size: 0;
+    padding: 0;
+    background: none;
+  }
 }
 </style>

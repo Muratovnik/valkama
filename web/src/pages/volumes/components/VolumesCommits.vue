@@ -6,7 +6,10 @@
  * page's scope (`readUnattachedCommits`): a project's commits, a space's projects', or every
  * commit of the store at the top.
  *
- * A row's «Attach to a card» opens a line under it where the card is found by its number or the
+ * A row's «Attach to a card» stands under its subject, the column read first after the hash, so it
+ * is in view wherever the table's frame is scrolled to the commit; in a column of its own at the
+ * row's end it stood past the frame at 1280px in Russian and far past a phone's. It opens a line
+ * under the row where the card is found by its number or the
  * words of its title (`SearchCombobox`, `useCardSearch`), in the page's space or in any space at
  * the top, closed cards too, since a commit belongs to whichever card it was made for. «Attach»
  * writes the module's action, the person's attach (`attachCommit`): the commit leaves the list, it
@@ -222,12 +225,6 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
             >
               {{ t('volumes.commits.time') }}
             </th>
-            <th
-              scope="col"
-              class="chart-cell chart-heading"
-            >
-              <span class="visually-hidden">{{ t('volumes.commits.attach') }}</span>
-            </th>
           </tr>
         </thead>
         <tbody
@@ -242,8 +239,21 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
             >
               {{ row.hash }}
             </th>
-            <td class="chart-cell volumes-commit-subject">{{ row.subject }}</td>
-            <td class="chart-cell volumes-commit-plain">{{ row.repository }}</td>
+            <td class="chart-cell volumes-commit-subject">
+              {{ row.subject }}
+              <span class="volumes-commit-action">
+                <VButton
+                  class="volumes-commit-attach"
+                  size="inline"
+                  variant="text"
+                  :aria-expanded="row.open"
+                  @click="startAttach(row.key)"
+                >
+                  {{ t('volumes.commits.attach') }}
+                </VButton>
+              </span>
+            </td>
+            <td class="chart-cell volumes-commit-words">{{ row.repository }}</td>
             <td
               v-tooltip.detail="row.sessionWhole"
               class="chart-cell volumes-commit-code"
@@ -251,22 +261,11 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
               {{ row.session }}
             </td>
             <td class="chart-cell volumes-commit-plain">{{ row.time }}</td>
-            <td class="chart-cell">
-              <VButton
-                class="volumes-commit-attach"
-                size="inline"
-                variant="text"
-                :aria-expanded="row.open"
-                @click="startAttach(row.key)"
-              >
-                {{ t('volumes.commits.attach') }}
-              </VButton>
-            </td>
           </tr>
           <tr v-if="row.open">
             <td
               class="chart-cell"
-              colspan="6"
+              colspan="5"
             >
               <form
                 class="volumes-attach"
@@ -322,8 +321,36 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
   container: volumes-commits / inline-size;
 }
 
+/* The subject over the row's action. The action stands on its own line at the column's start, its
+   fill under the pointer reaching past the column's edge as an inline control's does. */
 .volumes-commit-subject {
   min-inline-size: 14rem;
+}
+
+.volumes-commit-action {
+  display: block;
+  margin-block-start: var(--space-1);
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
+}
+
+/* On a phone the subject's column is what the frame has beside the commit's hash, which stays at
+   its start, and the action's name takes two lines there rather than one: on one line
+   «Прикрепить к карточке» held the column wider than the frame, past its edge. */
+@container volumes-commits (width <= 30rem) {
+  .volumes-commit-subject {
+    min-inline-size: 9rem;
+  }
+
+  .volumes-commit-attach {
+    text-align: start;
+    white-space: normal;
+  }
+}
+
+/* The repository's name wraps between its words, so a long one takes lines rather than the
+   frame's width; the moment keeps to one line. */
+.volumes-commit-words {
+  min-inline-size: 8em;
 }
 
 .volumes-commit-plain {

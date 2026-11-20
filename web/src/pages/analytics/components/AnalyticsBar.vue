@@ -4,7 +4,7 @@
  * page's own: its periods, with the ends of the reader's own beside them, its two days or the name
  * of a span between two moments; the filters set, each a chip that takes it out, and the way to
  * add one (`AnalyticsChips`); how fresh the figures are; and a read of them again. The bar's line,
- * its two rows and a phone's three rows are the period bar's, which keeps the panel under it from
+ * its two rows and a phone's rows are the period bar's, which keeps the panel under it from
  * moving with what the bar holds; the filters take the room the rest leaves, counting those they
  * have none for, and the list of filters they open lies over the panel.
  *
@@ -28,8 +28,8 @@
  * were said, so one said takes only the room the chips had and moves nothing: neither the bar's
  * height nor its controls.
  *
- * On a phone the freshness stands at the end of the periods' row; under it the filter, a failure
- * and the read again, by its icon; and the room of the reader's own days.
+ * On a phone the periods take the first row whole; under it the filter, a failure, the freshness
+ * and the read again, by its icon; and, once chosen, the reader's own days.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -265,14 +265,14 @@ const freshHint = computed(() =>
   align-items: center;
 }
 
-/* A phone (`PeriodBar`): the freshness at the end of the periods' row, a failure and the read
-   again, by its icon alone, the row under it beside the filter. A failure's words had no room
-   beside the freshness, so the disc stood alone. The failure has a column of its own under the
-   periods, the column of the freshness's start beside it its own too, so nothing moves when it is
+/* A phone (`PeriodBar`): the periods take the first row whole, and the row under it holds the
+   filter, a failure, the freshness and the read again, by its icon alone. Beside the periods the
+   freshness left them a row of 216px that scrolled sideways and cut «Сейчас» and «Свой». The
+   failure has a column of its own, the freshness one after it, so nothing moves when it is
    said. */
 @container (width <= 30rem) {
   .analytics-bar-fresh {
-    grid-area: 1 / 3 / 2 / 5;
+    grid-area: 2 / 3 / 3 / 4;
     align-self: center;
   }
 

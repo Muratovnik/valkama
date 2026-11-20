@@ -22,14 +22,15 @@
  * ems and wider than a phone is two rows from the start. News the line may come to say is held
  * while it is fitted (`held`): the page draws its room unseen, so news said moves nothing.
  *
- * On a phone the bar is three rows of one height whatever period is chosen: the periods in one row
- * that scrolls sideways, the chosen one scrolled into view; under it the filters and the line's
- * end; and the room of the reader's own days. The line's end lends its parts to those rows, where
- * the page places them on the bar's grid of four columns.
+ * On a phone the bar is two rows: the periods across the whole of the first, on as many lines as
+ * they need, each line shared among its periods, so every period stands whole; under it the
+ * filters and the line's end. The reader's own days take a third row once they are chosen. The
+ * line's end lends its parts to the second row, where the page places them on the bar's grid of
+ * four columns.
  *
  * A filter the page could not set says why under the bar (`refused`).
  */
-import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useElementSize } from '@vueuse/core'
@@ -85,18 +86,6 @@ defineSlots<{
 
 const { locale } = useI18n()
 
-/**
- * The periods' row, which scrolls sideways on a phone, and keeps the chosen one in view: when it is
- * chosen, and once the line is fitted, which changes the row's room.
- */
-const periodRow = ref<{ $el: HTMLElement } | null>(null)
-function showChosen() {
-  periodRow.value?.$el
-    .querySelector<HTMLElement>('.active')
-    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-}
-onMounted(showChosen)
-
 const line = useTemplateRef<HTMLElement>('line')
 const end = useTemplateRef<HTMLElement>('end')
 
@@ -136,7 +125,6 @@ const spanCut = computed(() => room.gave('span'))
 const twoRows = room.rows
 /** Whether the line is being fitted, news holding its room unseen. */
 const held = room.holding
-watch([() => props.period, held], showChosen, { flush: 'post' })
 
 const state = computed<BarState>(() => ({ held: held.value, short: short.value }))
 
@@ -158,7 +146,6 @@ defineExpose({ gave: room.gave })
       class="period-bar-line"
     >
       <SegmentedControl
-        ref="periodRow"
         class="period-bar-periods"
         size="compact"
         :label="words.label"
@@ -270,15 +257,18 @@ defineExpose({ gave: room.gave })
   }
 }
 
-/* A phone: three rows of one height whatever period is chosen. The periods one row that scrolls
-   sideways; the filters and the line's end the row under it; and the room of the reader's own
-   days. A span of days chosen used to take a row of its own and move everything under the bar
-   down 44px. The line's end lends the rows its parts, which the page places on the four columns:
-   the first as wide as its row leaves it, the three after it as wide as what stands in them. */
+/* A phone: two rows. The periods across the whole first row, wrapping onto a second line of the
+   track where one line has no room for them, each line shared among its periods; the filters and
+   the line's end the row under it. The periods' row scrolled sideways instead, beside the line's
+   end: at 390px it opened on «Сегодня» cut by 14px and hid «Свой» past its edge. The reader's own
+   days take a row of their own only once they are chosen: a row held for them under every other
+   period stood as a band of 72px between the filters and the figures. The line's end lends the
+   second row its parts, which the page places on the four columns: the first as wide as its row
+   leaves it, the three after it as wide as what stands in them. */
 @container (width <= 30rem) {
   .period-bar-line {
     display: grid;
-    grid-template-rows: auto auto var(--size-control-height-compact);
+    grid-template-rows: auto auto;
     grid-template-columns: minmax(min-content, 1fr) auto auto auto;
     gap: var(--space-2);
   }
@@ -288,14 +278,10 @@ defineExpose({ gave: room.gave })
   }
 
   .period-bar-periods {
-    flex-wrap: nowrap;
-    grid-area: 1 / 1 / 2 / 3;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: none;
+    --segmented-option-grow: 1;
 
-    /* As wide as its row leaves it, which its periods side by side would otherwise widen. */
-    contain: inline-size;
+    flex-wrap: wrap;
+    grid-area: 1 / 1 / 2 / -1;
   }
 
   .period-bar-own {

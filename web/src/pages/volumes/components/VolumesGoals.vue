@@ -10,6 +10,9 @@
  * and the estimate of what is left with the done tasks it is judged by. Every figure is the read's
  * own: a goal's spending is its own work, its stages' rows and its tasks', added up by the server.
  * Each heading sorts the rows that share a parent by its column; the read's order stands first.
+ * A row's name is its reference over its title, and under the title what the row says of itself:
+ * the goal over a row past the fifth indent, another space, a part. Each carries `data-part`:
+ * `reference`, `title` and `detail`.
  *
  * A space with no goal says so in the table's place, the work outside goals being counted below.
  * Each row carries `data-id` and `data-reference`, and each figure `data-figure`: `closed`,
@@ -25,6 +28,7 @@ import { useVolumesWords } from '@/pages/volumes/composables/useVolumesWords.ts'
 import SectionTable from '@/widgets/section-table/components/SectionTable.vue'
 import { useColumnSort } from '@/widgets/section-table/composables/useColumnSort.ts'
 
+import { PARTS } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 import type { Figure } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 
 import type { Volumes, VolumesGoal } from '@/shared/api/volumesReadApi.ts'
@@ -95,6 +99,8 @@ interface FigureCell extends Figure {
   /** The hint as the cell's description; absent with no hint, so nothing empty is read out. */
   description: string | undefined
   key: 'baseline' | 'closed' | 'remaining' | 'spent' | 'spent-all'
+  /** Its time and its tokens, which stand on two lines where the table is short of room. */
+  parts: string[]
 }
 
 const cell = (key: FigureCell['key'], figure: Figure, basis = ''): FigureCell => ({
@@ -102,6 +108,7 @@ const cell = (key: FigureCell['key'], figure: Figure, basis = ''): FigureCell =>
   key,
   basis,
   description: figure.hint || undefined,
+  parts: figure.text.split(PARTS),
 })
 
 /** What the row says under its name: the row over a row past the indent, its space, its part. */
@@ -219,23 +226,28 @@ const { tabStop, toggle } = keys
                 :name="line.goal.reference"
                 @toggle="toggle(line.row.id)"
               />
-              <span
-                :id="nameOf(line.row.id, 'reference')"
-                class="volumes-goal-reference"
-                >{{ line.goal.reference }}</span
-              >
-              <span
-                :id="nameOf(line.row.id, 'title')"
-                v-tooltip.clipped="line.goal.title"
-                v-slash-breaks="line.goal.title"
-                class="volumes-goal-title"
-              />
+              <span class="volumes-goal-words">
+                <span
+                  :id="nameOf(line.row.id, 'reference')"
+                  class="volumes-goal-reference"
+                  data-part="reference"
+                  >{{ line.goal.reference }}</span
+                >
+                <span
+                  :id="nameOf(line.row.id, 'title')"
+                  v-tooltip.clipped="line.goal.title"
+                  v-slash-breaks="line.goal.title"
+                  class="volumes-goal-title"
+                  data-part="title"
+                />
+                <span
+                  v-if="line.detail"
+                  class="chart-detail"
+                  data-part="detail"
+                  >{{ line.detail }}</span
+                >
+              </span>
             </span>
-            <span
-              v-if="line.detail"
-              class="chart-detail"
-              >{{ line.detail }}</span
-            >
           </th>
           <td
             class="chart-cell"
@@ -257,11 +269,21 @@ const { tabStop, toggle } = keys
             :data-figure="figure.key"
             :aria-description="figure.description"
           >
-            {{ figure.text }}
+            <span
+              v-for="(part, at) in figure.parts"
+              :key="at"
+              class="volumes-figure-part"
+              ><span
+                v-if="at"
+                class="volumes-figure-joint"
+                >{{ PARTS }}</span
+              >{{ part }}</span
+            >
+            <!-- The space keeps the basis a word of its own in the cell's text. -->
             <span
               v-if="figure.basis"
               class="chart-detail"
-              >{{ figure.basis }}</span
+              >{{ ` ${figure.basis}` }}</span
             >
           </td>
         </tr>
@@ -287,8 +309,7 @@ const { tabStop, toggle } = keys
   --size-section-table-over: calc(100dvh - 100cqb + 3rem);
 }
 
-/* A row's cells stand on its middle: the arrow's square sets the name's line, and an estimate's
-   basis stands under its figure. */
+/* A row's cells stand on its middle, and an estimate's basis stands under its figure. */
 .volumes-goal-row {
   cursor: pointer;
 
@@ -303,26 +324,43 @@ const { tabStop, toggle } = keys
 }
 
 .volumes-goal {
-  min-inline-size: 16rem;
   color: var(--color-text);
   font: inherit;
   text-align: start;
 }
 
+/* The indent and its arrow, then the row's words: its reference over its title, and under the
+   title what the row says of itself, such as the goal over a row past the fifth indent, all on
+   the title's edge. The words keep their own width whatever the indent takes, so a deep row's
+   title reads on lines as long as a shallow one's: beside the reference, in a column held at its
+   least, a goal six levels down kept some 54px of 276 for its title, which broke into six lines,
+   and its «in MAIN-17» stood at the cell's start, 182px left of the title. The arrow stands on the
+   reference's line. */
 .volumes-goal-line {
   display: flex;
-  gap: var(--space-2);
-  align-items: center;
+  align-items: flex-start;
   min-width: 0;
 }
 
+.volumes-goal-words {
+  display: grid;
+  flex: 1;
+  min-inline-size: 11rem;
+}
+
 .volumes-goal-reference {
-  flex: none;
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.volumes-goal-title {
-  min-width: 0;
+/* Where the table is too narrow for its headings on one line (`SectionTable`), a spend stands on
+   two lines, its time over its tokens, and the column of names takes the room that gives: on one
+   line the spends took 171px a column and left the names 276. */
+.volumes-goals-table[data-headings='two'] .volumes-figure-part {
+  display: block;
+}
+
+.volumes-goals-table[data-headings='two'] .volumes-figure-joint {
+  display: none;
 }
 </style>
