@@ -75,6 +75,29 @@ from server import launcher
 
 launcher.AUTOSTART_STORE = RunKeyDouble()
 
+
+class LoadNoting(unittest.TextTestResult):
+    """The result of every unittest run: one that fails says who holds the heavy-test lock.
+
+    A targeted run takes no lock, so it may fail beside another checkout's heavy run
+    for that load alone; the line after the failures names that run, or is absent
+    when the lock is free or held by this run's own holder.
+    """
+
+    def printErrors(self) -> None:  # noqa: N802 -- the name unittest's runner calls
+        super().printErrors()
+        if not self.wasSuccessful():
+            from tests import machine_lock
+
+            note = machine_lock.load_note()
+            if note is not None:
+                self.stream.writeln(note)
+
+
+# typeshed types the stream of a subclass as the decorator the runner wraps every stream in,
+# which is what the runner passes, but declares the attribute to take any stream.
+unittest.TextTestRunner.resultclass = LoadNoting  # type: ignore[assignment]
+
 #: The patterns that select every test module: unittest's own default and the one the
 #: gates and CI name. A narrower one makes a targeted run.
 _WHOLE_SUITE_PATTERNS = (None, "test*.py", "test_*.py")

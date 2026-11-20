@@ -417,5 +417,75 @@ class CommandTests(LockCase):
             pass
 
 
+class LoadNoteTests(LockCase):
+    """A failed run that took no lock says who holds it as it ends, and nothing when nobody does."""
+
+    def asked(self) -> bytes:
+        """What the command a Vitest run asks prints for this lock."""
+
+        found = subprocess.run(
+            [sys.executable, COMMAND, "holder", f"--path={self.path}"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=DEADLINE_SECONDS,
+            check=False,
+        )
+        self.assertEqual(0, found.returncode, found.stderr)
+        return found.stdout
+
+    def test_a_held_lock_is_named_with_its_holder_by_the_function_and_the_command(self) -> None:
+        with held_elsewhere(self.path, "another checkout's whole suite"):
+            note = machine_lock.load_note(self.path)
+            said = self.asked()
+        assert note is not None
+        self.assertIn(f"the heavy-test lock {self.path} was held as this run ended", note)
+        self.assertIn(f"by another checkout's whole suite in {ROOT.as_posix()}", note)
+        self.assertIn(b"by another checkout's whole suite in ", said)
+
+    def test_a_free_lock_or_none_at_all_is_said_as_nothing_and_left_as_it_was(self) -> None:
+        self.assertIsNone(machine_lock.load_note(self.path))
+        self.assertFalse(self.path.exists(), "asking made a lock file")
+        with machine_lock.held("an earlier run", path=self.path, say=self.fail):
+            pass
+        self.assertIsNone(machine_lock.load_note(self.path))
+        self.assertEqual(b"", self.asked())
+        # Asking gave the lock back.
+        with machine_lock.held("after", path=self.path, say=self.fail):
+            pass
+
+    def test_a_run_under_the_holder_names_no_one(self) -> None:
+        with held_elsewhere(self.path):
+            with mock.patch.dict(os.environ, machine_lock.marker(self.path)):
+                self.assertIsNone(machine_lock.load_note(self.path))
+            # The present control: the same lock, asked from outside the holder.
+            self.assertIsNotNone(machine_lock.load_note(self.path))
+
+    def test_a_failed_unittest_run_prints_the_holder_and_a_passing_or_unloaded_one_does_not(
+        self,
+    ) -> None:
+        class Probe(unittest.TestCase):
+            def test_fails(self) -> None:
+                self.fail("on purpose")
+
+            def test_passes(self) -> None:
+                pass
+
+        def run(name: str) -> str:
+            # unittest's default runner, as `python -m unittest` builds it.
+            stream = io.StringIO()
+            unittest.TextTestRunner(stream=stream).run(Probe(name))
+            return stream.getvalue()
+
+        with mock.patch.object(machine_lock, "lock_path", return_value=self.path):
+            with held_elsewhere(self.path, "a browser batch"):
+                failed, passed = run("test_fails"), run("test_passes")
+            free = run("test_fails")
+        self.assertIn("was held as this run ended, by a browser batch in ", failed)
+        self.assertTrue(failed.rstrip().endswith("FAILED (failures=1)"), failed)
+        self.assertNotIn("heavy-test lock", passed)
+        self.assertIn("FAILED", free)
+        self.assertNotIn("heavy-test lock", free)
+
+
 if __name__ == "__main__":
     unittest.main()

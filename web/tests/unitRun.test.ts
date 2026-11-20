@@ -22,11 +22,12 @@ const lockTool = fileURLToPath(new URL('../../tests/machine_lock.py', import.met
 
 describe('the Vitest run of npm test', () => {
   it('runs the whole suite through the lock tool, with Vitest as the command it holds the lock for', () => {
-    const { command, note } = unitRun([], () => true)
+    const { command, note, targeted } = unitRun([], () => true)
     expect(command.slice(0, 2)).toEqual([python, lockTool])
     const held = command.slice(command.indexOf('--') + 1)
     expect(held).toEqual(vitest)
     expect(note).toBeNull()
+    expect(targeted).toBe(false)
   })
 
   it.each([[['--reporter=dot']], [['--reporter', 'dot']]])(
@@ -39,9 +40,11 @@ describe('the Vitest run of npm test', () => {
   )
 
   it('runs the suite unlocked, and says so, where no Python can take the lock', () => {
-    const { command, note } = unitRun([], () => false)
+    const { command, note, targeted } = unitRun([], () => false)
     expect(command).toEqual(vitest)
     expect(note).toContain('without the heavy-test lock')
+    // Unlocked for want of Python, not by design: a failure of it names no holder.
+    expect(targeted).toBe(false)
   })
 
   it.each([
@@ -51,9 +54,10 @@ describe('the Vitest run of npm test', () => {
     [['--testNamePattern=refuses']],
   ])('runs a targeted run %j without the lock, and does not look for one', (args) => {
     const canLock = vi.fn(() => true)
-    const { command, note } = unitRun(args, canLock)
+    const { command, note, targeted } = unitRun(args, canLock)
     expect(command).toEqual([...vitest, ...args])
     expect(note).toBeNull()
+    expect(targeted).toBe(true)
     expect(canLock).not.toHaveBeenCalled()
   })
 })
