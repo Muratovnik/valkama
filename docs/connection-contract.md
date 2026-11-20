@@ -1591,7 +1591,9 @@ the same write ([Writes that wait for the owner](#writes-that-wait-for-the-owner
 Beside the questions, every answer of that read carries `triage_due`: one line
 for each space read whose work waiting for a triage review has grown past the
 owner's thresholds, such as
-`[{"space": {"key": "MAIN", "name": "Main"}, "count": 120, "oldest_at": "2026-11-02T09:12:00Z"}]`.
+`[{"space_ref": {"data_scope_id": "…", "space_key": "MAIN"}, "space": {"key": "MAIN", "name": "Main"}, "count": 120, "oldest_at": "2026-11-02T09:12:00Z"}]`,
+where `space_ref` is the source's, as `coverage` names it, so a reader opens that
+space's board by it even where two stores hold a space of one key.
 The work counted is the items in `triage` that no question to the owner holds,
 with no parent or under goals and stages all accepted and open, that no review
 has marked `triage_seen`. A space has a line while its `triage_reminder` is `on`

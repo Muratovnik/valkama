@@ -41,7 +41,7 @@ from server import http_surface, mcp_surface, session_open, sessions, store
 from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
 from server.ops import doctor, git_hook, url_schemes
-from server.planning import calls, read_model, requests, service, subscriptions
+from server.planning import calls, participation, read_model, requests, service, subscriptions
 from server.projects import project_registry
 from server.quota import samples
 from server.store_identity.metadata import read_store_metadata
@@ -836,16 +836,38 @@ class _Scenario:
         # A digest of the whole answer, ids and instants included, which change run to run.
         model["revision"] = "0" * 64
         _order_moves(model["workflow"])
+        due = self.triage_due()
         found = self.http(f"/api/modules/planning/search?{urlencode({'q': 'Tree', 'limit': '50'})}")
         # Equal matches stand in the order of their ids, which change run to run.
         found["items"].sort(key=lambda hit: int(hit["item"]["reference"].split("-")[1]))
         return {
             "planning-read-model": model,
+            "requests-triage-due": due,
             "planning-chain-tree": self.http(
                 f"/api/planning/work-item/chain?{urlencode({'id': goal, 'scope': 'tree'})}"
             ),
             "planning-search": found,
         }
+
+    def triage_due(self) -> dict[str, object]:
+        """The space's open questions as they read beside the board just read, with the line
+        «time to triage» for its stack: the space's count is one for this read alone, so the
+        line stands, and it inherits again after it, so no answer after this one reads it."""
+
+        def count(value: int | None) -> None:
+            conn = store.connect()
+            try:
+                space = read_model.space_identity(conn, SPACE)
+                participation.write_value(conn, space, "triage_count", value)
+                conn.commit()
+            finally:
+                conn.close()
+
+        count(1)
+        try:
+            return self.http(f"/api/modules/planning/requests?{self.scope(limit='1')}")
+        finally:
+            count(None)
 
     def volumes(self) -> dict[str, object]:
         """What stands in the space, in its project and in the space filtered to its tasks

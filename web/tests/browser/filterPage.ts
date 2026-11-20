@@ -13,7 +13,8 @@ import { boardRoute } from './boardPage.ts'
 import { filterSpace } from './served/filter.ts'
 import { spaceAnswer } from './servedAnswers.ts'
 
-async function serveSpace(page: Page, items?: Brief[], workflow?: unknown) {
+/** The space's read, laid over the backend's: these items, in this workflow when one is given. */
+export async function serveSpace(page: Page, items?: Brief[], workflow?: unknown) {
   await page.route('**/api/planning?*', (route) =>
     route.fulfill(
       spaceAnswer(new URL(route.request().url()).searchParams, filterSpace(items, workflow)),

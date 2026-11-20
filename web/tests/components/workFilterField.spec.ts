@@ -53,7 +53,7 @@ const groupNames = (wrapper: ReturnType<typeof field>) =>
 const everywhere = (text: string) => `Search for “${text}” in all projects`
 // Work that names no project offers «No project», so the project's facet is there too.
 /** The conditions after the held count. */
-const CONDITIONS_AFTER = ['Waiting for my answer', 'From another space']
+const CONDITIONS_AFTER = ['Waiting for my answer', 'Awaiting triage', 'From another space']
 const FACETS = ['State', 'Kind', 'Priority', 'Assignee', 'Project', 'Label']
 
 afterEach(() => {
@@ -178,7 +178,8 @@ describe('the Work filter field', () => {
     element.focus()
     await input(wrapper).trigger('keydown', { key: 'ArrowDown' })
     expect(highlighted(wrapper)).toBe('Workable')
-    for (let step = 0; step < 5; step += 1)
+    // Past the other four conditions and «State».
+    for (let step = 0; step < 6; step += 1)
       await input(wrapper).trigger('keydown', { key: 'ArrowDown' })
     expect(highlighted(wrapper)).toBe('Kind')
     await input(wrapper).trigger('keydown', { key: 'Enter' })

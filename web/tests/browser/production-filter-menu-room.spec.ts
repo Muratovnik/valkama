@@ -51,10 +51,10 @@ function inSight(page: Page) {
 
 const ALL_IN_SIGHT = ['all: in sight', 'any: in sight']
 
-/** The facets' step: four conditions and seven facets, whatever the space holds. */
+/** The facets' step: five conditions and seven facets, whatever the space holds. */
 async function facetRows(page: Page) {
   const rows = menu(page).getByRole('option')
-  await expect(rows).toHaveCount(11)
+  await expect(rows).toHaveCount(12)
   return rows.all()
 }
 
@@ -103,7 +103,7 @@ for (const [width, height] of [
   }
 }
 
-// A window short enough that the first groups alone outrun it: the facets' eleven rows do not
+// A window short enough that the first groups alone outrun it: the facets' twelve rows do not
 // fit under the bar, so the step scrolls inside the window instead.
 for (const [width, height] of [
   [1280, 420],

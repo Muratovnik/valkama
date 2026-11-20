@@ -133,6 +133,7 @@ _MODULES = (
             "ready",
             "held",
             "asked",
+            "triage",
             "elsewhere",
             "cat",
             "kind",
@@ -251,7 +252,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-11-18T12:00:00Z"
+DECLARED_AT = "2026-11-20T12:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

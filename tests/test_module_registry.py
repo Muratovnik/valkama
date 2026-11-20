@@ -140,6 +140,7 @@ class ModuleRegistryTests(unittest.TestCase):
                 "ready",
                 "held",
                 "asked",
+                "triage",
                 "elsewhere",
                 "cat",
                 "kind",

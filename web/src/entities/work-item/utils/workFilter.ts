@@ -64,6 +64,11 @@ export interface WorkFilter extends FacetValues {
   not?: FacetValues
   /** Startable right now, as the server answers it. */
   ready?: true
+  /**
+   * A card of the space's own triage stack that no review has marked (`awaitsTriage`): what the
+   * line «time to triage» of «Needs my answer» counts for the space.
+   */
+  triage?: true
 }
 
 /**
@@ -74,6 +79,7 @@ export type WorkFilterToken =
   | { facet: 'ready' }
   | { facet: 'held' }
   | { facet: 'asked' }
+  | { facet: 'triage' }
   | { facet: 'elsewhere'; value: Elsewhere; not?: true }
   | { facet: 'category'; value: StateCategory; not?: true }
   | { facet: 'kind'; value: WorkItemKind; not?: true }
@@ -103,12 +109,23 @@ const LIST_FACETS: readonly ListFacet[] = [
   'project',
   'goal',
 ]
-const FLAG_FACETS: readonly string[] = ['ready', 'held', 'asked'] satisfies FlagFacet[]
+/** The conditions with no value, in the order the menu, the chips and the address take them. */
+const FLAG_FACETS: readonly FlagFacet[] = ['ready', 'held', 'asked', 'triage']
 
-/** A condition that is on or off, with no value: startable, held, asked. */
+/** A condition that is on or off, with no value: startable, held, asked, awaiting triage. */
 export const isFlag = (
   token: WorkFilterToken,
-): token is Extract<WorkFilterToken, { facet: FlagFacet }> => FLAG_FACETS.includes(token.facet)
+): token is Extract<WorkFilterToken, { facet: FlagFacet }> =>
+  (FLAG_FACETS as readonly string[]).includes(token.facet)
+
+/**
+ * Whether a card waits in its space's triage stack with no review's mark: the read gives a stack
+ * card its `triage_stack`, with `seen_at` null until a review marks it. A card another space
+ * holds stands in that space's stack, not in this one's, so it is not taken here, as the
+ * server's line counts a space's own stack alone.
+ */
+const awaitsTriage = (item: WorkItemBrief) =>
+  item.triage_stack !== undefined && item.triage_stack.seen_at === null && !item.other_space
 
 /**
  * The references of an item and of every goal or stage over it, which «Goal or stage»
@@ -214,22 +231,22 @@ function textHolds(item: WorkItemBrief, typed: string): boolean {
 
 /**
  * The conditions: startable now, as the server answers it; held and not finished; a
- * question waiting for the owner's answer, the reason the queue gives the server; and a
- * card of another space.
+ * question waiting for the owner's answer, the reason the queue gives the server; a card
+ * of the space's triage stack no review has marked; and a card of another space.
  */
 function conditionsHold(item: WorkItemBrief, filter: WorkFilter): boolean {
   if (filter.ready && !item.workable) return false
   if (filter.held && (item.claim_ref === '' || !item.open)) return false
   if (filter.asked && !item.withheld.includes('question')) return false
+  if (filter.triage && !awaitsTriage(item)) return false
   return !filter.elsewhere?.length || Boolean(item.other_space)
 }
 
 /** The filter's facet tokens in a stable order: flags, then each list facet, its values before those negated. */
 export function filterTokens(filter: WorkFilter): WorkFilterToken[] {
-  const tokens: WorkFilterToken[] = []
-  if (filter.ready) tokens.push({ facet: 'ready' })
-  if (filter.held) tokens.push({ facet: 'held' })
-  if (filter.asked) tokens.push({ facet: 'asked' })
+  const tokens: WorkFilterToken[] = FLAG_FACETS.filter((facet) => filter[facet]).map((facet) => ({
+    facet,
+  }))
   for (const facet of LIST_FACETS) {
     for (const value of filter[facet] ?? []) tokens.push({ facet, value } as WorkFilterToken)
     for (const value of filter.not?.[facet] ?? [])
@@ -323,15 +340,14 @@ export function setLabelsMatch(filter: WorkFilter, match: LabelsMatch): WorkFilt
 
 /**
  * The conditions no facet's values say: startable right now, held by somebody and
- * not yet finished, a question waiting for the owner's answer, and a card another
- * space holds. The filter's menu offers them first, as values of their own, and a
- * chip says each; nothing beside the field stands for them. The last is a value, so
- * its chip turns it over: «≠» keeps every card of another space out.
+ * not yet finished, a question waiting for the owner's answer, a card of the space's
+ * triage stack no review has marked, and a card another space holds. The filter's
+ * menu offers them first, as values of their own, and a chip says each; nothing beside
+ * the field stands for them. The last is a value, so its chip turns it over: «≠» keeps
+ * every card of another space out.
  */
 export const WORK_FILTER_CONDITIONS: readonly WorkFilterToken[] = [
-  { facet: 'ready' },
-  { facet: 'held' },
-  { facet: 'asked' },
+  ...FLAG_FACETS.map((facet) => ({ facet })),
   { facet: 'elsewhere', value: 'other' },
 ]
 
@@ -350,6 +366,7 @@ export const WORK_FILTER_STATE_KEYS = {
   ready: 'ready',
   held: 'held',
   asked: 'asked',
+  triage: 'triage',
   elsewhere: 'elsewhere',
   category: 'cat',
   kind: 'kind',
@@ -411,9 +428,8 @@ export function readWorkFilter(state: RouteState | undefined): WorkFilter {
   if (!state) return filter
   const text = state[WORK_FILTER_STATE_KEYS.text]
   if (typeof text === 'string') filter.text = text
-  if (state[WORK_FILTER_STATE_KEYS.ready] === true) filter.ready = true
-  if (state[WORK_FILTER_STATE_KEYS.held] === true) filter.held = true
-  if (state[WORK_FILTER_STATE_KEYS.asked] === true) filter.asked = true
+  for (const flag of FLAG_FACETS)
+    if (state[WORK_FILTER_STATE_KEYS[flag]] === true) filter[flag] = true
   for (const facet of LIST_FACETS) {
     let raw = state[WORK_FILTER_STATE_KEYS[facet]]
     if (typeof raw !== 'string') continue
@@ -508,9 +524,7 @@ function encodeFilter(filter: WorkFilter): { complete: boolean; entries: RouteSt
   const text = cutText(filter.text, ROUTE_STATE_VALUE_CHARS)
   if (text !== filter.text) complete = false
   if (text.trim()) entries[WORK_FILTER_STATE_KEYS.text] = text
-  if (filter.ready) entries[WORK_FILTER_STATE_KEYS.ready] = true
-  if (filter.held) entries[WORK_FILTER_STATE_KEYS.held] = true
-  if (filter.asked) entries[WORK_FILTER_STATE_KEYS.asked] = true
+  for (const flag of FLAG_FACETS) if (filter[flag]) entries[WORK_FILTER_STATE_KEYS[flag]] = true
   for (const facet of LIST_FACETS) {
     const values = facetParts(filter, facet)
     const mark = facet === 'labels' && filter.labelsMatch === 'any' ? `${LABELS_ANY},` : ''
@@ -521,6 +535,13 @@ function encodeFilter(filter: WorkFilter): { complete: boolean; entries: RouteSt
   }
   return { complete, entries }
 }
+
+/**
+ * The route state that holds a filter and nothing else, for a link that opens a view with it.
+ * It is for a filter of conditions, which fits any bound a manifest sets; one that may not
+ * fit goes through `writeWorkFilter` instead.
+ */
+export const filterRouteState = (filter: WorkFilter): RouteState => encodeFilter(filter).entries
 
 /**
  * Write a filter into a route state: the filter's keys are replaced, every

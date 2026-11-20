@@ -36,9 +36,12 @@ async function active(page: Page) {
   return page.locator(`[id="${id}"]`)
 }
 
-/** ↓ from the field to the labels' row, into it, and on until the highlight stands on «all». */
+/**
+ * ↓ from the field to the labels' row, into it, and on until the highlight stands on «all». The
+ * first bound is the conditions and the facets over the labels' row, with room to spare.
+ */
 async function walkToChoice(page: Page) {
-  for (let step = 0; step < 10; step += 1) {
+  for (let step = 0; step < 20; step += 1) {
     await page.keyboard.press('ArrowDown')
     const row = await active(page)
     const text = await row.textContent()

@@ -124,6 +124,7 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
       'ready',
       'held',
       'asked',
+      'triage',
       'elsewhere',
       'cat',
       'kind',

@@ -31,7 +31,10 @@ import { byUse } from '@/shared/lib/byUse.ts'
 type Translate = (key: string, params?: Record<string, unknown>) => string
 type StateCategory = NonNullable<WorkItemBrief['state']>['category']
 /** A facet the menu steps into; the conditions are values of their own group instead. */
-type ValueFacet = Exclude<WorkFilterToken['facet'], 'asked' | 'elsewhere' | 'held' | 'ready'>
+type ValueFacet = Exclude<
+  WorkFilterToken['facet'],
+  'asked' | 'elsewhere' | 'held' | 'ready' | 'triage'
+>
 
 /** Whether a picked token's facet is one the menu steps into, so a pick can stay there. */
 export const isValueFacet = (token: WorkFilterToken) =>
@@ -130,6 +133,7 @@ function tokenValue(token: WorkFilterToken, t: Translate, words?: FilterWords): 
     case 'ready':
     case 'held':
     case 'asked':
+    case 'triage':
     case 'elsewhere': {
       return t(`workItem.facet.${token.facet}`)
     }

@@ -112,6 +112,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'request-proposed-goal.json': validateInputRequestDetail,
   'request-session-gone.json': validateInputRequestDetail,
   'request-triage-group.json': validateInputRequestDetail,
+  'requests-triage-due.json': validateInputRequestList,
   'requests.json': validateInputRequestList,
   'space-settings.json': validateSpaceRecord,
   'usage-item.json': validateItemUsageAnswer,

@@ -114,11 +114,12 @@ describe('the menu', () => {
   const values = (id: string) =>
     groups.find((group) => group.id === id)?.options.map((option) => [option.text, option.detail])
 
-  it('offers the four conditions first', () => {
+  it('offers the five conditions first', () => {
     expect(values('conditions')?.map(([text]) => text)).toEqual([
       'Workable',
       'Has an assignee',
       'Waiting for my answer',
+      'Awaiting triage',
       'From another space',
     ])
   })
