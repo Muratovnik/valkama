@@ -57,7 +57,9 @@ class Harness(unittest.TestCase):
         self.mark = (self.event, "proposed_goal", "accepted the goal")
 
     def marks(self, conn: sqlite3.Connection) -> list[tuple]:
-        return [tuple(row) for row in conn.execute("SELECT * FROM agent_decisions")]
+        return [
+            tuple(row) for row in conn.execute("SELECT event_id, point, what FROM agent_decisions")
+        ]
 
     def events_definition(self, conn: sqlite3.Connection) -> str:
         return str(

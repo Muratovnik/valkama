@@ -43,7 +43,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from . import calls, closing, leases, model, questions, request_model, subscriptions
+from . import calls, closing, composed, leases, model, questions, request_model, subscriptions
 from . import store as planning_store
 
 #: The points an action waits at, and how one ends.
@@ -84,12 +84,13 @@ class Proposal:
     what the question shows was proposed (`removed` and `rewritten` for a condition,
     `until` for putting a goal off, `summary` for a close, and for a group its
     `conditions`, `items`, `answer`, `until` and `why`), and `what` the line of the
-    summary of decisions once it is carried out.
+    summary of decisions once it is carried out: composed with its key and values
+    (`composed.decision`), or a text alone, stored without them.
     """
 
     kind: str
     params: Mapping[str, object]
-    what: str
+    what: composed.Text | str
     seen: Mapping[str, object] = field(default_factory=dict)
     reason: str | None = None
     proposed: Mapping[str, object] = field(default_factory=dict)
@@ -97,7 +98,8 @@ class Proposal:
 
 @dataclass(frozen=True)
 class Action:
-    """One action as stored."""
+    """One action as stored: `what` as composed, or as text alone where it was stored
+    without its key."""
 
     id: str
     work_item_id: str
@@ -105,7 +107,7 @@ class Action:
     kind: str
     params: dict
     seen: dict
-    what: str
+    what: composed.Text | str
     reason: str | None
     proposed: dict
     asked_call: int
@@ -122,13 +124,23 @@ class Action:
             kind=str(stored["kind"]),
             params=dict(stored.get("params") or {}),
             seen=dict(stored.get("seen") or {}),
-            what=str(stored.get("what") or ""),
+            what=_what(stored),
             reason=stored.get("reason"),
             proposed=dict(stored.get("proposed") or {}),
             asked_call=int(row["asked_call"]),
             created_at=str(row["created_at"]),
             outcome=row["outcome"],
         )
+
+
+def _what(stored: Mapping[str, object]) -> composed.Text | str:
+    """An action's `what` as `hold` stored it: with its key and values, or its text alone."""
+
+    text = str(stored.get("what") or "")
+    key, values = stored.get("what_key"), stored.get("what_values")
+    if isinstance(key, str) and isinstance(values, dict):
+        return composed.Text(key, values, text)
+    return text
 
 
 @dataclass(frozen=True)
@@ -158,7 +170,7 @@ def ask(
     proposal: Proposal,
     *,
     purpose: str,
-    prompt: str,
+    prompt: composed.Text,
     fields: list[dict],
     author: str | None,
 ) -> Waiting:
@@ -170,10 +182,11 @@ def ask(
     """
 
     action, fresh = hold(conn, work_item_id, point, proposal)
+    what = composed.plain(action.what)
     if not fresh:
-        return Waiting(action.id, point, owner_question(conn, action), action.what)
+        return Waiting(action.id, point, owner_question(conn, action), what)
     question = ask_owner(conn, action, purpose=purpose, prompt=prompt, fields=fields, author=author)
-    return Waiting(action.id, point, question, action.what)
+    return Waiting(action.id, point, question, what)
 
 
 def hold(
@@ -205,7 +218,12 @@ def hold(
         "kind": proposal.kind,
         "params": params,
         "seen": dict(proposal.seen),
-        "what": proposal.what,
+        "what": composed.plain(proposal.what),
+        **(
+            {"what_key": proposal.what.key, "what_values": dict(proposal.what.values)}
+            if isinstance(proposal.what, composed.Text)
+            else {}
+        ),
         "reason": proposal.reason,
         "proposed": dict(proposal.proposed),
     }
@@ -223,7 +241,7 @@ def ask_owner(
     action: Action,
     *,
     purpose: str,
-    prompt: str,
+    prompt: composed.Text,
     fields: list[dict],
     author: str | None,
 ) -> str:
@@ -288,7 +306,7 @@ def ask_sessions(
     action: Action,
     sessions: list[str],
     *,
-    prompt: str,
+    prompt: composed.Text,
     author: str | None,
 ) -> None:
     """Ask each session whose work the action's cancel ends whether it agrees, by a call of

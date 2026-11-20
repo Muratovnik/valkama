@@ -24,7 +24,7 @@ import sqlite3
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 
-from . import calls, item_projects, model
+from . import calls, composed, item_projects, model
 from . import store as planning_store
 
 #: Every point a decision is marked at.
@@ -58,11 +58,14 @@ _DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 _STAMP = "%Y-%m-%dT%H:%M:%SZ"
 
 
-def mark(conn: sqlite3.Connection, event_id: int, point: str, what: str) -> None:
+def mark(conn: sqlite3.Connection, event_id: int, point: str, what: composed.Text | str) -> None:
     """Mark the event that recorded an agent's own decision at `point`, saying `what`.
 
-    `what` is a short line the point writes, such as `accepted MAIN-12 under MAIN-3`;
-    one longer than `WHAT_LIMIT` is cut. An event is marked once. A point unknown
+    `what` is a short line the point composes (`composed.decision`), such as `accepted
+    MAIN-12 under MAIN-3`, stored with the key and values it was composed of; a text
+    alone, as a waiting action stored before keys carries it, is stored without them.
+    A text longer than `WHAT_LIMIT` is cut; its values are not. An event is marked once.
+    A point unknown
     here, an event that is not there or not of the action the point marks, and an
     empty `what` are the caller's mistakes and raise `ValueError`.
     """
@@ -74,14 +77,20 @@ def mark(conn: sqlite3.Connection, event_id: int, point: str, what: str) -> None
         raise ValueError(f"no event {event_id} to mark")
     if str(found[0]) not in EVENTS[point]:
         raise ValueError(f"{point} marks no {found[0]} event")
-    text = " ".join(what.split())
+    text = " ".join(composed.plain(what).split())
     if not text:
         raise ValueError("a decision says what was decided")
     if len(text) > WHAT_LIMIT:
         text = text[: WHAT_LIMIT - 1] + "…"
+    key, values = (
+        (what.key, model.dumps(dict(what.values)))
+        if isinstance(what, composed.Text)
+        else (None, None)
+    )
     conn.execute(
-        "INSERT INTO agent_decisions(event_id, point, what) VALUES(?, ?, ?)",
-        (event_id, point, text),
+        "INSERT INTO agent_decisions(event_id, point, what, what_key, what_values)"
+        " VALUES(?, ?, ?, ?, ?)",
+        (event_id, point, text, key, values),
     )
 
 
@@ -120,7 +129,8 @@ _FROM = (
 #: carried out a waiting action of the mark's point on its item, as Valkama's call makes
 #: the cancel the sessions agreed to, the call that asked that action (`asked_call`).
 _ROWS = (
-    "SELECT d.event_id, d.point, d.what, e.created_at, e.author, w.work_item_id,"
+    "SELECT d.event_id, d.point, d.what, d.what_key, d.what_values, e.created_at, e.author,"
+    " w.work_item_id,"
     " w.number, w.title, s.key, c.identity_state, c.identity_source, c.session_id, c.agent_id"
     + _FROM
     + " LEFT JOIN pending_actions a ON a.ended_call = e.call_id"
@@ -189,6 +199,7 @@ def page(
                 },
                 "session": _session(row),
                 "what": row["what"],
+                "what_message": _message(row),
                 "event_id": int(row["event_id"]),
             }
             for row in rows
@@ -196,6 +207,14 @@ def page(
         "total": total,
         "has_more": offset + len(rows) < total,
     }
+
+
+def _message(row: sqlite3.Row) -> dict | None:
+    """The key and values `what` was composed of; None on a mark written before keys."""
+
+    if row["what_key"] is None:
+        return None
+    return {"key": row["what_key"], "values": json.loads(row["what_values"])}
 
 
 def _session(row: sqlite3.Row) -> str:

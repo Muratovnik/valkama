@@ -1,3 +1,4 @@
+import { promptMessageSchema } from '@/shared/api/composedTextModel.ts'
 import { boundedList, boundedText, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import { ACTION_OUTCOMES, actionSchema } from '@/shared/api/inputRequestAction.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
@@ -138,6 +139,12 @@ const requestSchema = strictObject({
   title: z.string().min(1).max(200),
   kind: z.enum(['question', 'decision']),
   prompt: z.string().min(1).max(8000),
+  /**
+   * The key and values of a prompt the service composed, which the interface says in the
+   * reader's language; null on a prompt an agent wrote and on one stored before keys. A record
+   * a test builds may leave it out.
+   */
+  prompt_message: promptMessageSchema.nullable().optional(),
   fields: boundedList(fieldSchema, FIELD_LIMIT).min(1),
   answers: answersSchema.nullable(),
   /** Own variants of fields with options; null while there is no answer. */

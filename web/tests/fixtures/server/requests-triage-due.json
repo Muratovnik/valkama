@@ -17,6 +17,7 @@
         "title": "Contract card",
         "kind": "question",
         "prompt": "Why does the card read flat?",
+        "prompt_message": null,
         "fields": [
           {
             "id": "why",

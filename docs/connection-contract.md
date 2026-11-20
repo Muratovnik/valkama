@@ -447,7 +447,8 @@ owner is asked a question on it, and the answer of the write carries:
                     "question": "9a41…", "what": "cancel MAIN-12"}
 ```
 
-`what` is the line the summary of decisions would carry. The same write sent
+`what` is the line the summary of decisions would carry, in English; the
+interface says it from its key ([Texts the service composes](#texts-the-service-composes)). The same write sent
 again while it waits answers the same and writes nothing; another write of the
 point on the item is refused with `[participation]`. The top-level session that
 asked follows the item, unless it holds it. A goal waits in `triage` without a
@@ -533,6 +534,55 @@ carry it.
 | `[consent]` | 400 | a consent answer that is not `agree`, `object` with a `reason` or `moved_out`, or `moved_out` while the session's work is still in the list |
 | `owner_only` | 403 | an agent's answer to a question with a purpose but `consent`, or to one a waiting write carries; an agent's write of the setting |
 | `not_asker` | 403 | a withdrawal by another session than the one that asked, or of a question Valkama asked |
+
+#### Texts the service composes
+
+Some texts a person reads are written by Valkama, not by an agent: the prompt of the
+question a waiting write asks, the question a put-off that came back asks, the
+sweep's question to confirm a goal, and the `what` of a decision. They are stored in
+English, and an agent reads that text as before. Beside it the answers carry the key
+the text was composed from and its values, so the interface says the same in the
+reader's language without reading the English: a request's `prompt_message` (the
+request detail and the list of `GET /api/modules/planning/requests`) and a decision's
+`what_message` (`GET /api/planning/decisions`), each `{"key": …, "values": {…}}`:
+
+```json
+"prompt": "An agent proposes the goal MAIN-3: Exports. Take it on, put it off, or drop it.",
+"prompt_message": {"key": "goal_proposed", "values": {"reference": "MAIN-3", "title": "Exports"}}
+```
+
+Either is `null` on a text an agent wrote, a review's `to_check` among them, and on a
+row written before the store kept keys (schema 24); the interface then shows the
+stored text. The values are references, counts, a state's key, titles and the agent's
+own reason, summary or step as it wrote it, never a part of the English. The keys,
+each with its values, are defined once, in `server/planning/composed.py`:
+
+| Key of a question | Values |
+| --- | --- |
+| `task_filed`, `task_moved_in` | `reference`, `goal`, `title`: an agent files the task in an accepted goal, or moves it there |
+| `task_moved_to` | `reference`, `goal`, `state` (the state's key), `title`: an agent moves a task in a goal to a state |
+| `goal_proposed`, `goal_came_back` | `reference`, `title`: an agent proposes a goal; a goal came back from being put off |
+| `put_off_asked` | `reference`, `kind` (`goal` or `stage`), `title`, `until`, `reason` |
+| `put_off_came` | `reference`, and what it waited for: the moment `until` or the item `item`, the other `null` |
+| `cancel_asked` | `reference`, `point` (`cancel_outside` or `cancel_shared`), `title`, `reason` or `null`, `sessions_asked`, `objections` (`[{session, reason}]`), `unanswered` (sessions) |
+| `cancel_consent` | `reference`, `title`, `reason` or `null`: asked of a session at work |
+| `confirm_asked`, `confirm_agent`, `confirm_agent_empty` | `reference`, `cancelled` and `moved_out` (`[{reference, reason}]`), `steps`, `hidden` (lines that did not fit); the agent's two add `summary` or `null` |
+| `steps_asked` | `reference`, `kind`, `title`, `removed` (texts), `rewritten` (`[{from, to}]`), `reason` |
+| `group_asked` | `count`, `title` |
+
+| Key of a decision | Values |
+| --- | --- |
+| `accepted` | `reference`, `under` (a goal or stage, or `null`), `label` (the rule's label, or `null`) |
+| `moved` | `reference`, `under` |
+| `cancelled` | `reference`, `question` (the answered question it follows, or `null`) |
+| `closed` | `reference` |
+| `put_off` | `reference`, `until`, `reason` |
+| `steps` | `changes` (`[{change, before, after}]`, `change` `removed`, `rewrote` or `clarified`), `reason` or `null` |
+| `chose` | `labels` |
+| `group` | `title`, `answer` (`do`, `later` or `drop`), `count` |
+
+A key or a value not in these lists is new in a release of the server and the web
+together.
 
 #### The triage stack
 

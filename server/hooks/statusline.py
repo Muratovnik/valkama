@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 #: `store.STORE_SCHEMA_VERSION`, held equal by a test: importing the store module costs
 #: this command more than everything else it does.
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 #: The most stdin read as a reading; a status line input is a few kilobytes.
 MAX_INPUT_BYTES = 1024 * 1024

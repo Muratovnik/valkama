@@ -81,6 +81,7 @@ from datetime import datetime, timedelta
 
 from . import (
     calls,
+    composed,
     deferral,
     item_tree,
     leases,
@@ -515,11 +516,25 @@ def ask(conn: sqlite3.Connection, identity: str) -> str:
     return asked
 
 
-def prompt(reference: str, part: dict, steps: list[str], *, head: str | None = None) -> str:
-    """The question to confirm, at most `PROMPT_LIMIT` characters.
+#: A line of the question to confirm: its text, and the list and entry it shows, if any.
+_Line = tuple[str, str | None, object]
 
-    `head` is its first line when an agent's confirmation waits on it. The lines that
-    do not fit are counted at its end rather than cut mid-line.
+
+def prompt(
+    reference: str,
+    part: dict,
+    steps: list[str],
+    *,
+    head: str | None = None,
+    key: str = "confirm_asked",
+    summary: str | None = None,
+) -> composed.Text:
+    """The question to confirm, at most `PROMPT_LIMIT` characters, said by `key`.
+
+    `head` is its first line when an agent's confirmation waits on it, `key` then
+    `confirm_agent` or `confirm_agent_empty` with the agent's `summary` as the line quotes
+    it. The lines that do not fit are counted at its end rather than cut mid-line, and
+    the values hold what was shown: the entries that fit, and how many lines did not.
     """
 
     if head is None:
@@ -527,21 +542,40 @@ def prompt(reference: str, part: dict, steps: list[str], *, head: str | None = N
             f"All work under {reference} is closed: confirm it, or leave it to the next session"
             " that takes work in this space."
         )
-    lines = [*_listed("Cancelled", part["cancelled"]), *_listed("Moved out", part["moved_out"])]
+    lines: list[_Line] = [
+        *_listed("Cancelled", "cancelled", part["cancelled"]),
+        *_listed("Moved out", "moved_out", part["moved_out"]),
+    ]
     if steps:
-        lines += ["", "Its steps:", *(f"- {text}" for text in steps)]
+        lines += [("", None, None), ("Its steps:", None, None)]
+        lines += [(f"- {text}", "steps", text) for text in steps]
     else:
-        lines += ["", "It has no steps: check what was done against its description."]
-    whole = "\n".join([head, *lines])
-    if len(whole) <= PROMPT_LIMIT:
-        return whole
-    text = head
-    for shown, line in enumerate(lines):
-        more = f"\n({len(lines) - shown} more line(s) not shown: see {reference})"
-        if len(text) + 1 + len(line) + len(more) > PROMPT_LIMIT:
-            return text + more
-        text += "\n" + line
-    return text  # pragma: no cover - every line fitting is the whole fitting
+        lines += [
+            ("", None, None),
+            ("It has no steps: check what was done against its description.", None, None),
+        ]
+    text = "\n".join([head, *(line for line, _, _ in lines)])
+    shown = len(lines)
+    if len(text) > PROMPT_LIMIT:
+        text = head
+        for index, (line, _, _) in enumerate(lines):
+            more = f"\n({len(lines) - index} more line(s) not shown: see {reference})"
+            if len(text) + 1 + len(line) + len(more) > PROMPT_LIMIT:
+                text, shown = text + more, index
+                break
+            text += "\n" + line
+    kept = lines[:shown]
+    values: dict[str, object] = {
+        "reference": reference,
+        **{
+            name: [entry for _, section, entry in kept if section == name]
+            for name in ("cancelled", "moved_out", "steps")
+        },
+        "hidden": len(lines) - shown,
+    }
+    if key != "confirm_asked":
+        values["summary"] = summary
+    return composed.question(key, text, **values)
 
 
 def open_question(conn: sqlite3.Connection, identity: str) -> str | None:
@@ -587,16 +621,20 @@ def left(conn: sqlite3.Connection, identity: str) -> None:
     )
 
 
-def _listed(label: str, entries: list[dict]) -> list[str]:
+def _listed(label: str, section: str, entries: list[dict]) -> list[_Line]:
     if not entries:
         return []
     return [
-        "",
-        f"{label}:",
+        ("", None, None),
+        (f"{label}:", None, None),
         *(
-            f"- {entry['reference']}: {entry['reason']}"
-            if entry["reason"]
-            else f"- {entry['reference']}"
+            (
+                f"- {entry['reference']}: {entry['reason']}"
+                if entry["reason"]
+                else f"- {entry['reference']}",
+                section,
+                {"reference": entry["reference"], "reason": entry["reason"] or None},
+            )
             for entry in entries
         ),
     ]

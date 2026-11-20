@@ -15,6 +15,7 @@
     "title": "Contract card",
     "kind": "decision",
     "prompt": "Which path do the comments take?",
+    "prompt_message": null,
     "fields": [
       {
         "id": "path",
