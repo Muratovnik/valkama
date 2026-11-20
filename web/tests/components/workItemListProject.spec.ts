@@ -11,7 +11,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
@@ -22,6 +22,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
+import { goalRow, serveGoalVolumes, spentOf } from '../support/volumesDouble.ts'
 
 const named = (id: string, name: string) => ({
   project_id: id,
@@ -53,6 +54,7 @@ const space = [
 const BY_REFERENCE = { key: 'reference', descending: false } as const
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
   localStorage.clear()
 })
@@ -183,8 +185,17 @@ const model = (projects: number): PlanningReadModel => ({
   stale_claims: [],
 })
 
-/** The workspace's list over a space of `projects` projects, narrowed to `project` if named. */
+/** What the goal spent, as the server's `goal-volumes` gives it for the goal. */
+const GOAL_ROW = goalRow({ reference: 'MAIN-1', id: boardId(1), spent: spentOf(7200, 30_000) })
+/** The figure the goal's row of the list says it spent. */
+const goalSpent = () => rowOf('MAIN-1')?.querySelector('[data-spend="spent"]')?.textContent?.trim()
+
+/**
+ * The workspace's list over a space of `projects` projects, narrowed to `project` if named. The
+ * workspace writes its own store, so the list reads what the goal it draws spent.
+ */
 async function workspace(projects: number, project?: string) {
+  serveGoalVolumes([GOAL_ROW])
   mount(PlanningWorkspace, {
     attachTo: document.body,
     props: {
@@ -209,15 +220,18 @@ describe('when the workspace names the projects', () => {
   it('draws «Project» in a space of several projects with «All projects» chosen', async () => {
     await workspace(2)
     expect(heads()).toContain('Project')
+    expect(goalSpent()).toBe('Spent 2\u{A0}h · 30K')
   })
 
   it('draws none once a project is chosen', async () => {
     await workspace(2, 'alpha')
     expect(heads()).not.toContain('Project')
+    expect(goalSpent()).toBe('Spent 2\u{A0}h · 30K')
   })
 
   it('draws none in a space of one project', async () => {
     await workspace(1)
     expect(heads()).not.toContain('Project')
+    expect(goalSpent()).toBe('Spent 2\u{A0}h · 30K')
   })
 })

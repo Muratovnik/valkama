@@ -22,6 +22,7 @@ import VMenu from '@/shared/ui/VMenu.vue'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { emptyChain } from '../fixtures/chain.ts'
+import { goalRow, serveGoalVolumes, spentOf } from '../support/volumesDouble.ts'
 import { board, goal, i18n, live, space, tile } from '../support/workItemBoardHarness.ts'
 
 /** Each stack's list and the options it gave the drop library, in mount order. */
@@ -52,6 +53,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 afterEach(() => {
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
@@ -361,7 +363,11 @@ function chainOf(members: WorkItemRow[]): WorkItemChain {
   }
 }
 
+/** The workspace writes its own store, so its list reads what the root goal spent. */
 function workspace(view: 'kanban' | 'list') {
+  serveGoalVolumes([
+    goalRow({ reference: 'MAIN-1', id: goal.work_item_id, spent: spentOf(7200, 30_000) }),
+  ])
   return mount(PlanningWorkspace, {
     props: {
       model: {
@@ -402,6 +408,9 @@ describe('a chain narrows the board and the list', () => {
       // The board draws the root as no tile: a goal is a lane once accepted, here as its chip.
       const root = view === 'list' ? ['MAIN-1'] : []
       expect(shown).toEqual(new Set([...root, 'MAIN-10', 'MAIN-13']))
+      // The list's row of the root says what it spent; the board draws it as no tile to say it on.
+      const spent = wrapper.findAll('[data-spend="spent"]').map((part) => part.text())
+      expect(spent).toEqual(view === 'list' ? ['Spent 2\u{A0}h · 30K'] : [])
       const chip = wrapper.get('.workspace-chip')
       expect(chip.text()).toBe('Chain MAIN-1 · 3')
       expect(chip.attributes('aria-label')).toBe('Leave chain MAIN-1 and show the whole space')
