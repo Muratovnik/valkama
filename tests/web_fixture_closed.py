@@ -13,15 +13,21 @@ inside the period is counted by neither.
 
 Some carry the label `ui`, the goal among them, and the read is asked a second time under it:
 narrowed by a label, the read counts tasks alone, so the goal is not among them.
+
+The reads are asked at one fixed moment, `ASKED`, after every moment written here: the
+Volumes pace counts the last days up to the caller's today, and on the wall clock that
+count would change from one day to the next while the cards' moments stand still.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime
+from unittest import mock
 from urllib.parse import urlencode
 
 from server import store
-from server.planning import service
+from server.planning import chain, service
 
 SPACE = "ALPHA"
 #: The days the period is asked by, at the offset it is read at.
@@ -49,6 +55,9 @@ LABELLED = frozenset(
 )
 #: The last write of the card filed finished, after the period.
 LATER = "2026-11-25T10:00:00Z"
+#: The moment every read is asked at: after the last write above, so the pace of the last
+#: days stands still whatever the day the fixtures are written on.
+ASKED = datetime(2026, 11, 26, 12, tzinfo=UTC)
 
 
 def _file(conn, title: str, kind: str, state: str | None) -> str:
@@ -106,9 +115,10 @@ def closed_in_period(
     finally:
         conn.close()
     ref = {"data_scope_id": data_scope_id, "space_key": SPACE}
-    board = http(f"/api/planning?{urlencode(ref)}")
-    settle(board)
-    query = {"scope_kind": "space", **ref, **PERIOD}
-    volumes = http(f"/api/planning/volumes?{urlencode(query)}")
-    labelled = http(f"/api/planning/volumes?{urlencode({**query, 'label': LABEL})}")
+    with mock.patch.object(chain, "utc_now", lambda: ASKED):
+        board = http(f"/api/planning?{urlencode(ref)}")
+        settle(board)
+        query = {"scope_kind": "space", **ref, **PERIOD}
+        volumes = http(f"/api/planning/volumes?{urlencode(query)}")
+        labelled = http(f"/api/planning/volumes?{urlencode({**query, 'label': LABEL})}")
     return {"board": board, "volumes": volumes, "volumes_labelled": labelled}
