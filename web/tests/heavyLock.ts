@@ -27,8 +27,14 @@ interface GateOptions {
 export function lockedCommand(
   run: string,
   command: readonly string[],
-  { cpus, lockFile }: GateOptions = {},
+  options: GateOptions = {},
 ): string[] {
+  // An earlier version took the lock file as a string here. Read as options, a string names no
+  // file, and the run would take the machine's lock without a word; `npm run test:unit` does
+  // not typecheck, so the type alone does not stop it.
+  if (typeof (options as unknown) === 'string')
+    throw new TypeError('lockedCommand takes { cpus, lockFile } after the command, not a path')
+  const { cpus, lockFile } = options
   return [
     python,
     lockScript,
