@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url'
 
 import { scanScopeEscapes } from './ui-system/boundaries.mjs'
 import { DETAIL_TOOLTIPS } from './ui-system/detail-tooltips.mjs'
+import { scanFloatingPartScopes } from './ui-system/floating-parts.mjs'
 import { scanFocusRingWidths } from './ui-system/focus-rings.mjs'
 import { scanImportCycles, scanImportDirection } from './ui-system/imports.mjs'
 import {
@@ -78,6 +79,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanControlSizes(sources, sizes),
     ...scanFocusRingWidths(sources),
     ...scanScopeEscapes(sources),
+    ...scanFloatingPartScopes(sources),
     ...scanImportDirection(sources),
     ...scanImportCycles(sources),
   ]

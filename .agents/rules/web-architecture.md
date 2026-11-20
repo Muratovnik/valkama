@@ -40,8 +40,10 @@ A component is a black box, and two checks make that a fact rather than a habit.
 `eslint-plugin-vue-scoped-css` refuses a scoped selector no template in the same
 file can produce, so a class in a style block has to be a class that file writes;
 `scanScopeEscapes` in the UI-system guard holds `:deep()` and `:global()` to a
-list of files with a reason each. What a host needs is almost always the channel
-Vue already has: a class written on a child component tag lands on that child's
+list of files with a reason each. A class written on a floating Reka part such as
+`DropdownMenuContent` lands inside Reka's wrapper without the scope, so
+`scanFloatingPartScopes` refuses a scoped rule for it. What a host needs is
+almost always the channel Vue already has: a class written on a child component tag lands on that child's
 root together with the host's scope id, so `<VIcon class="note-icon" />` styles
 the same element `svg` used to reach and survives the icon becoming something
 other than an `svg`. Deeper than a root there are two more — the child placing
