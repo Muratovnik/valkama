@@ -163,7 +163,7 @@ by [the triage procedure](references/triage.md).
 **Checklist.** Each step is a condition the item must meet to close; the steps
 of your plan stay in your client. Send them with the claim in one
 call: `apply_work_item_changes` with `claim: true` and
-`checklist: ["first step", {"text": "…", "done": true}]`, a step already done
+`checklist: ["first condition", {"text": "…", "done": true}]`, a step already done
 sent as that object. `{"items": [...], "force": true}` sends the same steps when
 `force` must carry a refusal through. A step sent with
 the text of one the item has keeps its id, claim and tick, so add steps by
@@ -432,12 +432,12 @@ as accepted, or as every option refused.
 A request suits a question the work can go on without. No session waits for it:
 the answer arrives with the next read of the item, so go on with what does not
 depend on it. A question the work cannot go on without belongs in the client,
-where the person answers now. A request bound to an `execution_id` expires when
-that execution ends. Closing an item ends every request pending on it, a list under
-a comment too, `expired` with `item_completed` or `item_cancelled`, and reopening
-brings none back: keep the item open, in review for instance, while the answer or
-the ticks are still needed. A call that writes a list and closes its item is
-refused. The owner's own rules on where to ask come first.
+where the person answers now. Give a request to the owner no `execution_id`: one
+bound to an execution expires when it ends. Closing an item ends every request
+pending on it, a list under a comment too, `expired` with `item_completed` or
+`item_cancelled`, and reopening brings none back: keep the item open, in review for
+instance, while the answer or the ticks are still needed. A call that writes a list
+and closes its item is refused. The owner's own rules on where to ask come first.
 
 ## When the owner decides
 

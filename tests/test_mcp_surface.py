@@ -2065,7 +2065,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual(["one"], [step["text"] for step in item["checklist"]])
 
     def test_the_skill_and_the_tool_show_the_same_checklist_list(self) -> None:
-        form = '["first step", {"text": "…", "done": true}]'
+        form = '["first condition", {"text": "…", "done": true}]'
         with open(
             os.path.join(ROOT, "server", "skill", "valkama", "SKILL.md"), encoding="utf-8"
         ) as handle:
