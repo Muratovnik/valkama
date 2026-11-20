@@ -269,6 +269,36 @@ class StartUpMaintenanceTests(McpSurfaceTestCase):
         ).fetchall()
         self.assertTrue(archived[0])
 
+    def test_initialize_leaves_the_search_for_owed_copies_to_the_sweep(self) -> None:
+        """Before: with no archive directory yet, the start searched every end for a later
+        copy before it answered, 17-27 s on a 125 MB store, past the 10 s Codex gives it."""
+
+        source = os.path.join(self.home.name, "client-transcript.jsonl")
+        with open(source, "wb") as handle:
+            handle.write(b'{"type": "synthetic"}\n')
+        self.conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " session_id, transcript_path) VALUES (?, 'session_end', 'confirmed', 'hook', ?, ?)",
+            ("00000000-0000-4000-8000-000000000004", "S", source),
+        )
+        self.conn.commit()
+        self.assertFalse(os.path.isdir(transcripts.directory(store.db_path())))
+        searched_on: list[str] = []
+        real_pending = transcripts.pending
+
+        def recorded(conn: sqlite3.Connection) -> list[transcripts.Pending]:
+            searched_on.append(threading.current_thread().name)
+            return real_pending(conn)
+
+        with mock.patch.object(transcripts, "pending", side_effect=recorded):
+            answers, _ = self.start()
+            for thread in threading.enumerate():
+                if thread.name == housekeeping.TRANSCRIPT_SWEEP_THREAD:
+                    thread.join(10)
+        self.assertEqual(1, len(answers))
+        self.assertTrue(searched_on, "the sweep never searched for the owed copy")
+        self.assertEqual({housekeeping.TRANSCRIPT_SWEEP_THREAD}, set(searched_on))
+
     def test_an_unexpected_maintenance_failure_is_reported_and_the_server_still_starts(
         self,
     ) -> None:
