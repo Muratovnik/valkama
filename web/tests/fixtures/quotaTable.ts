@@ -44,8 +44,10 @@ export const TABLE = {
   fiveReset: 2 * HOUR,
 } as const
 
-const week = (readings: [number, number][]) => ({
+/** An earlier week: its readings as (days after its start, percent) and its restarts in days. */
+const week = (readings: [number, number][], restarts: number[] = []) => ({
   readings: readings.map(([days, percent]): [number, number] => [days * DAY, percent]),
+  restarts: restarts.map((days) => days * DAY),
 })
 
 /** A window with its earlier windows and how the last of them ended (`previous`). */
@@ -170,14 +172,14 @@ export function quotaTable(now: Date | number, offset = -new Date(now).getTimezo
         [1, 4],
         [5, 22],
       ]),
-      {
-        ...week([
+      week(
+        [
           [2, 40],
           [4, 12],
           [6, 30],
-        ]),
-        restarts: [4 * DAY],
-      },
+        ],
+        [4],
+      ),
       week([
         [1, 9],
         [4, 33],

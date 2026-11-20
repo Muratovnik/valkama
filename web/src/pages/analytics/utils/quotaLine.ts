@@ -80,7 +80,7 @@ export interface QuotaLine {
  * A window's own span, in ms: its start to its reset. A window that has named neither runs from its
  * first reading to the answer's moment `today`.
  */
-export function windowSpan(window: QuotaShareWindow, today: string): StepSpan {
+function windowSpan(window: QuotaShareWindow, today: string): StepSpan {
   const from = Date.parse(window.started_at ?? window.readings[0]?.at ?? today)
   return { from, to: Math.max(Date.parse(window.resets_at ?? today), from + 1) }
 }
