@@ -1966,6 +1966,7 @@ MCP tool reads it, for the same reason as above.
 | a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id`, a seat by its `id` |
 | `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, work on an item that names no project for `project`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, `none=project` does not admit work whose project is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
 | `compare` | `true` adds the preceding period of the same length; `false` by default |
+| `space` | the one space the work is narrowed to, by its key, as the other reads that take a space name it, or by its id or name; every space by default |
 
 A filter admits a stretch of work when its value is among those named, and every filter
 must admit it. A parameter given with an empty value, `model=` or `none=`, is taken as
@@ -1974,6 +1975,19 @@ the minute, a hundred days by the hour. Any other parameter, a repeated one, a v
 as `model=m-1,,m-2`, is refused with `400` and
 `{"error": {"code": "invalid_request", "message": …}}`, the shape the reads above refuse
 with.
+
+A space holds the work on the items its board holds: the space's items, and the items
+of other spaces that name one of the projects the registry binds to the space, as
+`list_work_items` reads a space (see [Tool results](#tool-results)). With `project`, it
+holds the space's items that name one of the projects named, and other spaces' items
+that name one when that project is one of the space's; a project of another space that
+the space's items name brings only the space's own. `none=project` keeps the space's
+items that name no project. Work on no item is the space's when the project of the place
+its session stands in, the one `project` reads such work by, is one of the space's projects;
+work whose place is unknown is no space's, and a gone item's is none either. When the
+projects registry cannot be read, a space holds its own items alone. A space the store
+does not hold is refused as any bad value is. Without `space`, `project` reads the items
+that name it in every space.
 
 ```json
 {"interface_version": "valkama-analytics-api",
