@@ -499,6 +499,7 @@ class AdmissionTests(unittest.TestCase):
             "waiting for the heavy-test lock L: it is held by someone",
             machine_lock.admission_line(161.4, 8, 32, 0.37, beside),
             machine_lock.admission_line(0.1, 1, 1, None, []),
+            machine_lock.admission_line(185.0, 24, 32, 0.66, beside[:1], (10.8, 22.4)),
         ]
         self.log.write_bytes(("\r\n".join(lines) + "\r\n Tests  3 passed (3)\r\n").encode())
 
@@ -507,13 +508,15 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(3, entry["tests"])
         admitted = entry["admitted"]
         assert isinstance(admitted, list)
-        self.assertEqual([161, 0], [gate["waited"] for gate in admitted])
-        self.assertEqual([0.37, None], [gate["busy"] for gate in admitted])
-        first, second = (gate["beside"] for gate in admitted)
+        self.assertEqual([161, 0, 185], [gate["waited"] for gate in admitted])
+        self.assertEqual([False, False, True], [gate["without_room"] for gate in admitted])
+        self.assertEqual([0.37, None, 0.66], [gate["busy"] for gate in admitted])
+        first, second, third = (gate["beside"] for gate in admitted)
         self.assertEqual(2, len(first))
         self.assertTrue(first[0].startswith("unittest in C:/a, process 11, since "), first)
         self.assertTrue(first[1].endswith(", with 4 CPUs"), first)
         self.assertEqual([], second)
+        self.assertEqual(1, len(third))
 
     def test_a_step_whose_log_says_no_admission_records_none(self) -> None:
         self.log.write_bytes(b"took the heavy-test lock after a while\n")
