@@ -54,6 +54,7 @@ it('loads only module authority and context, and never opens global feeds', asyn
     'planning',
     'analytics',
     'decisions',
+    'volumes',
     'settings',
   ])
   expect(loadContext).toHaveBeenCalledOnce()
@@ -71,6 +72,7 @@ it('retains committed authority after refresh fails with safe typed copy', async
     'planning',
     'analytics',
     'decisions',
+    'volumes',
     'settings',
   ])
   expect(feed.modulesAuthoritative.value).toBe(true)

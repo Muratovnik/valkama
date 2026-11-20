@@ -87,6 +87,22 @@ export const DETAIL_TOOLTIPS = new Map([
     'which place «the place» is, the last one a session was open in; it stood as a paragraph over the group',
   ],
   [
+    'pages/volumes/components/VolumesCommits.vue <td> v-tooltip.detail="row.sessionWhole"',
+    'the whole session id, of which the row prints the start',
+  ],
+  [
+    'pages/volumes/components/VolumesGoals.vue <td> v-tooltip.detail="figure.hint"',
+    "how a goal's figure is counted, or why it is «—», which the figure does not say",
+  ],
+  [
+    'pages/volumes/components/VolumesNumbers.vue <button> v-tooltip.detail="number.hint"',
+    "where a press on the number goes, and its category's oldest card and how long it has waited",
+  ],
+  [
+    'pages/volumes/components/VolumesNumbers.vue <div> v-tooltip.detail="number.hint"',
+    'why the number opens nothing, and what it counts where the figure alone does not say',
+  ],
+  [
     'shared/ui/ChoiceSelect.vue <strong> v-tooltip.detail="{ text: selected?.title, words: selected?.label }"',
     'the chosen option’s hint, which no row of the field draws; while its own words are cut, they come first, whole',
   ],

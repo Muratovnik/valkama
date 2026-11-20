@@ -1,0 +1,32 @@
+/*
+ * A section of the Volumes page under the numbers: its heading, with a count beside it where the
+ * section has one, a part's heading over each of its tables, and the figures in its rows, which
+ * keep to their line. This is the one place that says how, read by each section as its own scoped
+ * style — the goals (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
+ * (`VolumesFlow`), the estimates (`VolumesEstimates`) and the commits on no card
+ * (`VolumesCommits`).
+ */
+.volumes-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+  margin: 0;
+  font: var(--font-section-title);
+}
+
+.volumes-heading-count {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.volumes-subheading {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.volumes-figure {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

@@ -366,6 +366,7 @@ usePlatformEntryRestore({
           @notice="(message) => say(message, 'refused')"
           @open-space="openSpace"
           @question-taken="cardQuestionTaken"
+          @requests="requestsOpen = true"
           @state="updateModuleState"
           @locale="selectLocale"
         />

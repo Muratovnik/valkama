@@ -3198,6 +3198,87 @@ of the page's point filter and its table, so a decision read on the card is foun
 the same name, and the history's search finds the event by them. An event no decision marked
 carries nothing, and the mark is the record's own: the event's point as the full record has it.
 
+### Volumes
+
+Volumes is where a person reads how much work stands in each state of a scope, what each goal
+took and has left, the work outside goals, how work flowed in a period and the done work
+estimates are judged by. Analytics stays the place of spend and quota: Volumes says what a goal
+spent only as the sum its rows carry. It stands in the rail's Understand group beside Analytics
+and Agent decisions and, like them, fills the window: a bar over a panel of sections that
+scrolls under it, the bar staying where it is.
+
+Its scope is the context bar's, as on Agent decisions: a space, a project of it or every space
+at the top, chosen once. Its own filters are the period — the period strip Analytics stands on,
+today, this week, the past four weeks or days of the reader's own — and the kind and the label
+of a task, «All kinds» and «All labels» until one is chosen. The label's choice offers the
+labels the page's read itself names, and the one chosen: there is no read of labels of its own,
+and a label the read does not name would narrow nothing. Under the kind and label filter only
+matching tasks add up, in the numbers and in each goal's row, and a goal's count at acceptance
+stands as «—» with its reason, since it was taken of the whole goal. The period, the kind, the
+label and the days are the page's address; a choice rewrites it in place.
+
+On top stand ten numbers: one for each of the eight categories, in the model's order, then
+«Waiting for me» and «Commits on no card». Under an open category's number stands the age of
+its oldest card, under «Waiting for me» that of the question asked first; Done and Cancelled
+count what came to a close in the period and say «in the period». A category's number counts
+its tasks, goals and stages, as the board's filter by category shows them, and its hint says
+how many of each; under a filter it counts the matching tasks alone. The numbers stand in one
+row; a phone's page takes them in two rows of five, and where two rows have no room for a word
+of a name, which is never broken, they scroll sideways in their own frame, as a table does on a
+phone.
+
+A number opens the place that shows exactly what it counts. An open category's opens the board
+of the same scope narrowed to the category, with the page's kind and label; a label alone names
+the three kinds of a task there, so no goal carrying it comes in. «Waiting for me» counts
+questions, two questions on one card being two, so it opens the questions window, in a space
+and at the top alike, rather than the board, where two questions on one card would be one row.
+A number that opens nothing is a figure, not a control, and its hint says why: every space has
+no board of its own, the portfolio standing there, so at the top no category opens; Done and
+Cancelled count the period's closed cards, and no filter of Work narrows to a period. «Commits
+on no card» is «—» where their list cannot be read for the scope.
+
+«Commits on no card» shows their list under the numbers and hides it again, the number saying
+which. A row is a commit, the newest first: its hash as its short form, held at the row's start
+while a phone's table scrolls sideways, its subject, the repository, the session as its short
+form with the whole one in the hint, and when it was committed. «Attach
+to a card» opens a line under the row where the card is found by its number or the words of its
+title: the scope's space's cards, closed ones too, since a commit belongs to the card it was
+made for, and every space's at the top. «Attach» is the person's attach, the module's own
+action: the commit leaves the list, the attach is said aloud, and the page reads its numbers
+again, so the number drops by the commit. An attach the server refuses keeps the row and its
+line, the server's reason under the field. Past the most one read answers, the list shows the
+newest and says how many there are; a list that could not be read says so with a retry, and the
+number says «—» until it is read.
+
+The goals are a tree in the section table: each goal, its stages under it to any depth, on the
+tree's rows, folded as every tree folds them. One Tab stop holds the table: ↑ and ↓ move through
+the rows, → opens a folded row, ← folds an open one or goes to its parent, and Enter or a press
+opens the card. A row says where the goal stands, «closed N of M», how many tasks stood under it
+at acceptance (or at the start of work, which its hint says), what its work spent without the
+cancelled and with them — agent time and the tokens processed anew, the server's sums of
+everything under it — and what its open tasks have left by their estimates, rounded and marked
+«≈», with the done tasks the estimate is judged by under it. A heading sorts the rows that share
+a parent by its column. A row past the fifth level stands at the fifth indent and names its
+parent. The table's frame is held to the panel's height, which the page's layout gives it, so a
+long tree scrolls in its frame under a heading row that stays, whatever rows the bar takes.
+
+Under the goals, the work outside goals: the scope's tasks under no goal, by project and by
+label, each row saying how many stand in each category, the count of them beside the heading.
+Then the flow: how many tasks came in and came to a close in the period, the owner's decisions
+and the commits, for the period and day by day, newest first, with the pace of the scope's tasks
+over them in the words of a chain's. Then the estimates: the done tasks they are judged by,
+whether there are enough, and the table by project and kind, each label's row under its own.
+
+A figure the read has no data for is «—» with a hint saying why, never 0: a goal's count at
+acceptance the read does not give — under a filter, with part of its work outside the scope, not
+yet accepted, accepted empty and not started, or accepted before counts at acceptance were kept;
+spending of tasks begun before usage was first counted to a card; an estimate of open tasks none
+of which has one. Work counted that spent nothing says «nothing spent». Its states are the
+shared panel's: the first read waits in it and, failing, is its error with «Retry»; a scope with
+no work says «There is no work in this scope»; a scope without goals says so in the goals'
+place, its work outside goals counted below. A choice of another view dims the last one until
+its answer lands; a refresh that fails keeps what is shown and says «Could not refresh».
+
 ### Settings
 
 Settings uses one section anatomy and one type scale, and its groups read as

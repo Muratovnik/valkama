@@ -13,12 +13,20 @@ export interface CardSearchScope {
   /** The work item id of the card that would wait on the one found. */
   own: string
   space: PlanningSpaceRef | undefined
+  /**
+   * Any card, closed ones too, and of every space where `space` is not given: a card a commit is
+   * attached to, rather than one work waits on.
+   */
+  anyCard?: boolean
 }
 
 /**
  * The cards work can be put off until the close of: the open ones of its own space, found by
  * what is typed, and never the card itself, which putting off cannot wait on. The server refuses
  * the rest it cannot wait on, an ancestor among them, and says so where the write was made.
+ *
+ * Asked for any card (`anyCard`), it offers closed cards as well, and those of every space where
+ * no space is given.
  *
  * Nothing is offered before something is typed: a space's open work runs to hundreds of cards.
  * The card chosen stays among the options while other words are searched, so the field keeps
@@ -42,18 +50,18 @@ export function useCardSearch(scope: () => CardSearchScope) {
   async function run(words: string) {
     const current = new AbortController()
     controller = current
-    const { own, space } = scope()
+    const { anyCard = false, own, space } = scope()
     try {
       const result = await searchGlobalPlanningWorkItems(words, current.signal)
       if (controller !== current) return
       found.value = result.items
-        .filter(
-          ({ target: other, item }) =>
-            other.space_ref.data_scope_id === space?.data_scope_id &&
-            other.space_ref.space_key === space.space_key &&
-            item.open &&
-            item.work_item_id !== own,
-        )
+        .filter(({ target: other, item }) => {
+          const inSpace = space
+            ? other.space_ref.data_scope_id === space.data_scope_id &&
+              other.space_ref.space_key === space.space_key
+            : anyCard
+          return inSpace && (anyCard || (item.open && item.work_item_id !== own))
+        })
         .map(({ item }) => ({ value: item.reference, label: `${item.reference} ${item.title}` }))
     } catch {
       if (controller === current) found.value = []
@@ -80,8 +88,9 @@ export function useCardSearch(scope: () => CardSearchScope) {
   function choose(reference: string) {
     kept.value = options.value.find((option) => option.value === reference) ?? null
   }
-  const emptyLabel = computed(() =>
-    t(query.value ? 'requests.kinds.noCards' : 'requests.kinds.cardHint'),
-  )
+  const emptyLabel = computed(() => {
+    if (!query.value) return t('requests.kinds.cardHint')
+    return t(scope().anyCard ? 'requests.kinds.noCardsAny' : 'requests.kinds.noCards')
+  })
   return { choose, emptyLabel, options, search }
 }
