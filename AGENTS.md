@@ -106,13 +106,13 @@ green screenshot means nothing. Rebuild, then prove that the listener on port
 8642 is the Valkama-managed process in scope before restarting it for live
 verification and handoff. If ownership cannot be proved, do not stop it and
 report live acceptance blocked. Leaving it stale is not a cosmetic loss: the tray
-compares runtime identities, so a stale listener makes it refuse every click,
-and the refusal used to be silent. When anything under `desktop/` changed, run
+compares runtime identities, so a stale listener makes it refuse every click. When anything under `desktop/` changed, run
 `npm run dist` there as well; the installed app is a separate artifact that no
 web build touches, and reporting a desktop change as delivered without it hands
 the owner their previous binary. A browser an agent drives against a real listener
 opens a card through its route or `/open/<number>?in=browser`, because `/open/<number>`
-alone starts the desktop app on the person's screen.
+alone starts the desktop app on the person's screen, and a visible Electron
+window is opened only at a time agreed with the person.
 
 Every tool above is a development dependency pinned in `requirements-dev.txt`,
 configured in `pyproject.toml`. The server itself imports nothing outside the
@@ -185,8 +185,7 @@ One attempt at a work item is `executions/`: its own tables, its lifecycle, the
 Git baseline it started from, and one driver per agent client. A driver owns that
 client end to end — the command line, whether the identity is assigned or
 observed, which effort values it takes, where its structured result arrives — so
-nothing else branches on a client name. Two callers used to, and their copies had
-drifted. `runner` keeps process shape only: it spawns, polls and stops, and knows
+nothing else branches on a client name. `runner` keeps process shape only: it spawns, polls and stops, and knows
 nothing about what any of that means for the work.
 
 Imports run one way and this is the invariant to protect: a surface may import
@@ -303,7 +302,10 @@ force, and the gates hold each:
   and user runtime state out of Git. The one deliberate exception is `web/dist`,
   committed so a clone serves the built UI with no build step; rebuild it
   whenever `web/src` changes and include it in the next incremental local
-  commit after a coherent task-owned green boundary.
+  commit after a coherent task-owned green boundary. In a parallel worktree the
+  worker does not commit it and returns it to its branch's state before handing
+  off; the integrator rebuilds it once on the integrated head and commits it
+  there.
 - Test fixtures, comments and titles carry no value from a live store or the
   owner's own records: no figure, name or id. A case found on live data is
   rebuilt from made-up values, and its comment says the case, not where it was
@@ -348,8 +350,6 @@ replies.
   `CHANGELOG.md`, `DESIGN.md`, the contracts in `docs/` — must stand alone. A
   reader of a fresh clone has no planning trail and no local overlay, so those
   files may not reference one.
-- Databases, WAL files, release bundles, logs, and `node_modules`: outside Git,
-  as above; `web/dist` is the one committed exception.
 
 ## Response style
 
