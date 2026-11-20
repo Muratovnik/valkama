@@ -40,7 +40,7 @@
   ],
   "turns": [
     {
-      "prompt": "{\"skill\": true, \"calls\": [{\"tool\": \"search_work_items\", \"args\": {\"space\": \"ALPHA\", \"query\": \"greeting marker-only-in-the-record\"}}, {\"tool\": \"claim_work_item\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\"}}, {\"tool\": \"apply_work_item_changes\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\", \"checklist\": [{\"text\": \"README says when\", \"done\": true}], \"comment\": {\"body\": \"The README says it now.\"}}}, {\"tool\": \"create_work_item\", \"args\": {\"space\": \"ALPHA\", \"kind\": \"bug\", \"title\": \"The greeting's docs name no default\", \"description\": \"docs/cli.md names no default for the greeting.\", \"labels\": [\"docs\"], \"projects\": [\"app\"], \"links\": [{\"other\": \"{{n}}\", \"kind\": \"discovered-from\"}], \"author\": \"worker-b\"}}], \"files\": {\"app/NOTES.md\": \"The greeting prints on start.\\n\"}, \"answer\": \"Did {{n}} and filed a finding.\"}"
+      "prompt": "{\"skill\": true, \"calls\": [{\"tool\": \"search_work_items\", \"args\": {\"space\": \"ALPHA\", \"query\": \"greeting marker-only-in-the-record\"}}, {\"tool\": \"claim_work_item\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\"}}, {\"tool\": \"apply_work_item_changes\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\", \"checklist\": [{\"text\": \"README says when\", \"done\": true}], \"comment\": {\"body\": \"The README says it now.\"}}}, {\"tool\": \"create_work_item_request\", \"args\": {\"id\": \"{{m}}\", \"author\": \"worker-b\", \"kind\": \"question\", \"prompt\": \"Which name should the option have?\", \"fields\": [{\"id\": \"name\", \"label\": \"The option's name\", \"type\": \"choice\", \"required\": true, \"options\": [{\"id\": \"greeting\", \"label\": \"greeting\"}, {\"id\": \"hello\", \"label\": \"hello\"}]}]}}, {\"tool\": \"create_work_item\", \"args\": {\"space\": \"ALPHA\", \"kind\": \"bug\", \"title\": \"The greeting's docs name no default\", \"description\": \"docs/cli.md names no default for the greeting.\", \"labels\": [\"docs\"], \"projects\": [\"app\"], \"links\": [{\"other\": \"{{n}}\", \"kind\": \"discovered-from\"}], \"author\": \"worker-b\"}}], \"files\": {\"app/NOTES.md\": \"The greeting prints on start.\\n\"}, \"answer\": \"Did {{n}} and filed a finding.\"}"
     },
     {
       "before": [
@@ -63,6 +63,7 @@
       {"check": "comments", "on": "{{n}}", "where": {"new": true, "by": "main"}, "count": 1},
       {"check": "comments", "on": "{{n}}", "where": {"by": "other", "text": {"contains": "Another session"}}, "count": 1},
       {"check": "requests", "on": "{{n}}", "count": 0},
+      {"check": "requests", "on": "{{m}}", "where": {"new": true, "by": "main", "kind": "question"}, "count": 1},
       {"check": "spaces", "as": "space", "where": {"key": "ALPHA"}, "count": 1},
       {"check": "writes", "where": {"by": "subagent", "item": "{{m}}"}, "count": {"min": 1}},
       {"check": "writes", "where": {"by": "subagent", "item": {"not_in": ["{{m}}"]}}, "count": 0},

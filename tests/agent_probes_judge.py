@@ -663,10 +663,25 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
     answer = view.tools().call(
         "list_work_item_requests", {"id": reference, "full": True, "limit": REQUEST_PAGE}
     )
+    # Who asked is the session of the call that wrote the question's event: a question's
+    # own `session_id` is what its asker passed, which a client's agent never does.
+    with view.recorded() as conn:
+        askers = {
+            str(row[0]): (row[1], row[2])
+            for row in conn.execute(
+                "SELECT e.detail, x.session_id, x.agent_id FROM work_item_events e"
+                " LEFT JOIN execution_events x ON x.id = e.call_id"
+                " JOIN work_items w ON w.work_item_id = e.work_item_id"
+                " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
+                " WHERE e.action = 'request_created' AND s.key || '-' || w.number = ?",
+                (reference,),
+            )
+        }
     found = []
     for request in answer.get("requests") or ():
         if not view.before_judging(request.get("created_at")):
             continue
+        session, agent = askers.get(str(request.get("request_id")), (None, None))
         fields = [field for field in request.get("fields") or () if isinstance(field, Mapping)]
         options = [option for field in fields for option in field.get("options") or ()]
         answers = request.get("answers") or {}
@@ -679,7 +694,7 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
                 "purpose": request.get("purpose"),
                 "prompt": request.get("prompt"),
                 "status": request.get("status"),
-                "by": _role(view, request.get("session_id")),
+                "by": _role(view, session, agent),
                 "new": view.after_setup(request.get("created_at")),
                 "addressed_to": [_role(view, request["addressee"])]
                 if request.get("addressee")
