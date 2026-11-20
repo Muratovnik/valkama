@@ -1830,8 +1830,8 @@ when it holds a match, so a search never hides what it found; folded, its count 
 Grouped, the row of state names holds the strip as its chevron and count, the name its hover
 text, and every lane keeps the narrow track empty until it opens. Focus follows the press to
 the control that undoes it.
-The Done column, and a lane's Done cell, stand newest closed first, by the time
-of the item's latest transition; nothing there is planned, so the order of work
+The Done column, and a lane's Done cell, stand newest closed first, by when the
+item last entered its finished state; nothing there is planned, so the order of work
 the other columns stand in does not apply. No tile is placed by hand in any
 column: a drop within its own column changes nothing, and a tile dropped in
 another column moves to that state, standing last until the board reads the

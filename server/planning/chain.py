@@ -40,7 +40,17 @@ import sqlite3
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 
-from . import item_projects, item_tree, leases, model, participation, queue, read_model, states
+from . import (
+    item_projects,
+    item_tree,
+    leases,
+    model,
+    participation,
+    queue,
+    read_model,
+    standing,
+    states,
+)
 
 #: The scopes a chain is read in.
 SCOPES = ("chain", "tree")
@@ -93,21 +103,13 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         " WHERE f.planning_space_id = ? OR t.planning_space_id = ? ORDER BY l.id",
         (space_id, space_id),
     ).fetchall()
-    closed_by_event: dict[str, str] = {}
-    for event in conn.execute(
-        "SELECT e.work_item_id, e.created_at FROM work_item_events e"
-        " JOIN work_items i ON i.work_item_id = e.work_item_id"
-        " WHERE i.planning_space_id = ? AND e.action = 'transitioned' ORDER BY e.id",
-        (space_id,),
-    ):
-        # Ordered by id, so the last one written wins even when two share a second.
-        closed_by_event[str(event["work_item_id"])] = str(event["created_at"])
-
     children: dict[str, list[str]] = {}
     for identity, row in rows.items():
         if row["parent_id"] is not None:
             children.setdefault(str(row["parent_id"]), []).append(identity)
     members = _members(root_id, scope, rows, children, links)
+    # A finished member closed when it last entered its finished state, as every read says.
+    closed_at = standing.entered(conn, [rows[m] for m in members if rows[m]["state_terminal"]])
     # How many members each scope holds, whichever was asked.
     totals = {
         other: len(members)
@@ -147,7 +149,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 if parent is not None and parent in rows
                 else None,
                 "created_at": row["created_at"],
-                "closed_at": closed_by_event.get(identity, row["updated_at"]) if terminal else None,
+                "closed_at": closed_at.get(identity) if terminal else None,
                 "workable": not queue.withheld(conn, row, tree, settings=settings),
                 "queue_order": places.get(identity),
                 "_parent_id": parent,

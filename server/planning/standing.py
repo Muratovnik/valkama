@@ -1,13 +1,15 @@
-"""When an item came to stand where it is: the rule the triage stack and the Volumes reads share.
+"""When an item came to stand where it is: the one rule of every read that asks it.
 
 An item came to stand where it is at its last state entry, the last `created`,
 `transitioned` or `opened` event of its history, or at its creation when the history
 records none. "Last" is history order: the event written last, which has the highest id.
 A stamp is not the order, since an import or a clock step can write a later event with
 an earlier stamp. `ENTERED_AT` is that rule as one SQL expression over the items table
-`i`, and both readers take it, so one item has one moment in every read. A finished
-item's record carries it as `entered_at` (`entered`), so the Work filter's «Closed in a period»
-keeps exactly the cards the Volumes read counts as closed in it.
+`i`, and every reader takes it, so one item has one moment in every read: the triage
+stack, the Volumes read, and a finished item's `closed_at` wherever it is given, its
+record and brief (`read_model.closings`) and a chain's members (`entered`). So the
+Work filter's «Closed in a period» keeps exactly the cards the Volumes read counts as
+closed in it.
 
 Reads only: the module holds an expression and a read of it, and imports nothing of the
 product but the vocabulary of `model`.

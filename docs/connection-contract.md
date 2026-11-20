@@ -961,7 +961,7 @@ it. It carries, in this order:
 | `state` | `key`, `name` and `category`; `null` for an accepted open goal or stage. `open` says whether the work is over |
 | `open`, `container_state`, `acceptance`, `started_at`, `waits_for`, `workable`, `withheld` | as [The work model](#the-work-model) says |
 | `projects` | the projects the item changes, each with its `project_id`, `display_name` and `source`, as [The projects an item changes](#the-projects-an-item-changes) says |
-| `claim_ref`, `claim_state`, `last_claim_ref`, `lapsed_claim`, `closed_at` | who holds it and how the lease stands; who held it last; whose claim the sweep released, as [Claims are leases](#claims-are-leases) says; and when it closed, `null` while it is open |
+| `claim_ref`, `claim_state`, `last_claim_ref`, `lapsed_claim`, `closed_at` | who holds it and how the lease stands; who held it last; whose claim the sweep released, as [Claims are leases](#claims-are-leases) says; and when it closed, when it last entered its finished state as [A close ends the claims](#a-close-ends-the-claims) says, `null` while it is open |
 | `labels`, `source`, `revision`, `created_at`, `updated_at` | as in the full record |
 | `url` | the item's [address](#the-address-of-a-work-item) |
 | `parent` | the parent's reference, or `null` |
@@ -1782,9 +1782,10 @@ answers with `interface_version` and `chain`:
 | `members` | every member, in the order of work: `work_item_id`, `reference`, `title`, `kind`, `state` (`key`, `name`, `category`, `is_terminal`, or `null`), `open`, `container_state`, `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at`, `workable` and `queue_order` |
 | `edges` | the `discovered-from` links whose two ends are the root or members, and every `blocks` link into the root or a member, wherever its source lives: `from`, `to` (work item ids), `kind`, and the source's `reference`, `state_name`, `state_category`, `is_terminal`, `state_unavailable` and `container_state` |
 
-A member's `closed_at` is when it last changed state, if its state is terminal:
-the time of its latest transition, or of its last update when it never had one.
-It is `null` for an open member. `workable` is the rule every work item record
+A member's `closed_at` is when it closed, if its state is terminal: when it last
+entered its finished state, the moment every read gives a closed item (see
+[A close ends the claims](#a-close-ends-the-claims)). It is `null` for an open
+member. `workable` is the rule every work item record
 uses (see [The work model](#the-work-model)).
 
 An edge names its source because a member waits on its blocker whether or not
@@ -3987,16 +3988,18 @@ Who held the item is still on the record. The card (`get_work_item`, a
 reads (`GET /api/planning`, `GET /api/planning/work-items`) and the nodes of
 `GET /api/planning/graph` carry two fields
 that are `null` for open work; the compact rows of `list_work_items` and
-`search_work_items` do not. The full record and the briefs also carry a third, `entered_at`,
-which the card does not:
+`search_work_items` do not:
 
 | Field | For a closed item |
 | --- | --- |
-| `closed_at` | when its latest transition happened, the rule a chain member's `closed_at` follows; when it was last written if it never moved |
+| `closed_at` | when it last entered its finished state: its last `created`, `transitioned` or `opened` event in history order, or its creation when the history holds none. An edit after the close does not move it |
 | `last_claim_ref` | who held it when it closed, as `claim_ref` names a holder; `null` when it closed unheld |
-| `entered_at` | when it came to stand in its finished state: its last `created`, `transitioned` or `opened` event in history order, or its creation when the history holds none. It is the moment `GET /api/planning/volumes` counts it closed at; `closed_at` differs from it for an item that never moved |
 
-The Work filter's «Closed in a period» reads `entered_at`, and keeps exactly the cards
+That moment is the one every read gives a closed item: a chain member's `closed_at`
+follows it, and `GET /api/planning/volumes` counts the item closed at it. An item filed
+straight into a finished state, which never moved, closed when it was filed.
+
+The Work filter's «Closed in a period» reads `closed_at`, and keeps exactly the cards
 `GET /api/planning/volumes` counts as completed or cancelled for the same days. The board's
 address names that condition by the planning module's state keys `period` (`today`, `week`,
 `weeks4` or `custom`) and, for `custom`, `from` and `to`, the first and the last day taken

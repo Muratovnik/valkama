@@ -57,7 +57,7 @@ _WAITING = (
     " UNION SELECT w.work_item_id FROM accepted a JOIN work_items w ON w.parent_id = a.id"
     " JOIN workflow_states s ON s.state_id = w.state_id"
     f" WHERE w.kind = '{model.CONTAINER_KIND}' AND s.category = '{model.SERVICE_CATEGORY}')"
-    f" SELECT i.work_item_id, p.key, i.number, {standing.ENTERED_AT} AS entered_at,"
+    f" SELECT i.work_item_id, p.key, i.number, {standing.ENTERED_AT} AS since,"
     " m.seen_at, m.author"
     " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
     " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
@@ -68,7 +68,7 @@ _WAITING = (
     " AND (:items IS NULL OR i.work_item_id IN (SELECT value FROM json_each(:items)))"
     " AND NOT EXISTS (SELECT 1 FROM work_item_requests r"
     f" WHERE r.work_item_id = i.work_item_id AND {questions.OWNER_QUESTION})"
-    " ORDER BY entered_at, p.key, i.number"
+    " ORDER BY since, p.key, i.number"
 )
 #: The tables the stack is read from: a store without one of them has no stack.
 STACK_TABLES = ("triage_marks", "work_item_requests")
@@ -106,7 +106,7 @@ class Waiting:
     work_item_id: str
     space_key: str
     number: int
-    entered_at: str
+    since: str
     seen_at: str | None
     seen_by: str | None
 
@@ -222,7 +222,7 @@ def due(conn: sqlite3.Connection, settings: participation.Settings, space: str) 
     unseen = [found for found in waiting(conn, space) if found.seen_at is None]
     if not unseen:
         return None
-    oldest_at = unseen[0].entered_at
+    oldest_at = unseen[0].since
     entered = leases.moment(oldest_at)
     aged = entered is not None and entered <= leases.utc_now() - timedelta(
         days=settings.number(space, "triage_age_days")

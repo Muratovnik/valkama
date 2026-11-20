@@ -38,8 +38,8 @@ const NOW = new Date(2026, 10, 19, 12)
 const at = (day: number, hours = 12, minutes = 0, seconds = 0) =>
   new Date(2026, 10, day, hours, minutes, seconds).toISOString()
 
-const done = (n: number, entered: string, overrides: Partial<WorkItemBrief> = {}) =>
-  boardItem(n, 'done', { entered_at: entered, closed_at: entered, ...overrides })
+const done = (n: number, closed: string, overrides: Partial<WorkItemBrief> = {}) =>
+  boardItem(n, 'done', { closed_at: closed, ...overrides })
 const custom = (from: string, to: string): ClosedPeriod => ({ period: 'custom', from, to })
 const preset = (period: 'today' | 'week' | 'weeks4'): ClosedPeriod => ({ period, from: '', to: '' })
 const kept = (items: readonly WorkItemBrief[], closed: ClosedPeriod, now = NOW) =>
@@ -56,8 +56,8 @@ describe('«Closed in a period»', () => {
       done(2, at(12, 0)),
       done(3, at(18, 23, 59, 59)),
       done(4, at(19, 0)),
-      // Open work that came to stand where it is in the period is no closed work.
-      boardItem(5, 'dev', { entered_at: at(15) }),
+      // Open work is no closed work, whatever moment it carries.
+      boardItem(5, 'dev', { closed_at: at(15) }),
     ]
     expect(kept(space, custom('2026-11-12', '2026-11-18'))).toEqual(['MAIN-2', 'MAIN-3'])
     // The wrong way round, a period keeps nothing.
@@ -77,15 +77,11 @@ describe('«Closed in a period»', () => {
     expect(kept(space, preset('weeks4'))).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
   })
 
-  it('counts a card by when it came to stand finished, not by when it was last written', () => {
-    // Filed straight into its finished state, it never moved: `closed_at` falls back on its
-    // last write, after the period; a server that predates `entered_at` is read by `closed_at`.
-    const space = [
-      done(1, at(14), { closed_at: at(25) }),
-      done(2, at(25), { closed_at: at(14) }),
-      done(3, at(25), { entered_at: undefined, closed_at: at(14) }),
-    ]
-    expect(kept(space, custom('2026-11-12', '2026-11-18'))).toEqual(['MAIN-1', 'MAIN-3'])
+  it('counts a card by when it closed, not by when it was last written', () => {
+    // Filed straight into its finished state, it closed when it was filed; an edit after the
+    // period moves its last write, not its close.
+    const space = [done(1, at(14), { updated_at: at(25) }), done(2, at(25), { updated_at: at(14) })]
+    expect(kept(space, custom('2026-11-12', '2026-11-18'))).toEqual(['MAIN-1'])
   })
 
   it('keeps exactly the cards the Volumes read counts as Done and as Cancelled for the period', () => {
@@ -107,8 +103,8 @@ describe('«Closed in a period»', () => {
         ),
       ).toSorted()
     // Done: the first moment of the period, its last second, the goal, and the task filed
-    // finished, whose `closed_at` falls after it; Cancelled: the one inside, not the one at the
-    // first moment after it.
+    // finished, which closed when it was filed though its last write falls after the period;
+    // Cancelled: the one inside, not the one at the first moment after it.
     expect(shown('completed')).toEqual(['ALPHA-1', 'ALPHA-3', 'ALPHA-6', 'ALPHA-7'])
     expect(shown('completed')).toHaveLength(counted('completed'))
     expect(shown('cancelled')).toEqual(['ALPHA-5'])

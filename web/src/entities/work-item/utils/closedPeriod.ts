@@ -6,10 +6,9 @@
  * It keeps exactly the cards the Volumes read counts as Done and Cancelled for the same period:
  * the period is asked of the read by its days, and a card counts there when it came to stand in
  * its finished state from the first day's midnight up to the midnight after the last (`dayBounds`).
- * That moment is the record's `entered_at`, the rule the read counts by; `closed_at` is another
- * rule, which differs for a card that never moved, and is read only from a server that predates
- * `entered_at`. With the state category beside it, the condition is «Done in a period» or
- * «Cancelled in a period».
+ * That moment is the record's `closed_at`, when the card last entered its finished state, the
+ * moment the read counts by. With the state category beside it, the condition is «Done in a
+ * period» or «Cancelled in a period».
  *
  * The address holds it as the period pages hold theirs: `period`, and for days of the reader's
  * own `from` and `to`, the first and the last day taken in.
@@ -31,7 +30,7 @@ const CLOSED_CATEGORIES: ReadonlySet<string> = new Set(['completed', 'cancelled'
 export function closedWithin(item: WorkItemBrief, closed: ClosedPeriod, now: Date): boolean {
   if (item.state === null || !CLOSED_CATEGORIES.has(item.state.category)) return false
   const days = periodDays(closed, now)
-  const moment = Date.parse(item.entered_at ?? item.closed_at ?? '')
+  const moment = Date.parse(item.closed_at ?? '')
   if (days === null || Number.isNaN(moment)) return false
   const { begins, ends } = dayBounds(days)
   return begins <= moment && moment < ends
