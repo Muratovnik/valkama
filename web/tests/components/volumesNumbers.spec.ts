@@ -105,8 +105,8 @@ describe('the Volumes page’s numbers', () => {
     expect(went[0].state).toEqual({ cat: 'ready', kind: 'task,bug,improvement', labels: 'ui' })
   })
 
-  it('opens the questions window on the space from «Waiting for me», and on every space at the top', async () => {
-    for (const scope of [SPACE, GLOBAL]) {
+  it('opens the questions window on the scope from «Waiting for me», and on every space at the top', async () => {
+    for (const scope of [SPACE, PROJECT, GLOBAL]) {
       const page = mountPage(
         volumesDouble(() =>
           volumesAnswer({ waiting: 1, space: scope.kind === 'space' ? 'MAIN' : null }),
@@ -117,7 +117,12 @@ describe('the Volumes page’s numbers', () => {
       await number(page, 'waiting').trigger('click')
       page.unmount()
     }
-    expect(shell.questions).toEqual([{ data_scope_id: VOLUMES_STORE, space_key: 'MAIN' }, null])
+    const main = { data_scope_id: VOLUMES_STORE, space_key: 'MAIN' }
+    expect(shell.questions).toEqual([
+      { space: main, project: null },
+      { space: main, project: 'alpha' },
+      null,
+    ])
     expect(went).toEqual([])
   })
 

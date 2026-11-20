@@ -3,16 +3,17 @@ import type { Ref } from 'vue'
 
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 /**
  * The shell's ways to work from anywhere: the finder, the questions waiting, and opening a task.
  *
- * The questions window opens on every space's questions, or on one space's own when a place
- * narrowed to that space opens it (`openRequests`); the narrowing lasts until the window closes.
+ * The questions window opens on every space's questions, or on those of what a space's board
+ * holds, and of its project, when a place narrowed to that scope opens it (`openRequests`); the
+ * narrowing lasts until the window closes.
  *
  * `inPlace` is where the module on show opens a task's card itself, over its page, or null where
  * it does not; a task opened from the finder, the questions or a reference in any text goes
@@ -28,8 +29,8 @@ export function useGlobalWorkActions(
   /** What the finder opens searching for; blank opens it on the search it last held. */
   const finderText = ref('')
   const requestsOpen = ref(false)
-  /** The space the questions window is narrowed to, or none for every space's. */
-  const requestsScope = ref<PlanningSpaceRef | null>(null)
+  /** The scope the questions window is narrowed to, or none for every space's. */
+  const requestsScope = ref<QuestionScope | null>(null)
   const pendingRequestCount = ref<PendingCount | null>(null)
 
   /** A place a surface over the module asks for, which that surface gives way to. */
@@ -39,9 +40,9 @@ export function useGlobalWorkActions(
     requestsOpen.value = false
   }
 
-  /** The questions window, narrowed to a space when a place in that space opens it. */
-  function openRequests(space: PlanningSpaceRef | null = null) {
-    requestsScope.value = space
+  /** The questions window, narrowed to a scope when a place in that scope opens it. */
+  function openRequests(scope: QuestionScope | null = null) {
+    requestsScope.value = scope
     requestsOpen.value = true
   }
 

@@ -3264,14 +3264,15 @@ page's period, which keeps exactly the cards they count and names the period on 
 top they stay figures, as every category does there. «Waiting for me» counts
 questions, two questions on one card being two, so it opens the questions window, in a space
 and at the top alike, rather than the board, where two questions on one card would be one row.
-Opened from a space, the window lists that space's own questions, read narrowed by the server,
-and says so in its subtitle; a chip over the list names the space, and removing it lists every
-space's questions again. At the top it lists every space's. The rail's count stays every
-space's while the list is narrowed, and the narrowing ends when the window closes, so the rail
-opens it on every space's. The server narrows the questions to the cards of one space and to
-nothing finer, so the window opened from a project shows the whole space's, and the questions
-on another space's cards that name a project of the space, which the number counts, are not
-among them until its read can name them.
+Opened from a space, the window lists the questions the number counts while no kind or label
+is chosen: those on the cards the space's board holds, its own and other spaces' cards that
+name one of its projects, read narrowed so by the server; opened from a project, those of them
+on the cards that name the project. The page's kind and label do not narrow the window, so
+under them it lists more than the number, which then counts the questions on the matching tasks
+alone. Its subtitle says the scope, a chip over the list names the space, and the project after
+it («Main · alpha»), and removing the chip lists every space's questions again. At the top it
+lists every space's. The rail's count stays every space's while the list is narrowed, and the
+narrowing ends when the window closes, so the rail opens it on every space's.
 A number that opens nothing is a figure, not a control, and its hint says why: every space has
 no board of its own, the portfolio standing there, so at the top no category opens. «Commits
 on no card» is «—» where their list cannot be read for the scope.

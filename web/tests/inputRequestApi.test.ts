@@ -54,6 +54,35 @@ describe('input request wire contract', () => {
     })
   })
 
+  it('reads a scope as its board holds it, with the project it is narrowed to', async () => {
+    const space = requestEntry().target.space_ref
+    const fetchMock = serve(requestList())
+    await fetchInputRequests({ scope: { space, project: 'alpha' } })
+    await fetchInputRequests({ scope: { space, project: null } })
+    const queries = fetchMock.mock.calls
+      .map(([input]) => new URL(requestUrl(input), 'https://test.example'))
+      .filter((url) => url.pathname === '/api/modules/planning/requests')
+      .map((url) => Object.fromEntries(url.searchParams))
+    const space_fields = { data_scope_id: space.data_scope_id, space_key: space.space_key }
+    expect(queries).toEqual([
+      {
+        scope_kind: 'space',
+        status: 'pending',
+        limit: '200',
+        ...space_fields,
+        other_spaces: 'true',
+        project_id: 'alpha',
+      },
+      {
+        scope_kind: 'space',
+        status: 'pending',
+        limit: '200',
+        ...space_fields,
+        other_spaces: 'true',
+      },
+    ])
+  })
+
   it('takes the line that triage is due from the first page, which alone carries it', async () => {
     const line = {
       space_ref: requestEntry().target.space_ref,

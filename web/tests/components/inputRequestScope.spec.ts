@@ -1,8 +1,10 @@
 /**
- * The questions window narrowed to one space. The oracle is the window's contract in DESIGN.md
- * («Questions waiting for an answer»): opened from a place narrowed to a space, the window lists
- * that space's own questions, read narrowed by the server, and says so; a chip names the space,
- * and removing it brings every space's questions back. The rail's count stays every space's.
+ * The questions window narrowed to one scope. The oracle is the window's contract in DESIGN.md
+ * («Questions waiting for an answer» and «Volumes»): opened from a place narrowed to a space, or
+ * to a project of it, the window lists the questions on what the space's board holds, narrowed
+ * to the project when the place was, read narrowed by the server, and says so; a chip names the
+ * space and the project, and removing it brings every space's questions back. The rail's count
+ * stays every space's.
  */
 import { defineComponent, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
@@ -14,8 +16,8 @@ import InputRequestsHub from '@/features/input-requests/components/InputRequests
 import { requestListView } from '@/features/input-requests/utils/requestListView.ts'
 
 import { fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
-import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import { provideSpaceNames } from '@/shared/lib/spaceNames.ts'
 
@@ -29,7 +31,8 @@ vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
 
 const HERE = requestEntry()
 const STORE = HERE.target.space_ref.data_scope_id
-const TASK: PlanningSpaceRef = { data_scope_id: STORE, space_key: 'TASK' }
+const TASK: QuestionScope = { space: { data_scope_id: STORE, space_key: 'TASK' }, project: null }
+const ALPHA: QuestionScope = { ...TASK, project: 'alpha' }
 
 /** A question waiting on a card of another space. */
 function elsewhere(): InputRequestEntry {
@@ -57,7 +60,7 @@ const SPACES = [
 const wrappers: ReturnType<typeof mount>[] = []
 
 /** The window under a root that holds its scope, as the shell does, and clears it on `all`. */
-function hub(locale: 'en' | 'ru', scope: PlanningSpaceRef | null) {
+function hub(locale: 'en' | 'ru', scope: QuestionScope | null) {
   const counts: unknown[] = []
   const Root = defineComponent({
     components: { InputRequestsHub },
@@ -91,9 +94,9 @@ residentView(requestListView)
 
 beforeEach(() => {
   vi.resetAllMocks()
-  // The server's own narrowing: a space's read brings that space's cards only.
+  // The server's own narrowing: a scope's read brings what its board holds, here one card.
   vi.mocked(fetchInputRequests).mockImplementation(async (options = {}) =>
-    requestList(options.space ? [HERE] : [HERE, elsewhere()]),
+    requestList(options.scope ? [HERE] : [HERE, elsewhere()]),
   )
 })
 
@@ -103,12 +106,12 @@ afterEach(() => {
 })
 
 describe('the questions window narrowed to a space', () => {
-  it('lists the space’s own questions, read narrowed, names the space and counts every space’s', async () => {
+  it('lists the space’s board’s questions, read narrowed, names the space and counts every space’s', async () => {
     const { counts } = hub('en', TASK)
     await flushPromises()
     const asked = vi
       .mocked(fetchInputRequests)
-      .mock.calls.map(([options]) => options?.space ?? null)
+      .mock.calls.map(([options]) => options?.scope ?? null)
     expect(asked).toContainEqual(TASK)
     expect(asked).toContainEqual(null)
     expect(shown()).toEqual(['Confirm deployment'])
@@ -117,8 +120,22 @@ describe('the questions window narrowed to a space', () => {
       'Show every space’s questions, not only those of Requests space',
     )
     expect(document.body.textContent).toContain(
-      'Pending blocks of questions on the cards of Requests space',
+      'Pending blocks of questions on the board of Requests space',
     )
+    expect(counts.at(-1)).toEqual({ value: 2, incomplete: false })
+  })
+
+  it('reads a project’s questions narrowed to it and names the project beside the space', async () => {
+    const { counts } = hub('en', ALPHA)
+    await flushPromises()
+    const asked = vi.mocked(fetchInputRequests).mock.calls.map(([options]) => options?.scope)
+    expect(asked).toContainEqual(ALPHA)
+    expect(shown()).toEqual(['Confirm deployment'])
+    expect(chip()?.textContent.trim()).toBe('Requests space · alpha')
+    expect(document.body.textContent).toContain(
+      'Pending blocks of questions on the board of Requests space, project alpha',
+    )
+    // The rail's count is every space's, whatever the window is narrowed to.
     expect(counts.at(-1)).toEqual({ value: 2, incomplete: false })
   })
 
@@ -141,18 +158,18 @@ describe('the questions window narrowed to a space', () => {
     await flushPromises()
     expect(shown()).toHaveLength(2)
     expect(chip()).toBeNull()
-    const asked = vi.mocked(fetchInputRequests).mock.calls.map(([options]) => options?.space)
-    expect(asked.every((space) => space === undefined)).toBe(true)
+    const asked = vi.mocked(fetchInputRequests).mock.calls.map(([options]) => options?.scope)
+    expect(asked.every((scope) => scope === undefined)).toBe(true)
   })
 
   it('says the narrowing in Russian', async () => {
-    hub('ru', TASK)
+    hub('ru', ALPHA)
     await flushPromises()
     expect(chip()?.getAttribute('aria-label')).toBe(
-      'Показать вопросы всех пространств, а не только Requests space',
+      'Показать вопросы всех пространств, а не только Requests space · alpha',
     )
     expect(document.body.textContent).toContain(
-      'Открытые блоки вопросов в карточках пространства Requests space',
+      'Открытые блоки вопросов на доске пространства Requests space, проект alpha',
     )
   })
 })
