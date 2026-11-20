@@ -89,8 +89,8 @@
  * at a dot, and a reading a few pixels from the next is still found at its own mark.
  *
  * Where the window's count restarted inside it (`restarts`), the line falls at a reading, and the
- * restart is a place on the line there with its hint, its mark a ring around the fall
- * (`useStepWalk`), found by the pointer before the reading it restarted at.
+ * restart is a place on the line there with its hint, its mark a round ring on the middle of
+ * the fall (`useStepWalk`), found by the pointer before the reading it restarted at.
  *
  * The readings, the restarts and the two places are one stop for Tab, walked with the arrows in
  * the order they stand — the readings, each restart before the reading at its moment, then «now»,
@@ -349,10 +349,17 @@ const readingClass = (point: StepPoint, index: number) => ({
   ...markClass(index),
   'step-earlier': earlier(point),
 })
-/** A place's mark's classes: its kind, and pointed at. */
-const placeClass = (target: StepTargetPlace & { stop: number }) => [
+/**
+ * A place's mark's classes: its kind, pointed at, and in the neutral ink where it is of a window
+ * before the current one, as that window's readings are: a reset between two windows, which ends
+ * the one before, and a restart inside one.
+ */
+const placeClass = (target: StepTargetPlace & { stop: number; at?: number }) => [
   PLACE_MARK[target.kind],
   markClass(target.stop),
+  {
+    'step-earlier': Boolean(target.zero) || (target.at !== undefined && earlier({ at: target.at })),
+  },
 ]
 
 /** The one place Tab lands on: the last stood on while it is still there, else the latest reading. */

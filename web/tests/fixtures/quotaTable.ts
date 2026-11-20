@@ -7,10 +7,10 @@
  * - «Alpha»: five hours at 62 %, started three hours before now, with three windows before it, two
  *   of them today; a live week that started a day before now and resets in six, so «This week»,
  *   from Monday's midnight, starts in the week before it, with the five weeks before it back to
- *   back; and a model's week with no reading since its last reset, which is the live week's start:
+ *   back, the count of the fourth back restarted inside it; and a model's week with no reading since its last reset, which is the live week's start:
  *   its last window and the two before that, each with readings.
  * - «Beta»: a live week on another reset, started five days and three hours before now, with four
- *   weeks before it.
+ *   weeks before it, the first of them ending at 0 %, so its reset falls from 0 % to 0 %.
  * - «Gamma»: a week with no reading since its reset two days before now, and two weeks before it;
  *   no window of the account has a reading since its reset.
  *
@@ -170,10 +170,14 @@ export function quotaTable(now: Date | number, offset = -new Date(now).getTimezo
         [1, 4],
         [5, 22],
       ]),
-      week([
-        [2, 18],
-        [6, 40],
-      ]),
+      {
+        ...week([
+          [2, 40],
+          [4, 12],
+          [6, 30],
+        ]),
+        restarts: [4 * DAY],
+      },
       week([
         [1, 9],
         [4, 33],
@@ -226,7 +230,7 @@ export function quotaTable(now: Date | number, offset = -new Date(now).getTimezo
       forecast: { low_percent: 60, high_percent: 66 },
     }),
     offset,
-    [week([[3, 20]]), week([[2, 41]]), week([[5, 64]]), week([[1, 12]])],
+    [week([[3, 0]]), week([[2, 41]]), week([[5, 64]]), week([[1, 12]])],
   )
   const gamma = withEarlier(
     ended(

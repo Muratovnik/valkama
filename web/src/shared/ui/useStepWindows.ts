@@ -45,7 +45,7 @@ export function useStepWindows(
     })
   })
   /** Whether a reading is of a window before the current one, drawn in the neutral ink. */
-  const earlier = (point: StepPoint) => point.at < windowSpan.value.from
+  const earlier = (point: Pick<StepPoint, 'at'>) => point.at < windowSpan.value.from
   /** Whether the pace is drawn: the window has one, its layer is on and the frame shows it. */
   const evenDrawn = computed(
     () =>

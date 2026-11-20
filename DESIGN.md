@@ -1263,9 +1263,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the line «Forecast» beside a short dashed line, a key that turns the layer off and on as the
   pace's does. Where the window's count restarted inside it, its reset unchanged, the line falls
   at a reading, and the restart is a place on the line at that moment with its hint, painted only
-  while pointed at or focused as the others are: a ring around the fall, «Counter
+  while pointed at or focused as the others are: a round ring on the middle of the fall, «Counter
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
-  the readings cannot tell what zeroed it. The arrows walk the readings, each restart before the
+  the readings cannot tell what zeroed it. Every place's mark, a ring or the forecast's dot, is a
+  true circle at every width, at rest and pointed at, the line's own fall saying how far it fell:
+  a restart's ring once stretched over the fall, a capsule up to 89px tall, and an oval 12×8 at a
+  fall from 0 % to 0 %. On a window past its reset and on the windows before the current one the
+  marks take the neutral ink their readings are drawn in; they once stood blue on a grey line.
+  The arrows walk the readings, each restart before the
   reading at its moment, then «now», then the forecast. A step line shows its whole window, from
   its start to its reset, running or past its reset alike, and its axis names its two ends for
   what they are: «start 11:30» and «resets 16:30», or «reset at 16:30» once that has passed, each

@@ -7,13 +7,13 @@
  *
  * A restart is a place on the line at its moment, where the line falls with the window's reset
  * unchanged, with its hint, as the forecast at the reset is a place past the readings. Its mark is
- * a ring around the fall the line draws there (`restartFall`), «now»'s ring drawn as tall as the
- * fall, so it never reads as a reading's dot. The pointer finds it at its ring, and at the moment itself before
+ * a round ring, as «now»'s is, centred on the middle of the fall the line draws there
+ * (`restartFall`), so it never reads as a reading's dot. The pointer finds it at its ring, and at the moment itself before
  * the reading it restarted at, which keeps its step past the ring; its box, which the keyboard's
  * ring is drawn on, is the least width of a box (`--step-reach`) centred on its moment; it covers
  * its moment alone. A restart outside the span shown stands nowhere. The reset between two
  * windows of a line of several is a restart of the same kind (`zero`): the count falls to nothing
- * at the reset, with no reading there, and its ring stands around that fall.
+ * at the reset, with no reading there, and its ring stands on the middle of that fall.
  */
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
