@@ -2,10 +2,11 @@
  * What a step line draws and points at past its readings, as the browser draws it, for a spec to
  * hold: run in the page with `page.evaluate(aheadOfLines, selector)` for every step line the
  * selector finds. For each line: the boxes of its head, plot and axis and its height, so a spec
- * can tell that nothing moved; its field; every corner of its forecast's corridor where the field
- * resolves it — a probe laid where the corridor's outline puts each — or none without one; and
- * each place past its readings («now», the forecast at the reset): its stretch, its mark and
- * whether the mark is painted. It reads each part by the hook `StepLine` documents for it.
+ * can tell that nothing moved; its field; every corner of its forecast's line and of the fill of
+ * its range under it, where the plot's own mapping puts each on the screen, or none without one;
+ * how the line and the fill are painted; and each place past its readings («now», the forecast at
+ * the reset): its stretch, its mark and whether the mark is painted. It reads each part by the
+ * hook `StepLine` documents for it.
  */
 
 /** A box as the browser reports it, plain for the spec's side. */
@@ -18,13 +19,31 @@ interface Box {
   width: number
 }
 
+/** A path of the plot as drawn: its corners on the screen and how it is painted. */
+interface DrawnPath {
+  corners: { left: number; top: number }[]
+  dash: string
+  fill: string
+  fillOpacity: number
+  stroke: string
+  strokeWidth: number
+}
+
 export interface LineAhead {
   boxes: (Box | null)[]
+  /** Every corner of the forecast's line and of its range's fill. */
   corners: { left: number; top: number }[]
+  /** The drawing inside the field, whose top is the level of the whole window. */
+  drawing: Box | null
   field: Box | null
+  /** The forecast's dashed line, and how many the plot draws. */
+  forecast: DrawnPath | null
+  forecasts: number
   head: Box | null
   height: number
   places: { kind: string; mark: Box | null; painted: boolean; reach: Box | null }[]
+  /** The fill of the forecast's range under its line. */
+  range: DrawnPath | null
 }
 
 /** Runs in the page: every function it uses is its own. */
@@ -36,49 +55,50 @@ export function aheadOfLines(selector: string): LineAhead[] {
     const { bottom, height, left, right, top, width } = element.getBoundingClientRect()
     return { bottom, height, left, right, top, width }
   }
-  /** `text` split at `at` where no bracket is open. */
+  /**
+   * A path's corners where the plot's own mapping, stretched as it is, puts them on the screen,
+   * and how it is painted. The plot draws its paths of moves and straight lines alone.
+   */
   // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
-  const split = (text: string, at: string) => {
-    const parts: string[] = []
-    let depth = 0
-    let from = 0
-    // A clip path's text is ASCII, so its UTF-16 units are its characters.
-    for (let index = 0; index < text.length; index += 1) {
-      const char = text[index]
-      if (char === '(') depth += 1
-      if (char === ')') depth -= 1
-      if (char === at && depth === 0) {
-        parts.push(text.slice(from, index).trim())
-        from = index + 1
-      }
+  const drawn = (path: SVGPathElement | null): DrawnPath | null => {
+    const matrix = path?.getScreenCTM()
+    if (!path || !matrix) return null
+    const numbers = (path.getAttribute('d') ?? '').match(/-?[\d.]+(?:e-?\d+)?/gu) ?? []
+    const corners: { left: number; top: number }[] = []
+    for (let index = 0; index + 1 < numbers.length; index += 2) {
+      const { x, y } = new DOMPoint(
+        Number(numbers[index]),
+        Number(numbers[index + 1]),
+      ).matrixTransform(matrix)
+      corners.push({ left: x, top: y })
     }
-    return [...parts, text.slice(from).trim()]
+    const paint = getComputedStyle(path)
+    return {
+      corners,
+      dash: paint.strokeDasharray,
+      fill: paint.fill,
+      fillOpacity: Number(paint.fillOpacity),
+      stroke: paint.stroke,
+      strokeWidth: Number.parseFloat(paint.strokeWidth),
+    }
   }
   return [...document.querySelectorAll(selector)].map((figure) => {
     const field = figure.querySelector<HTMLElement>('[data-region="field"]')
-    const outline =
-      figure.querySelector<HTMLElement>('[data-mark="corridor"]')?.style.clipPath.trim() ?? ''
-    const corners = outline
-      ? split(outline.slice(outline.indexOf('(') + 1, outline.lastIndexOf(')')), ',').map(
-          (corner) => {
-            const [x = '0', ...y] = split(corner, ' ')
-            const probe = document.createElement('i')
-            probe.style.cssText = `position:absolute;inset-inline-start:${x};inset-block-start:${y.join(' ')};`
-            field?.append(probe)
-            const { left, top } = probe.getBoundingClientRect()
-            probe.remove()
-            return { left, top }
-          },
-        )
-      : []
+    const forecasts = figure.querySelectorAll<SVGPathElement>('[data-mark="forecast"]')
+    const forecast = drawn(forecasts[0] ?? null)
+    const range = drawn(figure.querySelector<SVGPathElement>('[data-mark="range"]'))
     return {
       boxes: ['head', 'plot', 'axis'].map((part) =>
         box(figure.querySelector(`[data-region="${part}"]`)),
       ),
       height: figure.getBoundingClientRect().height,
       field: box(field),
+      drawing: box(figure.querySelector('[data-region="drawing"]')),
       head: box(figure.querySelector('[data-region="head"]')),
-      corners,
+      corners: [...(forecast?.corners ?? []), ...(range?.corners ?? [])],
+      forecast,
+      forecasts: forecasts.length,
+      range,
       places: [...figure.querySelectorAll<HTMLElement>('[data-target]')].map((target) => {
         const mark = target.querySelector('[data-mark="place"]')
         return {
@@ -92,7 +112,7 @@ export function aheadOfLines(selector: string): LineAhead[] {
   })
 }
 
-/** The corners of a line's corridor that stand outside its field, by more than half a pixel. */
+/** The corners of a line's forecast that stand outside its field, by more than half a pixel. */
 export function cornersOutside(line: LineAhead) {
   const field = line.field
   return field

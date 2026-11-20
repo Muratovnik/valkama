@@ -12,6 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { noTask, serveUsage, task, unknownTask, value } from '../fixtures/analytics.ts'
 import type { Stretch, TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
+import { servedOver } from '../fixtures/quotaHistory.ts'
 import { NIGHT_GROUP as NIGHT, WORK_GROUP as WORK } from '../fixtures/quotaSpent.ts'
 import { installBackend } from './backend.ts'
 import type { BackendOptions } from './backend.ts'
@@ -257,7 +258,8 @@ export async function serveTask(page: Page) {
 
 /**
  * Answers the quota read with `quota`, or fails it. A later call stands over an earlier one, so a
- * test that served the page can give the quota another answer.
+ * test that served the page can give the quota another answer. Of the windows before each window
+ * (`earlier`) it gives those after the period's start the read asks for, as the server does.
  */
 export async function serveQuota(page: Page, quota: Quota | 'failed') {
   await page.route('**/api/analytics/quota?*', async (route) => {
@@ -267,7 +269,7 @@ export async function serveQuota(page: Page, quota: Quota | 'failed') {
     }
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify(quotaAnswer(quota)),
+      body: JSON.stringify(quotaAnswer(servedOver(quota, route.request().url()))),
     })
   })
 }

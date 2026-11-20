@@ -1,10 +1,9 @@
 /*
  * The marks of a step line (`StepLine`, `useStepAhead`, `useStepWalk`), read as its own scoped
- * style: each reading's dot and the box it stands in, the corridor of the forecast past them, the
- * hatch over the whole field cut to the corridor's outline, and the marks of its places — a
- * restart of the count on the line and «now» past the readings, each a ring in the line's hue
- * around the ground, and the forecast at the reset, a bar from its high end to its low or a dash
- * at its one value — never a reading's dot. Every mark is painted
+ * style: each reading's dot and the box it stands in, and the marks of its places — a restart of
+ * the count on the line, or a reset between two windows of it, and «now» past the readings, each
+ * a ring in the line's hue around the ground, and the forecast's end, a round dot of the line's
+ * hue ringed in the ground — never a reading's dot. Every mark is painted
  * only while pointed at or focused, its box kept at rest for its hint. None of them takes the
  * pointer: one layer over the field does, for all of them (`StepLine`).
  */
@@ -64,20 +63,6 @@
   inset-inline: calc(-1 * var(--step-hit));
 }
 
-/* The forecast's corridor: the readings' hue under the hatch (`hatch.css`) over the whole field,
-   cut to the corridor's outline; a forced palette's ink, as the readings' line. */
-.step-ahead {
-  position: absolute;
-  inset: 0;
-  background: var(--color-series-1);
-  pointer-events: none;
-
-  @media (forced-colors: active) {
-    background: CanvasText;
-    forced-color-adjust: none;
-  }
-}
-
 /* A place of the line: a ring in the line's hue around the ground, never a reading's dot; at rest
    unpainted, its box kept for its hint. The forecast's mark is no ring (`.step-reset-mark`). */
 .step-target-mark {
@@ -122,64 +107,21 @@
   translate: -50% 0;
 }
 
-/* The forecast at the corridor's end, the plot's end: a range is a stroke in the corridor's hue
-   from its high end (`--step-high`) to its low (`--step-low`), its box exactly that span, capped
-   at each end by a stroke as wide as a reading's dot, so a range a pixel or two tall is a short
-   dash and never a dot. One value is a dash at it (`.step-reset-point`), centred there. A rim of
-   the ground parts it from the hatch under it, as a dot's ring does; a forced palette draws it in
-   its ink. */
+/* The forecast's end, where its line ends: a round dot in the line's hue, at least a reading's dot
+   across and as tall as it is wide, ringed in the ground as a reading's dot is, at the run-out on
+   the level of the whole window or at the reset at its share (`--step-high`). A flat dash there
+   read as no mark at all; a forced palette draws it in its ink. */
 .step-reset-mark {
-  --step-ink: var(--color-series-1);
-  --step-rim: var(--color-canvas);
-  --step-rim-out: var(--space-hair);
-  --step-rim-in: calc(-1 * var(--space-hair));
-
   inset-block-start: calc(var(--step-inset) + (100% - 2 * var(--step-inset)) * var(--step-high));
-  inline-size: var(--space-half);
-  block-size: calc((100% - 2 * var(--step-inset)) * (var(--step-low) - var(--step-high)));
-  background: var(--step-ink);
-  filter: drop-shadow(var(--step-rim-out) 0 0 var(--step-rim))
-    drop-shadow(var(--step-rim-in) 0 0 var(--step-rim))
-    drop-shadow(0 var(--step-rim-out) 0 var(--step-rim))
-    drop-shadow(0 var(--step-rim-in) 0 var(--step-rim));
-  outline: none;
+  block-size: var(--space-2);
+  background: var(--color-series-1);
+  border-radius: 50%;
   box-shadow: none;
-  translate: -50% 0;
-
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    inset-inline-start: 50%;
-    inline-size: var(--space-2);
-    block-size: var(--space-half);
-    background: var(--step-ink);
-  }
-
-  &::before {
-    inset-block-start: 0;
-    translate: -50% -50%;
-  }
-
-  &::after {
-    inset-block-end: 0;
-    translate: -50% 50%;
-  }
-
-  @media (forced-colors: active) {
-    --step-ink: CanvasText;
-    --step-rim: Canvas;
-  }
-}
-
-.step-reset-point {
-  inline-size: var(--space-3);
-  block-size: var(--space-half);
   translate: -50% -50%;
 
-  &::before,
-  &::after {
-    content: none;
+  @media (forced-colors: active) {
+    background: CanvasText;
+    box-shadow: none;
   }
 }
 
@@ -190,7 +132,9 @@
 }
 
 .step-now-mark.step-shown,
-.step-target:focus-visible > .step-now-mark {
+.step-target:focus-visible > .step-now-mark,
+.step-reset-mark.step-shown,
+.step-target:focus-visible > .step-reset-mark {
   scale: 1.5;
 }
 
