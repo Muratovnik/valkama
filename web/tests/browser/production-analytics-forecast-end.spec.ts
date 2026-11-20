@@ -244,13 +244,6 @@ for (const width of [1440, 1024, 390])
       const level = await shareAt(window, one.ends.share)
       const dot = await drawnMark(mark)
       await record(info, `forecast ${one.kind} ${one.account} ${width}`, { drawn, level, dot })
-      await info.attach(
-        `forecast-${one.kind}-${one.ends.before ? 'runs-out' : 'lasts'}-${width}.png`,
-        {
-          body: await window.screenshot(),
-          contentType: 'image/png',
-        },
-      )
       // One line, 2px and dashed in the readings' hue, from now to its end.
       expect(drawn.count, 'one forecast line').toBe(1)
       const line = present(drawn.line, 'the forecast line')
@@ -285,6 +278,16 @@ for (const width of [1440, 1024, 390])
       expect(Math.abs(dot.centre.left - end.left), 'at the line’s end across').toBeLessThan(NEAR)
       expect(Math.abs(dot.centre.top - end.top), 'at the line’s end up').toBeLessThan(NEAR)
       await expectBeside(hint, mark, window)
+      // The picture without the hint, which stands over the line it names.
+      await page.mouse.move(1, 1)
+      await expect(page.getByRole('tooltip')).toHaveCount(0)
+      await info.attach(
+        `forecast-${one.kind}-${one.ends.before ? 'runs-out' : 'lasts'}-${width}.png`,
+        {
+          body: await window.screenshot(),
+          contentType: 'image/png',
+        },
+      )
     })
 
 test('in a forced palette the line, the fill and the dot are drawn in its ink, the ring in its ground', async ({
