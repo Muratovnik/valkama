@@ -8,8 +8,8 @@ the read as its grammar names it, to the day after the last. Around its two ends
 finished at the first moment in it and one a second before; one at the last second in it and a
 cancelled one at the first after it. Inside stand a cancelled task, a goal finished in it, and a
 task filed straight into a finished state, which never moved: its last write falls after the
-period, so the moment `closed_at` gives it is not the one the read counts. An open task that came
-to stand in triage inside the period is counted by neither.
+period, and it closed when it was filed, inside it. An open task that came to stand in triage
+inside the period is counted by neither.
 """
 
 from __future__ import annotations

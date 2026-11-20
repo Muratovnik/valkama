@@ -32,9 +32,7 @@ const CLOSED: Record<string, string> = {
 }
 const closedSpace = (): Brief[] =>
   boardSpace().map((item) =>
-    CLOSED[item.reference]
-      ? { ...item, entered_at: CLOSED[item.reference], closed_at: CLOSED[item.reference] }
-      : item,
+    CLOSED[item.reference] ? { ...item, closed_at: CLOSED[item.reference] } : item,
   )
 
 const DAYS = { cat: 'completed', period: 'custom', from: '2026-10-21', to: '2026-10-25' }
