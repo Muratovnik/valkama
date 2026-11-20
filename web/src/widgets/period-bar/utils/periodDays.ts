@@ -23,7 +23,8 @@ export const dayFrom = (text: string) => {
   return new Date(year, month - 1, date)
 }
 
-const shiftDays = (day: Date, days: number) =>
+/** The day `days` after (or before) `day`, at its midnight. */
+export const shiftDays = (day: Date, days: number) =>
   new Date(day.getFullYear(), day.getMonth(), day.getDate() + days)
 
 /** The days a custom period first stands at: the week up to today. */
@@ -33,8 +34,7 @@ export const customDays = (now: Date) => ({
 })
 
 /** A day an address holds, or none where it holds something else. */
-export const addressDay = (value: unknown) =>
-  typeof value === 'string' && DAY.test(value) ? value : ''
+const addressDay = (value: unknown) => (typeof value === 'string' && DAY.test(value) ? value : '')
 
 /**
  * The midnight a preset period starts at, on the day of `now`: today's, Monday's of this week, or
@@ -44,4 +44,37 @@ export function presetStart(period: Exclude<Period, 'custom'>, now: Date): Date 
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const back = { today: 0, week: (midnight.getDay() + 6) % 7, weeks4: 27 }[period]
   return shiftDays(midnight, -back)
+}
+
+/** A page's period as its address holds it: the period, and the days of the reader's own. */
+export interface PeriodView {
+  /** The first day of the reader's own period, `2030-03-04`; empty for a preset. */
+  from: string
+  period: Period
+  /** The last day of the reader's own period; empty for a preset. */
+  to: string
+}
+
+type RouteState = Readonly<Record<string, string | number | boolean>>
+
+/** The period an address holds; what it does not hold, or holds wrongly, is `fallback`. */
+export function readPeriod(state: RouteState | undefined, fallback: Period): PeriodView {
+  const period = PERIODS.find((value) => value === state?.period) ?? fallback
+  const custom = period === 'custom'
+  return {
+    period,
+    from: custom ? addressDay(state?.from) : '',
+    to: custom ? addressDay(state?.to) : '',
+  }
+}
+
+/** The address of a period: only what differs from `fallback`. */
+export function writePeriod(view: PeriodView, fallback: Period): Record<string, string> {
+  const state: Record<string, string> = {}
+  if (view.period !== fallback) state.period = view.period
+  if (view.period === 'custom') {
+    if (view.from) state.from = view.from
+    if (view.to) state.to = view.to
+  }
+  return state
 }

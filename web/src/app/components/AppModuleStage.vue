@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { analyticsView, decisionsView, settingsView } from '@/app/moduleViews.ts'
+import { analyticsView, decisionsView, settingsView, volumesView } from '@/app/moduleViews.ts'
 
 import PlanningCardOverlay from '@/pages/planning/PlanningCardOverlay.vue'
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
@@ -37,11 +37,14 @@ const emit = defineEmits<{
   'notice': [message: string]
   'open-space': [space: PlanningSpaceRef]
   'question-taken': []
+  /** The questions window, asked for by a page. */
+  'requests': []
   'state': [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
 }>()
 const SettingsView = settingsView.component
 const AnalyticsView = analyticsView.component
 const DecisionsView = decisionsView.component
+const VolumesView = volumesView.component
 const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)
 const cardOverlay = ref<InstanceType<typeof PlanningCardOverlay> | null>(null)
 async function refresh() {
@@ -109,6 +112,20 @@ defineExpose({ openCardId, refresh })
       :route-state="route.state"
       :space="scopeSpaceKey"
       :project-id="scopeProject"
+      @state="(state) => emit('state', state)"
+    />
+  </ModuleFrame>
+
+  <ModuleFrame
+    v-else-if="activeModule === 'volumes'"
+    module="volumes"
+    :label="moduleTitle"
+  >
+    <VolumesView
+      :route-state="route.state"
+      :scope="scope"
+      @go="(next) => emit('go', next)"
+      @requests="emit('requests')"
       @state="(state) => emit('state', state)"
     />
   </ModuleFrame>

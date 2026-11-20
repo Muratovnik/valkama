@@ -2,12 +2,13 @@ import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import { lazyView } from '@/shared/ui/lazyView.ts'
 
 /**
- * Settings, Analytics and Agent decisions are places the operator visits rather than works in, so
- * the shell downloads each when it is asked for instead of with the board.
+ * Settings, Analytics, Agent decisions and Volumes are places the operator visits rather than
+ * works in, so the shell downloads each when it is asked for instead of with the board.
  */
 export const settingsView = lazyView(() => import('@/pages/settings/SettingsView.vue'))
 export const analyticsView = lazyView(() => import('@/pages/analytics/AnalyticsView.vue'))
 export const decisionsView = lazyView(() => import('@/pages/decisions/DecisionsView.vue'))
+export const volumesView = lazyView(() => import('@/pages/volumes/VolumesView.vue'))
 
 /**
  * Start downloading a destination's code before it is drawn.
@@ -20,4 +21,5 @@ export function prefetchModule(module: ModuleId) {
   if (module === 'settings') settingsView.prefetch()
   if (module === 'analytics') analyticsView.prefetch()
   if (module === 'decisions') decisionsView.prefetch()
+  if (module === 'volumes') volumesView.prefetch()
 }

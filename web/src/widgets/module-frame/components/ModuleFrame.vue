@@ -49,11 +49,12 @@ const props = defineProps<{ label: string; module: ModuleFrameModule }>()
 }
 
 /* A module that lays out the whole of the frame itself, scrolling its own parts: Analytics is
-   a bar over a rail and a panel, each of which scrolls, and Agent decisions a bar over a
-   table in its own frame, so the frame holds it at its own size
+   a bar over a rail and a panel, each of which scrolls, Agent decisions a bar over a table in
+   its own frame, and Volumes a bar over a panel of sections that scrolls, so the frame holds it
+   at its own size
    and has nothing of it to scroll. It stands after the narrow frame's room at the foot and
    takes that room away: such a module keeps its own, inside the part that scrolls. */
-.module-frame-content:is(.module-sessions, .module-analytics, .module-decisions) {
+.module-frame-content:is(.module-sessions, .module-analytics, .module-decisions, .module-volumes) {
   width: 100%;
   height: 100%;
   padding: 0;

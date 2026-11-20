@@ -22,8 +22,11 @@ function signed(count: number, sign: '+' | '−'): string {
   return count === 0 ? '0' : `${sign}${count}`
 }
 
+/** What a pace is read from: a chain's, or the same shape the Volumes read gives for its scope. */
+type Pace = Pick<WorkItemChain, 'open' | 'recent' | 'series'>
+
 /** Whether anything moved in the window: a chain that stood still has no forecast at all. */
-const moved = (current: WorkItemChain) => current.recent.created + current.recent.closed > 0
+const moved = (current: Pace) => current.recent.created + current.recent.closed > 0
 
 /**
  * The chain's last seven days, as two answers. The `verdict` is what that pace says
@@ -40,8 +43,11 @@ const moved = (current: WorkItemChain) => current.recent.created + current.recen
  * members closed inside it — so both say it in the same words. The chain scope
  * used to call its new work "discovered", which a child filed as planned is
  * not, and the goal scope "added", for one and the same count.
+ *
+ * A chain's days are UTC days; a pace read on the caller's clock, as Volumes reads it, names its
+ * own today (`todayOf`).
  */
-export function useChainForecast(chain: () => WorkItemChain | null) {
+export function useChainForecast(chain: () => Pace | null, todayOf: () => string = utcToday) {
   const { t, locale } = useI18n()
 
   /** A rate a day, to a tenth and rounded up, so "more than" it is enough. */
@@ -99,17 +105,17 @@ export function useChainForecast(chain: () => WorkItemChain | null) {
   const verdict = computed(() => {
     const current = chain()
     if (!current || !moved(current)) return ''
-    const today = utcToday()
-    return said(forecastChain(current, today), today)
+    const day = todayOf()
+    return said(forecastChain(current, day), day)
   })
 
   const pace = computed(() => {
     const current = chain()
     if (!current) return ''
-    const today = utcToday()
+    const day = todayOf()
     const { days, created, closed } = current.recent
     if (!moved(current)) return t('workItem.chain.forecast.quiet', { days })
-    const history = historyDays(current.series, today) ?? days
+    const history = historyDays(current.series, day) ?? days
     const period =
       history < days
         ? t('workItem.chain.forecast.first', { count: history }, history)
@@ -119,7 +125,7 @@ export function useChainForecast(chain: () => WorkItemChain | null) {
       created: signed(created, '+'),
       closed: signed(closed, '−'),
     })
-    return forecastChain(current, today).kind === 'young'
+    return forecastChain(current, day).kind === 'young'
       ? t('workItem.chain.forecast.line', {
           facts,
           verdict: t('workItem.chain.forecast.young', { days }),

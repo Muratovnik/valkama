@@ -9,7 +9,7 @@ owns the two UI operating levels, module semantics on each level, and what the
 Kernel lets an adapter do. `OperatingScope` is a required route discriminant
 and is validated on every Kernel request.
 
-The shell exposes Work, Analytics, Agent decisions and Settings. The module list declares
+The shell exposes Work, Analytics, Agent decisions, Volumes and Settings. The module list declares
 Planning, Analytics, Agent decisions, Volumes, Memory, and Settings; Memory contributes work-item
 references. Session lifecycle and compact context are Planning-owned.
 Standalone Sessions, Improvements, and Skills destinations and their APIs are

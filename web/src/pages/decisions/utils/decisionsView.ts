@@ -6,28 +6,24 @@
  * The read is asked for the period's two moments with their offset, both ends taken in.
  */
 import {
-  addressDay,
   dayFrom,
   localDay,
-  PERIODS,
   presetStart,
+  readPeriod,
+  writePeriod,
 } from '@/widgets/period-bar/utils/periodDays.ts'
-import type { Period } from '@/widgets/period-bar/utils/periodDays.ts'
+import type { PeriodView } from '@/widgets/period-bar/utils/periodDays.ts'
 
 import type { DecisionPoint } from '@/shared/api/planningDecisionPoints.ts'
 import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
 
-export interface DecisionsView {
-  /** The first day of the reader's own period, `2030-03-04`; empty for a preset. */
-  from: string
-  period: Period
+export interface DecisionsView extends PeriodView {
   /** The point the decisions are of; null for every point. */
   point: DecisionPoint | null
-  /** The last day of the reader's own period; empty for a preset. */
-  to: string
 }
 
-const DEFAULT_VIEW: DecisionsView = { from: '', period: 'week', point: null, to: '' }
+/** The period a view stands at until the reader chooses another. */
+const DEFAULT_PERIOD = 'week'
 
 const pad = (value: number) => String(value).padStart(2, '0')
 
@@ -42,27 +38,13 @@ function stamp(at: Date) {
 
 /** The view an address holds; what it does not hold, or holds wrongly, is the default's. */
 export function readView(state: Readonly<Record<string, string | number | boolean>> | undefined) {
-  const period = PERIODS.find((value) => value === state?.period) ?? DEFAULT_VIEW.period
   const point = DECISION_POINTS.find((value) => value === state?.point) ?? null
-  const custom = period === 'custom'
-  return {
-    period,
-    point,
-    from: custom ? addressDay(state?.from) : '',
-    to: custom ? addressDay(state?.to) : '',
-  } satisfies DecisionsView
+  return { ...readPeriod(state, DEFAULT_PERIOD), point } satisfies DecisionsView
 }
 
 /** The address of a view: only what differs from the default. */
 export function writeView(view: DecisionsView): Record<string, string> {
-  const state: Record<string, string> = {}
-  if (view.period !== DEFAULT_VIEW.period) state.period = view.period
-  if (view.point) state.point = view.point
-  if (view.period === 'custom') {
-    if (view.from) state.from = view.from
-    if (view.to) state.to = view.to
-  }
-  return state
+  return { ...writePeriod(view, DEFAULT_PERIOD), ...(view.point ? { point: view.point } : {}) }
 }
 
 /**
