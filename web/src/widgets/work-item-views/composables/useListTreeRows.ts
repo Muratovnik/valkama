@@ -6,7 +6,10 @@
  *
  * The indent is `TreeRowLead`'s: a step is the arrow's 16px square and the 8px
  * after it, 16px in all on a narrow list, which also stops the indent at its
- * third level rather than its fifth. The widest reference of a tree is found
+ * second level rather than its fifth: at the third, the first column that holds an
+ * urgent row's glyph after its reference ran a tree five levels deep 9px past its
+ * frame at 390px. A deeper row names its parent under its title (`underOf`). The
+ * widest reference of a tree is found
  * after its indent (`indentOf`), so the first column is as wide as a deep row
  * needs.
  */
@@ -49,7 +52,7 @@ interface ListTreeRows {
 
 /** The indent's levels and step, on a list and on a narrow one. */
 const WIDE = { levels: 5, step: 24 }
-const NARROW = { levels: 3, step: 16 }
+const NARROW = { levels: 2, step: 16 }
 
 export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTreeRows) {
   const { t } = useI18n()

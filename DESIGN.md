@@ -1435,7 +1435,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   level, set size and position; a component binds them whole, as
   `v-bind="treeRowAttrs(row)"` and `treeGridAttrs`. `TreeRowLead` draws a row's
   start: an indent of 24px a level, 16px on a narrow list, that stops at the
-  fifth level, the third on a narrow list, and the arrow that folds or opens the
+  fifth level, the second on a narrow list, and the arrow that folds or opens the
   row. The arrow stays out of the Tab order, because ← and → do the same.
   `useFoldChoices` keeps a reader's fold or opening against a rule, per space,
   and forgets a choice once it agrees with the rule. The board's lanes, the
@@ -1925,7 +1925,11 @@ out of its width: measured on the width alone, a list by goal three levels deep 
 24px past its frame. A narrow list's cells take half the inset, 8px, as its head's sorts do,
 so a heading's word starts where its column's words do: at 12px a tree five levels deep at
 390px left its title 16 characters, broke «Переосмысление» inside, and stood «Название» 4px
-left of the titles under it. A group's row wraps between words and keeps each count whole, its
+left of the titles under it. The priority's glyph that follows a reference where its column
+has folded is counted in the first column's width, and a narrow list's indent stops at the
+second level, a row deeper naming its parent under its title: counted as nothing, an urgent
+row five levels deep at 390px stood its glyph 6px past its cell over the title's inset, and
+counted with the indent at the third level, the table ran 9px past its frame. A group's row wraps between words and keeps each count whole, its
 wrapped lines starting under its name: held to one line, a project's long name stood the
 table 574px wide in a list of 302 on a phone.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its

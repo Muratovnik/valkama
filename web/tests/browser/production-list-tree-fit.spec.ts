@@ -7,6 +7,11 @@
  * its head on two lines and ran 24px past the list's frame. At 390px, with the cells' inset
  * of a wider list, the title kept 16 characters and «Переосмысление» broke inside; a narrow
  * list's cells take its head's half inset, so the title's heading starts where its titles do.
+ * An urgent row's priority stands after its reference where its column has folded, and the
+ * first column counts it: counted as nothing, the glyph of one five levels deep stood 6px past
+ * its cell, over the title's inset, and counted with a narrow indent stepping to the third
+ * level, the table ran 9px past its frame. The indent steps to the second, and a row deeper
+ * names its parent.
  * The scroll bars are drawn, as the reader sees them: hidden, the frame was 10px wider.
  */
 import { expect } from '@playwright/test'
@@ -36,6 +41,8 @@ function deepTree() {
           kind: at === 0 && level < 3 ? 'stage' : 'task',
           parent_id: identity(level === 0 ? 1 : first - 3),
           title: TITLES[(first + at) % 2],
+          // The second row of each level urgent, its glyph after its reference.
+          priority: at === 1 ? 'urgent' : 'medium',
           updated_at: now,
         }),
       )
@@ -44,6 +51,8 @@ function deepTree() {
 
 /** The deepest row, at the fifth level. */
 const DEEPEST = 'MAIN-11'
+/** The goal and each level's first row, down to the deepest. */
+const CHAIN = ['MAIN-1', 'MAIN-2', 'MAIN-5', 'MAIN-8', DEEPEST] as const
 
 async function openDeep(page: Page, locale: string, width: number) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -59,7 +68,8 @@ async function openDeep(page: Page, locale: string, width: number) {
 
 /** How the list stands in its frame, and how its head and deepest title are set. */
 const measure = (page: Page) =>
-  page.locator('.work-item-list').evaluate((list, deepest) => {
+  page.locator('.work-item-list').evaluate((list, chain) => {
+    const deepest = chain.at(-1)
     const table = list.querySelector('table') as HTMLElement
     /** The distinct line tops of a range's letters. */
     const lines = (range: Range) =>
@@ -127,8 +137,29 @@ const measure = (page: Page) =>
       ),
       // The title's heading against the deepest title under it.
       edge: [firstLetter(table.querySelectorAll('thead th')[1]), firstLetter(title)],
+      // How far each priority glyph after a reference reaches past its cell's inset.
+      glyphs: [
+        ...list.querySelectorAll('tr.list-row:not(.list-row-held) .list-after:not(:empty)'),
+      ].map((glyph) => {
+        const cell = glyph.closest('td') as HTMLElement
+        const end =
+          cell.getBoundingClientRect().right -
+          Number.parseFloat(getComputedStyle(cell).paddingInlineEnd)
+        return Math.round((glyph.getBoundingClientRect().right - end) * 10) / 10
+      }),
+      // Each level's reference start, and whether its row names its parent under its title.
+      levels: chain.map((reference) => {
+        const at = list.querySelector(
+          `tr.list-row:not(.list-row-held)[data-reference="${reference}"]`,
+        )
+        const x = at?.querySelector('button[data-reference]')?.getBoundingClientRect().left
+        return {
+          x: Math.round(x ?? Number.NaN),
+          parent: Boolean(at?.querySelector('.list-parent')),
+        }
+      }),
     }
-  }, DEEPEST)
+  }, CHAIN)
 
 for (const locale of ['en', 'ru']) {
   test(`a tree five levels deep fits its frame at 1280px in ${locale}`, async ({ page }, info) => {
@@ -161,6 +192,17 @@ for (const locale of ['en', 'ru']) {
     expect(seen.titles, said).toBe(13)
     expect(seen.brokenAny, said).toEqual([])
     expect(Math.abs(seen.edge[0] - seen.edge[1]), said).toBeLessThanOrEqual(1)
+    // Every urgent row's glyph inside its cell, the deepest's too.
+    expect(seen.glyphs, said).toHaveLength(4)
+    expect(Math.max(...seen.glyphs), said).toBeLessThanOrEqual(0)
+    // Two levels a step apart, and every row past them naming its parent.
+    const [goal, stage] = seen.levels
+    expect((stage?.x ?? 0) - (goal?.x ?? 0), said).toBe(16)
+    expect(new Set(seen.levels.slice(1).map((level) => level.x)).size, said).toBe(1)
+    expect(
+      seen.levels.map((level) => level.parent),
+      said,
+    ).toEqual([false, false, true, true, true])
     await page.screenshot({ path: info.outputPath(`list-tree-fit-${locale}-390.png`) })
     await info.attach('measured', { body: said, contentType: 'application/json' })
   })

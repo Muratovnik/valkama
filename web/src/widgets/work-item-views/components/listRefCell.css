@@ -53,8 +53,11 @@
   }
 }
 
-/* The priority's glyph after the reference, where its column has folded away. */
+/* The priority's glyph after the reference, where its column has folded away. Its column
+   counts it: counted as nothing, an urgent row five levels deep at 390px stood it 6px past
+   its cell, over the title's inset. */
 .list-after {
+  min-width: max-content;
   margin-inline-start: var(--space-1);
 }
 
