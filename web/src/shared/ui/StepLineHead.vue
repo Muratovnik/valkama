@@ -23,7 +23,8 @@
  * One row as tall as a compact control whether the button stands there or not, so the plot never
  * moves when it comes or goes. The legend's keys wrap, each whole, rather than run past the plot.
  * The row is the line's `data-region="head"`; the button is `data-step="whole"`; the forecast's
- * key is `data-key="ahead"`, its swatch of a dashed line `data-mark="dash"`; the pace's key is
+ * key is `data-key="ahead"`, its swatch of a dashed line `data-mark="dash"`; the readings' key is
+ * `data-key="line"`, its swatch `data-mark="swatch"`; the pace's key is
  * `data-key="even"`, now's `data-key="now"` and the earlier windows' `data-key="earlier"`, each
  * swatch the key's first child.
  */
@@ -69,8 +70,10 @@ const emit = defineEmits<{ whole: [] }>()
       <span
         class="step-key"
         aria-hidden="true"
+        data-key="line"
         ><span
           class="step-swatch swatch-line"
+          data-mark="swatch"
           :class="{ 'swatch-muted': muted }"
         />{{ legend.line }}</span
       >
@@ -150,9 +153,15 @@ const emit = defineEmits<{ whole: [] }>()
   border-radius: 999px;
   opacity: var(--layer-key-swatch-opacity, 1);
 
+  /* The readings' key in a forced palette's text ink, as the plot draws their line there: its
+     colour once stood blue there, the one key a forced palette did not reach. */
   &.swatch-line {
     block-size: var(--space-half);
     background: var(--color-series-1);
+
+    @media (forced-colors: active) {
+      background: CanvasText;
+    }
   }
 
   &.swatch-muted {
