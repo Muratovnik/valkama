@@ -136,13 +136,18 @@ Before oracle, `store` takes schema 18's step, `quota-names`, which renames the 
 the quota accounts' names on a store a 2.9 build left at 17 and has nothing to do on one
 2.9.0 left at 18: so the steps here read one shape from either.
 
-The postconditions `fresh-shape` to `second-run` and `store-identity` to `commit-projects` are checked after the steps, inside the
-same transaction, `second-run` last; `store` adds `recovery-point`, the recovery point. `row-counts` compares the
-row counts of the tables `oracle` counted, of the projects `item-projects` fills, of the rows `confirmations`
-writes, of the commit tables `commits` creates and `commit-refs` fills and of the baselines, none;
-`fresh-tables` holds every other
-table to being empty and declared by a fresh store. `no-commit-refs` to `commit-projects` hold each item's
-refs, attachments and projects from commits to what `oracle` read of the file and the refs.
+The postconditions in `POSTCONDITIONS` are checked after the steps, inside the same
+transaction, second-run last; `store` adds recovery-point. row-counts compares the
+row counts of the tables oracle counted, of the projects item-projects fills, of the
+rows confirmations writes, of the commit tables commits creates and commit-refs
+fills and of the baselines, none; fresh-tables holds every other table to being
+empty and declared by a fresh store. no-commit-refs, other-refs, record-pairs,
+commits-attached and commit-projects hold each item's refs, attachments and projects
+from commits to what oracle read of the file and the refs. known-exceptions lists
+the known exceptions a person reads after the migration, each against what oracle
+foresaw: the children children-left took out, the tasks left in review and the
+goals and stages confirmations gave a row, which the first sweep asks the owner to
+confirm.
 """
 
 from __future__ import annotations
@@ -3078,14 +3083,28 @@ def _holds_known_exceptions(conn: sqlite3.Connection, context: Context) -> Mappi
             (_CONTAINER,),
         )
     )
+    # The goals and stages `confirmations` gave a row: the first sweep asks the owner to
+    # confirm each.
+    awaiting = sorted(references[identity] for identity in _confirmation_rows(conn) or ())
+    foreseen = sorted(
+        references[identity]
+        for identity, state in oracle.derived.items()
+        if state == closing_rules.AWAITING
+    )
     moved = context.memo.get("moved", [])
     found = []
     if moved != oracle.moved:
         found.append(f"taken out {moved}, the oracle expected {oracle.moved}")
     if review != oracle.review:
         found.append(f"in review {review}, the oracle expected {oracle.review}")
+    if awaiting != foreseen:
+        found.append(f"awaiting confirmation {awaiting}, the oracle expected {foreseen}")
     _unmet(found, "known exceptions")
-    return {"taken_out_of_closed_containers": moved, "tasks_left_in_review": review}
+    return {
+        "taken_out_of_closed_containers": moved,
+        "tasks_left_in_review": review,
+        "awaiting_confirmation": awaiting,
+    }
 
 
 def _holds_store_identity(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:

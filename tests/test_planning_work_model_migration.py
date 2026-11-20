@@ -1085,7 +1085,28 @@ class MigratedStoreTests(StoreCase):
         ]
         self.assertNotIn("work_item_confirmations", post_fresh_tables["detail"]["added"])
 
-    def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
+    def test_known_exceptions_lists_each_known_exception_a_person_reads_after_the_migration(
+        self,
+    ) -> None:
+        """The children taken out of the closed WM-3, the one task left in review and the
+        one goal awaiting confirmation, WM-18, whose children are all done."""
+
+        [post_known_exceptions] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "known-exceptions"
+        ]
+        self.assertEqual(
+            {
+                "taken_out_of_closed_containers": [
+                    {"reference": "WM-20", "from": "WM-3"},
+                    {"reference": "WM-4", "from": "WM-3"},
+                ],
+                "tasks_left_in_review": ["WM-21"],
+                "awaiting_confirmation": ["WM-18"],
+            },
+            post_known_exceptions["detail"],
+        )
+
+    def test_item_projects_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
         self,
     ) -> None:
         tasks = [number for number, expected in EXPECTED.items() if expected[0] == "task"]
@@ -2604,6 +2625,16 @@ CLAUSE_FAULTS: tuple[
             ),
         ],
         ["triage-marks"],
+    ),
+    (
+        "known-exceptions",
+        "awaiting confirmation [], the oracle expected ['WM-18']",
+        lambda ids: [
+            ("DELETE FROM work_item_confirmations WHERE work_item_id = ?", (ids["WM-18"],))
+        ],
+        # The row the table lacks, the row its own postcondition misses and the step a
+        # second run would take again to give it back.
+        ["row-counts", "known-exceptions", "awaiting-rows", "second-run"],
     ),
     (
         "request-shapes",
