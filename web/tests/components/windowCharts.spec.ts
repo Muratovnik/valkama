@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
 
 import StepLineTable from '@/shared/ui/StepLineTable.vue'
 
-import { AHEAD, axisWords, REACH, READ, targets } from '../support/stepAhead.ts'
+import { AHEAD, axisWords, HALF, REACH, READ, targets } from '../support/stepAhead.ts'
 import { corners, declared, placement } from '../support/stepDrawing.ts'
 import { HIT, HOUR, openLine, point, pointAt, START, WORDS } from '../support/stepLineMount.ts'
 
@@ -244,21 +244,27 @@ describe('the step line past its readings', () => {
     const line = openLine(READ, START + 3 * HOUR)
     await line.setProps({ ahead: AHEAD })
     // Over the whole five hours now stands at 60 %, and the corridor runs from there to the end.
+    // Each place's box has its middle where the pointer finds the place (`DESIGN.md`, the step
+    // line): «now»'s the least width of a box around its ring.
     expect(targets(line)).toEqual([
       {
         kind: 'now',
         stop: '2',
         hint: 'Now: 50%\nLast reading at h1.5',
-        reach: { start: 60, end: 'auto', size: REACH },
+        reach: { start: `calc(60% - ${HALF})`, end: 'auto', size: REACH },
         shown: false,
       },
       {
         kind: 'reset',
         stop: '3',
         hint: 'Forecast by the reset: 70%–100%\nResets at h5',
-        // From past now's reach to the run-out at four hours of five, 80 % across, where the
-        // forecast's line ends, and never so far on that its own reach passes that end.
-        reach: { start: `min(calc(60% + ${REACH}), calc(80% - ${REACH}))`, end: 20, size: 'auto' },
+        // From past now's box to half a box past the run-out at four hours of five, 80 % across,
+        // where the forecast's line ends; never starting so far on that the dot is not its middle.
+        reach: {
+          start: `min(calc(60% + ${HALF}), calc(80% - ${HALF}))`,
+          end: `calc(20% - ${HALF})`,
+          size: 'auto',
+        },
         shown: false,
       },
     ])
@@ -287,7 +293,7 @@ describe('the step line past its readings', () => {
     expect(declared(line.get('.step-reset-mark'))).toEqual({
       '--step-high': 0,
       '--step-low': 0,
-      '--step-side': 100,
+      '--step-side': 'calc(100% - var(--step-reach) / 2)',
     })
     expect(
       line.findAll('[data-mark="place"]').map((mark) => mark.attributes('data-shape')),
@@ -347,14 +353,19 @@ describe('the step line past its readings', () => {
     await line.setProps({ ahead: { ...AHEAD, forecast: null } })
     expect(line.find('[data-mark="forecast"]').exists()).toBe(false)
     expect(line.find('[data-key="ahead"]').exists()).toBe(false)
+    // Its box around its ring, and the pointer finds it along the rest of the plot from there.
     expect(targets(line).map(({ kind, reach }) => [kind, reach])).toEqual([
-      ['now', { start: 60, end: 0, size: 'auto' }],
+      ['now', { start: `calc(60% - ${HALF})`, end: 'auto', size: REACH }],
     ])
-    // Read at the reset, now stands at the plot's end and takes the pointer over the last 24px.
+    await pointAt(line, 290)
+    expect(targets(line).map(({ shown }) => shown)).toEqual([true])
+    // Read at the reset, now stands at the plot's end, its box around its ring there.
     await line.setProps({ end: START + 5 * HOUR })
     expect(targets(line).map(({ reach }) => reach)).toEqual([
-      { start: 'auto', end: 0, size: REACH },
+      { start: `calc(100% - ${HALF})`, end: 'auto', size: REACH },
     ])
+    await pointAt(line, 300 + HIT)
+    expect(targets(line).map(({ shown }) => shown)).toEqual([true])
     line.unmount()
   })
 

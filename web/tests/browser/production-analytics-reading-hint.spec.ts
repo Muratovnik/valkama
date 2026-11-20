@@ -12,11 +12,16 @@
  * step before it and its lower half, which a reading at 0 % sets on the floor. The plot keeps the
  * marks at 0 % and at its top inside its box, and the line at 0 % on its floor and no lower. The
  * marks once stood half out of the plot at 0 %, where the pointer found no reading.
+ *
+ * A reading whose mark stands within a mark's reach of a place's — the latest, two minutes before
+ * «now» — is found as that place, whose hint says the share at its moment (`DESIGN.md`, the step
+ * line: a place before any reading); the keyboard and the table still reach it.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { openPanel, pageAt, record, serve } from './analyticsPage.ts'
+import { HIT, shareOf } from './stepAhead.ts'
 import { test } from './test.ts'
 
 /** The room between a hint and what it stands against (`OFFSET` in `hintPlacement.ts`). */
@@ -43,19 +48,32 @@ async function openFiveHours(page: Page, width: number) {
 
 /** Each reading of a line, by its place: its mark, its reach's words and the line's boxes. */
 const readingAt = (line: Locator, index: number) =>
-  line.evaluate((figure, at) => {
-    // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
-    const box = (element: Element | null | undefined): Box => {
-      const { left, top, right, bottom } = element?.getBoundingClientRect() ?? new DOMRect()
-      return { left, top, right, bottom }
-    }
-    return {
-      words: figure.querySelectorAll('.step-reach')[at]?.getAttribute('aria-label') ?? '',
-      mark: box(figure.querySelectorAll('.step-mark')[at]),
-      field: box(figure.querySelector('.step-field')),
-      frame: box(figure),
-    }
-  }, index)
+  line.evaluate(
+    (figure, [at = 0, reach = HIT]) => {
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
+      const box = (element: Element | null | undefined): Box => {
+        const { left, top, right, bottom } = element?.getBoundingClientRect() ?? new DOMRect()
+        return { left, top, right, bottom }
+      }
+      const mark = box(figure.querySelectorAll('.step-mark')[at])
+      const middle = (mark.left + mark.right) / 2
+      // Whether a place's mark stands within a mark's reach of this one, which the pointer finds.
+      const nearPlace = [...figure.querySelectorAll('[data-target] [data-mark="place"]')].some(
+        (place) => {
+          const { left, right } = place.getBoundingClientRect()
+          return Math.abs((left + right) / 2 - middle) <= reach
+        },
+      )
+      return {
+        words: figure.querySelectorAll('.step-reach')[at]?.getAttribute('aria-label') ?? '',
+        mark,
+        nearPlace,
+        field: box(figure.querySelector('.step-field')),
+        frame: box(figure),
+      }
+    },
+    [index, HIT],
+  )
 
 /**
  * The one hint shown, once it stands still for two frames, with what it says: a grid's copy for
@@ -128,7 +146,7 @@ const middleOf = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + b
  * of it, in its lower half and its left half.
  */
 async function reachOf(page: Page, line: Locator, index: number) {
-  const { mark, field, words } = await readingAt(line, index)
+  const { mark, field, words, nearPlace } = await readingAt(line, index)
   const inside =
     mark.top >= field.top - 0.5 &&
     mark.bottom <= field.bottom + 0.5 &&
@@ -142,7 +160,9 @@ async function reachOf(page: Page, line: Locator, index: number) {
     ['its left half', middle.x - reach, middle.y],
   ] as const) {
     const hint = await pointAt(page, x, y).catch(() => null)
-    if (hint?.text !== words) missed.push(`${words}: ${part} showed ${hint?.text ?? 'none'}`)
+    // Beside a place, the place's hint, which says the reading's share.
+    const found = nearPlace ? hint?.text.includes(shareOf(words)) : hint?.text === words
+    if (!found) missed.push(`${words}: ${part} showed ${hint?.text ?? 'none'}`)
   }
   return { outside: inside ? [] : [`${words}: ${JSON.stringify({ mark, field })}`], missed }
 }
@@ -154,11 +174,25 @@ for (const width of [1440, 1280, 360])
     await openFiveHours(page, width)
     const viewport = { width, height: 1000 }
     const placed: unknown[] = []
+    const beside: unknown[] = []
     const sides = new Set<string>()
     for (const line of await page.locator('.quota-window .step-line').all()) {
       await line.evaluate((figure) => figure.scrollIntoView({ block: 'center' }))
       const count = await line.locator('.step-reach').count()
-      for (let index = 0; index < count; index += 1) {
+      const readings = await Promise.all(
+        Array.from({ length: count }, async (_, index) => ({
+          index,
+          ...(await readingAt(line, index)),
+        })),
+      )
+      // A reading within a mark's reach of a place is found as the place, which says its share.
+      for (const { mark, words } of readings.filter(({ nearPlace }) => nearPlace)) {
+        const at = middleOf(mark)
+        const hint = await pointAt(page, at.x, at.y)
+        beside.push({ words, hint: hint?.text })
+        expect(hint?.text, `${words}: the place beside it says its share`).toContain(shareOf(words))
+      }
+      for (const { index } of readings.filter(({ nearPlace }) => !nearPlace)) {
         const before = await readingAt(line, index)
         const at = middleOf(before.mark)
         const hint = await pointAt(page, at.x, at.y)
@@ -187,8 +221,9 @@ for (const width of [1440, 1280, 360])
         expect(hint?.box.right, `${words}: inside the window`).toBeLessThanOrEqual(viewport.width)
       }
     }
-    await record(info, `reading-hint-${width}`, placed)
-    expect(placed.length, 'readings pointed at').toBeGreaterThanOrEqual(6)
+    await record(info, `reading-hint-${width}`, { placed, beside })
+    // Every reading counts, whether its own hint or the place beside it answered.
+    expect(placed.length + beside.length, 'readings pointed at').toBeGreaterThanOrEqual(6)
     expect(sides.has('right'), 'a reading with room on its right').toBe(true)
   })
 

@@ -24,6 +24,10 @@ async function aheadOfLine(page: Page) {
   return line
 }
 
+/** The middle of a mark across the window. */
+const middle = (mark: { left: number; width: number } | null | undefined) =>
+  (mark?.left ?? 0) + (mark?.width ?? 0) / 2
+
 /** The words of each place's hint: its name, its figure and the lines under them. */
 const NOW_HINT = ['Now', '58%', 'Last reading at 14:00, 30 min ago, from the poll']
 const RESET_HINT = [
@@ -69,19 +73,19 @@ test('over the whole window, a step line points at now and at its forecast, each
     ['now', false],
     ['reset', false],
   ])
-  // Each is pointed at 4px into its stretch, from its start for «now» and from its end for the
-  // forecast, at its mark's height.
+  // Each is pointed at 4px from the middle of its mark, where the pointer finds it (`DESIGN.md`,
+  // the step line): on along the line for «now» and back for the forecast, at its mark's height.
   const [now, reset] = rest.places
   const aims = [
     {
       kind: 'now',
-      x: (now?.reach?.left ?? 0) + 4,
+      x: middle(now?.mark) + 4,
       y: (now?.mark?.top ?? 0) + 4,
       words: hints.now,
     },
     {
       kind: 'reset',
-      x: (reset?.reach?.right ?? 0) - 4,
+      x: middle(reset?.mark) - 4,
       y: (reset?.mark?.top ?? 0) + 4,
       words: hints.reset,
     },

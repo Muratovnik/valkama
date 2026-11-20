@@ -1242,10 +1242,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   with its hint and painted only while pointed at or focused, neither a reading's dot: «now»
   where the line ends, a ring, its share, when the latest reading was and how long the window has
   been silent, which takes the pointer from the line's end on and leaves the latest reading its
-  own dot; and, while the window stands and its forecast has a share to draw to, the end of the
-  forecast's line, its share at the reset, what that leaves out and when the reset is. The
-  forecast is a line, not a band: 2px like the readings' line, in their hue, dashed, the
-  conventional cue for a projection, from where the readings' line ends at now. For a week's
+  own dot farther than a mark's reach from its ring, the latest found as «now» within it; and,
+  while the window stands and its forecast has a share to draw to, the end of the forecast's line,
+  its share at the reset, what that leaves out and when the reset is. The forecast is a line,
+  not a band: 2px like the readings' line, in their hue, dashed, the conventional cue for a
+  projection, from where the readings' line ends at now. For a week's
   range it follows the high end, the faster pace, the one that decides a run-out, as the bar's
   tail does; the range down to the low end is a quiet solid fill of the hue at low opacity under
   that line, with no hatch and no outline, and none where the range is under about three pixels,
@@ -1270,6 +1271,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   a restart's ring once stretched over the fall, a capsule up to 89px tall, and an oval 12×8 at a
   fall from 0 % to 0 %. On a window past its reset and on the windows before the current one the
   marks take the neutral ink their readings are drawn in; they once stood blue on a grey line.
+  Within a mark's reach of the pointer a place — a restart, a reset between two windows, «now»,
+  the forecast's end — is found before any reading: on a period of weeks the readings stand on
+  every pixel, a continuum the pointer cannot single out, and a reset on the pixel of the reading
+  before it was never found; the place's own hint says the share at its moment. Of two places
+  within that reach of each other the pointer finds the nearer, and its hint says the other's
+  words after its own, so no place's facts are out of the pointer's reach; each keeps its own name
+  for the keyboard. A place's box, which the keyboard's ring is drawn on, has its middle where the
+  pointer finds it: the least width of a box around a restart's or «now»'s ring, and the
+  forecast's from past «now»'s along its line to half that width past its dot; a box that started
+  at «now» put its middle 12px past the ring, where the forecast's line took the pointer.
   The arrows walk the readings, each restart before the
   reading at its moment, then «now», then the forecast. A step line shows its whole window, from
   its start to its reset, running or past its reset alike, and its axis names its two ends for

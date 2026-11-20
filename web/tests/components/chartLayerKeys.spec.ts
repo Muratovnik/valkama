@@ -15,7 +15,7 @@ import type { PeriodColumn, PeriodMark, PeriodWords } from '@/shared/ui/chartGeo
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import type { StepAhead } from '@/shared/ui/windowGeometry.ts'
 
-import { HOUR, openLine, point, START } from '../support/stepLineMount.ts'
+import { HOUR, openLine, point, pointAt, START } from '../support/stepLineMount.ts'
 
 const words: PeriodWords = {
   total: 'total',
@@ -206,8 +206,9 @@ describe('the keys of the layers of a step line', () => {
     expect(headKey(line, 'ahead').attributes('aria-pressed')).toBe('false')
     expect(line.findAll('[data-mark="forecast"]')).toHaveLength(0)
     expect(places(line)).toEqual(['now'])
-    // With no forecast after it, «now» takes the pointer on to the plot's end.
-    expect(line.get('[data-target="now"]').attributes('style')).toContain('inset-inline-end: 0')
+    // With no forecast after it, «now» takes the pointer on to the plot's end, far from its ring.
+    await pointAt(line, 280)
+    expect(line.get('[data-target="now"] [data-mark="place"]').classes()).toContain('step-shown')
     expect(line.findAll('[data-mark="now"]')).toHaveLength(1)
     expect(line.findAll('[data-mark="even"]')).toHaveLength(1)
 

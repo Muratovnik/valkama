@@ -16,9 +16,13 @@
  * The pointer finds «now» at its ring, and without a forecast along the rest of the plot from the
  * line's end; the forecast at its dot and along its line. The dot stands at the line's end, the
  * run-out, the reset or where a frame ends before them; there its hint says the reset stands past
- * it (`words.past`). A place's box, which the keyboard's ring is drawn on, starts at the place:
- * «now»'s is the least width of a box (`--step-reach`) over a forecast, and that width before the
- * plot's end where «now» stands there; the forecast's starts past «now»'s and ends at its dot.
+ * it (`words.past`). A place's box, which the keyboard's ring is drawn on, has its middle where the
+ * pointer finds the place: «now»'s is the least width of a box (`--step-reach`) with its middle on
+ * the ring (`reachAround`), as a restart's is; the forecast's runs along its line from past
+ * «now»'s to half that width past its dot, and where the line is shorter than that width it is
+ * that width with its middle on the dot. A box that started at «now» or ended at the dot put its
+ * middle 12px off the mark, where on a dense period the forecast's line or a reading took the
+ * pointer.
  *
  * The forecast is a layer beside the readings, which its key in the legend turns off and on for
  * every chart (`shows`, `chartLayersStore`): turned off, neither its line nor its place is there,
@@ -31,10 +35,10 @@ import type { ComputedRef } from 'vue'
 import { targetHint } from '@/shared/ui/markHints.ts'
 import {
   corridorIn,
+  reachAround,
   STEP_HEIGHT,
   STEP_WIDTH,
   stepAcross,
-  stepX,
   stepY,
 } from '@/shared/ui/windowGeometry.ts'
 import type {
@@ -57,16 +61,15 @@ export interface StepTargetPlace {
   kind: 'now' | 'reset' | 'restart'
   /**
    * Where its mark stands: from the top of what it marks (`high`) to its foot (`low`), as shares
-   * of the drawing's height, one place for «now» and the forecast, and at its stretch's start,
-   * middle or end (`side`).
+   * of the drawing's height, one place for «now» and the forecast, and across its box (`side`):
+   * the middle, or half the least width of a box before its end.
    */
-  mark: { high: number; low: number; side: '0%' | '50%' | '100%' }
+  mark: { high: number; low: number; side: '50%' | typeof BEFORE_END }
   /**
-   * The box the keyboard's ring is drawn on: from `start` to the plot's end, or to `end` from the
-   * plot's end where it has one, or `size` wide from `start`, or the last `size` of the plot where
-   * it has no `start`.
+   * The box the keyboard's ring is drawn on: `size` wide from `start`, or from `start` to `end`
+   * from the plot's end.
    */
-  reach: { size: string | null; start: string | null; end?: string }
+  reach: { start: string } & ({ size: string; end?: never } | { end: string; size?: never })
   /** Whether a restart is a reset between two windows of the line, its count falling to nothing. */
   zero?: boolean
 }
@@ -78,6 +81,9 @@ export interface StepTargetPlace {
  * reads as a second edge of the line.
  */
 const FILL_LEAST = 3.5
+
+/** Where the forecast's dot stands in its box, which runs half the least width of a box past it. */
+const BEFORE_END = 'calc(100% - var(--step-reach) / 2)'
 
 /** Points of the plot as a path's moves: to the first, then a line to each next. */
 const traced = (places: readonly StepPlace[]) =>
@@ -129,20 +135,19 @@ export function useStepAhead(
     return Boolean(ahead && points.length && end >= frame.value.from && end <= frame.value.to)
   })
 
-  /** «Now», where the line ends: from there to the forecast, or to the plot's end without one. */
+  /**
+   * «Now», where the line ends, its box around its ring; the pointer finds it there, and without a
+   * forecast along the rest of the plot.
+   */
   function nowTarget(ahead: StepAhead): StepTargetPlace {
     const { end } = line()
-    const atEnd = stepX(frame.value, end) >= STEP_WIDTH
     const down = stepY(frame.value, ahead.value) / STEP_HEIGHT
     return {
       kind: 'now',
       hint: targetHint(ahead.now, 1),
-      reach: {
-        start: atEnd ? null : stepAcross(frame.value, end),
-        size: atEnd || corridor.value ? 'var(--step-reach)' : null,
-      },
-      mark: { high: down, low: down, side: atEnd ? '100%' : '0%' },
-      aim: { at: end, from: end, to: corridor.value ? end : frame.value.to },
+      reach: reachAround(frame.value, end),
+      mark: { high: down, low: down, side: '50%' },
+      aim: { at: end, from: end, to: corridor.value ? end : frame.value.to, place: true },
       covers: { from: end, to: end },
     }
   }
@@ -158,19 +163,18 @@ export function useStepAhead(
     if (!forecast || !drawn || !high) return null
     const begins = Math.max(line().end, frame.value.from)
     const { ends } = drawn
-    const after = nowShown.value ? ' + var(--step-reach)' : ''
+    const after = nowShown.value ? ' + var(--step-reach) / 2' : ''
     const across = (high.x / STEP_WIDTH) * 100
     const down = high.y / STEP_HEIGHT
     return {
       kind: 'reset',
       hint: targetHint(forecast, 1, drawn.cut ? [line().words.past] : []),
       reach: {
-        start: `min(calc(${stepAcross(frame.value, begins)}${after}), calc(${across}% - var(--step-reach)))`,
-        size: null,
-        end: `${100 - across}%`,
+        start: `min(calc(${stepAcross(frame.value, begins)}${after}), calc(${across}% - var(--step-reach) / 2))`,
+        end: `calc(${100 - across}% - var(--step-reach) / 2)`,
       },
-      mark: { high: down, low: down, side: '100%' },
-      aim: { at: ends, from: begins, to: ends },
+      mark: { high: down, low: down, side: BEFORE_END },
+      aim: { at: ends, from: begins, to: ends, place: true },
       covers: { from: begins, to: ends },
     }
   }

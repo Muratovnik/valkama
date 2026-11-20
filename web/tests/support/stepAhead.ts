@@ -48,3 +48,5 @@ export const targets = (line: ReturnType<typeof openLine>) =>
 
 /** The step the reach of «now» takes past its start: the line's own width for a pointer. */
 export const REACH = 'var(--step-reach)'
+/** Half the least width of a place's box: how far its box runs on either side of its mark. */
+export const HALF = 'var(--step-reach) / 2'

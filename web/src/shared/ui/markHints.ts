@@ -188,6 +188,12 @@ export function readingHint(point: StepPoint, slot: SeriesSlot): TooltipValue {
   }
 }
 
+/** A place of a step line in its hint: its words, and the grid that draws them. */
+interface PlaceHint {
+  body: TooltipBody
+  text: string
+}
+
 /**
  * What a step line points at past its readings — the window now, its forecast at the reset — in
  * its hint: what it is with its figure in the head, beside the line's swatch, and the lines under
@@ -197,12 +203,39 @@ export function targetHint(
   target: StepTarget,
   slot: SeriesSlot,
   more: readonly string[] = [],
-): TooltipValue {
+): PlaceHint {
   const notes = notesOf(...target.notes, ...more)
   return {
     text: lines(`${target.name}: ${target.figure}`, ...notes),
     body: seriesBody({ label: target.name, slot }, target.figure, notes),
   }
+}
+
+/** A place's hint that also says the words of `others` after its own lines, its text its own. */
+function hintWithNearby(hint: PlaceHint, others: readonly PlaceHint[]): PlaceHint {
+  if (!others.length) return hint
+  const said = others.flatMap((other) => other.text.split('\n'))
+  return { ...hint, body: { ...hint.body, notes: [...(hint.body.notes ?? []), ...said] } }
+}
+
+/**
+ * The hint of each of a step line's places, with the words of every other place whose mark stands
+ * within the pointer's reach of its own (`near`), in the order they stand: of two places that near,
+ * the pointer finds the nearer alone, and the other's facts would be out of its reach. Its text,
+ * the place's name, stays its own, which the keyboard reaches each place by.
+ */
+export function hintsWithNearby(
+  places: readonly { aim: { at: number }; hint: PlaceHint }[],
+  near: (one: number, other: number) => boolean,
+): PlaceHint[] {
+  return places.map((place) =>
+    hintWithNearby(
+      place.hint,
+      places
+        .filter((other) => other !== place && near(other.aim.at, place.aim.at))
+        .map((other) => other.hint),
+    ),
+  )
 }
 
 /** The parts of a folded rest its hint lists by name; the others are said as one line. */

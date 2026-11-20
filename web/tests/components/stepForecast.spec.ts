@@ -94,7 +94,12 @@ describe('a step line’s forecast', () => {
     const mark = line.get('[data-target="reset"] [data-mark="place"]')
     expect(mark.attributes('data-shape')).toBe('dot')
     expect(mark.classes()).toContain('step-reset-mark')
-    expect(declared(mark)).toEqual({ '--step-high': 0.3, '--step-low': 0.3, '--step-side': 100 })
+    // The dot half the least width of its box before the box's end, which runs that far past it.
+    expect(declared(mark)).toEqual({
+      '--step-high': 0.3,
+      '--step-low': 0.3,
+      '--step-side': 'calc(100% - var(--step-reach) / 2)',
+    })
     line.unmount()
   })
 
@@ -123,7 +128,7 @@ describe('a step line’s forecast', () => {
     expect(declared(short.get('.step-reset-mark'))).toEqual({
       '--step-high': 0.25,
       '--step-low': 0.25,
-      '--step-side': 100,
+      '--step-side': 'calc(100% - var(--step-reach) / 2)',
     })
     expect(corners(short.get('[data-mark="forecast"]').attributes('d')).at(-1)).toEqual([300, 25])
     short.unmount()

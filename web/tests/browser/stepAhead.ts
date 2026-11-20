@@ -9,6 +9,12 @@
  * hook `StepLine` documents for it.
  */
 
+/** How near a mark the pointer finds it (`--step-hit`): a place within it wins over a reading. */
+export const HIT = 6
+
+/** The share a reading's words say, «62%». */
+export const shareOf = (words: string) => /\d+(?:[.,]\d+)?\s?%/u.exec(words)?.[0] ?? words
+
 /** A box as the browser reports it, plain for the spec's side. */
 interface Box {
   bottom: number

@@ -82,11 +82,16 @@
  * One layer over the whole field takes the pointer for every place (`vHintPick`), and nothing else
  * in the plot does: not the drawing, not a place's own box. It runs half a mark past each edge of
  * the field, the reach of a mark (`--step-hit`), so a mark centred on an edge is pointed at whole,
- * and it finds the place under the pointer by its x alone (`aimAt`): a mark within that reach, the
- * nearest of several, wins; elsewhere the place whose stretch holds the pointer — a reading's
- * step, from its moment to the next reading's or to `end`, «now» from `end` to the plot's end
- * where no forecast follows, the forecast along its line. So a reader aims at a moment and not
- * at a dot, and a reading a few pixels from the next is still found at its own mark.
+ * and it finds the place under the pointer by its x alone (`aimAt`): a mark within that reach
+ * wins, a place's — a restart, «now», the forecast — before any reading's, the nearest of several;
+ * elsewhere the place whose stretch holds the pointer — a reading's step, from its moment to the
+ * next reading's or to `end`, «now» from `end` to the plot's end where no forecast follows, the
+ * forecast along its line. So a reader aims at a moment and not at a dot, and a reading a few
+ * pixels from the next is still found at its own mark. On a period of weeks the readings stand on
+ * every pixel, and a restart on the pixel of the reading before it was never found: a place is an
+ * event the pointer can single out, and its hint says the share at its moment. Where two places
+ * stand within that reach of each other the pointer finds the nearer, and its hint says the
+ * other's words after its own (`hintsWithNearby`); each keeps its own name for the keyboard.
  *
  * Where the window's count restarted inside it (`restarts`), the line falls at a reading, and the
  * restart is a place on the line there with its hint, its mark a round ring on the middle of
@@ -122,7 +127,7 @@ import { computed, nextTick, ref } from 'vue'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { useChartLayersStore } from '@/shared/stores/chartLayersStore.ts'
-import { readingHint } from '@/shared/ui/markHints.ts'
+import { hintsWithNearby, readingHint } from '@/shared/ui/markHints.ts'
 import StepLineHead from '@/shared/ui/StepLineHead.vue'
 import { vHintPick, vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { FRAME_KEYS } from '@/shared/ui/useAxisFrame.ts'
@@ -306,8 +311,8 @@ function stepStyle(index: number) {
 }
 /** The box a place past the readings stands in, which the keyboard's ring is drawn on. */
 const reachStyle = ({ reach }: StepTargetPlace) => ({
-  insetInlineStart: reach.start ?? 'auto',
-  insetInlineEnd: reach.end ?? (reach.start && reach.size ? 'auto' : '0'),
+  insetInlineStart: reach.start,
+  insetInlineEnd: reach.end ?? 'auto',
   inlineSize: reach.size ?? 'auto',
 })
 /**
@@ -372,7 +377,9 @@ const stop = computed(() => {
 const field = ref<HTMLElement | null>(null)
 /** The one layer that takes the pointer, half a mark past each edge of the field. */
 const hover = ref<HTMLElement | null>(null)
-const { pickAt, placeAt } = useStepAim({ field, hover }, frame, () => walk.aims.value)
+const { near, pickAt, placeAt } = useStepAim({ field, hover }, frame, () => walk.aims.value)
+/** Each place's hint, with the words of the places within a mark's reach of it. */
+const placeHints = computed(() => hintsWithNearby(places.value, near))
 const { framing, keys } = useStepFrame(field, { coveredBy, frame, narrow: span.narrow })
 
 /** The line back on its whole window, the keyboard's place on it kept in the page's order. */
@@ -559,9 +566,9 @@ function stand(index: number) {
         <!-- it says, walked in the order they stand. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
         <span
-          v-for="target in places"
+          v-for="(target, index) in places"
           :key="target.key"
-          v-tooltip.detail="target.hint"
+          v-tooltip.detail="placeHints[index]"
           class="step-target"
           role="img"
           :aria-keyshortcuts="FRAME_KEYS"

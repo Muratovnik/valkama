@@ -21,9 +21,9 @@ import type { ComputedRef } from 'vue'
 import { targetHint } from '@/shared/ui/markHints.ts'
 import type { StepTargetPlace } from '@/shared/ui/useStepAhead.ts'
 import {
+  reachAround,
   restartFall,
   STEP_HEIGHT,
-  stepAcross,
   stepStops,
   stepY,
 } from '@/shared/ui/windowGeometry.ts'
@@ -68,16 +68,13 @@ export function useStepWalk(
           key: restart.key,
           at: restart.at,
           hint: targetHint(restart, 1),
-          reach: {
-            start: `calc(${stepAcross(frame.value, restart.at)} - var(--step-reach) / 2)`,
-            size: 'var(--step-reach)',
-          },
+          reach: reachAround(frame.value, restart.at),
           mark: {
             high: stepY(frame.value, fall.high) / STEP_HEIGHT,
             low: stepY(frame.value, fall.low) / STEP_HEIGHT,
             side: '50%',
           },
-          aim: { at: restart.at, ...moment },
+          aim: { at: restart.at, ...moment, place: true },
           covers: moment,
         }
       })
@@ -88,11 +85,15 @@ export function useStepWalk(
     stepStops(shown.inside(), restarts.value).map((stop) => {
       if (stop.kind === 'reading') {
         const step = shown.step(stop.index)
-        return { ...stop, aim: { at: step.from, ...step }, covers: step }
+        return { ...stop, aim: { at: step.from, ...step, place: false }, covers: step }
       }
       const place = restarts.value[stop.index]
       const at = place?.at ?? 0
-      return { ...stop, aim: { at, from: at, to: at }, covers: { from: at, to: at } }
+      return {
+        ...stop,
+        aim: { at, from: at, to: at, place: true },
+        covers: { from: at, to: at },
+      }
     }),
   )
 

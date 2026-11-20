@@ -15,7 +15,8 @@
  * Each step line past its readings points at «now» and, where a forecast has a share to draw to,
  * runs its dashed line on toward the reset and points at its end: the line and its range inside
  * the plot, each place's hint at its mark and clear of the line's head, nothing moving while
- * pointed at; the latest reading keeps its own dot, however close to «now» it was read. A window
+ * pointed at; the latest reading keeps its own dot beyond a mark's reach of «now», and within it is
+ * found as «now», whose hint says its share. A window
  * spent already has run out at now, so no line runs on from there; a window past its reset draws
  * neither. Each run attaches what it measured.
  *
@@ -24,7 +25,7 @@
  * said of each of its members.
  */
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { messages } from '@/shared/i18n/index.ts'
 
@@ -38,8 +39,9 @@ import {
 } from '../fixtures/quota.ts'
 import { NOW, openPanel, pageAt, record, serve, serveQuota } from './analyticsPage.ts'
 import { drawLined } from './drawnViews.ts'
+import { pointAtLatest } from './latestReading.ts'
 import { forecastLines } from './quotaForecastLine.ts'
-import { aheadOfLines, cornersOutside, hintAtDot, latestHint } from './stepAhead.ts'
+import { aheadOfLines, cornersOutside } from './stepAhead.ts'
 import type { LineAhead } from './stepAhead.ts'
 import { test } from './test.ts'
 
@@ -221,11 +223,14 @@ const hintOf = (page: Page, at: number, kind: string) =>
     { lines: LINES, line: at, place: kind },
   )
 
-/** Where a place is pointed at: 4px into its stretch, from its start for «now», from its end for the forecast. */
+/**
+ * Where a place is pointed at, from the middle of its mark, where the pointer finds it (`DESIGN.md`,
+ * the step line): 4px on for «now», along the line past it, and 4px back for the forecast.
+ */
 const AIM = {
-  now: (left: number) => left + 4,
-  reset: (_: number, right: number) => right - 4,
-} as Record<string, (left: number, right: number) => number>
+  now: (middle: number) => middle + 4,
+  reset: (middle: number) => middle - 4,
+} as Record<string, (middle: number) => number>
 
 /**
  * Points at each place past each line's readings, at its mark's height, and says where its hint
@@ -242,7 +247,8 @@ async function pointAtPlaces(page: Page, lines: LineAhead[]) {
       const target = figure.locator(`[data-target="${kind}"]`)
       const reach = (await target.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 }
       const mark = await target.locator('[data-mark="place"]').boundingBox()
-      const x = AIM[kind]?.(reach.x, reach.x + reach.width) ?? reach.x
+      const middle = mark ? mark.x + mark.width / 2 : reach.x + reach.width / 2
+      const x = AIM[kind]?.(middle) ?? middle
       await page.mouse.move(x, (mark?.y ?? reach.y) + 4)
       await expect(page.getByRole('tooltip')).toBeVisible()
       const seen = await hintOf(page, at, kind)
@@ -257,40 +263,6 @@ async function pointAtPlaces(page: Page, lines: LineAhead[]) {
       )
       await page.mouse.move(1, 1)
     }
-  return strays
-}
-
-/** Whether a mark is painted, as it is only while pointed at or focused. */
-const painted = (mark: Locator) =>
-  mark.evaluate((node) => node.checkVisibility({ opacityProperty: true }))
-
-/**
- * Points at the latest reading's dot on each line «now» follows, however close to now it was
- * read, and says where the pointer went instead of it: there the reading paints its own dot and
- * says its own hint, which stands at the dot as a point's does, and «now» stays unpainted.
- */
-async function pointAtLatest(page: Page, lines: LineAhead[]) {
-  const strays: string[] = []
-  for (const [at, line] of lines.entries()) {
-    if (!line.places.some(({ kind }) => kind === 'now')) continue
-    const figure = page.locator(LINES).nth(at)
-    await figure.evaluate((node) => node.scrollIntoView({ block: 'center' }))
-    const dot = figure.locator('[data-reading]').last().locator('[data-mark="reading"]')
-    const box = await dot.boundingBox()
-    if (!box) {
-      strays.push(`line ${at}: no latest reading`)
-      continue
-    }
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await expect(page.getByRole('tooltip')).toBeVisible()
-    if (!(await painted(dot))) strays.push(`line ${at}: the latest reading's dot unpainted`)
-    if (await painted(figure.locator('[data-target="now"] [data-mark="place"]')))
-      strays.push(`line ${at}: «now» took the latest reading's dot`)
-    const hint = await page.evaluate(latestHint, { lines: LINES, line: at })
-    if (!hintAtDot(hint))
-      strays.push(`line ${at}: the latest reading's hint off its dot ${JSON.stringify(hint)}`)
-    await page.mouse.move(1, 1)
-  }
   return strays
 }
 
@@ -390,7 +362,7 @@ for (const lang of ['en', 'ru'] as const)
         for (const [index, line] of lines.entries())
           expect(cornersOutside(line), `line ${index}: corners outside its plot`).toEqual([])
         expect(await pointAtPlaces(page, lines), `${section}: places pointed at`).toEqual([])
-        expect(await pointAtLatest(page, lines), `${section}: latest readings`).toEqual([])
+        expect(await pointAtLatest(page, lines, LINES), `${section}: latest readings`).toEqual([])
       }
       await record(info, `forecast ${width} ${lang}`, measured)
     })

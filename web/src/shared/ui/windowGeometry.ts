@@ -313,43 +313,74 @@ export function stepParts(
 }
 
 /**
- * A place of a step line as the pointer finds it: the moment its mark stands at, and the moments
- * of the stretch it takes the pointer along where no mark is near.
+ * A place of a step line as the pointer finds it: the moment its mark stands at, the moments of
+ * the stretch it takes the pointer along where no mark is near, and whether it is a place of its
+ * own — a restart, «now», the forecast — rather than a reading (`place`).
  */
 export interface StepAim {
   at: number
   from: number
+  place: boolean
   to: number
 }
 
+/** How the pointer reaches a step line's marks: the field's width and a mark's reach, in pixels. */
+export interface StepReach {
+  radius: number
+  width: number
+}
+
+/** Where a moment's mark stands across a field `width` pixels wide. */
+const markAcross = (frame: StepFrame, at: number, width: number) =>
+  (stepX(frame, at) / STEP_WIDTH) * width
+
+/** Whether the marks of two moments stand within a mark's reach of each other. */
+export const marksNear = (frame: StepFrame, one: number, other: number, reach: StepReach) =>
+  Math.abs(markAcross(frame, one, reach.width) - markAcross(frame, other, reach.width)) <=
+  reach.radius
+
 /**
  * The place the pointer `x` pixels into a field `width` wide points at, of `aims` drawn over
- * `frame`: the place whose mark stands nearest `x` within `radius` of it, the earlier of two as
- * near; else the first whose stretch holds `x`, held inside the field; null where none does.
- * A mark wins over a stretch, so a reading a few pixels from the next is found at its own mark
- * and never under its neighbour's step.
+ * `frame`: of the marks within `radius` of `x`, a place's before any reading's, the nearest of
+ * those, the earlier of two as near; else the first whose stretch holds `x`, held inside the
+ * field; null where none does. A mark wins over a stretch, so a reading a few pixels from the next
+ * is found at its own mark and never under its neighbour's step; and a place wins over a reading,
+ * so a restart, «now» or the forecast on the pixel of a reading, which a dense period's readings
+ * stand on at every pixel, is found at its mark, its own hint saying the share at that moment.
  */
 export function aimAt(
   frame: StepFrame,
   aims: readonly StepAim[],
   x: number,
-  { width, radius }: { radius: number; width: number },
+  { width, radius }: StepReach,
 ): number | null {
-  const across = (at: number) => (stepX(frame, at) / STEP_WIDTH) * width
-  let nearest: number | null = null
-  let distance = radius
+  let nearest: { index: number; off: number; place: boolean } | null = null
   for (const [index, aim] of aims.entries()) {
-    const off = Math.abs(across(aim.at) - x)
-    if (off < distance || (nearest === null && off === distance)) {
-      nearest = index
-      distance = off
-    }
+    const off = Math.abs(markAcross(frame, aim.at, width) - x)
+    if (off > radius) continue
+    const outranks =
+      nearest === null ||
+      (aim.place && !nearest.place) ||
+      (aim.place === nearest.place && off < nearest.off)
+    if (outranks) nearest = { index, off, place: aim.place }
   }
-  if (nearest !== null) return nearest
+  if (nearest !== null) return nearest.index
   const inside = Math.min(Math.max(x, 0), width)
-  const found = aims.findIndex((aim) => inside >= across(aim.from) && inside <= across(aim.to))
+  const found = aims.findIndex(
+    (aim) =>
+      inside >= markAcross(frame, aim.from, width) && inside <= markAcross(frame, aim.to, width),
+  )
   return found === -1 ? null : found
 }
+
+/**
+ * The box of a place, which the keyboard's ring is drawn on: the least width of a box
+ * (`--step-reach`) with its middle on the moment its mark stands at, where the pointer finds it.
+ */
+export const reachAround = (frame: StepFrame, at: number) => ({
+  start: `calc(${stepAcross(frame, at)} - var(--step-reach) / 2)`,
+  size: 'var(--step-reach)',
+})
 
 /** An edge's share at a moment: straight between its turns, held at its ends. */
 function courseAt(course: StepCourse, at: number): number {
