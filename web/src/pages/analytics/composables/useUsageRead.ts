@@ -1,7 +1,7 @@
 /**
  * The reads behind the Analytics page: the period by the chosen dimension beside the period it
  * is compared with, the period by account, and the values each filter can offer, every one of
- * them within the scope's project.
+ * them within the scope: its space, and its project. Another space is a new view.
  *
  * A new view asks again and drops the answer to the one it replaced, so a slow read never
  * draws over a later one. While it asks, the last answer stays on screen as a refresh in flight
@@ -24,7 +24,7 @@ import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces
 import { beforeStepsQuery } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { providePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import { scopeFilters } from '@/pages/analytics/composables/useSharedUsage.ts'
-import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
+import type { SharedUsage, UsageScope } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { comparedBounds, comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
@@ -129,8 +129,8 @@ export function useUsageRead(options: {
   /** The page's colour keys, which take in each answer of the period as it lands. */
   places: ColourPlaces
   shared: SharedUsage
-  /** The project the page is scoped to, which every read is filtered to; null at the top. */
-  projectId: () => string | null
+  /** The space and project the page is scoped to, which every read is narrowed to. */
+  scope: () => UsageScope
   view: () => AnalyticsView
 }) {
   const { now, read: ask } = options.shared
@@ -171,7 +171,7 @@ export function useUsageRead(options: {
   providePanelStanding({ anew, failed: refreshFailed })
 
   /** The scope's own filter: its project, or nothing at the top. */
-  const scope = computed<UsageFilters>(() => scopeFilters(options.projectId()))
+  const scope = computed<UsageFilters>(() => scopeFilters(options.scope()))
 
   /** The filters the reads carry: the page's, and the scope's project over its own. */
   const filters = computed<UsageFilters>(() => ({ ...options.view().filters, ...scope.value }))
@@ -183,7 +183,15 @@ export function useUsageRead(options: {
   const asked = computed(() => {
     const view = options.view()
     const { period, from, to } = view
-    return JSON.stringify({ period, from, to, by: breakdownOf(view), filters: filters.value })
+    const { space } = options.scope()
+    return JSON.stringify({
+      period,
+      from,
+      to,
+      by: breakdownOf(view),
+      filters: filters.value,
+      space,
+    })
   })
 
   /**
@@ -192,7 +200,7 @@ export function useUsageRead(options: {
    */
   const offeredFor = computed(() => {
     const { period, from, to } = options.view()
-    return JSON.stringify({ period, from, to, scope: scope.value })
+    return JSON.stringify({ period, from, to, scope: options.scope() })
   })
 
   let reading: AbortController | null = null

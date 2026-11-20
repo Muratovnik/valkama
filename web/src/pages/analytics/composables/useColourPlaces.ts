@@ -1,6 +1,6 @@
 /**
  * The rows each colour key of the Analytics page is ranked over: the period's answer by the key's
- * dimension, or by its pair, without the page's filters and within the scope's project. A value is
+ * dimension, or by its pair, without the page's filters and within the scope. A value is
  * the colour of its place in that ranking (`rankedSlots`), so a filter that takes values away
  * repaints none of those it leaves; another measure ranks the same rows again and may repaint.
  *
@@ -17,7 +17,7 @@ import { inject, provide, shallowRef } from 'vue'
 import type { InjectionKey } from 'vue'
 
 import { scopeFilters } from '@/pages/analytics/composables/useSharedUsage.ts'
-import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
+import type { SharedUsage, UsageScope } from '@/pages/analytics/composables/useSharedUsage.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageFilters, UsageRow } from '@/shared/api/analyticsApi.ts'
@@ -145,16 +145,16 @@ const nowhere: ColourPlaces = {
 /** The Analytics page's colour keys, for the page itself and every part inside it. */
 export function provideColourPlaces(options: {
   shared: SharedUsage
-  projectId: () => string | null
+  scope: () => UsageScope
   view: () => AnalyticsView
 }): ColourPlaces {
   const places = createColourPlaces({
     placesKey: () => {
       const { period, from, to } = options.view()
-      return JSON.stringify({ period, from, to, project: options.projectId() })
+      return JSON.stringify({ period, from, to, scope: options.scope() })
     },
     read: (query, signal) => options.shared.read(query, signal),
-    scope: () => scopeFilters(options.projectId()),
+    scope: () => scopeFilters(options.scope()),
   })
   provide(PLACES, places)
   return places

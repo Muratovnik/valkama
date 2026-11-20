@@ -20,7 +20,7 @@ import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useRailReads } from '@/pages/analytics/composables/useRailReads.ts'
 import type { RailRead } from '@/pages/analytics/composables/useRailReads.ts'
-import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
+import type { SharedUsage, UsageScope } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import { dimensionFigures, overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
@@ -88,7 +88,7 @@ export function useRailTiles(options: {
   overview: () => PlatformUiState<Usage>
   /** The moment the page's own answer was asked at. */
   overviewAt: () => Date
-  projectId: () => string | null
+  scope: () => UsageScope
   view: () => AnalyticsView
 }) {
   const { t } = useI18n()
