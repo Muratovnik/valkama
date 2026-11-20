@@ -11,14 +11,18 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import sqlite3
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, ClassVar
+from unittest import mock
 
 from tests import agent_probes, agent_probes_judge
 from tests.test_agent_probes import SAMPLES, RunCase
+
+PASSED, FAILED = agent_probes_judge.PASSED, agent_probes_judge.FAILED
 
 JUDGED = SAMPLES / "judged"
 #: A word only the session's record carries: the query of its search.
@@ -331,6 +335,57 @@ class ConditionTests(unittest.TestCase):
         self.assertFalse(holds(item, {"labels": ["a", "b"]}))
         self.assertTrue(holds(["x.md", "y.py"], {"excludes": {"matches": r"\.txt$"}, "count": 2}))
         self.assertFalse(holds(None, {"present": True}))
+
+
+class FirstCallTests(unittest.TestCase):
+    """`first_call` judges the session's first write: the store records no read."""
+
+    CHECK: ClassVar[dict[str, str]] = {"check": "first_call", "identity": "confirmed"}
+
+    def judge(
+        self, events: list[tuple[str, str, str]], tools: list[str]
+    ) -> agent_probes_judge.Outcome:
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE execution_events(id INTEGER PRIMARY KEY, tool TEXT,"
+            " identity_state TEXT, session_id TEXT)"
+        )
+        # Event 1 is setup's; the session's own come after it.
+        conn.execute("INSERT INTO execution_events VALUES(1, 'create_work_item', 'confirmed', 'x')")
+        conn.executemany(
+            "INSERT INTO execution_events(tool, identity_state, session_id) VALUES(?, ?, ?)", events
+        )
+        record = mock.Mock(session={"session_id": "own", "setup_last_event": 1})
+        record.store.return_value = conn
+        calls = [
+            agent_probes_judge.Call(index, tool, True, False, agent_probes_judge.Who("main"), {})
+            for index, tool in enumerate(tools)
+        ]
+        view = mock.Mock(record=record, transcript=agent_probes_judge.Transcript(calls=calls))
+        return agent_probes_judge.CHECKS["first_call"](view, self.CHECK)
+
+    def test_the_first_write_must_be_the_sessions_own_and_confirmed(self) -> None:
+        reads = ["list_planning_spaces", "search_work_items"]
+        own = ("create_work_item", "confirmed", "own")
+        self.assertEqual(PASSED, self.judge([own], [*reads, "create_work_item"]).result)
+        for first in (
+            ("create_work_item", "unconfirmed", "own"),
+            ("claim_work_item", "confirmed", "x"),
+        ):
+            with self.subTest(first=first):
+                self.assertEqual(FAILED, self.judge([first, own], ["create_work_item"]).result)
+
+    def test_a_session_that_only_read_has_nothing_to_confirm(self) -> None:
+        for tools in ([], ["list_planning_spaces", "search_work_items", "get_work_item"]):
+            with self.subTest(tools=tools):
+                outcome = self.judge([], tools)
+                self.assertEqual(PASSED, outcome.result)
+                self.assertIn("no Valkama write", outcome.evidence)
+
+    def test_a_write_the_store_did_not_record_fails(self) -> None:
+        outcome = self.judge([], ["search_work_items", "create_work_item"])
+        self.assertEqual(FAILED, outcome.result)
+        self.assertIn("create_work_item", outcome.evidence)
 
 
 if __name__ == "__main__":

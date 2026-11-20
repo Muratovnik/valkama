@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from server import processes
+from server.planning import tools as planning_tools
 from server.store_identity.primitives import ContractError
 from server.store_identity.refs import planning_space_ref
 from tests import agent_probes as probes
@@ -1126,18 +1127,43 @@ def _handshake(record: Record, check: Mapping[str, Any]) -> bool:
     return check["contains"] in str(found.get("instructions") or "")
 
 
-def _first_call(record: Record, check: Mapping[str, Any]) -> bool:
+#: The tools that only read. The store records a call of the others, never of these.
+READ_TOOLS = frozenset(
+    tool["name"] for tool in planning_tools.TOOLS if tool["annotations"].get("readOnlyHint")
+)
+
+
+def _check_first_call(view: View, check: Mapping[str, Any]) -> Outcome:
+    """The session's first Valkama write as the store recorded it, and whose it is.
+
+    The store records writes only. A session whose Valkama calls all read, or that
+    made none, leaves nothing to confirm: the check holds and says so.
+    """
+
+    record = view.record
     with contextlib.closing(record.store()) as conn:
         found = conn.execute(
-            "SELECT identity_state, session_id FROM execution_events"
+            "SELECT tool, identity_state, session_id FROM execution_events"
             " WHERE id > ? AND tool IS NOT NULL ORDER BY id LIMIT 1",
             (record.session.get("setup_last_event", 0),),
         ).fetchone()
-    return (
-        found is not None
-        and found[0] == check["identity"]
-        and found[1] == record.session.get("session_id")
-    )
+    if found is None:
+        writes = [
+            call.tool
+            for call in view.transcript.calls
+            if call.valkama and call.tool not in READ_TOOLS
+        ]
+        if writes:
+            return Outcome(FAILED, f"the store recorded none of the session's writes: {writes}")
+        return Outcome(PASSED, "the session made no Valkama write: nothing to confirm")
+    tool, identity, session = found
+    passed = identity == check["identity"] and session == record.session.get("session_id")
+    shown = {
+        "tool": tool,
+        "identity": identity,
+        "own_session": session == record.session.get("session_id"),
+    }
+    return Outcome(PASSED if passed else FAILED, json.dumps(shown))
 
 
 def _flag(
@@ -1333,7 +1359,7 @@ CHECKS: dict[str, Callable[[View, Mapping[str, Any]], Outcome]] = {
     "spaces": _check_spaces,
     "writes": _check_writes,
     "session": _flag(_session),
-    "first_call": _flag(_first_call),
+    "first_call": _check_first_call,
     "call": _check_call,
     "no_call": _check_no_call,
     "order": _check_order,
