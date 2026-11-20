@@ -89,8 +89,8 @@ async function send(cancels?: string) {
         before.value = new Map(list.value.cancels.map((row) => [row.reference, said(row)]))
       list.value = error_.list
       readFailed.value = ''
-    } else if (cancels === undefined) readFailed.value = writeFailure(error_)
-    else failure.value = writeFailure(error_)
+    } else if (cancels === undefined) readFailed.value = writeFailure(error_, t)
+    else failure.value = writeFailure(error_, t)
   } finally {
     busy.value = false
   }

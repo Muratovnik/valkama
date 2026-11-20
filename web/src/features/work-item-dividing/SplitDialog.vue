@@ -66,7 +66,7 @@ async function submit() {
     })
     emit('done')
   } catch (error_) {
-    error.value = writeFailure(error_)
+    error.value = writeFailure(error_, t)
   } finally {
     busy.value = false
   }

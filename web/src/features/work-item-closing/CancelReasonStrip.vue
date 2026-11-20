@@ -60,7 +60,7 @@ async function confirm(why: string) {
     emit('done')
   } catch (error_) {
     if (error_ instanceof CancelListError) emit('list', why)
-    else failure.value = writeFailure(error_)
+    else failure.value = writeFailure(error_, t)
   } finally {
     busy.value = false
   }

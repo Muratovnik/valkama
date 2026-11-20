@@ -181,7 +181,11 @@ describe("a goal's cancel whose list could not be read", () => {
       given: 'The plan changed',
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('What closes could not be read.')
+    // What happened, in the catalogue's words: no status code reaches the owner.
+    expect(wrapper.text()).toContain(
+      'What closes could not be read. The local service did not complete the request.',
+    )
+    expect(wrapper.text()).not.toMatch(/HTTP|503/u)
     expect(wrapper.find('[data-reference]').exists()).toBe(false)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -196,6 +200,47 @@ describe("a goal's cancel whose list could not be read", () => {
     expect(
       wrapper.findAll('[data-reference]').map((row) => row.attributes('data-reference')),
     ).toEqual(['QA-2'])
+  })
+
+  it('says an answer it cannot read is one this build cannot read, and what to do', async () => {
+    serve({
+      '/api/planning/work-item/apply': () =>
+        json({ error: { code: 'cancel_list', message: 'Cancelling QA-1', cancels: 'all' } }, 409),
+    })
+    const wrapper = mountOf(CancelGoalDialog, {
+      item: goal({ container_state: 'in_progress' }),
+      state: 'dropped',
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(
+      'What closes could not be read. This build cannot read the local service response.' +
+        ' Restart or update Valkama, then retry.',
+    )
+    expect(wrapper.text()).not.toMatch(/HTTP|409/u)
+  })
+
+  it('says a cancel the connection lost in the catalogue’s words, under the list', async () => {
+    let calls = 0
+    serve({
+      '/api/planning/work-item/apply': () => {
+        calls += 1
+        if (calls > 1) throw new TypeError('Failed to fetch')
+        return json(cancelRefused, 409)
+      },
+    })
+    const wrapper = mountOf(CancelGoalDialog, {
+      item: goal({ reference: 'MAIN-31', container_state: 'in_progress' }),
+      state: 'cancelled',
+      given: 'The plan changed',
+    })
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(calls).toBe(2)
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'The local service did not complete the request.',
+    )
+    expect(wrapper.findAll('[data-reference]')).toHaveLength(2)
   })
 })
 
