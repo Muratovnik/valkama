@@ -15,6 +15,13 @@
     "title": "Goal an agent proposes",
     "kind": "question",
     "prompt": "An agent proposes the goal MAIN-25: Goal an agent proposes. Take it on, put it off, or drop it.",
+    "prompt_message": {
+      "key": "goal_proposed",
+      "values": {
+        "reference": "MAIN-25",
+        "title": "Goal an agent proposes"
+      }
+    },
     "fields": [
       {
         "id": "answer",

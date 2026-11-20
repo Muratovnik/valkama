@@ -17,6 +17,7 @@
         "title": "Contract card",
         "kind": "question",
         "prompt": "What to take on",
+        "prompt_message": null,
         "fields": [
           {
             "id": "items",
@@ -75,6 +76,7 @@
         "title": "Contract card",
         "kind": "question",
         "prompt": "Why does the card read flat?",
+        "prompt_message": null,
         "fields": [
           {
             "id": "why",
@@ -122,6 +124,7 @@
         "title": "Contract card",
         "kind": "decision",
         "prompt": "Which path do the comments take?",
+        "prompt_message": null,
         "fields": [
           {
             "id": "path",

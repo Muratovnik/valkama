@@ -15,6 +15,13 @@
     "title": "Group of export findings",
     "kind": "question",
     "prompt": "Group of 2 items: «Group of export findings»",
+    "prompt_message": {
+      "key": "group_asked",
+      "values": {
+        "count": 2,
+        "title": "Group of export findings"
+      }
+    },
     "fields": [
       {
         "id": "answer",

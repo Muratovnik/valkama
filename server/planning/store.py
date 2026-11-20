@@ -230,11 +230,16 @@ DECISION_POINTS = (
 _DECISION_POINT_SQL = ",".join(f"'{point}'" for point in DECISION_POINTS)
 #: An agent's decision, as a mark on the event that recorded it: when, which item and
 #: which session are the event's and its call's, so the mark holds only the point and
-#: what was decided. It goes with its event, and the event with its item.
+#: what was decided: in English, and by the key and values it was composed of
+#: (`planning.composed`), both null on a mark written before schema 24. It goes with its
+#: event, and the event with its item.
 AGENT_DECISIONS = f"""CREATE TABLE IF NOT EXISTS agent_decisions(
     event_id INTEGER PRIMARY KEY REFERENCES work_item_events(id) ON DELETE CASCADE,
     point TEXT NOT NULL CHECK(point IN ({_DECISION_POINT_SQL})),
-    what TEXT NOT NULL
+    what TEXT NOT NULL,
+    what_key TEXT,
+    what_values TEXT,
+    CHECK((what_key IS NULL) = (what_values IS NULL))
 )"""
 
 #: The points at which an agent's write can wait for the owner (`planning.pending`):
@@ -409,8 +414,10 @@ _PURPOSE_SQL = ",".join(f"'{purpose}'" for purpose in request_model.PURPOSES)
 #: A question, a decision or a list, asked of the owner or of one agent session, and
 #: how it ended. Closing its item ends one still pending (`questions.end`), as done or
 #: cancelled. The 3.0 migration rebuilds the table from this text, so the columns
-#: later schemas appended stand in the order they were appended, then `purpose` and the
-#: action waiting for the owner the question is about (`action_id`), last.
+#: later schemas appended stand in the order they were appended, then `purpose`, the
+#: action waiting for the owner the question is about (`action_id`), and, last, the key
+#: and values of a prompt the service composed (`planning.composed`), both null on a
+#: prompt an agent wrote and on every row written before schema 24.
 _WORK_ITEM_REQUESTS = f"""(
     request_id TEXT PRIMARY KEY,
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
@@ -430,7 +437,10 @@ _WORK_ITEM_REQUESTS = f"""(
     expired_reason TEXT CHECK(expired_reason IN ({_EXPIRED_REASON_SQL})){_appended("work_item_requests")},
     {ADDRESSEE_COLUMN},
     purpose TEXT CHECK(purpose IS NULL OR purpose IN ({_PURPOSE_SQL})),
-    action_id TEXT REFERENCES pending_actions(action_id) ON DELETE CASCADE
+    action_id TEXT REFERENCES pending_actions(action_id) ON DELETE CASCADE,
+    prompt_key TEXT,
+    prompt_values TEXT,
+    CHECK((prompt_key IS NULL) = (prompt_values IS NULL))
 )"""
 _REBUILT = {
     "planning_spaces": _PLANNING_SPACES,

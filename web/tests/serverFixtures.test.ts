@@ -16,6 +16,7 @@ import {
   validateUsageAnswer,
 } from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
+import { validateDecisionsPage } from '@/shared/api/decisionsApi.ts'
 import {
   validateDocument,
   validateFound,
@@ -100,6 +101,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card-returned.json': (value) => validatePlanningWorkItemPayload(value),
   'card-converted.json': (value) => validatePlanningWorkItemPayload(value),
   'commit-attached.json': validateAttachedCommit,
+  'decisions.json': validateDecisionsPage,
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
   'description-told.json': (value) => validateWorkItemRecord(value),
@@ -147,8 +149,10 @@ const readers: Record<string, (value: unknown) => unknown> = {
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
-  // The server's closed lists, which the tests below hold the web's to.
+  // The server's closed lists, which the tests below hold the web's to; the keys of the
+  // texts it composes, which `composedText.test.ts` holds the web's schemas to.
   'open-vocabulary.json',
+  'composed-texts.json',
   'doctor-vocabulary.json',
   'mcp-get-work-item.json',
   'mcp-get-work-item-thread.json',

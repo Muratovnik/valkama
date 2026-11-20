@@ -32,6 +32,7 @@ import { endedByClose } from '@/shared/api/inputRequestModel.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { unbroken } from '@/shared/lib/unbroken.ts'
+import { useComposedText } from '@/shared/lib/useComposedText.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import MetaLine from '@/shared/ui/MetaLine.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -48,6 +49,9 @@ const props = defineProps<{
 const { t, te, d } = useI18n()
 /** The question with the service's own field and option words in the reader's language. */
 const spoken = computed(() => spokenRequest(props.request, t, te))
+/** The prompt in the reader's language where the service composed it, else as written. */
+const composed = useComposedText()
+const prompt = computed(() => composed.prompt(props.request))
 const answered = computed(() => props.request.status === 'answered')
 const when = computed(() => {
   const at = props.request.resolved_at
@@ -98,7 +102,7 @@ const closing = computed(() => {
       :reset-key="request.request_id"
       :lines="4"
     >
-      <RichText :source="request.prompt" />
+      <RichText :source="prompt" />
     </CollapsibleText>
     <div
       v-if="answered"

@@ -216,6 +216,10 @@ _POLLED: dict[str, object] = {"organization": "probe", "session_id": None}
 #: The probes of each clause no listed form covers, by table and the clause's text:
 #: the changes to the table's row that it must refuse, and those it must take.
 _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
+    ("agent_decisions", "(what_key IS NULL) = (what_values IS NULL)"): (
+        ({"what_key": "closed"}, {"what_values": "{}"}),
+        ({"what_key": "closed", "what_values": "{}"},),
+    ),
     (
         "analytics_surface_uses",
         "day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'",
@@ -290,6 +294,10 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
     ("work_item_deferrals", "(until_at IS NULL) <> (until_item_id IS NULL)"): (
         ({"until_at": None}, {"until_item_id": "probe"}),
         ({"until_at": None, "until_item_id": "probe"},),
+    ),
+    ("work_item_requests", "(prompt_key IS NULL) = (prompt_values IS NULL)"): (
+        ({"prompt_key": "goal_proposed"}, {"prompt_values": "{}"}),
+        ({"prompt_key": "goal_proposed", "prompt_values": "{}"},),
     ),
     ("work_item_waiting_notices", "(delivered_call IS NULL) = (delivered_at IS NULL)"): (
         ({"delivered_call": 1}, {"delivered_at": "probe"}),

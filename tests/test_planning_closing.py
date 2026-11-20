@@ -468,12 +468,25 @@ class NoStepsTests(Tree):
             "cancelled": [{"reference": f"MAIN-{n}", "reason": "x" * 90} for n in range(200)],
             "moved_out": [],
         }
-        text = closing.prompt("MAIN-3", part, ["a step"])
+        asked = closing.prompt("MAIN-3", part, ["a step"])
+        text = asked.text
         self.assertLessEqual(len(text), closing.PROMPT_LIMIT)
         shown = text.count("\n- MAIN-")
         self.assertGreater(shown, 50)
         self.assertTrue(
             text.endswith(f"\n({200 - shown + 3} more line(s) not shown: see MAIN-3)"), text[-80:]
+        )
+        # Its key holds what the text shows: the entries that fit and how many lines did not.
+        self.assertEqual("confirm_asked", asked.key)
+        self.assertEqual(
+            {
+                "reference": "MAIN-3",
+                "cancelled": part["cancelled"][:shown],
+                "moved_out": [],
+                "steps": [],
+                "hidden": 200 - shown + 3,
+            },
+            asked.values,
         )
 
 

@@ -37,7 +37,7 @@ import re
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 
-from . import calls, model, request_model, store
+from . import calls, composed, model, request_model, store
 
 #: A request row `r` that asks the owner, open or closed: neither a list on a
 #: comment nor a request asked of an agent session.
@@ -339,7 +339,7 @@ def ask(
     work_item_id: str,
     *,
     kind: str,
-    prompt: str,
+    prompt: str | composed.Text,
     fields: list[dict],
     author: str | None,
     purpose: str | None = None,
@@ -355,22 +355,29 @@ def ask(
     The one insert of a request row. Its caller has checked and parsed what it
     passes, and checks after the insert what it must of the row; `purpose` names
     one of `request_model.PURPOSES`, or nothing, and `action_id` the action waiting
-    for the owner the request is about (`pending`), or nothing.
+    for the owner the request is about (`pending`), or nothing. A prompt the service
+    composed (`composed.Text`) is stored as its text with its key and values beside it;
+    one an agent wrote, as written, with neither.
     """
 
     if purpose is not None:
         model.enum_field(purpose, frozenset(request_model.PURPOSES), "purpose")
     identity = model.new_id()
+    key, values = (
+        (prompt.key, model.dumps(dict(prompt.values)))
+        if isinstance(prompt, composed.Text)
+        else (None, None)
+    )
     conn.execute(
         "INSERT INTO work_item_requests(request_id,work_item_id,comment_id,kind,prompt,"
         "fields_json,author,execution_id,session_id,expires_at,created_at,addressee,purpose,"
-        "action_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "action_id,prompt_key,prompt_values) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             identity,
             work_item_id,
             comment_id,
             kind,
-            prompt,
+            composed.plain(prompt),
             model.dumps(fields),
             model.actor(author),
             execution_id,
@@ -380,6 +387,8 @@ def ask(
             addressee,
             purpose,
             action_id,
+            key,
+            values,
         ),
     )
     log_event(conn, work_item_id, "request_created", identity, author)

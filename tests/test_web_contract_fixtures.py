@@ -40,7 +40,15 @@ from server import http_surface, mcp_surface, session_open, sessions, store
 from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
 from server.ops import doctor, git_hook, url_schemes
-from server.planning import calls, participation, read_model, requests, service, subscriptions
+from server.planning import (
+    calls,
+    composed,
+    participation,
+    read_model,
+    requests,
+    service,
+    subscriptions,
+)
 from server.projects import project_registry
 from server.quota import samples
 from server.store_identity.metadata import read_store_metadata
@@ -1255,6 +1263,13 @@ class _Scenario:
             ),
             # After them all too: the cards it files take numbers no answer above holds.
             **self.written(),
+            # The decisions the agents took on their own in the answers above, each with the
+            # key its line was composed of, and every key the service composes.
+            "decisions": self.http(f"/api/planning/decisions?{urlencode({'space': SPACE})}"),
+            "composed-texts": {
+                "questions": {key: list(names) for key, names in composed.QUESTIONS.items()},
+                "decisions": {key: list(names) for key, names in composed.DECISIONS.items()},
+            },
         }
 
 

@@ -56,6 +56,7 @@ WEB_REQUEST_KEYS = {
     "title",
     "kind",
     "prompt",
+    "prompt_message",
     "fields",
     "answers",
     "own",

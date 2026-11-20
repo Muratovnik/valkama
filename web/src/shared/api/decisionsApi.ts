@@ -9,6 +9,7 @@
  * with a larger page. Strict like every planning contract: a field nobody declared is refused.
  */
 
+import { whatMessageSchema } from '@/shared/api/composedTextModel.ts'
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
 import type { DecisionPoint } from '@/shared/api/planningDecisionPoints.ts'
@@ -34,6 +35,11 @@ const decisionSchema = strictObject({
   session: z.string().min(1).max(512),
   /** What the point said was decided, up to 300 characters. */
   what: z.string().min(1).max(300),
+  /**
+   * The key and values `what` was composed of, which the interface says in the reader's
+   * language; null on a mark written before keys. A record a test builds may leave it out.
+   */
+  what_message: whatMessageSchema.nullable().optional(),
   event_id: positiveInt(),
 })
 
@@ -56,7 +62,7 @@ export interface DecisionsQuery {
 }
 
 /** One page of the marks, or a refusal naming what does not fit the contract. */
-function validateDecisionsPage(payload: unknown): DecisionsPage {
+export function validateDecisionsPage(payload: unknown): DecisionsPage {
   return parseContract(pageSchema, payload, 'planning.decisions', invalid)
 }
 

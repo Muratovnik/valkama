@@ -76,6 +76,7 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { unbroken } from '@/shared/lib/unbroken.ts'
+import { useComposedText } from '@/shared/lib/useComposedText.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -179,6 +180,9 @@ const {
 
 const waiting = computed(() => request.value.status === 'pending')
 const inForm = computed(() => waiting.value || changing.value)
+/** The prompt in the reader's language where the service composed it, else as written. */
+const composed = useComposedText()
+const prompt = computed(() => composed.prompt(request.value))
 const kind = useKindAnswers({
   answers: () => props.answers,
   entry: () => props.entry,
@@ -351,7 +355,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
       >
         <RichText
           :id="promptId"
-          :source="request.prompt"
+          :source="prompt"
         />
       </CollapsibleText>
       <p
