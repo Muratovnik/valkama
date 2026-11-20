@@ -18,6 +18,7 @@ from server import store
 from server.planning import (
     api,
     calls,
+    composed,
     decisions,
     item_projects,
     model,
@@ -108,12 +109,19 @@ class SummaryTests(Harness):
         self.a1 = self.item("ALPHA", "One table for both scopes", ["app"])
         self.a2 = self.item("ALPHA", "Retire the old route", ["lib"])
         self.b1 = self.item("BETA", "Pages for the open questions", ["app"])
-        #: Each point, the item, the action it marks, when, and what the point wrote.
+        #: Each point, the item, the action it marks, when, and what the point wrote: one
+        #: composed with its key, the rest as a text alone, as a mark from before keys is.
         laid = [
             ("finding", self.a1, "accepted", f"{DAY_ONE}T09:00:00Z", "accepted the finding"),
             ("proposed_goal", self.a2, "accepted", f"{DAY_ONE}T10:00:00Z", "accepted the goal"),
             ("task_in_goal", self.b1, "accepted", f"{DAY_ONE}T11:00:00Z", "accepted in the goal"),
-            ("decision", self.a1, "request_answered", f"{DAY_ONE}T12:00:00Z", "chose one table"),
+            (
+                "decision",
+                self.a1,
+                "request_answered",
+                f"{DAY_ONE}T12:00:00Z",
+                composed.decision("chose", "chose «one table»", labels=["one table"]),
+            ),
             ("cancel_outside", self.a2, "transitioned", f"{DAY_ONE}T13:00:00Z", "cancel it"),
             ("cancel_shared", self.b1, "transitioned", f"{DAY_TWO}T09:00:00Z", "cancel the goal"),
             ("condition", self.a1, "checklist_replaced", f"{DAY_TWO}T10:00:00Z", "removed step"),
@@ -135,7 +143,9 @@ class SummaryTests(Harness):
                     "projects": ["app"] if reference in (self.a1, self.b1) else ["lib"],
                 },
                 "session": SESSION,
-                "what": what,
+                "what": composed.plain(what),
+                # A mark composed with its key carries it; one marked as a text alone none.
+                "what_message": what.message() if isinstance(what, composed.Text) else None,
                 "event_id": event,
             }
         self.conn.commit()
@@ -442,6 +452,23 @@ class DecisionRowTests(Harness):
         ).fetchone()
         self.assertEqual(("request_answered", record["request_id"]), tuple(marked))
         self.assertEqual(SESSION, entry["session"])
+        # The mark carries the labels it was composed of, the interface's to say; the
+        # prompt the agent wrote carries no key and is shown as written.
+        self.assertEqual(
+            {
+                "key": "chose",
+                "values": {
+                    "labels": [
+                        "One table for both scopes",
+                        "The migration check: accept",
+                        "Docs",
+                        "Probe",
+                    ]
+                },
+            },
+            entry["what_message"],
+        )
+        self.assertIsNone(record["prompt_message"])
         # Asked in a batch, it comes back answered in the batch's questions too.
         answer = self.tool(
             "apply_work_item_changes",

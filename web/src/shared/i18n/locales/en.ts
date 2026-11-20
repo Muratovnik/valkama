@@ -6,6 +6,7 @@ import { analyticsMessages } from '@/shared/i18n/analyticsMessages.ts'
 import { boardMessages } from '@/shared/i18n/boardMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
+import { composedTextMessages } from '@/shared/i18n/composedTextMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { decisionPointMessages } from '@/shared/i18n/decisionPointMessages.ts'
 import { decisionsMessages } from '@/shared/i18n/decisionsMessages.ts'
@@ -72,6 +73,7 @@ export const en = {
   analytics: analyticsMessages.en.analytics,
   decisions: decisionsMessages.en,
   decisionPoints: decisionPointMessages.en,
+  composed: composedTextMessages.en,
   volumes: volumesMessages.en,
   app: {
     title: 'Valkama',

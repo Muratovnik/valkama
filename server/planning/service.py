@@ -28,6 +28,7 @@ from . import (
     baselines,
     calls,
     closing,
+    composed,
     decisions,
     deferral,
     images,
@@ -961,7 +962,7 @@ class Decided:
     recorded the move, its `accepted` or its `transitioned`."""
 
     point: str
-    what: str
+    what: composed.Text
 
 
 def _accepted(
@@ -997,19 +998,25 @@ def _accepted(
     return accepted
 
 
-def _accepted_what(conn: sqlite3.Connection, identity: str, *, ruled: str | None = None) -> str:
+def _accepted_what(
+    conn: sqlite3.Connection, identity: str, *, ruled: str | None = None
+) -> composed.Text:
     """What the summary of decisions says of an acceptance: `accepted MAIN-12`, with the
     goal or stage it stands under (`under MAIN-3`) or the label a rule took it by
     (`by the label docs`)."""
 
     row = read_model.item_by_id(conn, identity)
-    said = f"accepted {read_model.reference(conn, row)}"
+    reference = read_model.reference(conn, row)
+    said = f"accepted {reference}"
     if ruled is not None:
-        return f"{said} by the label {ruled}"
+        return composed.decision(
+            "accepted", f"{said} by the label {ruled}", reference=reference, under=None, label=ruled
+        )
+    under = None
     if row["parent_id"] is not None:
-        parent = read_model.item_by_id(conn, str(row["parent_id"]))
-        said += f" under {read_model.reference(conn, parent)}"
-    return said
+        under = read_model.reference(conn, read_model.item_by_id(conn, str(row["parent_id"])))
+        said += f" under {under}"
+    return composed.decision("accepted", said, reference=reference, under=under, label=None)
 
 
 def _last_event(conn: sqlite3.Connection, identity: str, action: str) -> int:
@@ -1048,41 +1055,54 @@ def _ask_about_task(
         proposal = pending.Proposal(
             "transition",
             {"parent": goal_id, **move.params()},
-            f"accepted {reference} under {goal}",
+            _under_what("accepted", reference, goal),
             seen={"parent": goal_id},
             reason=move.reason or None,
         )
-        prompt = (
+        prompt = composed.question(
+            "task_moved_to",
             f"An agent moves the task {reference}, lying in {goal}, to {move.state}:"
             f" {model.sentence(row['title'])} Take it on and move it there, put it off, move it"
-            " out of the goal, or drop it."
+            " out of the goal, or drop it.",
+            reference=reference,
+            goal=goal,
+            state=move.state,
+            title=str(row["title"]),
         )
     elif moved_from is None:
         # It lies under the goal: moved away before the answer, it is no longer asked about.
         proposal = pending.Proposal(
             "accept",
             {"parent": goal_id},
-            f"accepted {reference} under {goal}",
+            _under_what("accepted", reference, goal),
             seen={"parent": goal_id},
         )
-        prompt = (
+        prompt = composed.question(
+            "task_filed",
             f"An agent files the task {reference} in {goal}: {model.sentence(row['title'])}"
-            " Take it on, put it off, move it out of the goal, or drop it."
+            " Take it on, put it off, move it out of the goal, or drop it.",
+            reference=reference,
+            goal=goal,
+            title=str(row["title"]),
         )
     else:
         done = "moved" if moved_from["acceptance"] is not None else "accepted"
         proposal = pending.Proposal(
             "parent",
             {"parent": goal_id},
-            f"{done} {reference} under {goal}",
+            _under_what(done, reference, goal),
             seen={
                 "parent": moved_from["parent_id"],
                 "accepted": moved_from["acceptance"] is not None,
             },
         )
-        prompt = (
+        prompt = composed.question(
+            "task_moved_in",
             f"An agent moves the task {reference} into {goal}: {model.sentence(row['title'])}"
-            " Take it on, put it off, leave it where it was, or drop it."
+            " Take it on, put it off, leave it where it was, or drop it.",
+            reference=reference,
+            goal=goal,
+            title=str(row["title"]),
         )
     return pending.ask(
         conn,
@@ -1106,21 +1126,34 @@ def _ask_about_goal(
     row = read_model.item_by_id(conn, identity)
     reference = read_model.reference(conn, row)
     if by_agent:
-        prompt = f"An agent proposes the goal {reference}: {model.sentence(row['title'])}"
+        said = f"An agent proposes the goal {reference}: {model.sentence(row['title'])}"
     else:
-        prompt = (
-            f"The goal {reference} came back from being put off: {model.sentence(row['title'])}"
-        )
+        said = f"The goal {reference} came back from being put off: {model.sentence(row['title'])}"
     return pending.ask(
         conn,
         identity,
         "proposed_goal",
         pending.Proposal("accept", {}, _accepted_what(conn, identity)),
         purpose="goal",
-        prompt=prompt + " Take it on, put it off, or drop it.",
+        prompt=composed.question(
+            "goal_proposed" if by_agent else "goal_came_back",
+            said + " Take it on, put it off, or drop it.",
+            reference=reference,
+            title=str(row["title"]),
+        ),
         fields=request_model.fields(request_model.goal_fields(recommend=by_agent)),
         author=author,
     )
+
+
+def _under_what(done: str, reference: str, goal: str) -> composed.Text:
+    """What the summary of decisions would say of a task taken into a goal: `accepted
+    MAIN-12 under MAIN-3`, or `moved` for one already accepted elsewhere."""
+
+    said = f"{done} {reference} under {goal}"
+    if done == "moved":
+        return composed.decision("moved", said, reference=reference, under=goal)
+    return composed.decision("accepted", said, reference=reference, under=goal, label=None)
 
 
 def _insert_item(
@@ -2143,7 +2176,7 @@ def _transition(
     ruled: str | None = None,
     following: object = None,
     gated: bool = False,
-    agreed: str | None = None,
+    agreed: composed.Text | str | None = None,
     decided: Decided | None = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`; `ruled` is the
@@ -2523,14 +2556,19 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
                 gone=due.because == deferral.DELETED,
             ):
                 return None
-            condition = deferral.said(str(due.until_at)) if item is None else f"{item} closed"
+            moment = deferral.said(str(due.until_at)) if item is None else None
+            condition = f"{item} closed" if moment is None else moment
             questions.ask(
                 conn,
                 due.work_item_id,
                 kind="question",
-                prompt=(
+                prompt=composed.question(
+                    "put_off_came",
                     f"{reference} was put off until {condition}; that has come. Do it, put it"
-                    " off again, or drop it."
+                    " off again, or drop it.",
+                    reference=reference,
+                    until=moment,
+                    item=item,
                 ),
                 fields=request_model.fields(list(request_model.RETURN_FIELDS)),
                 author=deferral.AUTHOR,
@@ -2588,10 +2626,16 @@ def _goal_defer(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
     return participation.load(conn).mode(str(row["planning_space_id"]), "goal_defer")
 
 
-def _put_off_what(reference: str, until: str, why: str) -> str:
+def _put_off_what(reference: str, until: str, why: str) -> composed.Text:
     """What the summary of decisions says of putting a goal or stage off."""
 
-    return f"put off {reference} until {until}: {why}"
+    return composed.decision(
+        "put_off",
+        f"put off {reference} until {until}: {why}",
+        reference=reference,
+        until=until,
+        reason=why,
+    )
 
 
 def _ask_about_put_off(
@@ -2614,10 +2658,16 @@ def _ask_about_put_off(
             proposed={"until": until},
         ),
         purpose="goal",
-        prompt=(
+        prompt=composed.question(
+            "put_off_asked",
             f"An agent puts off {reference}, an accepted {_container_word(row)}:"
             f" {model.sentence(row['title'])} Until {until}. Its reason: {model.sentence(why)}"
-            " Keep it, put it off, or drop it."
+            " Keep it, put it off, or drop it.",
+            reference=reference,
+            kind=_container_word(row),
+            title=str(row["title"]),
+            until=until,
+            reason=why,
         ),
         fields=request_model.fields(request_model.put_off_fields(until)),
         author=author,
@@ -2814,12 +2864,15 @@ def _cancel_point(
     return _CancelGate("cancel_outside", mode)
 
 
-def _cancel_what(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | None) -> str:
+def _cancel_what(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | None) -> composed.Text:
     """What the summary of decisions says of a cancel: `cancel MAIN-12`, and the
     question it follows (`following question <id>`)."""
 
-    said = f"cancel {read_model.reference(conn, row)}"
-    return said if followed is None else f"{said} following question {followed}"
+    reference = read_model.reference(conn, row)
+    said = f"cancel {reference}"
+    if followed is not None:
+        said += f" following question {followed}"
+    return composed.decision("cancelled", said, reference=reference, question=followed)
 
 
 #: What the owner's question says of the item an agent cancels, at each point.
@@ -2828,16 +2881,45 @@ _CANCEL_ASKED = {
     "cancel_shared": "which other sessions work on",
 }
 #: What the question then asks the owner to do.
-CANCEL_OR_KEEP = " Cancel it, or keep it."
+_CANCEL_OR_KEEP = " Cancel it, or keep it."
 
 
-def cancel_asked(conn: sqlite3.Connection, row: sqlite3.Row, point: str, reason: str | None) -> str:
-    """The owner's question about an agent's cancel at `point`, up to what it asks them to
-    do: the item, why it is the owner's to decide, and the agent's reason."""
+def cancel_asked(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    point: str,
+    reason: str | None,
+    *,
+    sessions_asked: bool = False,
+    objections: Sequence[tuple[str, str]] = (),
+    unanswered: Sequence[str] = (),
+) -> composed.Text:
+    """The owner's question about an agent's cancel at `point`: the item, why it is the
+    owner's to decide, and the agent's reason; that the sessions at work are asked as well
+    (`sessions_asked`), or, when their round passed it to the owner, what they said: each
+    session that objected with its reason (`objections`), or those that did not answer
+    within a day (`unanswered`); and what it asks the owner to do."""
 
-    return (
-        f"An agent cancels {read_model.reference(conn, row)}, {_CANCEL_ASKED[point]}:"
+    reference = read_model.reference(conn, row)
+    said = (
+        f"An agent cancels {reference}, {_CANCEL_ASKED[point]}:"
         f" {model.sentence(row['title'])}{_reason_said(reason)}"
+    )
+    if sessions_asked:
+        said += " The sessions are asked as well, and their answers show here."
+    said += "".join(f" {label} objects: {model.sentence(why)}" for label, why in objections)
+    if unanswered:
+        said += f" Not every session answered within a day: {', '.join(unanswered)} did not."
+    return composed.question(
+        "cancel_asked",
+        said + _CANCEL_OR_KEEP,
+        reference=reference,
+        point=point,
+        title=str(row["title"]),
+        reason=reason or None,
+        sessions_asked=sessions_asked,
+        objections=[{"session": label, "reason": why} for label, why in objections],
+        unanswered=list(unanswered),
     )
 
 
@@ -2874,15 +2956,13 @@ def _ask_about_cancel(
         proposed={"state": "cancelled"},
     )
     action, fresh = pending.hold(conn, identity, gate.point, proposal)
-    asked = cancel_asked(conn, row, gate.point, reason)
     question = pending.owner_question(conn, action)
     if fresh and gate.mode == participation.HUMAN:
-        shown = " The sessions are asked as well, and their answers show here." if gate.busy else ""
         question = pending.ask_owner(
             conn,
             action,
             purpose="cancel",
-            prompt=asked + shown + CANCEL_OR_KEEP,
+            prompt=cancel_asked(conn, row, gate.point, reason, sessions_asked=bool(gate.busy)),
             fields=request_model.fields(request_model.cancel_fields()),
             author=author,
         )
@@ -2891,17 +2971,23 @@ def _ask_about_cancel(
             conn,
             action,
             list(gate.busy),
-            prompt=f"Another session's agent cancels {read_model.reference(conn, row)}, work"
-            f" you take part in: {model.sentence(row['title'])}{_reason_said(reason)} Answer agree,"
-            " object with a reason, or move your work out of it with move_out and answer"
-            " moved_out.",
+            prompt=composed.question(
+                "cancel_consent",
+                f"Another session's agent cancels {read_model.reference(conn, row)}, work"
+                f" you take part in: {model.sentence(row['title'])}{_reason_said(reason)} Answer"
+                " agree, object with a reason, or move your work out of it with move_out and"
+                " answer moved_out.",
+                reference=read_model.reference(conn, row),
+                title=str(row["title"]),
+                reason=reason or None,
+            ),
             author=author,
         )
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
     if question:
         answer["waits_for_owner"] = pending.Waiting(
-            action.id, gate.point, question, action.what
+            action.id, gate.point, question, composed.plain(action.what)
         ).answer()
     else:
         answer["waits_for_sessions"] = pending.round_of(conn, action).answer()
@@ -2921,7 +3007,7 @@ def cancel_agreed(
     *,
     reason: str,
     cancels: str | None,
-    what: str,
+    what: composed.Text | str,
     author: str | None,
 ) -> dict:
     """Make a cancel the sessions whose work it ends agreed to, as Valkama's write: the
@@ -2956,29 +3042,35 @@ def _goal_close(
 _SUMMARY_SHOWN = 1000
 
 
-def _close_what(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
+def _close_what(conn: sqlite3.Connection, row: sqlite3.Row) -> composed.Text:
     """What the summary of decisions says of a goal's close: `close MAIN-3`."""
 
-    return f"close {read_model.reference(conn, row)}"
+    reference = read_model.reference(conn, row)
+    return composed.decision("closed", f"close {reference}", reference=reference)
 
 
-def _close_asked(reference: str, summary: Mapping[str, object], *, waits: bool) -> str:
-    """The first line of the owner's question about an agent's close of a goal: what stands
-    under it, the agent's summary quoted with one stop of its own at most, and what the
-    answers do. A goal with nothing under it has no period of waiting, so leaving it hands
-    it to no session: it stays open."""
+def _close_asked(
+    reference: str, part: dict, steps: list[str], summary: Mapping[str, object], *, waits: bool
+) -> composed.Text:
+    """The owner's question about an agent's close of a goal. Its first line says what
+    stands under it, the agent's summary quoted with one stop of its own at most, and what
+    the answers do; a goal with nothing under it has no period of waiting, so leaving it
+    hands it to no session: it stays open. The lines under it are the confirmation's."""
 
     done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN].rstrip()
     said = f", and its summary says: {done}" if done else ""
     if waits:
-        return (
+        head = (
             model.sentence(f"An agent confirms {reference}: all work under it is closed{said}")
             + " Confirm it, or leave it to the next session that takes work in this space."
         )
-    return (
-        model.sentence(f"An agent closes {reference}, which has nothing under it{said}")
-        + " Confirm it, or leave it open."
-    )
+    else:
+        head = (
+            model.sentence(f"An agent closes {reference}, which has nothing under it{said}")
+            + " Confirm it, or leave it open."
+        )
+    key = "confirm_agent" if waits else "confirm_agent_empty"
+    return closing.prompt(reference, part, steps, head=head, key=key, summary=done or None)
 
 
 def _ask_about_close(
@@ -3023,9 +3115,7 @@ def _ask_about_close(
                 conn,
                 action,
                 purpose=closing.CONFIRM,
-                prompt=closing.prompt(
-                    reference, part, steps, head=_close_asked(reference, summary, waits=waits)
-                ),
+                prompt=_close_asked(reference, part, steps, summary, waits=waits),
                 fields=request_model.fields(
                     list(
                         request_model.CONFIRM_FIELDS if waits else request_model.CONFIRM_OPEN_FIELDS
@@ -3037,7 +3127,7 @@ def _ask_about_close(
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
     answer["waits_for_owner"] = pending.Waiting(
-        action.id, action.point, question, action.what
+        action.id, action.point, question, composed.plain(action.what)
     ).answer()
     return answer
 
@@ -4235,9 +4325,8 @@ def set_checklist(
         *(entry.before for entry in reworded if entry.clarifies or not held),
     ):
         _log(conn, identity, "checklist_removed", str(text)[:120], author)
-    said = _steps_what(removed, changed, why) + [entry.said() for entry in clarified]
-    if point and said:
-        decisions.mark(conn, replaced, "condition", "; ".join(said))
+    if point and (removed or changed or clarified):
+        decisions.mark(conn, replaced, "condition", _steps_what(removed, changed, why, clarified))
     overridden = record_overrides(conn, identity, guards, author)
     # A step completed or dropped here ends its claim, which may have been the last holder.
     _settle(conn, identity, author, "steps replaced")
@@ -4258,9 +4347,14 @@ class _Reworded:
     after: str
     clarifies: bool
 
+    @property
+    def change(self) -> str:
+        """The change the summary of decisions names: `clarified`, or `rewrote`."""
+
+        return "clarified" if self.clarifies else "rewrote"
+
     def said(self) -> str:
-        verb = "clarified" if self.clarifies else "rewrote"
-        return f"{verb} step «{self.before}» → «{self.after}»"
+        return f"{self.change} step «{self.before}» → «{self.after}»"
 
 
 #: What a step says to only clarify its wording, sent beside its id and new text.
@@ -4316,14 +4410,33 @@ def _steps_detail(replacement: list[dict], clarified: list[_Reworded], why: str 
     return detail[:EVENT_DETAIL_LIMIT]
 
 
-def _steps_what(removed: list[dict], changed: list[_Reworded], why: str | None) -> list[str]:
-    """What the summary of decisions says of steps removed or reworded: each, then why."""
+def _steps_what(
+    removed: list[dict],
+    changed: list[_Reworded],
+    why: str | None,
+    clarified: Sequence[_Reworded] = (),
+) -> composed.Text:
+    """What the summary of decisions says of steps removed or reworded: each, then why,
+    and each step whose wording was only clarified after them."""
 
     said = [f"removed step «{step['text']}»" for step in removed]
     said += [entry.said() for entry in changed]
     if said and why:
         said[-1] += f": {why}"
-    return said
+    said += [entry.said() for entry in clarified]
+    changes = [
+        {"change": "removed", "before": str(step["text"]), "after": None} for step in removed
+    ]
+    changes += [
+        {"change": entry.change, "before": entry.before, "after": entry.after}
+        for entry in (*changed, *clarified)
+    ]
+    return composed.decision(
+        "steps",
+        "; ".join(said),
+        changes=changes,
+        reason=why if removed or changed else None,
+    )
 
 
 def _steps_proposal(
@@ -4338,7 +4451,7 @@ def _steps_proposal(
             "rewrite": [{"id": entry.id, "to": entry.after} for entry in changed],
             "force": force,
         },
-        "; ".join(_steps_what(removed, changed, why)),
+        _steps_what(removed, changed, why),
         reason=why,
         proposed={
             "removed": [{"id": str(step["id"]), "text": str(step["text"])} for step in removed],
@@ -4389,13 +4502,17 @@ def _ask_about_steps(
     or stage: what was and what would be, and why (`requests.carry_out`). The same write
     sent again while it waits answers that wait and asks nothing more."""
 
+    what = composed.plain(action.what)
     if not fresh:
-        return pending.Waiting(
-            action.id, action.point, pending.owner_question(conn, action), action.what
-        )
+        return pending.Waiting(action.id, action.point, pending.owner_question(conn, action), what)
     reference = read_model.reference(conn, row)
-    lines = [f"- remove «{entry['text']}»" for entry in action.proposed["removed"]]
-    lines += [f"- «{entry['from']}» → «{entry['to']}»" for entry in action.proposed["rewritten"]]
+    removed = [str(entry["text"]) for entry in action.proposed["removed"]]
+    rewritten = [
+        {"from": str(entry["from"]), "to": str(entry["to"])}
+        for entry in action.proposed["rewritten"]
+    ]
+    lines = [f"- remove «{text}»" for text in removed]
+    lines += [f"- «{entry['from']}» → «{entry['to']}»" for entry in rewritten]
     prompt = "\n".join(
         [
             f"An agent changes the steps of {reference}, a {_container_word(row)}:"
@@ -4408,11 +4525,20 @@ def _ask_about_steps(
         conn,
         action,
         purpose="condition",
-        prompt=prompt[: closing.PROMPT_LIMIT],
+        prompt=composed.question(
+            "steps_asked",
+            prompt[: closing.PROMPT_LIMIT],
+            reference=reference,
+            kind=_container_word(row),
+            title=str(row["title"]),
+            removed=removed,
+            rewritten=rewritten,
+            reason=str(action.reason),
+        ),
         fields=request_model.fields(request_model.condition_fields()),
         author=author,
     )
-    return pending.Waiting(action.id, action.point, question, action.what)
+    return pending.Waiting(action.id, action.point, question, what)
 
 
 def _write_checklist(

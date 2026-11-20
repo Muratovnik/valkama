@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from . import (
     calls,
     closing,
+    composed,
     consent,
     decisions,
     deferral,
@@ -142,6 +143,9 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "title": item["title"],
         "kind": row["kind"],
         "prompt": row["prompt"],
+        # The key and values of a prompt the service composed; null on one an agent wrote,
+        # on one stored before keys and on an attached store from before them.
+        "prompt_message": _prompt_message(row, columns),
         "fields": json.loads(row["fields_json"]),
         "answers": parts["answers"],
         "own": parts["own"],
@@ -172,6 +176,12 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         # The write waiting for the owner the question is about, only on such a question.
         **_action_part(conn, row),
     }
+
+
+def _prompt_message(row: sqlite3.Row, columns: Sequence[str]) -> dict | None:
+    if "prompt_key" not in columns or row["prompt_key"] is None:
+        return None
+    return {"key": row["prompt_key"], "values": json.loads(row["prompt_values"])}
 
 
 def _action_part(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
@@ -651,8 +661,11 @@ def _decide_by_recommendation(
         author=author,
         at=request_model.now(),
     )
-    chosen = ", ".join(f"«{label}»" for label in request_model.chosen_labels(fields, given))
-    decisions.mark(conn, event, "decision", f"chose {chosen}")
+    labels = request_model.chosen_labels(fields, given)
+    chosen = ", ".join(f"«{label}»" for label in labels)
+    decisions.mark(
+        conn, event, "decision", composed.decision("chose", f"chose {chosen}", labels=labels)
+    )
 
 
 def _close(

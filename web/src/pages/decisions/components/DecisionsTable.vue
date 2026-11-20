@@ -27,6 +27,7 @@ import type { Decision } from '@/shared/api/decisionsApi.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { opensInPlace } from '@/shared/lib/linkPress.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
+import { useComposedText } from '@/shared/lib/useComposedText.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const props = defineProps<{
@@ -39,6 +40,8 @@ const props = defineProps<{
 
 const { locale, t } = useI18n()
 const resolve = useReferenceLinks()
+/** What was decided in the reader's language, from the key it was composed of. */
+const composed = useComposedText()
 
 const COLUMNS = ['at', 'point', 'item', 'session', 'what'] as const
 type Column = (typeof COLUMNS)[number]
@@ -65,7 +68,7 @@ const { sortBy, lines, marks } = useColumnSort({
     if (column === 'point') return pointWords(decision)
     if (column === 'item') return decision.item.reference
     if (column === 'session') return holderName(decision.session)
-    return decision.what
+    return composed.what(decision)
   },
 })
 
@@ -81,6 +84,7 @@ const rows = computed(() =>
     at: when.value.format(new Date(decision.at)),
     point: pointWords(decision),
     session: holderName(decision.session),
+    what: composed.what(decision),
     link: resolve({ kind: 'work-item', value: decision.item.reference }),
     name: t('decisions.table.open', { reference: decision.item.reference }),
   })),
@@ -157,7 +161,7 @@ function follow(row: (typeof rows.value)[number], event: MouseEvent) {
           />
         </th>
         <td class="chart-cell decisions-session">{{ row.session }}</td>
-        <td class="chart-cell decisions-what">{{ row.decision.what }}</td>
+        <td class="chart-cell decisions-what">{{ row.what }}</td>
       </tr>
     </template>
   </SectionTable>

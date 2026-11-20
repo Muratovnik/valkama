@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import dataclass, field
 
 from . import (
     calls,
@@ -137,16 +138,25 @@ def settle(conn: sqlite3.Connection, action: pending.Action) -> str | None:
     verdict = _verdict(conn, action)
     if verdict is None:
         return None
-    decided, said = verdict
-    if decided == OWNER:
-        _pass_to_owner(conn, action, said)
+    if isinstance(verdict, _Told):
+        _pass_to_owner(conn, action, verdict)
         return OWNER
-    return _cancel(conn, action, said)
+    return _cancel(conn, action, verdict)
 
 
-def _verdict(conn: sqlite3.Connection, action: pending.Action) -> tuple[str, list[str]] | None:
-    """What the answers decide: `owner` with what the owner is told, or `carried_out` with
-    the sessions that agreed; None while a live session that has not answered has time."""
+@dataclass(frozen=True)
+class _Told:
+    """What the owner is told of a round passed on: each session that objected with its
+    reason, or the sessions that did not answer within a day."""
+
+    objections: list[tuple[str, str]] = field(default_factory=list)
+    unanswered: list[str] = field(default_factory=list)
+
+
+def _verdict(conn: sqlite3.Connection, action: pending.Action) -> _Told | list[str] | None:
+    """What the answers decide: the owner's question, with what the owner is told, or the
+    cancel, with the sessions that agreed; None while a live session that has not answered
+    has time."""
 
     rows = pending.consent_rows(conn, action)
     objections = []
@@ -157,13 +167,11 @@ def _verdict(conn: sqlite3.Connection, action: pending.Action) -> tuple[str, lis
         answer = json.loads(row["answers_json"])
         label = pending.session_label(row)
         if answer.get(request_model.REVIEW_ANSWER) == request_model.CONSENT_OBJECT:
-            objections.append(
-                f"{label} objects: {model.sentence(answer.get(request_model.CONSENT_REASON))}"
-            )
+            objections.append((label, str(answer.get(request_model.CONSENT_REASON))))
         else:
             agreed.append(label)
     if objections:
-        return OWNER, objections
+        return _Told(objections=objections)
     settings = participation.load(conn)
     silent = [
         row
@@ -174,15 +182,14 @@ def _verdict(conn: sqlite3.Connection, action: pending.Action) -> tuple[str, lis
         )
     ]
     if not silent:
-        return pending.CARRIED_OUT, agreed
+        return agreed
     now = request_model.stamp(leases.utc_now())
     if any(row["expires_at"] and row["expires_at"] <= now for row in silent):
-        unheard = ", ".join(pending.session_label(row) for row in silent)
-        return OWNER, [f"Not every session answered within a day: {unheard} did not."]
+        return _Told(unanswered=[pending.session_label(row) for row in silent])
     return None
 
 
-def _pass_to_owner(conn: sqlite3.Connection, action: pending.Action, said: list[str]) -> None:
+def _pass_to_owner(conn: sqlite3.Connection, action: pending.Action, told: _Told) -> None:
     """Ask the owner whether to make the cancel, telling them what the sessions said; a
     day of silence ends the requests nobody answered with their deadline."""
 
@@ -194,9 +201,14 @@ def _pass_to_owner(conn: sqlite3.Connection, action: pending.Action, said: list[
             conn,
             action,
             purpose="cancel",
-            prompt=service.cancel_asked(conn, item, action.point, action.reason)
-            + "".join(f" {line}" for line in said)
-            + service.CANCEL_OR_KEEP,
+            prompt=service.cancel_asked(
+                conn,
+                item,
+                action.point,
+                action.reason,
+                objections=told.objections,
+                unanswered=told.unanswered,
+            ),
             fields=request_model.fields(request_model.cancel_fields()),
             author=AUTHOR,
         )

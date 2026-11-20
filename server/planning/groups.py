@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from . import (
     calls,
     closing,
+    composed,
     deferral,
     leases,
     model,
@@ -202,7 +203,13 @@ def propose(conn: sqlite3.Connection, goal_id: str, group: Group, author: str | 
     for row in rows:
         service.update_work_item(conn, str(row["work_item_id"]), parent=reference, author=author)
     references = [read_model.reference(conn, row) for row in rows]
-    what = f"group «{goal['title']}»: {group.answer} {_count(rows)}"
+    what = composed.decision(
+        "group",
+        f"group «{goal['title']}»: {group.answer} {_count(rows)}",
+        title=str(goal["title"]),
+        answer=group.answer,
+        count=len(rows),
+    )
     deciding = _decides(conn, goal, group, rows)
     if deciding == HUMAN:
         waits = _ask(conn, goal_id, group, rows, what, author)
@@ -304,7 +311,7 @@ def _ask(
     goal_id: str,
     group: Group,
     rows: list[sqlite3.Row],
-    what: str,
+    what: composed.Text,
     author: str | None,
 ) -> pending.Waiting:
     """Keep the group's answer back for the owner on the goal, which stays in triage: the
@@ -349,7 +356,12 @@ def _ask(
         "finding",
         proposal,
         purpose="triage",
-        prompt=f"Group of {_count(rows)}: «{goal['title']}»",
+        prompt=composed.question(
+            "group_asked",
+            f"Group of {_count(rows)}: «{goal['title']}»",
+            count=len(rows),
+            title=str(goal["title"]),
+        ),
         fields=request_model.fields(
             request_model.triage_fields(group.answer, group.why, options, group.until)
         ),
