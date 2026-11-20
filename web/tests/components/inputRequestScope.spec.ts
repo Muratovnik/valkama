@@ -3,8 +3,9 @@
  * («Questions waiting for an answer» and «Volumes»): opened from a place narrowed to a space, or
  * to a project of it, the window lists the questions on what the space's board holds, narrowed
  * to the project when the place was and to the Volumes page's kind and label when it has them,
- * read narrowed by the server, and says so; a chip names the space, the project, the kind and
- * the label, and removing it brings every space's questions back. The rail's count stays every space's.
+ * read narrowed by the server, and says so; a chip names the space, the project by the name the
+ * context bar gives it, the kind and the label, and removing it brings every space's questions
+ * back. The rail's count stays every space's.
  */
 import { defineComponent, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
@@ -60,8 +61,15 @@ function elsewhere(): InputRequestEntry {
   }
 }
 
+/** The spaces as the shell lists them, the context bar's source of the projects' names. */
 const SPACES = [
-  { data_scope_id: STORE, space_key: 'TASK', name: 'Requests space' },
+  {
+    data_scope_id: STORE,
+    space_key: 'TASK',
+    name: 'Requests space',
+    projects: [{ project_id: 'alpha', display_name: 'Alpha app' }],
+    other_space_projects: [{ project_id: 'beta', display_name: 'Beta lib', space_key: 'AWAY' }],
+  },
   { data_scope_id: STORE, space_key: 'AWAY', name: 'Far space' },
 ]
 
@@ -139,9 +147,9 @@ describe('the questions window narrowed to a space', () => {
     const asked = vi.mocked(fetchInputRequests).mock.calls.map(([options]) => options?.scope)
     expect(asked).toContainEqual(ALPHA)
     expect(shown()).toEqual(['Confirm deployment'])
-    expect(chip()?.textContent.trim()).toBe('Requests space · alpha')
+    expect(chip()?.textContent.trim()).toBe('Requests space · Alpha app')
     expect(document.body.textContent).toContain(
-      'Pending blocks of questions on the board of Requests space, project alpha',
+      'Pending blocks of questions on the board of Requests space, project Alpha app',
     )
     // The rail's count is every space's, whatever the window is narrowed to.
     expect(counts.at(-1)).toEqual({ value: 2, incomplete: false })
@@ -173,12 +181,23 @@ describe('the questions window narrowed to a space', () => {
   it('says the narrowing in Russian', async () => {
     hub('ru', ALPHA)
     await flushPromises()
+    expect(chip()?.textContent.trim()).toBe('Requests space · Alpha app')
     expect(chip()?.getAttribute('aria-label')).toBe(
-      'Показать вопросы всех пространств, а не только Requests space · alpha',
+      'Показать вопросы всех пространств, а не только Requests space · Alpha app',
     )
     expect(document.body.textContent).toContain(
-      'Открытые блоки вопросов на доске пространства Requests space, проект alpha',
+      'Открытые блоки вопросов на доске пространства Requests space, проект Alpha app',
     )
+  })
+
+  it('names another space’s project by its name, and one the bar does not offer by its id', async () => {
+    hub('en', { ...TASK, project: 'beta' })
+    await flushPromises()
+    expect(chip()?.textContent.trim()).toBe('Requests space · Beta lib')
+    for (const wrapper of wrappers.splice(0)) wrapper.unmount()
+    hub('en', { ...TASK, project: 'unlisted' })
+    await flushPromises()
+    expect(chip()?.textContent.trim()).toBe('Requests space · unlisted')
   })
 })
 
@@ -188,9 +207,9 @@ describe('the questions window under the Volumes page’s kind and label', () =>
     await flushPromises()
     const asked = vi.mocked(fetchInputRequests).mock.calls.map(([options]) => options?.scope)
     expect(asked).toContainEqual(BUGS)
-    expect(chip()?.textContent.trim()).toBe('Requests space · alpha · Bug · ui')
+    expect(chip()?.textContent.trim()).toBe('Requests space · Alpha app · Bug · ui')
     expect(document.body.textContent).toContain(
-      'Pending blocks of questions on the board of Requests space, project alpha, only on' +
+      'Pending blocks of questions on the board of Requests space, project Alpha app, only on' +
         ' tasks of kind Bug with the label ui',
     )
   })
@@ -198,9 +217,9 @@ describe('the questions window under the Volumes page’s kind and label', () =>
   it('says the filter in Russian', async () => {
     hub('ru', BUGS)
     await flushPromises()
-    expect(chip()?.textContent.trim()).toBe('Requests space · alpha · Дефект · ui')
+    expect(chip()?.textContent.trim()).toBe('Requests space · Alpha app · Дефект · ui')
     expect(document.body.textContent).toContain(
-      'Открытые блоки вопросов на доске пространства Requests space, проект alpha, только на' +
+      'Открытые блоки вопросов на доске пространства Requests space, проект Alpha app, только на' +
         ' задачах вида «Дефект» с меткой «ui»',
     )
   })

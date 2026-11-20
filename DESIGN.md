@@ -3279,9 +3279,10 @@ questions on the matching tasks alone, by the one rule the number counts by, so 
 a goal or a stage is never among them; at the top, where it otherwise lists every space's,
 the kind and label narrow every space's questions the same way. Its subtitle says the scope
 and the filter («…, only on tasks of kind Bug with the label ui»), and a chip over the list
-names the space, the project after it, and then the kind and the label («Main · alpha · Bug ·
-ui»; at the top «Bug · ui»). Removing the chip lists every space's questions again, with no
-filter. At the top with no kind or label it lists every
+names the space, the project after it by the name the context bar gives it, and then the kind
+and the label («Main · Alpha app · Bug · ui»; at the top «Bug · ui»). A project the bar does
+not offer in the space is named by its id, as the bar names it. Removing the chip lists every
+space's questions again, with no filter. At the top with no kind or label it lists every
 space's, with no chip. The rail's count stays every space's while the list is narrowed, and the
 narrowing ends when the window closes, so the rail opens it on every space's.
 A number that opens nothing is a figure, not a control, and its hint says why: every space has

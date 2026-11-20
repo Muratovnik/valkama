@@ -3,9 +3,9 @@
  * The questions waiting for an answer, every space's, or those on what one space's board holds
  * when the window was opened from a place narrowed to it (`scope`), narrowed to its project too
  * when the place was, and to the tasks of the Volumes page's kind and label when the page has
- * them. The narrowing stands as a chip over the list naming the space, the project, the kind
- * and the label, and the subtitle says it; the chip is the way back to every space's questions
- * (`all`). The rail's count is always every space's: a
+ * them. The narrowing stands as a chip over the list naming the space, the project by its name
+ * as the context bar names it, the kind and the label, and the subtitle says it; the chip is the
+ * way back to every space's questions (`all`). The rail's count is always every space's: a
  * second reader keeps it while the list is narrowed.
  */
 import { computed, reactive, ref, watch } from 'vue'
