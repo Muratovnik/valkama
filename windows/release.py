@@ -479,7 +479,6 @@ def _stages(
         ),
         ("coverage", (*tools["coverage"], "report"), ROOT),
         ("npm", (NPM, "test"), copy / "web"),
-        ("npm", (NPM, "run", "typecheck"), copy / "web"),
         ("web build", (NPM, "run", "build"), copy / "web"),
         ("npm", (NPM, "test"), copy / "desktop"),
     ]

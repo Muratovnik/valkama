@@ -842,7 +842,7 @@ class ModulesStepTests(ModulesCase):
 
     def test_every_npm_step_of_the_list_is_held_to_its_modules_and_no_other_is(self) -> None:
         self.assertEqual(
-            {"web-test", "web-typecheck", "web-build", "desktop-test"},
+            {"web-test", "web-build", "desktop-test"},
             {step.name for step in isolated.GATE_STEPS if step.needs_modules},
         )
 

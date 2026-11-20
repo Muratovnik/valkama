@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --build && vite build",
-    "test": "npm run lint && npm run check:ui-system && npm run check:tokens && npm run lint:dead && npm run lint:dup && npm run test:unit",
+    "test": "npm run lint && npm run typecheck && npm run check:ui-system && npm run check:tokens && npm run lint:dead && npm run lint:dup && npm run test:unit",
     "lint": "npm run lint:types && npm run lint:js && npm run lint:css && npm run lint:format",
     "lint:dead": "knip --no-progress",
     "lint:dup": "jscpd -t 1",

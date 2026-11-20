@@ -71,11 +71,8 @@ jobs:
       - name: Install Playwright browsers and dependencies
         run: npx playwright install --with-deps
         working-directory: web
-      - name: Web lint and unit tests
+      - name: Web lint, types and unit tests
         run: npm test
-        working-directory: web
-      - name: Web types
-        run: npm run typecheck
         working-directory: web
       - name: Production Settings browser smoke
         run: npm run test:browser -- --project=production production-settings.spec.ts

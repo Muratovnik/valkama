@@ -55,7 +55,6 @@ python -m coverage run -m unittest discover -s . -p "test_*.py"
 python -m coverage report
 cd web
 npm test
-npm run typecheck
 npm run build
 cd ../desktop
 npm test

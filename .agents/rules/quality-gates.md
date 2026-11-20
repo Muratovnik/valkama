@@ -4,12 +4,11 @@ Routed from `AGENTS.md`. Read this before touching the toolchain, the test
 suite, or any number a gate compares against. The gate command list itself
 stays in `AGENTS.md`; this file is why each gate exists and how it bites.
 
-`npm test` runs oxlint, ESLint, Prettier, Stylelint, the UI-system guard, knip
-and jscpd before the suites; `npm run format` applies the two formatters.
-`npm run test:browser` adds the axe pass over the harness surfaces, and
-`desktop`'s own `npm test` asserts the renderer options and the packaged fuse
-set as text, because configuration is what silently reverts and no test of
-behavior can see it.
+`npm test` runs oxlint, ESLint, Prettier, Stylelint, vue-tsc, the UI-system
+guard, knip and jscpd before the suites; `npm run format` applies the two
+formatters. `npm run test:browser` adds the axe pass over the harness surfaces,
+and `desktop`'s own `npm test` asserts the renderer options and the packaged
+fuse set as text, because configuration is what silently reverts.
 
 The browser suite serves the harness on 4174 and the built app on 4175 and never
 reuses a server, so a second checkout running it at the same time sets

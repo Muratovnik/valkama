@@ -162,7 +162,6 @@ GATE_STEPS = (
     ),
     Step("coverage", "python", "python -m coverage report"),
     Step("web-test", "web", "npm test", "web"),
-    Step("web-typecheck", "web", "npm run typecheck", "web"),
     Step("web-build", "web", "npm run build", "web"),
     Step("desktop-test", "desktop", "npm test", "desktop"),
 )

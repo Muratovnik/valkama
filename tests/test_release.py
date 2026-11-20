@@ -374,7 +374,6 @@ class ReleaseToolchainTests(unittest.TestCase):
                 (("ci",), copy / "web"),
                 (("ci",), copy / "desktop"),
                 (("test",), copy / "web"),
-                (("run", "typecheck"), copy / "web"),
                 (("run", "build"), copy / "web"),
                 (("test",), copy / "desktop"),
             ],
@@ -444,7 +443,7 @@ class ReleaseToolchainTests(unittest.TestCase):
                     for call in stages.calls
                     if call.args[0][0] == release.NPM
                 ]
-                self.assertEqual(6, len(npm))
+                self.assertEqual(5, len(npm))
                 for cwd in npm:
                     self.assertTrue(cwd.is_relative_to(self.temporary), cwd)
                     self.assertFalse(cwd.is_relative_to(checkout.resolve()), cwd)
@@ -473,7 +472,7 @@ class ReleaseToolchainTests(unittest.TestCase):
     def test_a_failed_npm_stage_still_removes_the_copy(self) -> None:
         checkout = make_checkout(self.root / "checkout")
         with self.assertRaises(subprocess.CalledProcessError):
-            self.checked(checkout, FakeStages(self.outside(), fail=("run", "typecheck")))
+            self.checked(checkout, FakeStages(self.outside(), fail=("test",)))
         self.assertEqual([], list(self.temporary.iterdir()))
         self.assertEqual({"kept": b"kept"}, files(self.outside()))
         self.assertEqual(

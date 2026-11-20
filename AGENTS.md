@@ -62,7 +62,6 @@ python -m coverage run -m unittest discover -s . -p "test_*.py"
 python -m coverage report
 cd web
 npm test
-npm run typecheck
 npm run build
 cd ../desktop
 npm test
@@ -78,11 +77,11 @@ split with it:
 
 - The worker of one worktree runs, right after each commit, the targeted tests
   of what the commit changed and `python tests/commit_subjects.py`;
-  when the commit touches `web/`, also `npm run lint` and
-  `npm run check:ui-system` there. The worker does not run the whole browser
-  suite, nor `python .github/relkit.pyz audit --history` after each commit: the
-  history audit reads every commit, so it runs before publication, on the
-  clean head about to be pushed.
+  when the commit touches `web/`, also `npm run lint`,
+  `npm run check:ui-system` and `npm run typecheck` there. The worker does not
+  run the whole browser suite, nor `python .github/relkit.pyz audit --history`
+  after each commit: it reads every commit, so it runs before publication, on
+  the clean head about to be pushed.
 - The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
