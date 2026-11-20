@@ -1452,6 +1452,16 @@ def _meta(session: str) -> dict[str, str]:
     return {"sessionId": session, "threadId": session, "callId": str(uuid.uuid4())}
 
 
+def _cancel_list_token(answer: object) -> str | None:
+    """The token of a `cancel_list` refusal: what a cancel of open work is confirmed by."""
+
+    refusal = answer.get("error") if isinstance(answer, Mapping) else None
+    if not isinstance(refusal, Mapping) or refusal.get("code") != "cancel_list":
+        return None
+    token = refusal.get("list_token")
+    return token if isinstance(token, str) else None
+
+
 def _last_event(store_file: Path) -> int:
     uri = f"{store_file.resolve().as_uri()}?mode=ro"
     with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
@@ -1684,6 +1694,14 @@ class SessionRunner:
                 arguments["author"] = call["author"]
             meta = _meta(self._role(str(call.get("session", "setup"))))
             answer, error = client.call(str(call["tool"]), arguments, meta)
+            token = _cancel_list_token(answer) if error else None
+            if token is not None and isinstance(arguments.get("transition"), Mapping):
+                # A cancel that ends open work under the item names that work and waits
+                # for the same transition back with its token: the session the step
+                # stands for meant the cancel, so it confirms the list.
+                transition = {**arguments["transition"], "cancels": token}
+                arguments = {**arguments, "transition": transition}
+                answer, error = client.call(str(call["tool"]), arguments, meta)
             if error:
                 raise ProbeError(f"{call['tool']} was refused: {answer}")
             name = call.get("as")

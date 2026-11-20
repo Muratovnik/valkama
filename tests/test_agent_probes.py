@@ -729,6 +729,85 @@ class LiveFileTests(RunCase):
         self.assertEqual(["environment failure"], [probe["verdict"] for probe in judged["probes"]])
 
 
+class CancelListTests(RunCase):
+    """A step that cancels a goal with open work under it confirms the list it is shown.
+
+    The server answers such a cancel with the open items and a token, and carries
+    it out only when the same transition comes back with that token.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.run_probes("--client", "claude")
+
+    @classmethod
+    def cases(cls) -> Path:
+        cases = Path(cls.directory.name) / "cases"
+        cases.mkdir()
+        goal = {
+            "space": "ALPHA",
+            "kind": "goal",
+            "title": "Release 2.0",
+            "acceptance": "assignment",
+        }
+        task = {
+            "space": "ALPHA",
+            "kind": "task",
+            "title": "Rename the flag",
+            "parent": "{{g}}",
+            "acceptance": "assignment",
+        }
+        cancel = {
+            "id": "{{g}}",
+            "summary": {"done": "The release is dropped.", "next": "Nothing."},
+            "transition": {"state": "cancelled", "reason": "Dropped."},
+        }
+        scenario = {
+            "id": "K1",
+            "clients": ["claude"],
+            "workspace": str(SAMPLES / "workspace"),
+            "overlay": str(SAMPLES / "overlay"),
+            "repos": ["app", "lib"],
+            "registry": {"space": "ALPHA", "projects": ["app", "lib"], "default": "app"},
+            "mcp": "tip",
+            "setup": [
+                {"tool": "create_work_item", "session": "setup", "as": "g", "args": goal},
+                {"tool": "create_work_item", "session": "setup", "as": "t", "args": task},
+                {"tool": "claim_work_item", "session": "other", "args": {"id": "{{t}}"}},
+            ],
+            "turns": [
+                {"prompt": json.dumps({"answer": "Waiting."})},
+                {
+                    "before": [
+                        {"tool": "apply_work_item_changes", "session": "other", "args": cancel}
+                    ],
+                    "prompt": json.dumps({"answer": "Done."}),
+                },
+            ],
+            "expect": {
+                "start": [{"check": "session", "event": "session_start", "client": "{{client}}"}]
+            },
+            "rubric": {},
+        }
+        (cases / "cancel.json").write_text(json.dumps(scenario), encoding="utf-8")
+        return cases
+
+    def test_the_cancel_is_carried_with_the_token_it_was_answered_with(self) -> None:
+        # Carried, the cancel asks the owner, and the other sessions that took part in
+        # the work it ends for their consent; refused, it would have asked nobody.
+        record = self.record("cancel", "claude")
+        self.assertEqual([], record.session["failures"])
+        with contextlib.closing(record.store()) as conn:
+            asked = conn.execute(
+                "SELECT r.purpose FROM work_item_requests r"
+                " JOIN work_items w ON w.work_item_id = r.work_item_id"
+                " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+                " WHERE p.key = 'ALPHA' AND w.number = ?",
+                (int(record.session["bindings"]["g"].split("-")[1]),),
+            ).fetchall()
+        self.assertEqual(["cancel", "consent"], sorted(purpose for (purpose,) in asked))
+
+
 class AncestorInstructionTests(unittest.TestCase):
     """Claude Code reads `.claude/CLAUDE.md` in every directory above its working one.
 
