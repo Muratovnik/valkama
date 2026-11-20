@@ -144,7 +144,7 @@ const stepMoment = (at: number) =>
   words.moment(momentAtOffset(at, offsetOf(props.today)), props.today)
 const readingsLabel = computed(() =>
   pastShown.value
-    ? words.readingsLabel(props.account, pastShown.value, props.now, props.today)
+    ? words.readingsLabel(props.account, pastShown.value, { now: props.now, today: props.today })
     : '',
 )
 const caption = computed(() =>

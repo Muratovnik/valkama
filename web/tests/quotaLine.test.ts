@@ -1,102 +1,171 @@
 /**
- * The span a quota window's step line runs over (`quotaLine`) and the parts a line of several
- * windows draws (`stepParts`), against the rule (DESIGN.md, Analytics, the quota's panel): a line
- * runs from the first window it holds to its current window's reset; the lines of a section run
- * over as long a time as the longest, each to its own reset; the line under a card names the
- * window before it only where the line does not hold that window, the server's reset slack
- * apart; and a line of several windows falls to nothing at each reset, the windows before the
- * current one apart from it, the current one from the fall at its start.
+ * What each quota window card's step line draws (`sectionLines`) and the parts a line of several
+ * windows draws (`stepParts`), against the rule (DESIGN.md, Analytics, the quota's panel) and its
+ * decision table, the fixture `quotaTable`. How far back from now the period starts decides: no
+ * further back than the card's window lasts, the line is that one window; further back, every
+ * window the period overlaps, each whole. The lines of a section run over one length. The line
+ * under a card names the window before it only where the line does not hold that window, the
+ * server's reset slack apart; and a line of several windows falls to nothing at each reset, the
+ * windows before the current one apart from it, the current one from the fall at its start.
  */
 import { describe, expect, it } from 'vitest'
 
-import {
-  holdsPrevious,
-  lineSpan,
-  scaledSpan,
-  sectionLength,
-} from '@/pages/analytics/utils/quotaLine.ts'
+import { holdsPrevious, lineKey, sectionLines } from '@/pages/analytics/utils/quotaLine.ts'
 
-import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
+import type { Quota, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import { stepParts } from '@/shared/ui/windowGeometry.ts'
 
-import { quotaAt } from './fixtures/quota.ts'
-import { earlierWindows } from './fixtures/quotaHistory.ts'
+import { earlierWindows, servedOver } from './fixtures/quotaHistory.ts'
+import { quotaTable, TABLE } from './fixtures/quotaTable.ts'
 import { corners } from './support/stepDrawing.ts'
 
-const NOW = new Date(Date.UTC(2026, 10, 11, 11, 30))
+/** Wednesday, 11 November 2026, 14:30 UTC: the table's moment, every time written at UTC. */
+const NOW = Date.UTC(2026, 10, 11, 14, 30)
+const TODAY = new Date(NOW).toISOString()
 const MINUTE = 60_000
-const DAY = 86_400_000
-const TODAY = NOW.toISOString()
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
+const WEEK = 7 * DAY
 
-/** «Work»'s week from the fixture, with `count` weeks before it. */
-function weekOf(count: number): { account: QuotaAccount; week: QuotaShareWindow } {
-  const quota = structuredClone(quotaAt(NOW, 0))
-  const [account] = quota.accounts
-  const week = account?.windows[1]
-  if (!account || !week || !('readings' in week)) throw new Error('«Work» reads its week')
-  week.earlier = earlierWindows(
-    Date.parse(week.started_at ?? ''),
-    0,
-    { kind: 'week', source: 'poll' },
-    Array.from({ length: count }, () => ({ readings: [[DAY, 20] as [number, number]] })),
-  )
-  return { account, week }
+/** The periods of the page, by where each starts: «Now», «Today», «This week», «4 weeks». */
+const PERIODS = {
+  now: NOW - HOUR,
+  today: Date.UTC(2026, 10, 11),
+  week: Date.UTC(2026, 10, 9),
+  weeks4: Date.UTC(2026, 9, 15),
+  /** A custom range of one day three weeks back, shorter than a week. */
+  custom: Date.UTC(2026, 9, 21),
+} as const
+
+/** The answer as the read over `from` gives it, and the lines of `section` the panel draws of it. */
+function linesOver(quota: Quota, from: number, section: 'quota_week' | 'quota_five_hour') {
+  const asked = new Date(from).toISOString()
+  const served = servedOver(quota, `http://127.0.0.1/?from=${encodeURIComponent(asked)}`)
+  const lines = sectionLines(served.accounts, section, TODAY, asked)
+  const of = (name: string, kind: string) => {
+    const account = served.accounts.find((one) => one.name === name)
+    const window = account?.windows.find(
+      (one): one is QuotaShareWindow => one.kind === kind && 'readings' in one,
+    )
+    const line = account && window ? lines.get(lineKey(account, window)) : undefined
+    if (!window || !line) throw new Error(`${name} draws a ${kind} line`)
+    return { window, line }
+  }
+  return { lines, of }
 }
 
-describe('the span of a quota window’s line', () => {
-  it('runs from the first window it holds to the current reset, and is the window alone with none', () => {
-    const { week } = weekOf(2)
-    const start = Date.parse(week.started_at ?? '')
-    const reset = Date.parse(week.resets_at ?? '')
-    expect(lineSpan(week, TODAY)).toEqual({ from: start - 14 * DAY, to: reset })
-    week.earlier = []
-    expect(lineSpan(week, TODAY)).toEqual({ from: start, to: reset })
+describe('what a quota window’s line holds', () => {
+  for (const period of ['now', 'today', 'week'] as const)
+    it(`at a period that starts no further back than a week, «${period}», a week is its one window`, () => {
+      const { of } = linesOver(quotaTable(NOW, 0), PERIODS[period], 'quota_week')
+      const { line } = of('Alpha', 'week')
+      // The live week started a day ago, so «This week», from Monday, starts in the week before
+      // it, which the answer holds; the line is the current week alone, whole, all the same.
+      expect(line.earlier).toEqual([])
+      expect(line.span).toEqual({ from: NOW + TABLE.alphaStart, to: NOW + TABLE.alphaReset })
+      expect(line.holds).toEqual(line.span)
+      expect(line.current).toEqual(line.span)
+    })
+
+  it('at «This week» the section runs over one week, each line its own window', () => {
+    const { lines } = linesOver(quotaTable(NOW, 0), PERIODS.week, 'quota_week')
+    expect(lines.size).toBe(4)
+    for (const [key, line] of lines) expect(line.span.to - line.span.from, key).toBe(WEEK)
   })
 
-  it('is as long as the section’s longest line, each line to its own reset', () => {
-    const { account, week } = weekOf(3)
-    const night = quotaAt(NOW, 0).accounts[1]
-    if (!night) throw new Error('the fixture holds a second account')
-    // «Work»'s week holds four weeks; the second account's week and «Work»'s model week one each.
-    const length = sectionLength([account, night], 'quota_week', TODAY)
-    expect(length).toBe(4 * 7 * DAY)
-    const nightWeek = night.windows[1]
-    if (!nightWeek || !('readings' in nightWeek)) throw new Error('the second account reads a week')
-    const nightReset = Date.parse(nightWeek.resets_at ?? '')
-    expect(scaledSpan(nightWeek, TODAY, length)).toEqual({
-      from: nightReset - 4 * 7 * DAY,
-      to: nightReset,
-    })
-    // The longest line runs over exactly the time it holds; no scale is the line's own span.
-    expect(scaledSpan(week, TODAY, length)).toEqual(lineSpan(week, TODAY))
-    expect(scaledSpan(nightWeek, TODAY, null)).toEqual(lineSpan(nightWeek, TODAY))
-    expect(sectionLength([], 'quota_week', TODAY)).toBeNull()
+  it('at «Today» on a reset day a week is its one window', () => {
+    // The week reset at 09:00 today, after the period's midnight: the answer holds the week before.
+    const quota = quotaTable(NOW, 0)
+    const week = quota.accounts[0]?.windows[1]
+    if (!week || !('readings' in week)) throw new Error('«Alpha» reads its week')
+    const reset = Date.UTC(2026, 10, 11, 9)
+    week.started_at = new Date(reset).toISOString()
+    week.resets_at = new Date(reset + WEEK).toISOString()
+    week.earlier = earlierWindows(reset, 0, { kind: 'week', source: 'poll' }, [
+      { readings: [[DAY, 30]] },
+    ])
+    const { line } = linesOver(quota, PERIODS.today, 'quota_week').of('Alpha', 'week')
+    expect(line.earlier).toEqual([])
+    expect(line.span).toEqual({ from: reset, to: reset + WEEK })
   })
 
-  it('holds the window before the current one where a window it holds reset when that one did', () => {
-    const { week } = weekOf(1)
-    const before = week.earlier?.[0]
-    if (!before) throw new Error('a week before')
-    const ended = (resets: number) => ({
-      started_at: before.started_at,
-      resets_at: new Date(resets).toISOString(),
-      latest: week.latest,
-      ran_out: false,
-    })
-    const reset = Date.parse(before.resets_at)
-    // At the moment the line's last week reset, or within the server's ten minutes of slack.
-    for (const off of [0, 9 * MINUTE, -9 * MINUTE]) {
-      week.previous = ended(reset + off)
-      expect(holdsPrevious(week), `${off / MINUTE} min off`).toBe(true)
+  it('at «Now» just after a reset five hours are their one window', () => {
+    // The five hours reset half an hour ago and the next started twenty minutes ago.
+    const quota = quotaTable(NOW, 0)
+    const five = quota.accounts[0]?.windows[0]
+    if (!five || !('readings' in five)) throw new Error('«Alpha» reads its five hours')
+    const start = NOW - 20 * MINUTE
+    five.started_at = new Date(start).toISOString()
+    five.resets_at = new Date(start + 5 * HOUR).toISOString()
+    five.readings = [
+      { at: new Date(NOW - 2 * MINUTE).toISOString(), used_percent: 3, source: 'poll' },
+    ]
+    five.earlier = [
+      {
+        started_at: new Date(NOW - 330 * MINUTE).toISOString(),
+        resets_at: new Date(NOW - 30 * MINUTE).toISOString(),
+        readings: [
+          { at: new Date(NOW - 2 * HOUR).toISOString(), used_percent: 70, source: 'poll' },
+        ],
+        restarts: [],
+      },
+    ]
+    const { line } = linesOver(quota, PERIODS.now, 'quota_five_hour').of('Alpha', 'five_hour')
+    expect(line.earlier).toEqual([])
+    expect(line.span).toEqual({ from: start, to: start + 5 * HOUR })
+  })
+
+  it('at «Today» five hours hold every five-hour window since midnight', () => {
+    const { line } = linesOver(quotaTable(NOW, 0), PERIODS.today, 'quota_five_hour').of(
+      'Alpha',
+      'five_hour',
+    )
+    // Fourteen and a half hours back, further than five hours: the two windows that reset today.
+    expect(line.earlier.map((one) => Date.parse(one.resets_at))).toEqual([
+      NOW - 11 * HOUR,
+      NOW - 4 * HOUR,
+    ])
+    expect(line.holds).toEqual({ from: NOW - 16 * HOUR, to: NOW + TABLE.fiveReset })
+  })
+
+  it('at «4 weeks» a week holds every week the period overlaps, each whole', () => {
+    const { of } = linesOver(quotaTable(NOW, 0), PERIODS.weeks4, 'quota_week')
+    const { line } = of('Alpha', 'week')
+    // From midnight 27 days back: the four weeks that reset after it, the first from its start.
+    expect(line.earlier.map((one) => Date.parse(one.resets_at))).toEqual(
+      [4, 3, 2, 1].map((back) => NOW + TABLE.alphaStart - (back - 1) * WEEK),
+    )
+    expect(line.holds.from).toBe(NOW + TABLE.alphaStart - 4 * WEEK)
+    expect(line.current).toEqual({ from: NOW + TABLE.alphaStart, to: NOW + TABLE.alphaReset })
+  })
+
+  it('reaches a custom range shorter than a week that ended weeks ago', () => {
+    // One day three weeks back: shorter than a week, but far further back from now than one.
+    const { line } = linesOver(quotaTable(NOW, 0), PERIODS.custom, 'quota_week').of('Alpha', 'week')
+    expect(line.earlier).toHaveLength(3)
+    expect(line.holds.from).toBe(NOW + TABLE.alphaStart - 3 * WEEK)
+    expect(line.holds.from).toBeLessThanOrEqual(PERIODS.custom)
+  })
+
+  it('names the window before where the line does not hold it, the reset slack apart', () => {
+    const quota = quotaTable(NOW, 0)
+    const short = linesOver(quota, PERIODS.week, 'quota_week').of('Alpha', 'week')
+    const long = linesOver(quota, PERIODS.weeks4, 'quota_week').of('Alpha', 'week')
+    // At «This week» the line holds no week before, whatever the answer gives: the line under the
+    // card names it; at «4 weeks» the line holds it, so nothing names it again.
+    expect(holdsPrevious(short.window, short.line)).toBe(false)
+    expect(holdsPrevious(long.window, long.line)).toBe(true)
+    const previous = long.window.previous
+    if (!previous) throw new Error('the week names the week before')
+    const reset = Date.parse(previous.resets_at)
+    for (const off of [9 * MINUTE, -9 * MINUTE, 11 * MINUTE]) {
+      const moved = { ...previous, resets_at: new Date(reset + off).toISOString() }
+      expect(
+        holdsPrevious({ ...long.window, previous: moved }, long.line),
+        `${off / MINUTE} min off`,
+      ).toBe(Math.abs(off) <= 10 * MINUTE)
     }
-    // A reset the line holds no window for, a window with no previous, and a line of none.
-    week.previous = ended(reset - 7 * DAY)
-    expect(holdsPrevious(week)).toBe(false)
-    week.previous = null
-    expect(holdsPrevious(week)).toBe(false)
-    week.previous = ended(reset)
-    week.earlier = []
-    expect(holdsPrevious(week)).toBe(false)
+    expect(holdsPrevious({ ...long.window, previous: null }, long.line)).toBe(false)
   })
 })
 

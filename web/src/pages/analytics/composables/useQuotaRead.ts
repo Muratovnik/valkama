@@ -4,8 +4,9 @@
  *
  * Where each window stands now depends on nothing the page chooses — not the filters, the measure
  * or the section. The period reaches only the windows before the current ones that each window's
- * step line draws: the read names its start (`from`), and is read again when the page's period
- * changes. It is read when the page opens, again with every refresh the bar asks, and again on the
+ * step line draws: the read names its start (`from`), its answer keeps the start it was read
+ * over, by which the panel decides what each line holds (`sectionLines`), and it is read again
+ * when the page's period changes. It is read when the page opens, again with every refresh the bar asks, and again on the
  * live interval while the page is seen (`useLiveRefresh`), since a window moves whatever period is
  * on show, each time with the period's start as it then stands. While it is read again the
  * answer on show stays; a read again that fails keeps it and says so, and a first read that fails
@@ -26,7 +27,14 @@ import type { Quota } from '@/shared/api/analyticsApi.ts'
 export type QuotaRead =
   | { status: 'failed' }
   | { status: 'loading' }
-  | { failedAgain: boolean; quota: Quota; refreshing: boolean; status: 'ready' }
+  | {
+      failedAgain: boolean
+      quota: Quota
+      refreshing: boolean
+      status: 'ready'
+      /** The start of the period the answer was read over (`from`); absent, null, for none. */
+      from?: string | null
+    }
 
 export function useQuotaRead(options: {
   /** The start of the page's period as a time with its offset, or null where it has none. */
@@ -43,13 +51,10 @@ export function useQuotaRead(options: {
     if (held.status === 'ready') read.value = { ...held, refreshing: true }
     try {
       // `getTimezoneOffset` counts west of UTC as positive; the read counts east.
-      const quota = await fetchQuota(
-        -new Date().getTimezoneOffset(),
-        controller.signal,
-        options.from(),
-      )
+      const from = options.from()
+      const quota = await fetchQuota(-new Date().getTimezoneOffset(), controller.signal, from)
       if (controller.signal.aborted) return
-      read.value = { status: 'ready', quota, refreshing: false, failedAgain: false }
+      read.value = { status: 'ready', quota, from, refreshing: false, failedAgain: false }
     } catch {
       if (controller.signal.aborted) return
       read.value =

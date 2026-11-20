@@ -40,11 +40,13 @@ import QuotaWindow from '@/pages/analytics/components/QuotaWindow.vue'
 import { useAccountActions } from '@/pages/analytics/composables/useAccountActions.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { sectionWindows, spendWindows, windowKey } from '@/pages/analytics/utils/quotaFigures.ts'
+import { lineKey } from '@/pages/analytics/utils/quotaLine.ts'
+import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
 
 import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
-import type { QuotaAccount } from '@/shared/api/analyticsApi.ts'
+import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import { MAX_ACCOUNT_ALIAS_LENGTH } from '@/shared/lib/accountAliases.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -66,8 +68,8 @@ const props = defineProps<{
   shown: 'chart' | 'table'
   /** The answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
-  /** How long every window's line of the section runs over, in ms (`sectionLength`). */
-  scale?: number | null
+  /** The line of each window of the section, by `lineKey` (`sectionLines`). */
+  lines?: ReadonlyMap<string, QuotaLine>
 }>()
 
 /** The account's name was saved, which the quota's answer says only once it is read again. */
@@ -134,6 +136,9 @@ const tableWords = computed<WindowWords>(() => ({
   forecast: t('analytics.quota.table.forecast'),
   empty: t('analytics.quota.table.empty'),
 }))
+
+/** What a window's step line draws, as the section decided it (`sectionLines`). */
+const lineOf = (window: QuotaShareWindow) => props.lines?.get(lineKey(props.account, window))
 </script>
 
 <template>
@@ -240,7 +245,7 @@ const tableWords = computed<WindowWords>(() => ({
         :now="now"
         :fresh-for="freshFor"
         :shown="shown"
-        :scale="scale"
+        :line="lineOf(window)"
       />
     </template>
     <ul

@@ -26,7 +26,7 @@ export function useQuotaStepWords() {
      * The answer's moment at its offset, whether the window is past its reset, and the start the
      * axis names where it is not the window's own: the first window's of a line of several.
      */
-    read: { ended: boolean; today: string; start?: string },
+    read: { ended: boolean; today: string; start?: string | null },
   ): StepWords => {
     const { today, ended } = read
     const start = read.start ?? window.started_at

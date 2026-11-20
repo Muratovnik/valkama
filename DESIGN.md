@@ -2949,8 +2949,13 @@ reading in words under its reset, and that it has no pace where it has none. A w
 line covers the page's period, never less than the current window: every window of its kind and
 account the period overlaps, each whole from its start to its reset, one after another, the count
 falling to nothing at each reset, the earlier ones in the neutral ink and the current one at the
-right end (Charts); at «Now», «Today» and «This week» a window longer than the period shows its
-one window whole, as it always did. A period of the reader's own that ends before now changes
+right end (Charts). How far back from now the period starts decides, not the period's own
+length: where it starts no further back than the window lasts — «Now», «Today» and «This week»
+for a week, «Now» for five hours — the line is that one window whole across the plot, as it always
+was, and the line under the card names the window before; where it starts further back, the line
+holds the period, so a custom day three weeks ago is reached. «This week» once drew two weeks
+where the week reset mid-week, the one before muted in the left half, since the answer holds every
+window that resets after the period's start, and the section's scale doubled with it. A period of the reader's own that ends before now changes
 nothing of that: the line still ends at the current window, the one the figures over it say, and
 only reaches further back. Every line of a section runs over as long a time as the longest of
 them, to its own reset, the same time to a pixel in every card, so the two windows of an account

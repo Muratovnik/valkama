@@ -5,7 +5,7 @@
  *
  * It reads the quota (`useQuotaRead`), not the page's usage: the filters do not apply to it, and the
  * period reaches only each window's step line, which draws every window of the period up to the
- * current one; all the lines of the section share one time scale (`sectionLength`), each as long
+ * current one; all the lines of the section share one time scale (`sectionLines`), each as long
  * as the longest and ending at its own reset, so the two windows of a pair stand moment for moment. The «ⓘ» of its heading says that once, with what «Breakdown» is and
  * leaves out (`useSectionCaveats`); no line of the panel says either again. Its windows are drawn
  * or read as their tables, as every chart of the page is (`ChartSection`). No figure here is added to another: each is one
@@ -33,7 +33,7 @@ import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { accountKey, answerMoment, withoutFiveHours } from '@/pages/analytics/utils/quotaFigures.ts'
-import { sectionLength } from '@/pages/analytics/utils/quotaLine.ts'
+import { sectionLines } from '@/pages/analytics/utils/quotaLine.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
@@ -76,12 +76,15 @@ const noFiveHours = computed(() => {
 const caveats = useSectionCaveats()
 const about = computed(() => caveats.quota())
 
-/** The one time scale of the section's lines: how long each runs over, in ms. */
-const scale = computed(() => {
+/**
+ * The line of each window of the section, by its card (`sectionLines`): what it holds over the
+ * period the answer was read over, on the section's one time scale.
+ */
+const lines = computed(() => {
   const { read, section } = props
   return read.status === 'ready'
-    ? sectionLength(read.quota.accounts, section, answerMoment(read.quota))
-    : null
+    ? sectionLines(read.quota.accounts, section, answerMoment(read.quota), read.from ?? null)
+    : undefined
 })
 
 const root = ref<HTMLElement | null>(null)
@@ -122,7 +125,7 @@ const narrow = useNarrowCharts(root)
               :today="answerMoment(payload)"
               :now="now"
               :fresh-for="payload.fresh_for_seconds"
-              :scale="scale"
+              :lines="lines"
               @renamed="emit('retry')"
             />
           </template>
@@ -143,7 +146,7 @@ const narrow = useNarrowCharts(root)
               :today="answerMoment(payload)"
               :now="now"
               :fresh-for="payload.fresh_for_seconds"
-              :scale="scale"
+              :lines="lines"
               @renamed="emit('retry')"
             />
           </template>

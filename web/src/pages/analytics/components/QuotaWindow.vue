@@ -28,12 +28,13 @@
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
  * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
  * is a bar with no fill that says «0% used» and «up to date». The bar and the figures over it are
- * the current window's; the step line under them covers the page's period, never less than the
- * current window (`quotaLine`): every window of its kind and account the period overlaps, each
- * whole from its start to its reset, its count falling to nothing at each reset (`lineRestarts`),
- * the earlier ones in the neutral ink of a window past its reset and the current one at the right
- * end, on the one time scale the section's lines share (`scale`): as long as the longest of them,
- * to its own reset. Its axis names the start of the first window it holds and the current window's
+ * the current window's; the step line under them is decided for the whole section (`line`,
+ * `sectionLines`): where the page's period starts no further back from now than the window lasts,
+ * the window alone across the plot; where it starts further back, every window of its kind and
+ * account the period overlaps, each whole from its start to its reset, its count falling to
+ * nothing at each reset (`lineRestarts`), the earlier ones in the neutral ink of a window past its
+ * reset and the current one at the right end; on the one time scale the section's lines share, as
+ * long as the longest of them, to its own reset. Its axis names the start of the first window it holds and the current window's
  * reset, each under the moment it stands at (`StepLine`'s `holds`). While the window stands, the
  * line marks now, points at where it stands now and runs its forecast's line to its end. A window past its reset by the panel's moment (`ended`) has neither, even where its
  * answer was read before the reset; it leads with that it reset with no reading since, its share
@@ -79,12 +80,8 @@ import {
   stateAt,
   windowKey,
 } from '@/pages/analytics/utils/quotaFigures.ts'
-import {
-  holdsPrevious,
-  lineSpan,
-  scaledSpan,
-  windowSpan,
-} from '@/pages/analytics/utils/quotaLine.ts'
+import { holdsPrevious, ownLine } from '@/pages/analytics/utils/quotaLine.ts'
+import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
@@ -107,10 +104,10 @@ const props = defineProps<{
   today: string
   window: QuotaShareWindow
   /**
-   * How long every line of the section runs over, in ms (`sectionLength`), each to its own reset;
-   * unset, the line's own: the first window it holds to the current window's reset.
+   * What its step line draws, decided for the whole section (`sectionLines`): the windows it holds
+   * and the span it runs over; unset, its own window alone.
    */
-  scale?: number | null
+  line?: QuotaLine
 }>()
 
 const { t } = useI18n()
@@ -162,8 +159,10 @@ const bar = computed(() => {
 })
 /** Whether the window has a pace: it named its start and its reset. */
 const paced = computed(() => props.window.even_percent !== null)
-const points = computed(() => words.linePoints(props.window, props.today))
-const restarts = computed(() => words.lineRestarts(props.window, props.today))
+/** What the step line draws: the section's decision, or the window alone. */
+const drawn = computed(() => props.line ?? ownLine(props.window, props.today))
+const points = computed(() => words.linePoints(props.window, props.today, drawn.value.earlier))
+const restarts = computed(() => words.lineRestarts(props.window, props.today, drawn.value.earlier))
 /** Whether what used the window can be read: the account has a seat and the window a start. */
 const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
 /** What opens the side panel on what used the window; none outside the page. */
@@ -198,16 +197,10 @@ const facts = computed(() => {
   ]
 })
 
-/**
- * The current window's own span, its start to its reset; the span its line holds, from the first
- * window it holds to that reset; and the span the line runs over, the section's scale, or else the
- * one it holds. A window that has named neither runs from its first reading to the answer's moment.
- */
-const current = computed(() => windowSpan(props.window, props.today))
-const holds = computed(() => lineSpan(props.window, props.today))
+/** The span the line runs over, and where its readings end: the answer's moment, or the reset. */
 const span = computed(() => ({
-  ...scaledSpan(props.window, props.today, props.scale ?? null),
-  end: Math.min(Date.parse(props.today), current.value.to),
+  ...drawn.value.span,
+  end: Math.min(Date.parse(props.today), drawn.value.current.to),
 }))
 
 /**
@@ -230,7 +223,7 @@ const stepWords = computed(() =>
   stepWordsOf(props.window, points.value, {
     today: props.today,
     ended: ended.value,
-    start: props.window.earlier?.[0]?.started_at,
+    start: drawn.value.start,
   }),
 )
 /** Whether a past window stands in this one's place (`QuotaPastWindow`). */
@@ -242,7 +235,7 @@ const legend = computed(() => ({
   ...(props.window.even_percent === null ? {} : { even: t('analytics.quota.readings.even') }),
 }))
 /** Whether the line holds the window before this one, which then needs no line of its own. */
-const held = computed(() => holdsPrevious(props.window))
+const held = computed(() => holdsPrevious(props.window, drawn.value))
 
 /**
  * What the line draws past its readings while the window stands: where it stands now, and the
@@ -261,7 +254,11 @@ const ahead = computed<StepAhead | null>(() => {
   }
 })
 const readingsLabel = computed(() =>
-  words.readingsLabel(props.account, props.window, props.now, props.today),
+  words.readingsLabel(props.account, props.window, {
+    now: props.now,
+    today: props.today,
+    earlier: drawn.value.earlier,
+  }),
 )
 const readingsCaption = computed(() =>
   t('analytics.quota.readings.caption', {
@@ -356,8 +353,8 @@ const readingsCaption = computed(() =>
         :from="span.from"
         :to="span.to"
         :end="span.end"
-        :current="current"
-        :holds="holds"
+        :current="drawn.current"
+        :holds="drawn.holds"
         :points="points"
         :words="stepWords"
         :moment="stepMoment"
