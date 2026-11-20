@@ -14,10 +14,17 @@ states, never taken from the read under test.
 from __future__ import annotations
 
 import json
+import os
+import sqlite3
 import unittest
+from contextlib import closing
+from unittest import mock
 
+from server import store
 from server.planning import api, interactions, participation
 from server.planning.routing import PlanningRouting
+from server.projects import scopes
+from tests.planning_tree import Tree
 from tests.test_planning_volumes import VolumesCase
 
 
@@ -243,6 +250,69 @@ class TaskFilterQuestionsTests(VolumesCase):
             ):
                 self.listed(space, board=False, **narrowed)
             self.assertEqual(400, caught.exception.status)
+
+
+class AttachedStoreQuestionsTests(VolumesCase):
+    """A question waits on a bug labelled `ui` in the primary store's MAIN, and on a bug
+    labelled `ui` and a task without a label in BETA, a space of a store attached beside it.
+    «Waiting for me» at the top of Volumes opens the questions window at the top, under the
+    page's kind and label or with none: the window lists what the number counts."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        main = self.place("MAIN", "b", kind="bug")
+        self.label(self.conn, main)
+        self.question("MAIN:b", "2026-11-01T09:00:00.000Z")
+        self.side = self.root / "side.sqlite3"
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.side)}):
+            other = store.connect()
+        try:
+            beta = Tree(other, "BETA")
+            bug = beta.add("b", kind="bug")
+            self.label(other, bug)
+            for day, identity in ((2, bug), (3, beta.add("t"))):
+                other.execute(
+                    "INSERT INTO work_item_requests(request_id, work_item_id, kind, prompt,"
+                    " fields_json, status, author, created_at)"
+                    " VALUES (?, ?, 'question', 'Which way?', '[]', 'pending', 'asking-agent', ?)",
+                    (f"side-{day}", identity, f"2026-11-0{day}T09:00:00.000Z"),
+                )
+            other.commit()
+        finally:
+            other.close()
+        scopes.attach(str(self.primary), "side", str(self.side))
+        self.conn.commit()
+
+    @staticmethod
+    def label(conn: sqlite3.Connection, identity: str) -> None:
+        conn.execute(
+            "UPDATE work_items SET labels = ? WHERE work_item_id = ?",
+            (json.dumps(["ui"]), identity),
+        )
+
+    def listed(self, **narrowed: list[str]) -> dict:
+        """The window's read at the top, as the page opens it under its kind and label."""
+
+        routing = PlanningRouting(self.conn, str(self.primary))
+        kept = {name: values for name, values in narrowed.items() if values}
+        parameters = {"scope_kind": ["global"], "status": ["pending"], **kept}
+        return interactions.request_list(routing, parameters)
+
+    # The two reads part here: the number counts the store this service writes, the window
+    # every source. Which set «every space» is at the top waits for the owner's choice.
+    @unittest.expectedFailure
+    def test_the_window_at_the_top_lists_what_the_number_counts(self) -> None:
+        # The case is what it says: the attached store holds open questions of its own.
+        with closing(sqlite3.connect(self.side)) as side:
+            waiting = side.execute(
+                "SELECT COUNT(*) FROM work_item_requests WHERE status = 'pending'"
+            ).fetchone()[0]
+        self.assertEqual(2, waiting)
+        for kinds, labels in (([], []), (["bug"], []), ([], ["ui"])):
+            with self.subTest(kinds=kinds, labels=labels):
+                answer = self.listed(task_kind=kinds, task_label=labels)
+                read = self.volumes(kind=kinds, label=labels)
+                self.assertEqual(read["counts"]["waiting_owner"]["count"], answer["total"])
 
 
 if __name__ == "__main__":
