@@ -32,6 +32,7 @@ import type {
   QuotaShareWindow,
   QuotaWindow,
 } from '@/shared/api/analyticsApi.ts'
+import { sentences } from '@/shared/lib/sentences.ts'
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import { useChartLayersStore } from '@/shared/stores/chartLayersStore.ts'
 import type { StepPoint, StepRestart, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
@@ -240,12 +241,12 @@ export function useQuotaWords() {
   const meterHint = (window: QuotaShareWindow, now: number, today: string, freshFor: number) =>
     `${even(window)}\n${latest(window, now, today, freshFor)}`
 
-  /** The bar's words and how old its latest reading is and who read it, for a screen reader. */
+  /**
+   * The bar's words and how old its latest reading is and who read it, for a screen reader: two
+   * sentences, the first ending in the forecast's moment, which may end in a stop of its own.
+   */
   const barRead = (window: QuotaShareWindow, now: number, today: string, freshFor: number) =>
-    t('analytics.quota.barRead', {
-      bar: barLabel(window, now, today, freshFor),
-      read: latest(window, now, today, freshFor),
-    })
+    sentences([barLabel(window, now, today, freshFor), latest(window, now, today, freshFor)])
 
   /**
    * Where a window stands now, as its step line's «now» says it: its share, and when its latest
@@ -427,7 +428,9 @@ export function useQuotaWords() {
    * the moments its count restarted, where it did; then, where its line holds windows before it,
    * each of those by its span and the share it ended at. With the forecast's layer turned off, a
    * window that still stands is named without its forecast, as the line draws it; its table keeps
-   * it.
+   * it. Each is a sentence of its own, closed by one stop (`sentences`): the readings end in a
+   * moment and the forecast in a week's run-out, «к ночи на 21 нояб.», either of which may end in
+   * a stop of its own.
    */
   function readingsLabel(
     account: QuotaAccount,
@@ -454,19 +457,18 @@ export function useQuotaWords() {
         )
         .join(', '),
     }
-    const label =
-      stands(window, now) && !layers.shown('ahead')
-        ? t('analytics.quota.readings.labelNoForecast', values)
-        : t('analytics.quota.readings.label', {
-            ...values,
-            forecast: forecastAt(window, now, today),
-          })
     const restarted = restarts(window, today).map((restart) => restart.timeText)
-    const said = restarted.length
-      ? `${label} ${t('analytics.quota.readings.restarts', { at: restarted.join(', ') })}`
-      : label
-    const before = beforeWords(earlier, today)
-    return before ? `${said} ${before}` : said
+    return sentences(
+      [
+        t('analytics.quota.readings.label', values),
+        stands(window, now) && !layers.shown('ahead') ? null : forecastAt(window, now, today),
+        restarted.length
+          ? t('analytics.quota.readings.restarts', { at: restarted.join(', ') })
+          : null,
+        beforeWords(earlier, today),
+      ],
+      { closed: true },
+    )
   }
 
   /**

@@ -11,6 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { isShareWindow } from '@/shared/api/analyticsApi.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
 
 import { serveUsage } from '../fixtures/analytics.ts'
@@ -33,12 +34,12 @@ const usage = (query: URLSearchParams) => serveUsage([], query)
 /** A moment as the answer writes it. */
 const at = (ms: number) => new Date(ms).toISOString()
 
-/** The page at `route`, its quota read answering `quota` over the period it asks from. */
-async function pageOver(quota: Quota, route: Record<string, string>) {
+/** The page at `route` in `locale`, its quota read answering `quota` over the period it asks from. */
+async function pageOver(quota: Quota, route: Record<string, string>, locale: 'en' | 'ru' = 'en') {
   const answer = (query: URLSearchParams) =>
     quotaAnswer(servedOver(quota, `http://127.0.0.1/?${query.toString()}`))
   const reads = stubAnalyticsReads(usage, answer)
-  const page = await mountAnalytics({ routeState: route })
+  const page = await mountAnalytics({ routeState: route }, locale)
   return { reads, page }
 }
 
@@ -247,5 +248,20 @@ describe('the words of a line for a reader who cannot see it', () => {
     const alpha = lineOf(page, 'Alpha', 'week').line.attributes('aria-label') ?? ''
     expect(alpha).toMatch(/\. Forecast · .+\. Before it: .+\.$/u)
     for (const label of [gamma, alpha]) expect(label).not.toMatch(/[^.] Before it:/u)
+  })
+
+  it('close a forecast that ends in a day cut short with that day’s own stop, in Russian', async () => {
+    // «Alpha»'s week runs out before its reset: a week's run-out is said by its day, which Russian
+    // cuts short with a stop of its own, «к ночи на 15 нояб.», the forecast's sentence's last word.
+    const quota = quotaTable(NOW)
+    const week = quota.accounts[0]?.windows
+      .filter(isShareWindow)
+      .find((window) => window.kind === 'week')
+    if (!week) throw new Error('«Alpha» has a week')
+    week.forecast = { low_percent: 120, high_percent: 140 }
+    const { page } = await pageOver(quota, { by: 'quota_week', period: 'weeks4' }, 'ru')
+    const alpha = lineOf(page, 'Alpha', 'week').line.attributes('aria-label') ?? ''
+    expect(alpha).toMatch(/Лимит закончится до сброса, примерно .+ \d{1,2} нояб\. До него: .+\.$/u)
+    expect(alpha).not.toContain('..')
   })
 })
