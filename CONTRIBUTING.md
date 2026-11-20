@@ -120,7 +120,9 @@ checks), when it names a changed file outside that graph, such as a document,
 a fixture or `valkama.py`, or when it is one of the modules that hold a whole
 surface of the server, which run on every change under `server/`. A change to
 a central module reaches most of the suite, because the tests that import the
-MCP or HTTP surface import nearly all of the server through it. For a change
+MCP or HTTP surface import nearly all of the server through it; a selection of
+more than a quarter of the test modules runs under the machine's heavy-test
+lock, as the gates' `unittest` step does. For a change
 under `web/` the script prints the `npx vitest related` command to run from
 `web/` and runs no node itself. It picks no browser spec: those are chosen by
 the route, fixture or page helper they rely on, not by import. It is the

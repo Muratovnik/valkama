@@ -7,6 +7,7 @@ that imports the changed code red for the next change to find.
 
 from __future__ import annotations
 
+import sys
 import unittest
 from collections.abc import Mapping
 from typing import ClassVar
@@ -168,6 +169,24 @@ class WebTest(unittest.TestCase):
 
     def test_no_web_change_gives_no_command(self) -> None:
         self.assertEqual([], affected.web_command(["web/dist/index.html", "docs/guide.md"]))
+
+
+class RunTest(unittest.TestCase):
+    UNITTEST: ClassVar[list[str]] = [sys.executable, "-m", "unittest"]
+
+    def test_a_quarter_of_the_test_modules_or_fewer_runs_without_the_lock(self) -> None:
+        self.assertEqual(
+            [*self.UNITTEST, "tests.test_a"], affected.run_command(["tests.test_a"], 4)
+        )
+
+    def test_a_larger_selection_waits_for_the_machines_heavy_test_lock(self) -> None:
+        command = affected.run_command(["tests.test_a", "tests.test_b"], 4)
+        self.assertEqual(
+            [sys.executable, str(affected.ROOT / "tests" / "machine_lock.py"), "run"], command[:3]
+        )
+        self.assertEqual(
+            [*self.UNITTEST, "tests.test_a", "tests.test_b"], command[command.index("--") + 1 :]
+        )
 
 
 def present(commit: str) -> bool:

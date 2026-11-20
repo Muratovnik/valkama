@@ -5,7 +5,10 @@
 RANGE is what `git diff` takes, such as `HEAD~1..HEAD` after a commit; `--staged`
 reads the index; with neither, the working tree against `HEAD`, untracked files
 included. Without `--list` the modules run in one `python -m unittest` from the
-repository root and the exit code is its own.
+repository root and the exit code is its own. A selection of more than a quarter
+of the test modules is a heavy run, as `tests/machine_lock.py` names one: it runs
+under the machine's heavy-test lock, waiting for another checkout's gate or
+browser run instead of running beside it.
 
 A test module is reached when:
 
@@ -69,6 +72,11 @@ SURFACES: Mapping[str, str] = {
         "holds every history action the server writes to the list the web's card reads"
     ),
 }
+
+#: Past this share of the test modules a selection is no longer a targeted run:
+#: two such runs at once fail timing-sensitive tests that pass alone, which is
+#: what the machine's heavy-test lock is for.
+HEAVY_SHARE = 0.25
 
 WEB = "web/"
 WEB_BUILD = "web/dist/"
@@ -208,6 +216,17 @@ def web_command(changed: Iterable[str]) -> list[str]:
     return ["npx", "vitest", "related", "--run", "--maxWorkers=2", *files] if files else []
 
 
+def run_command(chosen: Sequence[str], test_modules: int) -> list[str]:
+    """The command that runs the selection; a heavy one through the machine's lock."""
+
+    command = [sys.executable, "-m", "unittest", *chosen]
+    if len(chosen) <= test_modules * HEAVY_SHARE:
+        return command
+    what = f"tests/affected.py: {len(chosen)} of {test_modules} test modules"
+    lock = str(ROOT / "tests" / "machine_lock.py")
+    return [sys.executable, lock, "run", "--run", what, "--", *command]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python tests/affected.py",
@@ -222,7 +241,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     options = parser.parse_args(argv)
 
     changed = changed_files(options.range, staged=options.staged)
-    chosen = select(changed, build_graph(), test_sources())
+    graph = build_graph()
+    chosen = select(changed, graph, test_sources())
     command = web_command(changed)
     sys.stdout.writelines(
         f"{module}  # {reason}\n" if options.why else f"{module}\n"
@@ -234,9 +254,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     sys.stdout.flush()
     if options.list or not chosen:
         return 0
-    return subprocess.run(
-        [sys.executable, "-m", "unittest", *chosen], cwd=ROOT, check=False
-    ).returncode
+    test_modules = sum(1 for module in graph.modules if is_test_module(module))
+    return subprocess.run(run_command(list(chosen), test_modules), cwd=ROOT, check=False).returncode
 
 
 if __name__ == "__main__":
