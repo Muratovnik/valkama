@@ -108,7 +108,7 @@ for (const size of SIZES) {
       await page.goto(serializePlatformRoute({ module_id: 'volumes', scope: spaceScope }))
       await expect(page.locator('.volumes-page')).toBeVisible()
 
-      await page.locator('[data-number="waiting"]').getByRole('button').click()
+      await page.locator('[data-number="waiting"]').click()
       const dialog = page.getByRole('dialog', { name: words.title, exact: true })
       await expect(dialog).toBeVisible()
       const chip = dialog.locator('[data-part="scope"]')
