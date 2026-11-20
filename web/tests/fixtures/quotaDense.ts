@@ -84,8 +84,8 @@ function fiveHoursBefore(now: number, offset: number, source: Source): QuotaEarl
 }
 
 /** Readings `ago` ms before now, oldest first, with their shares. */
-const readingsAgo = (agos: readonly number[], shares: readonly number[]): [number, number][] =>
-  agos.map((ago, index) => [ago, shares[index] ?? 0])
+const readingsAgo = (ages: readonly number[], shares: readonly number[]): [number, number][] =>
+  ages.map((ago, index) => [ago, shares[index] ?? 0])
 
 /** The four accounts of `quotaAt` as of `now`, «Work»'s five hours and week read densely. */
 export function quotaDense(now: Date | number, offset = -new Date(now).getTimezoneOffset()): Quota {
@@ -101,28 +101,28 @@ export function quotaDense(now: Date | number, offset = -new Date(now).getTimezo
 
   // The current five hours started three hours ago: read every five minutes, the latest a minute
   // before now, the count restarted an hour and a half ago.
-  const fiveAgos = readingTimes(3 * HOUR, 5 * MINUTE).map((after) => 3 * HOUR - after)
-  const fiveRestart = fiveAgos.findIndex((ago) => ago <= 90 * MINUTE)
+  const fiveAges = readingTimes(3 * HOUR, 5 * MINUTE).map((after) => 3 * HOUR - after)
+  const fiveRestart = fiveAges.findIndex((ago) => ago <= 90 * MINUTE)
   const currentFive = share(moment, offset, {
     kind: 'five_hour',
     left: 2 * HOUR,
     source: five.latest.source,
-    readings: readingsAgo(fiveAgos, rising(fiveAgos, 62, fiveRestart)),
-    restarts: [fiveAgos[fiveRestart] ?? 0],
+    readings: readingsAgo(fiveAges, rising(fiveAges, 62, fiveRestart)),
+    restarts: [fiveAges[fiveRestart] ?? 0],
     forecast: five.forecast,
   })
   currentFive.earlier = fiveHoursBefore(moment, offset, five.latest.source)
 
   // The current week started four days ago: read every hour, the latest a minute before now, the
   // count restarted two days ago.
-  const weekAgos = readingTimes(4 * DAY, HOUR).map((after) => 4 * DAY - after)
-  const weekRestart = weekAgos.findIndex((ago) => ago <= 2 * DAY)
+  const weekAges = readingTimes(4 * DAY, HOUR).map((after) => 4 * DAY - after)
+  const weekRestart = weekAges.findIndex((ago) => ago <= 2 * DAY)
   const currentWeek = share(moment, offset, {
     kind: 'week',
     left: 3 * DAY,
     source: week.latest.source,
-    readings: readingsAgo(weekAgos, rising(weekAgos, 41, weekRestart)),
-    restarts: [weekAgos[weekRestart] ?? 0],
+    readings: readingsAgo(weekAges, rising(weekAges, 41, weekRestart)),
+    restarts: [weekAges[weekRestart] ?? 0],
     forecast: week.forecast,
   })
   const weekTimes = readingTimes(WEEK, 2 * HOUR)
