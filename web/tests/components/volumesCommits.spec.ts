@@ -139,20 +139,21 @@ describe('commits on no card on the Volumes page', () => {
     expect(page.get('.volumes-commits').text()).toContain('2 commits')
     const first = page.get('[data-commit="abcdef0123"]')
     expect(first.get('th').text()).toBe('abcdef01')
+    // The row's action stands under its subject, in the columns read first.
     expect(first.findAll('td').map((cell) => cell.text())).toEqual([
-      'Fix the parser',
+      'Fix the parser Attach to a card',
       'Alpha',
       'c0ffee00',
       expect.stringContaining('2026'),
-      'Attach to a card',
     ])
+    expect(first.get('td .volumes-commit-attach').text()).toBe('Attach to a card')
     const second = page.get('[data-commit="1234567890"]')
     expect(
       second
         .findAll('td')
         .slice(0, 2)
         .map((cell) => cell.text()),
-    ).toEqual(['no subject', 'no repository'])
+    ).toEqual(['no subject Attach to a card', 'no repository'])
 
     await commitsNumber(page).trigger('click')
     expect(page.find('.volumes-commits').exists()).toBe(false)

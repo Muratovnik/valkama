@@ -6,6 +6,9 @@
  * period of a thousand decisions is read in the table while the bar stays above it. Each
  * column's heading sorts by it: the moment newest first, words A to Z first.
  *
+ * On a phone a decision stands as a block of its own (`stack`): when and the point on its first
+ * line, the card under them, then the session and what it decided.
+ *
  * Over the table a line counts the decisions of the view, and while further pages are still being
  * read it says how many of how many are in (`reading`); where the view holds more than the page
  * reads, it says the newest are shown (`MOST`).
@@ -121,6 +124,7 @@ function follow(row: (typeof rows.value)[number], event: MouseEvent) {
     :label="t('decisions.table.label')"
     :marks="marks"
     :sort-words="sortWords"
+    stack
     @sort="sortBy"
   >
     <template #head>
@@ -205,5 +209,13 @@ function follow(row: (typeof rows.value)[number], event: MouseEvent) {
   min-inline-size: 16rem;
   color: var(--color-text);
   overflow-wrap: anywhere;
+}
+
+/* A phone (`stack`): the card and what was decided each take a line of their own. */
+@container (width <= 30rem) {
+  .decisions-item,
+  .decisions-what {
+    flex-basis: 100%;
+  }
 }
 </style>

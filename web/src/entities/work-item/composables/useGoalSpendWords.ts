@@ -18,6 +18,9 @@ import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 /** What stands for a figure the read cannot give. */
 export const UNKNOWN = '—'
 
+/** What stands between a spend's time and its tokens, where a host may break the two apart. */
+export const PARTS = ' · '
+
 /** A figure and, where it is «—» or not whole, the hint that says why. */
 export interface Figure {
   hint: string
@@ -43,7 +46,7 @@ export function useGoalSpendWords() {
   /** Time and tokens of a spend, joined; empty where nothing was counted. */
   function amount(seconds: number, tokens: UsageTokens): string {
     const anew = tokensAnew(tokens)
-    return [seconds > 0 ? span(seconds) : '', anew ? compact(anew) : ''].filter(Boolean).join(' · ')
+    return [seconds > 0 ? span(seconds) : '', anew ? compact(anew) : ''].filter(Boolean).join(PARTS)
   }
 
   /**

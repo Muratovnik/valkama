@@ -3,9 +3,10 @@
  * The numbers on top of the Volumes page: one for each of the eight categories, in the model's
  * order, then «Waiting for me» and «Commits on no card», ten in a row where the page has room for
  * every name and in as many rows as the names need where it has not, as on a phone; they never
- * scroll sideways. Under an open category's number stands the age of its
- * oldest card, under «Waiting for me» that of the question asked first; a closed category counts
- * what came to stand there in the period and says so.
+ * scroll sideways. A number's figure stands at its top, over its name: the figures of a row stand
+ * at one height whatever lines the names take. Under an open category's name stands the age of
+ * its oldest card, under «Waiting for me» that of the question asked first; a closed category
+ * counts what came to stand there in the period and says so.
  *
  * A category's number counts its tasks, goals and stages, which the board's filter by category
  * shows together; under a filter only tasks match, and the number counts them alone. A number
@@ -233,7 +234,11 @@ function press(number: VolumesNumber) {
   min-width: min-content;
 }
 
-/* A number: its name over its figure over its age, the figure in the ink of the figures. */
+/* A number: its figure over its name over its age, the figure in the ink of the figures. The
+   figure stands first, at the number's top, so every figure of a row stands at one height
+   whatever lines the names take; under its name, it stood a line lower under a name of two lines
+   than under one, and «Коммиты без карточки», three lines, put it 34px under the row's highest.
+   The name still comes first to assistive technology, which reads the elements in their order. */
 .volumes-number {
   display: grid;
   flex: 1;
@@ -267,16 +272,19 @@ function press(number: VolumesNumber) {
 }
 
 .volumes-number-label {
+  grid-row: 2;
   overflow-wrap: normal;
 }
 
 .volumes-number-figure {
+  grid-row: 1;
   color: var(--color-text);
   font: var(--font-section-title);
   font-variant-numeric: tabular-nums;
 }
 
 .volumes-number-under {
+  grid-row: 3;
   min-block-size: 1lh;
   color: var(--color-text-tertiary);
 }

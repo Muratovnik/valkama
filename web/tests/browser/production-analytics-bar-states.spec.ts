@@ -10,10 +10,12 @@
  * when the page has nothing to show nor beside the figures a failed refresh kept, and the mark is
  * back once a read answers. A failure said moves nothing: the bar keeps its height, the panel its
  * top, and every control of the bar its place. A span of days chosen keeps the bar's height and the
- * panel's top wherever the bar is of one height for every period: on a phone, in the two rows of a
- * narrow bar, and on a line wide enough for the span; between 50rem and about 1360px the line
- * beside a span is two rows where a preset's is one, which `DESIGN.md` chose over one height. On a
- * phone the chosen period stands in view in its row, opened, chosen or beside a failure.
+ * panel's top wherever the bar is of one height for every period: in the two rows of a narrow bar,
+ * and on a line wide enough for the span; between 50rem and about 1360px the line beside a span is
+ * two rows where a preset's is one, which `DESIGN.md` chose over one height, and on a phone the
+ * reader's own days take a row of their own only once chosen, rather than a row held empty under
+ * every other period. On a phone every period stands whole in its row, opened, chosen or beside a
+ * failure.
  *
  * The bar and the panel end on one right edge whether the panel scrolls or not.
  */
@@ -187,8 +189,8 @@ for (const width of WIDTHS)
     await record(info, `bar-states failed ${width}`, seen)
   })
 
-/** Widths the bar is of one height for every period at: a phone, two rows, one line. */
-const ONE_HEIGHT = [390, 760, 1024, 1440, 1920] as const
+/** Widths the bar is of one height for every period at: two rows, one line. */
+const ONE_HEIGHT = [760, 1024, 1440, 1920] as const
 
 for (const width of ONE_HEIGHT)
   test(`a span of days moves neither the bar nor the panel at ${width}px`, async ({
@@ -206,18 +208,26 @@ for (const width of ONE_HEIGHT)
     expect(days.body, 'the top under the bar').toBe(week.body)
   })
 
-/** How far the chosen period stands past either end of the periods' row, which scrolls sideways. */
+/**
+ * How far the period that stands furthest out stands past either end of the periods' row or of the
+ * window, and how far the row scrolls sideways: every period whole is none of either.
+ */
 const chosenPast = (page: Page) =>
   page.evaluate(() => {
     const strip = document.querySelector('.period-bar-periods') as HTMLElement
-    const chosen = strip.querySelector('.active') as HTMLElement
     const row = strip.getBoundingClientRect()
-    const own = chosen.getBoundingClientRect()
-    return Math.max(row.left - own.left, own.right - row.right, 0)
+    const window = document.documentElement.clientWidth
+    const options = [...strip.querySelectorAll('[role="radio"]')].map((one) => {
+      const own = one.getBoundingClientRect()
+      return Math.max(row.left - own.left, own.right - row.right, own.right - window, 0)
+    })
+    return options.length === 5
+      ? Math.max(...options, strip.scrollWidth - strip.clientWidth)
+      : Number.NaN
   })
 
 for (const width of [360, 390] as const)
-  test(`the chosen period stands in view on a phone at ${width}px`, async ({ page }, info) => {
+  test(`every period stands whole on a phone at ${width}px`, async ({ page }, info) => {
     const fail = await serveFailing(page, width)
     const past: Record<string, number> = {}
     for (const [name, state] of Object.entries(PERIODS)) {
@@ -235,7 +245,7 @@ for (const width of [360, 390] as const)
     past['days chosen'] = await chosenPast(page)
     await record(info, `bar-states chosen ${width}`, past)
     for (const [name, value] of Object.entries(past))
-      expect.soft(value, `the chosen period past the row, ${name}`).toBeLessThanOrEqual(0.5)
+      expect.soft(value, `a period past the row, ${name}`).toBeLessThanOrEqual(0.5)
   })
 
 for (const width of [390, 760, 1440] as const)
