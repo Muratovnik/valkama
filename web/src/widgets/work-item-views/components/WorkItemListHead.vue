@@ -237,8 +237,8 @@ function choose(value: string) {
 
 /* The reference's heading starts over the reference rather than over the
    glyphs that lead it, at the start the list declares; it is the cell's inset
-   where no list declares one. A sort's inset is the one the list declares
-   (`--space-list-inset`), half on a narrow list. */
+   where no list declares one. A sort's inset is the list's cells'
+   (`--space-list-inset`), so a heading's word starts where its column's words do. */
 .list-head-reference > .list-sorts > .list-sort {
   padding-inline-start: max(var(--space-list-inset), var(--list-reference-start, 0px));
 }

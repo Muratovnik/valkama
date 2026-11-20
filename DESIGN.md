@@ -1921,7 +1921,10 @@ in English, 34.2 and 32.8 in Russian. A tree's first column is wider by its lead
 deepest row, 24px a level up to the fifth, so a tree meets them with that lead taken
 out of its width: measured on the width alone, a list by goal three levels deep at
 1280px stood every column but two, left its title 131px with words broken inside and ran
-24px past its frame. A group's row wraps between words and keeps each count whole, its
+24px past its frame. A narrow list's cells take half the inset, 8px, as its head's sorts do,
+so a heading's word starts where its column's words do: at 12px a tree five levels deep at
+390px left its title 16 characters, broke «Переосмысление» inside, and stood «Название» 4px
+left of the titles under it. A group's row wraps between words and keeps each count whole, its
 wrapped lines starting under its name: held to one line, a project's long name stood the
 table 574px wide in a list of 302 on a phone.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its

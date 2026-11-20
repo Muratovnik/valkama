@@ -4,7 +4,10 @@
  * the widths its columns stand from are met by the room beside the first column, and a
  * tree's first column is wider by its lead. Measured on the list's width alone, such a tree
  * at 1280px stood every column but two, left its title 131px with words broken inside, put
- * its head on two lines and ran 24px past the list's frame.
+ * its head on two lines and ran 24px past the list's frame. At 390px, with the cells' inset
+ * of a wider list, the title kept 16 characters and «Переосмысление» broke inside; a narrow
+ * list's cells take its head's half inset, so the title's heading starts where its titles do.
+ * The scroll bars are drawn, as the reader sees them: hidden, the frame was 10px wider.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -13,6 +16,8 @@ import { installBackend } from './backend.ts'
 import { boardRoute } from './boardPage.ts'
 import { brief, identity, serveSpace, stateOf, stillFrames } from './longSpace.ts'
 import { test } from './test.ts'
+
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 /** Titles as agents write them, one long word in each. */
 const TITLES = [
@@ -96,6 +101,18 @@ const measure = (page: Page) =>
     }))
     const row = list.querySelector(`tr.list-row:not(.list-row-held)[data-reference="${deepest}"]`)
     const title = row?.querySelector('.list-name')
+    /** Where the first letter of an element's first words stands. */
+    function firstLetter(element: Element | null | undefined) {
+      const walker = document.createTreeWalker(element ?? document.body, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue
+        const range = document.createRange()
+        range.setStart(node, node.textContent.search(/\S/u))
+        range.setEnd(node, node.textContent.search(/\S/u) + 1)
+        return Math.round(range.getBoundingClientRect().left * 10) / 10
+      }
+      return Number.NaN
+    }
     return {
       fit: (list as HTMLElement).dataset.fit,
       past: Math.round(table.getBoundingClientRect().width - list.clientWidth),
@@ -103,6 +120,13 @@ const measure = (page: Page) =>
       heads,
       title: heads[1]?.width ?? 0,
       brokenTitle: title ? broken(title) : ['no title'],
+      // Every title shares the column, the Russian ones with the longest word.
+      titles: [...list.querySelectorAll('tr.list-row:not(.list-row-held) .list-name')].length,
+      brokenAny: [...list.querySelectorAll('tr.list-row:not(.list-row-held) .list-name')].flatMap(
+        (name) => broken(name),
+      ),
+      // The title's heading against the deepest title under it.
+      edge: [firstLetter(table.querySelectorAll('thead th')[1]), firstLetter(title)],
     }
   }, DEEPEST)
 
@@ -130,8 +154,13 @@ for (const locale of ['en', 'ru']) {
     await openDeep(page, locale, 390)
     const seen = await measure(page)
     const said = JSON.stringify(seen)
+    expect(seen.fit, said).toBe('narrow')
     expect(seen.past, said).toBeLessThanOrEqual(0)
     expect(seen.sideways, said).toBeLessThanOrEqual(0)
+    // No word of any title broken inside, and the title's heading on its titles' edge.
+    expect(seen.titles, said).toBe(13)
+    expect(seen.brokenAny, said).toEqual([])
+    expect(Math.abs(seen.edge[0] - seen.edge[1]), said).toBeLessThanOrEqual(1)
     await page.screenshot({ path: info.outputPath(`list-tree-fit-${locale}-390.png`) })
     await info.attach('measured', { body: said, contentType: 'application/json' })
   })

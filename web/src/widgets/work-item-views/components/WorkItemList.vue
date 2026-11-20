@@ -387,13 +387,12 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
 /* A row focused from the keyboard stops below the sticky head rather than
    under it. Where a reference starts in its cell — the cell's inset and the
    two glyph slots before it — is declared here for the head, which starts the
-   reference's heading there rather than over the glyphs, and so is the inset of
-   the head's sorts, half on a narrow list: the width the longest order's name
-   needs beside the title's. */
+   reference's heading there; the cells and the sorts share one inset, halved on a
+   narrow list, as DESIGN.md says under «Work». */
 .work-item-list {
   --space-list-inset: var(--space-3);
   --list-slot-size: var(--size-control-inline);
-  --list-reference-start: calc(var(--space-3) + var(--list-slot-size) + var(--space-1));
+  --list-reference-start: calc(var(--space-list-inset) + var(--list-slot-size) + var(--space-1));
 
   height: 100%;
   min-height: 0;
@@ -456,7 +455,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
 
 .list-cell {
   vertical-align: baseline;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-list-inset);
   color: var(--color-text-muted);
   font: var(--font-line);
   white-space: nowrap;
@@ -507,7 +506,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
 .list-holder,
 .list-goal,
 .list-project {
-  max-width: calc(10rem + 2 * var(--space-3));
+  max-width: calc(10rem + 2 * var(--space-list-inset));
 }
 
 .list-claim {
