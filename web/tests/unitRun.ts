@@ -30,6 +30,14 @@ interface UnitRun {
 
 const web = fileURLToPath(new URL('..', import.meta.url))
 
+/**
+ * The pool the whole suite runs in, and the CPUs it declares to the gate. Vitest's own default
+ * is every logical CPU but one, which on a 32-CPU machine would ask for nearly all of it, while
+ * the suite measured there used 2.6 cores at the median and 7.4 at p95: eight workers is what it
+ * uses, and what lets it share the machine with a smaller heavy run.
+ */
+const suiteWorkers = 8
+
 /** Whether these Vitest arguments narrow the run to some files or some test names. */
 function targeted(args: readonly string[]): boolean {
   return args.some((argument, index) => {
@@ -42,14 +50,14 @@ function targeted(args: readonly string[]): boolean {
 
 /** What `npm run test:unit -- <args>` runs; `canLock` is asked only when the lock would be taken. */
 export function unitRun(args: readonly string[], canLock: () => boolean): UnitRun {
-  const vitest = [
+  const start = [
     process.execPath,
     join(web, 'node_modules/vitest/vitest.mjs'),
     'run',
     '--config',
     'vitest.config.ts',
-    ...args,
   ]
+  const vitest = [...start, ...args]
   if (targeted(args)) return { command: vitest, note: null, targeted: true }
   if (!canLock())
     return {
@@ -57,8 +65,16 @@ export function unitRun(args: readonly string[], canLock: () => boolean): UnitRu
       note: 'No Python here runs tests/machine_lock.py: the Vitest suite runs without the heavy-test lock',
       targeted: false,
     }
+  // A pool the caller sized is one this cannot count, so that run asks for the whole machine.
+  const sized = args.some((argument) => /^--max-?workers(=|$)/i.test(argument))
   return {
-    command: lockedCommand('npm test: the Vitest suite', vitest),
+    command: sized
+      ? lockedCommand('npm test: the Vitest suite', vitest)
+      : lockedCommand(
+          'npm test: the Vitest suite',
+          [...start, `--maxWorkers=${suiteWorkers}`, ...args],
+          { cpus: suiteWorkers },
+        ),
     note: null,
     targeted: false,
   }

@@ -126,8 +126,8 @@ class Step:
     directory: str = "."
     #: It reads the commits of the checkout, so a directory without them refuses it.
     needs_history: bool = False
-    #: It holds the machine's heavy-test lock while it runs.
-    exclusive: bool = False
+    #: It holds a place at the machine's heavy-test gate while it runs.
+    gated: bool = False
 
     @property
     def needs_modules(self) -> bool:
@@ -158,7 +158,7 @@ GATE_STEPS = (
         "unittest",
         "python",
         'python -m coverage run -m unittest discover -s . -p "test_*.py"',
-        exclusive=True,
+        gated=True,
     ),
     Step("coverage", "python", "python -m coverage report"),
     Step("web-test", "web", "npm test", "web"),
@@ -175,7 +175,7 @@ class Run(NamedTuple):
     cwd: Path
     needs_modules: bool = False
     needs_history: bool = False
-    exclusive: bool = False
+    gated: bool = False
 
 
 def _say(line: str) -> None:
@@ -379,8 +379,12 @@ def _tail(log: Path) -> str:
     return " | ".join(_log_line(line).strip() for line in lines[-3:])
 
 
-def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
+def _run_step(
+    run: Run, log: Path, environment: Mapping[str, str], preface: Sequence[str] = ()
+) -> int:
     with log.open("wb") as output:
+        output.write("".join(f"{line}\n" for line in preface).encode())
+        output.flush()
         try:
             return subprocess.run(
                 run.argv,
@@ -424,14 +428,15 @@ def run_gates(
     """Run every step; the result is 0 only when at least one ran and none failed or was refused.
 
     The modules are read again at each step, because another session's `npm ci`
-    may have replaced them while the steps before it ran. An exclusive step waits
-    for the heavy-test lock, the machine's unless `lock` names another file, and
-    runs marked as under it, so the suite inside does not wait for its own step.
+    may have replaced them while the steps before it ran. A gated step waits
+    at the heavy-test gate, the machine's unless `lock` names another file, needing
+    what the whole unittest suite declares, and runs marked as under it, so the
+    suite inside does not wait for its own step; what the gate said opens its log.
     Given the start of a `record`, it writes the whole record into `out` at the end.
     """
 
     # Imported here, not at the top, for the reason `_refusal` gives.
-    from tests import machine_lock, run_record
+    from tests import WHOLE_SUITE_CPUS, machine_lock, run_record
 
     # A hold of the run that started this one covers the steps too, though their
     # environment was built without the caller's `VALKAMA_*`.
@@ -462,16 +467,25 @@ def run_gates(
                 report(f"{run.name:<14} refused  {detail}")
                 steps.append(run_record.step(run.name, run.argv, run.cwd, log, None))
                 continue
-            if run.exclusive:
+            gate_said: list[str] = []
+            if run.gated:
+
+                def told(line: str, said: list[str] = gate_said) -> None:
+                    report(line)
+                    said.append(line)
+
                 holding: contextlib.AbstractContextManager[None] = machine_lock.held(
-                    f"tests/isolated.py gates: the {run.name} step", path=lock, say=report
+                    f"tests/isolated.py gates: the {run.name} step",
+                    path=lock,
+                    cpus=WHOLE_SUITE_CPUS,
+                    say=told,
                 )
                 step_environment = {**environment, **machine_lock.marker(lock)}
             else:
                 holding = contextlib.nullcontext()
                 step_environment = dict(environment)
             with holding:
-                code = _run_step(run, log, step_environment)
+                code = _run_step(run, log, step_environment, gate_said)
             if code != 0:
                 failed.append(run.name)
             report(f"{run.name:<14} exit={code}  {_tail(log)}")
@@ -540,7 +554,7 @@ def gates(steps: Sequence[Step], out: Path) -> int:
             ROOT / step.directory,
             step.needs_modules,
             step.needs_history,
-            step.exclusive,
+            step.gated,
         )
         for step in steps
     ]

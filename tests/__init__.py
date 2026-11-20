@@ -102,6 +102,12 @@ unittest.TextTestRunner.resultclass = LoadNoting  # type: ignore[assignment]
 #: gates and CI name. A narrower one makes a targeted run.
 _WHOLE_SUITE_PATTERNS = (None, "test*.py", "test_*.py")
 
+#: The logical CPUs a run of the whole suite declares to the heavy-test gate. The suite
+#: is one Python process, with the processes some tests start; a sampler of whole runs
+#: saw it at one to two cores, short of a run from start to end, so this is a first
+#: figure to revise against a measured one. `tests/isolated.py` declares it for its step.
+WHOLE_SUITE_CPUS = 2
+
 
 def load_tests(
     loader: unittest.TestLoader, standard_tests: unittest.TestSuite, pattern: str | None
@@ -123,7 +129,7 @@ def load_tests(
     from tests import machine_lock
 
     if pattern in _WHOLE_SUITE_PATTERNS and not loader.testNamePatterns:
-        machine_lock.hold_until_exit("the whole unittest suite")
+        machine_lock.hold_until_exit("the whole unittest suite", cpus=WHOLE_SUITE_CPUS)
     here = os.path.dirname(os.path.abspath(__file__))
     standard_tests.addTests(
         loader.discover(here, pattern or "test_*.py", top_level_dir=os.path.dirname(here))

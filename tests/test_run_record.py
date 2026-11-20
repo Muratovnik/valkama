@@ -479,6 +479,50 @@ class CountTests(unittest.TestCase):
         self.assertNotEqual(test_steps((*isolated.GATE_STEPS, added)), set(run_record.TEST_COUNTS))
 
 
+class AdmissionTests(unittest.TestCase):
+    """What the heavy-test gate said as a step's runs went in, read back from the step's log."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(prefix="vk-gate-", ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.log = Path(directory.name) / "web-test.log"
+
+    def test_each_admission_is_recorded_with_its_wait_its_load_and_the_runs_beside_it(
+        self,
+    ) -> None:
+        beside = [
+            machine_lock.Entry("unittest", "C:/a", 11, 1_800_000_000.0, 2, 0, Path("a")),
+            machine_lock.Entry("browser batch", "C:/b", 22, 1_800_000_000.0, 4, 0, Path("b")),
+        ]
+        # The lines as the gate writes them: the record reads the gate's own words back.
+        lines = [
+            "waiting for the heavy-test lock L: it is held by someone",
+            machine_lock.admission_line(161.4, 8, 32, 0.37, beside),
+            machine_lock.admission_line(0.1, 1, 1, None, []),
+        ]
+        self.log.write_bytes(("\r\n".join(lines) + "\r\n Tests  3 passed (3)\r\n").encode())
+
+        entry = run_record.step("web-test", ["npm", "test"], ROOT, self.log, 0)
+
+        self.assertEqual(3, entry["tests"])
+        admitted = entry["admitted"]
+        assert isinstance(admitted, list)
+        self.assertEqual([161, 0], [gate["waited"] for gate in admitted])
+        self.assertEqual([0.37, None], [gate["busy"] for gate in admitted])
+        first, second = (gate["beside"] for gate in admitted)
+        self.assertEqual(2, len(first))
+        self.assertTrue(first[0].startswith("unittest in C:/a, process 11, since "), first)
+        self.assertTrue(first[1].endswith(", with 4 CPUs"), first)
+        self.assertEqual([], second)
+
+    def test_a_step_whose_log_says_no_admission_records_none(self) -> None:
+        self.log.write_bytes(b"took the heavy-test lock after a while\n")
+        self.assertNotIn("admitted", run_record.step("web-test", ["npm"], ROOT, self.log, 0))
+        # Nor a refused step, whose log holds only the refusal.
+        self.log.write_bytes(machine_lock.admission_line(0, 1, 1, None, []).encode())
+        self.assertNotIn("admitted", run_record.step("web-test", ["npm"], ROOT, self.log, None))
+
+
 class GatesRecordTests(unittest.TestCase):
     """The record a `gates` run writes, with its steps stood in for."""
 

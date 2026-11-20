@@ -25,10 +25,32 @@ describe('the Vitest run of npm test', () => {
     const { command, note, targeted } = unitRun([], () => true)
     expect(command.slice(0, 2)).toEqual([python, lockTool])
     const held = command.slice(command.indexOf('--') + 1)
-    expect(held).toEqual(vitest)
+    expect(held).toEqual([...vitest, '--maxWorkers=8'])
     expect(note).toBeNull()
     expect(targeted).toBe(false)
   })
+
+  it('declares to the gate the pool of eight workers it runs the suite in', () => {
+    const { command } = unitRun(['--reporter=dot'], () => true)
+    const gate = command.slice(0, command.indexOf('--'))
+    expect(gate).toContain('--cpus=8')
+    expect(command.slice(command.indexOf('--') + 1)).toEqual([
+      ...vitest,
+      '--maxWorkers=8',
+      '--reporter=dot',
+    ])
+  })
+
+  it.each([[['--maxWorkers=16']], [['--max-workers', '4']]])(
+    'asks for the whole machine for a pool %j it did not size, and leaves that pool as given',
+    (args) => {
+      const { command } = unitRun(args, () => true)
+      expect(
+        command.slice(0, command.indexOf('--')).some((word) => word.startsWith('--cpus')),
+      ).toBe(false)
+      expect(command.slice(command.indexOf('--') + 1)).toEqual([...vitest, ...args])
+    },
+  )
 
   it.each([[['--reporter=dot']], [['--reporter', 'dot']]])(
     'keeps the option %j of the whole suite on the command it holds the lock for',

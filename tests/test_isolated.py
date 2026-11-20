@@ -24,7 +24,12 @@ from pathlib import Path
 from unittest import mock
 
 from tests import isolated, machine_lock
-from tests.test_machine_lock import DEADLINE_SECONDS, HELD_SECONDS, held_elsewhere
+from tests.test_machine_lock import (
+    DEADLINE_SECONDS,
+    HELD_SECONDS,
+    goes_in_at_once,
+    held_elsewhere,
+)
 from tests.test_mcp_front import alive, wait_until
 from tests.test_release import link_directory
 
@@ -414,11 +419,17 @@ class GateTests(Workspace):
 
 
 class HeavyLockTests(Workspace):
-    """The unittest step waits for the machine's heavy-test lock; no other step takes it."""
+    """The unittest step waits for the machine's heavy-test lock; no other step takes it.
+
+    At a count of 1, one run at a time, so no step reads this machine's load.
+    """
 
     def setUp(self) -> None:
         super().setUp()
         self.lock = self.root / "heavy.lock"
+        count = mock.patch.dict(os.environ, {machine_lock.CPUS_VARIABLE: "1"})
+        count.start()
+        self.addCleanup(count.stop)
 
     def gate_runs(self, *only: str) -> list[isolated.Run]:
         """The runs `gates --only ...` would hand to `run_gates`."""
@@ -432,23 +443,19 @@ class HeavyLockTests(Workspace):
         return run_gates.call_args.args[0]
 
     def test_of_the_whole_list_only_the_unittest_step_takes_the_lock(self) -> None:
-        exclusive = [
-            run.name for run in self.gate_runs("python", "web", "desktop") if run.exclusive
-        ]
-        self.assertEqual(["unittest"], exclusive)
+        gated = [run.name for run in self.gate_runs("python", "web", "desktop") if run.gated]
+        self.assertEqual(["unittest"], gated)
 
     def test_a_selection_without_the_unittest_step_takes_no_lock(self) -> None:
-        self.assertEqual(
-            [], [run.name for run in self.gate_runs("coverage", "web") if run.exclusive]
-        )
+        self.assertEqual([], [run.name for run in self.gate_runs("coverage", "web") if run.gated])
 
-    def test_the_exclusive_step_waits_for_the_holder_and_a_light_one_does_not(self) -> None:
+    def test_the_gated_step_waits_for_the_holder_and_a_light_one_does_not(self) -> None:
         marker = self.root / "ran"
         heavy = isolated.Run(
             "unittest",
             [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"],
             ROOT,
-            exclusive=True,
+            gated=True,
         )
         result: list[tuple[int, str]] = []
         with held_elsewhere(self.lock, "another checkout's suite") as release:
@@ -478,10 +485,19 @@ class HeavyLockTests(Workspace):
         summary = (self.out / isolated.SUMMARY).read_text(encoding="utf-8")
         self.assertIn("it is held by another checkout's suite", summary)
         self.assertIn("took the heavy-test lock after", summary)
-        with machine_lock.held("after", path=self.lock, say=self.fail):
-            pass
+        # The step's own log opens with what the gate said, which its record reads.
+        said = (self.out / isolated.LOGS / "unittest.log").read_text(encoding="utf-8")
+        self.assertTrue(said.startswith("waiting for the heavy-test lock "), said)
+        self.assertIn("\ntook the heavy-test lock after ", said)
+        goes_in_at_once(self, self.lock)
 
-    def taking_the_lock(self, name: str, *, exclusive: bool = False) -> isolated.Run:
+    def test_the_gated_step_declares_what_the_whole_suite_needs(self) -> None:
+        heavy = isolated.Run("unittest", [sys.executable, "-c", "0"], ROOT, gated=True)
+        with mock.patch.object(machine_lock, "held", wraps=machine_lock.held) as held:
+            quietly(lambda: isolated.run_gates([heavy], self.out, os.environ, lock=self.lock))
+        self.assertEqual(2, held.call_args.kwargs["cpus"])
+
+    def taking_the_lock(self, name: str, *, gated: bool = False) -> isolated.Run:
         """A step that takes the lock itself, as the suite in the unittest step and `npm test` do."""
 
         return isolated.Run(
@@ -492,7 +508,7 @@ class HeavyLockTests(Workspace):
                 *("--", sys.executable, "-c", "print('in')"),
             ],
             ROOT,
-            exclusive=exclusive,
+            gated=gated,
         )
 
     def gates_in_a_thread(
@@ -517,9 +533,9 @@ class HeavyLockTests(Workspace):
             if name != machine_lock.HELD_BY_ANCESTOR
         }
 
-    def test_the_suite_inside_the_exclusive_step_does_not_wait_for_its_own_step(self) -> None:
+    def test_the_suite_inside_the_gated_step_does_not_wait_for_its_own_step(self) -> None:
         thread, result = self.gates_in_a_thread(
-            [self.taking_the_lock("unittest", exclusive=True)], self.unmarked()
+            [self.taking_the_lock("unittest", gated=True)], self.unmarked()
         )
         thread.join(DEADLINE_SECONDS)
 
@@ -558,7 +574,7 @@ class HeavyLockTests(Workspace):
                 thread, result = self.gates_in_a_thread(
                     [
                         self.taking_the_lock("web-test"),
-                        self.taking_the_lock("unittest", exclusive=True),
+                        self.taking_the_lock("unittest", gated=True),
                     ],
                     self.unmarked(),
                 )
