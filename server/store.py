@@ -617,11 +617,8 @@ def _assert_current_catalog(conn: sqlite3.Connection) -> None:
 
 
 def _read_stored_version_without_write(path: str) -> int:
-    probe = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-    try:
+    with read_only(path) as probe:
         return int(probe.execute("PRAGMA user_version").fetchone()[0])
-    finally:
-        probe.close()
 
 
 def refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool = False) -> None:
@@ -656,11 +653,8 @@ def refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool = F
 def _probe_generation(path: str) -> None:
     """`refuse_another_generation` on an existing file, through a read-only connection."""
 
-    probe = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-    try:
+    with read_only(path) as probe:
         refuse_another_generation(probe)
-    finally:
-        probe.close()
 
 
 def open_read_only() -> sqlite3.Connection:
@@ -689,6 +683,24 @@ def _uri(path: str, mode: str) -> str:
     escaped = absolute.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
     prefix = "file:" if escaped.startswith("/") else "file:/"
     return f"{prefix}{escaped}?mode={mode}"
+
+
+@contextlib.contextmanager
+def read_only(path: str) -> Iterator[sqlite3.Connection]:
+    """The store file at `path` for a look that writes nothing, closed when the block ends.
+
+    Nothing is created, migrated or locked, and a missing file is an
+    `sqlite3.OperationalError`. The close is the point: `with` on a connection only
+    ends a transaction, and a connection left to the garbage collector keeps the file
+    open until a collection finds it, so on Windows a backup, a restore or a rename of
+    the file fails in the meantime.
+    """
+
+    conn = sqlite3.connect(_uri(path, "ro"), uri=True)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def connect_for_read() -> sqlite3.Connection:
@@ -979,8 +991,7 @@ def store_generation(path: str) -> str:
 
     if not os.path.isfile(path):
         raise FileNotFoundError(f"there is no store at {path}")
-    probe = sqlite3.connect(_uri(path, "ro"), uri=True)
-    try:
+    with read_only(path) as probe:
         try:
             refuse_another_generation(probe)
         except WorkModelMigrationRequiredError:
@@ -989,8 +1000,6 @@ def store_generation(path: str) -> str:
         if stored != STORE_SCHEMA_VERSION:
             raise StoreTooOldError(stored)
         return "current"
-    finally:
-        probe.close()
 
 
 def copy_store(source: str, directory: str) -> str:
@@ -1005,11 +1014,8 @@ def copy_store(source: str, directory: str) -> str:
     destination = os.path.join(directory, f"{DATA_PREFIX}.sqlite3")
     if os.path.exists(destination):
         raise FileExistsError(f"{destination} already exists")
-    conn = sqlite3.connect(_uri(source, "ro"), uri=True)
-    try:
+    with read_only(source) as conn:
         conn.execute("VACUUM INTO ?", (destination,))
-    finally:
-        conn.close()
     store_backups.copy_pictures(
         planning_images.directory_beside(source), planning_images.directory_beside(destination)
     )
@@ -1019,12 +1025,9 @@ def copy_store(source: str, directory: str) -> str:
 def _environment(path: str) -> dict[str, Any]:
     """What the timing of a run depends on: the machine, the SQLite and the store's size."""
 
-    probe = sqlite3.connect(_uri(path, "ro"), uri=True)
-    try:
+    with read_only(path) as probe:
         pages = int(probe.execute("PRAGMA page_count").fetchone()[0])
         page_size = int(probe.execute("PRAGMA page_size").fetchone()[0])
-    finally:
-        probe.close()
     memory = sqlite3.connect(":memory:")
     try:
         memory.execute("CREATE VIRTUAL TABLE probe USING fts5(text)")
