@@ -38,11 +38,14 @@ The read of every space counts its numbers by category and its questions waiting
 the owner in every store the questions window reads every space from: the store this
 service writes and each attached store beside it (`sources`), as «All spaces» lists
 them. A store an earlier build wrote is read as it is, and its states stand in the
-categories of before, so only its questions count. The rest of the read is of the
-store this service writes alone: usage, the owner's decisions and the commits are
-written there, so the goals, the work outside goals, the flow, the estimates and the
-commits on no card are its own, and a space of an attached store is refused rather
-than counted short. The four numbers of a space's card in the portfolio count no
+categories of before, so only its questions count. The read names each source it covers
+as the questions window names them (`coverage`), so a store that could not be read is
+said rather than counted short in silence. The rest of the read is of the store this
+service writes alone: usage, the owner's decisions and the commits are written there, so
+the goals, the work outside goals, the flow, the estimates and the commits on no card are
+its own, which the read says while an attached store it counts holds work
+(`attached_work`), and a space of an attached store is refused rather than counted
+short. The four numbers of a space's card in the portfolio count no
 usage, and are counted in the store that holds the space (`portfolio_numbers`),
 unless an earlier build wrote it.
 """
@@ -138,6 +141,8 @@ class Request(NamedTuple):
     #: The stores counted beside the one the read writes, in the read of every space
     #: (`sources`); a space's read has none.
     beside: tuple[sqlite3.Connection, ...] = ()
+    #: Each source the read covers, read or not and why (`Sources.coverage`).
+    coverage: tuple[dict, ...] = ()
 
     def matching(self) -> Scope:
         """The items the sections count: the scope's, or under a filter the scope's tasks
@@ -202,17 +207,62 @@ def scope(
     return Scope(space, project, own, tuple(clauses), tuple(parameters))
 
 
+class Sources(NamedTuple):
+    """What a read counts beside the store it writes, and what it covers."""
+
+    #: The stores counted beside `conn`, open while the read runs.
+    stores: tuple[sqlite3.Connection, ...]
+    #: Each source the read covers, as the questions window's read of every space names
+    #: its own (`PlanningRouting.sources`): `space_ref`, `status` `searched` or
+    #: `unavailable`, and the stable code of why in `reason`, or None.
+    coverage: tuple[dict, ...]
+
+
 @contextlib.contextmanager
-def sources(conn: sqlite3.Connection, scope: Scope) -> Iterator[tuple[sqlite3.Connection, ...]]:
-    """The stores a read counts beside `conn`, open while it reads: for every space, each
-    attached store of a space «All spaces» lists (`PlanningRouting.present_spaces`), the
-    list the questions window reads every space by; for one space, none."""
+def sources(conn: sqlite3.Connection, scope: Scope) -> Iterator[Sources]:
+    """The stores a read counts beside `conn`, open while it reads, and the sources it covers:
+    for every space, each attached store of a space «All spaces» lists
+    (`PlanningRouting.present_spaces`), the list the questions window reads every space by,
+    and every source that list names; for one space, no store and that space alone.
+
+    A source is skipped for the reason the routing gives (`unavailable_reason`), for
+    `store_unreadable` when its store went away after the routing listed it, and for
+    `requests_unavailable` when its store keeps no questions, as the window skips them.
+    """
 
     if scope.space is not None:
-        yield ()
+        yield Sources((), (_covered(scope.answer()["space_ref"], None),))
         return
-    with PlanningRouting(conn, _store_path(conn)).attached_stores() as attached:
-        yield attached
+    routing = PlanningRouting(conn, _store_path(conn))
+    with routing.attached_stores() as attached:
+        opened = {str(read_store_metadata(store)["data_scope_id"]): store for store in attached}
+        opened[scope.data_scope_id] = conn
+        coverage = []
+        for space_ref in routing.sources():
+            reason = routing.unavailable_reason(space_ref)
+            store = opened.get(space_ref["data_scope_id"])
+            if reason is None and store is None:
+                reason = "store_unreadable"
+            elif reason is None and store is not None and not questions.kept(store):
+                reason = "requests_unavailable"
+            coverage.append(_covered(space_ref, reason))
+        yield Sources(attached, tuple(coverage))
+
+
+def _covered(space_ref: dict, reason: str | None) -> dict:
+    return {
+        "space_ref": space_ref,
+        "status": "searched" if reason is None else "unavailable",
+        "reason": reason,
+    }
+
+
+def _holds_work(stores: Sequence[sqlite3.Connection]) -> bool:
+    """Whether any of these stores holds a work item."""
+
+    return any(
+        store.execute("SELECT 1 FROM work_items LIMIT 1").fetchone() is not None for store in stores
+    )
 
 
 def space_scope(
@@ -657,5 +707,8 @@ def read(conn: sqlite3.Connection, request: Request) -> dict:
         "period": request.period.answer(),
         "filter": None if request.work_filter is None else request.work_filter.answer(),
         "measured_from": measured_from(conn),
+        "coverage": list(request.coverage),
+        # The stores beside it count at the top alone: the sections under it read `conn`.
+        "attached_work": _holds_work(request.beside),
         **{name: section(reading) for name, section in SECTIONS},
     }

@@ -2162,6 +2162,10 @@ of another space that the space's items name keeps only the space's own.
               "utc_offset": 180},
    "filter": null,
    "measured_from": "2030-02-17T16:03:29.000Z",
+   "coverage": [{"space_ref": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001",
+                               "space_key": "MAIN"},
+                 "status": "searched", "reason": null}],
+   "attached_work": false,
    "counts": {
      "categories": [
        {"category": "triage", "tasks": 40, "goals": 1, "stages": 1,
@@ -2210,6 +2214,8 @@ of another space that the space's items name keeps only the space's own.
 | `period` | the period asked for, with `from` and `to` at the caller's offset |
 | `filter` | the filter asked for, `{"kinds": [...], "labels": [...]}` with each in the order named and once, or `null` when the read names no `kind` and no `label` |
 | `measured_from` | the start of the first stretch of agent work counted to an item in this store, as the usage rows hold it, or `null` when none is: an item started before it may have spent more than its usage says (see [How much work an item took](#how-much-work-an-item-took)) |
+| `coverage` | each source the read covers, as the mapped search and request reads name theirs ([Reading a question](#reading-a-question)): `space_ref`, `status` `searched` or `unavailable`, and `reason`, the stable code of why, or `null`. A `space` read names the space alone; a `global` read names every source the read of every source's questions names, from the same list and with the same codes, so a store the questions window says it skipped is skipped here too and counted in no number |
+| `attached_work` | `true` when a `global` read counts a store attached beside the one this service writes that holds at least one work item: its work is in `counts.categories` and `counts.waiting_owner`, and not in the sections below them. `false` otherwise, and always for a `space` read |
 | `counts.categories` | the eight categories, every one, in the order of [The work model](#the-work-model): `category`, `tasks`, `goals`, `stages` and `oldest`; under a filter `goals` and `stages` are `null` |
 | `counts.waiting_owner` | the questions to the owner still open on the scope's items: `count`, and `oldest`, the one asked first, with `request_id`, the `reference` of its item and its `created_at` as `since`, or `null` when none waits |
 | `counts.unattached_commits` | how many commits stand on no card: the `total` of [Commits on no card](#commits-on-no-card) read by the project, by the space, or, for `global`, of the whole store; `null` when that list refuses the scope, a project only items name or a space or project read while the projects registry cannot be read, and the rest of the answer stands |
@@ -2253,7 +2259,11 @@ Read for `global`, `counts.categories` and `counts.waiting_owner` count every sp
 spaces» lists: those of the store this service writes and of each attached store that
 opens, as the directory of spaces and the read of every source's questions take them
 ([The panel of open questions](#the-panel-of-open-questions)). Each `oldest` is chosen
-across the stores. A store an earlier build wrote counts its questions alone, since its
+across the stores. A source those reads could not reach is named in `coverage` with
+their reason and counted nowhere: an attached store that does not open
+(`store_unreadable`), which names no identity, so only a space the registry binds there
+is named; an attached store with no questions (`requests_unavailable`); and a space the
+registry binds in a store this service neither writes nor has attached. A store an earlier build wrote counts its questions alone, since its
 states stand in the categories of before. The rest of the answer, `measured_from`,
 `counts.unattached_commits`, `goals`, `outside`, `flow` and `estimates`, counts the store
 this service writes alone, where usage, the owner's decisions and the commits are

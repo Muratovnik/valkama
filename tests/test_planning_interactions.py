@@ -24,7 +24,10 @@ from server import store
 from server.planning import api, interactions, participation
 from server.planning.routing import PlanningRouting
 from server.projects import scopes
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests.planning_tree import Tree
+from tests.registry_fixtures import project_entry, registry_bytes
 from tests.test_planning_volumes import PERIOD, VolumesCase
 
 
@@ -278,6 +281,7 @@ class AttachedStoreQuestionsTests(VolumesCase):
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.side)}):
             other = store.connect()
         try:
+            self.side_scope = str(read_store_metadata(other)["data_scope_id"])
             beta = Tree(other, "BETA")
             for day, short in enumerate(("b", "t"), start=1):
                 kind, labels = SIDE_CARDS[f"BETA:{short}"]
@@ -372,6 +376,105 @@ class AttachedStoreQuestionsTests(VolumesCase):
                 self.assertEqual(expected, answer["total"])
                 self.assertEqual(expected, counts["waiting_owner"]["count"])
                 self.assertEqual(expected, self.triage_tasks(counts))
+
+    # -- what the top covers -----------------------------------------------------
+
+    def bind_beta(self) -> None:
+        """Bind a project to BETA in the attached store, beside the case's own bindings: a store
+        that does not open names no identity, and the binding is what names its space."""
+
+        entries = []
+        for project, space_ref in (
+            ("app", {"data_scope_id": self.scope_id, "space_key": "MAIN"}),
+            ("lib", {"data_scope_id": self.scope_id, "space_key": "ALPHA"}),
+            ("beta", {"data_scope_id": self.side_scope, "space_key": "BETA"}),
+        ):
+            entry = project_entry(project, self.root / project)
+            entry["planning_binding"] = {**planning_space_entity(space_ref), "default": True}
+            entries.append(entry)
+        registry = self.root / "local" / "Valkama" / "projects.json"
+        registry.write_bytes(registry_bytes(entries))
+
+    def sources(self, answer: dict) -> list[tuple[str, str, str, str | None]]:
+        """Each source a coverage names: whose store, the space, whether read and why not."""
+
+        stores = {self.scope_id: "primary", self.side_scope: "attached"}
+        return [
+            (
+                stores[entry["space_ref"]["data_scope_id"]],
+                entry["space_ref"]["space_key"],
+                entry["status"],
+                entry["reason"],
+            )
+            for entry in answer["coverage"]
+        ]
+
+    def test_a_store_that_does_not_open_is_named_as_the_questions_window_names_it(self) -> None:
+        self.attach()
+        self.bind_beta()
+        self.side.rename(self.root / "gone.sqlite3")
+        read = self.volumes()
+        # The primary store's spaces by key, then the space the registry binds in the store
+        # that did not open, with the code the window gives it.
+        expected = [
+            ("primary", "ALPHA", "searched", None),
+            ("primary", "MAIN", "searched", None),
+            ("attached", "BETA", "unavailable", "store_unreadable"),
+        ]
+        self.assertEqual(expected, self.sources(read))
+        self.assertEqual(self.listed()["coverage"], read["coverage"])
+        # The numbers count what was read, as the window lists it: MAIN's question alone.
+        self.assertEqual(1, read["counts"]["waiting_owner"]["count"])
+        self.assertFalse(read["attached_work"])
+
+    def test_every_source_read_is_named_as_read(self) -> None:
+        self.attach()
+        self.bind_beta()
+        read = self.volumes()
+        self.assertEqual(
+            [
+                ("primary", "ALPHA", "searched", None),
+                ("primary", "MAIN", "searched", None),
+                ("attached", "BETA", "searched", None),
+            ],
+            self.sources(read),
+        )
+        self.assertEqual(self.listed()["coverage"], read["coverage"])
+
+    def test_a_store_without_questions_is_named_as_the_window_names_it(self) -> None:
+        self.attach()
+        self.bind_beta()
+        with closing(sqlite3.connect(self.side)) as side:
+            side.execute("DROP TABLE work_item_requests")
+            side.commit()
+        read = self.volumes()
+        self.assertEqual(
+            ("attached", "BETA", "unavailable", "requests_unavailable"), self.sources(read)[-1]
+        )
+        self.assertEqual(self.listed()["coverage"], read["coverage"])
+
+    def test_the_top_says_an_attached_store_holds_work_the_sections_do_not_read(self) -> None:
+        self.assertFalse(self.volumes()["attached_work"])
+        self.attach()
+        self.assertTrue(self.volumes()["attached_work"])
+        # A space's read is of its own store, the sections with it: nothing to say.
+        self.assertFalse(self.volumes("MAIN")["attached_work"])
+
+    def test_an_attached_store_with_no_work_says_nothing(self) -> None:
+        with closing(sqlite3.connect(self.side)) as side:
+            side.execute("DELETE FROM work_item_requests")
+            side.execute("DELETE FROM work_items")
+            side.commit()
+        self.attach()
+        read = self.volumes()
+        # The case is what it says: the store is read, and it holds nothing.
+        self.assertIn(("attached", "BETA", "searched", None), self.sources(read))
+        self.assertFalse(read["attached_work"])
+
+    def test_a_space_read_names_the_one_space_it_read(self) -> None:
+        self.attach()
+        read = self.volumes("MAIN")
+        self.assertEqual([("primary", "MAIN", "searched", None)], self.sources(read))
 
 
 if __name__ == "__main__":

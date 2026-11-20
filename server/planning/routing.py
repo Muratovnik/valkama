@@ -189,6 +189,30 @@ class PlanningRouting:
             for key in self._stores[data_scope_id]
         ]
 
+    def sources(self) -> list[dict]:
+        """Every source a read across every space covers, once: each present space, then each
+        space the registry binds a project to that no store here can answer for, by store and key.
+
+        This is the one list such a read names in its `coverage`: the questions window, the
+        mapped search and the top of Volumes each say of every source whether they read it,
+        and of one they could not, why (`unavailable_reason`). An attached store that does not
+        open names no identity, so a space the registry binds there is all that can be said of
+        it. The primary store's spaces come first, so its item leads a search before an attached
+        store's item of the same reference.
+        """
+
+        absent: list[dict] = []
+        for project in self.projects:
+            binding = project.get("planning_binding")
+            if binding is None:
+                continue
+            space_ref = planning_space_ref(project_registry.binding_entity(binding))
+            if self.unavailable_reason(space_ref) is not None and space_ref not in absent:
+                absent.append(space_ref)
+        return self.present_spaces() + sorted(
+            absent, key=lambda ref: (ref["data_scope_id"], ref["space_key"])
+        )
+
     def space_name(self, space_ref: dict) -> str | None:
         return self._stores.get(space_ref["data_scope_id"], {}).get(space_ref["space_key"])
 
