@@ -28,7 +28,9 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
   user runs. The commit hooks and the `MessageDisplay` hook are added;
 - the MCP registration of this checkout, a launcher `valkama.cmd` that runs it,
   this checkout's skill, copies of the user's other skills and plugins, and a
-  Git configuration with the commit hooks;
+  Git configuration with the commit hooks. Codex on Windows reads the user's
+  `.agents/skills` whatever the profile's home is, so it gets the profile's in
+  its `$CODEX_HOME/skills` and has each of the user's turned off by path;
 - per scenario: the sample workspace with its overlay and repositories, its
   projects in the profile's registry, and a store copy migrated by this
   checkout, served by `tests/isolated.py serve --store-copy`.
@@ -556,8 +558,14 @@ def _toml(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def codex_config(live: str, registration: Mapping[str, Any]) -> str:
-    """The user's Codex configuration with `registration` as its only MCP server."""
+def codex_config(
+    live: str, registration: Mapping[str, Any], hidden_skills: Sequence[Path] = ()
+) -> str:
+    """The user's Codex configuration with `registration` as its only MCP server.
+
+    Each of `hidden_skills`, a `SKILL.md` of the user's that Codex would read
+    whatever the profile's home, is turned off by its path.
+    """
 
     lines = [
         without_mcp_servers(live).rstrip("\n"),
@@ -570,10 +578,20 @@ def codex_config(live: str, registration: Mapping[str, Any]) -> str:
         *(f"{name} = {_toml(value)}" for name, value in sorted(registration["env"].items())),
         "",
     ]
+    for path in hidden_skills:
+        lines += ["[[skills.config]]", f"path = {_toml(str(path))}", "enabled = false", ""]
     text = "\n".join(lines)
-    servers = tomllib.loads(text).get("mcp_servers")
+    try:
+        parsed = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise ProbeError(f"the Codex configuration does not take the profile's: {error}") from None
+    servers = parsed.get("mcp_servers")
     if not isinstance(servers, dict) or set(servers) != {"valkama"}:
         raise ProbeError("the Codex configuration names MCP servers outside its tables")
+    entries = parsed.get("skills", {}).get("config", [])
+    off = {entry.get("path") for entry in entries if entry.get("enabled") is False}
+    if not {str(path) for path in hidden_skills} <= off:
+        raise ProbeError("the Codex configuration turns the user's skills back on")
     return text
 
 
@@ -604,6 +622,60 @@ class Inputs:
         return Path.home() / ".agents" / "skills"
 
 
+#: Windows' known folder of the user's profile, `FOLDERID_Profile`.
+_FOLDERID_PROFILE = uuid.UUID("5E6C858F-0E22-4760-9AFE-EA3317B67173")
+
+
+def codex_user_home() -> Path | None:
+    """The home whose `.agents/skills` Codex reads here, when the profile cannot move it.
+
+    Codex 0.166 reads its user's skills from `$CODEX_HOME/skills` and from
+    `.agents/skills` under the home `dirs::home_dir` names
+    (`codex-rs/ext/skills/src/host_roots.rs`). On Windows that is the shell's
+    profile folder, `SHGetKnownFolderPath(FOLDERID_Profile)` in `dirs-sys`,
+    whatever `HOME` and `USERPROFILE` say, so a probe's Codex read the user's own
+    installed skill there. Elsewhere it is `HOME`, which the profile sets: None.
+    """
+
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    folder = ctypes.create_string_buffer(_FOLDERID_PROFILE.bytes_le, 16)
+    found = ctypes.c_wchar_p()
+    result = ctypes.WinDLL("shell32").SHGetKnownFolderPath(folder, 0, None, ctypes.byref(found))
+    try:
+        return Path(found.value) if result == 0 and found.value else None
+    finally:
+        ctypes.WinDLL("ole32").CoTaskMemFree(found)
+
+
+def _codex_skills(home: Path, codex_dir: Path, user_home: Path | None) -> tuple[Path, ...]:
+    """Codex's user skills, all from the profile; the user's `SKILL.md` files it must pass over.
+
+    Codex reads the profile's `$CODEX_HOME/skills`, and `.agents/skills` under
+    `user_home` when the profile cannot move that home. The profile's own
+    `.agents/skills`, this checkout's skill and the copies of the user's others,
+    goes into the first where it has no skill of that name, and every skill under
+    the second is returned to be turned off by its path.
+    """
+
+    target = codex_dir / "skills"
+    for child in sorted((home / ".agents" / "skills").iterdir()):
+        if (target / child.name).exists():
+            continue
+        if child.is_dir():
+            shutil.copytree(child, target / child.name, symlinks=True)
+        else:
+            shutil.copy2(child, target / child.name)
+    if user_home is None:
+        return ()
+    users = user_home / ".agents" / "skills"
+    if not users.is_dir() or users.resolve() == (home / ".agents" / "skills").resolve():
+        return ()
+    return tuple(sorted(users.rglob("SKILL.md")))
+
+
 @dataclasses.dataclass
 class Profile:
     """The client home a run built, and the environment its clients run in."""
@@ -616,6 +688,8 @@ class Profile:
     codex_hooks: Mapping[str, Any]
     codex_config: str
     coordinator: tuple[Path, Path]
+    #: The user's skills Codex would read beside the profile's, turned off in its configuration.
+    codex_hidden_skills: tuple[Path, ...] = ()
 
     @property
     def claude_dir(self) -> Path:
@@ -854,6 +928,7 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
     _copy_plugins(live_claude / "plugins", claude_dir / "plugins", live_claude, claude_dir)
     _copy_plugins(live_codex / "plugins", codex_dir / "plugins", live_codex, codex_dir)
     _valkama(environment, "skill", "install", "--client", "claude", "--client", "codex")
+    hidden_skills = _codex_skills(home, codex_dir, codex_user_home())
 
     settings = _read_json(live_claude / "settings.json")
     claude_hooks = {"hooks": settings.pop("hooks", None) or {}}
@@ -874,6 +949,7 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
         codex_hooks=_read_json(live_codex / "hooks.json"),
         codex_config=codex_text.read_text(encoding="utf-8") if codex_text.is_file() else "",
         coordinator=(inputs.coordinator, coordinator),
+        codex_hidden_skills=hidden_skills,
     )
 
 
@@ -928,7 +1004,9 @@ def write_client_configs(
     )
     _write_json(profile.codex_dir / "hooks.json", {"hooks": codex.hooks})
     config = codex_config(
-        profile.codex_config, mcp_registration(profile, mode, store_file, "codex")
+        profile.codex_config,
+        mcp_registration(profile, mode, store_file, "codex"),
+        profile.codex_hidden_skills,
     )
     (profile.codex_dir / "config.toml").write_text(config, encoding="utf-8", newline="\n")
     dropped["claude"], dropped["codex"] = claude.dropped, codex.dropped

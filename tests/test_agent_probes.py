@@ -260,7 +260,12 @@ class RunCase(unittest.TestCase):
             *arguments,
         ]
         output = io.StringIO()
-        with mock.patch.dict(os.environ, patched), contextlib.redirect_stdout(output):
+        with (
+            mock.patch.dict(os.environ, patched),
+            # The home Codex takes `.agents/skills` from whatever the profile sets.
+            mock.patch.object(agent_probes, "codex_user_home", lambda: user),
+            contextlib.redirect_stdout(output),
+        ):
             for name in ("VALKAMA_DB", "CLAUDE_CONFIG_DIR", "CODEX_HOME"):
                 os.environ.pop(name, None)
             code = agent_probes.main(argv)
@@ -412,7 +417,7 @@ class RunTests(RunCase):
 
     def test_the_mcp_registration_launcher_skill_plugins_and_git(self) -> None:
         claude = json.loads((self.home / ".claude" / ".claude.json").read_text("utf-8"))
-        self.assertEqual(["mcp_servers", "model", "windows"], sorted(self.codex_config()))
+        self.assertEqual(["mcp_servers", "model", "skills", "windows"], sorted(self.codex_config()))
         servers = {"claude": claude["mcpServers"], "codex": self.codex_config()["mcp_servers"]}
         for client, registered in servers.items():
             with self.subTest(client=client):
@@ -439,11 +444,14 @@ class RunTests(RunCase):
         self.assertEqual(str(launcher), path.split(os.pathsep)[0])
         self.assertIn(str(agent_probes.ENTRY), (launcher / "valkama.cmd").read_text("utf-8"))
         head_skill = (ROOT / "server" / "skill" / "valkama" / "SKILL.md").read_bytes()
-        for skills in (self.home / ".claude" / "skills", self.home / ".agents" / "skills"):
+        for skills in (
+            self.home / ".claude" / "skills",
+            self.home / ".agents" / "skills",
+            self.home / ".codex" / "skills",
+        ):
             with self.subTest(skills=skills):
                 self.assertEqual(head_skill, (skills / "valkama" / "SKILL.md").read_bytes())
                 self.assertEqual("help\n", (skills / "helper" / "SKILL.md").read_text("utf-8"))
-        self.assertFalse((self.home / ".codex" / "skills" / "valkama").exists())
         installed = json.loads(
             (self.home / ".claude" / "plugins" / "installed_plugins.json").read_text("utf-8")
         )
@@ -457,6 +465,22 @@ class RunTests(RunCase):
         self.assertEqual(
             str(self.home / ".gitconfig"),
             self.record("alpha", "codex").session["environment"]["GIT_CONFIG_GLOBAL"],
+        )
+
+    def test_codex_reads_the_profiles_skills_and_none_of_the_users(self) -> None:
+        # Codex 0.166 reads `$CODEX_HOME/skills`, and `.agents/skills` under the home
+        # Windows names whatever HOME says: there it found the user's installed skill.
+        users = self.user / ".agents" / "skills"
+        self.assertEqual(
+            [
+                {"path": str(users / "helper" / "SKILL.md"), "enabled": False},
+                {"path": str(users / "valkama" / "SKILL.md"), "enabled": False},
+            ],
+            self.codex_config()["skills"]["config"],
+        )
+        self.assertEqual(
+            (ROOT / "server" / "skill" / "valkama" / "SKILL.md").read_bytes(),
+            (self.home / ".codex" / "skills" / "valkama" / "SKILL.md").read_bytes(),
         )
 
     def codex_config(self) -> dict[str, Any]:
@@ -826,6 +850,27 @@ class StoreCopyRegistryTests(unittest.TestCase):
                 self.assertEqual(content, (copied / file).read_bytes(), file)
             self.assertIn(("projects", "upgrade"), calls)
             self.assertEqual("migrated", prepared["migration"])
+
+
+class CodexSkillConfigTests(unittest.TestCase):
+    """The user's skills stay off, or the run is refused, whatever the user's own configuration."""
+
+    REGISTRATION: ClassVar[dict[str, Any]] = {"command": "python", "args": [], "env": {}}
+
+    def test_a_later_rule_of_the_users_cannot_turn_a_skill_back_on(self) -> None:
+        hidden = Path("C:/user/.agents/skills/valkama/SKILL.md")
+        live = f'[[skills.config]]\npath = "{hidden.as_posix()}"\nenabled = true\n'
+
+        text = agent_probes.codex_config(live, self.REGISTRATION, [hidden])
+
+        entries = tomllib.loads(text)["skills"]["config"]
+        self.assertEqual({"path": str(hidden), "enabled": False}, entries[-1])
+
+    def test_a_skills_table_that_cannot_take_the_rules_refuses_the_run(self) -> None:
+        live = "skills = { config = [] }\n"
+
+        with self.assertRaisesRegex(agent_probes.ProbeError, "does not take the profile's"):
+            agent_probes.codex_config(live, self.REGISTRATION, [Path("C:/u/SKILL.md")])
 
 
 class SectionTests(unittest.TestCase):
