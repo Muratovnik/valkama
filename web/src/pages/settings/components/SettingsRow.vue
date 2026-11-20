@@ -17,9 +17,8 @@ defineProps<{
    */
   stack?: boolean
   /**
-   * The control is a row of choices that may be wider than half the row: it starts half way
-   * and reaches toward the name as far as its words need, down to the name's floor, and past
-   * that stands under the name.
+   * The control is a row of choices that may be wider than half the row: beside the name in
+   * the half every row's control stands in where it fits there, under the name where not.
    */
   wide?: boolean
 }>()
@@ -73,19 +72,19 @@ defineProps<{
     align-items: baseline;
   }
 
-  /* The choice starts where every row's does, half way, and reaches further toward the name
-     as far as its words need while the name keeps 12rem; where it does not fit even so, it
-     stands under the name, as a narrow row's does. Held to half the row, Participation's set
-     of four segments wrapped its last onto a second line at 1280px, 445 by 78 beside a scope
-     choice 40 tall, while the name beside it had more room than it used. A grid could only
-     wrap the choice inside its column there, three segments over one. */
+  /* The choice stands beside the name in the half every row's control stands in where its
+     words fit there, and under the name, as a narrow row's does, where they do not. Held to
+     the half, Participation's set of four segments wrapped its last onto a second line at
+     1280px, 445 by 78 beside a scope choice 40 tall, and a grid could only wrap it inside its
+     column. Reaching toward the name instead started the choices of one column at three
+     edges at 1024px, 649, 643 and 623. */
   &.wide {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3) var(--size-column-gutter);
 
     .settings-row-identity {
-      flex: 1 1 12rem;
+      flex: 1 1 calc(50% - var(--size-column-gutter) / 2);
     }
 
     .settings-row-control {

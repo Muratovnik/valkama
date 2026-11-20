@@ -288,6 +288,22 @@ for (const locale of ['en', 'ru'] as const)
         ),
       )
       expect(lines).toEqual({ scope: 1, set: 1, launch: 1 })
+      // Each wide choice starts where the other rows' controls do, or under its own name.
+      const edges = await page.evaluate(() =>
+        [...document.querySelectorAll('.settings-row.wide')].map((wide) =>
+          [
+            wide.querySelector('.settings-row-control'),
+            document.querySelector('.settings-row:not(.wide) .settings-row-control'),
+            wide.querySelector('.settings-row-identity'),
+          ].map((part) => Math.round(part?.getBoundingClientRect().left ?? Number.NaN)),
+        ),
+      )
+      expect(edges).toHaveLength(3)
+      for (const [control = Number.NaN, half = Number.NaN, name = Number.NaN] of edges)
+        expect(
+          Math.min(Math.abs(control - half), Math.abs(control - name)),
+          JSON.stringify(edges),
+        ).toBeLessThanOrEqual(1)
     })
 
 const ground = (place: Locator) => place.evaluate((one) => getComputedStyle(one).backgroundColor)

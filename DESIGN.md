@@ -1389,12 +1389,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   pressed takes the hovered ground and the main ink under the pointer, a step
   under the pressed one's ground; the ink alone was a step of grey a reader
   pointing at a two-segment row did not see. A row of choices wider than half a
-  settings row is a wide row (`SettingsRow`'s `wide`): the choice starts half
-  way, as every row's does, and reaches toward the name as far as its words need
-  while the name keeps 12rem; past that it stands under the name, as every row of
-  a narrow workspace does, and wraps only where that line cannot hold it either,
-  its segments then sharing each line evenly. Held to half the row,
-  Participation's set wrapped onto a second line at 1280px.
+  settings row is a wide row (`SettingsRow`'s `wide`): the choice stands beside
+  the name in the half every row's control stands in where its words fit there,
+  and under the name, as every row of a narrow workspace does, where they do not;
+  it wraps only where that line cannot hold it either, its segments then sharing
+  each line evenly. Held to the half, Participation's set wrapped onto a second
+  line at 1280px; reaching toward the name instead, the choices of one column
+  started at three edges at 1024px.
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
