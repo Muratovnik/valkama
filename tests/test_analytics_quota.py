@@ -508,9 +508,10 @@ class ConventionTests(_Quota):
                 self.assertEqual(
                     (status, body), self.answer_of(api.USAGE_PATH, {**period, **parameters})
                 )
-        # The usage read's own parameters are not this read's.
+        # The usage read's own parameters are not this read's, but for `from`, the start of
+        # the period whose earlier windows each window holds (`test_analytics_quota_period`).
         status, body = self.answer_of(api.QUOTA_PATH, period)
-        self.assertEqual((400, "from is not a parameter"), (status, body["error"]["message"]))
+        self.assertEqual((400, "to is not a parameter"), (status, body["error"]["message"]))
 
 
 class HttpTests(_Quota):
