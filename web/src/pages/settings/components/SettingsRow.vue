@@ -16,13 +16,19 @@ defineProps<{
    * places or a list of checkboxes: the name stands at its top, on the line of the first.
    */
   stack?: boolean
+  /**
+   * The control is a row of choices that may be wider than half the row: it starts half way
+   * and reaches toward the name as far as its words need, down to the name's floor, and past
+   * that stands under the name.
+   */
+  wide?: boolean
 }>()
 </script>
 
 <template>
   <div
     class="settings-row"
-    :class="{ stack }"
+    :class="{ stack, wide }"
   >
     <span class="settings-row-identity">
       <strong
@@ -66,6 +72,27 @@ defineProps<{
   &.stack {
     align-items: baseline;
   }
+
+  /* The choice starts where every row's does, half way, and reaches further toward the name
+     as far as its words need while the name keeps 12rem; where it does not fit even so, it
+     stands under the name, as a narrow row's does. Held to half the row, Participation's set
+     of four segments wrapped its last onto a second line at 1280px, 445 by 78 beside a scope
+     choice 40 tall, while the name beside it had more room than it used. A grid could only
+     wrap the choice inside its column there, three segments over one. */
+  &.wide {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--size-column-gutter);
+
+    .settings-row-identity {
+      flex: 1 1 12rem;
+    }
+
+    .settings-row-control {
+      flex: 0 0 calc(50% - var(--size-column-gutter) / 2);
+      min-width: fit-content;
+    }
+  }
 }
 
 .settings-row-identity {
@@ -89,8 +116,12 @@ defineProps<{
   min-width: 0;
 }
 
+/* A narrow workspace stands every row's control under its name, a wide row's as well: beside it
+   at 760px the launch place stood alone on the page next to its name. */
 @container workspace (width <= 696px) {
-  .settings-row {
+  .settings-row,
+  .settings-row.wide {
+    display: grid;
     grid-template-columns: 1fr;
     gap: var(--space-3);
     align-items: start;

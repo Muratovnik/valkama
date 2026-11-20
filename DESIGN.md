@@ -1385,7 +1385,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   arrows show a panel as they reach its tab where it shows at once, and only
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
-  same control built again, and `check:ui-system` rejects one.
+  same control built again, and `check:ui-system` rejects one. A segment not
+  pressed takes the hovered ground and the main ink under the pointer, a step
+  under the pressed one's ground; the ink alone was a step of grey a reader
+  pointing at a two-segment row did not see. A row of choices wider than half a
+  settings row is a wide row (`SettingsRow`'s `wide`): the choice starts half
+  way, as every row's does, and reaches toward the name as far as its words need
+  while the name keeps 12rem; past that it stands under the name, as every row of
+  a narrow workspace does, and wraps only where that line cannot hold it either,
+  its segments then sharing each line evenly. Held to half the row,
+  Participation's set wrapped onto a second line at 1280px.
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its

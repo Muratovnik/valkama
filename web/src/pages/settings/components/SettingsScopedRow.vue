@@ -37,10 +37,12 @@ const props = withDefaults(
     failure?: string
     /** The shared value; only in a space's scope. */
     inherited?: Value
+    /** A choice wider than half the row (`SettingsRow`). */
+    wide?: boolean
     /** The words for a value, as the inherited one is said. */
     wordsOf?: (value: Value) => string
   }>(),
-  { inherited: undefined, failure: '', wordsOf: String },
+  { inherited: undefined, failure: '', wordsOf: String, wide: false },
 )
 
 /** A new own value, or null to inherit the shared one again. */
@@ -91,6 +93,7 @@ function setOwned(on: boolean) {
     :label-id="labelId"
     :failure="failure"
     :stack="inSpace"
+    :wide="wide"
   >
     <!-- A space, not a margin, between the two: the name is also what labels the choice. -->
     <template #label

@@ -125,6 +125,7 @@ const placeOptions = computed(() =>
           :hint="setHint"
           :own="preset.preset"
           :failure="failureOf('set')"
+          wide
           @update:own="(set) => change({ set: set as ParticipationSet | null })"
         >
           <template #default="{ names, value, update }">
@@ -176,6 +177,7 @@ const placeOptions = computed(() =>
           :label="t('settings.participation.launch.label')"
           :hint="launchHint"
           :failure="launchFailure"
+          wide
         >
           <SegmentedControl
             v-if="spacePlace.place.value !== null"
@@ -210,7 +212,11 @@ const placeOptions = computed(() =>
   padding: var(--space-4);
 }
 
+/* Where even the whole row cannot hold the set on one line, as on a phone, its segments wrap
+   and share each line evenly, rather than leaving each line ragged by its own words. */
 .settings-participation-sets {
+  --segmented-option-grow: 1;
+
   flex-wrap: wrap;
   max-width: 100%;
 }
