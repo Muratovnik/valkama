@@ -10,6 +10,17 @@ import { serverText } from '@/shared/api/planningText.ts'
 const PLANNING_API = 'valkama-planning-api' as const
 
 const apiVersion = z.literal(PLANNING_API, { message: `expected ${PLANNING_API}` })
+
+/**
+ * The step of a batch a refusal stands on: a write of several groups in one call
+ * (`/api/planning/work-item/apply`, a creation with its claim, steps and links) names the
+ * group and the entry's position in it beside the code and the message, whatever refused it.
+ */
+export const refusedStep = strictObject({
+  group: boundedText(/^[a-z_]{1,64}$/u, 64),
+  index: positiveInt(true),
+}).optional()
+
 /** The refusal shape every neutral write answers with when it says no. */
 const refusalSchema = strictObject({
   error: strictObject({
@@ -17,6 +28,7 @@ const refusalSchema = strictObject({
     message: serverText(),
     expected: positiveInt(true).optional(),
     actual: positiveInt(true).optional(),
+    step: refusedStep,
   }),
 })
 

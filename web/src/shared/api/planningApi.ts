@@ -13,8 +13,12 @@ import { readCancelList } from '@/shared/api/inputRequestAction.ts'
 import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
 import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
-import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
-import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
+import {
+  validateMovedItem,
+  validateReadModel,
+  validateWorkItemRecord,
+} from '@/shared/api/planningModel.ts'
+import type { MovedItem, PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
 import { readPending, readRefusal } from '@/shared/api/planningRefusal.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
@@ -95,6 +99,9 @@ export function planningRefusal(error: unknown): PlanningRefusal | null {
   }
 }
 
+const isErrorEnvelope = (payload: unknown) =>
+  typeof payload === 'object' && payload !== null && 'error' in payload
+
 /** A call of the planning boundary, refused as `write` is; for a write that sends no author. */
 export async function request(input: string, init?: RequestInit): Promise<unknown> {
   const { response, payload } = await readJsonResponse(input, init)
@@ -115,8 +122,13 @@ export async function request(input: string, init?: RequestInit): Promise<unknow
     )
   }
   // No envelope to read, so the status is the whole answer. It is not a refusal:
-  // the failure path names the cause from the status, and never a raw code.
-  throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status })
+  // the failure path names the cause from the status, and never a raw code. An error
+  // envelope this build cannot read is the server's answer in a shape the build does
+  // not know, which a restart or an update cures, and the failure says so.
+  throw Object.assign(new Error(`HTTP ${response.status}`), {
+    status: response.status,
+    ...(isErrorEnvelope(payload) ? { code: 'contract_invalid' } : {}),
+  })
 }
 
 function query(parameters: Record<string, string | number | undefined>): string {
@@ -316,8 +328,8 @@ export async function transitionWorkItem(input: {
   expected_revision?: number
   force?: boolean
   reason?: string
-}): Promise<WorkItem> {
-  return validateWorkItemRecord(await write('/api/planning/work-item/transition', { ...input }))
+}): Promise<MovedItem> {
+  return validateMovedItem(await write('/api/planning/work-item/transition', { ...input }))
 }
 
 export async function claimWorkItem(input: {

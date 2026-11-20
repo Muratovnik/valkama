@@ -132,7 +132,7 @@ async function submit() {
     emit('done')
   } catch (error_) {
     reopened.value = openedUnder(error_, props.item.reference)
-    if (!reopened.value) error.value = writeFailure(error_)
+    if (!reopened.value) error.value = writeFailure(error_, t)
   } finally {
     busy.value = false
   }

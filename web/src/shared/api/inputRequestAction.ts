@@ -7,6 +7,7 @@
 
 import { boundedList, boundedText, strictObject, z } from '@/shared/api/contract.ts'
 import { summarySchema, TITLE, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { refusedStep } from '@/shared/api/planningRefusal.ts'
 import { holderField, serverText } from '@/shared/api/planningText.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
@@ -66,13 +67,14 @@ export type CancelList = z.infer<typeof cancelListSchema>
  * The refusal of an answer that cancels work nobody confirmed (`cancel_list`): the list as it
  * stands when refused, whose token the answer's retry sends to confirm it. It is the list to
  * confirm, and not the one a question showed when it was asked: work the answer itself cancels
- * first is not on it.
+ * first is not on it. A cancel sent in a batch, as a card's cancel is, is refused on its step.
  */
 const cancelListRefusal = strictObject({
   error: strictObject({
     code: z.literal('cancel_list'),
     message: serverText(),
     ...cancelListShape,
+    step: refusedStep,
   }),
 })
 

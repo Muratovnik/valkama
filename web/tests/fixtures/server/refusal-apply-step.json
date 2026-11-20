@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "workflow_guard",
+    "message": "transition: [summary] MAIN-34 has no closing summary; record what was done and what comes next before closing it",
+    "step": {
+      "group": "transition",
+      "index": 0
+    }
+  }
+}
