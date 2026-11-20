@@ -298,7 +298,10 @@ def _add_tokens(tokens: dict[str, int], **counts: object) -> None:
 
 def _claude(record: Record, transcript: Transcript) -> None:
     pending: dict[str, int] = {}
-    launches: dict[str, int] = {}
+    #: Each launch's report, by the id of its call, in the order of the launches.
+    launches: dict[str, str | None] = {}
+    #: The launches sent to the background, whose call answers with where they run.
+    backgrounded: set[str] = set()
     for lines in record.turns():
         answer = None
         for line in lines:
@@ -316,6 +319,11 @@ def _claude(record: Record, transcript: Transcript) -> None:
                 for part in (line.get("message") or {}).get("content") or ():
                     if isinstance(part, Mapping) and part.get("type") == "tool_result":
                         _claude_result(transcript, part, pending, launches)
+            elif kind == "system" and line.get("subtype") == "task_started":
+                if line.get("is_backgrounded"):
+                    backgrounded.add(str(line.get("tool_use_id")))
+            elif kind == "system" and line.get("subtype") == "task_notification":
+                _claude_notification(line, launches, backgrounded)
             elif kind == "result":
                 answer = line.get("result")
                 usage = line.get("usage") or {}
@@ -331,6 +339,7 @@ def _claude(record: Record, transcript: Transcript) -> None:
                     reasoning=details.get("thinking_tokens"),
                 )
         transcript.answer = answer if isinstance(answer, str) else None
+    transcript.reports.extend(report for report in launches.values() if report is not None)
 
 
 def _claude_use(
@@ -338,7 +347,7 @@ def _claude_use(
     part: Mapping[str, Any],
     parent: object,
     pending: dict[str, int],
-    launches: dict[str, int],
+    launches: dict[str, str | None],
 ) -> None:
     name = str(part.get("name") or "")
     given = part.get("input")
@@ -359,7 +368,7 @@ def _claude_use(
         pending[part["id"]] = index
     if name in CLAUDE_SUBAGENT_TOOLS and not parent:
         transcript.subagents.append(str(arguments.get("description") or arguments.get("prompt")))
-        launches[str(part.get("id"))] = index
+        launches[str(part.get("id"))] = None
     skill = arguments.get("skill")
     if name == "Skill" and transcript.skill is None and isinstance(skill, str):
         if SKILL_NAME.fullmatch(skill):
@@ -367,16 +376,34 @@ def _claude_use(
             transcript.skill_evidence = f"Skill {skill} at call {index}"
 
 
+def _claude_notification(
+    line: Mapping[str, Any], launches: dict[str, str | None], backgrounded: set[str]
+) -> None:
+    """A subagent's end: the report it handed back, or a backgrounded one's summary."""
+
+    identifier = str(line.get("tool_use_id"))
+    if identifier not in launches:
+        return
+    handback = line.get("handback_report")
+    report = handback.get("text") if isinstance(handback, Mapping) else None
+    if isinstance(report, str):
+        launches[identifier] = report
+    elif identifier in backgrounded:
+        launches[identifier] = str(line.get("summary") or "")
+
+
 def _claude_result(
     transcript: Transcript,
     part: Mapping[str, Any],
     pending: dict[str, int],
-    launches: dict[str, int],
+    launches: dict[str, str | None],
 ) -> None:
     identifier = str(part.get("tool_use_id"))
     text = _result_text(part.get("content"))
-    if identifier in launches:
-        transcript.reports.append(text)
+    # A subagent in the foreground answers its launch with its report; one sent to the
+    # background answers with where it runs, and its notification brings the report.
+    if identifier in launches and launches[identifier] is None:
+        launches[identifier] = text
     index = pending.pop(identifier, None)
     if index is not None:
         call = transcript.calls[index]

@@ -8,12 +8,15 @@ as it would a real one. The prompt is a JSON object:
 
     {"skill": true, "calls": [{"tool": "claim_work_item", "args": {...}}],
      "files": {"app/NOTES.md": "text"}, "subagent": {"calls": [...], "report": "..."},
-     "answer": "..."}
+     "subagents": [{"calls": [...], "report": "...", "background": true}], "answer": "..."}
 
 Every key is optional. `skill` loads the Valkama skill first, as each client
 does: Claude Code by its Skill tool, Codex by reading the skill's file in a
 shell. `files` are written as each client's edit, `subagent` runs its calls as
-one subagent and returns its report. A prompt that is not JSON is answered as it
+one subagent and returns its report, and `subagents` runs several. One with
+`background` runs as Claude Code's backgrounded agent does: its launch answers
+with where it runs, and its report comes in the notification of its end; Codex
+has no such mode and runs it as any other. A prompt that is not JSON is answered as it
 stands, with no call. The output has the shapes the real clients write: the
 `stream-json` lines of Claude Code and the `--json` items of Codex, with each
 turn's tokens.
@@ -191,8 +194,11 @@ def main(argv: list[str]) -> int:
         turn.call(call)
     for name, text in (script.get("files") or {}).items():
         turn.write(Path.cwd() / name, text)
-    if script.get("subagent") and mcp is not None:
-        turn.subagent(script["subagent"])
+    works = list(script.get("subagents") or ())
+    if script.get("subagent"):
+        works.insert(0, script["subagent"])
+    for work in works if mcp is not None else ():
+        turn.subagent(work)
     if mcp is not None:
         mcp.close()
     run_hooks(client, hooks, "Stop", common, None)
@@ -327,8 +333,21 @@ class Turn:
                 "input": {"description": "a part of the work", "prompt": "Do the part."},
             }
             emit({"type": "assistant", "message": {"content": [use]}, "parent_tool_use_id": None})
+            background = bool(work.get("background"))
+            if background:
+                started = {"type": "system", "subtype": "task_started", "tool_use_id": launch}
+                emit({**started, "is_backgrounded": True})
+                launched = (
+                    "Async agent launched successfully.\nThe agent is working in the background."
+                )
+                done = {"type": "tool_result", "tool_use_id": launch, "content": launched}
+                emit({"type": "user", "message": {"content": [done]}, "parent_tool_use_id": None})
             for call in work.get("calls") or ():
                 self.call(call, parent=launch)
+            if background:
+                end = {"type": "system", "subtype": "task_notification", "tool_use_id": launch}
+                emit({**end, "status": "completed", "handback_report": {"text": report}})
+                return
             done = {"type": "tool_result", "tool_use_id": launch, "content": report}
             emit({"type": "user", "message": {"content": [done]}, "parent_tool_use_id": None})
             return
