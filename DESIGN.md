@@ -771,8 +771,9 @@ and only fades the end of a strip that scrolls on past it.
   own, a menu, the headings take the rows' inset instead. A chain's rows once stood 8px in
   from their headings, a session 8px in from its label and a step's box 6px in from the
   checklist's heading, three edges in one column; a list without marks is no indent either,
-  where a question's conditions stood 20px in from their label. `production-card-list-edges.spec.ts`
-  measures them. A row whose box is laid out in every state, as Analytics' rail entries,
+  where a question's conditions stood 20px in from their label, and a refusal's list of the
+  work it would cancel 20px in from its first line. `production-card-list-edges.spec.ts` and
+  `production-question-cancel-edges.spec.ts` measure them. A row whose box is laid out in every state, as Analytics' rail entries,
   ranked rows and table rows are, draws that box first: the box stands on the edge and its
   words take the inset inside it, since a box that reached past the column in one state read
   as an entry pushed out of it (Analytics). A question's options and findings are such rows,

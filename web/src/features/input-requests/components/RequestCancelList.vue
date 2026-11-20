@@ -145,10 +145,11 @@ defineExpose({ focus: () => moveFocus(lead.value) })
   font: var(--font-detail);
 }
 
+/* A list with no marks stands on the column's edge, under the line over it, as the base rule
+   sets every list: indented, what closes and what waits on it started 20px in from it. */
 .request-cancel-rows {
   display: grid;
   gap: var(--space-1);
-  padding-inline-start: var(--space-5);
   margin: 0;
 }
 
