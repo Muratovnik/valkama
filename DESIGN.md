@@ -1894,6 +1894,13 @@ the focused row moves focus to the folded row. The tree draws its window from
 300 rows it could show, folded rows included, not from the rows it shows. Its
 first column is as wide as the deepest reference needs after its indent, so
 neither a fold nor a scroll moves a column.
+A goal's or a stage's row says under its title what it spent, as its row on the Volumes page
+says it: «Spent», without the cancelled work, and «With cancelled», each agent time and the
+tokens processed anew, «—» with its hint where usage was not counted, never 0. The list reads
+those rows in one read for the goals and stages it draws, a list that draws more as it scrolls
+asking for the new ones, and a row without its figures yet, or whose read failed, has no line:
+the list never waits on them. A space of an attached store, which that read does not answer
+for, draws none.
 The list has a find of its own, because the browser's reached only the rows in
 the page. While the list is what the page shows, with no card, dialog or finder
 over it and no menu, choice list or other popup open, Ctrl+F (⌘F) opens the
@@ -2448,6 +2455,20 @@ A section of a card that holds nothing and offers nothing is absent, rather than
 heading and a sentence saying so on the first screen: the «Agents» tab and «Checklist»
 stand only while they have something in them, and a step arriving with the live stream's next
 frame brings its section back with no reload.
+What work on a card took stands as one quiet line under its facts: the time, the estimated cost
+and the tokens processed anew, the whole tree's on a goal or a stage. A goal's or a stage's card
+adds a line under it with both numbers of its row on the Volumes page, «Spent», without the
+cancelled work, and «With cancelled», read for the card alone and said in that page's words, so a
+goal reads the same on its card, in the list and on the page. The «Agents» tab's head adds the
+sessions that worked on the item, its why saying they count every session that spent on it or
+wrote to it and can be more than the card lists, and, under the organizations, «Weekly quota»:
+one line per account and week, the latest first, the account by the starts of its ids, the day
+its week resets and the item's part of that week, «≈ 10% of the week», whose hint says the share
+of the account's cost that week and how much of the week is spent. A week without a reading of
+it, or whose account's work cost nothing, says so in place of a figure. Lines of different
+weeks are never added up. A line under them says the figure assumes a quota is spent in
+proportion to the API price and leans high, and another how much of the cost is on no account
+that can be shown, when any is.
 A step's discussion stands at the end of its first line and comes up as a row's actions do
 (**Actions that come up**): standing on every step at rest, it repeated one icon down the list.
 A question has no section of its own: it stands in the discussion and reads as a

@@ -44,6 +44,19 @@ export const workItemUsageMessages = {
       role: { main: 'Main agent', subagent: 'Subagent', advisor: 'Adviser' },
       classNone: 'no launch class',
       classUnknown: 'launch class unknown',
+      sessions: 'Sessions',
+      sessionsNote:
+        'Every session that spent on the work or wrote to it, each once. Sessions that only spent on it count too, so this can be more than the sessions the card lists.',
+      quota: 'Weekly quota',
+      quotaWeek: 'week to {date}',
+      quotaPercent: '≈\u{A0}{percent} of the week',
+      quotaShare:
+        'Its share of the account’s cost that week, {share}, times the {used} of the week spent.',
+      quotaNoReading: 'No reading of this week says how much of it is spent.',
+      quotaNoCost: 'The account’s work that week had no cost.',
+      quotaNote:
+        'Assumes a quota is spent in proportion to the API price, which no published formula confirms. It leans high: the week’s percent holds work no stretch here records.',
+      quotaUnknown: '≈\u{A0}{share} of its cost is on no account that can be shown.',
     },
   },
   ru: {
@@ -88,6 +101,20 @@ export const workItemUsageMessages = {
       role: { main: 'Основной агент', subagent: 'Субагент', advisor: 'Советник' },
       classNone: 'без класса запуска',
       classUnknown: 'класс запуска неизвестен',
+      sessions: 'Сессии',
+      sessionsNote:
+        'Каждая сессия, которая тратила на работу или писала в неё, по одному разу. Считаются и сессии, которые только тратили, поэтому число может быть больше списка сессий в карточке.',
+      quota: 'Недельная квота',
+      quotaWeek: 'неделя до {date}',
+      quotaPercent: '≈\u{A0}{percent} недели',
+      quotaShare:
+        'Её доля в цене работы аккаунта за неделю, {share}, умноженная на израсходованные {used} недели.',
+      quotaNoReading: 'Ни одно чтение этой недели не говорит, сколько её израсходовано.',
+      quotaNoCost: 'Работа аккаунта на этой неделе ничего не стоила.',
+      quotaNote:
+        'Считается, что квота тратится пропорционально цене по API; опубликованной формулы, которая это подтверждает, нет. Число завышено: процент недели включает работу, которой здесь нет.',
+      quotaUnknown:
+        '≈\u{A0}{share} её цены приходится на работу без аккаунта, который можно показать.',
     },
   },
 }

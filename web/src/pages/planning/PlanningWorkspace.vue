@@ -373,6 +373,7 @@ defineExpose({ toggleFilter })
           :projects="listProjects"
           :space-items="model.work_items"
           :sort="sort"
+          :goal-volumes="writable"
           @filter="toggleFilter"
           @open="(reference) => emit('open', reference)"
           @sort="setSort"

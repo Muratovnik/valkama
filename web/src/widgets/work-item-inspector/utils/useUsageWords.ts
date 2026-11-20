@@ -2,6 +2,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { ItemUsage, UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import { spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 
 /**
  * The words of a usage read, in the one way the card says them. A number the server has
@@ -21,16 +22,6 @@ const INCOMPLETE = '+'
 export const LEAST_COST = 0.01
 /** From here a count is said in thousands, whose word takes the same form at any number. */
 const COMPACT_FROM = 1000
-
-/**
- * What was processed anew: input, cache writes and output. Cached reads are left out because
- * they dwarf the rest, and reasoning because it is already part of output at both clients.
- */
-export function tokensAnew(tokens: UsageTokens): number | null {
-  const kinds = [tokens.input, tokens.cache_write_5m, tokens.cache_write_1h, tokens.output]
-  const known = kinds.filter((count) => count !== null)
-  return known.length ? known.reduce((sum, count) => sum + count, 0) : null
-}
 
 /** Whether a line has anything to say: a read with nothing in it is no line and no zeros. */
 export function saysAnything(line: UsageFigures): boolean {

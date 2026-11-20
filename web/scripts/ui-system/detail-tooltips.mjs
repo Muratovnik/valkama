@@ -236,6 +236,10 @@ export const DETAIL_TOOLTIPS = new Map([
     "the follower's whole session id, where the card prints its start; never the name the card prints",
   ],
   [
+    'widgets/work-item-inspector/components/GoalSpendLine.vue <span> v-tooltip.detail="part.figure.hint"',
+    'why a figure of what a goal spent is «—» or not whole, which the figure does not say',
+  ],
+  [
     'widgets/work-item-inspector/components/InspectorHolderRows.vue <span> v-tooltip.detail="participant.hint"',
     "a goal's participant's whole session id, where the card prints its start, and the tasks it holds",
   ],
@@ -246,5 +250,17 @@ export const DETAIL_TOOLTIPS = new Map([
   [
     'widgets/work-item-inspector/components/UsageFacts.vue <span> v-tooltip.detail="fact.title"',
     'how a figure is counted, which the figure does not say',
+  ],
+  [
+    'widgets/work-item-inspector/components/UsageQuota.vue <span> v-tooltip.detail="week.seat"',
+    'the whole seat of a quota week, of which the line prints the starts of its ids',
+  ],
+  [
+    'widgets/work-item-inspector/components/UsageQuota.vue <span> v-tooltip.detail="week.hint"',
+    "the share and the week's spent percent a quota figure is made of, or why it has none",
+  ],
+  [
+    'widgets/work-item-views/composables/useListGoalSpend.ts script [vTooltip, part.figure.hint, undefined, { detail: true }]',
+    "why a figure of what a goal's row spent is «—» or not whole, which the figure does not say",
   ],
 ])

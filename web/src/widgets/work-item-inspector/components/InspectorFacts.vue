@@ -39,6 +39,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import GoalSpendLine from '@/widgets/work-item-inspector/components/GoalSpendLine.vue'
 import InspectorHolderRows from '@/widgets/work-item-inspector/components/InspectorHolderRows.vue'
 import InspectorStateRow from '@/widgets/work-item-inspector/components/InspectorStateRow.vue'
 import InspectorUsageLine from '@/widgets/work-item-inspector/components/InspectorUsageLine.vue'
@@ -303,6 +304,7 @@ defineExpose({ actionCell })
     <MissingPlaces class="card-missing" />
     <div class="card-usage">
       <InspectorUsageLine @details="emit('usage')" />
+      <GoalSpendLine />
     </div>
   </div>
 </template>

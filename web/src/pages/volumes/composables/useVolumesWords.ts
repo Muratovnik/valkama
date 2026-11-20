@@ -11,22 +11,13 @@
  */
 import { useI18n } from 'vue-i18n'
 
-import { tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+import { UNKNOWN, useGoalSpendWords } from '@/entities/work-item/composables/useGoalSpendWords.ts'
+import type { Figure } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 
-import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import type { Volumes, VolumesGoal, VolumesSpent } from '@/shared/api/volumesReadApi.ts'
-import { spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 
 type ProjectGroup = Volumes['outside']['by_project'][number]['project']
-
-/** What stands for a figure the read cannot give. */
-export const UNKNOWN = '—'
-
-/** A figure and, where it is «—» or not whole, the hint that says why. */
-export interface Figure {
-  hint: string
-  text: string
-}
 
 const HOUR = 3600
 const DAY_MS = 86_400_000
@@ -34,13 +25,9 @@ const HOUR_MS = 3_600_000
 const MINUTE_MS = 60_000
 
 export function useVolumesWords() {
-  const { locale, t } = useI18n()
-
-  const compact = (value: number) =>
-    new Intl.NumberFormat(locale.value, { notation: 'compact', maximumFractionDigits: 1 }).format(
-      value,
-    )
-  const span = (seconds: number) => spanWords(seconds * 1000, spanWordsOf(t))
+  const { t } = useI18n()
+  const goalSpend = useGoalSpendWords()
+  const { amount, compact, span } = goalSpend
 
   /** How long ago a moment was, in its largest unit: «74 d», «5 h», «12 min». */
   function age(since: string, now: Date): string {
@@ -51,26 +38,9 @@ export function useVolumesWords() {
     return t('time.lessThanMinute')
   }
 
-  /** Time and tokens of a spend, joined; empty where nothing was counted. */
-  function amount(seconds: number, tokens: UsageTokens): string {
-    const anew = tokensAnew(tokens)
-    return [seconds > 0 ? span(seconds) : '', anew ? compact(anew) : ''].filter(Boolean).join(' · ')
-  }
-
-  /**
-   * What a goal spent. Nothing counted while its tasks began before usage was counted is «—»;
-   * counted with some of them begun before, the figure is marked as not whole.
-   */
-  function spent(line: VolumesSpent, measuredFrom: string | null): Figure {
-    const said = amount(line.agent_seconds, line.tokens)
-    if (measuredFrom === null) return { text: UNKNOWN, hint: t('volumes.goals.neverMeasured') }
-    const partly = line.partly_measured
-    if (!said && partly > 0) return { text: UNKNOWN, hint: t('volumes.goals.spentUnknown') }
-    if (!said) return { text: t('volumes.goals.noSpend'), hint: '' }
-    if (partly > 0)
-      return { text: `${said}+`, hint: t('volumes.goals.partly', { count: partly }, partly) }
-    return { text: said, hint: '' }
-  }
+  /** What a goal spent, as every place says it; «—» while no usage was counted to a card. */
+  const spent = (line: VolumesSpent, measuredFrom: string | null): Figure =>
+    goalSpend.spent(line, measuredFrom !== null)
 
   /** «Closed N of M». */
   const closed = (row: VolumesGoal) =>

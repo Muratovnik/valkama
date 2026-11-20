@@ -21,10 +21,11 @@ import { useI18n } from 'vue-i18n'
 import { goalLines, useGoalTree } from '@/pages/volumes/composables/useGoalTree.ts'
 import type { GoalLine } from '@/pages/volumes/composables/useGoalTree.ts'
 import { useVolumesWords } from '@/pages/volumes/composables/useVolumesWords.ts'
-import type { Figure } from '@/pages/volumes/composables/useVolumesWords.ts'
 
 import SectionTable from '@/widgets/section-table/components/SectionTable.vue'
 import { useColumnSort } from '@/widgets/section-table/composables/useColumnSort.ts'
+
+import type { Figure } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 
 import type { Volumes, VolumesGoal } from '@/shared/api/volumesReadApi.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'

@@ -20,7 +20,7 @@ import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageF
 import { isSeveral, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
-import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+import { useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
@@ -29,6 +29,7 @@ import { aliasOf } from '@/shared/lib/accountAliases.ts'
 import { accountLabel } from '@/shared/lib/accountLabel.ts'
 import type { AnsweredNames } from '@/shared/lib/accountLabel.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'

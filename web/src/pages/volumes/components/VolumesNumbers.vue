@@ -21,7 +21,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { UNKNOWN, useVolumesWords } from '@/pages/volumes/composables/useVolumesWords.ts'
+import { useVolumesWords } from '@/pages/volumes/composables/useVolumesWords.ts'
 import {
   categoryTarget,
   CLOSED,
@@ -30,6 +30,8 @@ import {
 } from '@/pages/volumes/utils/volumesTargets.ts'
 import type { VolumesTarget } from '@/pages/volumes/utils/volumesTargets.ts'
 import type { VolumesView } from '@/pages/volumes/utils/volumesView.ts'
+
+import { UNKNOWN } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import type { Volumes } from '@/shared/api/volumesReadApi.ts'
