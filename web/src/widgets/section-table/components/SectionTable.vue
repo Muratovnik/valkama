@@ -16,8 +16,8 @@
  * sideways in its frame, the first column held at its start.
  *
  * The page's rows (`rows`) are rows of the table's body, each written with the cells the columns
- * name. While the page has nothing to table yet (`held`) the frame stays away and the page's
- * `held` slot stands in its place. Asked to (`reveal`), the table brings itself into view with
+ * name; a page whose rows are a tree's says so (`tree`). While the page has nothing to table yet
+ * (`held`) the frame stays away and the page's `held` slot stands in its place. Asked to (`reveal`), the table brings itself into view with
  * the focus on it.
  *
  * The frame's height is the window's less what stands over the table, which the page says on the
@@ -48,10 +48,12 @@ const props = withDefaults(
     held?: boolean
     /** What changes what the table holds, which its headings' lines are measured again for. */
     holds?: readonly unknown[]
+    /** The rows are a tree's, every one of them drawn (`ChartTable`). */
+    tree?: boolean
     /** What a heading's press does, in words, for each column's words. */
     sortWords: (column: string) => string
   }>(),
-  { held: false, holds: () => [] },
+  { held: false, holds: () => [], tree: false },
 )
 /** A column's heading pressed to sort by it. */
 const emit = defineEmits<{ sort: [column: string] }>()
@@ -103,6 +105,7 @@ defineExpose({ reveal })
       :label="label"
       :empty="empty"
       :words="emptyWords"
+      :tree="tree"
     >
       <thead>
         <tr class="table-head">

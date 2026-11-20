@@ -95,7 +95,8 @@ export function planningRefusal(error: unknown): PlanningRefusal | null {
   }
 }
 
-async function request(input: string, init?: RequestInit): Promise<unknown> {
+/** A call of the planning boundary, refused as `write` is; for a write that sends no author. */
+export async function request(input: string, init?: RequestInit): Promise<unknown> {
   const { response, payload } = await readJsonResponse(input, init)
   if (response.ok) return payload
   const pending = readPending(payload)

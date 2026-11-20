@@ -32,6 +32,7 @@ import { shellScopeMessages } from '@/shared/i18n/shellScopeMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
+import { volumesMessages } from '@/shared/i18n/volumesMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemChainMessages } from '@/shared/i18n/workItemChainMessages.ts'
@@ -71,6 +72,7 @@ export const ru = {
   analytics: analyticsMessages.ru.analytics,
   decisions: decisionsMessages.ru,
   decisionPoints: decisionPointMessages.ru,
+  volumes: volumesMessages.ru,
   app: {
     title: 'Valkama',
   },

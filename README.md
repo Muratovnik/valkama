@@ -127,8 +127,8 @@ python valkama.py git-hook install
    python valkama.py serve
    ```
 
-   Open `http://127.0.0.1:8642/`. You should see Work, Analytics, Agent decisions
-   and Settings navigation and an empty Planning directory. Stop the server with `Ctrl+C` —
+   Open `http://127.0.0.1:8642/`. You should see Work, Analytics, Agent decisions,
+   Volumes and Settings navigation and an empty Planning directory. Stop the server with `Ctrl+C` —
    agents spawn their own copy and do not need this one running. On Windows the
    [desktop app](docs/guides/installation.md#the-desktop-app-windows) starts the
    server for you.

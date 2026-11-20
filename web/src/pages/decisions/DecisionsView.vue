@@ -24,17 +24,12 @@ import { useI18n } from 'vue-i18n'
 
 import DecisionsTable from '@/pages/decisions/components/DecisionsTable.vue'
 import { useDecisionsRead } from '@/pages/decisions/composables/useDecisionsRead.ts'
-import {
-  customDays,
-  DECISION_PERIODS,
-  localDay,
-  periodBounds,
-  readView,
-  writeView,
-} from '@/pages/decisions/utils/decisionsView.ts'
-import type { DecisionsPeriod, DecisionsView } from '@/pages/decisions/utils/decisionsView.ts'
+import { periodBounds, readView, writeView } from '@/pages/decisions/utils/decisionsView.ts'
+import type { DecisionsView } from '@/pages/decisions/utils/decisionsView.ts'
 
 import PeriodBar from '@/widgets/period-bar/components/PeriodBar.vue'
+import { customDays, localDay, PERIODS } from '@/widgets/period-bar/utils/periodDays.ts'
+import type { Period } from '@/widgets/period-bar/utils/periodDays.ts'
 
 import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
@@ -69,7 +64,7 @@ const now = ref(new Date())
 const today = computed(() => localDay(now.value))
 
 const periods = computed(() =>
-  DECISION_PERIODS.map((value) => ({ value, label: t(`decisions.period.${value}`) })),
+  PERIODS.map((value) => ({ value, label: t(`decisions.period.${value}`) })),
 )
 const barWords = computed(() => ({
   from: t('decisions.period.from'),
@@ -77,7 +72,7 @@ const barWords = computed(() => ({
   reversed: t('decisions.period.reversed'),
   to: t('decisions.period.to'),
 }))
-function choosePeriod(period: DecisionsPeriod) {
+function choosePeriod(period: Period) {
   change(period === 'custom' ? { period, ...customDays(new Date()) } : { period })
 }
 
