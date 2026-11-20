@@ -1,6 +1,6 @@
 /**
- * The four numbers of each space's card at «All spaces» in the real app, at 1280px in English
- * and at 390px in English and in Russian. The oracle is the portfolio's contract in DESIGN.md
+ * The four numbers of each space's card at «All spaces» in the real app, at 1280px and at 390px,
+ * in English and in Russian. The oracle is the portfolio's contract in DESIGN.md
  * («Work», the context bar's «All spaces») and the directory's in the connection contract («A
  * space's card in the portfolio»): each card shows the cards in triage, the tasks ready and in
  * progress and the questions waiting for the owner; a space without numbers shows each as «—»
@@ -19,6 +19,7 @@ import { test } from './test.ts'
 const SIZES = [
   { lang: 'en', width: 1280, height: 800 },
   { lang: 'en', width: 390, height: 844 },
+  { lang: 'ru', width: 1280, height: 800 },
   { lang: 'ru', width: 390, height: 844 },
 ] as const
 
