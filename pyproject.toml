@@ -362,10 +362,16 @@ warn_unused_configs = true
 # measured figure rises; never lower it to make a run green.
 [tool.coverage.run]
 branch = true
-# `tests.isolated`, `tests.commit_subjects` and `tests.machine_lock` are tools
-# that happen to live beside the tests rather than tests, so they are measured
-# like the code they run beside.
-source = ["server", "tests.isolated", "tests.commit_subjects", "tests.machine_lock"]
+# `tests.isolated`, `tests.commit_subjects`, `tests.machine_lock` and
+# `tests.run_record` are tools that happen to live beside the tests rather than
+# tests, so they are measured like the code they run beside.
+source = [
+  "server",
+  "tests.isolated",
+  "tests.commit_subjects",
+  "tests.machine_lock",
+  "tests.run_record",
+]
 data_file = ".cache/coverage/data"
 
 [tool.coverage.report]

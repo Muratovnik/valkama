@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
 import { python } from './browser/serverStore.ts'
-import { unitRun } from './unitRun.ts'
+import { runUnits, unitRun } from './unitRun.ts'
 
 const vitest = [
   process.execPath,
@@ -59,5 +59,39 @@ describe('the Vitest run of npm test', () => {
     expect(note).toBeNull()
     expect(targeted).toBe(true)
     expect(canLock).not.toHaveBeenCalled()
+  })
+})
+
+describe('the end of a run of npm run test:unit', () => {
+  const named = 'the heavy-test lock L was held as this run ended, by R\n'
+
+  /** A run whose command exits with `code`, and what it said. */
+  function ending(code: number, canLock = true) {
+    const said: string[] = []
+    const holder = vi.fn(() => named)
+    const io = {
+      canLock: () => canLock,
+      holder,
+      spawn: () => Promise.resolve(code),
+      write: (text: string) => said.push(text),
+    }
+    return { holder, io, said }
+  }
+
+  it('names the holder of the heavy-test lock after a targeted run that failed', async () => {
+    const { io, said } = ending(1)
+    expect(await runUnits(['tests/allowedRun.test.ts'], io)).toBe(1)
+    expect(said).toEqual([named])
+  })
+
+  it.each([
+    ['a targeted run that passed', ['tests/allowedRun.test.ts'], 0, true],
+    ['a whole-suite run that failed holding the lock', [], 1, true],
+    ['a whole-suite run that failed unlocked for want of Python', [], 1, false],
+  ])('asks for no holder after %s', async (_what, args, code, canLock) => {
+    const { holder, io, said } = ending(code, canLock)
+    expect(await runUnits(args, io)).toBe(code)
+    expect(holder).not.toHaveBeenCalled()
+    expect(said.join('')).not.toContain('was held as this run ended')
   })
 })

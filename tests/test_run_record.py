@@ -11,6 +11,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -451,10 +452,31 @@ class CountTests(unittest.TestCase):
         self.assertIsNone(self.counted("unittest", "Traceback (most recent call last):\n"))
         self.assertIsNone(self.counted("web-test", " Test Files  2 passed (2)\n"))
 
+    def test_the_closing_line_counts_over_one_the_log_quotes_before_it(self) -> None:
+        # A test that runs a nested suite, as the tests of these tools do, logs its count first.
+        cases = {
+            "unittest": ("Ran 2 tests in 0.010s\n\nOK\n....\nRan 40 tests in 3.100s\n\nOK\n", 40),
+            "web-test": ("      Tests  1 passed (1)\n...\n      Tests  12 passed (12)\n", 12),
+            "desktop-test": (f"# tests 1\n# pass 1\n{SPEC} tests 30\n{SPEC} pass 30\n", 30),
+        }
+        for name, (text, expected) in cases.items():
+            with self.subTest(step=name):
+                self.assertEqual(expected, self.counted(name, text))
+
     def test_the_counted_steps_are_the_test_steps_of_the_gate_list(self) -> None:
-        names = {step.name for step in isolated.GATE_STEPS}
-        self.assertEqual({"unittest", "web-test", "desktop-test"}, set(run_record.TEST_COUNTS))
-        self.assertLessEqual(set(run_record.TEST_COUNTS), names)
+        def test_steps(steps: tuple[isolated.Step, ...]) -> set[str]:
+            # A step runs tests when its name says so, or it runs unittest or a package's tests.
+            runs = re.compile(r"-m unittest\b|^npm test$")
+            return {
+                step.name
+                for step in steps
+                if step.name.endswith("test") or runs.search(step.command)
+            }
+
+        self.assertEqual(test_steps(isolated.GATE_STEPS), set(run_record.TEST_COUNTS))
+        # The control: a test step added to the list without a count is one this sees.
+        added = isolated.Step("browser-test", "web", "npm run test:browser:allowed", "web")
+        self.assertNotEqual(test_steps((*isolated.GATE_STEPS, added)), set(run_record.TEST_COUNTS))
 
 
 class GatesRecordTests(unittest.TestCase):
@@ -520,6 +542,25 @@ class GatesRecordTests(unittest.TestCase):
         record = json.loads((self.out / run_record.NAME).read_text(encoding="utf-8"))
         self.assertEqual([None, None], [record["steps"][0]["exit"], record["steps"][0]["tests"]])
         self.assertEqual(1, record["result"])
+
+    def test_gates_says_before_its_first_step_where_a_record_cannot_match(self) -> None:
+        steps = (isolated.Step("only", "python", 'python -c "pass"'),)
+        warning = "warning: a stand-in for a result directory the tree sees"
+        with (
+            mock.patch.object(isolated, "GATE_STEPS", steps),
+            mock.patch.object(isolated.release, "require_toolchain", return_value={}),
+            mock.patch.object(run_record, "placement_warning", return_value=warning) as placed,
+            contextlib.redirect_stdout(io.StringIO()) as said,
+        ):
+            isolated.main(["gates", "--out", str(self.out)])
+
+        placed.assert_called_once_with(isolated.ROOT, self.out)
+        lines = said.getvalue().splitlines()
+        self.assertIn(warning, lines)
+        self.assertLess(
+            lines.index(warning),
+            next(i for i, line in enumerate(lines) if line.startswith("only ")),
+        )
 
 
 if __name__ == "__main__":

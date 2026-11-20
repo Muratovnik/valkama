@@ -64,11 +64,30 @@ export function unitRun(args: readonly string[], canLock: () => boolean): UnitRu
   }
 }
 
+/** What a run asks, starts and says, so a test can stand in for each. */
+interface UnitIo {
+  canLock: () => boolean
+  /** The line naming who holds the lock, or `''`. */
+  holder: () => string
+  spawn: (command: readonly string[]) => Promise<number>
+  write: (text: string) => void
+}
+
+/** Runs `npm run test:unit -- <args>` and resolves with the exit code of what it ran. */
+export async function runUnits(args: readonly string[], io: UnitIo): Promise<number> {
+  const run = unitRun(args, io.canLock)
+  if (run.note !== null) io.write(`${run.note}\n`)
+  const code = await io.spawn(run.command)
+  if (code !== 0 && run.targeted) io.write(io.holder())
+  return code
+}
+
 const entry = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : ''
 if (entry === import.meta.url) {
-  const run = unitRun(process.argv.slice(2), lockAvailable)
-  if (run.note !== null) process.stdout.write(`${run.note}\n`)
-  const code = await spawnInherited(run.command, { cwd: web, env: process.env })
-  if (code !== 0 && run.targeted) process.stdout.write(lockHolder())
-  process.exitCode = code
+  process.exitCode = await runUnits(process.argv.slice(2), {
+    canLock: lockAvailable,
+    holder: () => lockHolder(),
+    spawn: (command) => spawnInherited(command, { cwd: web, env: process.env }),
+    write: (text) => process.stdout.write(text),
+  })
 }
