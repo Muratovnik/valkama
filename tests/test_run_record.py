@@ -104,13 +104,48 @@ class CheckTests(TreeCase):
         self.assertIn(f"accepted: {record} was made in ", said)
         self.assertIn(f" at {head}; passed: only exit=0", said)
 
+    def test_an_accepted_record_of_a_failed_run_exits_apart_from_a_pass_and_a_refusal(
+        self,
+    ) -> None:
+        out = self.repo / "tmp" / "failed"
+        out.mkdir(parents=True)
+        log = out / "step.log"
+        log.write_bytes(b"x\n")
+        steps = [
+            run_record.step("lint", ["lint"], self.repo, log, 0),
+            run_record.step("unit", ["unit"], self.repo, log, 2),
+            run_record.step("web", ["web"], self.repo, log, None),
+        ]
+        failed = run_record.write(out, run_record.begin(self.repo, {}), steps, 1)
+        nothing = run_record.write(self.repo / "tmp", run_record.begin(self.repo, {}), [], 1)
+
+        code, said = self.checked(failed, self.repo)
+
+        # The codes `check --help` documents: 0 passed, 1 failed, 3 refused.
+        self.assertEqual(1, code, said)
+        self.assertIn("; failed: unit, web; ran: lint exit=0, unit exit=2, web exit=None", said)
+        self.assertNotIn("passed", said)
+        code, said = self.checked(nothing, self.repo)
+        self.assertEqual(1, code)
+        self.assertIn("; failed: no step ran; ran: \n", said)
+        self.assertEqual(0, self.checked(self.record_of(self.repo), self.repo)[0])
+        self.assertEqual(3, self.checked(failed, self.other)[0])
+        with contextlib.redirect_stdout(io.StringIO()) as helped, self.assertRaises(SystemExit):
+            run_record.main(["check", "--help"])
+        for line in (
+            "0  accepted, and the run it records passed",
+            "1  accepted, and the run it records failed",
+            "3  refused",
+        ):
+            self.assertIn(line, helped.getvalue())
+
     def test_a_record_of_another_worktree_of_the_repository_is_refused(self) -> None:
         # Both trees are at the same commit and clean: only which tree it is differs.
         record = self.record_of(self.other)
 
         code, said = self.checked(record, self.repo)
 
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn(
             f"it was made in {git_worktrees.canonical(self.other)},"
             f" not in {git_worktrees.canonical(self.repo)}",
@@ -129,7 +164,7 @@ class CheckTests(TreeCase):
 
         code, said = self.checked(record, self.repo)
 
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn(f"it was made at commit {before}, and this tree is at {after}", said)
         self.assertNotIn("it was made in ", said)
 
@@ -141,7 +176,7 @@ class CheckTests(TreeCase):
 
         code, said = self.checked(record, self.repo)
 
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn("it was made in a clean tree, and this tree has uncommitted changes", said)
         self.write("server/app.py", "print('one')\n")
         self.assertEqual(0, self.checked(record, self.repo)[0])
@@ -157,7 +192,7 @@ class CheckTests(TreeCase):
                 kept = (self.repo / name).read_bytes()
                 self.write(name, text)
                 code, said = self.checked(record, self.repo)
-                self.assertEqual(1, code)
+                self.assertEqual(run_record.REFUSED, code)
                 self.assertIn("it was made on other uncommitted changes than this tree has", said)
                 (self.repo / name).write_bytes(kept)
         self.assertEqual(0, self.checked(record, self.repo)[0])
@@ -186,7 +221,7 @@ class CheckTests(TreeCase):
         self.write("server/app.py", "print('edited again')\n")
         self.git("add", "server/app.py")
         code, said = self.checked(record, self.repo)
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn("it was made on other uncommitted changes than this tree has", said)
 
     def test_an_untracked_file_counts_where_git_status_hides_untracked_files(self) -> None:
@@ -196,7 +231,7 @@ class CheckTests(TreeCase):
 
         code, said = self.checked(record, self.repo)
 
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn("it was made in a clean tree, and this tree has uncommitted changes", said)
         made = self.record_of(self.repo, "with-file")
         self.write("tests/test_new.py", "print('other')\n")
@@ -212,7 +247,7 @@ class CheckTests(TreeCase):
 
         code, said = self.checked(record, self.repo)
 
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn(
             f"is a run record of format 1, and this check compares a tree as format {run_record.FORMAT}",
             said,
@@ -222,13 +257,13 @@ class CheckTests(TreeCase):
         broken = self.root / "broken.json"
         broken.write_text('{"tree": {}}', encoding="utf-8")
         code, said = self.checked(broken, self.repo)
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn("is not a readable run record", said)
 
         plain = self.root / "plain"
         plain.mkdir()
         code, said = self.checked(self.record_of(self.repo), plain)
-        self.assertEqual(1, code)
+        self.assertEqual(run_record.REFUSED, code)
         self.assertIn("is not a Git working tree", said)
 
     def test_a_result_directory_the_tree_sees_is_warned_about_and_an_ignored_one_is_not(
