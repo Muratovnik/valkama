@@ -177,11 +177,16 @@ export interface UsageQuery {
   /** Not included; a date or a time, as `from`. */
   to: string
   utcOffset: number
+  /** The space the read is narrowed to, by its key: the work its board holds. None at the top. */
+  space?: string | null
   /** How the series is cut: by day, the default, by hour or by minute. */
   step?: UsageStep
 }
 
-/** The query string of a read: each filter by its dimension's name, and `none` for the rest. */
+/**
+ * The query string of a read: each filter by its dimension's name, `none` for the rest, and the
+ * space it is narrowed to.
+ */
 export function usageParameters(query: UsageQuery): URLSearchParams {
   const parameters = new URLSearchParams({
     from: query.from,
@@ -199,6 +204,7 @@ export function usageParameters(query: UsageQuery): URLSearchParams {
   }
   if (none.length) parameters.set('none', none.join(','))
   if (query.compare) parameters.set('compare', 'true')
+  if (query.space) parameters.set('space', query.space)
   return parameters
 }
 

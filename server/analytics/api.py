@@ -25,7 +25,7 @@ QUOTA_PATH = "/api/analytics/quota"
 USES_PATH = "/api/analytics/uses"
 
 _PARAMETERS = frozenset(
-    {"from", "to", "step", "utc_offset", "group_by", "compare", "none", *usage.DIMENSIONS}
+    {"from", "to", "step", "utc_offset", "group_by", "compare", "none", "space", *usage.DIMENSIONS}
 )
 
 
@@ -87,7 +87,8 @@ def _compare(parameters: Mapping[str, list[str]]) -> bool:
 
 def _usage(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     """What agent work spent in a period: `from`, `to`, `step`, `utc_offset`, `group_by`,
-    a filter per dimension, `none` and `compare`."""
+    a filter per dimension, `none`, `compare` and `space`, the one space it is narrowed to,
+    named as the other reads that take a space name it."""
 
     _refuse_unknown(parameters, _PARAMETERS)
     request = usage.query(
@@ -103,6 +104,7 @@ def _usage(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
         },
         none=_list(parameters, "none"),
         compare=_compare(parameters),
+        space=_first(parameters, "space"),
     )
     return {"interface_version": ANALYTICS_API_INTERFACE, "usage": usage.read(conn, request)}
 

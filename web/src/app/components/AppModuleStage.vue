@@ -60,7 +60,7 @@ const scopeProject = computed(() =>
 )
 /** The space a scope names, which Settings shows its own values of; null at the top. */
 const scopeSpace = computed(() => (props.scope.kind === 'space' ? props.scope.space_ref : null))
-/** The key of that space, which Agent decisions reads by; null at the top. */
+/** The key of that space, which Agent decisions and Analytics read by; null at the top. */
 const scopeSpaceKey = computed(() => scopeSpace.value?.space_key ?? null)
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(
@@ -98,6 +98,7 @@ defineExpose({ openCardId, refresh })
   >
     <AnalyticsView
       :route-state="route.state"
+      :space="scopeSpaceKey"
       :project-id="scopeProject"
       :covered="cardOver"
       @state="(state, mode) => emit('state', state, mode)"

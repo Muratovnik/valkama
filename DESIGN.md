@@ -2861,6 +2861,12 @@ Analytics is a monitor of what agent work spent, and it fills the window: a bar 
 and a panel. Nothing in it moves under the pointer or when an answer arrives; a hint lies over
 the page and shifts nothing, and a part that has nothing to say yet keeps the room it will need.
 
+The page reads within the scope the context bar chose. In a space every figure is the work on
+the items the space's board holds, its own and the items of other spaces that name its projects,
+and the work on no item whose session stands in one of its projects; a project chosen there
+narrows it as it narrows the board, and «All spaces» reads every space. The quota is each
+account's and no space's: no scope narrows it.
+
 Each column has one scroll: the rail scrolls, the panel scrolls, and inside the panel only a
 dimension's table scrolls up and down, in its own frame about the window's height. Only a row
 of periods or a table wider than its column scrolls sideways, in a frame of its own. Held to
@@ -2923,7 +2929,7 @@ on a short line, its words had left a red disc with no hint. The retry is reache
 too: where the line has no room for «· Retry», the words themselves are the retry, named
 «Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
 Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
-refresh beside it. Reading another period or filter dims what is shown until its answer comes, after a moment so that a quick answer does not flicker;
+refresh beside it. Reading another space, period or filter dims what is shown until its answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,
 and say «no data yet» in their hint rather than being drawn as a drop.
@@ -3061,9 +3067,10 @@ figure counts add up to it and are the sectors of its ring, or its ranked bars, 
 ring; cache reads close the chart under its legend or its bars, no part of any share, and
 reasoning is part of output.
 
-The quota's two sections read where each account's quota stands now, which no period or
-filter changes, and read it again on the live interval whatever the period; that the period and
-the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says once.
+The quota's two sections read where each account's quota stands now, which no space, period or
+filter changes, and read it again on the live interval whatever the period; that the space, the
+period and the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says
+once.
 Each tile names the tightest window of its kind across accounts — the most spent of those whose
 reset is still ahead, a fresh one before a silent one at the same share — by its account's
 name, with its share, its state in words beside the section's name and a thin `WindowBar` with
