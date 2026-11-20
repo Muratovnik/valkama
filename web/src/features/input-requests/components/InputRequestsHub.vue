@@ -13,6 +13,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { DIALOG_ROOM_BESIDE_DOCUMENT } from '@/shared/lib/shellLayout.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
@@ -21,6 +22,7 @@ const props = defineProps<{ open: boolean; pane?: OverlayPaneNames | null }>()
 const emit = defineEmits<{
   'close': []
   'count': [value: PendingCount | null]
+  'open': [route: PlatformRoute]
   'pane-close': []
   'pane-fit': [fit: PaneFit | null]
   'select': [target: PlanningTarget]
@@ -110,6 +112,7 @@ watch(
       @dismiss="remove"
       @draft="(key, value) => (drafts[key] = value)"
       @select="emit('select', $event)"
+      @open="emit('open', $event)"
     />
     <template #actions="{ scroller }">
       <RequestNavigator :scroller="scroller" />

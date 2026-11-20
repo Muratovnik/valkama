@@ -28,10 +28,10 @@ import { periodBounds, readView, writeView } from '@/pages/decisions/utils/decis
 import type { DecisionsView } from '@/pages/decisions/utils/decisionsView.ts'
 
 import PeriodBar from '@/widgets/period-bar/components/PeriodBar.vue'
-import { customDays, localDay, PERIODS } from '@/widgets/period-bar/utils/periodDays.ts'
-import type { Period } from '@/widgets/period-bar/utils/periodDays.ts'
 
 import { DECISION_POINTS } from '@/shared/api/planningDecisionPoints.ts'
+import { customDays, localDay, PERIODS } from '@/shared/lib/periodDays.ts'
+import type { Period } from '@/shared/lib/periodDays.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'

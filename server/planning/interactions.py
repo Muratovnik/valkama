@@ -355,7 +355,8 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     and a reader takes the next from `offset` while `has_more` says so.
 
     Beside the questions stands `triage_due`: a line for each space read whose stack
-    of triage waits past the owner's thresholds (`triage.due`). It is no question, so
+    of triage waits past the owner's thresholds (`triage.due`), with the `space_ref` of
+    its source, which a link to that space's board needs. It is no question, so
     it is no item, counts in no total and takes no answer. It belongs to the list as
     a whole, not to a page: only the first page reads it, and a read of answered or
     closed questions, or of one item's, has none.
@@ -423,7 +424,8 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
                 )
             entry.update(status="searched", reason=None)
             if line is not None:
-                due.append(line)
+                # The source's own ref: two stores may hold a space of one key.
+                due.append({"space_ref": space_ref, **line})
         except (api.PlanningHttpError, ValueError, sqlite3.Error, KeyError, TypeError):
             if scope_kind != "global":
                 raise

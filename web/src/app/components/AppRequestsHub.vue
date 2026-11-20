@@ -9,11 +9,13 @@ import InputRequestsHub from '@/features/input-requests/components/InputRequests
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   close: []
   count: [value: PendingCount | null]
+  open: [route: PlatformRoute]
   select: [target: PlanningTarget]
 }>()
 
@@ -27,6 +29,7 @@ const documentBeside = useDocumentPane('hub', () => t('requests.title'))
     :pane="documentBeside.pane"
     @close="emit('close')"
     @select="(target) => emit('select', target)"
+    @open="(route) => emit('open', route)"
     @count="(count) => emit('count', count)"
     @pane-close="documentBeside.close"
     @pane-fit="documentBeside.stand"

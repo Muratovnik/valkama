@@ -82,10 +82,17 @@ const {
 watch(activeModule, prefetchModule, { immediate: true })
 
 // A task opened from the finder, the questions or a text: see the composable.
-const { finderOpen, finderText, findText, requestsOpen, pendingRequestCount, openTarget } =
-  useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
-    cardInPlace(activeManifest.value, route.value, target),
-  )
+const {
+  finderOpen,
+  finderText,
+  findText,
+  requestsOpen,
+  pendingRequestCount,
+  openRoute,
+  openTarget,
+} = useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
+  cardInPlace(activeManifest.value, route.value, target),
+)
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
   mainContent.value?.focus()
@@ -385,6 +392,7 @@ usePlatformEntryRestore({
     :open="requestsOpen"
     @close="requestsOpen = false"
     @select="openTarget"
+    @open="openRoute"
     @count="(count) => (pendingRequestCount = count)"
   />
   <DocumentDrawer

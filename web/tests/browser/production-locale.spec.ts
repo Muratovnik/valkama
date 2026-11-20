@@ -198,7 +198,9 @@ test('Russian Work bar keeps its controls on one row, and the former presets are
     'Можно брать',
     /^Есть исполнитель/u,
     'Ждёт моего ответа',
+    'Ждёт разбора',
     'Из другого пространства',
+    'Закрыто за период',
   ])
   await page.keyboard.press('Escape')
   await field.click()

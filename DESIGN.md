@@ -1625,9 +1625,23 @@ space never lists another space's views. Nothing in the row is a pressed filter 
 its own any more: everything to the right of the field narrows it, and the two
 conditions that once stood beside it as presets, «Workable» and «Has an
 assignee», are the first group of the filter's menu, with «Waiting for my answer», a task
-whose question to the owner keeps the queue from giving it, and «From another space», a
+whose question to the owner keeps the queue from giving it, «Awaiting triage», a card of
+the space's own triage stack that no review has marked, exactly the cards the line «time to
+triage» of «Needs my answer» counts for the space, and «From another space», a
 card another space holds; that one is a value, so its chip's «≠» keeps every such card
-out instead. «Workable» is the list read's own answer for each card, the one the queue
+out instead. «Awaiting triage» reads the mark the list read gives each stack card: a card
+another space holds stands in that space's stack, so it is not taken. The last condition,
+«Closed in a period», is a row with a chevron that steps into its periods, those of the
+period bar — «Today», «This week», «Past 4 weeks» and «Days of my own» — one at a time: a
+card that came to be completed or cancelled within the period's days, each whole on the
+reader's calendar, a preset to the end of today. It keeps exactly the cards the Volumes read
+counts as Done and Cancelled for those days, by the moment the read counts by, when the card
+came to stand where it is, so with the state beside it «Done in a period» and «Cancelled in a
+period» are each one address. Its chip says the period, «Closed this week»; for days of the
+reader's own the chip says «Closed on my days» and the period bar's two day fields stand after
+the chips, the first and the last day taken in, a day set anew narrowing the work at once.
+The address keeps it as the period pages keep theirs: `period`, and `from` and `to` for days of
+the reader's own. «Workable» is the list read's own answer for each card, the one the queue
 gives by, so the filter lets through what claim-ready hands out and follows a rule the
 server adds without a copy of it here: where the owner hands out work by hand, the queue gives
 nothing and no card there reads workable. A usable filter is as wide as a
@@ -2635,7 +2649,12 @@ work waiting for a triage review has grown past the owner's thresholds: «Пор
 how long the oldest has waited, counted from when it entered, since the read carries no clock of
 the server. It stands on a quiet ground of its own, as a line of the window and no question:
 nothing answers it, no number counts it, and focus never goes to it after an answer. A space
-whose triage reminder is off has no line, since the server leaves it out.
+whose triage reminder is off has no line, since the server leaves it out. Its one control,
+«Показать находки» («Show findings») at the line's end, or on a row of its own where the words
+leave it no room, closes the window and opens that space's board filtered by «Awaiting
+triage», the cards the line counts. The space is the line's own, in the store the read found it
+in, whatever scope the window was opened over, «All spaces» included; its accessible name adds
+the space's name, since every line's word is the same.
 A review's point is one row: a chevron and the point's label, which are one press that opens the
 point, the three words of the verdict at the row's end and the comment's glyph after them; under
 the label, from its edge to the row's end, one quiet line of what the point comes to. Accepted

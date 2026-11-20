@@ -169,6 +169,12 @@ const workItemBriefShape = {
    */
   closed_at: boundedText(ISO, 96).nullable().optional(),
   /**
+   * When a finished item came to stand where it is: its last state entry in history order, or
+   * its creation, the moment the Volumes read counts it closed at, which `closed_at` is not for
+   * one that never moved. Null for open work, and absent from a server that predates it.
+   */
+  entered_at: boundedText(ISO, 96).nullable().optional(),
+  /**
    * Who held a finished item when it closed, as `claim_ref` names a holder. A
    * close ends the claim, so `claim_ref` is blank by then. Null for open work
    * and for an item closed unheld.
