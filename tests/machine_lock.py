@@ -385,7 +385,14 @@ def _place(directory: Path, prefix: str, record: Mapping[str, object]) -> tuple[
     try:
         handle.write(b"0" + json.dumps(record).encode())
         handle.flush()
-        if not store_lock.try_lock(handle):
+        if sys.platform != "win32":
+            import fcntl
+
+            # Waited for, not tried: a file made a moment ago under a name of its own is
+            # held by nothing but a reader asking whether it is held, which `load_note`
+            # does outside the decision by a shared lock it gives back at once.
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        elif not store_lock.try_lock(handle):
             raise OSError(f"could not hold {file}")
     except BaseException:
         handle.close()
