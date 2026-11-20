@@ -1,25 +1,14 @@
 /**
  * The view of the Volumes page and its address: the period — today, this week, the past four
- * weeks or days of the reader's own (`periodDays`) — and the filter of its tasks, a kind and a
- * label, every task when neither is chosen. The space and the project are the context bar's,
- * never the page's.
+ * weeks or days of the reader's own — and the filter of its tasks, a kind and a label, every task
+ * when neither is chosen. The space and the project are the context bar's, never the page's.
  *
- * The read is asked for the period as days of the reader's calendar at the reader's offset from
- * UTC: from the first day's midnight to the midnight after the last, which the read does not
- * take in, so today is read whole.
+ * The read is asked for the period's days as `periodDays` names them, so today is read whole.
  */
-import {
-  dayFrom,
-  localDay,
-  presetStart,
-  readPeriod,
-  shiftDays,
-  writePeriod,
-} from '@/widgets/period-bar/utils/periodDays.ts'
-import type { PeriodView } from '@/widgets/period-bar/utils/periodDays.ts'
-
 import { TASK_KINDS } from '@/shared/api/volumesReadApi.ts'
 import type { TaskKind } from '@/shared/api/volumesReadApi.ts'
+import { readPeriod, writePeriod } from '@/shared/lib/periodDays.ts'
+import type { PeriodView } from '@/shared/lib/periodDays.ts'
 
 export interface VolumesView extends PeriodView {
   /** The kind of task the read keeps; null for every kind. */
@@ -52,27 +41,5 @@ export function writeView(view: VolumesView): Record<string, string> {
     ...writePeriod(view, DEFAULT_PERIOD),
     ...(view.kind ? { kind: view.kind } : {}),
     ...(view.label ? { label: view.label } : {}),
-  }
-}
-
-/**
- * The days a view's period is read between, at `now`: from its first day to the day after its
- * last, and the reader's offset from UTC that day. Null for days of the reader's own not yet both
- * chosen, or the wrong way round.
- */
-export function periodDays(
-  view: VolumesView,
-  now: Date,
-): { from: string; to: string; utcOffset: number } | null {
-  const utcOffset = -now.getTimezoneOffset()
-  if (view.period === 'custom') {
-    return !view.from || !view.to || view.to < view.from
-      ? null
-      : { from: view.from, to: localDay(shiftDays(dayFrom(view.to), 1)), utcOffset }
-  }
-  return {
-    from: localDay(presetStart(view.period, now)),
-    to: localDay(shiftDays(now, 1)),
-    utcOffset,
   }
 }

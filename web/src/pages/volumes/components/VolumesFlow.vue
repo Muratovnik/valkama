@@ -12,10 +12,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { localDay } from '@/widgets/period-bar/utils/periodDays.ts'
 import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
 
 import type { Volumes } from '@/shared/api/volumesReadApi.ts'
+import { localDay } from '@/shared/lib/periodDays.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 
 const props = defineProps<{

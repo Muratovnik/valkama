@@ -3,14 +3,15 @@
  * the past four weeks, or days of the reader's own. A day starts at the reader's midnight, and a
  * day is named as that calendar names it, `2030-03-04`.
  *
- * `periodDays` is how a read by days is asked for one: from the first day to the day after the
- * last, which the read does not take in, at the reader's offset from UTC that day, as the
- * Volumes read's grammar names a period. So whatever counts by a period here counts the days
- * the Volumes read counts.
+ * Every page on the period bar (`PeriodBar`) and the Work filter's closing period count their
+ * days here, so two places never disagree over where this week began. `periodDays` is how a read
+ * by days is asked for one: from the first day to the day after the last, which the read does
+ * not take in, at the reader's offset from UTC that day, as the Volumes read's grammar names a
+ * period. So whatever counts by a period here counts the days the Volumes read counts.
  */
 
 export const PERIODS = ['today', 'week', 'weeks4', 'custom'] as const
-type Period = (typeof PERIODS)[number]
+export type Period = (typeof PERIODS)[number]
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -20,7 +21,7 @@ export const localDay = (day: Date) =>
   `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
 
 /** The midnight a day's name stands for, in the browser's own time. */
-const dayFrom = (text: string) => {
+export const dayFrom = (text: string) => {
   const [year, month, date] = text.split('-').map(Number)
   return new Date(year, month - 1, date)
 }
@@ -42,7 +43,7 @@ export const dayOf = (value: unknown) => (typeof value === 'string' && DAY.test(
  * The midnight a preset period starts at, on the day of `now`: today's, Monday's of this week, or
  * the one 27 days back for the past four weeks.
  */
-function presetStart(period: Exclude<Period, 'custom'>, now: Date): Date {
+export function presetStart(period: Exclude<Period, 'custom'>, now: Date): Date {
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const back = { today: 0, week: (midnight.getDay() + 6) % 7, weeks4: 27 }[period]
   return shiftDays(midnight, -back)
@@ -55,6 +56,30 @@ export interface PeriodView {
   period: Period
   /** The last day of the reader's own period; empty for a preset. */
   to: string
+}
+
+type RouteState = Readonly<Record<string, string | number | boolean>>
+
+/** The period an address holds; what it does not hold, or holds wrongly, is `fallback`. */
+export function readPeriod(state: RouteState | undefined, fallback: Period): PeriodView {
+  const period = PERIODS.find((value) => value === state?.period) ?? fallback
+  const custom = period === 'custom'
+  return {
+    period,
+    from: custom ? dayOf(state?.from) : '',
+    to: custom ? dayOf(state?.to) : '',
+  }
+}
+
+/** The address of a period: only what differs from `fallback`. */
+export function writePeriod(view: PeriodView, fallback: Period): Record<string, string> {
+  const state: Record<string, string> = {}
+  if (view.period !== fallback) state.period = view.period
+  if (view.period === 'custom') {
+    if (view.from) state.from = view.from
+    if (view.to) state.to = view.to
+  }
+  return state
 }
 
 /**
