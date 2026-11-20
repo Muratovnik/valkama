@@ -562,8 +562,8 @@ class LauncherTests(unittest.TestCase):
         # the desktop app and the tray start it, is proven managed, and the stop
         # that proof authorizes ends exactly that process. A virtual
         # environment's python.exe is a redirector to the base interpreter, so
-        # the listener's image is the base one and the launcher must record it.
-        interpreter = getattr(sys, "_base_executable", sys.executable)
+        # the listener's image is the base one: installed from this interpreter,
+        # whichever it is, the launcher records the base.
         listening = (
             "import socket, sys, time\n"
             "s = socket.socket()\n"
@@ -576,10 +576,13 @@ class LauncherTests(unittest.TestCase):
         installed = launcher.install(
             self.directory,
             platform_name="nt",
-            python=interpreter,
+            python=sys.executable,
             checkout=self.checkout,
             releases=self.releases,
         )
+        interpreter = str(installed["python"])
+        base = Path(getattr(sys, "_base_executable", sys.executable)).resolve()
+        self.assertEqual(str(base), interpreter)
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]

@@ -339,15 +339,53 @@ class InstallTests(OnDemandCase):
         self.assertIn(str(installed["shim"]), self.spawned[0])
         self.assertIn("--on-demand", self.spawned[0])
 
-    def make_environment(self) -> Path:
-        """A virtual environment made from `self.python`, laid out as Windows has it."""
+    def make_environment(self, home: Path | None = None) -> Path:
+        """A virtual environment made from `home`, laid out as Windows has it."""
 
         environment = self.root / "environment"
         redirector = self.make_interpreter(environment / "Scripts")
         (environment / "pyvenv.cfg").write_text(
-            f"home = {self.python.parent}\nversion = 3.11.9\n", encoding="utf-8"
+            f"home = {home or self.python.parent}\nversion = 3.11.9\n", encoding="utf-8"
         )
         return redirector
+
+    def legacy_install(self) -> tuple[Path, dict[str, object]]:
+        """What an install from a virtual environment left before it recorded the base."""
+
+        redirector = self.make_environment()
+        with mock.patch.object(
+            launcher, "_environment_base", lambda _python: (False, None), create=True
+        ):
+            installed = self.install(python=redirector)
+        self.assertEqual(str(redirector), installed["python"])
+        self.enable()
+        self.spawned.clear()
+        return redirector, installed
+
+    def hold_port_as(self, installed: dict[str, object], image: Path) -> None:
+        self.owners[:] = [
+            {
+                "pid": 4321,
+                "command_line": subprocess.list2cmdline(
+                    [
+                        str(image),
+                        str(installed["shim"]),
+                        "serve",
+                        "--on-demand",
+                        "--port",
+                        str(PORT),
+                    ]
+                ),
+                "executable_path": str(image),
+                "identity_token": "creation-a",
+            }
+        ]
+
+    def test_an_environment_naming_no_base_that_exists_is_refused(self) -> None:
+        redirector = self.make_environment(home=self.root / "removed-python")
+        with self.assertRaisesRegex(launcher.LauncherError, "virtual environment"):
+            self.install(python=redirector)
+        self.assertFalse((self.directory / launcher.MANIFEST_NAME).exists())
 
     def test_an_install_from_a_virtual_environment_records_the_python_it_runs(self) -> None:
         # The environment's python.exe starts the base interpreter as a child, so a
@@ -361,31 +399,28 @@ class InstallTests(OnDemandCase):
     def test_a_listener_started_through_a_recorded_environment_restarts_as_its_base(
         self,
     ) -> None:
-        # What an install from a virtual environment left before it recorded the base:
-        # the redirector in the manifest, its child holding the port as the base.
-        redirector = self.make_environment()
-        with mock.patch.object(launcher, "_base_interpreter", lambda python: python, create=True):
-            installed = self.install(python=redirector)
-        self.assertEqual(str(redirector), installed["python"])
-        self.enable()
-        self.spawned.clear()
-        windowed = str(self.python.parent / launcher.WINDOWED_PYTHON)
-        self.owners[:] = [
-            {
-                "pid": 4321,
-                "command_line": subprocess.list2cmdline(
-                    [windowed, str(installed["shim"]), "serve", "--on-demand", "--port", str(PORT)]
-                ),
-                "executable_path": windowed,
-                "identity_token": "creation-a",
-            }
-        ]
+        # The redirector in the manifest, its child holding the port as the base.
+        redirector, installed = self.legacy_install()
+        windowed = self.python.parent / launcher.WINDOWED_PYTHON
+        self.hold_port_as(installed, windowed)
         self.new_release()
         result = self.install(python=redirector)
         self.assertEqual([4321], self.stopped)
         self.assertEqual(str(self.python), result["python"])
         self.assertEqual("restarted", result["on_demand_listener"]["state"])
-        self.assertEqual(windowed, self.spawned[0][0])
+        self.assertEqual(str(windowed), self.spawned[0][0])
+
+    def test_a_recorded_environment_owns_no_listener_of_an_interpreter_it_does_not_name(
+        self,
+    ) -> None:
+        redirector, installed = self.legacy_install()
+        other = self.make_interpreter(self.root / "other").parent / launcher.WINDOWED_PYTHON
+        self.hold_port_as(installed, other)
+        self.new_release()
+        result = self.install(python=redirector)
+        self.assertEqual([], self.stopped)
+        self.assertEqual([], self.spawned)
+        self.assertEqual("none", result["on_demand_listener"]["state"])
 
     def test_a_foreign_listener_is_never_stopped(self) -> None:
         installed = self.install()

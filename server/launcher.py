@@ -552,30 +552,34 @@ def _names_on_demand(command_line: str) -> bool:
         return False
 
 
-def _base_interpreter(python: Path) -> Path:
-    """The interpreter a process started as `python` runs as.
+def _environment_base(python: Path) -> tuple[bool, Path | None]:
+    """Whether `python` belongs to a virtual environment, and the interpreter it starts.
 
     A virtual environment's python.exe on Windows is a redirector: it starts the
     interpreter its `pyvenv.cfg` names as `home` as a child, and that child is the
     process that holds a port. The server runs on the system Python with no
     third-party imports, so that interpreter is the one to record, and the one a
-    listener of this launcher is known by. Anything else is returned as it is.
+    listener of this launcher is known by. The base is None when the environment
+    names none that exists.
     """
 
     if not python.is_absolute():
-        return python
+        return False, None
     for folder in (python.parent, python.parent.parent):
-        try:
-            lines = (folder / "pyvenv.cfg").read_text(encoding="utf-8").splitlines()
-        except (OSError, ValueError):
+        config = folder / "pyvenv.cfg"
+        if not config.is_file():
             continue
+        try:
+            lines = config.read_text(encoding="utf-8").splitlines()
+        except (OSError, ValueError):
+            return True, None
         for line in lines:
             key, separator, value = line.partition("=")
             if separator and key.strip().lower() == "home":
                 base = Path(value.strip()) / python.name
-                return base.resolve() if base.is_absolute() and base.is_file() else python
-        return python
-    return python
+                return True, base.resolve() if base.is_absolute() and base.is_file() else None
+        return True, None
+    return False, None
 
 
 def _classify_listener_processes(
@@ -635,14 +639,15 @@ def _classify_listener_processes(
         }
     # Autostart runs the windowed interpreter that sits beside the recorded one, so
     # a listener started at login has no console window. That is the same Python.
-    # An install from before `_base_interpreter` may have recorded a virtual
+    # An install from before `_environment_base` may have recorded a virtual
     # environment's redirector, whose listener runs as the base interpreter: known
     # by that, it is the one the next install stops and starts again as the base.
     recorded = (
         os.fspath(python),
         ntpath.join(ntpath.dirname(os.fspath(python)), WINDOWED_PYTHON),
     )
-    interpreters = (*recorded, *(str(_base_interpreter(Path(path))) for path in recorded))
+    bases = (_environment_base(Path(path))[1] for path in recorded)
+    interpreters = (*recorded, *(str(base) for base in bases if base is not None))
     managed = [
         pid
         for pid, owner in unique.items()
@@ -1096,7 +1101,14 @@ def install(
     origin = Path(checkout).expanduser().resolve() if checkout else default_checkout()
     commit = checkout_revision(origin, revision)
     chosen = Path(python).expanduser().resolve() if python else Path(sys.executable).resolve()
-    interpreter = _base_interpreter(chosen)
+    in_environment, base = _environment_base(chosen)
+    if in_environment and base is None:
+        # Recording the redirector would make every listener it starts unprovable.
+        raise LauncherError(
+            f"{chosen} belongs to a virtual environment whose pyvenv.cfg names no base "
+            "interpreter that exists; run launcher install with the Python it was made from"
+        )
+    interpreter = base or chosen
     if not interpreter.is_file():
         raise LauncherError(f"Python interpreter is missing: {interpreter}")
     release_root = Path(releases).expanduser().resolve() if releases else default_releases(platform)
