@@ -26,6 +26,7 @@ import RequestHistory from '@/features/input-requests/components/RequestHistory.
 import RequestSummary from '@/features/input-requests/components/RequestSummary.vue'
 import RequestUnsent from '@/features/input-requests/components/RequestUnsent.vue'
 import { isStructured } from '@/features/input-requests/utils/reviewForm.ts'
+import { spokenRequest } from '@/features/input-requests/utils/spokenFields.ts'
 
 import { endedByClose } from '@/shared/api/inputRequestModel.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -44,7 +45,9 @@ const props = defineProps<{
   /** What was chosen and not sent when it closed, a line per field. */
   unsentChosen: readonly string[]
 }>()
-const { t, d } = useI18n()
+const { t, te, d } = useI18n()
+/** The question with the service's own field and option words in the reader's language. */
+const spoken = computed(() => spokenRequest(props.request, t, te))
 const answered = computed(() => props.request.status === 'answered')
 const when = computed(() => {
   const at = props.request.resolved_at
@@ -70,7 +73,7 @@ const structured = computed(() => isStructured(props.request.fields))
 const bareText = computed(() => props.request.fields.length === 1)
 const note = computed(() => props.request.note ?? '')
 /** Each field answered on its own, where the question is not answered row by row. */
-const plainFields = computed(() => (structured.value ? [] : props.request.fields))
+const plainFields = computed(() => (structured.value ? [] : spoken.value.fields))
 const closing = computed(() => {
   const { status, answered_by: by, by_person: person } = props.request
   if (status === 'answered') return ''
@@ -111,7 +114,7 @@ const closing = computed(() => {
       >
       <RequestSummary
         v-if="structured"
-        :request="request"
+        :request="spoken"
       />
       <RequestFieldAnswer
         v-for="field in plainFields"
@@ -132,7 +135,7 @@ const closing = computed(() => {
       </blockquote>
       <RequestHistory
         v-if="request.history.length"
-        :request="request"
+        :request="spoken"
       />
     </div>
     <p

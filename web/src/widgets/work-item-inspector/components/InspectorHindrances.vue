@@ -9,6 +9,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
+import { usePutOffDay } from '@/widgets/work-item-inspector/utils/usePutOffDay.ts'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
@@ -17,7 +18,8 @@ import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{ item: WorkItem }>()
 
-const { t, d } = useI18n()
+const { t } = useI18n()
+const day = usePutOffDay()
 
 const blockers = computed(() => openBlockers(props.item))
 /** A blocker as the facet registry words a wait: «Ждёт MAIN-12», then what it is. */
@@ -36,19 +38,6 @@ const deferral = computed(() => {
   const line = `${t('workItem.closeActions.deferred.label')} ${until}`
   return put.reason ? `${line} — ${put.reason}` : line
 })
-
-/**
- * A day put off until comes back at its midnight in UTC, so it is said as that day, wherever
- * the reader is; a time is said as the reader's own clock has it.
- */
-function day(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return value
-  const midnight = date.getUTCHours() === 0 && date.getUTCMinutes() === 0
-  return midnight
-    ? d(date, { day: 'numeric', month: 'long', timeZone: 'UTC' })
-    : d(date, 'activity')
-}
 </script>
 
 <template>
