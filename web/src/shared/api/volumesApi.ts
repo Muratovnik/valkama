@@ -27,6 +27,7 @@ import {
   TITLE,
   WORK_ITEM_REFERENCE,
 } from '@/shared/api/planningModel.ts'
+import { planningCoverageSchema } from '@/shared/api/planningTarget.ts'
 import { tokensSchema } from '@/shared/api/planningUsageApi.ts'
 import { enumField, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 import { validatePlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
@@ -315,6 +316,13 @@ const volumesSchema = strictObject({
   filter: filterSchema.nullable(),
   /** When usage was first counted to an item in this store; null before any was. */
   measured_from: boundedText(ISO, 96).nullable(),
+  /**
+   * Each source the read covers, named as the questions window's read names its own: one it
+   * could not read says why, and the numbers at the top count without it.
+   */
+  coverage: z.array(planningCoverageSchema),
+  /** Whether a store attached beside this one holds work: the numbers count it, the sections not. */
+  attached_work: z.boolean(),
   counts: strictObject({
     /** The eight categories, always all, in the model's order. */
     categories: z.array(categorySchema).length(STATE_CATEGORIES.length),

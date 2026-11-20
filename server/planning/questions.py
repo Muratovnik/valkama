@@ -105,6 +105,16 @@ def expired(conn: sqlite3.Connection, request_id: str, at: str) -> str | None:
     return lapse(facts, at)
 
 
+def kept(conn: sqlite3.Connection) -> bool:
+    """Whether the store keeps requests at all: an attached store written before them has no
+    table of them, and a read of its questions cannot be answered."""
+
+    found = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_item_requests'"
+    ).fetchone()
+    return found is not None
+
+
 def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
     """The questions still open for the owner to answer, on one item or everywhere in this store."""
 

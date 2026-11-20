@@ -16,6 +16,17 @@
     },
     "filter": null,
     "measured_from": "2026-01-02T03:04:05.000Z",
+    "coverage": [
+      {
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "MAIN"
+        },
+        "status": "searched",
+        "reason": null
+      }
+    ],
+    "attached_work": false,
     "counts": {
       "categories": [
         {

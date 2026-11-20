@@ -5,6 +5,7 @@ import { requestIdentity, targetIdentity } from '@/features/input-requests/utils
 import { fetchInputRequest, fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
 import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
+import { coverageIncomplete } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 
 /**
@@ -59,9 +60,7 @@ export function useInputRequests(
   let generation = 0
   let timer: ReturnType<typeof setInterval> | undefined
   let seenWrites = confirmedWrites.value
-  const partial = computed(
-    () => result.value?.coverage.some((source) => source.status === 'unavailable') ?? false,
-  )
+  const partial = computed(() => coverageIncomplete(result.value?.coverage ?? []))
   const entries = computed(() => {
     const combined = new Map<string, InputRequestEntry>()
     for (const entry of result.value?.items ?? []) combined.set(requestIdentity(entry), entry)

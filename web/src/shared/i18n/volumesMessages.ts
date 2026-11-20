@@ -29,6 +29,8 @@ export const volumesMessages = {
     empty: 'There is no work in this scope',
     emptyDescription: 'Choose another space or project in the context bar, or a longer period.',
     incomplete: 'Choose the first and the last day of the period.',
+    ownStore:
+      'Goals, work outside goals, the flow and the estimates count the main store’s spaces only.',
     numbers: {
       label: 'Work by state',
       waiting: 'Waiting for me',
@@ -167,6 +169,8 @@ export const volumesMessages = {
     emptyDescription:
       'Выберите другое пространство или проект в строке контекста или период длиннее.',
     incomplete: 'Выберите первый и последний день периода.',
+    ownStore:
+      'Цели, работа вне целей, поток и оценки считают только пространства основного хранилища.',
     numbers: {
       label: 'Работа по состояниям',
       waiting: 'Ждут меня',
