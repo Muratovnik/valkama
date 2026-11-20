@@ -9,8 +9,7 @@ directory, beside `gates.txt` and the step logs, and `run` writes one for checks
 no gate step is, such as a targeted test run, a command at a time: the working
 tree it ran in, the commit and the uncommitted changes it ran on, each step's
 command and exit code, the tests each test step ran, how long its heavy runs
-waited at the heavy-test gate, whether one went in without the room it asked
-for, at what load and beside which runs, and the
+waited at the heavy-test gate, at what load and beside which runs, and the
 versions of the tools. A report cites the record instead of retelling it. `check` accepts a
 record made in DIR, by default this checkout, at the state DIR is in now, and
 refuses one made in another working tree, at another commit or on other
@@ -61,11 +60,10 @@ TEST_COUNTS: dict[str, re.Pattern[bytes]] = {
 
 
 #: What a run says as it goes through the heavy-test gate, `tests/machine_lock.py`'s
-#: `admission_line`, in any step: how long it waited, whether it went in without the
-#: room it waited for, how busy the machine was, and the runs it went beside.
+#: `admission_line`, in any step: how long it waited, how busy the machine was, and
+#: the runs it went beside, one after another.
 ADMISSION = re.compile(
-    rb"^took the heavy-test lock after (?:(\d+) min )?(\d+) s"
-    rb"( without the room it asked for[^:\n]*)?: [^\n]*?,"
+    rb"^took the heavy-test lock after (?:(\d+) min )?(\d+) s: [^\n]*?,"
     rb" (?:the machine (\d+)% busy|the load not measured),"
     rb" (?:alone|beside \d+ runs?: ([^\n]*?))\r?$",
     re.MULTILINE,
@@ -75,20 +73,18 @@ ADMISSION = re.compile(
 def admissions(log: Path) -> list[dict[str, object]]:
     """Each place a step's runs took at the heavy-test gate, by its log, in order.
 
-    The seconds it waited, whether it went in without the room it asked for, so that
-    a failure in it reads as load, the busy fraction it went in at (None where the
-    load was not measured) and each run it went beside, as the gate named them.
+    The seconds it waited, the busy fraction it went in at (None where the load was
+    not measured) and each run it went beside, as the gate named them.
     """
 
     found: list[dict[str, object]] = []
-    for minutes, seconds, short, busy, beside in ADMISSION.findall(log.read_bytes()):
+    for minutes, seconds, busy, beside in ADMISSION.findall(log.read_bytes()):
         # Names for a reader of the record, in whatever code page the console wrote a
         # checkout's path; nothing decides on them.
         runs = beside.decode("utf-8", errors="replace")
         found.append(
             {
                 "waited": int(minutes or 0) * 60 + int(seconds),
-                "without_room": bool(short),
                 "busy": int(busy) / 100 if busy else None,
                 "beside": runs.split("; ") if runs else [],
             }

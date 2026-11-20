@@ -6,38 +6,39 @@
 A development tool beside the tests, as `tests/isolated.py` is. Heavy runs that
 together want more CPUs than the machine has — the whole unittest suite under
 coverage, the Vitest suite, the whole browser suite — fail timing-sensitive tests
-that pass alone, so each declares the logical CPUs it needs and goes in only when
-both hold:
+that pass alone, so each declares the logical CPUs it needs, and goes in:
 
-- the needs of the heavy runs going plus its own fit the CPUs the gate hands out,
-  the machine's logical CPUs unless `CPUS_VARIABLE` names another count; and
-- the CPUs free now, measured system-wide over `MEASURE_SECONDS` and less the
-  needs of runs that went in within `RAMP_SECONDS`, are at least its need, a need
-  above `ROOM_FRACTION` of the machine held to that fraction. This is what sees
-  load that never declares itself here: targeted runs, builds, an antivirus.
-
-The second rule only delays a run. One that it alone keeps out — the first rule
-holds, no waiter is ahead of it and no earlier version's run holds the lock —
-waits for that room `ROOM_WAIT_SECONDS` at most, counted from the first round
-that refused it for that alone, then goes in without it and says so, and the run
-record carries that: before the gate a run started once the lock was free,
-whatever the load, and load nothing here declares must not hold the head of the
-queue for ever. A wait for the first rule or for an earlier version's run starts
-no such count.
+- when no other heavy run is going, at once, whatever the machine's load, as a
+  run did before the gate; nothing is measured;
+- beside other heavy runs only when both hold: their needs plus its own fit the
+  CPUs the gate hands out, the machine's logical CPUs unless `CPUS_VARIABLE`
+  names another count; and the CPUs free, measured system-wide over
+  `MEASURE_SECONDS` and less the needs of runs that went in within
+  `RAMP_SECONDS`, are at least its need. The measurement is what sees load that
+  never declares itself here: targeted runs, builds, an antivirus. A run that
+  does not fit waits until it does or until it would be alone, which is never
+  longer than one heavy run at a time made it wait.
 
 A run that declares nothing asks for every CPU the gate hands out, so it goes
 alone and nothing joins it; the browser suite does, because it takes whatever
-the machine has. Where the load cannot be measured only the first rule decides.
-At a count of 1 every run asks for the whole machine and the load is not read:
-one heavy run at a time, which is what this tool did before and the rollback.
+the machine has. Where the load cannot be measured the needs alone decide. At a
+count of 1 every run asks for the whole machine and goes alone: one heavy run at
+a time, which is what this tool did before and the rollback.
 
 One run decides at a time, and waiters go in the order they came: a later run
 waits behind an earlier waiter even where it would fit, so a run that needs the
 whole machine is not passed for ever by smaller ones. An earlier version's waiter
 is outside that order, so runs sharing the machine can pass it again and again;
-that lasts until no branch uses the earlier version any more. A waiter says why it waits
-when it starts and every minute; the run says on going in how long it waited,
-how busy the machine was and which runs it goes beside.
+that lasts until no branch uses the earlier version any more. A waiter says why
+it waits when it starts and every minute; the run says on going in how long it
+waited, how busy the machine was and which runs it goes beside.
+
+The load is measured outside the decision, which every run's start and end waits
+for, and the decision that follows reads the runs going afresh. The measurement it
+uses is still safe: the needs are read at the decision, the measuring run keeps
+its place at the head of the queue, so no other run goes in while it measures,
+and a run that went in shortly before counts by its need while the load does not
+show it yet. A run that ended meanwhile only makes the reading high.
 
 The commands go through it themselves: the `tests` package's `load_tests` for a
 run of the whole suite, and `web/tests/unitRun.ts` and
@@ -110,16 +111,9 @@ CPUS_VARIABLE = "VALKAMA_HEAVY_TEST_CPUS"
 #: next, against 0.07 for 1-second ones: steady beside needs of 2 and 8 CPUs, and a
 #: waiter measures again on its next round.
 MEASURE_SECONDS = 3.0
-#: The share of the machine the measured room is held to, so that a run that needs
-#: the whole machine can start where only light background work goes on.
-ROOM_FRACTION = 0.7
 #: How long a run that went in counts against the measured room by its need: it
 #: has not loaded the machine yet when it starts, so the load does not show it.
 RAMP_SECONDS = 60.0
-#: How long a run nothing here keeps out waits for the measured room, from the first
-#: round that refused it for that alone; then it goes in without it and says so.
-#: Before the gate a run started once the lock was free, whatever the machine's load.
-ROOM_WAIT_SECONDS = 180.0
 
 
 def logon_local_app_data() -> str | None:
@@ -508,29 +502,21 @@ def arithmetic_refusal(need: int, going: Sequence[Entry], capacity: int) -> str 
     )
 
 
-def _room(
-    need: int, going: Sequence[Entry], cpus: int, busy: float, now: float
-) -> tuple[float, float, int]:
-    """The CPUs free for `need`, the room it asks for, and the needs of runs still starting."""
-
-    ramping = sum(entry.cpus for entry in going if now - entry.since < RAMP_SECONDS)
-    return cpus * (1 - busy) - ramping, min(float(need), ROOM_FRACTION * cpus), ramping
-
-
 def room_refusal(
     need: int, going: Sequence[Entry], cpus: int, busy: float | None, now: float
 ) -> str | None:
-    """Why the machine has no room for `need` now, or None when it has or its load is unknown."""
+    """Why the machine has no room for `need` beside `going`, or None when it has or its load is unknown."""
 
     if busy is None:
         return None
-    free, wanted, ramping = _room(need, going, cpus, busy, now)
-    if free >= wanted:
+    ramping = sum(entry.cpus for entry in going if now - entry.since < RAMP_SECONDS)
+    free = cpus * (1 - busy) - ramping
+    if free >= need:
         return None
     starting = f", less {_cpus(ramping)} of runs still starting" if ramping else ""
     return (
         f"{max(0.0, free):.1f} of {_cpus(cpus)} are free (the machine {busy:.0%} busy{starting}),"
-        f" and this run needs {wanted:g}"
+        f" and this run needs {need}"
     )
 
 
@@ -544,25 +530,10 @@ def queue_refusal(ahead: Sequence[Entry]) -> str | None:
 
 
 def admission_line(
-    waited: float,
-    need: int,
-    capacity: int,
-    busy: float | None,
-    beside: Sequence[Entry],
-    without_room: tuple[float, float] | None = None,
+    waited: float, need: int, capacity: int, busy: float | None, beside: Sequence[Entry]
 ) -> str:
-    """What a run says as it goes in; `tests/run_record.py` reads its facts back.
+    """What a run says as it goes in; `tests/run_record.py` reads its facts back."""
 
-    `without_room` is the CPUs that were free and the room the run asked for, when
-    it went in after waiting `ROOM_WAIT_SECONDS` for that room.
-    """
-
-    short = (
-        ""
-        if without_room is None
-        else f" without the room it asked for, {max(0.0, without_room[0]):.1f} CPUs"
-        f" free where it needs {without_room[1]:g}"
-    )
     load = "the load not measured" if busy is None else f"the machine {busy:.0%} busy"
     runs = (
         "alone"
@@ -571,7 +542,7 @@ def admission_line(
         f" {'; '.join(entry.named() for entry in beside)}"
     )
     return (
-        f"took the heavy-test lock after {_duration(waited)}{short}:"
+        f"took the heavy-test lock after {_duration(waited)}:"
         f" {need} of {_cpus(capacity)}, {load}, {runs}"
     )
 
@@ -638,37 +609,34 @@ def held(
     ticket_seq = 0
     place: tuple[BinaryIO, Path] | None = None
     gate: BinaryIO | None = None
-    # When the measured room alone first kept this run out: nothing a run here declared.
-    room_since: float | None = None
+    # A measurement taken outside the decision, for the next decision to use: the load
+    # is measured for seconds, and the decision holds up every other run's.
+    reading: tuple[float | None] | None = None
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         while place is None:
+            admitted: str | None = None
             with _deciding(path.with_name(f"{path.name}.admission")):
                 now = clock()
                 going, waiting = entries(path, reclaim=True)
                 ahead = [entry for entry in waiting if ticket is None or entry.seq < ticket_seq]
-                busy: float | None = None
-                without_room: tuple[float, float] | None = None
+                measured = reading is not None
+                busy = reading[0] if reading is not None else None
+                reading = None
                 reason = queue_refusal(ahead) or arithmetic_refusal(need, going, capacity)
-                # Asked before the load is measured, and the lock taken after: a run that is
-                # only measuring holds nothing an earlier version's run would wait for.
                 if reason is None and _held_exclusively(path):
                     # Nothing here holds it, so a run of an earlier version does.
                     reason = f"it is held by {holder(path)}"
-                if reason is None:
-                    busy = measure() if capacity > 1 else None
-                    measured = clock()
-                    reason = room_refusal(need, going, machine, busy, measured)
-                    if reason is not None and busy is not None:
-                        room_since = measured if room_since is None else room_since
-                        if measured - room_since >= ROOM_WAIT_SECONDS:
-                            free, wanted, _ramping = _room(need, going, machine, busy, measured)
-                            without_room = (free, wanted)
-                            reason = None
-                if reason is None:
+                # The room counts only for a run that would go in beside others: alone, it
+                # goes in as soon as nothing holds the lock, whatever the load, as it did
+                # before the gate.
+                measuring = reason is None and bool(going) and not measured
+                if reason is None and going and measured:
+                    reason = room_refusal(need, going, machine, busy, now)
+                if reason is None and not measuring:
                     gate = path.open("a+b")
                     if not _try_lock(gate, shared=shared):
-                        # Taken by an earlier version's run while the load was measured.
+                        # Taken by an earlier version's run since it was found free.
                         gate.close()
                         gate = None
                         reason = f"it is held by {holder(path)}"
@@ -680,12 +648,19 @@ def held(
                         _leave(*ticket)
                         ticket = None
                     waited = time.monotonic() - started
-                    say(admission_line(waited, need, capacity, busy, going, without_room))
-                    break
-                if ticket is None:
+                    admitted = admission_line(waited, need, capacity, busy, going)
+                elif ticket is None:
+                    # A place in the queue, held while it measures too, so no later run
+                    # goes in on the room this one is measuring.
                     ticket_seq = max((entry.seq for entry in waiting), default=0) + 1
                     record = {**own, "since": now, "seq": ticket_seq}
                     ticket = _place(directory, f"wait-{ticket_seq:09d}", record)
+            if admitted is not None:
+                say(admitted)
+                break
+            if measuring:
+                reading = (measure(),)
+                continue
             if time.monotonic() >= next_report:
                 if next_report == started:
                     say(f"waiting for the heavy-test lock {path}: {reason}")

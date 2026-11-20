@@ -31,12 +31,13 @@ Each rule here is a way a hand-written wrapper went wrong:
   directory of the task it was first written for.
 - `serve` says when the committed `web/dist` it serves is behind `web/src`. A
   browser check once took screenshots of a bundle ten commits behind its sources.
-- The `unittest` step holds the machine's heavy-test lock, `tests/machine_lock.py`,
-  for its own duration and no longer, and runs marked as under it, because the
-  suite takes that lock itself. The whole suite beside another checkout's failed
-  timing budgets that hold alone, so a second such run waits and says for whom in
-  the summary. No other step is held here; the Vitest run of `npm test` takes the
-  lock on its own and says so in its step's log.
+- The `unittest` step holds a place at the machine's heavy-test gate,
+  `tests/machine_lock.py`, for its own duration and no longer, declaring the CPUs
+  the whole suite declares, and runs marked as under it, because the suite takes
+  that place itself. The whole suite beside another checkout's heavy runs failed
+  timing budgets that hold alone, so the step waits until it fits, and what the
+  gate said while it waited opens the step's log. No other step is held here; the
+  Vitest run of `npm test` goes through the gate on its own and says so in its log.
 - A run is cited, not retold: reports that retyped results got them wrong, so
   each `gates` run leaves the record `tests/run_record.py` describes and checks.
 
