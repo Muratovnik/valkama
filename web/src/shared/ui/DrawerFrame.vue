@@ -34,6 +34,9 @@ const emit = defineEmits<{ close: [] }>()
  * that flip took from under a reader — a press, a focus, a position — had its own
  * repair. A tall pinned head ate the drawer, which is what the flip was for; a bar and
  * one row of tabs pin less than it did.
+ *
+ * The bar's controls, the host's and then Close, stand in `data-drawer-controls`: the first of
+ * them is the first control a Tab into the drawer reaches.
  */
 const frame = ref<HTMLElement | null>(null)
 const bar = ref<HTMLElement | null>(null)
@@ -167,8 +170,11 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
       :class="{ 'title-away': away.titleAway, 'action-away': away.actionAway }"
     >
       <!-- The controls come first in the document and stand at the row's end: focus
-           going in reaches Back or Close, and not a fact. -->
-      <div class="drawer-frame-controls">
+           going in reaches the first of them, on a card Back, «…» or Close, and not a fact. -->
+      <div
+        class="drawer-frame-controls"
+        data-drawer-controls
+      >
         <slot name="controls" />
         <button
           class="drawer-frame-close"

@@ -104,14 +104,18 @@ test.describe('in Russian', () => {
       'Выполнено',
     ])
 
-    // A row of the list says its state.
+    // A row of the list says its state, in the column its heading names: the columns the
+    // list draws before it are the list's to choose.
     await page.goto(boardRoute({ view: 'list' }))
-    // The row's cells: its reference, its title, then its state.
+    const list = page.getByRole('table', { name: /^Работа этого пространства/u })
+    const stateHead = list.getByRole('columnheader', { name: 'Состояние', exact: true })
+    await expect(stateHead).toHaveCount(1)
+    const stateColumn = await stateHead.evaluate((head) => (head as HTMLTableCellElement).cellIndex)
     const listed = (reference: string) =>
-      page
+      list
         .getByRole('row', { name: new RegExp(`^${reference} `, 'u') })
         .getByRole('cell')
-        .nth(2)
+        .nth(stateColumn)
     await expect(listed('MAIN-12')).toHaveText('В работе')
     await expect(listed('MAIN-13')).toHaveText('Code review')
 

@@ -962,7 +962,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and to the close, and focus moves to the new content's first control as it
   does on an open. A panel opened by no input, from an address or a reload, holds
   focus on what it is read with until a Tab, so that no control stands ringed for
-  something nobody pressed and the keys that scroll work at once. A card an
+  something nobody pressed and the keys that scroll work at once. That Tab goes on to
+  the first control, on a card the first of Back, «…» and Close its bar holds. A card an
   address opens does not wait for its space: it reads its own record beside the
   space's read, and what it takes from the space — the states it may move to,
   its parent's reference — comes in later into places already held for it, the

@@ -28,6 +28,15 @@ const reader = (drawer: Locator) => drawer.locator('.drawer-frame-body')
 const ringedControls = (page: Page) => page.locator('.drawer :is(button, a[href]):focus-visible')
 const ringed = (control: Locator) => control.evaluate((node) => node.matches(':focus-visible'))
 
+/**
+ * Where a Tab into the card goes first: its first control, the first of Back, «…» and Close
+ * that its bar holds, in that order (DESIGN.md, the card's bar). Which of them stand there
+ * depends on the card: Back only after a link, «…» only once the item is read and offers
+ * something.
+ */
+const firstControl = (drawer: Locator) =>
+  drawer.locator('[data-drawer-controls]').getByRole('button').first()
+
 /** A page that hears routes from outside as the desktop app hands them over, from no input. */
 async function canBeHandedRoutes(page: Page) {
   await page.addInitScript(() => {
@@ -68,10 +77,10 @@ for (const width of [1440, 390]) {
     await expect(reader(drawer)).toHaveCSS('outline-style', 'none')
     await expect(ringedControls(page)).toHaveCount(0)
 
-    const close = drawer.locator('.drawer-frame-close')
+    const first = firstControl(drawer)
     await page.keyboard.press('Tab')
-    await expect(close).toBeFocused()
-    expect(await ringed(close)).toBe(true)
+    await expect(first).toBeFocused()
+    expect(await ringed(first)).toBe(true)
   })
 }
 
@@ -133,7 +142,7 @@ test('a reload forgets the input before it: the card it opens rings nothing', as
   await page.goto(CARD)
   const before = await cardBeingRead(page)
   await page.keyboard.press('Tab')
-  await expect(before.locator('.drawer-frame-close')).toBeFocused()
+  await expect(firstControl(before)).toBeFocused()
   await page.reload()
   const drawer = await cardBeingRead(page)
   await expect(reader(drawer)).toBeFocused()
@@ -154,7 +163,7 @@ test('a route handed over to a card nobody has touched moves focus nowhere and r
   await expect(reader(drawer)).toBeFocused()
   await expect(ringedControls(page)).toHaveCount(0)
   await page.keyboard.press('Tab')
-  await expect(drawer.locator('.drawer-frame-close')).toBeFocused()
+  await expect(firstControl(drawer)).toBeFocused()
 })
 
 test('a route handed over to a card read from the keyboard shows where focus went', async ({
@@ -166,7 +175,7 @@ test('a route handed over to a card read from the keyboard shows where focus wen
   await page.goto(CARD)
   const drawer = await cardBeingRead(page)
   await page.keyboard.press('Tab')
-  await expect(drawer.locator('.drawer-frame-close')).toBeFocused()
+  await expect(firstControl(drawer)).toBeFocused()
   await handOver(page, OTHER_CARD)
   await expect(drawer.locator('.head-reference')).toHaveText(blockedWorkItem.reference)
   const close = drawer.locator('.drawer-frame-close')
