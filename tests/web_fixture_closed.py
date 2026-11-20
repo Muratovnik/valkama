@@ -10,6 +10,9 @@ cancelled one at the first after it. Inside stand a cancelled task, a goal finis
 task filed straight into a finished state, which never moved: its last write falls after the
 period, so the moment `closed_at` gives it is not the one the read counts. An open task that came
 to stand in triage inside the period is counted by neither.
+
+Some carry the label `ui`, the goal among them, and the read is asked a second time under it:
+narrowed by a label, the read counts tasks alone, so the goal is not among them.
 """
 
 from __future__ import annotations
@@ -34,6 +37,16 @@ CARDS = (
     ("Filed finished inside the period", "task", None, "2026-11-14T10:00:00Z"),
     ("Open since inside the period", "task", None, "2026-11-13T10:00:00Z"),
 )
+#: The label the second read narrows to, and the cards that carry it.
+LABEL = "ui"
+LABELLED = frozenset(
+    {
+        "Finished at the period's first moment",
+        "Cancelled inside the period",
+        "Goal finished inside the period",
+        "Filed finished inside the period",
+    }
+)
 #: The last write of the card filed finished, after the period.
 LATER = "2026-11-25T10:00:00Z"
 
@@ -43,7 +56,10 @@ def _file(conn, title: str, kind: str, state: str | None) -> str:
     accepted when filed, since only accepted work is completed."""
 
     accepted = {"acceptance": "assignment"} if kind == "goal" else {}
-    filed = service.create_work_item(conn, space=SPACE, title=title, kind=kind, **accepted)
+    labels = [LABEL] if title in LABELLED else []
+    filed = service.create_work_item(
+        conn, space=SPACE, title=title, kind=kind, labels=labels, **accepted
+    )
     reference = str(filed["reference"])
     if state is not None:
         service.set_summary(conn, reference, {"done": "Over.", "next": "Nothing."})
@@ -56,7 +72,8 @@ def _file(conn, title: str, kind: str, state: str | None) -> str:
 def closed_in_period(
     http: Callable[[str], dict], data_scope_id: str, settle: Callable[[dict], None]
 ) -> dict:
-    """The space's board, settled as every board fixture is (`settle`), and its Volumes read."""
+    """The space's board, settled as every board fixture is (`settle`), and its Volumes read,
+    whole and under the label."""
 
     conn = store.connect()
     try:
@@ -91,5 +108,7 @@ def closed_in_period(
     ref = {"data_scope_id": data_scope_id, "space_key": SPACE}
     board = http(f"/api/planning?{urlencode(ref)}")
     settle(board)
-    volumes = http(f"/api/planning/volumes?{urlencode({'scope_kind': 'space', **ref, **PERIOD})}")
-    return {"board": board, "volumes": volumes}
+    query = {"scope_kind": "space", **ref, **PERIOD}
+    volumes = http(f"/api/planning/volumes?{urlencode(query)}")
+    labelled = http(f"/api/planning/volumes?{urlencode({**query, 'label': LABEL})}")
+    return {"board": board, "volumes": volumes, "volumes_labelled": labelled}

@@ -3257,7 +3257,11 @@ frame to the pressed number, moving every other one. Opening that list moves not
 
 A number opens the place that shows exactly what it counts. An open category's opens the board
 of the same scope narrowed to the category, with the page's kind and label; a label alone names
-the three kinds of a task there, so no goal carrying it comes in. «Waiting for me» counts
+the three kinds of a task there, so no goal carrying it comes in. Done and Cancelled count what
+came to a close in the period, so they open the Work list of the same scope, ungrouped, with
+the category, the page's kind and label, and the filter's condition «Closed in a period» for the
+page's period, which keeps exactly the cards they count and names the period on its chip. At the
+top they stay figures, as every category does there. «Waiting for me» counts
 questions, two questions on one card being two, so it opens the questions window, in a space
 and at the top alike, rather than the board, where two questions on one card would be one row.
 Opened from a space, the window lists that space's own questions, read narrowed by the server,
@@ -3269,8 +3273,7 @@ nothing finer, so the window opened from a project shows the whole space's, and 
 on another space's cards that name a project of the space, which the number counts, are not
 among them until its read can name them.
 A number that opens nothing is a figure, not a control, and its hint says why: every space has
-no board of its own, the portfolio standing there, so at the top no category opens; Done and
-Cancelled count the period's closed cards, and no filter of Work narrows to a period. «Commits
+no board of its own, the portfolio standing there, so at the top no category opens. «Commits
 on no card» is «—» where their list cannot be read for the scope.
 
 «Commits on no card» shows their list under the numbers and hides it again, the number saying
