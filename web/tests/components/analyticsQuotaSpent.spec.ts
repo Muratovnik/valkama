@@ -49,6 +49,14 @@ const usage = (query: URLSearchParams) => serveUsage(WORLD, query)
 
 /** Words as a reader reads them: the app keeps a figure and its unit together with a no-break space. */
 const plain = (text: string) => text.replaceAll('\u{A0}', ' ')
+/** What a part says to a reader: its words without the room it keeps unseen (`aria-hidden`). */
+function said(part: Omit<DOMWrapper<Element>, 'exists'>) {
+  const copy = part.element.cloneNode(true) as Element
+  for (const unseen of copy.querySelectorAll('[aria-hidden="true"]')) unseen.remove()
+  return plain(copy.textContent ?? '')
+    .replaceAll(/\s+/gu, ' ')
+    .trim()
+}
 
 function accountNamed(page: VueWrapper, name: string) {
   const found = page
@@ -320,14 +328,14 @@ describe('the states of what used a window', () => {
     // The other account's work on MAIN-1 was before its five hours began.
     const none = await openSpend(page, NIGHT_NAME)
     expect(none.attributes('data-state')).toBe('none')
-    expect(none.get('.window-spend-body').text()).toBe(
+    expect(said(none.get('.window-spend-body'))).toBe(
       'No work was recorded on this account in this window.',
     )
     // With no lines its heading names the stretch alone, no sum.
     expect(none.get('h3').text()).toMatch(/^Window breakdown: \d{2}:\d{2} – \d{2}:\d{2}$/u)
     const unplaced = await openSpend(page, SEATED_NAME)
     expect(unplaced.attributes('data-state')).toBe('unplaced')
-    expect(plain(unplaced.get('.window-spend-body').text())).toBe(
+    expect(said(unplaced.get('.window-spend-body'))).toBe(
       'No work was recorded on this account in this window. Not counted here: ≈ $4.00 of work in its organization with the account unknown.',
     )
     expect(unplaced.find('.ranked-bars').exists()).toBe(false)
@@ -385,5 +393,43 @@ describe('the states of what used a window', () => {
     await flushPromises()
     expect(blockIn(page).attributes('data-state')).toBe('spent')
     expect(lines(blockIn(page))[0]).toEqual(['MAIN-1 Answer a review', '≈ $6.00 · 46%'])
+  })
+
+  it('keeps its lines when a read again fails, and says so in the room it kept for those words', async () => {
+    let at = NOW
+    let fails = false
+    const reads = stubAnalyticsReads(
+      (query) => (isSpend(query) && fails ? { status: 503 } : usage(query)),
+      () => quotaAnswer(quotaAt(at)),
+    )
+    const page = await openFiveHours()
+    await openSpend(page, 'Work')
+    const first = lines(blockIn(page))[0]
+    expect(first).toEqual(['MAIN-1 Answer a review', '≈ $6.00 · 46%'])
+    // The words a read again that fails would say stand in the block unseen while an answer
+    // stands, under the status that says them (DESIGN.md § Analytics: nothing moves when it is
+    // said or when the next answer replaces it).
+    const room = () => blockIn(page).get('.window-spend-again [aria-hidden="true"]')
+    const status = () => blockIn(page).get('.window-spend-again [role="status"]')
+    expect(plain(room().text())).toMatch(/^Could not refresh; .+ Retry$/u)
+    expect(status().text()).toBe('')
+
+    // The quota answers ten minutes on, a new step of what used the window, and its read fails.
+    fails = true
+    at = new Date(NOW.getTime() + 10 * 60_000)
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(reads.quotaAsked).toHaveLength(2)
+    expect(lines(blockIn(page))[0], 'the lines it showed stay').toEqual(first)
+    expect(plain(status().text()), 'said in the words whose room it kept').toBe(
+      plain(room().text()),
+    )
+    expect(blockIn(page).findAll('.window-spend-again')).toHaveLength(1)
+
+    fails = false
+    await status().get('button').trigger('click')
+    await flushPromises()
+    expect(status().text()).toBe('')
+    expect(plain(room().text())).toMatch(/^Could not refresh; .+ Retry$/u)
   })
 })

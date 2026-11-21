@@ -3058,7 +3058,12 @@ organization's work on no known account, when its panel opens, never for a windo
 opened, so another account's work
 is never in it; work its organization recorded with no account known is a quiet line of its
 own, never counted to the account. No work, only such work, a wait and a read that failed, with
-its retry, each say so in the panel, and the quota's own figures stand meanwhile. It stands
+its retry, each say so in the panel, and the quota's own figures stand meanwhile. A read again
+that fails, a newer step of the window, keeps the lines and says «Could not refresh; data as of
+13:20 may be out of date. Retry» under them, in room the block keeps for those words while any
+answer stands, so nothing moves when it is said or when the next answer replaces it: said in room
+of its own it took 36px under the lines and gave them back, and a panel scrolled to its end moved
+by as much. It stands
 apart from the window's bar and readings, on no axis of theirs: under the window it was a block
 as tall as the window again, and every window of every account read what used it whether or not
 anyone asked.
