@@ -2,6 +2,7 @@
 
     python tests/isolated.py gates --out DIR [--only NAME ...] [--owner]
     python tests/isolated.py serve --out DIR [--store-copy [SOURCE]]
+    python tests/isolated.py profile --out DIR --store-copy [SOURCE] [--copy PATH ...]
     python tests/isolated.py stop --out DIR
 
 A development tool and not part of the product: `valkama` has no such command,
@@ -47,6 +48,21 @@ the whole profile goes when the server stops or fails. One process owns that:
 `serve` starts a supervisor and returns; the supervisor holds the server's
 process handle, so it cannot stop a process that merely reused the number, and
 it cleans up when the server dies with nobody watching.
+
+`profile` makes the same home with no server, for a rehearsal run by hand: the
+store copy, the project registry, the installed Host Runtime (`~/.agent-host-runtime`),
+a copy of the global Git configuration and each `--copy PATH` of the caller's home.
+It writes the child's environment twice, as `env.json` for a program and as
+`env.ps1` for a `pwsh` that dot-sources it, with a free `VALKAMA_PORT` and the
+client homes `CLAUDE_CONFIG_DIR` and `CODEX_HOME` removed. Two more rules hold
+there:
+
+- A profile is made only in a directory that does not exist yet, and `stop`
+  removes all of it. A run into a used directory is how an earlier home reads as
+  state.
+- No link is followed or copied: a link copied as a link lets a child write
+  through it into what it names, so each one left out is named instead, and
+  `stop` removes a link without entering it.
 """
 
 from __future__ import annotations
@@ -73,7 +89,7 @@ from typing import NamedTuple
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from server import processes, store
+from server import git_worktrees, processes, store
 from server.projects import project_registry, registry_owner
 from windows import release
 
@@ -83,6 +99,12 @@ STATE = "serve.json"
 STOP = "serve.stop"
 SUMMARY = "gates.txt"
 SUPERVISE = "supervise"
+PROFILE_ENV = "env.json"
+PROFILE_SCRIPT = "env.ps1"
+#: The installed Host Runtime, which a rehearsal of the transition installs into.
+HOST_RUNTIME = ".agent-host-runtime"
+#: Where an agent client reads its own state when set; a profile's child must not.
+CLIENT_HOMES = ("CLAUDE_CONFIG_DIR", "CODEX_HOME")
 
 #: Long enough for a large store copy to migrate before the listener opens.
 START_SECONDS = 180.0
@@ -194,6 +216,22 @@ def store_path(home: Path) -> Path:
     return home / store.DATA_ROOT / f"{store.DATA_PREFIX}.sqlite3"
 
 
+def _moved(home: Path) -> dict[str, str]:
+    real_store = Path(store.data_root()) / f"{store.DATA_PREFIX}.sqlite3"
+    return {
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "LOCALAPPDATA": str(home / "AppData" / "Local"),
+        "APPDATA": str(home / "AppData" / "Roaming"),
+        "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
+        "VALKAMA_DB": str(store_path(home)),
+        "VALKAMA_NO_TRAY": "1",
+        "VALKAMA_NO_ALERTS": "1",
+        "VALKAMA_PROTECTED_STORE": str(real_store),
+        "PYTHONUTF8": "1",
+    }
+
+
 def isolated_environment(home: Path) -> dict[str, str]:
     """The caller's environment with every user location moved into `home`.
 
@@ -206,26 +244,12 @@ def isolated_environment(home: Path) -> dict[str, str]:
     and a test of it must never reach the caller's, whatever Git takes for home.
     """
 
-    real_store = Path(store.data_root()) / f"{store.DATA_PREFIX}.sqlite3"
     environment = {
         name: value
         for name, value in os.environ.items()
         if not name.upper().startswith("VALKAMA_") and name.upper() != "GIT_CONFIG_GLOBAL"
     }
-    environment.update(
-        {
-            "HOME": str(home),
-            "USERPROFILE": str(home),
-            "LOCALAPPDATA": str(home / "AppData" / "Local"),
-            "APPDATA": str(home / "AppData" / "Roaming"),
-            "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
-            "VALKAMA_DB": str(store_path(home)),
-            "VALKAMA_NO_TRAY": "1",
-            "VALKAMA_NO_ALERTS": "1",
-            "VALKAMA_PROTECTED_STORE": str(real_store),
-            "PYTHONUTF8": "1",
-        }
-    )
+    environment.update(_moved(home))
     return environment
 
 
@@ -245,17 +269,21 @@ def _git_settings() -> dict[str, str]:
     return settings
 
 
-def prepare_home(home: Path) -> None:
-    """A new, empty profile, so nothing from an earlier run reads as state."""
-
-    if not remove_tree(home):
-        raise ServeError(f"could not clear {home}")
+def _make_home(home: Path) -> None:
     for directory in (
         home / store.DATA_ROOT,
         home / "AppData" / "Local",
         home / "AppData" / "Roaming",
     ):
         directory.mkdir(parents=True)
+
+
+def prepare_home(home: Path) -> None:
+    """A new, empty profile, so nothing from an earlier run reads as state."""
+
+    if not remove_tree(home):
+        raise ServeError(f"could not clear {home}")
+    _make_home(home)
     for key, value in _git_settings().items():
         processes.run_text(["git", "config", "--file", str(home / ".gitconfig"), key, value])
 
@@ -539,8 +567,9 @@ def _argv(command: str, tools: Mapping[str, tuple[str, ...]]) -> list[str]:
 
 
 def gates(steps: Sequence[Step], out: Path) -> int:
-    if _read_state(out) is not None:
-        _say(f"a server is recorded in {out}; run stop first")
+    occupied = _occupied(out)
+    if occupied is not None:
+        _say(occupied)
         return 1
     interpreter = release.running_interpreter()
     requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
@@ -660,13 +689,14 @@ def bundle_warning(root: Path) -> str | None:
 # --- serve -------------------------------------------------------------------
 
 
-def copy_store(source: Path, target: Path) -> None:
-    """Back `source` up into `target` through a connection that cannot write to it."""
+def copy_store(source: Path, home: Path) -> None:
+    """Copy `source` to where the profile's store goes, as the product's own copy does.
 
-    uri = f"{source.resolve().as_uri()}?mode=ro"
-    with contextlib.closing(sqlite3.connect(uri, uri=True)) as reader:
-        with contextlib.closing(sqlite3.connect(target)) as writer:
-            reader.backup(writer)
+    That copy reads through a connection that cannot write, and leaves no journal
+    beside a store nobody has open.
+    """
+
+    store.copy_store(str(source), str(store_path(home).parent))
 
 
 def _write_state(out: Path, state: Mapping[str, object]) -> None:
@@ -757,7 +787,7 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
     try:
         prepare_home(home)
         if source is not None:
-            copy_store(source, store_path(home))
+            copy_store(source, home)
             copy_registry(home)
         argv = command or [sys.executable, "valkama.py", "serve", "--port", "0"]
         with log.open("wb") as output:
@@ -788,7 +818,7 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
             time.sleep(POLL_SECONDS)
         if not stop_file.exists():
             problems.append(f"the server exited with code {server.returncode}; see {log}")
-    except (OSError, sqlite3.Error, ServeError) as error:
+    except (OSError, sqlite3.Error, RuntimeError) as error:
         problems.append(str(error))
     finally:
         if server is not None and server.poll() is None:
@@ -822,6 +852,16 @@ def alive(pid: int) -> bool:
     return True
 
 
+def _occupied(out: Path) -> str | None:
+    """Why `out` may not take a new home, or None: a server or a profile holds the one there."""
+
+    if _read_state(out) is not None:
+        return f"a server is recorded in {out}; run stop first"
+    if (out / PROFILE_ENV).is_file():
+        return f"a profile is in {out}; run stop first"
+    return None
+
+
 def _clear_state(out: Path) -> None:
     (out / STATE).unlink(missing_ok=True)
     (out / STOP).unlink(missing_ok=True)
@@ -830,8 +870,9 @@ def _clear_state(out: Path) -> None:
 def start(out: Path, source: Path | None) -> int:
     """Start a supervisor, wait until it says how the start went, and return."""
 
-    if _read_state(out) is not None:
-        _say(f"a server is recorded in {out}; run stop first")
+    occupied = _occupied(out)
+    if occupied is not None:
+        _say(occupied)
         return 1
     (out / LOGS).mkdir(parents=True, exist_ok=True)
     argv = [sys.executable, __file__, SUPERVISE, "--out", str(out)]
@@ -922,10 +963,20 @@ def _wait_for_end(out: Path, supervisor: int) -> dict | None:
 
 
 def stop(out: Path) -> int:
-    """Stop what `serve` started in `out` and remove its profile; say what went wrong."""
+    """Stop what `serve` started in `out` and remove its profile; say what went wrong.
+
+    A rehearsal profile has no server, and the whole of `out` is its own. Its home
+    goes first, so a removal that fails there leaves the profile for the next stop.
+    """
 
     home = out / HOME
     state = _read_state(out)
+    if state is None and (out / PROFILE_ENV).is_file():
+        if not (remove_tree(home) and remove_tree(out)):
+            _say(f"stop failed: {out} is still on disk; it may hold a store copy")
+            return 1
+        _say(f"removed the profile {out}")
+        return 0
     if state is None:
         remove_tree(home)
         _say(f"no server is recorded in {out}")
@@ -953,12 +1004,168 @@ def stop(out: Path) -> int:
     return 0
 
 
+# --- the rehearsal profile ---------------------------------------------------
+
+
+def free_port() -> int:
+    """A port nothing listens on now; free when asked, not reserved."""
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def profile_environment(home: Path, port: int) -> tuple[dict[str, str], list[str]]:
+    """What a profile's child sets, and what it removes, against the caller's environment.
+
+    The settings are those of `isolated_environment`, the profile's own Git
+    configuration among them, plus the profile's port. Removed are the client homes
+    and whatever of the caller's `isolated_environment` would not pass on.
+    """
+
+    settings = {**_moved(home), "VALKAMA_PORT": str(port)}
+    passed = isolated_environment(home)
+    dropped = {name for name in os.environ if name not in passed and name not in settings}
+    return settings, sorted(dropped | set(CLIENT_HOMES))
+
+
+def _powershell(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def write_environment(out: Path, settings: Mapping[str, str], removed: Sequence[str]) -> None:
+    """`env.json` for a program and `env.ps1` for a `pwsh` that dot-sources it."""
+
+    document = {"set": dict(settings), "unset": list(removed)}
+    (out / PROFILE_ENV).write_text(
+        json.dumps(document, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
+    lines = ["# The environment of a rehearsal profile. Load it with: . <this file>"]
+    lines += [
+        f"[Environment]::SetEnvironmentVariable({_powershell(name)}, {_powershell(value)})"
+        for name, value in settings.items()
+    ]
+    # Not `SetEnvironmentVariable(name, $null)`: PowerShell hands a .NET string
+    # parameter "" for $null, and that leaves the variable set, to nothing.
+    lines += [
+        f"Remove-Item -LiteralPath {_powershell(f'Env:{name}')} -ErrorAction Ignore"
+        for name in removed
+    ]
+    (out / PROFILE_SCRIPT).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
+def _named(home: Path, relative: str) -> Path:
+    """The path under `home` that `relative` names, reached through no link."""
+
+    path = Path(relative)
+    if path.drive or path.root or not path.parts or ".." in path.parts:
+        raise ValueError(f"{relative}: name a path inside the home, relative to it")
+    reached = home
+    for part in path.parts:
+        reached = reached / part
+        if git_worktrees.is_reparse_point(str(reached)):
+            raise ValueError(f"{relative}: {reached} is a link, and a profile follows none")
+    return reached
+
+
+def copy_without_links(source: Path, target: Path) -> list[Path]:
+    """Copy `source` to `target`, leaving out every link under it; the links left out.
+
+    A link copied as a link would let a child write through it into what it names.
+    """
+
+    left_out: list[Path] = []
+
+    def links(directory: str, names: list[str]) -> list[str]:
+        found = [name for name in names if git_worktrees.is_reparse_point(f"{directory}/{name}")]
+        left_out.extend(Path(directory, name) for name in found)
+        return found
+
+    if source.is_dir():
+        shutil.copytree(source, target, ignore=links, dirs_exist_ok=True)
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    return left_out
+
+
+def _copy_git_config(target: Path) -> None:
+    """The caller's global Git configuration, as a file of the profile's own.
+
+    Its content is copied, so a child's `git config --global` writes the copy and
+    never the original, even where the original is a link.
+    """
+
+    found = os.environ.get("GIT_CONFIG_GLOBAL") or str(Path.home() / ".gitconfig")
+    if Path(found).is_file():
+        shutil.copyfile(found, target)
+    else:
+        target.write_bytes(b"")
+
+
+def _size(directory: Path) -> int:
+    return sum(path.lstat().st_size for path in directory.rglob("*") if path.is_file())
+
+
+def build_profile(out: Path, source: Path, copies: Sequence[str]) -> tuple[list[Path], int]:
+    """Fill the new directory `out`: the links under the copied paths left out, and the port."""
+
+    caller, home = Path.home(), out / HOME
+    # Every name is checked before the store, the longest copy, is taken.
+    named = {relative: _named(caller, relative) for relative in copies}
+    for relative, path in named.items():
+        if not path.exists():
+            raise ValueError(f"{relative}: {path} does not exist")
+    runtime = _named(caller, HOST_RUNTIME)
+    if runtime.exists():
+        named = {HOST_RUNTIME: runtime, **named}
+    else:
+        _say(f"there is no {runtime} to copy")
+    _make_home(home)
+    copy_store(source, home)
+    copy_registry(home)
+    _copy_git_config(home / ".gitconfig")
+    left_out: list[Path] = []
+    for relative, path in named.items():
+        left_out += copy_without_links(path, home / relative)
+    port = free_port()
+    write_environment(out, *profile_environment(home, port))
+    return left_out, port
+
+
+def profile(out: Path, source: Path, copies: Sequence[str]) -> int:
+    """Make a profile in the new directory `out`, or make nothing and say why."""
+
+    started = time.monotonic()
+    try:
+        out.mkdir(parents=True)
+    except FileExistsError:
+        _say(f"{out} already exists; a profile is made only in a new directory")
+        return 1
+    try:
+        left_out, port = build_profile(out, source, copies)
+    except (OSError, sqlite3.Error, RuntimeError, ValueError) as error:
+        removed = remove_tree(out)
+        _say(f"profile failed: {error}" + ("" if removed else f"; {out} is still on disk"))
+        return 1
+    for link in left_out:
+        _say(f"not copied, a link: {link}")
+    _say(
+        f"profile {out}: {_size(out) / 2**20:.1f} MiB in {time.monotonic() - started:.1f}s,"
+        f" port {port}; load it with . {out / PROFILE_SCRIPT}"
+        f" and remove it with stop --out {out}"
+    )
+    return 0
+
+
 # --- the command line --------------------------------------------------------
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Gates and a server in a throwaway profile.")
-    commands = parser.add_subparsers(dest="command", required=True, metavar="{gates,serve,stop}")
+    commands = parser.add_subparsers(
+        dest="command", required=True, metavar="{gates,serve,profile,stop}"
+    )
     names = sorted({step.name for step in GATE_STEPS} | {step.group for step in GATE_STEPS})
 
     gates_command = commands.add_parser("gates", help="run the gates of the repository")
@@ -979,7 +1186,25 @@ def _parser() -> argparse.ArgumentParser:
             " only read, and the copy is written to and migrated like a real store"
         ),
     )
-    commands.add_parser("stop", help="stop that server and remove its profile")
+    profile_command = commands.add_parser(
+        "profile", help="make a rehearsal profile with no server: a home and its environment"
+    )
+    profile_command.add_argument(
+        "--store-copy",
+        nargs="?",
+        const="",
+        required=True,
+        metavar="SOURCE",
+        help="copy SOURCE into the profile, by default the store this user runs on; it is only read",
+    )
+    profile_command.add_argument(
+        "--copy",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="also copy PATH, relative to this user's home, leaving out every link under it",
+    )
+    commands.add_parser("stop", help="stop that server, or remove a profile, and its home")
     supervise_command = commands.add_parser(SUPERVISE)
     supervise_command.add_argument("--store-copy")
     for command in commands.choices.values():
@@ -993,15 +1218,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         reconfigure(encoding="utf-8")
     options = _parser().parse_args(argv)
     out = options.out.resolve()
+    copy = getattr(options, "store_copy", None)
+    # The one resolution of where the store is, asked here, in the caller's own
+    # environment. Nothing else in this file names the live store.
+    source = None if copy is None else Path(copy or store.db_path())
+    if options.command == "profile":
+        assert source is not None
+        return profile(out, source, options.copy)
     out.mkdir(parents=True, exist_ok=True)
     if options.command == "gates":
         return gates(select_steps(options.only, owner=options.owner), out)
     if options.command == "stop":
         return stop(out)
-    copy = options.store_copy
-    # The one resolution of where the store is, asked here, in the caller's own
-    # environment. Nothing else in this file names the live store.
-    source = None if copy is None else Path(copy or store.db_path())
     if options.command == SUPERVISE:
         supervise(out, source)
         return 0

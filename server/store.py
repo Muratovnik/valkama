@@ -688,17 +688,20 @@ def _uri(path: str, mode: str) -> str:
 
 
 @contextlib.contextmanager
-def read_only(path: str) -> Iterator[sqlite3.Connection]:
+def read_only(path: str, *, immutable: bool = False) -> Iterator[sqlite3.Connection]:
     """The store file at `path` for a look that writes nothing, closed when the block ends.
 
     Nothing is created, migrated or locked, and a missing file is an
     `sqlite3.OperationalError`. The close is the point: `with` on a connection only
     ends a transaction, and a connection left to the garbage collector keeps the file
     open until a collection finds it, so on Windows a backup, a restore or a rename of
-    the file fails in the meantime.
+    the file fails in the meantime. `immutable` reads a file nothing holds open as one
+    that cannot change, so SQLite creates no journal or index beside it; the caller
+    answers for that being so.
     """
 
-    conn = sqlite3.connect(_uri(path, "ro"), uri=True)
+    uri = _uri(path, "ro") + ("&immutable=1" if immutable else "")
+    conn = sqlite3.connect(uri, uri=True)
     try:
         yield conn
     finally:
@@ -1004,20 +1007,40 @@ def store_generation(path: str) -> str:
         return "current"
 
 
+def _stamp(path: str) -> tuple[int, int] | None:
+    """What a write to the file at `path` changes, or None when it cannot be read."""
+
+    try:
+        found = os.stat(path)
+    except OSError:
+        return None
+    return found.st_size, found.st_mtime_ns
+
+
 def copy_store(source: str, directory: str) -> str:
     """A copy of the store at `source` in `directory`, with its pictures beside it.
 
     `VACUUM INTO` through a read-only connection: a store in WAL mode keeps its latest
     commits in its journal, which a copy of the file alone would miss, and the source
     is never opened for writing. `directory` must not hold a store already.
+
+    A store with no journal beside it is open nowhere, and its file holds every
+    commit. A read-only connection to it would create the journal and its index and,
+    unable to checkpoint, leave both beside the source, so it is read as immutable
+    instead; a store that was opened or written while that copy was taken refuses it.
     """
 
     os.makedirs(directory, exist_ok=True)
     destination = os.path.join(directory, f"{DATA_PREFIX}.sqlite3")
     if os.path.exists(destination):
         raise FileExistsError(f"{destination} already exists")
-    with read_only(source) as conn:
+    unopened = not os.path.lexists(f"{source}-wal")
+    before = _stamp(source) if unopened else None
+    with read_only(source, immutable=unopened) as conn:
         conn.execute("VACUUM INTO ?", (destination,))
+    if unopened and (os.path.lexists(f"{source}-wal") or _stamp(source) != before):
+        os.remove(destination)
+        raise RuntimeError(f"{source} was opened while it was copied; copy it again")
     store_backups.copy_pictures(
         planning_images.directory_beside(source), planning_images.directory_beside(destination)
     )
