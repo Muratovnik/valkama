@@ -6,9 +6,10 @@
  * does. happy-dom lays nothing out, so the frame's room and its scroll are set here the way a
  * browser would report them, and the scroll event is sent when a browser would send it.
  */
+import { defineComponent, h, ref } from 'vue'
+
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, ref } from 'vue'
 
 import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
