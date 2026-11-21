@@ -26,6 +26,7 @@ questions about the store and knows nothing about who asked:
     http_security.py  the loopback write guard: host, origin, token, body size
     static_assets.py  the built web UI, the checkout paths and runtime identity
     launcher.py     the managed stable command agent clients register
+    source_archive.py  the record that lets an unpacked release archive be pinned
     watchers.py     change fan-out, shared by every surface
     platform/       the kernel: the module list and its manifest, the store
                     bring-up, and the external adapter contract and transports
