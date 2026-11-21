@@ -22,6 +22,11 @@
  * one that is not is brought in as far as the fade is wide, so its words stand clear of it.
  * A browser asked to keep a fade's width clear of every pick moved the strip by the two
  * pixels a section already in sight stood inside that width.
+ *
+ * The strip is what scrolls, and a mask on it takes its bar too: drawn over the whole strip,
+ * the fade ate the thumb wherever it ran under a cut end. So the fade stops over the bar's
+ * strip, as tall as the strip draws its bar, read off the strip as it stands (`bar`): none
+ * where the bar lies over the sections and draws no room of its own, as a phone's does.
  */
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 
@@ -47,9 +52,12 @@ const sectionsIn = (node: HTMLElement) => [...node.querySelectorAll('button')]
 
 /** Whether a section is cut at either end of the row, read off the strip as it stands. */
 const more = reactive({ before: false, after: false })
+/** How tall the strip draws its bar, in pixels: the room it takes under the sections. */
+const bar = ref(0)
 function measure() {
   const node = strip.value
   if (!node) return
+  bar.value = node.offsetHeight - node.clientHeight
   const row = node.getBoundingClientRect()
   const sections = sectionsIn(node)
   const first = sections[0]?.getBoundingClientRect()
@@ -150,6 +158,7 @@ function focused(event: FocusEvent) {
     ref="strip"
     class="inspector-tabs"
     :class="{ 'more-before': more.before, 'more-after': more.after }"
+    :style="{ '--size-tabs-bar': `${bar}px` }"
     @focusin="focused"
     @scroll="measure"
   >
@@ -166,27 +175,38 @@ function focused(event: FocusEvent) {
 <style scoped>
 .inspector-tabs {
   --size-tabs-fade: var(--space-8);
+  --size-tabs-bar: 0px;
+  --tabs-fade-start: black;
+  --tabs-fade-end: black;
 
   width: 100%;
   overflow-x: auto;
 
-  /* A mask reads only how opaque its image is, so the colour stands for "shown". */
   &.more-before {
-    mask-image: linear-gradient(to right, transparent, black var(--size-tabs-fade));
+    --tabs-fade-start: transparent;
   }
 
   &.more-after {
-    mask-image: linear-gradient(to left, transparent, black var(--size-tabs-fade));
+    --tabs-fade-end: transparent;
   }
 
-  &.more-before.more-after {
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      black var(--size-tabs-fade),
-      black calc(100% - var(--size-tabs-fade)),
-      transparent
-    );
+  /* A mask reads only how opaque its image is, so the colour stands for "shown". The fade over
+     the sections, and under it the bar's strip laid whole (`--size-tabs-bar`). */
+  &:is(.more-before, .more-after) {
+    mask-image:
+      linear-gradient(
+        to right,
+        var(--tabs-fade-start),
+        black var(--size-tabs-fade),
+        black calc(100% - var(--size-tabs-fade)),
+        var(--tabs-fade-end)
+      ),
+      linear-gradient(black, black);
+    mask-repeat: no-repeat;
+    mask-position: top, bottom;
+    mask-size:
+      100% calc(100% - var(--size-tabs-bar)),
+      100% var(--size-tabs-bar);
   }
 }
 </style>

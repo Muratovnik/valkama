@@ -21,7 +21,11 @@
  * names. No work on the account,
  * work only its organization recorded with no account known, a wait and a read that failed each
  * say so in words of their own; the organization's work with no account is never drawn as the
- * account's. A wait and a failure stay in this block, with a retry.
+ * account's. A wait and a failure stay in this block, with a retry. A read again that fails keeps
+ * the lines and says so under them, in room the block keeps for those words while any answer is
+ * on show (`again`), so nothing moves when it is said or when the next answer replaces it: said in
+ * room of its own, it took 36px under the lines and gave them back with the answer, and a panel
+ * scrolled to its end moved by as much.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -220,13 +224,15 @@ const apart = computed(() => {
   return unplaced ? cost(unplaced) : ''
 })
 
-const failedAgain = computed(() =>
-  answer.value?.failedAgain
-    ? t('analytics.quota.spent.failedAgain', {
-        to: quotaWords.moment(answer.value.period.to, props.today),
-      })
-    : '',
-)
+/** What a read again that failed says, and whether one did: its words keep their room either way. */
+const again = computed(() => {
+  const held = answer.value
+  if (!held) return null
+  const words = t('analytics.quota.spent.failedAgain', {
+    to: quotaWords.moment(held.period.to, props.today),
+  })
+  return { words, failed: held.failedAgain }
+})
 </script>
 
 <template>
@@ -311,20 +317,43 @@ const failedAgain = computed(() =>
         >
           {{ t('analytics.quota.spent.none') }}
         </p>
-        <p
-          v-if="failedAgain"
-          class="window-spend-failed"
-          role="status"
+        <!-- The words' room, unseen, under the status that says them once a read again fails. -->
+        <div
+          v-if="again"
+          class="window-spend-again"
         >
-          {{ failedAgain }}
-          <VButton
-            variant="text"
-            size="inline"
-            @click="retry"
+          <p
+            class="window-spend-room"
+            aria-hidden="true"
           >
-            {{ t('platform.actions.retry') }}
-          </VButton>
-        </p>
+            {{ again.words }}
+            <VButton
+              variant="text"
+              size="inline"
+              tabindex="-1"
+            >
+              {{ t('platform.actions.retry') }}
+            </VButton>
+          </p>
+          <p
+            class="window-spend-said"
+            role="status"
+          >
+            <span
+              v-if="again.failed"
+              class="window-spend-failed"
+            >
+              {{ again.words }}
+              <VButton
+                variant="text"
+                size="inline"
+                @click="retry"
+              >
+                {{ t('platform.actions.retry') }}
+              </VButton>
+            </span>
+          </p>
+        </div>
       </template>
       <p
         v-else-if="state === 'failed'"
@@ -385,10 +414,26 @@ const failedAgain = computed(() =>
 
 /* A state in words, one quiet line in the bars' place; it keeps that place while it waits. */
 .window-spend-note,
-.window-spend-failed {
+.window-spend-failed,
+.window-spend-room,
+.window-spend-said {
   min-block-size: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* A read again that failed, said over the room its words keep unseen. */
+.window-spend-again {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+
+.window-spend-room {
+  visibility: hidden;
 }
 </style>

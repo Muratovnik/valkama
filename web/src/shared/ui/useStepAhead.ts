@@ -13,12 +13,12 @@
  * level. A week's range down to its slower edge is a fill under the line, where it is at least
  * `FILL_LEAST` of the drawing tall somewhere; under that it reads as the line's own width.
  *
- * The pointer finds «now» at its ring, and without a forecast along the rest of the plot from the
+ * The pointer finds «now» at its dot, and without a forecast along the rest of the plot from the
  * line's end; the forecast at its dot and along its line. The dot stands at the line's end, the
  * run-out, the reset or where a frame ends before them; there its hint says the reset stands past
  * it (`words.past`). A place's box, which the keyboard's ring is drawn on, has its middle where the
  * pointer finds the place: «now»'s is the least width of a box (`--step-reach`) with its middle on
- * the ring (`reachAround`), as a restart's is; the forecast's runs along its line from past
+ * its dot (`reachAround`), as a restart's is on its ring; the forecast's runs along its line from past
  * «now»'s to half that width past its dot, and where the line is shorter than that width it is
  * that width with its middle on the dot. A box that started at «now» or ended at the dot put its
  * middle 12px off the mark, where on a dense period the forecast's line or a reading took the
@@ -136,7 +136,7 @@ export function useStepAhead(
   })
 
   /**
-   * «Now», where the line ends, its box around its ring; the pointer finds it there, and without a
+   * «Now», where the line ends, its box around its dot; the pointer finds it there, and without a
    * forecast along the rest of the plot.
    */
   function nowTarget(ahead: StepAhead): StepTargetPlace {

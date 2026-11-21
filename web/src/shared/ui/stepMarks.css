@@ -2,8 +2,8 @@
  * The marks of a step line (`StepLine`, `useStepAhead`, `useStepWalk`), read as its own scoped
  * style: each reading's dot and the box it stands in, and the marks of its places — a restart of
  * the count on the line, or a reset between two windows of it, and «now» past the readings, each
- * a ring in the line's hue around the ground, and the forecast's end, a round dot of the line's
- * hue ringed in the ground — never a reading's dot. Every mark is painted
+ * a ring in the line's hue around the ground, and «now» and the forecast's end, each a round dot
+ * of the line's hue ringed in the ground. Every mark is painted
  * only while pointed at or focused, its box kept at rest for its hint. None of them takes the
  * pointer: one layer over the field does, for all of them (`StepLine`).
  */
@@ -63,8 +63,9 @@
   inset-inline: calc(-1 * var(--step-hit));
 }
 
-/* A place of the line, every kind of it a true circle at every width: a ring in the line's hue
-   around the ground, never a reading's dot, or the forecast's solid dot (`.step-reset-mark`); at rest
+/* A place of the line, every kind of it a true circle at every width: a restart's ring in the
+   line's hue around the ground, or the solid dot of «now» and the forecast (`.step-now-mark`,
+   `.step-reset-mark`); at rest
    unpainted, its box kept for its hint. It stands centred on what it marks, from its top
    (`--step-high`) to its foot (`--step-low`): one point for «now» and the forecast, the middle of
    the fall for a restart, whose line already draws the fall. A restart's ring was once stretched
@@ -97,10 +98,12 @@
   }
 }
 
-/* The forecast's end, where its line ends: a round dot in the line's hue, a reading's dot across,
-   ringed in the ground as a reading's dot is, at the run-out on the level of the whole window or
-   at the reset at its share. A flat dash there read as no mark at all; a forced palette draws it in
-   its ink. */
+/* «Now», where the readings' line ends, and the forecast's end, where its line ends: a round dot
+   in the line's hue, a reading's dot across, ringed in the ground as a reading's dot is, the
+   forecast's at the run-out on the level of the whole window or at the reset at its share. A flat
+   dash at the forecast's end read as no mark at all, and a ring at «now» as another kind of point
+   than the forecast's; a forced palette draws both in its ink. */
+.step-now-mark,
 .step-reset-mark {
   background: var(--color-series-1);
   box-shadow: none;
@@ -123,7 +126,7 @@
   }
 }
 
-.step-muted .step-reset-mark {
+.step-muted :is(.step-now-mark, .step-reset-mark) {
   background: var(--color-text-tertiary);
   box-shadow: none;
 

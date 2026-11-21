@@ -738,10 +738,12 @@ and only fades the end of a strip that scrolls on past it.
   own, a menu, the headings take the rows' inset instead. A chain's rows once stood 8px in
   from their headings, a session 8px in from its label and a step's box 6px in from the
   checklist's heading, three edges in one column. `production-card-list-edges.spec.ts`
-  measures them. A row whose box is laid out in every state, as Analytics' rail entries,
-  ranked rows and table rows are, draws that box first: the box stands on the edge and its
-  words take the inset inside it, since a box that reached past the column in one state read
-  as an entry pushed out of it (Analytics).
+  measures them. A row whose box is drawn in every state, as Analytics' rail entries are, and a
+  table row, whose cells are the table's columns, draw that box first: the box stands on the
+  edge and its words take the inset inside it, since a box that reached past the column in one
+  state read as an entry pushed out of it (Analytics). A ranked row draws no ground at rest, so it takes the inset outside the
+  column as other rows do: its name and its bar start on the heading's edge. Inset inside, every
+  ranked name stood 8px in from its section's heading, in the page and in the value panel.
 - A disclosure's chevron is the icon layer's `disclosure-closed` and `disclosure-open`: the
   set's chevron drawn from its square's start edge, so the square stands on the column's
   edge, the stroke starts there in both states, and the words after the square keep their
@@ -1248,10 +1250,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   The reading pointed at or focused draws its dot and says its moment, its share and its source
   in its hint, as every mark does; the one a key stands on keeps its dot whatever the pointer
   does, and Tab lands on the latest. Past the readings the line has two places of its own, each
-  with its hint and painted only while pointed at or focused, neither a reading's dot: «now»
-  where the line ends, a ring, its share, when the latest reading was and how long the window has
-  been silent, which takes the pointer from the line's end on and leaves the latest reading its
-  own dot farther than a mark's reach from its ring, the latest found as «now» within it; and,
+  with its hint and painted only while pointed at or focused: «now» where the line ends, a round
+  dot drawn as the forecast's end is, its share, when the latest reading was and how long the
+  window has been silent, which takes the pointer from the line's end on and leaves the latest
+  reading its own dot farther than a mark's reach from it, the latest found as «now» within it; a
+  ring there, which a restart keeps, read as a second kind of point on the one line; and,
   while the window stands and its forecast has a share to draw to, the end of the forecast's line,
   its share at the reset, what that leaves out and when the reset is. The forecast is a line,
   not a band: 2px like the readings' line, in their hue, dashed, the conventional cue for a
@@ -1275,7 +1278,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   at a reading, and the restart is a place on the line at that moment with its hint, painted only
   while pointed at or focused as the others are: a round ring on the middle of the fall, «Counter
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
-  the readings cannot tell what zeroed it. Every place's mark, a ring or the forecast's dot, is a
+  the readings cannot tell what zeroed it. Every place's mark, a restart's ring or the dot of «now» and of the forecast, is a
   true circle at every width, at rest and pointed at, the line's own fall saying how far it fell:
   a restart's ring once stretched over the fall, a capsule up to 89px tall, and an oval 12×8 at a
   fall from 0 % to 0 %. On a window past its reset and on the windows before the current one the
@@ -1287,9 +1290,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   within that reach of each other the pointer finds the nearer, and its hint says the other's
   words after its own, so no place's facts are out of the pointer's reach; each keeps its own name
   for the keyboard. A place's box, which the keyboard's ring is drawn on, has its middle where the
-  pointer finds it: the least width of a box around a restart's or «now»'s ring, and the
+  pointer finds it: the least width of a box around a restart's ring or «now»'s dot, and the
   forecast's from past «now»'s along its line to half that width past its dot; a box that started
-  at «now» put its middle 12px past the ring, where the forecast's line took the pointer.
+  at «now» put its middle 12px past its mark, where the forecast's line took the pointer.
   The arrows walk the readings, each restart before the
   reading at its moment, then «now», then the forecast. A step line shows its whole window, from
   its start to its reset, running or past its reset alike, and its axis names its two ends for
@@ -2950,7 +2953,9 @@ while every account stood as the start of its id, and with both at once «Name»
 menu said. The menu and «Name» are one unit on one centre line at every width: beside the name
 while both fit there, and on the next line together where they do not, the name keeping its own;
 as two items of the heading's row, a phone's wrapped «Name» alone, 40px under the menu at the
-name's end.
+name's end. The field stands on the name's edge and line, as wide as its line leaves up to a
+name's width, with the menu on its line; laid out at a name's width, a phone's field wrapped
+under the unseen name 12px past the edge, the menu 40px above it.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · up to date», «13% used · reading 5 h ago», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the
@@ -3062,7 +3067,12 @@ organization's work on no known account, when its panel opens, never for a windo
 opened, so another account's work
 is never in it; work its organization recorded with no account known is a quiet line of its
 own, never counted to the account. No work, only such work, a wait and a read that failed, with
-its retry, each say so in the panel, and the quota's own figures stand meanwhile. It stands
+its retry, each say so in the panel, and the quota's own figures stand meanwhile. A read again
+that fails, a newer step of the window, keeps the lines and says «Could not refresh; data as of
+13:20 may be out of date. Retry» under them, in room the block keeps for those words while any
+answer stands, so nothing moves when it is said or when the next answer replaces it: said in room
+of its own it took 36px under the lines and gave them back, and a panel scrolled to its end moved
+by as much. It stands
 apart from the window's bar and readings, on no axis of theirs: under the window it was a block
 as tall as the window again, and every window of every account read what used it whether or not
 anyone asked.

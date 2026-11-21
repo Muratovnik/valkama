@@ -1,6 +1,6 @@
 /**
  * Every place of a step line is reached by the pointer at its own mark, in the browser: each
- * reading, the first and the last, «now» and the forecast's end, whose ring stands centred on the
+ * reading, the first and the last, «now» and the forecast's end, whose dot stands centred on the
  * line's end: the forecast's last corner, or the plot's right edge for a line read at its reset. The pointer at a mark's centre opens that place's own hint and paints
  * that mark alone, and what it stands on there is the line's one layer over its field, never the
  * drawing or the page around the plot. Two readings five minutes apart, closer than a pointer is

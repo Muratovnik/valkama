@@ -71,7 +71,8 @@
  * the readings the line has two more places, each with its own hint, and each paints its mark
  * only while it is pointed at or focused, as a reading does. At `end`, «now» (`ahead.now`): the
  * share it stands at, when its latest reading was and how long the window has been silent; its
- * mark is a ring rather than a reading's dot, so it never reads as a reading. Where the forecast's
+ * mark is the round dot the forecast's end is drawn with, a ring there having read as a second
+ * kind of point on the one line. Where the forecast's
  * line ends, its forecast (`ahead.forecast`): what the slower and the faster pace leave, when the
  * reset is and when the window runs out before it; its mark is a round dot in the line's hue
  * ringed in the ground, at least a reading's dot across, at the line's end (`stepMarks.css`). A
@@ -328,8 +329,8 @@ const PLACE_MARK = {
 /** A restart's hook where it is a reset between two windows of the line: present, or absent. */
 const dropMark = ({ zero }: StepTargetPlace) => zero || undefined
 
-/** The shape of a place's mark: a ring for «now» and a restart, a round dot for the forecast. */
-const markShape = ({ kind }: StepTargetPlace) => (kind === 'reset' ? 'dot' : 'ring')
+/** The shape of a place's mark: a ring for a restart, a round dot for «now» and the forecast. */
+const markShape = ({ kind }: StepTargetPlace) => (kind === 'restart' ? 'ring' : 'dot')
 
 /** Where a place's mark stands, as its style: its top and its foot, at its stretch's side. */
 const targetMark = ({ mark }: StepTargetPlace) => ({

@@ -244,14 +244,18 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 
 /* A line of the chart, not a control standing in it: a row that opens something takes the
    same box as one that does not, and the whole of it is what a pointer presses. Its states are
-   the model the page's rows share (`rowStates.css`). */
+   the model the page's rows share (`rowStates.css`). It draws no ground at rest, so it keeps
+   its fill's inset outside the column (`--space-fill-inset`): its name and its bar start on the
+   edge the heading over it stands on, and the ground under the pointer reaches past it. Inset
+   inside the column, every name stood 8px in from its section's heading. */
 .ranked-line {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: center;
   min-block-size: var(--size-control-inline);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-fill-inset);
+  margin-inline: calc(-1 * var(--space-fill-inset));
   border: 0;
   color: var(--color-text);
   font: var(--font-detail);

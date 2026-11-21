@@ -77,6 +77,39 @@ const rowsOf = (where: Locator) =>
       }),
   )
 
+/** Where a part of an account's head stands: its left edge and its centre line. */
+async function placeOf(part: Locator) {
+  const found = await part.boundingBox()
+  if (!found) throw new Error('a part of the account’s head stands nowhere')
+  return { left: found.x, centre: found.y + found.height / 2 }
+}
+
+// The field that renames the account takes the name's place (`DESIGN.md`, the quota's accounts):
+// it starts on the edge the name stood on, and the menu stays on its line. Laid out at a name's
+// width, a phone's field wrapped under the unseen name, 12px past that edge, the menu 40px above it.
+for (const width of [1440, 1024, 390])
+  test(`the rename field stands in the name's place with the menu on its line at ${width} px`, async ({
+    page,
+  }, info) => {
+    await serve(page)
+    await page.setViewportSize({ width, height: 1000 })
+    const quota = await openPanel(page, pageAt({ by: 'quota_week' }))
+    const account = quota.locator(`[data-account="${NIGHT_NAME}"]`)
+    await expect(account).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const name = await placeOf(account.locator('[data-account-head="name"]'))
+    await account.locator('[data-account-head="name-it"]').click()
+    const field = account.locator('[data-account-head="field"]')
+    await expect(field.getByRole('textbox'), 'the field that renames it').toBeFocused()
+    const menu = await placeOf(account.locator('[data-account-head="menu"]').getByRole('button'))
+    const seen = { name: name.left, field: await placeOf(field), menu: menu.centre }
+    await record(info, `rename-field-${width}`, seen)
+    expect(Math.abs(seen.field.left - seen.name), 'the field on the name’s edge').toBeLessThan(NEAR)
+    expect(Math.abs(seen.menu - seen.field.centre), 'the menu on the field’s line').toBeLessThan(
+      NEAR,
+    )
+  })
+
 for (const width of [1440, 1024, 390])
   test(`every heading row centres its heading and its controls on one line at ${width} px`, async ({
     page,
