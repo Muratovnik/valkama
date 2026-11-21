@@ -2703,7 +2703,9 @@ and a cut end faded (`ChoiceStrip`), with the freshness at their end; the filter
 and the refresh; and the room of the reader's own days, which took a row of their own and moved
 the panel 44px when chosen. A refresh that fails keeps what is shown
 and says so in words before the age at every width, «Could not refresh» with a retry: given up
-on a short line, its words had left a red disc with no hint. The retry is reached at every width
+on a short line, its words had left a red disc with no hint. A refresh whose period before could
+not be read, where what is shown has it, fails so too: shown, it took every change and the table's columns
+of the period before away, and the words that said so came in over the figures. The retry is reached at every width
 too: where the line has no room for «· Retry», the words themselves are the retry, named
 «Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
 Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
@@ -2823,7 +2825,10 @@ period with no agent time has no such line
 and a period before with none gives no «was», the line's place kept either way, and the chart
 draws no second axis for it. Across the panel under the cells stands the period chart, stacked
 by project, with the period before as a short line at its height; at a project's scope it is that
-project's one series of plain columns, which no legend names. Stacked by task it named a few per
+project's one series of plain columns, which no legend names. The period before's steps and the
+accounts that mark its changes are read after the chart is drawn, and a note under it that either
+could not be read stands in room the chart keeps for it, so the cards under it stay where they
+stand when it is said or taken away. Stacked by task it named a few per
 cent of the time, the rest «Other», and the tasks have their own section; and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
@@ -2895,7 +2900,10 @@ The second dimension is the section's, not the table's: «Split by» in the sect
 chooses it, and the ranked bars, the small charts, the period columns and the table all read
 its pairs, «claude-opus-5-5 · high», each pair a value with its own colour and the tail folded
 into «other» as any series is. Chosen over the table alone, it left the charts beside a crossed
-table answering the first dimension only. A pair's name short of room on its line cuts its first
+table answering the first dimension only. A refresh whose pairs could not be read again keeps
+them in every one of those parts and says «Could not refresh · Retry» before the table's download,
+in room the table's heading row keeps for it while the pairs stand: dropped, they left the charts
+and the table gave its place to one line of words. A pair's name short of room on its line cuts its first
 part and keeps the separator and the second whole, «claude-opus-5-… · medium», because the second
 is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
 chart. In the ranked bars a pair's name takes a line of its own over its bar at every width, as any
@@ -3080,7 +3088,8 @@ lines it names no sum, and work its organization recorded with no account known,
 not in it. It keeps the room of the headings a newer answer can give it, with no sum and with a
 sum of five figures before the point, so the breakdowns beside it and the lines under it stay
 where they stand when one does: a newer answer once made it a line longer, and the lines moved
-25px down under it. That it is the API price estimate and not quota points, and that
+25px down under it. It keeps as well the room of its moments as a later day says them, each dated,
+since past midnight its start is a moment of another day. That it is the API price estimate and not quota points, and that
 work in claude.ai and the desktop app, which the window's share counts, is not in it, the
 section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
 says for this one, never as a line of the panel. It is read by account, the account's and its
@@ -3140,7 +3149,9 @@ estimate at API prices, what the tokens count and, read by the minute, that a mi
 are shared out — the section's «ⓘ» says under the panel, so the «ⓘ» «About these figures» that
 ends the figures' heading says it for the value's own read, once and in that «ⓘ» alone,
 never as a line of the panel. Its days are the page's period and step with
-the period before marked, one series in the value's colour; under them dense ranked bars say the
+the period before marked, one series in the value's colour, and a note that the period before
+could not be read stands under them in room the days keep for it: read after the days are drawn
+and said in room of its own, it moved the lists under them 25px down; under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
 the value's filter added, and wait and fail as the page's do: a read again that fails keeps what
 the panel shows and says «Could not refresh · Retry» beside its actions, in room their row keeps
