@@ -329,7 +329,8 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
     controls: await boxes(page, '.analytics-bar-line > *'),
     dateInputs: await boxes(page, '.analytics-bar input[type="date"]'),
     pageScroll: await pageScroll(page),
-    days: await page.locator('.spending-days tbody tr').count(),
+    // The days drawn, as every chart opens at every width: a column per day of the period.
+    days: await page.locator('.spending-days .period-slot').count(),
   }
   await record(info, 'analytics custom period 390', measured)
   expect(measured.pageScroll).toBe(0)

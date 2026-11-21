@@ -64,7 +64,7 @@ const offered = computed<Shown[]>(() => [...props.views, 'table'])
 const opening = computed<Drawn>(() => props.views[0] ?? 'chart')
 const chosen = ref<Shown | null>(null)
 const shown = computed<Shown>(() => {
-  return chosen.value && offered.value.includes(chosen.value) ? chosen.value : opening.value;
+  return chosen.value && offered.value.includes(chosen.value) ? chosen.value : opening.value
 })
 const options = computed(() =>
   offered.value.map((value) => ({ value, label: t(`analytics.shown.${value}`) })),
