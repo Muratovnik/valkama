@@ -1,10 +1,11 @@
 /**
  * A value's side panel whose period before cannot be read, in the real app over the browser double.
  * The oracle is the requirement (`DESIGN.md`, Analytics: nothing moves when a failure is said or
- * when the next answer replaces it): the steps of the period before are read after the panel's days
- * are drawn, and when that read fails the note under the days says so in room the days keep for it,
- * so none of the panel's parts moves when it is said or when a later answer takes it away. Today
- * is read again every 30 s while it is on show, and the panel with it.
+ * when the next answer replaces it): the steps of the period before are read with the panel's
+ * answers, and when a read again of them fails the panel keeps what it shows and says so beside its
+ * actions, in room their row keeps for it, so none of the panel's parts moves when it is said or
+ * when a later answer takes it away. Today is read again every 30 s while it is on show, and the
+ * panel with it.
  */
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
@@ -60,7 +61,7 @@ async function placed(panel: Locator) {
 }
 
 for (const width of [1440, 390])
-  test(`at ${width}px a task's panel whose period before cannot be read says so under its days, and nothing in it moves then or when a later answer reads it`, async ({
+  test(`at ${width}px a task's panel whose period before cannot be read again says so beside its actions, and nothing in it moves then or when a later answer reads it`, async ({
     page,
   }, info) => {
     const said = messages.en.analytics
@@ -92,8 +93,8 @@ for (const width of [1440, 390])
     for (const part of PARTS) await expect(panel.locator(`[data-part="${part}"]`)).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     const note = panel
-      .locator('[data-part="days"]')
-      .getByText(said.overview.before.failed)
+      .locator('[data-part="actions"]')
+      .getByText(said.frame.refreshFailed)
       .filter({ visible: true })
     await expect(note).toHaveCount(0)
     const before = await placed(panel)
@@ -103,7 +104,7 @@ for (const width of [1440, 390])
     await expect(note).toHaveCount(1)
     expect(refused, 'the period before was asked again and refused').toBeGreaterThan(0)
     const during = await placed(panel)
-    expect(during, 'the note said under the days').toEqual(before)
+    expect(during, 'the failure said beside the actions').toEqual(before)
 
     failing = false
     await page.clock.runFor(30_000)

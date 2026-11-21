@@ -7,27 +7,22 @@
  * measure says so, as the page's own day chart does (`dayColumns`'s rules), and so does a step
  * whose figure says nothing of how much, which is not named (`unnamedEntries`).
  *
- * Each column carries the figure of the step it is compared with in the period before, read with
- * the value's filters through the period the page's answer is compared with (`usePeriodBefore`),
- * drawn as a short mark at its height; while those steps are read there is no mark, and when they
- * could not be read a note under the chart says so, in room the chart keeps for it whatever they
- * do (`HeldNote`): those steps are read after the answer is drawn, and the note said in room of its
- * own moved what stands under the chart. Its steps narrow nothing: the page is under the panel.
+ * Each column carries the figure of the step it is compared with in the period before (`before`),
+ * read with the value's answers (`useValueRead`), drawn as a short mark at its height; when those
+ * steps could not be read there is no mark, and the panel says the read failed beside its actions.
+ * Its steps narrow nothing: the page is under the panel.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
-import HeldNote from '@/pages/analytics/components/HeldNote.vue'
 import { useDayWords } from '@/pages/analytics/composables/useDayWords.ts'
-import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { notYet, unfinished } from '@/pages/analytics/utils/dayFigures.ts'
 import { figureOf, spentOf, unnamedEntries } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import type { Usage } from '@/shared/api/analyticsApi.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
@@ -35,10 +30,8 @@ import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 const props = defineProps<{
-  /** The period the page's answer is compared with; null when it was not read. */
-  compared: PeriodBounds | null
-  /** The filters the value is read with: the page's and its own. */
-  filters: UsageFilters
+  /** The steps of the period before, to mark over each column; null when not read. */
+  before: Usage['series'] | null
   /** The value's hue on the page. */
   hue: SeriesSlot
   measure: Measure
@@ -63,16 +56,6 @@ const title = computed(() =>
   t('analytics.detail.days', { measure: words.measure(props.measure), per: words.per(step.value) }),
 )
 
-const before = usePeriodBefore({
-  usage: () => props.usage,
-  filters: () => props.filters,
-  compared: () => props.compared,
-})
-const beforeSteps = computed(() => (Array.isArray(before.value) ? before.value : null))
-/** The note under the chart, kept in its room: what it says once the period before failed. */
-const unread = computed(() => t('analytics.overview.before.failed'))
-const unreadSaid = computed(() => (before.value === 'failed' ? unread.value : ''))
-
 /** The one series: the value. */
 const SERIES = 'value'
 
@@ -84,7 +67,7 @@ const chart = computed<PeriodChartProps>(() => {
     series: [{ key: SERIES, label: props.name, labelRuns: props.nameRuns, slot: props.hue }],
     columns: usage.series.map((point, index) => {
       const figure = figureOf(measure, spentOf(point))
-      const was = beforeSteps.value?.[index]
+      const was = props.before?.[index]
       const pending = step.value === 'minute' && notYet(point.start, usage.last_event_at)
       const values = figure === null ? {} : { [SERIES]: figure }
       const unnamed = unnamedEntries(measure, values)
@@ -117,10 +100,6 @@ const chart = computed<PeriodChartProps>(() => {
       <PeriodColumns
         v-bind="chart"
         :live="live"
-      />
-      <HeldNote
-        :room="[unread]"
-        :said="unreadSaid"
       />
     </template>
     <template #table>

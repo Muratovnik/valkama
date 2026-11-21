@@ -10,8 +10,8 @@
  * legend names it, «account change», and that day's hint, name and table row say the change by
  * the accounts that came and left, «Account change: +b, −a» (`accountChanges`):
  * work whose organization nobody recorded is no account and marks nothing. The marks are the ones
- * read with the answer shown, and a read of the accounts that failed says the marks are not there
- * rather than leaving them out without a word.
+ * read with the answer shown; a read of the accounts that failed is said where the page says its
+ * reads failed (`useUsageRead`), and the chart draws no mark rather than a note of its own.
  *
  * Each period that has begun is a control, in the chart and in its table, that narrows the view to
  * that period alone and breaks it down by task: a day, an hour of a single day or a minute of the
@@ -31,11 +31,8 @@
  * to say, in its «ⓘ» (`useSectionCaveats`). Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
  * short mark at its height on the same scale, named in the legend and said in the period's hint
- * and the table; while those steps are read there is no mark, and when they could not be read a note
- * under the chart says so. Both reads land after the answer is drawn, so their notes are said in
- * room the chart keeps for them whatever the reads do (`HeldNote`): that of the accounts wherever
- * they are read apart, beside the chart and its table, and that of the period before wherever its
- * steps are given. Said in room of their own, they moved what stands under the chart.
+ * and the table; while those steps are read, and when they could not be read, there is no mark,
+ * and the page says the read failed where it says its reads fail (`useUsageRead`).
  *
  * Split by a second dimension (`across`), the answer is read by both and the stack is of its
  * pairs, «claude-opus-5-5 · high», each in its hue of the page, the rest folded into «other» as
@@ -45,7 +42,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
-import HeldNote from '@/pages/analytics/components/HeldNote.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useDayWords } from '@/pages/analytics/composables/useDayWords.ts'
 import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
@@ -109,31 +105,6 @@ const titles = computed(() =>
 
 /** The steps of the period before, when they were read. */
 const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
-
-/** A note of a read that lands after the answer, and whether that read failed. */
-interface LateNote {
-  failed: boolean
-  words: string
-}
-/** The accounts' note, where they are read apart from the answer, which is by account itself. */
-const accountsNote = computed<LateNote[]>(() =>
-  props.by === 'seat'
-    ? []
-    : [{ words: t('analytics.days.accountsFailed'), failed: props.accounts === 'failed' }],
-)
-/** The chart's notes: the period before's where its steps are given, and the accounts'. */
-const chartNotes = computed<LateNote[]>(() => [
-  ...(props.before
-    ? [{ words: t('analytics.overview.before.failed'), failed: props.before === 'failed' }]
-    : []),
-  ...accountsNote.value,
-])
-/** Notes as one line of words: every one, for their room, or those whose read failed. */
-const joined = (notes: readonly LateNote[], all = false) =>
-  notes
-    .filter((note) => all || note.failed)
-    .map((note) => note.words)
-    .join(' ')
 
 /** What the step compared with the column at `index` holds; nothing when none is compared. */
 function beforeOf(index: number) {
@@ -258,11 +229,6 @@ function frame(firstKey: string, lastKey: string) {
         @series="marks.select"
         @follow="marks.follow"
       />
-      <HeldNote
-        v-if="chartNotes.length"
-        :room="[joined(chartNotes, true)]"
-        :said="joined(chartNotes)"
-      />
     </template>
     <template #table>
       <PeriodColumnsTable
@@ -270,11 +236,6 @@ function frame(firstKey: string, lastKey: string) {
         @period="period"
         @series="marks.select"
         @follow="marks.follow"
-      />
-      <HeldNote
-        v-if="accountsNote.length"
-        :room="[joined(accountsNote, true)]"
-        :said="joined(accountsNote)"
       />
     </template>
   </ChartSection>

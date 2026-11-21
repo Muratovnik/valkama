@@ -153,8 +153,7 @@ describe('a value under a minute in its side panel’s days', () => {
     const own = STRETCHES.filter((one) => one.group.model?.id === 'model-a')
     const panel = mount(ValueDays, {
       props: {
-        compared: null,
-        filters: {},
+        before: null,
         hue: 1,
         measure: 'time',
         name: 'model-a',
