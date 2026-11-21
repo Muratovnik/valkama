@@ -2,15 +2,16 @@
  * The Analytics sweep reads a text the page draws in runs as it is written (`written` in
  * `tests/sweep/sweepInPage.ts`), since a hint's words and the names the API gives are written so:
  * a task's title holding code is drawn without its backticks (`textRuns.ts`), and read as drawn it
- * was never the words it is marked with. The runs here are drawn by the page's own code, installed
- * as the sweep installs its helpers in a page.
+ * was never the words it is marked with. The runs here are drawn by the page's own code, and the
+ * sweep's helpers are installed as `window.sweepHelpers`, where they find each other in a page.
  */
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { titleRuns } from '@/shared/lib/titleRuns.ts'
 import { drawRuns } from '@/shared/ui/textRuns.ts'
 
-import { helperScript } from '../sweep/sweepInPage.ts'
+import { hintHelpers } from '../sweep/sweepInPage.ts'
+import { layoutHelpers } from '../sweep/sweepInPageLayout.ts'
 
 /** A title as written, with a piece of code holding a slash, which the runs draw in pieces. */
 const TITLE = 'MAIN-7 Raise `server/STORE_SCHEMA` before the move'
@@ -26,8 +27,7 @@ function drawn(title: string, after = ''): HTMLElement {
 }
 
 beforeAll(() => {
-  // eslint-disable-next-line sonarjs/code-eval -- the script the sweep installs in a page, its own
-  new Function(helperScript())()
+  window.sweepHelpers = { ...hintHelpers, ...layoutHelpers }
 })
 
 describe('the sweep reads drawn runs as written', () => {

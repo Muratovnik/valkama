@@ -449,8 +449,11 @@ function readSurface(aimed: string): Surface | null {
   }
 }
 
-/** The helpers of this module, by name, as `window.sweepHelpers` holds them. */
-const hintHelpers = {
+/**
+ * The helpers of this module, by name, as `window.sweepHelpers` holds them; a component spec
+ * installs them as they are, where a page is given them as a script (`helperScript`).
+ */
+export const hintHelpers = {
   alongBand,
   box,
   classes,
