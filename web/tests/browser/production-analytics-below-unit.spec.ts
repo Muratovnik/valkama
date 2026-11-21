@@ -3,8 +3,9 @@
  * double. The oracle is the owner's rule: no view of a chart names a row that reads «under a
  * minute», under any name — not the ring, its bars nor its table twin — while unknown work of a
  * minute or more stays, since it shows a gap in what is placed; the section's own table, which
- * holds every value in every measure, still lists the small row, and the section's total still
- * counts it. The figures expected are the fixture's own seconds.
+ * holds every value in every measure, still lists the small row, its time read as none, «0 min»,
+ * as a figure that says nothing of how much is in every view (DESIGN.md, Charts), and the
+ * section's total still counts it. The figures expected are the fixture's own seconds.
  */
 import { expect } from '@playwright/test'
 
@@ -63,9 +64,10 @@ test('a row under a minute is in no view of the chart, and kept by the section t
   // The total counts it: 7180 + 30 + 120 seconds.
   await expect(analytics.locator('.tile-figure[data-measure="time"]')).toHaveText(/^2\sh\s2\smin$/u)
 
-  // The section's own table lists it, under its name, with its figure.
+  // The section's own table lists it, under its name, its time read as none.
   const small = analytics.locator('.spending-table tbody tr', { hasText: 'model-b' })
   await expect(small).toHaveCount(1)
-  await expect(small).toContainText('under a minute')
+  await expect(small.locator('td[data-measure="time"]')).toHaveText(/^0\smin$/u)
+  await expect(small).not.toContainText('under a minute')
   await record(info, 'below the unit', { drawn, sectors })
 })
