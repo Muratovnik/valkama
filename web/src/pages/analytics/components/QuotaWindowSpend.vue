@@ -25,7 +25,8 @@
  * say so in words of their own; the organization's work with no account is never drawn as the
  * account's. A wait and a failure stay in this block, with a retry. A read again that fails keeps
  * the lines and says so under them, in room the block keeps for those words while any answer is
- * on show (`again`), so nothing moves when it is said or when the next answer replaces it: said in
+ * on show, as today and as a later day says them (`again`), so nothing moves when it is said or
+ * when the next answer replaces it: said in
  * room of its own, it took 36px under the lines and gave them back with the answer, and a panel
  * scrolled to its end moved by as much.
  */
@@ -137,15 +138,30 @@ const sum = computed(() => {
   return all
 })
 
-/** The stretch the figures cover, the window's start to the moment read to, in words. */
-const stretch = computed(() => {
+/** The moments the figures cover: the window's start and the moment read to. */
+const moments = computed(() => {
   const period = answer.value?.period
-  const from = period?.from ?? props.window.started_at ?? props.today
-  const to = period?.to ?? props.today
   return {
-    from: quotaWords.moment(from, props.today),
-    to: quotaWords.moment(to, props.today),
+    from: period?.from ?? props.window.started_at ?? props.today,
+    to: period?.to ?? props.today,
   }
+})
+/** The stretch the figures cover in words, each moment undated on the answer's day. */
+const stretch = computed(() => ({
+  from: quotaWords.moment(moments.value.from, props.today),
+  to: quotaWords.moment(moments.value.to, props.today),
+}))
+/**
+ * The same stretch as a later day says it, a moment of another day dated: past midnight the
+ * window's start, and the moment read to until a newer answer reads past it, take their dates.
+ */
+const datedStretches = computed(() => {
+  const { from, to } = moments.value
+  const start = words.datedClock(from)
+  return [
+    { from: start, to: stretch.value.to },
+    { from: start, to: words.datedClock(to) },
+  ]
 })
 
 /** The heading: the stretch, and the sum of its lines where it has any, said as a line's estimate is. */
@@ -167,8 +183,9 @@ const WIDEST_SUM = 99_999.99
  * The headings a newer answer can give the block, kept unseen in the heading's place
  * (`heldRoom.css`), as a level keeps every heading it takes in turn (`PanelLevel`'s `titles`):
  * with no sum, and with the widest (`WIDEST_SUM`) and the tokens it leaves out now, at the
- * moments it covers now, each said at one width whichever minute it names. A newer answer once
- * changed the heading, which took a line more, and the block's lines moved 25px down under it.
+ * moments it covers now and as a later day says them (`datedStretches`), each said at one width
+ * whichever minute it names. A newer answer once changed the heading, which took a line more, and
+ * the block's lines moved 25px down under it; past midnight a time took its date and did the same.
  */
 const rivals = computed(() => {
   const widest = cost({
@@ -177,10 +194,10 @@ const rivals = computed(() => {
     tokens: null,
     unpriced: sum.value?.unpriced ?? 0,
   })
-  const others = [
-    t('analytics.quota.spent.title', stretch.value),
-    t('analytics.quota.spent.titleTotal', { ...stretch.value, total: widest }),
-  ]
+  const others = [stretch.value, ...datedStretches.value].flatMap((each) => [
+    t('analytics.quota.spent.title', each),
+    t('analytics.quota.spent.titleTotal', { ...each, total: widest }),
+  ])
   return [...new Set(others)].filter((other) => other !== heading.value)
 })
 
@@ -256,14 +273,18 @@ const apart = computed(() => {
   return unplaced ? cost(unplaced) : ''
 })
 
-/** What a read again that failed says, and whether one did: its words keep their room either way. */
+/**
+ * What a read again that failed says, and whether one did: its words keep their room either way,
+ * and so do the words a later day says, the moment they name dated past midnight.
+ */
 const again = computed(() => {
   const held = answer.value
   if (!held) return null
-  const words = t('analytics.quota.spent.failedAgain', {
+  const said = t('analytics.quota.spent.failedAgain', {
     to: quotaWords.moment(held.period.to, props.today),
   })
-  return { words, failed: held.failedAgain }
+  const dated = t('analytics.quota.spent.failedAgain', { to: words.datedClock(held.period.to) })
+  return { words: said, room: [...new Set([said, dated])], failed: held.failedAgain }
 })
 </script>
 
@@ -364,10 +385,12 @@ const again = computed(() => {
           class="window-spend-again held-room"
         >
           <p
+            v-for="form in again.room"
+            :key="form"
             class="window-spend-room held-room-unseen"
             aria-hidden="true"
           >
-            {{ again.words }}
+            {{ form }}
             <VButton
               variant="text"
               size="inline"

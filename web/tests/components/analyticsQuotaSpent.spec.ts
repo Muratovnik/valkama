@@ -406,8 +406,52 @@ describe('the states of what used a window', () => {
     const room = block
       .findAll('.window-spend-heading [aria-hidden="true"]')
       .map((one) => plain(one.text()))
-    expect(room).toEqual([stretch, `${stretch} · ≈ $99,999.99`])
+    // And as a later day says it, a moment of another day dated: past midnight a time takes its
+    // date (`datedStretches`).
+    const dated = 'Window breakdown: Nov 11, 11:30 – 14:30'
+    const allDated = 'Window breakdown: Nov 11, 11:30 – Nov 11, 14:30'
+    expect(room).toEqual([
+      stretch,
+      `${stretch} · ≈ $99,999.99`,
+      dated,
+      `${dated} · ≈ $99,999.99`,
+      allDated,
+      `${allDated} · ≈ $99,999.99`,
+    ])
     expect(said(block.get('.window-spend-head'))).not.toContain('99,999')
+  })
+
+  it('keeps before midnight the room of the heading it takes after, a time taking its date', async () => {
+    // The quota is read at ten to midnight, its five hours begun at 20:50, and again at ten past,
+    // the same window: the heading's start is then a moment of another day.
+    const evening = new Date(2026, 10, 11, 23, 50)
+    const night = new Date(2026, 10, 12, 0, 10)
+    vi.setSystemTime(evening)
+    let at = evening
+    const answered = () => {
+      const window = quotaAt(evening)
+      return quotaAnswer({ ...window, now: momentAt(at.getTime(), -at.getTimezoneOffset()) })
+    }
+    stubAnalyticsReads(usage, answered)
+    const page = await openFiveHours()
+    await openSpend(page, 'Work')
+    const heading = () => plain(blockIn(page).get('.window-spend-title').text())
+    const room = () =>
+      blockIn(page)
+        .findAll('.window-spend-heading [aria-hidden="true"]')
+        .map((one) => plain(one.text()))
+    expect(heading()).toBe('Window breakdown: 20:50 – 23:50')
+    // Figures are of one width each, so a heading is kept for by its shape, whichever minute.
+    const shape = (text: string) => text.replaceAll(/[0-9]/gu, '0')
+    const kept = [heading(), ...room()].map(shape)
+
+    at = night
+    vi.setSystemTime(night)
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    const after = heading()
+    expect(after, 'the start dated past midnight').toMatch(/^Window breakdown: Nov 11, 20:50 – /u)
+    expect(kept, 'its room kept before midnight').toContain(shape(after))
   })
 
   it('keeps its lines when a read again fails, and says so in the room it kept for those words', async () => {
