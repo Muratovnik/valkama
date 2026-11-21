@@ -12,7 +12,7 @@
  *   its first letter on theirs, and run on to `EDGE` short of the window's right edge, wrapping
  *   by words only where they do not fit there (`placeWhole`, drawn by `WholeText`). On one line
  *   it covers its own line and nothing over or under it, in a list as anywhere; over a clamp of
- *   several lines its words keep the clamp's column and run on down past it.
+ *   several lines its words take the clamp's column and alignment and run on down past it.
  * - A hint of a chart's mark stands at that mark, whatever the chart: a day's stack, a column of a
  *   small chart and the small chart's name, a ranked row's bar, a reading of a step line, a sector
  *   of a ring. The mark declares itself, and the place of its hint follows from the mark alone:
@@ -207,7 +207,10 @@ function inRow({ aside, frame, rem, width, window }: HintSetting): HintPlace {
 
 /** What decides where the whole of a cut text is laid, measured as it opens. */
 export interface WholeSetting {
-  /** Where the whole text's first letter stands inside its own box as drawn, in px. */
+  /**
+   * Where the whole text's first letter stands inside its own box as drawn, in px; over a clamp
+   * (`lines`) only how far down, since across its box is laid by the clamp's column.
+   */
   inset: { left: number; top: number }
   /** Where the cut text's first letter stands, in the window's coordinates. */
   letter: { left: number; top: number }
@@ -217,6 +220,11 @@ export interface WholeSetting {
   window: number
   /** The box the cut text's lines show in where they are cut down, as a clamp's (`cutLinesOf`). */
   lines?: Box | null
+  /**
+   * How far in from its box's left edge the whole text's lines start as drawn, its padding: what
+   * its box is laid by over a clamp's column (`lines`). 0 before it is drawn.
+   */
+  pad?: number
   /** How tall the whole text came out as drawn and how tall the window is, in px, once drawn. */
   tall?: { drawn: number; window: number } | null
 }
@@ -234,32 +242,38 @@ export interface WholePlace {
 /**
  * Where the whole of a cut text is laid: its box placed so that its first letter stands on the
  * cut text's, and as wide as the room from there to `EDGE` short of the window's right edge.
- * Over a text cut down to its lines it is as wide as they are, standing as far past their end as
- * it stands before their start, and at least as high: its words wrap at the width the clamp cut
- * them at and take the lines they need under the clamp's, so no line and no ellipsis shows beside
- * or under it, and no empty room stands under its last line. Run on to the window's edge, a
- * board tile's title cut at its third line lay on one line 560 to 660px wide, past the next
- * columns, with 38px of empty frame under it. Drawn taller than the room under where it is laid
- * (`tall`), it stands higher, its bottom `EDGE` short of the window's and its top no higher than
- * `EDGE` under the window's top.
+ * Over a text cut down to its lines its lines take the clamp's whole column, its box standing
+ * `pad` out of it on each side, and it is at least as high as the clamp's lines: drawn in the
+ * clamp's type and alignment (`WholeText`), its words wrap where the clamp wrapped them and take
+ * the lines they need under the clamp's, so no line and no ellipsis shows beside or under it, no
+ * empty room stands under its last line, and its first letter stands on the cut one because its
+ * first line is the clamp's. Laid from that letter instead, over a clamp whose lines end at its
+ * column's end, as a table's column heading, the box started at the letter, inside the column,
+ * narrower than it, and broke words the clamp kept whole. Run on to the window's edge, a board
+ * tile's title cut at its third line lay on one line 560 to 660px wide, past the next columns,
+ * with 38px of empty frame under it. Drawn taller than the room under where it is laid (`tall`),
+ * it stands higher, its bottom `EDGE` short of the window's and its top no higher than `EDGE`
+ * under the window's top.
  */
 export function placeWhole({
   inset,
   letter,
   lines,
+  pad = 0,
   scale,
   tall,
   window,
 }: WholeSetting): WholePlace {
-  const left = letter.left - inset.left
   const laidTop = letter.top - inset.top
   const top = tall ? Math.min(laidTop, Math.max(EDGE, tall.window - EDGE - tall.drawn)) : laidTop
-  const room = Math.max(0, (window - EDGE - left) / scale)
-  if (!lines) return { left, top, widest: room }
-  const past = (start: number, end: number, from: number) =>
-    Math.max(0, end - from + Math.max(0, start - from)) / scale
-  const widest = Math.min(room, past(lines.left, lines.right, left))
-  const block = past(lines.top, lines.bottom, laidTop)
+  const roomFrom = (left: number) => Math.max(0, (window - EDGE - left) / scale)
+  if (!lines) {
+    const left = letter.left - inset.left
+    return { left, top, widest: roomFrom(left) }
+  }
+  const left = lines.left - pad
+  const widest = Math.min(roomFrom(left), (lines.right - lines.left + 2 * pad) / scale)
+  const block = Math.max(0, lines.bottom - laidTop + Math.max(0, lines.top - laidTop)) / scale
   return { left, top, widest, least: { block, inline: widest } }
 }
 
