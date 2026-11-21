@@ -4,7 +4,8 @@
  * step, the value's whole figure in the page's measure, one series in the value's hue on the page,
  * drawn or as its table as every chart of the page is (`ChartSection`). The step not over yet is
  * hatched, a minute after the newest record read has no data yet, and a step with no figure in the
- * measure says so, as the page's own day chart does (`dayColumns`'s rules).
+ * measure says so, as the page's own day chart does (`dayColumns`'s rules), and so does a step
+ * whose figure says nothing of how much, which is not named (`unnamedEntries`).
  *
  * Each column carries the figure of the step it is compared with in the period before, read with
  * the value's filters through the period the page's answer is compared with (`usePeriodBefore`),
@@ -21,7 +22,7 @@ import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.t
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { notYet, unfinished } from '@/pages/analytics/utils/dayFigures.ts'
-import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { figureOf, spentOf, unnamedEntries } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageFilters } from '@/shared/api/analyticsApi.ts'
@@ -80,13 +81,16 @@ const chart = computed<PeriodChartProps>(() => {
       const figure = figureOf(measure, spentOf(point))
       const was = beforeSteps.value?.[index]
       const pending = step.value === 'minute' && notYet(point.start, usage.last_event_at)
+      const values = figure === null ? {} : { [SERIES]: figure }
+      const unnamed = unnamedEntries(measure, values)
       return {
         key: point.start,
         ...words.stepName(point.start, step.value),
-        values: figure === null ? {} : { [SERIES]: figure },
+        values,
         absent: figure === null ? [SERIES] : [],
         incomplete: unfinished(point.start, step.value, readAt),
         ...(pending ? { pending } : {}),
+        ...(unnamed.length ? { unnamed } : {}),
         ...(was ? { before: figureOf(measure, spentOf(was)) } : {}),
       }
     }),

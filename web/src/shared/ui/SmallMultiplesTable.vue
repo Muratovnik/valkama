@@ -12,7 +12,7 @@ import { computed } from 'vue'
 
 import { markActs, markTag, markType } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
-import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
+import { placeMultiples, shownValue } from '@/shared/ui/multiplesGeometry.ts'
 import type {
   MultiplePeriod,
   MultiplesWords,
@@ -51,7 +51,7 @@ const rows = computed(() => {
     ...one,
     rest: one.kind === 'none' || one.kind === 'unknown',
     cells: props.periods.map((period, index) => {
-      const value = one.values[index]
+      const value = shownValue(one, index)
       return { key: period.key, text: value === null ? null : props.formatValue(value ?? 0) }
     }),
   }))

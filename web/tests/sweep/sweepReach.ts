@@ -104,7 +104,7 @@ interface Found {
 async function pointAround(
   page: Page,
   { mark, around }: { around: MarkAround; mark: Hinted },
-  options: { forbid: readonly string[]; name: (id: string) => string },
+  options: { forbid: readonly string[]; names: readonly string[]; name: (id: string) => string },
   found: Found,
 ) {
   for (const point of around.points) {
@@ -113,7 +113,8 @@ async function pointAround(
       : expectedAmong(point.nearby, mark.id, point.at)
     const surface = await pointAt(page, point.at, mark.id, expected)
     found.pointed += 1
-    for (const text of options.forbid.filter((one) => surface && occurrences(surface.text, one)))
+    const said = (one: string) => surface && occurrences(surface.text, one, options.names)
+    for (const text of options.forbid.filter((one) => said(one)))
       found.said.push({
         text,
         said: surface?.text.slice(0, 120) ?? '',
@@ -146,7 +147,13 @@ async function pointAround(
  */
 export async function sweepReach(
   page: Page,
-  options: { forbid: readonly string[]; perSort: number; scope: string | null },
+  options: {
+    forbid: readonly string[]
+    /** The names of the data shown, inside which a forbidden text is the data's (`occurrences`). */
+    names: readonly string[]
+    perSort: number
+    scope: string | null
+  },
 ): Promise<Found> {
   const hinted = await readHinted(page, options.scope)
   const byId = new Map(hinted.map((one) => [one.id, one.path]))
@@ -157,7 +164,12 @@ export async function sweepReach(
     if (!around) continue
     // A scroll closes the hint and asks again for whatever the pointer then rests on.
     if (around.scrolled) await rest(page)
-    await pointAround(page, { mark, around }, { forbid: options.forbid, name }, found)
+    await pointAround(
+      page,
+      { mark, around },
+      { forbid: options.forbid, name, names: options.names },
+      found,
+    )
   }
   await rest(page)
   return { ...found, said: dedupe(found.said) }

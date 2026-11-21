@@ -8,7 +8,9 @@
  * With the measure «tokens» it adds the tokens of each value by kind (`kindsByValue`), so what the
  * tiles say of the kinds stands value by value. Under the rows is the total of every column, from
  * the read's own total, and for rows a search kept, their own total (`totalOf`). A cell carries the number it sorts by: the figure in its measure, null
- * where the read holds none, which sorts after every figure whichever way the column runs.
+ * where the read holds none, which sorts after every figure whichever way the column runs. A
+ * row's figure that says nothing of how much reads as none (`entrySpent`), and sorts by what it
+ * is; a total says what it holds.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,6 +26,7 @@ import {
 import type { TokenKind } from '@/pages/analytics/utils/tokenKinds.ts'
 import {
   comparedLines,
+  entrySpent,
   figureOf,
   lineChangeOf,
   measureOf,
@@ -145,10 +148,16 @@ export function useTableModel(source: () => TableSource) {
   const { t } = useI18n()
   const words = useSpendingWords()
 
-  const figureCell = (key: string, measure: Measure, spent: Spent, chosen: boolean) => ({
+  /** A figure's cell: a row's as an entry says it (`entrySpent`), a total's as it is. */
+  const figureCell = (
+    key: string,
+    measure: Measure,
+    spent: Spent,
+    { chosen, total }: { chosen: boolean; total: boolean },
+  ) => ({
     key,
     chosen,
-    ...words.lineFigureWords(measure, spent),
+    ...words.lineFigureWords(measure, total ? spent : entrySpent(measure, spent)),
     sort: figureOf(measure, spent),
   })
 
@@ -220,18 +229,20 @@ export function useTableModel(source: () => TableSource) {
       ...kindColumns(),
     ]
     // A value's change is its line's (`comparedLines`); the total's, the tiles' own rule beside
-    // what a read narrowed to accounts left out on no account (`unplacedBefore`).
-    const cellsOf = (
-      now: Spent,
-      before: Spent | null,
-      tokens: UsageTokens,
-      change: LineChange | null,
-    ): TableCell[] => {
-      return [
-        ...MEASURES.map((key) => figureCell(key, key, now, key === measure)),
+    // what a read narrowed to accounts left out on no account (`unplacedBefore`). A row's figures
+    // are entries, a total's say what they hold (`figureCell`).
+    const cellsOf =
+      (total: boolean) =>
+      (
+        now: Spent,
+        before: Spent | null,
+        tokens: UsageTokens,
+        change: LineChange | null,
+      ): TableCell[] => [
+        ...MEASURES.map((key) => figureCell(key, key, now, { chosen: key === measure, total })),
         ...(before && change
           ? [
-              figureCell('before', measure, before, true),
+              figureCell('before', measure, before, { chosen: true, total }),
               {
                 key: 'change',
                 chosen: false,
@@ -242,7 +253,8 @@ export function useTableModel(source: () => TableSource) {
           : []),
         ...kindCells(tokens),
       ]
-    }
+    const rowCells = cellsOf(false)
+    const totalCells = cellsOf(true)
     const compared = comparedLines({
       rows: usage.rows,
       before: comparison?.rows ?? null,
@@ -254,12 +266,12 @@ export function useTableModel(source: () => TableSource) {
     })
     const lines = compared.map((line) =>
       lineOf(line, [
-        cellsOf(line.now, line.before, kindsOf(kinds, line.key), line.change),
+        rowCells(line.now, line.before, kindsOf(kinds, line.key), line.change),
         whenOf(measure, line.now, line.before),
       ]),
     )
     const before = comparison ? spentOf(comparison.total) : null
-    const total = cellsOf(
+    const total = totalCells(
       spentOf(usage.total),
       before,
       usage.total.tokens,
@@ -280,7 +292,7 @@ export function useTableModel(source: () => TableSource) {
         found.flatMap(({ unplaced }) => (unplaced ? [[unplaced.key, unplaced.spent]] : [])),
       )
       const loose = left.size ? spentTogether([...left.values()]) : undefined
-      return cellsOf(
+      return totalCells(
         now,
         was,
         kindsTogether(kinds, [...held]),

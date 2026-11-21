@@ -9,7 +9,7 @@
  * The name gives the figures its room down to its floor, eight of the table's ems, and is cut
  * there, its whole words laid over it under the pointer and the keyboard's focus. It is cut only for
  * the figures: every column of figures is as wide as its cells ask and no wider. Where even the
- * floor leaves the figures too little, at a window of 900 pixels, the table scrolls sideways in
+ * floor leaves the figures too little, at a window of 860 pixels, the table scrolls sideways in
  * its frame with the names held at its start. Each run prints what it measured.
  *
  * A cost that leaves tokens without a price says how many on a second, quieter line under its
@@ -109,7 +109,7 @@ const FLOOR_EMS = 8
 const DESKTOP = [1280, 1440, 1670, 1920]
 
 /** A window whose frame is narrower than the figures and the name's floor. */
-const NARROW = 900
+const NARROW = 860
 
 /**
  * How the table stands in its frame: how far it runs past the frame, to the fraction of a pixel,

@@ -1045,7 +1045,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   a unit or more stays, since it shows a gap in what is placed. The section's total and every
   share still count such a row — a ring that leaves one out stays open by its share rather than
   stretching the rest over it — the section's own table, which holds every value in every
-  measure, lists it, and a chart whose every row is one draws them all.
+  measure, lists it, and a chart whose every row is one draws them all. The same holds for an
+  entry of a breakdown, one value in one day, hour or minute or one figure of the section's
+  table (`unnamedEntries`, `entrySpent`): it is absent there as a value that did not spend there
+  is — the period's hint does not list it, it draws nothing, and its table cell, a small chart's
+  hint and the section table's cell read «0 мин» — while the period's total, the value's figure
+  over the span and the section's total count it. A total under the unit, the running minute or
+  a whole day under a minute, keeps its words.
   `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
   draws one small chart of the span per leading value, all on one scale whose top is written
   once over them, each with its name on one line and its figure; the folded tail shares the

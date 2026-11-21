@@ -3,7 +3,7 @@
  * what a reader may press, installed beside `sweepInPage.ts`'s helpers and bound by the same
  * rule: each function reaches the others only through `window.sweepHelpers`.
  */
-import type { Point, ScrollMaker } from './sweepRules.ts'
+import type { Point, ScrollMaker, TextPlace } from './sweepRules.ts'
 
 /** A box of the page or the panel that holds more than it shows sideways. */
 export interface Overflowing {
@@ -24,10 +24,30 @@ export interface Overflowing {
 
 /** One place a forbidden text stands, visible. */
 export interface Occurrence {
+  /** The texts of the elements around the place's text, each with where that text starts in it. */
+  contexts: TextPlace[]
   owner: string
   path: string
+  /** The place's text as it is written, which `contexts` place. */
+  raw: string
   said: string
   text: string
+}
+
+/**
+ * The texts of the four elements around `node`, nearest first, each with where `node` starts in
+ * it: enough for a name drawn in several runs to read whole.
+ */
+function contextsOf(node: Node): TextPlace[] {
+  const places: TextPlace[] = []
+  let at = node.parentElement
+  for (let depth = 0; at && depth < 4; depth += 1, at = at.parentElement) {
+    const before = document.createRange()
+    before.setStart(at, 0)
+    before.setEndBefore(node)
+    places.push({ context: at.textContent ?? '', at: before.toString().length })
+  }
+  return places
 }
 
 /** Text with every run of space, of any width, read as one space. */
@@ -176,6 +196,8 @@ function readForbidden(texts: readonly string[], scope: string | null): Occurren
       found.push({
         text,
         said: said.trim().slice(0, 120),
+        raw: node.textContent ?? '',
+        contexts: help.contextsOf(node),
         path: help.path(parent),
         owner: help.owner(parent),
       })
@@ -224,6 +246,7 @@ function pressPoint(index: number): Point | null {
 
 /** The helpers of this module, by name, as `window.sweepHelpers` holds them. */
 export const layoutHelpers = {
+  contextsOf,
   escapeesOf,
   inflowOf,
   inRow,

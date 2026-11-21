@@ -61,7 +61,9 @@ Overflow reports a sideways scroll that is none of the design's: the page's,
 one widened by content out of flow, one whose content is neither a table nor a
 row of like items, and one shorter than the least target (`--period-reach`).
 `--forbid <text>`, repeatable, counts every visible place a text stands, in the
-page and in a hint. Run it on a store copy, from `web/`, with its output in the
+page and in a hint, as the product's own words: a place inside a name of the
+data shown, such as a task's title that quotes the text, is the data's, judged
+by the titles and names the page's API answers gave (`occurrences`). Run it on a store copy, from `web/`, with its output in the
 ignored `tmp/` (it refuses any other place, since it records what the store
 shows):
 

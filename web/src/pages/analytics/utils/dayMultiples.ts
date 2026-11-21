@@ -11,6 +11,7 @@ import {
   lineKeyOf,
   rankedLines,
   spentOf,
+  unnamedEntries,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
@@ -28,9 +29,13 @@ export function valueSlots(source: StackSource): Map<string, SeriesSlot> {
   return new Map(stackLines(source).flatMap((one) => (one.line ? [[one.key, one.slot]] : [])))
 }
 
-/** A line of the small charts, with its figure in each day of the answer; null for no figure. */
+/**
+ * A line of the small charts, with its figure in each day of the answer, null for no figure, and
+ * the days, by place, whose figure says nothing of how much (`unnamedEntries`).
+ */
 export interface DayMultiple {
   line: SpendingLine
+  unnamed: number[]
   values: (number | null)[]
 }
 
@@ -38,8 +43,9 @@ export interface DayMultiple {
  * The lines of the small charts: the largest values in the measure, or split by `across` the
  * largest pairs, work with no value there and work nobody can place among them by their figures,
  * the rest folded into one «other» (`rankedLines`), each with its figure day by day; a line whose
- * figure says nothing of how much has no chart (`drawnLines`). A day a line spent in without a
- * figure in the measure is null, not zero.
+ * figure says nothing of how much has no chart (`drawnLines`), and a day whose figure says nothing
+ * is not named in its chart (`unnamedEntries`). A day a line spent in without a figure in the
+ * measure is null, not zero.
  */
 export function dayMultiples({ usage, by, measure, across = null }: StackSource): DayMultiple[] {
   const breakdown = breakdownOf(by, across)
@@ -56,10 +62,12 @@ export function dayMultiples({ usage, by, measure, across = null }: StackSource)
       const held = sums.get(into)
       sums.set(into, figure === null ? (held ?? null) : (held ?? 0) + figure)
     }
-    return sums
+    const amounts = [...sums].filter((entry): entry is [string, number] => entry[1] !== null)
+    return { sums, unnamed: new Set(unnamedEntries(measure, Object.fromEntries(amounts))) }
   })
   return lines.map((line) => ({
     line,
-    values: days.map((sums) => (sums.has(line.key) ? (sums.get(line.key) ?? null) : 0)),
+    values: days.map(({ sums }) => (sums.has(line.key) ? (sums.get(line.key) ?? null) : 0)),
+    unnamed: days.flatMap((day, index) => (day.unnamed.has(line.key) ? [index] : [])),
   }))
 }

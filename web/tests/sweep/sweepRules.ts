@@ -288,13 +288,72 @@ export function scrollMiss(reading: ScrollReading): { by: number; rule: ScrollRu
   return by < LEAST_SCROLL ? { rule: 'sliver', by } : null
 }
 
-/** `value` with every run of whitespace, of any width, read as one space. */
-function oneSpace(value: string): string {
-  return value.replaceAll(/\s+/gu, ' ')
+/** A wider text a text stands in, and where that text starts in it. */
+export interface TextPlace {
+  at: number
+  context: string
 }
 
-/** Every place a text stands in `said`, whitespace of any width read as one space. */
-export function occurrences(said: string, text: string): number {
-  const needle = oneSpace(text)
-  return needle ? oneSpace(said).split(needle).length - 1 : 0
+/** A pattern of `text` that takes any run of whitespace in it as any other. */
+function loosely(text: string): RegExp {
+  const parts = text.trim().split(/\s+/u)
+  return new RegExp(
+    parts.map((part) => part.replaceAll(/[$()*+.?[\\\]^{|}]/gu, '\\$&')).join('\\s+'),
+    'gu',
+  )
+}
+
+/** Where `text` stands in `within`, each place as its start and its end. */
+function spansOf(within: string, text: string): [number, number][] {
+  return [...within.matchAll(loosely(text))].map((match) => [
+    match.index,
+    match.index + match[0].length,
+  ])
+}
+
+/**
+ * The names a page may draw a name as: as given, and without the backticks of code, which a
+ * task's title drawn in runs leaves out (`textRuns.ts`).
+ */
+function drawnNames(names: readonly string[]): string[] {
+  return [...new Set(names.flatMap((name) => [name, name.replaceAll('`', '')]))].filter((name) =>
+    name.trim(),
+  )
+}
+
+/**
+ * Every place a text stands in `said` as the product's own words, whitespace of any width read
+ * as one space. A place inside a name of the data shown (`names`), such as a task's title that
+ * quotes the words, is the data's, not the product's, and does not count. A name may reach past
+ * `said`, as a title drawn in runs is several texts: `contexts` are the wider texts `said` stands
+ * in, each with where it starts there, and a place inside a name in any of them is the name's.
+ */
+export function occurrences(
+  said: string,
+  text: string,
+  names: readonly string[] = [],
+  contexts: readonly TextPlace[] = [],
+): number {
+  if (!text.trim()) return 0
+  const holding = drawnNames(names).filter((name) => loosely(text).test(name))
+  const places = [{ context: said, at: 0 }, ...contexts]
+  const named = ([start, end]: [number, number]) =>
+    places.some(({ context, at }) =>
+      holding.some((name) =>
+        spansOf(context, name).some(([from, to]) => from <= at + start && at + end <= to),
+      ),
+    )
+  return spansOf(said, text).filter((place) => !named(place)).length
+}
+
+/**
+ * The names of the data in an answer of the API: every `title` and `name` it holds, at any
+ * depth, as a work item's title or a value's name.
+ */
+export function namesIn(answer: unknown): string[] {
+  if (Array.isArray(answer)) return answer.flatMap((one) => namesIn(one))
+  if (!answer || typeof answer !== 'object') return []
+  return Object.entries(answer).flatMap(([key, one]) =>
+    (key === 'title' || key === 'name') && typeof one === 'string' ? [one] : namesIn(one),
+  )
 }

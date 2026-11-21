@@ -81,9 +81,19 @@ export function measureOf(measure: Measure, spent: Spent): number | null {
 export function belowUnit(measure: Measure, spent: Spent): boolean {
   if (measure === 'time') return Math.round(spent.seconds * 1000) < MINUTE
   const amount = measureOf(measure, spent)
-  if (amount === null) return false
-  if (measure === 'tokens') return amount < 1
-  return spent.unpriced === 0 && amount < LEAST_COST
+  return (
+    amount !== null &&
+    (measure === 'tokens' || spent.unpriced === 0) &&
+    amountBelowUnit(measure, amount)
+  )
+}
+
+/** The least amount the words of a count write: a token, a cent. */
+const LEAST: Record<Exclude<Measure, 'time'>, number> = { tokens: 1, cost: LEAST_COST }
+
+/** Whether an amount on a chart's scale (`measureOf`) is less than the least its words count. */
+function amountBelowUnit(measure: Measure, amount: number): boolean {
+  return measure === 'time' ? Math.round(amount * HOUR * 1000) < MINUTE : amount < LEAST[measure]
 }
 
 /**
@@ -93,11 +103,49 @@ export function belowUnit(measure: Measure, spent: Spent): boolean {
  * chart names it: not the ranked bars, the ring's sectors and legend, the small charts, the day
  * chart's series, nor the table twin of any of them. Every total and share a chart says stays of
  * all the lines, which its caller sums before it leaves any out; the section's own table, which
- * holds every value in every measure, lists them all.
+ * holds every value in every measure, lists them all, each figure as an entry says it
+ * (`entrySpent`). A line kept says nothing either in a period where its figure is below the unit
+ * (`unnamedEntries`).
  */
 export function drawnLines<T extends { spent: Spent }>(measure: Measure, lines: readonly T[]): T[] {
   const counted = lines.filter((line) => !belowUnit(measure, line.spent))
   return counted.length ? counted : [...lines]
+}
+
+/**
+ * The entries of a breakdown in one period that say nothing of how much: of each series' amount in
+ * a day, an hour or a minute, by key, on the chart's scale (`measureOf`), every one above zero and
+ * below the unit of its words (`belowUnit`), «under a minute». Every view of the period leaves
+ * them out as it leaves out a series that did not spend there: the day's hint does not list one,
+ * its table cell and a small chart's say what a day with nothing says, and neither is drawn. The
+ * period's total and each series' figure over the span still count them. An amount that leaves
+ * something out (`absent`: no price, no token counted) is never one, since its words say so.
+ */
+export function unnamedEntries(
+  measure: Measure,
+  amounts: Readonly<Partial<Record<string, number>>>,
+  absent: readonly string[] = [],
+): string[] {
+  return Object.entries(amounts)
+    .filter(
+      ([key, amount]) =>
+        amount !== undefined &&
+        amount > 0 &&
+        !absent.includes(key) &&
+        amountBelowUnit(measure, amount),
+    )
+    .map(([key]) => key)
+}
+
+/**
+ * What a line's entry of the section's table says it spent in a measure: what it spent, with a
+ * figure below the unit of its words (`belowUnit`) read as none, «0 min», as a line that did not
+ * spend in that measure reads (`unnamedEntries`). A total says what it holds, however small.
+ */
+export function entrySpent(measure: Measure, spent: Spent): Spent {
+  if (!belowUnit(measure, spent)) return spent
+  if (measure === 'time') return { ...spent, seconds: 0 }
+  return measure === 'tokens' ? { ...spent, tokens: 0 } : { ...spent, cost: 0 }
 }
 
 /** Whether a line spent anything at all: some time, a token, a price or tokens without one. */
