@@ -183,11 +183,11 @@ unittest.TextTestRunner.resultclass = LoadNoting  # type: ignore[assignment]
 #: gates and CI name. A narrower one makes a targeted run.
 _WHOLE_SUITE_PATTERNS = (None, "test*.py", "test_*.py")
 
-#: The logical CPUs a run of the whole suite declares to the heavy-test gate. The suite
-#: is one Python process, with the processes some tests start; a sampler of whole runs
-#: saw it at one to two cores, short of a run from start to end, so this is a first
-#: figure to revise against a measured one. `tests/parallel.py` declares it for each
-#: process it runs at once.
+#: The logical CPUs a run of the whole suite in one process declares to the heavy-test
+#: gate. The suite is one Python process, with the processes some tests start; a
+#: sampler of whole runs saw it at one to two cores, short of a run from start to end,
+#: so this is a first figure to revise against a measured one. `tests/parallel.py`,
+#: which runs it in several processes, declares a figure of its own.
 WHOLE_SUITE_CPUS = 2
 
 

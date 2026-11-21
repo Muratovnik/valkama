@@ -19,8 +19,8 @@ nothing is lost because a module took its process down. A module named twice
 runs once.
 
 The run holds a place at the machine's heavy-test gate, `tests/machine_lock.py`,
-declaring `PROCESS_CPUS` for each process it runs at once, unless a holder
-started it, as `tests/isolated.py gates` does. `--coverage` runs every process
+declaring one CPU for every `PROCESSES_PER_CPU` processes it runs at once, unless
+a holder started it, as `tests/isolated.py gates` does. `--coverage` runs every process
 under `coverage run --parallel-mode` and combines their data at the end, into
 the data file `coverage report` reads.
 
@@ -54,9 +54,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: The pattern the gates' discovery is spelled with.
 PATTERN = "test_*.py"
-#: The logical CPUs one worker process counts at the gate: the figure the whole
-#: suite in one process declares, `tests.WHOLE_SUITE_CPUS`, held equal by a test.
-PROCESS_CPUS = 2
+#: How many worker processes count as one logical CPU at the gate. A test process
+#: waits on its disk, its children and its sockets far more than it computes: eight
+#: at once over 132 modules used 1.5 CPUs on average and 3.1 at most over any ten
+#: seconds, their children included, so eight declare four.
+PROCESSES_PER_CPU = 2
 #: How many processes run at once by default, and fewer on a machine with fewer CPUs.
 DEFAULT_JOBS = 8
 #: The variable a holder of the heavy-test lock sets for what it starts,
@@ -80,7 +82,7 @@ def default_jobs(cpus: int | None = None) -> int:
 def declared_cpus(jobs: int) -> int:
     """What a run of `jobs` processes at once declares at the heavy-test gate."""
 
-    return jobs * PROCESS_CPUS
+    return -(-jobs // PROCESSES_PER_CPU)
 
 
 def whole_suite(root: Path = ROOT, pattern: str = PATTERN, package: str = "tests") -> list[str]:

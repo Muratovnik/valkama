@@ -16,7 +16,6 @@ import textwrap
 import unittest
 from pathlib import Path
 
-import tests
 from tests import machine_lock, parallel
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -261,9 +260,8 @@ class SuiteTests(unittest.TestCase):
 
 
 class GateTests(unittest.TestCase):
-    def test_the_figures_copied_from_the_package_are_its_own(self) -> None:
+    def test_the_figure_copied_from_the_package_is_its_own(self) -> None:
         self.assertEqual(machine_lock.HELD_BY_ANCESTOR, parallel.HELD_VARIABLE)
-        self.assertEqual(tests.WHOLE_SUITE_CPUS, parallel.PROCESS_CPUS)
 
     def test_a_run_not_under_a_holder_goes_through_the_gate_declaring_its_processes(self) -> None:
         command = parallel.gate_command(["--jobs", "3", "tests.test_a"], "three modules", 3)
@@ -273,11 +271,15 @@ class GateTests(unittest.TestCase):
         )
         options = command[: command.index("--")]
         self.assertEqual("three modules", options[options.index("--run") + 1])
-        self.assertEqual(str(3 * parallel.PROCESS_CPUS), options[options.index("--cpus") + 1])
+        # Two processes count as one CPU, and a part of one as a whole one.
+        self.assertEqual("2", options[options.index("--cpus") + 1])
         self.assertEqual(
             [sys.executable, str(ROOT / "tests" / "parallel.py"), "--jobs", "3", "tests.test_a"],
             command[command.index("--") + 1 :],
         )
+
+    def test_the_processes_declare_one_cpu_for_every_two(self) -> None:
+        self.assertEqual([1, 1, 2, 4], [parallel.declared_cpus(jobs) for jobs in (1, 2, 3, 8)])
 
     def test_the_default_takes_half_the_machine_up_to_its_ceiling(self) -> None:
         self.assertEqual(
@@ -304,7 +306,7 @@ class GateTests(unittest.TestCase):
         stream = open(os.devnull, "w", encoding="utf-8")
         self.addCleanup(stream.close)
 
-        name = f"{__name__}.GateTests.test_the_figures_copied_from_the_package_are_its_own"
+        name = f"{__name__}.GateTests.test_the_figure_copied_from_the_package_is_its_own"
 
         code = parallel.work(name, report, stream)
 
