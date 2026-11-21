@@ -154,11 +154,16 @@ export async function chooseView(page: Page, chart: number, option: number): Pro
 /**
  * Opens the value panel by pressing what a reader would (`markPressables`), at a point the pointer
  * reaches it, until the address holds a panel. A press that did something else is undone by
- * opening the view again. Answers the path of what opened it, or null where nothing did.
+ * opening the view again. Answers the path of what opened it, or null where nothing did, and how
+ * many marks of the charts act when pressed.
  */
-export async function openPanel(page: Page, base: string, view: ViewState): Promise<string | null> {
-  const candidates = await markPressables(page)
-  for (const [index, path] of candidates.entries()) {
+export async function openPanel(
+  page: Page,
+  base: string,
+  view: ViewState,
+): Promise<{ acting: number; opener: string | null }> {
+  const { acting, paths } = await markPressables(page)
+  for (const [index, path] of paths.entries()) {
     const at = await pressPoint(page, index)
     if (!at) continue
     await page.mouse.click(at.x, at.y)
@@ -166,10 +171,10 @@ export async function openPanel(page: Page, base: string, view: ViewState): Prom
     if (viewNow(page).detail) {
       await page.locator('.analytics-detail').first().waitFor()
       await settle(page)
-      return path
+      return { acting, opener: path }
     }
     await openView(page, base, view)
     await markPressables(page)
   }
-  return null
+  return { acting, opener: null }
 }

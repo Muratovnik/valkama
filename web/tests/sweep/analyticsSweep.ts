@@ -29,7 +29,7 @@ import type { Browser, Page } from '@playwright/test'
 
 import { installHelpers, readForbidden, readOverflow } from './sweepPage.ts'
 import { rest, sweepReach } from './sweepReach.ts'
-import { scrollMiss } from './sweepRules.ts'
+import { panelNote, scrollMiss } from './sweepRules.ts'
 import { chartViews, chooseView, discover, openPanel, openView } from './sweepStates.ts'
 import type { PeriodChoice } from './sweepStates.ts'
 import { summarize } from './sweepSummary.ts'
@@ -188,10 +188,11 @@ async function walkPeriod(
     if (others.length) await chooseView(page, chart.chart, chart.chosen)
   }
   await openView(page, base, view)
-  const opener = await openPanel(page, base, view)
+  const { acting, opener } = await openPanel(page, base, view)
   if (opener)
     results.push(await measure(page, state(`panel from ${opener}`, true), '.analytics-detail'))
-  else notes.push(`${at}: no mark opened the value panel`)
+  const note = panelNote(acting, opener !== null)
+  if (note) notes.push(`${at}: ${note}`)
   return results
 }
 

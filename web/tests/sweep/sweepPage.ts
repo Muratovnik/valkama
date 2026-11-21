@@ -60,8 +60,11 @@ export function readForbidden(
   ] as const)
 }
 
-/** Marks what a reader may press to open a value (`data-sweep-press`) and answers their paths. */
-export function markPressables(page: Page): Promise<string[]> {
+/**
+ * Marks what a reader may press to open a value (`data-sweep-press`) and answers their paths, and
+ * how many of them are marks of a chart that act.
+ */
+export function markPressables(page: Page): Promise<{ acting: number; paths: string[] }> {
   return page.evaluate(() => window.sweepHelpers.markPressables())
 }
 

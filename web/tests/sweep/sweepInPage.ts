@@ -87,6 +87,8 @@ export interface Surface {
   box: Box
   /** The marks of the aimed chart drawn as pointed at, or null where none are told apart. */
   painted: string[] | null
+  /** Where the aimed mark declares its hint stands, read as the hint shows. */
+  place: MarkPlace | null
   /** Ids of the hinted elements whose words it is, or else whose words it holds. */
   says: string[]
   text: string
@@ -242,7 +244,24 @@ function onFill(shape: Element, at: Point): boolean | undefined {
   return matrix ? shape.isPointInFill(new DOMPoint(at.x, at.y).matrixTransform(matrix)) : undefined
 }
 
-/** Where a mark's hint stands, and its centre: its point, its declared box, or the element. */
+/**
+ * Whether a point is where a drawn shape takes the pointer: its fill or its stroke, painted or
+ * not, as a ring's sector takes it over its half of the ground beside it; undefined for what is
+ * no drawn shape.
+ */
+function onReach(shape: Element, at: Point): boolean | undefined {
+  if (!(shape instanceof SVGGeometryElement)) return undefined
+  const matrix = shape.getScreenCTM()?.inverse()
+  if (!matrix) return undefined
+  const local = new DOMPoint(at.x, at.y).matrixTransform(matrix)
+  return shape.isPointInFill(local) || shape.isPointInStroke(local)
+}
+
+/**
+ * Where a mark's hint stands, as the mark declares it now, and its centre: its point, its declared
+ * box, or the element. A drawn shape's point is read again after the pointer came, since a ring's
+ * sector names the point where the pointer stands on it, and it must stand on the shape itself.
+ */
 function markPlace(element: Element): { centre: Point; place: MarkPlace | null } {
   const help = window.sweepHelpers
   const declared = (
@@ -257,7 +276,11 @@ function markPlace(element: Element): { centre: Point; place: MarkPlace | null }
       : new DOMPoint(0, 0)
     return {
       centre: { x: at.x, y: at.y },
-      place: { kind: 'point', box: { left: at.x, right: at.x, top: at.y, bottom: at.y } },
+      place: {
+        kind: 'point',
+        box: { left: at.x, right: at.x, top: at.y, bottom: at.y },
+        onShape: help.onFill(declared, at) !== false,
+      },
     }
   }
   if (declared)
@@ -351,7 +374,7 @@ async function readAround(id: string, nudge: number): Promise<MarkAround | null>
       .map((one) => ({
         id: one.dataset.sweep ?? '',
         box: help.box(one),
-        onShape: help.onFill(one, at),
+        onShape: help.onReach(one, at),
       }))
       .filter((one) => Math.abs(one.box.left - at.x) < 400 && Math.abs(one.box.top - at.y) < 400),
   }))
@@ -397,11 +420,13 @@ function readSurface(aimed: string): Surface | null {
   // The element whose words it is whole, else every element whose words it holds: a place's hint
   // says the words of the places near it after its own.
   const whole = matching.filter((one) => one.words === text || one.own === text)
+  const pointed = document.querySelector(`[data-sweep="${aimed}"]`)
   return {
     box: help.box(surface),
     text: (surface.textContent ?? '').replaceAll(/\s+/gu, ' ').trim(),
     says: (whole.length ? whole : matching).map((one) => one.id),
-    painted: help.paintedNear(document.querySelector(`[data-sweep="${aimed}"]`)),
+    painted: help.paintedNear(pointed),
+    place: pointed ? help.markPlace(pointed).place : null,
   }
 }
 
@@ -419,6 +444,7 @@ const hintHelpers = {
   middleOf,
   nextFrame,
   onFill,
+  onReach,
   owner,
   paintedNear,
   path,
