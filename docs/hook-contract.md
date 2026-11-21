@@ -1416,7 +1416,10 @@ reading is recorded under, and which windows it keeps.
 | `seat` | the seven-day window's reset, as for the status line |
 
 A gateway's `spend_limit` reaches the mod without its dollars and is not kept
-from it. Everything else is the status line command's: a reading the store cannot
+from it. The engine's windows hold no model's own week and no extra usage, so
+neither the mod nor the status line ever records one: those come only from
+[the poll of the usage endpoint](connection-contract.md#the-poll-of-the-usage-endpoint),
+which is off until its owner switches it on. Everything else is the status line command's: a reading the store cannot
 take now goes to the spool, input that carries no reading writes nothing and
 prints nothing, and a reading the store would refuse is reported on stderr and
 written nowhere. A `--source` that names neither `statusline` nor `mod`, or is
@@ -1487,6 +1490,7 @@ empty conversation.
 | The executable names above the hook: `Code.exe` and its forks, a JetBrains `…64.exe`, `WindowsTerminal.exe`, `OpenConsole.exe`, `ChatGPT.exe` | a session start on Windows | the IDE is taken for VS Code, and a Codex app session is not placed |
 | The last `entrypoint` in a Claude Code transcript, and `payload.originator` on the first line of a Codex rollout | the open plan, for a session recorded before places were | the session is not placed |
 | The mod API, which Claude Code calls early access: the events `session.start`, `session.measure` and `turn.complete`, `$.session.usage().rateLimits`, `$.fs.read` and `$.process.run` | [the mod](#the-mod) | the mod hands nothing over, and `doctor` calls the `mod` source silent; `claude plugin test server/mod/valkama-quota` shows which call moved |
+| The window kinds in `rateLimits` and in the status line's `rate_limits`: `five_hour`, `seven_day` and a gateway's `spend_limit`, with no model week and no extra usage | [the mod](#the-mod) and the status line | a window the engine stops sending is no longer collected; one it starts sending is not kept until the receiver's parser names it |
 | `<config>/sessions/<pid>.json` of Claude Code, its `sessionId` and `pid` only | the desktop app, at a click, to see whether the process runs | the session's row decides whether it runs |
 | `CLAUDE_PID` and `CLAUDE_CODE_SESSION_ID` | [the watcher](#the-watcher) | a watcher whose client is gone, or that runs for another session, is ended by the session's end or its `timeout` alone |
 | That `claude -p` with a text prompt waits for an `asyncRewake` hook, and `--input-format stream-json` does not, read from the client's arguments | [the watcher](#the-watcher) | where a one-turn client stops waiting, nothing is lost; where another client starts to wait, its turns wait for the watcher's `timeout` again |
