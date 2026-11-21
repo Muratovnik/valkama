@@ -223,6 +223,13 @@ export interface PeriodColumn {
    * which is not zero. It is drawn as a hatched ground with no sum, and says so in words.
    */
   pending?: boolean
+  /**
+   * The keys of `values` this period does not name: a series whose amount here says nothing of
+   * how much, as its caller judges it, or an amount no series stands for. Such an amount is not
+   * drawn, and the period's hint and its table row say of a series what they say of one with
+   * nothing there, while the period's sum, and the series' figure over the span, count it.
+   */
+  unnamed?: readonly string[]
 }
 
 /** Something that changed at the start of a period, such as the account the work ran under. */
@@ -316,10 +323,18 @@ export interface StackedColumn {
   /** The series with no figure in the period (`PeriodColumn.absent`), in the series' order. */
   absent: PeriodSeries[]
   column: PeriodColumn
+  /** How high the stack is drawn: its segments together. */
+  drawn: number
   marks: string[]
-  /** Bottom first, in the series' order; a series with nothing in the period has no segment. */
+  /**
+   * Bottom first, in the series' order; a series with nothing in the period, or with an amount
+   * there it does not name (`PeriodColumn.unnamed`), has no segment.
+   */
   segments: StackSegment[]
-  /** The sum drawn; a period with nothing drawn and a series absent has no sum (`hasSum`). */
+  /**
+   * The period's sum: what is drawn and what is not named; a period with nothing drawn and a
+   * series absent has no sum (`hasSum`).
+   */
   total: number
 }
 
@@ -362,13 +377,17 @@ export function stackColumns(
     let reached = 0
     for (const one of series) {
       const value = drawable(column.values[one.key])
-      if (!value) continue
+      if (!value || column.unnamed?.includes(one.key)) continue
       segments.push({ series: one, value, start: reached, end: reached + value })
       reached += value
     }
+    const unnamed = (column.unnamed ?? []).reduce(
+      (sum, key) => sum + drawable(column.values[key]),
+      0,
+    )
     const notes = marks.filter((mark) => mark.at === column.key).map((mark) => mark.label)
     const absent = series.filter((one) => column.absent?.includes(one.key))
-    return { column, total: reached, segments, marks: notes, absent }
+    return { column, drawn: reached, total: reached + unnamed, segments, marks: notes, absent }
   })
   // The period compared with stands on the same scale, so its mark is never cut off.
   const before = columns.map((column) => drawable(column.before ?? 0))
@@ -383,9 +402,9 @@ export function stackColumns(
  */
 export function segmentPlace(one: StackedColumn, at: number) {
   const segment = one.segments[at]
-  if (!segment || one.total <= 0) return { insetBlockEnd: '0%', blockSize: '0%' }
-  const start = `${(segment.start / one.total) * 100}%`
-  const size = `${(segment.value / one.total) * 100}%`
+  if (!segment || one.drawn <= 0) return { insetBlockEnd: '0%', blockSize: '0%' }
+  const start = `${(segment.start / one.drawn) * 100}%`
+  const size = `${(segment.value / one.drawn) * 100}%`
   if (at === 0) return { insetBlockEnd: start, blockSize: size }
   return {
     insetBlockEnd: `calc(${start} + var(--space-half))`,

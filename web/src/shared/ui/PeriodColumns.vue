@@ -390,7 +390,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                 <span
                   class="period-stack"
                   :class="{ 'period-incomplete': one.column.incomplete }"
-                  :style="heightOf(one.total)"
+                  :style="heightOf(one.drawn)"
                   data-hint-mark
                 >
                   <component

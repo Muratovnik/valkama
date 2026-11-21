@@ -141,7 +141,10 @@ function figureHint(series: Named, figure: string, share: string): TooltipValue 
   }
 }
 
-/** A series' figure over every period drawn, and its share of all of them, as its entry's hint. */
+/**
+ * A series' figure over every period drawn, and its share of all of them, as its entry's hint:
+ * its amounts a period does not name (`PeriodColumn.unnamed`) count too.
+ */
 export function seriesHint(
   series: Named & { key: string },
   columns: readonly StackedColumn[],
@@ -153,6 +156,8 @@ export function seriesHint(
   for (const one of columns) {
     whole += one.total
     for (const segment of one.segments) if (segment.series.key === series.key) held += segment.value
+    const unnamed = one.column.unnamed?.includes(series.key) ? one.column.values[series.key] : 0
+    if (unnamed && Number.isFinite(unnamed) && unnamed > 0) held += unnamed
   }
   return figureHint(series, format(held), shareWords(held, whole, share))
 }

@@ -6,6 +6,7 @@ import {
   measureOf,
   spendingLines,
   spentOf,
+  unnamedEntries,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
@@ -154,7 +155,9 @@ export interface StackSource {
 /**
  * Each day of the answer as a column of the measure, by the series of the stack: by its values,
  * or split, by its pairs. A value that spent in a day with no figure in the measure is absent
- * there, not a zero, and a minute with no data yet (`notYet`) is pending, not a zero either.
+ * there, not a zero, and a minute with no data yet (`notYet`) is pending, not a zero either. A
+ * series whose figure in a day says nothing of how much is not named there (`unnamedEntries`),
+ * nor is the figure of a value no series stands for, yet the day's sum counts both.
  */
 export function dayColumns(
   { usage, by: dimension, measure, across = null }: StackSource,
@@ -162,6 +165,7 @@ export function dayColumns(
   readAt: Date,
 ): Omit<PeriodColumn, 'fullLabel' | 'label'>[] {
   const named = new Set(series.filter((one) => one.line).map((one) => one.key))
+  const drawnSeries = new Set(series.map((one) => one.key))
   const breakdown = breakdownOf(dimension, across)
   return usage.series.map((point) => {
     const values: Record<string, number> = {}
@@ -174,12 +178,20 @@ export function dayColumns(
       else values[into] = (values[into] ?? 0) + figure
     }
     const pending = usage.period.step === 'minute' && notYet(point.start, usage.last_event_at)
+    // What no series stands for, a line no chart draws (`drawnLines`), still counts in the sum.
+    const unnamed = [
+      ...new Set([
+        ...unnamedEntries(measure, values, [...absent]),
+        ...Object.keys(values).filter((key) => !drawnSeries.has(key)),
+      ]),
+    ]
     return {
       key: point.start,
       values,
       absent: [...absent],
       incomplete: unfinished(point.start, usage.period.step, readAt),
       ...(pending ? { pending } : {}),
+      ...(unnamed.length ? { unnamed } : {}),
     }
   })
 }

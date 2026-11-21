@@ -33,6 +33,17 @@ export interface SmallMultiple extends MarkAction {
   labelRuns?: readonly TextRun[]
   /** The hue of the value wherever the page draws it; the neutral when it has none. */
   slot?: SeriesSlot
+  /**
+   * The periods, by place, whose amount says nothing of how much, as the caller judges it: drawn
+   * and said as a period with nothing in it (`shownValue`), and still counted in the multiple's
+   * figure over the span.
+   */
+  unnamed?: readonly number[]
+}
+
+/** A period's amount as its chart draws and says it: nothing where it is not named (`unnamed`). */
+export function shownValue(multiple: SmallMultiple, index: number): number | null | undefined {
+  return multiple.unnamed?.includes(index) ? 0 : multiple.values[index]
 }
 
 export interface MultiplePeriod {
@@ -60,8 +71,8 @@ export interface PlacedMultiple extends SmallMultiple {
   kind: MultipleKind
 }
 
-const drawable = (value: number | null) =>
-  value !== null && Number.isFinite(value) && value > 0 ? value : 0
+const drawable = (value: number | null | undefined) =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 
 const kindOf = (multiple: SmallMultiple): MultipleKind => multiple.kind ?? 'category'
 
@@ -88,7 +99,7 @@ export function placeMultiples(
   ]
   const largest = Math.max(
     0,
-    ...onScale.flatMap((one) => one.values.map((value) => drawable(value))),
+    ...onScale.flatMap((one) => one.values.map((_, index) => drawable(shownValue(one, index)))),
   )
   const topStep = axis(largest).at(-1)
   const top = largest > 0 ? (topStep?.value ?? largest) : 0
@@ -100,7 +111,7 @@ export function placeMultiples(
   const place = (one: SmallMultiple): PlacedMultiple => ({
     ...one,
     kind: kindOf(one),
-    heights: one.values.map((value) => heightOf(value)),
+    heights: one.values.map((_, index) => heightOf(shownValue(one, index) ?? null)),
   })
   const apart = APART.flatMap((kind) =>
     multiples.filter((one) => kindOf(one) === kind).map((one) => ({ ...place(one), heights: [] })),

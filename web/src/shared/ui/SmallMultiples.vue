@@ -26,7 +26,7 @@ import { markPartId, markTag, roundAxis } from '@/shared/ui/chartGeometry.ts'
 import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { multiplePeriodHint, namedHint } from '@/shared/ui/markHints.ts'
-import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
+import { placeMultiples, shownValue } from '@/shared/ui/multiplesGeometry.ts'
 import type {
   MultiplePeriod,
   MultiplesWords,
@@ -63,7 +63,7 @@ const placed = computed(() =>
 )
 const top = computed(() => placed.value.topText)
 
-/** A chart's figure over the span: what its periods add up to. */
+/** A chart's figure over the span: what its periods add up to, the ones it does not name too. */
 const figureOf = (one: SmallMultiple) =>
   one.values.reduce<number>(
     (sum, value) => sum + (value !== null && Number.isFinite(value) && value > 0 ? value : 0),
@@ -89,7 +89,7 @@ const nameHint = (one: PlacedMultiple) =>
 /** A period of a chart in its hint: its name and its figure, where the periods are named. */
 function periodHint(one: PlacedMultiple, index: number) {
   const period = props.periods?.[index]
-  const value = one.values[index]
+  const value = shownValue(one, index)
   const figure =
     value === null || value === undefined ? (props.words.absent ?? '—') : props.formatValue(value)
   return period

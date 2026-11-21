@@ -77,7 +77,7 @@ const marks = useLineMarks({
 })
 
 const multiples = computed<SmallMultiple[]>(() =>
-  drawn.value.map(({ line, values }) => ({
+  drawn.value.map(({ line, values, unnamed }) => ({
     key: line.key,
     label: words.lineLabel(props.by, line),
     labelEnd: words.lineEnd(line),
@@ -86,6 +86,7 @@ const multiples = computed<SmallMultiple[]>(() =>
     kind: line.kind === 'other' ? 'other' : 'category',
     slot: props.slots.get(line.key) ?? 'other',
     values,
+    unnamed,
     valueText: words.lineFigure(props.measure, line.spent),
     ...marks.markOf(line),
   })),
