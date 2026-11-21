@@ -47,6 +47,13 @@ SOURCE_WINDOWS: dict[str, dict[str, str]] = {
     },
 }
 
+#: The kinds the poll alone of the live sources reads: the client gives the status line and the
+#: mod no model's week and no usage credits, so where the poll is off nothing reads them now, and
+#: what the store holds of them is imported history.
+POLL_ONLY: frozenset[str] = frozenset(SOURCE_WINDOWS["poll"].values()) - frozenset(
+    kind for source, kinds in SOURCE_WINDOWS.items() if source != "poll" for kind in kinds.values()
+)
+
 # The shapes below are character sets rather than patterns: `re` is the second largest
 # import of the status line command, which records a reading on every refresh.
 _UPPER = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")

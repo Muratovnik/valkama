@@ -62,10 +62,18 @@
  * that window already (`holdsPrevious`); while one is open, nothing of this window stands beside
  * it — its lead, bar, facts, readings and «Breakdown» are hidden.
  *
+ * A window nothing reads now (`uncollected`) — a model's week where only the quota poll reads it
+ * and the poll is off, with no reading of the poll in its current span — reads as an account gone
+ * quiet if it shows its readings, which are an import's history: it says instead that only the
+ * poll reads it and that the poll is off, with the way to the switch in Settings (`ScreenLink`),
+ * and draws no bar, no facts, no readings and no «Breakdown», forecasting nothing. With the poll
+ * on it is a window as any other.
+ *
  * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
- * at the panel's moment in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
- * `latest`); the lines over its bar are `data-lead`, `share` for a standing window's, `ended` and
- * `before` for one past its reset.
+ * at the panel's moment in `data-state` (`fresh`, `silent`, or `uncollected`); each line of its
+ * facts is `data-fact` (`forecast`, `reset`, `even`, `latest`); the lines over its bar are
+ * `data-lead`, `share` for a standing window's, `ended` and `before` for one past its reset, and
+ * `uncollected` for one nothing reads, whose way to the switch is `data-settings`.
  */
 import { computed, ref } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
@@ -79,8 +87,10 @@ import {
   accountKey,
   forecastCourses,
   forecastEnds,
+  pollSettingsHref,
   stands,
   stateAt,
+  uncollected,
   windowKey,
 } from '@/pages/analytics/utils/quotaFigures.ts'
 import { holdsPrevious, namedAfter, ownLine } from '@/pages/analytics/utils/quotaLine.ts'
@@ -88,7 +98,8 @@ import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
-import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
+import type { Quota, QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
+import ScreenLink from '@/shared/ui/ScreenLink.vue'
 import StepLine from '@/shared/ui/StepLine.vue'
 import StepLineTable from '@/shared/ui/StepLineTable.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -102,6 +113,8 @@ const props = defineProps<{
   freshFor: number
   /** The moment the panel stands at, in ms. */
   now: number
+  /** Whether the quota poll is on, and the kinds it alone reads: the answer's `poll`. */
+  poll: Quota['poll']
   shown: 'chart' | 'table'
   /** The answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
@@ -119,8 +132,21 @@ const words = useQuotaWords()
 const name = computed(() => words.windowName(props.window))
 /** Whether the window has reset by the panel's moment, though its answer was read before that. */
 const ended = computed(() => !stands(props.window, props.now))
-/** The window's state at the panel's moment, though its answer may have called it fresh. */
-const state = computed(() => stateAt(props.window, props.now, props.freshFor))
+/**
+ * Whether nothing reads the window now (`uncollected`): only the poll reads its kind, the poll is
+ * off, and its current span holds no reading of the poll. It then says so in place of its share,
+ * with the way to the switch, and draws and forecasts nothing from readings that are history.
+ */
+const unread = computed(() => uncollected(props.window, props.poll, props.now))
+const unreadWords = computed(() => words.uncollectedWords(props.window))
+const settingsHref = pollSettingsHref()
+/**
+ * The window's state at the panel's moment, though its answer may have called it fresh; one
+ * nothing reads now is `uncollected`.
+ */
+const state = computed(() =>
+  unread.value ? 'uncollected' : stateAt(props.window, props.now, props.freshFor),
+)
 /**
  * Whether the window was silent by the moment it stands to: the panel's, or its reset where it has
  * passed. Nothing was measured after its last reading, so its line ends there.
@@ -172,7 +198,9 @@ const restarts = computed(() =>
   drawn.value.empty ? [] : words.lineRestarts(props.window, props.today, drawn.value.earlier),
 )
 /** Whether what used the window can be read: the account has a seat and the window a start. */
-const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
+const spends = computed(
+  () => !unread.value && seatOf(props.account) !== null && props.window.started_at !== null,
+)
 /** What opens the side panel on what used the window; none outside the page. */
 const openSpend = useWindowDetail()
 function spend() {
@@ -309,7 +337,21 @@ const readingsCaption = computed(() =>
       class="quota-window-parts"
     >
       <div class="quota-window-summary">
-        <template v-if="shown === 'chart'">
+        <template v-if="unread">
+          <p
+            class="quota-window-lead quota-window-ended"
+            data-lead="uncollected"
+          >
+            {{ unreadWords.lead }}
+          </p>
+          <ScreenLink
+            class="quota-window-settings"
+            :href="settingsHref"
+            data-settings
+            >{{ unreadWords.settings }}</ScreenLink
+          >
+        </template>
+        <template v-else-if="shown === 'chart'">
           <template v-if="bar.ended">
             <p
               class="quota-window-lead quota-window-ended"
@@ -347,7 +389,7 @@ const readingsCaption = computed(() =>
           />
         </template>
         <ul
-          v-if="facts.length"
+          v-if="facts.length && !unread"
           class="quota-window-facts"
         >
           <li
@@ -361,7 +403,7 @@ const readingsCaption = computed(() =>
         </ul>
       </div>
       <StepLine
-        v-if="shown === 'chart'"
+        v-if="!unread && shown === 'chart'"
         class="quota-window-readings quota-window-line"
         :label="readingsLabel"
         :from="span.from"
@@ -380,7 +422,7 @@ const readingsCaption = computed(() =>
         :restarts="restarts"
       />
       <StepLineTable
-        v-else
+        v-else-if="!unread"
         class="quota-window-readings"
         :label="readingsCaption"
         :points="points"
@@ -446,6 +488,11 @@ const readingsCaption = computed(() =>
 /* Past its reset the window leads with that, in the text's ink, and no figure leads it. */
 .quota-window-ended {
   color: var(--color-text);
+}
+
+/* The way to the poll's switch starts on the column's edge, as wide as its words. */
+.quota-window-settings {
+  justify-self: start;
 }
 
 .quota-window-share {

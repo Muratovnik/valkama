@@ -125,6 +125,7 @@ const narrow = useNarrowCharts(root)
               :today="answerMoment(payload)"
               :now="now"
               :fresh-for="payload.fresh_for_seconds"
+              :poll="payload.poll"
               :lines="lines"
               @renamed="emit('retry')"
             />
@@ -146,6 +147,7 @@ const narrow = useNarrowCharts(root)
               :today="answerMoment(payload)"
               :now="now"
               :fresh-for="payload.fresh_for_seconds"
+              :poll="payload.poll"
               :lines="lines"
               @renamed="emit('retry')"
             />

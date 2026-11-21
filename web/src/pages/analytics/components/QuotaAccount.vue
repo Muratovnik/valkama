@@ -15,6 +15,9 @@
  * A seat known only for its week says so. A window of money past a limit has no share: it is a
  * line of its name and its state, its age and its source in the line's hint as a window of a
  * share keeps them in its bar's, all of it in words as a table, and never a figure beside a share.
+ * One nothing reads now (`uncollected`), the usage credits where only the quota poll reads them
+ * and the poll is off, says that on its line instead of a state, with the way to the switch; a
+ * window of a share says it in its card and in the table's row.
  *
  * It is a group of the panel on a surface of its own, its windows side by side where the width
  * keeps each readable and one under the next where it does not (`PanelLevel`). Two windows side by
@@ -41,15 +44,22 @@ import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindow from '@/pages/analytics/components/QuotaWindow.vue'
 import { useAccountActions } from '@/pages/analytics/composables/useAccountActions.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
-import { sectionWindows, spendWindows, windowKey } from '@/pages/analytics/utils/quotaFigures.ts'
+import {
+  pollSettingsHref,
+  sectionWindows,
+  spendWindows,
+  uncollected,
+  windowKey,
+} from '@/pages/analytics/utils/quotaFigures.ts'
 import { lineKey } from '@/pages/analytics/utils/quotaLine.ts'
 import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
 
 import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
-import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
+import type { Quota, QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import { MAX_ACCOUNT_ALIAS_LENGTH } from '@/shared/lib/accountAliases.ts'
+import ScreenLink from '@/shared/ui/ScreenLink.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VMenu from '@/shared/ui/VMenu.vue'
@@ -66,6 +76,8 @@ const props = defineProps<{
   freshFor: number
   /** The moment the panel stands at, in ms. */
   now: number
+  /** Whether the quota poll is on, and the kinds it alone reads: the answer's `poll`. */
+  poll: Quota['poll']
   section: QuotaSection
   shown: 'chart' | 'table'
   /** The answer's moment at its offset: each time is said at it, and undated on its day. */
@@ -103,13 +115,20 @@ const windows = computed(() => sectionWindows(props.account, props.section))
  * and how old its reading is and who read it in its hint, all of it in words in a table.
  */
 const others = computed(() =>
-  spendWindows(props.account).map((window) => ({
-    key: windowKey(window),
-    text: words.other(window, props.now, props.freshFor),
-    state: words.otherState(window, props.now, props.freshFor),
-    read: words.latest(window, props.now, props.today, props.freshFor),
-  })),
+  spendWindows(props.account).map((window) => {
+    const unread = uncollected(window, props.poll, props.now)
+    const said = words.uncollectedWords(window)
+    return {
+      key: windowKey(window),
+      text: unread ? said.line : words.other(window, props.now, props.freshFor),
+      state: unread ? said.line : words.otherState(window, props.now, props.freshFor),
+      read: words.latest(window, props.now, props.today, props.freshFor),
+      settings: unread ? said.settings : null,
+    }
+  }),
 )
+/** Where the owner switches the poll on, for a window of money nothing reads now. */
+const settingsHref = pollSettingsHref()
 
 /**
  * The windows as the table's rows. A window past its reset with no reading since says so where
@@ -118,6 +137,15 @@ const others = computed(() =>
  */
 const rows = computed<WindowRow[]>(() =>
   windows.value.map((window) => {
+    if (uncollected(window, props.poll, props.now))
+      return {
+        key: windowKey(window),
+        label: words.windowName(window),
+        valueText: words.uncollectedWords(window).lead,
+        evenText: '—',
+        noteText: '—',
+        forecastText: '—',
+      }
     const ended = words.ended(window, props.now, props.today)
     return {
       key: windowKey(window),
@@ -247,6 +275,7 @@ const lineOf = (window: QuotaShareWindow) => props.lines?.get(lineKey(props.acco
         :window="window"
         :today="today"
         :now="now"
+        :poll="poll"
         :fresh-for="freshFor"
         :shown="shown"
         :line="lineOf(window)"
@@ -266,6 +295,13 @@ const lineOf = (window: QuotaShareWindow) => props.lines?.get(lineKey(props.acco
           >{{ other.state }}</span
         >
         <template v-else>{{ other.text }}</template>
+        <ScreenLink
+          v-if="other.settings"
+          class="quota-account-settings"
+          :href="settingsHref"
+          data-settings
+          >{{ other.settings }}</ScreenLink
+        >
       </li>
     </ul>
   </PanelLevel>
@@ -359,5 +395,10 @@ const lineOf = (window: QuotaShareWindow) => props.lines?.get(lineKey(props.acco
   gap: var(--space-1);
   padding: 0;
   list-style: none;
+}
+
+/* The way to the poll's switch follows the words of the window nothing reads, a gap after them. */
+.quota-account-settings {
+  margin-inline-start: var(--space-2);
 }
 </style>

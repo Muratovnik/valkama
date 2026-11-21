@@ -2963,6 +2963,18 @@ the share spent now. As a table its row says the same where the share stood, the
 and under them the share it ended at, with a dash for its pace and its forecast, and its window
 says no reset under the row. A reading after the reset starts a window that stands, which none
 of this touches.
+A window nothing reads now is no account gone quiet. A model's week and the usage credits come
+from the quota poll alone — the client gives the status line and the mod neither — and the
+answer says whether the poll is on and which kinds only it reads (`poll`). With the poll off and
+no reading of the poll in the window's current span, the card says so in place of its share,
+«Only the quota poll reads this window, and the poll is off», with the way to the switch,
+«Quota settings», and draws no bar, no facts, no readings and no «Breakdown»; an imported
+reading of an earlier window, drawn, read as «Reset at …, no new readings» of an account that
+went silent. Such a window is never the rail's tightest and its card forecasts nothing; the
+alerts, which take only a reading fresher than `fresh_for_seconds`, warn of nothing from its
+history.
+A window of money says the same on its line, and as a table the row says it where the share
+stood, a dash for the rest. With the poll on, every window is read as before.
 Its state is judged by the same clock: a reading older than the answer's `fresh_for_seconds`
 reads silent, on the tile and in the panel, though the answer called it fresh.
 Where steady use from the window's start would stand now is drawn — the bar's tick, the line's

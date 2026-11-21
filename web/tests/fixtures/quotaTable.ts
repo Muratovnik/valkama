@@ -20,7 +20,7 @@
 import type { Quota, QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 
 import { momentAt } from './analytics.ts'
-import { share } from './quota.ts'
+import { POLL_ON, share } from './quota.ts'
 import { earlierWindows } from './quotaHistory.ts'
 
 const MINUTE = 60_000
@@ -284,6 +284,7 @@ export function quotaTable(now: Date | number, offset = -new Date(now).getTimezo
     utc_offset: offset,
     fresh_for_seconds: 900,
     retained_from: at(moment - 365 * DAY),
+    poll: POLL_ON,
     accounts,
   }
 }

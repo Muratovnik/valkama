@@ -185,6 +185,17 @@ export function useQuotaWords() {
   }
 
   /**
+   * What a window nothing reads now says in place of its share (`uncollected`): that only the
+   * quota poll reads it and the poll is off, and the name of the way to the switch; a window of
+   * money says it after its name, on its line.
+   */
+  const uncollectedWords = (window: QuotaWindow) => ({
+    lead: t('analytics.quota.uncollected.lead'),
+    line: t('analytics.quota.uncollected.line', { window: windowName(window) }),
+    settings: t('analytics.quota.uncollected.settings'),
+  })
+
+  /**
    * A week's range, never past 100 %, which a quota cannot pass: a low end there runs the window
    * out before the reset, about when its slower pace says; a high end there only may; ends said
    * alike are one value.
@@ -534,6 +545,7 @@ export function useQuotaWords() {
     sectionName,
     share,
     stateWords,
+    uncollectedWords,
     windowName,
   }
 }

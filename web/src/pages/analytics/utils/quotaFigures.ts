@@ -28,6 +28,15 @@ import type {
   QuotaShareWindow,
   QuotaWindow,
 } from '@/shared/api/analyticsApi.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+
+/** Where the owner switches the quota poll on: the general settings, which hold «Quota». */
+export const pollSettingsHref = () =>
+  serializePlatformRoute({
+    module_id: 'settings',
+    scope: { kind: 'global' },
+    state: { section: 'general' },
+  })
 
 /** The windows a section of the quota shows. */
 const SECTION_KINDS: Record<QuotaSection, readonly QuotaShareWindow['kind'][]> = {
@@ -48,6 +57,20 @@ export const spendWindows = (account: QuotaAccount) =>
 /** Whether a window still stands at `now` (ms): its reset ahead, or none named. */
 export const stands = (window: QuotaWindow, now: number) =>
   window.resets_at === null || Date.parse(window.resets_at) > now
+
+/**
+ * Whether nothing reads a window now: its kind is one the quota poll alone of the live sources
+ * reads (`poll.only`), the poll is off, and no reading of the poll stands in its current span — a
+ * window past its reset at `now` (ms) has none, and a standing one holds only another source's,
+ * an import's history. Its readings then say nothing of the account now, so the window draws none
+ * of them and forecasts nothing: it says that only the poll reads it and that the poll is off.
+ */
+export function uncollected(window: QuotaWindow, poll: Quota['poll'], now: number): boolean {
+  if (poll.on || !poll.only.includes(window.kind)) return false
+  if (!stands(window, now)) return true
+  const readings = 'readings' in window ? window.readings : [window.latest]
+  return !readings.some((one) => one.source === 'poll')
+}
 
 /**
  * A window's state at `now` (ms): fresh while its latest reading is at most `freshFor` seconds
@@ -214,7 +237,7 @@ function nearer(
 /**
  * The window of a section nearest its limit across accounts (`nearer`), its forecast taken at the
  * answer's moment, and whether it stands and is fresh at the panel's `now` (ms); null where none
- * stands.
+ * stands. A window nothing reads now (`uncollected`) is never it: its share is history.
  */
 export function tightest(quota: Quota, section: QuotaSection, now: number): QuotaPick | null {
   const fresh = (one: QuotaWindow) => stateAt(one, now, quota.fresh_for_seconds) === 'fresh'
@@ -222,7 +245,7 @@ export function tightest(quota: Quota, section: QuotaSection, now: number): Quot
   let found: QuotaPick | null = null
   for (const account of quota.accounts)
     for (const window of sectionWindows(account, section)) {
-      if (!stands(window, now)) continue
+      if (!stands(window, now) || uncollected(window, quota.poll, now)) continue
       if (!found || nearer(window, found.window, answered, fresh)) found = { account, window }
     }
   return found

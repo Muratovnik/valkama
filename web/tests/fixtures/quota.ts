@@ -33,6 +33,12 @@ export const NIGHT = {
   account_uuid: '7e6d5c4b-3a29-4180-9f8e-7d6c5b4a3928',
 }
 export const UNREAD = { organization: '9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a' }
+
+/**
+ * The poll as an answer says it when the owner turned it on: a model's week and the usage
+ * credits, which it alone reads, are then read as every other window.
+ */
+export const POLL_ON: Quota['poll'] = { on: true, only: ['extra_usage', 'week_model'] }
 const SEATED = { organization: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' }
 
 type Reading = [ago: number, percent: number]
@@ -228,6 +234,7 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
     utc_offset: offset,
     fresh_for_seconds: 900,
     retained_from: at(moment - 365 * DAY),
+    poll: POLL_ON,
     accounts,
   }
 }

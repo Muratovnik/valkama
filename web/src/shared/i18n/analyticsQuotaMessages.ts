@@ -65,6 +65,11 @@ export const analyticsQuotaMessages = {
     barNoPace: '{window}: {share} used, {state}. {forecast}',
     barEnded: '{window}: reset at {at}, no new readings; {ended}',
     ended: 'Reset at {at}, no new readings',
+    uncollected: {
+      lead: 'Only the quota poll reads this window, and the poll is off',
+      line: '{window}: only the quota poll reads it, and the poll is off',
+      settings: 'Quota settings',
+    },
     forecastKey: 'Forecast',
     forecastLine: '{key} · {forecast}',
     even: 'Pace tick · steady use since the window started would be at {share} now',
@@ -242,6 +247,11 @@ export const analyticsQuotaMessages = {
     barNoPace: '{window}: израсходовано {share}, {state}. {forecast}',
     barEnded: '{window}: сброшено в {at}, новых показаний нет; {ended}',
     ended: 'Сброшено в {at}, новых показаний нет',
+    uncollected: {
+      lead: 'Это окно читает только опрос квоты, а он выключен',
+      line: '{window}: его читает только опрос квоты, а он выключен',
+      settings: 'Настройки квоты',
+    },
     forecastKey: 'Прогноз',
     forecastLine: '{key} · {forecast}',
     even: 'Отметка темпа · при ровном расходе с начала окна сейчас было бы {share}',

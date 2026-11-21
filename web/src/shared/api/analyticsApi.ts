@@ -371,6 +371,14 @@ const quotaSchema = strictObject({
   fresh_for_seconds: positiveInt(),
   /** The oldest moment the store keeps a reading at `now`: no window before it is ever read. */
   retained_from: moment(),
+  /**
+   * Whether the owner's poll of the usage endpoint is on, and the kinds it alone of the live
+   * sources reads: with it off, nothing reads a window of those kinds now.
+   */
+  poll: strictObject({
+    on: z.boolean(),
+    only: z.array(enumField([...SHARE_KINDS, ...SPEND_KINDS])),
+  }),
   accounts: z.array(quotaAccountSchema),
 })
 
