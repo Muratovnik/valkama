@@ -44,13 +44,13 @@ splitting one or a part off it, or handing items to other agents.
    first. `list_work_items` filters by `state`, `category`, `kind`, `parent`,
    `owner` and `project`. Claim the item that already covers the work.
 3. **File it only when none does.** `create_work_item` with a `title` and a
-   `description` that is the brief: goal, context, constraints, the "done when"
-   and its verify command. Name the projects the change touches (`projects`). Give
-   `space` only when the projects live in two spaces or the item names none (a
-   goal, a triage review item); the server otherwise takes the parent's, else the
-   projects' home space. A finding in another project's code goes to that
-   project's space. A part of the task at hand another project, holder or later
-   time takes is split off it with `split_from`, not filed apart. An approved plan
+   `description` that is the brief: goal, context, constraints, the "done when" and
+   its verify command. Name the projects the change touches (`projects`). A part of
+   the task at hand another project, holder or later time takes is split off it with
+   `split_from`, not added to `projects` or filed apart. Give `space` only when the
+   projects live in two spaces or the item names none (a goal, a triage review
+   item); the server otherwise takes the parent's, else the projects' home space. A
+   finding in another project's code goes to that project's space. An approved plan
    becomes one item per unit it anchors, with that anchor as `source`
    (`docs/plan.md#kb:a7f3`), never a copy; a file the description names is written
    as Naming a file says. Umbrella work is `kind: goal`, or `stage` under a parent
@@ -62,8 +62,8 @@ splitting one or a part off it, or handing items to other agents.
    decision the owner must make is a question on the new item (see Asking the
    owner): each option, its cost and your recommendation, not a list in the
    description. The answer's `similar` names up to three open items that read like
-   it: merge the new item into one that is the same change (`merge_work_items`)
-   and link a related one; an empty `similar` does not rule out a duplicate.
+   it: merge the new item into one that is the same change (`merge_work_items`) and
+   link a related one; an empty `similar` does not rule out a duplicate.
 4. **Claim before working.** `claim_work_item` takes a named item; the next task
    of a space, or of a goal or stage with `within`, is `claim_ready_work_item`'s,
    not a pick from a list: accepted work in a ready state, never triage, in the
