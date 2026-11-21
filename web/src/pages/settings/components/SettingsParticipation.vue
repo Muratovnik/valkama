@@ -130,12 +130,12 @@ const placeOptions = computed(() =>
         >
           <template #default="{ names, value, update }">
             <SegmentedControl
-              class="settings-participation-sets"
               :aria-describedby="names['aria-describedby']"
               :aria-labelledby="names['aria-labelledby']"
               :label="t('settings.participation.set.label')"
               :model-value="value"
               :options="setOptions"
+              wrap
               @update:model-value="update"
             />
           </template>
@@ -181,10 +181,10 @@ const placeOptions = computed(() =>
         >
           <SegmentedControl
             v-if="spacePlace.place.value !== null"
-            class="settings-participation-sets"
             :label="t('settings.participation.launch.label')"
             :model-value="spacePlace.place.value"
             :options="placeOptions"
+            wrap
             @update:model-value="spacePlace.choose"
           />
           <VButton
@@ -210,15 +210,6 @@ const placeOptions = computed(() =>
 
 .settings-participation-panel {
   padding: var(--space-4);
-}
-
-/* Where even the whole row cannot hold the set on one line, as on a phone, its segments wrap
-   and share each line evenly, rather than leaving each line ragged by its own words. */
-.settings-participation-sets {
-  --segmented-option-grow: 1;
-
-  flex-wrap: wrap;
-  max-width: 100%;
 }
 
 .settings-participation-retry {
