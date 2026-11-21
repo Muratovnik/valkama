@@ -15,6 +15,9 @@
  * a price says how many on a second line of its cell, under its amount (`SpendingTableFigure`):
  * that row is taller, and its column is as wide as the longer of the two lines. A window too
  * narrow for that column scrolls the table sideways in its frame, the names held at its start.
+ * Its headings keep to two lines rather than come down to their longest word (`least` off), as
+ * the owner chose for Analytics: a second line and the sideways scroll; at 900px the week's
+ * «Before, Nov 2 – 4» came down to three lines with it.
  *
  * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
@@ -179,6 +182,7 @@ defineExpose({ reveal })
     :held="held"
     :holds="holds"
     :label="model.title"
+    :least="false"
     :marks="marks"
     :sort-words="sortWords"
     @sort="sortBy"

@@ -15,8 +15,9 @@
  * (`useTableFit`, its step on the root as `data-fit`): headings over figures on one line while
  * that keeps every column in the frame (`one`), on two once it would not (`two`), and every
  * column at the least that breaks no word where two lines still do not (`least`), the page
- * letting its own columns give way there. Where even that does not fit, a table of figures keeps
- * two lines and scrolls sideways in its frame, the first column held at its start.
+ * letting its own columns give way there; a page may keep its headings to two lines instead
+ * (`least` off). Where even that does not fit, a table of figures keeps two lines and scrolls
+ * sideways in its frame, the first column held at its start.
  *
  * The page's rows (`rows`) are rows of the table's body, each written with the cells the columns
  * name; a page whose rows are a tree's says so (`tree`). While the page has nothing to table yet
@@ -59,6 +60,11 @@ const props = withDefaults(
     held?: boolean
     /** What changes what the table holds, which its headings' lines are measured again for. */
     holds?: readonly unknown[]
+    /**
+     * Where two lines over its figures do not fit, its columns come down to their least before it
+     * scrolls; without it, its headings keep to two lines and it scrolls.
+     */
+    least?: boolean
     /** Where its columns do not fit, each row stands as a block of its cells rather than scrolling. */
     stack?: boolean
     /** The rows are a tree's, every one of them drawn (`ChartTable`). */
@@ -66,7 +72,7 @@ const props = withDefaults(
     /** What a heading's press does, in words, for each column's words. */
     sortWords: (column: string) => string
   }>(),
-  { held: false, holds: () => [], stack: false, tree: false },
+  { held: false, holds: () => [], least: true, stack: false, tree: false },
 )
 /** A column's heading pressed to sort by it. */
 const emit = defineEmits<{ sort: [column: string] }>()
@@ -92,7 +98,7 @@ const root = ref<HTMLElement | null>(null)
 const figures = computed(() => props.columns.some(({ numeric }) => numeric))
 const rule = computed((): TableFitRule =>
   figures.value
-    ? { steps: ['one', 'two', 'least'], otherwise: 'two' }
+    ? { steps: props.least ? ['one', 'two', 'least'] : ['one', 'two'], otherwise: 'two' }
     : { steps: ['one'], otherwise: 'one' },
 )
 /** How it stands in its frame: the first step whose columns fit, else stacked or scrolling. */

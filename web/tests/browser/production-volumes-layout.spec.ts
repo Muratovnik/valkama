@@ -147,42 +147,51 @@ async function openPage(page: Page, width: number) {
  * word being broken when its letters stand on more than one line.
  */
 const tableFit = (page: Page, region: string) =>
-  page.getByRole('region', { name: region, exact: true }).evaluate((section) => {
-    const frame = section.querySelector<HTMLElement>('[data-region="table-frame"]')
-    if (!frame) return null
-    const box = frame.getBoundingClientRect()
-    const left = box.left + frame.clientLeft
-    const right = left + frame.clientWidth
-    const cells = [...frame.querySelectorAll('th, td')]
-    const past = Math.max(
-      0,
-      ...cells.map((one) => {
+  // The section first: its frame is a region of the same name once it scrolls.
+  page
+    .getByRole('region', { name: region, exact: true })
+    .first()
+    .evaluate((section) => {
+      const frame = section.querySelector<HTMLElement>('[data-region="table-frame"]')
+      if (!frame) return null
+      const box = frame.getBoundingClientRect()
+      const left = box.left + frame.clientLeft
+      const right = left + frame.clientWidth
+      // A stacked table's heading row is cut away, read only aloud: its cells are not drawn.
+      const heads = [...frame.querySelectorAll('thead')]
+      const hidden = new Set(heads.filter((head) => getComputedStyle(head).clipPath !== 'none'))
+      const drawn = [...frame.querySelectorAll('th, td')].filter(
+        (one) => !hidden.has(one.closest('thead') as HTMLTableSectionElement),
+      )
+      const cells = drawn.map((one) => {
         const own = one.getBoundingClientRect()
-        return Math.max(left - own.left, own.right - right)
-      }),
-    )
-    const broken: string[] = []
-    const walker = document.createTreeWalker(frame, NodeFilter.SHOW_TEXT)
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      for (const found of (node.textContent ?? '').matchAll(/[^\s/]+/gu)) {
-        const range = document.createRange()
-        range.setStart(node, found.index)
-        range.setEnd(node, found.index + found[0].length)
-        const lines = new Set(
-          [...range.getClientRects()]
-            .filter((rect) => rect.width > 0)
-            .map((rect) => Math.round(rect.top)),
-        )
-        if (lines.size > 1) broken.push(found[0])
+        return { cell: one.className, by: Math.max(left - own.left, own.right - right) }
+      })
+      const worst = cells.toSorted((one, other) => other.by - one.by)[0] ?? { cell: '', by: 0 }
+      const past = Math.max(0, worst.by)
+      const broken: string[] = []
+      const walker = document.createTreeWalker(frame, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        for (const found of (node.textContent ?? '').matchAll(/[^\s/]+/gu)) {
+          const range = document.createRange()
+          range.setStart(node, found.index)
+          range.setEnd(node, found.index + found[0].length)
+          const lines = new Set(
+            [...range.getClientRects()]
+              .filter((rect) => rect.width > 0)
+              .map((rect) => Math.round(rect.top)),
+          )
+          if (lines.size > 1) broken.push(found[0])
+        }
       }
-    }
-    return {
-      fit: section.closest<HTMLElement>('[data-fit]')?.dataset.fit,
-      past,
-      sideways: frame.scrollWidth - frame.clientWidth,
-      broken,
-    }
-  })
+      return {
+        fit: section.closest<HTMLElement>('[data-fit]')?.dataset.fit,
+        past,
+        worst: worst.cell,
+        sideways: frame.scrollWidth - frame.clientWidth,
+        broken,
+      }
+    })
 
 /** The numbers by the row they stand in: for each row, the top of each figure. */
 const figureRows = (page: Page) =>

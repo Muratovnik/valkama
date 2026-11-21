@@ -137,6 +137,9 @@ async function starts(page: Page, selectors: readonly string[]) {
   return found
 }
 
+// Playwright hides scrollbars, and one that arrives narrows the frame on a real screen.
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
+
 for (const size of SIZES) {
   const words = WORDS[size.lang]
   const tag = `${size.lang} ${size.width}`
@@ -272,16 +275,12 @@ for (const size of SIZES) {
   })
 }
 
-// Playwright hides scrollbars, and one that arrives narrows the frame on a real screen.
 for (const size of FIT_SIZES) {
   const words = WORDS[size.lang]
   const tag = `${size.lang} ${size.width}`
 
   test.describe(`Agent decisions' table, ${tag}px`, () => {
-    test.use({
-      locale: size.lang === 'ru' ? 'ru-RU' : 'en-US',
-      launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] },
-    })
+    test.use({ locale: size.lang === 'ru' ? 'ru-RU' : 'en-US' })
 
     test('every part of a decision stands in the frame, stacked where its columns do not fit', async ({
       page,

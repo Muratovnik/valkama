@@ -970,7 +970,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   another and its headings a line of sort buttons over them (`SectionTable`'s
   `stack`). Sideways scroll is the last resort: only a table of figures whose
   least does not fit scrolls, at its second step, its names held at the
-  frame's start. Stacked by a phone's width alone, Agent decisions left «What
+  frame's start. Analytics' tables take no third step: their owner chose a
+  second line and the sideways scroll for them. Stacked by a phone's width alone, Agent decisions left «What
   was decided» past the frame at 1024 and 760; held to their widths, the goals
   of Volumes left «Left ≈» past it at 1280, under a scroll bar below the
   fold.
