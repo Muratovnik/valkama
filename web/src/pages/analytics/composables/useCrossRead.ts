@@ -9,14 +9,15 @@
  * It is asked whenever the answer on show is replaced or the second dimension changes, and drops
  * the read it replaces, so a slow one never draws over a later one. While it asks, the last crossed
  * answer of the same two dimensions stays on screen, and a read that fails keeps it there too, and
- * the bar says the read failed with the page's (`usePanelPartFailed`); one with no pairs to keep
- * says so in the table, which may ask again (`retry`). Dropped there, the pairs went from the
+ * the bar says the read failed with the page's (`usePanelPartFailed`), as a side panel over the
+ * bar does in room of its own (`failedAgain`); one with no pairs to keep says so in the table,
+ * which may ask again (`retry`). Dropped there, the pairs went from the
  * charts and the table at the first refresh that failed, which gave its place to one line of
  * words. With no answer on show, no second dimension, or one the section already breaks
  * down by, nothing is asked. It goes through the page's shared reads (`useSharedUsage`), so a split chosen again for
  * the same view takes the answer it had.
  */
-import { onScopeDispose, shallowRef, watch } from 'vue'
+import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { usePanelPartFailed } from '@/pages/analytics/composables/useReadStanding.ts'
@@ -45,7 +46,9 @@ export function useCrossRead(options: {
   const shared = useSharedUsage()
   const places = useColourPlaces()
   const state = shallowRef<CrossRead>({ status: 'off' })
-  usePanelPartFailed(() => state.value.status === 'failed' && state.value.usage !== null)
+  /** Whether a read again failed, the pairs it was to replace kept on show. */
+  const failedAgain = computed(() => state.value.status === 'failed' && state.value.usage !== null)
+  usePanelPartFailed(() => failedAgain.value)
   let reading: AbortController | null = null
 
   async function read() {
@@ -108,5 +111,5 @@ export function useCrossRead(options: {
   watch([options.usage, options.across], () => void read(), { immediate: true })
   onScopeDispose(() => reading?.abort())
 
-  return { state, retry: read }
+  return { state, failedAgain, retry: read }
 }

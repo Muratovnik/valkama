@@ -8,12 +8,16 @@
  * leaves the names a narrow column, so a name of free text takes two lines (`twoLineNames`).
  *
  * While the page reads its answer anew, of this section or another, the table waits for it rather
- * than showing rows of another dimension under this one's name. What a reader of the panel selects
+ * than showing rows of another dimension under this one's name. A read again of the pairs that
+ * fails keeps them and says «Could not refresh · Retry» beside the field, in room the field's row
+ * keeps for it while the section is split (`RefreshFailed`, `held`), as a value's panel says its
+ * own beside its actions: said only in the page's bar, the words stood under this panel, unseen. What a reader of the panel selects
  * it by: the content is `data-detail="all"`.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
 import SpendingTable from '@/pages/analytics/components/SpendingTable.vue'
 import { useCrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -63,6 +67,8 @@ const cross = useCrossRead({
   filters: () => props.filters,
 })
 const find = ref('')
+/** Whether the section is split, so pairs stand whose read again can fail. */
+const split = computed(() => cross.state.value.status !== 'off')
 </script>
 
 <template>
@@ -72,15 +78,23 @@ const find = ref('')
     @close="emit('close')"
   >
     <template #facts>
-      <VTextInput
-        v-model="find"
-        class="value-table-find"
-        size="compact"
-        autocomplete="off"
-        :label="t('analytics.detail.all.find')"
-        :placeholder="t('analytics.detail.all.find')"
-        hide-label
-      />
+      <div class="value-table-facts">
+        <VTextInput
+          v-model="find"
+          class="value-table-find"
+          size="compact"
+          autocomplete="off"
+          :label="t('analytics.detail.all.find')"
+          :placeholder="t('analytics.detail.all.find')"
+          hide-label
+        />
+        <RefreshFailed
+          v-if="split"
+          :failed="cross.failedAgain.value"
+          held
+          @retry="cross.retry"
+        />
+      </div>
     </template>
     <div
       class="value-table"
@@ -118,7 +132,17 @@ const find = ref('')
   min-width: 0;
 }
 
+/* The field, and beside it the room of a failed read again of the pairs while it fits the line;
+   on a phone that room takes the line under the field. */
+.value-table-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+}
+
 .value-table-find {
+  flex: 1 1 12rem;
   max-inline-size: 24rem;
 }
 
