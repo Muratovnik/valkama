@@ -423,6 +423,8 @@ export const namesHidden = (element: HTMLElement) =>
 const CUTS = new Set(['hidden', 'clip', 'auto', 'scroll'])
 /** How many elements inside a hint's element are looked at: a hint sits on a control. */
 const LOOK_AT = 40
+/** Half the unit the browser lays a line out in, 1/64px: less than any line past its box. */
+const ACROSS_NOISE = 1 / 128
 
 /** The text a box shows or cuts, less the shared copy kept for assistive technology. */
 function shownText(box: HTMLElement): Text[] {
@@ -493,6 +495,10 @@ export function firstLetterOf(element: HTMLElement): { box: DOMRect; inked: Elem
  * one 12px to each side and 8px over and under — and that is nothing the hint has to say.
  * Counted, it showed the hint of a table's name that stood whole. The letters of a line stand
  * a little past a box no taller than its leading, so down only a line a quarter past counts.
+ * Across, the browser lays a line out in 64ths of a pixel and ends one that stands past its box
+ * by any of them in an ellipsis, so only less than one of them, a measure's noise, is forgiven
+ * (`ACROSS_NOISE`): forgiven half a pixel, a name of the value panel laid out 0.5px past its box
+ * showed «…» and no hint.
  */
 function hidesText(box: HTMLElement, across: boolean): boolean {
   const style = getComputedStyle(box)
@@ -509,7 +515,7 @@ function hidesText(box: HTMLElement, across: boolean): boolean {
       const [from, to, size] = across
         ? [line.left, line.right, line.width]
         : [line.top, line.bottom, line.height]
-      const slack = across ? 0.5 : Math.max(1, size / 4)
+      const slack = across ? ACROSS_NOISE : Math.max(1, size / 4)
       return size > 0 && (to > end + slack || from < start - slack)
     })
   })

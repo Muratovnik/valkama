@@ -227,6 +227,20 @@ describe('textIsClipped', () => {
     expect(textIsClipped(cut)).toBe(true)
   })
 
+  it('counts a line laid out half a pixel past its box, which the browser ends in an ellipsis', () => {
+    // A one-line name 0.5px wider than its box reads «…» on the screen; one as wide as its box
+    // reads whole.
+    document.body.innerHTML = '<span id="past">f00d · not placed</span><span id="flush">f00d</span>'
+    const [past, flush] = ['#past', '#flush'].map(
+      (selector) => document.querySelector<HTMLElement>(selector) as HTMLElement,
+    )
+    if (!past || !flush) throw new Error('the boxes are missing')
+    overflowing(past, 100.5)
+    overflowing(flush, 100)
+    expect(textIsClipped(past)).toBe(true)
+    expect(textIsClipped(flush)).toBe(false)
+  })
+
   it('counts a label hidden for want of room, and not the copy kept for a screen reader', () => {
     document.body.innerHTML =
       '<button id="narrow">+<span class="label">Create</span></button><span id="short">MAIN-12<span class="visually-hidden">Waiting on MAIN-12</span></span>'
