@@ -124,7 +124,7 @@ class Harness(unittest.TestCase):
             with calls.bind(by, tool):
                 waiting = pending.ask(
                     self.conn,
-                    self.id(reference),
+                    self.item_id(reference),
                     point,
                     proposal,
                     purpose=purpose,
@@ -184,12 +184,12 @@ class Harness(unittest.TestCase):
 
     # -- reads ----------------------------------------------------------------------
 
-    def id(self, reference: str) -> str:
+    def item_id(self, reference: str) -> str:
         return str(service.get_work_item(self.conn, reference)["work_item_id"])
 
     def row(self, reference: str) -> sqlite3.Row:
         return self.conn.execute(
-            "SELECT * FROM work_items WHERE work_item_id = ?", (self.id(reference),)
+            "SELECT * FROM work_items WHERE work_item_id = ?", (self.item_id(reference),)
         ).fetchone()
 
     def request(self, question: str) -> sqlite3.Row:
@@ -219,7 +219,7 @@ class Harness(unittest.TestCase):
             for row in self.conn.execute(
                 "SELECT detail FROM work_item_events WHERE work_item_id = ? AND action = ?"
                 " ORDER BY id",
-                (self.id(reference), action),
+                (self.item_id(reference), action),
             )
         ]
 
@@ -229,7 +229,7 @@ class Harness(unittest.TestCase):
             for row in self.conn.execute(
                 "SELECT session_id, agent_id, follows FROM work_item_subscriptions"
                 " WHERE work_item_id = ? ORDER BY session_id, agent_id",
-                (self.id(reference),),
+                (self.item_id(reference),),
             )
         ]
 
@@ -275,7 +275,7 @@ class AskTests(Harness):
                 for row in self.conn.execute(
                     "SELECT action FROM work_item_events WHERE work_item_id = ? AND id >"
                     " (SELECT MAX(id) FROM work_item_events WHERE work_item_id = ? AND action = 'created')",
-                    (self.id(goal), self.id(goal)),
+                    (self.item_id(goal), self.item_id(goal)),
                 )
             ],
         )
@@ -315,7 +315,7 @@ class AskTests(Harness):
             pending.Proposal("defer", {"until": "2026-12-01"}, "put it off"),
             point="goal_defer",
         )
-        self.assertEqual(2, len(pending.open_on(self.conn, self.id(goal))))
+        self.assertEqual(2, len(pending.open_on(self.conn, self.item_id(goal))))
         self.assertEqual("goal_defer", beside.point)
 
     def test_a_question_valkama_asked_subscribes_nobody(self) -> None:
@@ -389,7 +389,7 @@ class ReadTests(Harness):
         )
         self.assertEqual(str(self.action(waiting.action)["created_at"]), part["asked_at"])
         self.assertEqual("cancel", record["purpose"])
-        [compact] = requests.item_questions(self.conn, self.id(goal))["items"]
+        [compact] = requests.item_questions(self.conn, self.item_id(goal))["items"]
         self.assertEqual(
             ({"point": "cancel_outside"}, "cancel"), (compact["action"], compact["purpose"])
         )
@@ -402,7 +402,7 @@ class ReadTests(Harness):
             )
         self.conn.commit()
         self.assertNotIn("action", record)
-        [compact] = requests.item_questions(self.conn, self.id(task))["items"]
+        [compact] = requests.item_questions(self.conn, self.item_id(task))["items"]
         self.assertNotIn("action", compact)
 
 
@@ -440,7 +440,7 @@ class CarryOutTests(Harness):
                 self.assertEqual(outcome, record["carried_out"])
                 self.assertEqual((outcome, True, True), self.ended(waiting))
                 self.assertEqual((choice, outcome), self.ran[-1])
-                self.assertEqual([], pending.open_on(self.conn, self.id(goal)))
+                self.assertEqual([], pending.open_on(self.conn, self.item_id(goal)))
 
     def test_an_own_variant_or_a_point_nothing_carries_is_refused_and_nothing_written(
         self,
@@ -485,7 +485,7 @@ class CarryOutTests(Harness):
         self.conn.commit()
         task = str(filed["reference"])
         question = str(filed["waits_for_owner"]["question"])
-        [action] = pending.open_on(self.conn, self.id(task))
+        [action] = pending.open_on(self.conn, self.item_id(task))
         with mock.patch.object(leases, "utc_now", lambda: NOW):
             self.person("/api/planning/work-item/defer", id=goal, until=UNTIL, reason="later")
         self.assertEqual("pending", self.request(question)["status"])
@@ -516,7 +516,7 @@ class CarryOutTests(Harness):
         with calls.bind(AGENT, "create_work_item"):
             asked = questions.ask(
                 self.conn,
-                self.id(self.goal),
+                self.item_id(self.goal),
                 kind="question",
                 prompt="Do you agree?",
                 fields=request_model.fields(FIELDS),
@@ -557,7 +557,7 @@ class ApplicabilityTests(Harness):
             task,
             pending.Proposal(
                 "parent",
-                {"parent": self.id(accepted)},
+                {"parent": self.item_id(accepted)},
                 f"move {task} under {accepted}",
                 seen={"parent": before},
             ),
@@ -570,7 +570,7 @@ class ApplicabilityTests(Harness):
         other = self.filed("Another finding")
         under = self.ask(
             other,
-            pending.Proposal("parent", {"parent": self.id(proposed)}, f"move {other}"),
+            pending.Proposal("parent", {"parent": self.item_id(proposed)}, f"move {other}"),
             point="task_in_goal",
             purpose="task",
         )
@@ -676,26 +676,28 @@ class EndTests(Harness):
             "/api/planning/work-item/merge", id=self.survivor, items=[self.merged], reason="one"
         )
         row = self.action(self.waiting.action)
-        self.assertEqual(("dropped", self.id(self.merged)), (row["outcome"], row["work_item_id"]))
+        self.assertEqual(
+            ("dropped", self.item_id(self.merged)), (row["outcome"], row["work_item_id"])
+        )
         self.assertEqual(
             ["cancel_outside: merged into ALPHA-1"], self.events(self.merged, "action_dropped")
         )
         question = self.request(self.waiting.question)
         self.assertEqual(
-            ("expired", "item_cancelled", self.id(self.merged)),
+            ("expired", "item_cancelled", self.item_id(self.merged)),
             (question["status"], question["expired_reason"], question["work_item_id"]),
         )
         self.assertIn(self.waiting.question, self.events(self.merged, "request_expired"))
         # The question about the work itself moves to the survivor and waits there.
         plain = self.request(self.plain)
         self.assertEqual(
-            ("pending", self.id(self.survivor)), (plain["status"], plain["work_item_id"])
+            ("pending", self.item_id(self.survivor)), (plain["status"], plain["work_item_id"])
         )
         # What the person's merge said of the duplicate: the dropped action beside the
         # withdrawn question, the one told as news, not as where the work stands.
         told = {
             entry["kind"]
-            for entry in person_events.since_last_agent_write(self.conn, self.id(self.merged))
+            for entry in person_events.since_last_agent_write(self.conn, self.item_id(self.merged))
         }
         self.assertLessEqual({"action_dropped", "question_withdrawn"}, told)
         self.assertNotIn("action_dropped", person_events.WORK_KINDS)
@@ -720,7 +722,7 @@ class EndTests(Harness):
         )
 
     def test_a_delete_takes_the_action_and_its_questions_with_the_item(self) -> None:
-        identity = self.id(self.merged)
+        identity = self.item_id(self.merged)
         with calls.bind(calls.browser(), "/api/planning/work-item/delete"):
             service.delete_work_item(self.conn, self.merged)
         self.conn.commit()
@@ -816,12 +818,12 @@ class SettingHarness(Harness):
                 "SELECT d.point, e.action, e.detail FROM agent_decisions d"
                 " JOIN work_item_events e ON e.id = d.event_id WHERE e.work_item_id = ?"
                 " ORDER BY e.id",
-                (self.id(reference),),
+                (self.item_id(reference),),
             )
         ]
 
     def waiting_on(self, reference: str) -> list[pending.Action]:
-        return pending.open_on(self.conn, self.id(reference))
+        return pending.open_on(self.conn, self.item_id(reference))
 
     def owners_list(self) -> list[str]:
         """The questions waiting for the owner's answer, everywhere."""
@@ -973,7 +975,7 @@ class ProposedGoalTests(SettingHarness):
         # The asker follows the goal and hears the answer and the acceptance on it.
         told = {
             entry["kind"]
-            for entry in person_events.since_last_agent_write(self.conn, self.id("ALPHA-1"))
+            for entry in person_events.since_last_agent_write(self.conn, self.item_id("ALPHA-1"))
         }
         self.assertLessEqual({"question_answered", "status"}, told)
         self.assertIn(("session-a", "", 1), self.followers("ALPHA-1"))
@@ -1097,7 +1099,7 @@ class TaskInGoalTests(SettingHarness):
         task = str(answer["reference"])
         card = self.card(task)
         self.assertEqual(
-            ("ready", "inherited", self.id(self.goal)),
+            ("ready", "inherited", self.item_id(self.goal)),
             (card["state"]["category"], card["acceptance"]["basis"], card["parent_id"]),
         )
         self.assertNotIn("waits_for_owner", answer)
@@ -1128,7 +1130,7 @@ class TaskInGoalTests(SettingHarness):
         # A ready task moved in was accepted before: nothing is decided, nothing marked.
         ready = self.ready_elsewhere("Ready elsewhere")
         self.tool("apply_work_item_changes", id=ready, update={"parent": self.goal})
-        self.assertEqual(self.id(self.goal), self.card(ready)["parent_id"])
+        self.assertEqual(self.item_id(self.goal), self.card(ready)["parent_id"])
         self.assertEqual(2, len(self.decided()))
 
     def test_a_task_filed_in_a_goal_on_an_assignment_is_summarised_at_any_setting(self) -> None:
@@ -1164,7 +1166,7 @@ class TaskInGoalTests(SettingHarness):
         task = str(filed["reference"])
         card = self.card(task)
         self.assertEqual(
-            ("triage", None, self.id(self.goal)),
+            ("triage", None, self.item_id(self.goal)),
             (card["state"]["category"], card["acceptance"], card["parent_id"]),
         )
         [action] = self.waiting_on(task)
@@ -1240,7 +1242,7 @@ class TaskInGoalTests(SettingHarness):
             {taken: "carried_out", moving: "declined", out_task: "declined", drop_task: "declined"},
             {reference: record["carried_out"] for reference, record in answered.items()},
         )
-        goal = self.id(self.goal)
+        goal = self.item_id(self.goal)
         do = self.card(taken)
         self.assertEqual(
             ("ready", "inherited", goal),
@@ -1288,12 +1290,12 @@ class TaskInGoalTests(SettingHarness):
         self.conn.commit()
         # The agent moves the task under a goal nobody has taken on before the owner answers.
         self.tool("apply_work_item_changes", id=task, update={"parent": elsewhere})
-        self.assertEqual(self.id(elsewhere), self.card(task)["parent_id"])
+        self.assertEqual(self.item_id(elsewhere), self.card(task)["parent_id"])
         record = self.answer(question, "do")
         self.assertEqual("dropped", record["carried_out"])
         card = self.card(task)
         self.assertEqual(
-            ("triage", None, self.id(elsewhere)),
+            ("triage", None, self.item_id(elsewhere)),
             (card["state"]["category"], card["acceptance"], card["parent_id"]),
         )
         stored = self.request(question)
@@ -1350,7 +1352,7 @@ class CancelOutsideTests(SettingHarness):
     def told(self, reference: str) -> set[str]:
         return {
             entry["kind"]
-            for entry in person_events.since_last_agent_write(self.conn, self.id(reference))
+            for entry in person_events.since_last_agent_write(self.conn, self.item_id(reference))
         }
 
     # -- the setting ------------------------------------------------------------------
@@ -1911,7 +1913,7 @@ class AcceptanceQuestionTests(SettingHarness):
             ]
         )
         self.assertEqual(
-            (self.id(self.goal), ("triage", None)),
+            (self.item_id(self.goal), ("triage", None)),
             (self.card(stage)["parent_id"], self.where(under)),
         )
         warnings = self.take_on_the_goal()
@@ -2007,7 +2009,9 @@ class AcceptanceQuestionTests(SettingHarness):
             ("task_in_goal", action.id, f"accepted {task} under {self.goal}"),
             (waits["point"], waits["action"], waits["what"]),
         )
-        self.assertEqual(("accept", {"parent": self.id(self.goal)}), (action.kind, action.params))
+        self.assertEqual(
+            ("accept", {"parent": self.item_id(self.goal)}), (action.kind, action.params)
+        )
         self.assertEqual("task", self.request(waits["question"])["purpose"])
         # Its answer takes it on with the goal.
         self.answer(waits["question"], "do")
@@ -2287,7 +2291,7 @@ class GoalCloseTests(SettingHarness):
 
     def period(self, goal: str) -> sqlite3.Row:
         return self.conn.execute(
-            "SELECT * FROM work_item_confirmations WHERE work_item_id = ?", (self.id(goal),)
+            "SELECT * FROM work_item_confirmations WHERE work_item_id = ?", (self.item_id(goal),)
         ).fetchone()
 
     def test_an_agent_confirms_a_goal_by_the_default(self) -> None:
@@ -2377,7 +2381,7 @@ class GoalCloseTests(SettingHarness):
         notices = self.conn.execute(
             "SELECT scope FROM work_item_waiting_notices WHERE work_item_id = ?"
             " AND delivered_call IS NULL",
-            (self.id(left),),
+            (self.item_id(left),),
         ).fetchall()
         self.assertIn("space", [str(row[0]) for row in notices])
 
@@ -2410,7 +2414,7 @@ class GoalCloseTests(SettingHarness):
             for row in self.conn.execute(
                 "SELECT notice_id, from_call FROM work_item_waiting_notices"
                 " WHERE work_item_id = ? AND scope = 'space' ORDER BY notice_id",
-                (self.id(goal),),
+                (self.item_id(goal),),
             )
         ]
 
