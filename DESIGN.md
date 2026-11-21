@@ -738,10 +738,12 @@ and only fades the end of a strip that scrolls on past it.
   own, a menu, the headings take the rows' inset instead. A chain's rows once stood 8px in
   from their headings, a session 8px in from its label and a step's box 6px in from the
   checklist's heading, three edges in one column. `production-card-list-edges.spec.ts`
-  measures them. A row whose box is laid out in every state, as Analytics' rail entries,
-  ranked rows and table rows are, draws that box first: the box stands on the edge and its
-  words take the inset inside it, since a box that reached past the column in one state read
-  as an entry pushed out of it (Analytics).
+  measures them. A row whose box is drawn in every state, as Analytics' rail entries are, and a
+  table row, whose cells are the table's columns, draw that box first: the box stands on the
+  edge and its words take the inset inside it, since a box that reached past the column in one
+  state read as an entry pushed out of it (Analytics). A ranked row draws no ground at rest, so it takes the inset outside the
+  column as other rows do: its name and its bar start on the heading's edge. Inset inside, every
+  ranked name stood 8px in from its section's heading, in the page and in the value panel.
 - A disclosure's chevron is the icon layer's `disclosure-closed` and `disclosure-open`: the
   set's chevron drawn from its square's start edge, so the square stands on the column's
   edge, the stroke starts there in both states, and the words after the square keep their
