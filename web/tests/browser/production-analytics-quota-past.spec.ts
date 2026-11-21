@@ -249,6 +249,12 @@ const WEEK_LINE = {
   ru: /^Прошлое окно: до 7 нояб\., 14:30 — 9\s?%$/u,
 }
 
+/** The longest line the fixture gives, «Work»'s five hours', in each language. */
+const FIVE_HOUR_LINE = {
+  en: /^Previous window: until Nov 10, 22:30 — 100%, ran out$/u,
+  ru: /^Прошлое окно: до 10 нояб\., 22:30 — 100\s?%, исчерпано$/u,
+}
+
 /** How many readings «Work»'s current week holds in the fixture. */
 function workWeekReadings() {
   const week = withPrevious().accounts[0]?.windows.find((one) => one.kind === 'week')
@@ -315,6 +321,11 @@ for (const lang of ['en', 'ru'] as const) {
         const { all } = counted(KINDS[by])
         await expectInside(page, info, `quota-past-${lang}-390-${by}`, all)
       }
+      // The longest line is among those judged.
+      await page.goto(pageAt({ by: 'quota_five_hour' }))
+      await expect(
+        page.locator('[data-account="Work"] [data-window="five_hour"] [data-past="line"]'),
+      ).toHaveText(FIVE_HOUR_LINE[lang])
     })
   })
 }
