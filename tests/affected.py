@@ -6,9 +6,9 @@ RANGE is what `git diff` takes, such as `HEAD~1..HEAD` after a commit; `--staged
 reads the index; with neither, the working tree against `HEAD`, untracked files
 included. Without `--list` the modules run in one `python -m unittest` from the
 repository root and the exit code is its own. A selection of more than a quarter
-of the test modules is a heavy run, as `tests/machine_lock.py` names one: it runs
-under the machine's heavy-test lock, waiting for another checkout's gate or
-browser run instead of running beside it.
+of the test modules is a heavy run, as `tests/machine_lock.py` names one: it goes
+through the machine's heavy-test gate declaring what the whole suite declares, and
+waits there while another checkout's runs leave it no room.
 
 A test module is reached when:
 
@@ -77,6 +77,11 @@ SURFACES: Mapping[str, str] = {
 #: two such runs at once fail timing-sensitive tests that pass alone, which is
 #: what the machine's heavy-test lock is for.
 HEAVY_SHARE = 0.25
+#: The logical CPUs a heavy selection declares at the gate: one unittest process, as
+#: the whole suite is, so the figure is `tests.WHOLE_SUITE_CPUS`, held equal by a test.
+#: Not imported from there: importing the `tests` package moves the environment that
+#: the run started here inherits.
+HEAVY_SELECTION_CPUS = 2
 
 WEB = "web/"
 WEB_BUILD = "web/dist/"
@@ -217,14 +222,17 @@ def web_command(changed: Iterable[str]) -> list[str]:
 
 
 def run_command(chosen: Sequence[str], test_modules: int) -> list[str]:
-    """The command that runs the selection; a heavy one through the machine's lock."""
+    """The command that runs the selection; a heavy one through the machine's gate."""
 
     command = [sys.executable, "-m", "unittest", *chosen]
     if len(chosen) <= test_modules * HEAVY_SHARE:
         return command
     what = f"tests/affected.py: {len(chosen)} of {test_modules} test modules"
     lock = str(ROOT / "tests" / "machine_lock.py")
-    return [sys.executable, lock, "run", "--run", what, "--", *command]
+    return [
+        *(sys.executable, lock, "run", "--run", what),
+        *("--cpus", str(HEAVY_SELECTION_CPUS), "--", *command),
+    ]
 
 
 def main(argv: Sequence[str] | None = None) -> int:

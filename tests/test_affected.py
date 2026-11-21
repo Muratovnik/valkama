@@ -14,6 +14,7 @@ from typing import ClassVar
 
 import grimp
 
+import tests
 from server import processes
 from tests import affected
 
@@ -187,6 +188,12 @@ class RunTest(unittest.TestCase):
         self.assertEqual(
             [*self.UNITTEST, "tests.test_a", "tests.test_b"], command[command.index("--") + 1 :]
         )
+
+    def test_a_heavy_selection_declares_the_cpus_of_the_whole_suite(self) -> None:
+        # Declaring nothing asks the gate for the whole machine: nothing would go beside it.
+        command = affected.run_command(["tests.test_a", "tests.test_b"], 4)
+        options = command[: command.index("--")]
+        self.assertEqual(str(tests.WHOLE_SUITE_CPUS), options[options.index("--cpus") + 1])
 
 
 def present(commit: str) -> bool:

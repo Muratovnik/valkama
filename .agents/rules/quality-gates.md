@@ -90,28 +90,32 @@ semgrep installs on the Python of `.venv` again, its pin can move back into
 venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
 `LOCALAPPDATA`, `APPDATA` and `VALKAMA_DB`, and every step's exit code counts.
 `--only python` is the Python half; `--owner` is the audit with the owner policy.
-Use it instead of a wrapper of your own, and `serve --out DIR` with
-`stop --out DIR` for a live check; a test compares its steps with `AGENTS.md`.
+A report cites its `DIR/record.json`, which `python tests/run_record.py check`
+refuses for another tree or state. Use it instead of a wrapper of your own, and
+`serve --out DIR` with `stop --out DIR` for a live check; a test compares its
+steps with `AGENTS.md`.
 It does not move `TEMP`, which is what keeps the suite's renames from failing
-with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
+with `PermissionError`.
 
-Two heavy runs on one machine fail tests that pass alone: a timing budget of the
-suite was missed by half while another checkout's full suite ran beside it. So
-the `unittest` step of `gates` and every run of `npm run test:browser:allowed`
-but `--list` hold one lock, `tests/machine_lock.py`: a file in the system's
-temporary directory, never in the TEMP a run was given, where every checkout and
-worktree of the machine meets it.
-The step holds it for its own duration and the runner for Playwright's; the other
-steps, a `--only` that leaves `unittest` out, a spec run with
-`npx playwright test <file>`, and a bare `coverage run` take none. It is the
-operating system's lock on the file, so it goes with a holder that dies. A run
-that finds it held waits with no time limit and says for whom, when it starts and
-again every minute, then says when it got the lock and goes on:
+Heavy runs wanting more CPUs than there are fail tests that pass alone, so each
+goes through one gate, `tests/machine_lock.py`, at a file in the system's
+temporary directory no TEMP or profile moves, declaring its CPUs: the whole
+unittest suite 2, from its package's `load_tests` until its process ends;
+`npm run test:unit` up to 8 workers, all given `--maxWorkers`;
+`npm run test:browser:allowed` but `--list` all. In arrival order, a run goes in
+alone at once, beside others if it fits their CPUs and the load;
+`VALKAMA_HEAVY_TEST_CPUS=1` lets one in at a time.
+Targeted runs take none — a unittest module, subpackage, `-p` or `-k`, Vitest
+given files or `-t`, `npx playwright test <file>` — nor do the light gate steps,
+and `npm test` with no Python says so and runs unlocked. What a holder starts goes
+in at once: `gates` holds a place for `unittest`, whose wait opens its log, and
+`npm test`'s is in `logs/web-test.log`. Its locks are the OS's: they go with a
+run that dies. A waiter waits without limit, saying why at once and every
+minute, then how long it waited:
 
 ```text
-waiting for the heavy-test lock <file>: it is held by <run> in <checkout>, process <pid>, since <date> <time> (<n> min <n> s ago)
-still waiting after 1 min 0 s: the lock is held by <the same, or the run that took it next>
-took the heavy-test lock after 2 min 41 s
+waiting for the heavy-test lock <file>: <who holds its CPUs, how many are free, or who is ahead>
+took the heavy-test lock after 41 s: 2 of 32 CPUs, the machine 31% busy, alone
 ```
 
 `tests/commit_subjects.py` reads the subject of every commit `HEAD` reaches,
@@ -192,7 +196,4 @@ machine where `requirements-dev.txt` was never installed.
 
 Discovery starts at the repository root because that is the import root: it is
 not itself a package, so unittest puts it on `sys.path`, which is what makes
-`server` and `tests` importable. It used to start one level down, inside a
-directory that held the whole product while the repository around it held only
-that product's configuration. Flattening removed the level; discovery still
-starts here, and every test lives under `tests/`.
+`server` and `tests` importable. Every test lives under `tests/`.

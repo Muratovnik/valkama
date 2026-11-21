@@ -39,6 +39,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import unittest
 
 #: The suite's own directory, removed when the interpreter exits. One per run,
 #: so a leftover file from a previous run cannot be read as state.
@@ -154,3 +155,64 @@ launcher.AUTOSTART_STORE = RunKeyDouble()
 from tests import sqlite_leaks
 
 sqlite_leaks.install()
+
+
+class LoadNoting(unittest.TextTestResult):
+    """The result of every unittest run: one that fails says who holds the heavy-test lock.
+
+    A targeted run takes no lock, so it may fail beside another checkout's heavy run
+    for that load alone; the line after the failures names that run, or is absent
+    when the lock is free or held by this run's own holder.
+    """
+
+    def printErrors(self) -> None:  # noqa: N802 -- the name unittest's runner calls
+        super().printErrors()
+        if not self.wasSuccessful():
+            from tests import machine_lock
+
+            note = machine_lock.load_note()
+            if note is not None:
+                self.stream.writeln(note)
+
+
+# typeshed types the stream of a subclass as the decorator the runner wraps every stream in,
+# which is what the runner passes, but declares the attribute to take any stream.
+unittest.TextTestRunner.resultclass = LoadNoting  # type: ignore[assignment]
+
+#: The patterns that select every test module: unittest's own default and the one the
+#: gates and CI name. A narrower one makes a targeted run.
+_WHOLE_SUITE_PATTERNS = (None, "test*.py", "test_*.py")
+
+#: The logical CPUs a run of the whole suite declares to the heavy-test gate. The suite
+#: is one Python process, with the processes some tests start; a sampler of whole runs
+#: saw it at one to two cores, short of a run from start to end, so this is a first
+#: figure to revise against a measured one. `tests/isolated.py` declares it for its step.
+WHOLE_SUITE_CPUS = 2
+
+
+def load_tests(
+    loader: unittest.TestLoader, standard_tests: unittest.TestSuite, pattern: str | None
+) -> unittest.TestSuite:
+    """A run of the whole suite holds the machine's heavy-test lock until it ends.
+
+    unittest calls this for each run that reaches the package itself, such as
+    `discover -s . -p "test_*.py"` as the gates and CI spell it, `discover -s tests -t .`
+    and `-m unittest tests`, and never for a module or a subpackage named on its own,
+    so those targeted runs take no lock; nor does one narrowed by `-p` or `-k`. The
+    lock is taken while the suite loads, so a run that waited starts its clock once it
+    is in. `tests/machine_lock.py` says why the lock exists and why a run under a
+    holder goes in at once.
+
+    Discovery does not walk a package that has this hook, so the hook walks it, from
+    the directory that holds the package, so that its modules keep their `tests.` names.
+    """
+
+    from tests import machine_lock
+
+    if pattern in _WHOLE_SUITE_PATTERNS and not loader.testNamePatterns:
+        machine_lock.hold_until_exit("the whole unittest suite", cpus=WHOLE_SUITE_CPUS)
+    here = os.path.dirname(os.path.abspath(__file__))
+    standard_tests.addTests(
+        loader.discover(here, pattern or "test_*.py", top_level_dir=os.path.dirname(here))
+    )
+    return standard_tests

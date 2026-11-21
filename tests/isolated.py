@@ -31,10 +31,15 @@ Each rule here is a way a hand-written wrapper went wrong:
   directory of the task it was first written for.
 - `serve` says when the committed `web/dist` it serves is behind `web/src`. A
   browser check once took screenshots of a bundle ten commits behind its sources.
-- The `unittest` step holds the machine's heavy-test lock, `tests/machine_lock.py`,
-  for its own duration and no longer. The whole suite beside another checkout's
-  failed timing budgets that hold alone, so a second such run waits and says for
-  whom; the other steps are light and take no lock.
+- The `unittest` step holds a place at the machine's heavy-test gate,
+  `tests/machine_lock.py`, for its own duration and no longer, declaring the CPUs
+  the whole suite declares, and runs marked as under it, because the suite takes
+  that place itself. The whole suite beside another checkout's heavy runs failed
+  timing budgets that hold alone, so the step waits until it fits, and what the
+  gate said while it waited opens the step's log. No other step is held here; the
+  Vitest run of `npm test` goes through the gate on its own and says so in its log.
+- A run is cited, not retold: reports that retyped results got them wrong, so
+  each `gates` run leaves the record `tests/run_record.py` describes and checks.
 
 A served store copy holds whatever the live store holds, so it lives inside the
 throwaway profile, together with any backup a migration writes beside it, and
@@ -122,8 +127,8 @@ class Step:
     directory: str = "."
     #: It reads the commits of the checkout, so a directory without them refuses it.
     needs_history: bool = False
-    #: It holds the machine's heavy-test lock while it runs.
-    exclusive: bool = False
+    #: It holds a place at the machine's heavy-test gate while it runs.
+    gated: bool = False
 
     @property
     def needs_modules(self) -> bool:
@@ -154,7 +159,7 @@ GATE_STEPS = (
         "unittest",
         "python",
         'python -m coverage run -m unittest discover -s . -p "test_*.py"',
-        exclusive=True,
+        gated=True,
     ),
     Step("coverage", "python", "python -m coverage report"),
     Step("web-test", "web", "npm test", "web"),
@@ -172,7 +177,7 @@ class Run(NamedTuple):
     cwd: Path
     needs_modules: bool = False
     needs_history: bool = False
-    exclusive: bool = False
+    gated: bool = False
 
 
 def _say(line: str) -> None:
@@ -380,8 +385,12 @@ def _tail(log: Path) -> str:
     return " | ".join(_log_line(line).strip() for line in lines[-3:])
 
 
-def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
+def _run_step(
+    run: Run, log: Path, environment: Mapping[str, str], preface: Sequence[str] = ()
+) -> int:
     with log.open("wb") as output:
+        output.write("".join(f"{line}\n" for line in preface).encode())
+        output.flush()
         try:
             return subprocess.run(
                 run.argv,
@@ -422,18 +431,33 @@ def run_gates(
     environment: Mapping[str, str],
     *,
     lock: Path | None = None,
+    record: Mapping[str, object] | None = None,
 ) -> int:
     """Run every step; the result is 0 only when at least one ran and none failed or was refused.
 
     The modules are read again at each step, because another session's `npm ci`
-    may have replaced them while the steps before it ran. An exclusive step waits
-    for the heavy-test lock, the machine's unless `lock` names another file.
+    may have replaced them while the steps before it ran. A gated step waits
+    at the heavy-test gate, the machine's unless `lock` names another file, needing
+    what the whole unittest suite declares, and runs marked as under it, so the
+    suite inside does not wait for its own step; what the gate said opens its log.
+    Given the start of a `record`, it writes the whole record into `out` at the end.
     """
 
+    # Imported here, not at the top, for the reason `_refusal` gives.
+    from tests import WHOLE_SUITE_CPUS, machine_lock, run_record
+
+    # A hold of the run that started this one covers the steps too, though their
+    # environment was built without the caller's `VALKAMA_*`.
+    if machine_lock.HELD_BY_ANCESTOR in os.environ:
+        environment = {
+            **environment,
+            machine_lock.HELD_BY_ANCESTOR: os.environ[machine_lock.HELD_BY_ANCESTOR],
+        }
     logs = out / LOGS
     logs.mkdir(parents=True, exist_ok=True)
     failed: list[str] = []
     refused: dict[str, list[str]] = {}
+    steps: list[dict[str, object]] = []
     with (out / SUMMARY).open("w", encoding="utf-8", newline="\n") as summary:
 
         def report(line: str) -> None:
@@ -449,32 +473,43 @@ def run_gates(
                 refused.setdefault(cause, []).append(run.name)
                 log.write_text(f"{detail}\n", encoding="utf-8", newline="\n")
                 report(f"{run.name:<14} refused  {detail}")
+                steps.append(run_record.step(run.name, run.argv, run.cwd, log, None))
                 continue
-            if run.exclusive:
-                # Imported here, not at the top, for the reason `_refusal` gives.
-                from tests import machine_lock
+            gate_said: list[str] = []
+            if run.gated:
+
+                def told(line: str, said: list[str] = gate_said) -> None:
+                    report(line)
+                    said.append(line)
 
                 holding: contextlib.AbstractContextManager[None] = machine_lock.held(
-                    f"tests/isolated.py gates: the {run.name} step", path=lock, say=report
+                    f"tests/isolated.py gates: the {run.name} step",
+                    path=lock,
+                    cpus=WHOLE_SUITE_CPUS,
+                    say=told,
                 )
+                step_environment = {**environment, **machine_lock.marker(lock)}
             else:
                 holding = contextlib.nullcontext()
+                step_environment = dict(environment)
             with holding:
-                code = _run_step(run, log, environment)
+                code = _run_step(run, log, step_environment, gate_said)
             if code != 0:
                 failed.append(run.name)
             report(f"{run.name:<14} exit={code}  {_tail(log)}")
+            steps.append(run_record.step(run.name, run.argv, run.cwd, log, code))
         if not runs:
             report("no gate step ran")
-            return 1
         if failed:
             report(f"failed: {', '.join(failed)}")
         for cause, names in refused.items():
             report(f"not run, because {cause}: {', '.join(names)}")
-        if failed or refused:
-            return 1
-        report(f"all {len(runs)} steps passed")
-    return 0
+        result = 1 if failed or refused or not runs else 0
+        if result == 0:
+            report(f"all {len(runs)} steps passed")
+        if record is not None:
+            report(f"record: {run_record.write(out, record, steps, result)}")
+    return result
 
 
 def select_steps(only: Sequence[str] | None, *, owner: bool) -> list[Step]:
@@ -529,7 +564,7 @@ def gates(steps: Sequence[Step], out: Path) -> int:
             ROOT / step.directory,
             step.needs_modules,
             step.needs_history,
-            step.exclusive,
+            step.gated,
         )
         for step in steps
     ]
@@ -538,7 +573,14 @@ def gates(steps: Sequence[Step], out: Path) -> int:
         refusal = modules_refusal(package)
         if refusal is not None:
             _say(f"the npm steps here will be refused. {refusal}")
-    return run_gates(runs, out, environment)
+    # Imported here, not at the top, for the reason `_refusal` gives.
+    from tests import run_record
+
+    warning = run_record.placement_warning(ROOT, out)
+    if warning is not None:
+        _say(warning)
+    versions = run_record.tool_versions(interpreter, npm=any(run.needs_modules for run in runs))
+    return run_gates(runs, out, environment, record=run_record.begin(ROOT, versions))
 
 
 # --- the bundle --------------------------------------------------------------
