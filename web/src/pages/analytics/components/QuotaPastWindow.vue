@@ -6,7 +6,7 @@
  * Under the window stands one quiet line: «Previous window: until Nov 19, 05:00 — 9%», the moment
  * that window reset and its last share, with «ran out» where a reading of it
  * reached the whole window; or «Previous window: no readings» where the store keeps none, which is
- * text and no control. Where the window's step line holds that window already (`held`), as it does
+ * text and no control. A window narrower than the line gives it a second row from its start. Where the window's step line holds that window already (`held`), as it does
  * over a period longer than the window, no line stands: it would name a window drawn right above
  * it. The line with a window is a button: it opens that window in the card, read
  * when asked (`usePastWindow`). While a past window is open, the card holds it and nothing of the
@@ -371,10 +371,15 @@ async function close() {
 }
 
 /* The line under the window starts where the lines above it do: the margin takes back the inset
-   the button's fill keeps under the pointer. */
+   the button's fill keeps under the pointer. A window narrower than the line, as a phone-wide one
+   is, gives it a second row from the same start: kept on one row, the longest line stood 97px past
+   such a window and scrolled the panel sideways. */
 .quota-past-line {
   justify-self: start;
+  max-width: calc(100% + var(--space-fill-inset));
   margin-inline-start: calc(-1 * var(--space-fill-inset));
+  text-align: start;
+  white-space: normal;
 }
 
 .quota-past-none {

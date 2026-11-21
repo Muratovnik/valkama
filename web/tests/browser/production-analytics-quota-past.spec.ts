@@ -5,7 +5,8 @@
  * window before it is kept, with that it ran out where it did, and «Previous window: no readings»
  * where none is. Here «Work» alone has windows before its five hours and its week; every other
  * window of the fixture has none. The line stays one line inside its window, in English and in
- * Russian, at 1440 pixels and at 1024.
+ * Russian, at 1440 pixels and at 1024; at 390 the longest line takes a second row from its start,
+ * inside its window.
  *
  * The line with a window is a button. It shows that window in the card in place of the current
  * one — whose share, bar, facts and readings stand hidden meanwhile — on an axis from the window's
@@ -192,6 +193,53 @@ async function expectWhole(page: Page, info: TestInfo, name: string, count: numb
   for (const line of short) expect(line.short, line.text).toBeLessThanOrEqual(0)
 }
 
+/**
+ * Each shown line under a window: its words, how far its right edge passes its window's, and how
+ * far apart the starts of its rows of words stand, in pixels.
+ */
+const lineStarts = (page: Page) =>
+  page.evaluate(
+    (selector) =>
+      [...document.querySelectorAll<HTMLElement>(selector)]
+        .filter((line) => line.checkVisibility())
+        .map((line) => {
+          const range = document.createRange()
+          range.selectNodeContents(line)
+          const starts = [...range.getClientRects()].map((rect) => rect.left)
+          const card = line.closest('[data-window]')?.getBoundingClientRect()
+          return {
+            text: line.textContent.trim(),
+            rows: starts.length,
+            past: card
+              ? Math.round((line.getBoundingClientRect().right - card.right) * 100) / 100
+              : null,
+            spread: starts.length ? Math.max(...starts) - Math.min(...starts) : null,
+          }
+        }),
+    LINES,
+  )
+
+/**
+ * Every shown line stands inside its window, cut by nothing, its rows starting where it does: a
+ * phone-wide window is narrower than the longest line, which then takes a second row rather than
+ * standing past the window and scrolling the page sideways.
+ */
+async function expectInside(page: Page, info: TestInfo, name: string, count: number) {
+  await expect(page.locator(`:is(${LINES}):visible`)).toHaveCount(count)
+  const lines = await lineStarts(page)
+  const short = await shortfalls(page, LINES)
+  await record(info, name, { lines, short })
+  expect(lines).toHaveLength(count)
+  for (const line of lines) {
+    expect(line.rows, line.text).toBeGreaterThan(0)
+    expect(line.past, line.text).not.toBeNull()
+    expect(line.past ?? 1, line.text).toBeLessThanOrEqual(0.5)
+    expect(line.spread ?? 1, line.text).toBeLessThanOrEqual(1)
+  }
+  expect(short).toHaveLength(count)
+  for (const line of short) expect(line.short, line.text).toBeLessThanOrEqual(0)
+}
+
 /** The kinds of window each quota section shows. */
 const KINDS = { quota_five_hour: ['five_hour'], quota_week: ['week', 'week_model'] }
 
@@ -199,6 +247,12 @@ const KINDS = { quota_five_hour: ['five_hour'], quota_week: ['week', 'week_model
 const WEEK_LINE = {
   en: /^Previous window: until Nov 7, 14:30 — 9%$/u,
   ru: /^Прошлое окно: до 7 нояб\., 14:30 — 9\s?%$/u,
+}
+
+/** The longest line the fixture gives, «Work»'s five hours', in each language. */
+const FIVE_HOUR_LINE = {
+  en: /^Previous window: until Nov 10, 22:30 — 100%, ran out$/u,
+  ru: /^Прошлое окно: до 10 нояб\., 22:30 — 100\s?%, исчерпано$/u,
 }
 
 /** How many readings «Work»'s current week holds in the fixture. */
@@ -258,6 +312,21 @@ for (const lang of ['en', 'ru'] as const) {
         ).toHaveText(WEEK_LINE[lang])
       })
     }
+
+    test('at 390 pixels each line wraps inside its window, every row from its start', async ({
+      page,
+    }, info) => {
+      for (const by of ['quota_five_hour', 'quota_week'] as const) {
+        await open(page, by, 390)
+        const { all } = counted(KINDS[by])
+        await expectInside(page, info, `quota-past-${lang}-390-${by}`, all)
+      }
+      // The longest line is among those judged.
+      await page.goto(pageAt({ by: 'quota_five_hour' }))
+      await expect(
+        page.locator('[data-account="Work"] [data-window="five_hour"] [data-past="line"]'),
+      ).toHaveText(FIVE_HOUR_LINE[lang])
+    })
   })
 }
 
