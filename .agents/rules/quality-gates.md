@@ -51,6 +51,34 @@ clipboard and is not on that list, so a spec that starts to goes onto it in the
 same change, and on a configuration that selects a listed spec without the
 variable.
 
+The Analytics sweep (`web/tests/sweep/analyticsSweep.ts`) is not a gate but a
+measurement of a running Valkama: every rail section, period, chart view and the
+value panel opened from a mark of each section, at each width, for three
+classes. Hover reach points the real pointer at each sampled mark's centre and
+3px off it on each axis and expects what `DESIGN.md` and `hintReach.ts` say:
+the mark's own hint, the nearest of several, either of two within a pixel.
+Overflow reports a sideways scroll that is none of the design's: the page's,
+one widened by content out of flow, one whose content is neither a table nor a
+row of like items, and one shorter than the least target (`--period-reach`).
+`--forbid <text>`, repeatable, counts every visible place a text stands, in the
+page and in a hint. Run it on a store copy, from `web/`, with its output in the
+ignored `tmp/` (it refuses any other place, since it records what the store
+shows):
+
+```powershell
+python tests/isolated.py serve --out tmp/<name>/stand --store-copy
+node tests/sweep/analyticsSweep.ts --url <the stand's address> --out ../tmp/<name>/sweep --forbid "меньше минуты"
+python tests/isolated.py stop --out tmp/<name>/stand
+```
+
+`--widths`, `--sections` and `--periods` narrow it; `--marks` sets how many
+marks of each sort it samples. It writes `sweep.json`, every miss with its
+state, selector path, owner, offset and what was found instead, prints a
+summary by class and owner, and exits 1 when anything missed. A hover or
+overflow remark is closed by its group's number falling on a store copy, not
+by a test on the spot the remark named: such a test passes while the same
+defect stands at the next mark, period or width.
+
 semgrep is the only dataflow analysis here: ruff matches patterns, semgrep
 follows a tainted value through a function. It reads the Python server alone,
 because it does not parse `.vue`; the web side is covered by
