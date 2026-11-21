@@ -748,6 +748,8 @@ def _comments(view: View, reference: str) -> list[dict[str, Any]]:
                 "new": view.after_setup(comment.get("at")),
                 "text": body,
                 "awaits_reply": bool(comment.get("awaits_reply")),
+                # The items it told by reference: their holders hear it as its own do.
+                "mentions": list(comment.get("mentions") or ()),
             }
         )
     return comments
