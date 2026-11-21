@@ -11,8 +11,8 @@ import { recordInput, ringAsked } from '@/shared/lib/pressFocus.ts'
  * browser shows what it focuses by centring it, and in a frame that scrolls sideways that
  * took the reader's place away: opening the board's folded column at a phone's width gave
  * focus to the button that folds it again, which stood past the frame's end, and the board
- * slid 441px, the tiles' links off the screen. Up and down it is still shown, by the nearest
- * edge, so a landing below the fold is scrolled to; an element that already had focus, or
+ * slid 441px, the tiles' links off the screen. Up and down it is still shown as the browser
+ * shows it, so a landing below the fold is scrolled to; an element that already had focus, or
  * did not take it, scrolls nothing, as with the browser. What the focus handlers scroll
  * themselves stands: they run before the wrap measures. A focus that names `preventScroll`
  * scrolls for itself and is left alone. A walk the reader makes with the arrows does go
@@ -28,10 +28,19 @@ function scrolledAcross(node: Element): [Element, number][] {
   return held
 }
 
-/** Shows `node` up and down by the nearest edge, every scroll across left as it stands. */
-function showAlong(node: Element) {
+/** Chromium's own showing of a focus: left alone in sight, centred out of it, edged in part. */
+type ShownIfNeeded = Element & { scrollIntoViewIfNeeded?: (centre?: boolean) => void }
+
+/**
+ * Shows `node` up and down as the browser's focus would, every scroll across left as it
+ * stands. By the nearest edge instead, the row a page key reached in the list ran past the
+ * list's end, its reference shown and its lower part cut; a browser without Chromium's call
+ * takes the nearest edge all the same.
+ */
+function showAlong(node: ShownIfNeeded) {
   const held = scrolledAcross(node)
-  node.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  if (node.scrollIntoViewIfNeeded) node.scrollIntoViewIfNeeded(true)
+  else node.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   for (const [box, left] of held) if (box.scrollLeft !== left) box.scrollLeft = left
 }
 

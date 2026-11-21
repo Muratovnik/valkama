@@ -3512,7 +3512,7 @@ the next Tab to the start of a long form — why a write or a read did not go th
 just written, a list's heading — carry `.focus-landing` from `base.css`: the ring stands 4px
 clear of the words and turns at a control's corner, so one line never closes into a capsule.
 Wherever the interface puts focus, a frame that scrolls sideways stays where the reader left
-it, and what takes focus is shown up and down by the nearest edge: opening the board's folded
+it, and what takes focus is shown up and down as the browser shows it: opening the board's folded
 column at 390px once slid the board 441px to centre the button that folds it again, and the
 tiles' links went off the screen. Only a walk with the arrows takes a frame across, as far as
 the place walked to needs. A text field shows focus by turning its own
