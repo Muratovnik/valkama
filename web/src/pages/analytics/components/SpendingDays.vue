@@ -32,8 +32,7 @@
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
  * short mark at its height on the same scale, named in the legend and said in the period's hint
  * and the table; while those steps are read there is no mark, and when they could not be read a note
- * under the chart says so. A `brief` chart, standing beside the titles of its tasks, names
- * each task by its number alone.
+ * under the chart says so.
  *
  * Split by a second dimension (`across`), the answer is read by both and the stack is of its
  * pairs, «claude-opus-5-5 · high», each in its hue of the page, the rest folded into «other» as
@@ -74,8 +73,6 @@ const props = defineProps<{
   across?: UsageDimension | null
   /** The steps of the period before, to mark over each column; none marked without. */
   before?: BeforeSteps | null
-  /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
-  brief?: boolean
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
@@ -115,16 +112,13 @@ function beforeOf(index: number) {
   return step ? { before: figureOf(props.measure, spentOf(step)) } : {}
 }
 
-/** A series' name: its value's, or by its task's number alone where the chart is `brief`. */
+/** A series' name: its value's, or «Other» for the rest. */
 function seriesName(line: StackLine['line']) {
-  if (!line) return t('analytics.days.other')
-  const reference = props.brief && props.by === 'work_item' ? line.value?.reference : null
-  return reference ?? words.lineLabel(props.by, line)
+  return line ? words.lineLabel(props.by, line) : t('analytics.days.other')
 }
 
-/** A series' name in runs where it holds a task's title; none where the chart names it by number. */
-const seriesRuns = (line: NonNullable<StackLine['line']>) =>
-  props.brief && props.by === 'work_item' ? undefined : words.lineRuns(props.by, line)
+/** A series' name in runs where it holds a task's title. */
+const seriesRuns = (line: NonNullable<StackLine['line']>) => words.lineRuns(props.by, line)
 
 /** The page's colour keys, which the stack's hues are ranked over (`useColourPlaces`). */
 const places = useColourPlaces()

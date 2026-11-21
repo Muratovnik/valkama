@@ -9,8 +9,11 @@ import { useI18n } from 'vue-i18n'
  *
  * - The period's three figures, which also choose the page's measure (`SpendingTiles`).
  * - The period's chart by day, or by hour for a single day, across the panel's whole width,
- *   stacked by task, with the period the figures are compared with outlined behind it on the
- *   same scale (`usePeriodBefore`) and the marks of where the accounts changed.
+ *   stacked by project, with the period the figures are compared with outlined behind it on the
+ *   same scale (`usePeriodBefore`) and the marks of where the accounts changed. Stacked by task it
+ *   named a few per cent of the time, the rest «Other» and «No task»; the tasks have their own
+ *   section. At a project's scope there is the one project, so it is one plain series with no
+ *   legend. It is the period read by project (`useTopValues`), drawn once that read is in hand.
  * - Under it one row of cards: what changed most from the period before, task by task, then the
  *   first five values of each dimension a person asks about most — tasks, models and projects;
  *   no project at a project's scope, where every figure is that project's — each asked of the
@@ -18,7 +21,8 @@ import { useI18n } from 'vue-i18n'
  *   side panel, as a bar of that section does. The roles have no card: there are two of them, and the rail's
  *   tile says both.
  *
- * Its own answer is the read by task, beside the period before; a press that could not do what
+ * Its own answer is the read by task, beside the period before, which its tiles and «What
+ * changed» read; a press that could not do what
  * it asked says why where it was pressed. Its heading names it, and the heading's «ⓘ» says which
  * projects its figures are of (`scope`) and their caveats once (`useSectionCaveats`).
  */
@@ -42,7 +46,6 @@ import { refusedIn } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
 
@@ -84,9 +87,6 @@ const caveats = useSectionCaveats()
 /** Which projects the figures are of, then the caveats of them, as its heading's «ⓘ» says. */
 const about = computed(() => [props.scope, ...caveats.spending(props.usage)])
 
-/** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
-const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_item')
-
 const cards = computed<OverviewCard[]>(() =>
   OVERVIEW_CARDS.filter((card) => !(props.projectScoped && card === 'project')),
 )
@@ -96,12 +96,17 @@ const beforeSteps = usePeriodBefore({
   filters: () => props.filters,
   compared: () => props.compared,
 })
+/** What the chart stacks the period by: its projects, one at a project's scope. */
+const CHART_BY: UsageDimension = 'project'
 const top = useTopValues({
   usage: () => props.usage,
   filters: () => props.filters,
   period: () => props.period,
-  dimensions: () => cards.value,
+  dimensions: () => [...new Set([...cards.value, CHART_BY])],
 })
+/** The period by project, for the chart; null until it is first read. */
+const chart = computed(() => top.answers.value[CHART_BY] ?? null)
+const chartFailed = computed(() => !chart.value && top.reads.value[CHART_BY] === 'failed')
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
@@ -180,19 +185,25 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
       />
       <div class="overview-chart">
         <SpendingDays
+          v-if="chart"
           :accounts="accounts"
           :before="beforeSteps"
-          :by="by"
+          :by="CHART_BY"
           :measure="measure"
           :live="live"
           :notice="noticeIn('days')"
           :read-at="readAt"
-          :usage="usage"
-          brief
+          :usage="chart"
           @frame="(span, label) => emit('frame', span, label)"
           @step="(span, label) => emit('step', span, label)"
-          @inspect="(value, label) => emit('inspect', by, value, label, 'days')"
+          @inspect="(value, label) => emit('inspect', CHART_BY, value, label, 'days')"
         />
+        <FieldError
+          v-else-if="chartFailed"
+          role="alert"
+        >
+          {{ t('analytics.overview.chartFailed') }}
+        </FieldError>
       </div>
       <FieldError
         v-if="noticeIn('bars')"

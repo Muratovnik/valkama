@@ -2795,8 +2795,10 @@ measure of everything else on the page. Under its change the tokens cell and the
 what an hour of agent time took of them beside the period before's, «$17.9/h, was 8.1»; a
 period with no agent time has no such line
 and a period before with none gives no «was», the line's place kept either way, and the chart
-draws no second axis for it. Across the panel under the cells stands the period chart, with the
-period before as a short line at its height, and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
+draws no second axis for it. Across the panel under the cells stands the period chart, stacked
+by project, with the period before as a short line at its height; at a project's scope it is that
+project's one series of plain columns, which no legend names. Stacked by task it named a few per
+cent of the time, the rest «Other», and the tasks have their own section; and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
 hovered ground under the pointer, and nothing moves. The overview may scroll: the chart's

@@ -154,7 +154,8 @@ describe('the overview on the page', () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ projectId: 'alpha' })
     expect(cards(page)).toEqual(['work_item', 'model'])
-    expect(reads.grouped('project')).toHaveLength(0)
+    // The one read by project is the chart's, of the one project (`overviewChart.spec.ts`).
+    expect(reads.grouped('project')).toHaveLength(1)
   })
 
   it('names what moved most from the week before, in the measure’s own units', async () => {
