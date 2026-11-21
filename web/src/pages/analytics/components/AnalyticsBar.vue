@@ -456,7 +456,9 @@ const freshHint = computed(() =>
 }
 
 /* A short bar (`short`) says the read again by its icon. Its words stay in the button for
-   assistive technology, hidden from sight, and its hint names it. */
+   assistive technology, hidden from sight, and its hint names it. They are hidden by this rule
+   rather than the shared `.visually-hidden`, which a hint never counts as cut (`textIsClipped`):
+   under that class the short bar's button lost its hint. */
 .analytics-bar-short .analytics-refresh-words {
   position: absolute;
   inline-size: 1px;

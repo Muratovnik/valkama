@@ -86,7 +86,7 @@ describe('the accounts beside the period before', () => {
       // Nothing now is a fall by its whole figure, whatever placed the work before.
       ['3d3d3d3d', '5 min', '↓ 100%'],
     ])
-    expect(changes(seatTable('ru'))[0]).toEqual(['1b1b1b1b', '10 мин', 'Раньше не определён'])
+    expect(changes(seatTable('ru'))[0]).toEqual(['1b1b1b1b', '10 мин', 'Ранее неизвестен'])
   })
 
   it('leave a percent to every value of another dimension, an organization included', () => {

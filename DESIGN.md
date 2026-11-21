@@ -1059,7 +1059,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls sideways in its own frame
-  (`ChartTable`, `keyScroll`) rather than widening the page. A twin's name, a row's or a series'
+  (`ChartTable`, `keyScroll`) rather than widening the page. A twin only a few pixels wider
+  than its frame, less than the least target, takes them from its headings over figures that
+  stand at their floor and fits instead: the days' twin of a section at 1024px scrolled by 5 to
+  18px, which brought nothing into reach and left its note's last letters under the edge. A
+  twin's name, a row's or a series'
   over its figures, takes two lines at most, then an ellipsis, whole in its hint, as the side
   panel's narrow names do (`.two-lines`), and a detail a line of its own under it: unbounded, a
   task's name in the ranked twin at 390 stood on fourteen lines and its row 234 px tall, and the
@@ -2864,8 +2868,8 @@ changed most: which account that work ran under is not known, so a percent read 
 starting to place the work as growth, a rise of thousands of percent on an account that had
 worked all along. The rail's tile says it in words of its own, «Not known before», where the
 table and the cards say «Account not known before»: beside the tile's total the whole phrase cut
-«6 h» into an ellipsis by 9px at 1440px. The Russian «Раньше не определён» is short already and
-stays. Work with no value in the dimension, or of a value
+«6 h» into an ellipsis by 9px at 1440px. The Russian table says «Ранее неизвестен», as short as
+a figure, where the rail keeps «Раньше не определён». Work with no value in the dimension, or of a value
 nobody can place — an unknown model — is ranked where its figure puts it, in the neutral colour;
 a list of free text sets it apart after its values instead, with its bar on their scale. A value
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
@@ -2888,8 +2892,13 @@ measure, so the switch beside it wraps alike whichever measure stands and choosi
 nothing under the chart either. Under the measure «tokens» each value's tokens by kind follow
 its change: the name,
 the three measures, the period before and the change stand in the table's width as it opens,
-their headings taking a second line rather than that width, and the kinds are reached by the
-table's own sideways scroll.
+at 1024px and wider and under every measure, their headings taking a second line rather than
+that width, and the kinds are reached by the table's own sideways scroll. A change cell that
+says why it has no figure says it in a figure's width, in every language: «Ранее без цены»,
+«Без токенов», «Оба без цены», «No price before»; the heading over it names the period it is
+compared with, and the section's tiles say the whole sentence. In whole sentences, «Нет цены ни
+в одном периоде» made the change's column 215px wide and stood the change 76px past the frame
+at 1280px.
 
 The second dimension is the section's, not the table's: «Split by» in the section's heading
 chooses it, and the ranked bars, the small charts, the period columns and the table all read
@@ -3163,9 +3172,11 @@ they were first drawn, and the panel stood over the card.
 
 A cost is always an estimate at API prices and is written as one, with «≈», and the section's
 «ⓘ» says once that it is not a bill; cached reads are counted apart from the tokens processed
-anew and never summed into them. In a table, the tokens a cost leaves without a price stand as a
-quieter second line under its amount, which keeps to the row's line, and a window too narrow for
-them may scroll the table sideways with its names kept in place.
+anew and never summed into them. In a table, the tokens a cost leaves without a price stand in
+the quieter ink under its amount, which keeps to the row's line, and wrap inside the width the
+column's figures give them, between words and never inside a count: the row is taller and the
+column as wide as its figures. Kept to one line of their own, they made the cost's column 192px
+wide and stood the table 218px past its frame at 1280px.
 
 ### Settings
 

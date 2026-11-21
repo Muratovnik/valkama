@@ -1,11 +1,13 @@
 /**
  * The Analytics sweep's misses, and their summary by class and owner: one group per class, rule
- * and owning component, with its count by width, by period and by section, so a fix can take a
- * whole group rather than the one spot a remark named.
+ * and owning component, with its count by width, by period, by section and by measure, so a fix
+ * can take a whole group rather than the one spot a remark named.
  */
 
 /** The state of the page a miss was found in. */
 export interface StateName {
+  /** The measure the view was opened with; empty for the one the page opens on. */
+  measure: string
   panel: boolean
   period: string
   section: string
@@ -27,6 +29,7 @@ export interface Miss {
 
 /** A group of misses one fix could take. */
 export interface Group {
+  byMeasure: Record<string, number>
   byPeriod: Record<string, number>
   bySection: Record<string, number>
   byWidth: Record<string, number>
@@ -45,7 +48,8 @@ const tally = (counts: Record<string, number>, key: string | number) => {
 }
 
 const stateText = (state: StateName) =>
-  `${state.width} ${state.section} ${state.period} ${state.view}${state.panel ? ' (panel)' : ''}`
+  [state.width, state.section, state.period, state.measure, state.view].filter(Boolean).join(' ') +
+  (state.panel ? ' (panel)' : '')
 
 /** The misses grouped by class, rule and owner, the largest group first, and the totals by class. */
 export function summarize(misses: readonly Miss[]) {
@@ -62,6 +66,7 @@ export function summarize(misses: readonly Miss[]) {
       paths: 0,
       byWidth: {},
       byPeriod: {},
+      byMeasure: {},
       bySection: {},
       examples: [],
       seen: new Set<string>(),
@@ -70,6 +75,7 @@ export function summarize(misses: readonly Miss[]) {
     tally(group.byWidth, miss.state.width)
     tally(group.byPeriod, miss.state.period)
     tally(group.bySection, miss.state.section)
+    tally(group.byMeasure, miss.state.measure || 'opening')
     if (!group.seen.has(miss.path)) {
       group.seen.add(miss.path)
       group.paths += 1

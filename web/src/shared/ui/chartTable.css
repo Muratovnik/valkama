@@ -15,6 +15,10 @@
    table: placed against the panel instead, the comma before a quota share's remark, in a table
    scrolled past its frame, stood 150px past the panel at 390px and scrolled the panel sideways. */
 .chart-table-frame {
+  /* What the headings over figures give from their floor; the frame sets it as it measures
+     (`chartTableGive.ts`), and a frame inside another starts from none. */
+  --chart-table-give: 0px;
+
   position: relative;
   max-width: 100%;
   overflow-x: auto;
@@ -45,9 +49,10 @@
 }
 
 /* A series named at length, a task by its title, wraps over its figures instead of widening
-   the table by its whole name; its figures still keep to one line. */
+   the table by its whole name; its figures still keep to one line. Where the floors would leave
+   the table a sliver past its frame, the headings at theirs give it (`chartTableGive.ts`). */
 .chart-heading[data-numeric='true'] {
-  min-inline-size: 8em;
+  min-inline-size: calc(8em - var(--chart-table-give, 0px));
   white-space: normal;
 }
 

@@ -107,13 +107,13 @@ const MEASURES = ['time', 'tokens', 'cost'] as const
 
 /**
  * The widths the tokens' table is read at, and how many of its first columns — the name, the three
- * measures, the period before and the change — stand whole in its frame as it opens. At 1024
- * pixels the frame is 713 wide and those six need some 770 in Russian even with the name at its
- * least, the change's column as wide as «Сейчас токены не учтены»: there only the name is held,
- * at the frame's start, and the rest are reached by its scroll, as on a phone.
+ * measures, the period before and the change — stand whole in its frame as it opens: all six from
+ * 1024 pixels up. With the change said in a sentence, «Сейчас токены не учтены», those six needed
+ * some 770 pixels in Russian at 1024, against a frame of 713, and only the name stood in it; a
+ * change cell says why it has no figure in a figure's width now («Без токенов»).
  */
 const TOKEN_WIDTHS = [
-  { width: 1024, inView: 1 },
+  { width: 1024, inView: 6 },
   { width: 1440, inView: 6 },
   { width: 1920, inView: 6 },
 ]

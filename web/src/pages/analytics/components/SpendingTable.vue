@@ -491,9 +491,10 @@ defineExpose({ reveal })
 /* The headings over figures on two lines, each column at its least: the frame of a narrower
    table, a period before named with its hours, or the tokens by kind after the change under the
    measure «tokens», whose table is wider than its frame and whose kinds are reached by the frame's
-   own scroll. The change then stands inside the frame's edge rather than past it. */
+   own scroll. The change then stands inside the frame's edge rather than past it. Where the
+   least would leave the table a sliver past its frame, the headings give it (`ChartTable`). */
 .spending-table[data-headings='two'] .chart-heading[data-numeric='true'] {
-  min-inline-size: 7em;
+  min-inline-size: calc(7em - var(--chart-table-give, 0px));
   white-space: normal;
 }
 </style>
