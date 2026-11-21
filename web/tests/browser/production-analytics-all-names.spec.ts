@@ -132,10 +132,19 @@ for (const width of [1440, 1024])
     expectOneBaseline(short, 'the short row')
 
     // The hint says the long name whole, laid over its lines; the short one, whole on screen, has
-    // none. Either surface a hint is drawn on counts.
+    // none. Either surface a hint is drawn on counts. The long name's whole words keep its column
+    // and run on down over the rows under it, holding up while the pointer is within them, so
+    // the pointer leaves them before it comes to the short name.
     const hint = page.locator('[data-hint-surface]')
     await table.getByRole('link', { name: LONG_NAME }).hover()
     await expect(hint).toHaveText(LONG_NAME)
+    const laid = (await hint.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 }
+    const shortBox = (await table.getByRole('link', { name: SHORT_NAME }).boundingBox()) ?? laid
+    expect(shortBox.y + shortBox.height / 2, 'the short name under the long one').toBeLessThan(
+      laid.y + laid.height,
+    )
+    await page.mouse.move(width - 2, 898)
+    await expect(hint).toHaveCount(0)
     await table.getByRole('link', { name: SHORT_NAME }).hover()
     await expect(hint).toHaveCount(0)
 

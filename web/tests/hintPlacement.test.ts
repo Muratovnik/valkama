@@ -82,10 +82,12 @@ test('a first letter past the room leaves the whole words no width rather than a
   assert.equal(laid.widest, 0)
 })
 
-test('over a text clamped to its lines the whole words are at least as large as those lines', () => {
+test('over a text clamped to its lines the whole words keep its column and are at least as high', () => {
   // A clamp of two lines 20px high, 150px wide, its first letter 3px down its first line; the
   // whole words' own letter stands 4px in and 4px down their box, so the box starts 1px over the
-  // lines and reaches 1px past them.
+  // lines and reaches 1px past them. It is as wide as the clamp and wraps there, however much
+  // room the window has on the right: run on to 8px short of the edge, 1332px, the words lay on
+  // one line over an empty frame as high as the clamp.
   const lines = { left: 100, right: 250, top: 50, bottom: 90 }
   assert.deepEqual(
     placeWhole({
@@ -95,19 +97,18 @@ test('over a text clamped to its lines the whole words are at least as large as 
       scale: 1,
       window: 1440,
     }),
-    { left: 100, top: 49, widest: 1332, least: { block: 42, inline: 150 } },
+    { left: 100, top: 49, widest: 150, least: { block: 42, inline: 150 } },
   )
   // Drawn at half size, they take as large a room in their own type.
-  assert.deepEqual(
-    placeWhole({
-      inset: { left: 2, top: 2 },
-      letter: { left: 102, top: 51.5 },
-      lines,
-      scale: 0.5,
-      window: 1440,
-    }).least,
-    { block: 82, inline: 300 },
-  )
+  const half = placeWhole({
+    inset: { left: 2, top: 2 },
+    letter: { left: 102, top: 51.5 },
+    lines,
+    scale: 0.5,
+    window: 1440,
+  })
+  assert.deepEqual(half.least, { block: 82, inline: 300 })
+  assert.equal(half.widest, 300)
   // Never wider than the room to the window's edge.
   const atEdge = placeWhole({
     inset: { left: 0, top: 0 },
@@ -117,6 +118,27 @@ test('over a text clamped to its lines the whole words are at least as large as 
     window: 1440,
   })
   assert.equal(atEdge.least?.inline, atEdge.widest)
+  assert.equal(atEdge.widest, 32)
+})
+
+test('whole words drawn taller than the window leaves under them stand higher, inside it', () => {
+  const laid = { inset: { left: 4, top: 4 }, letter: { left: 104, top: 704 }, scale: 1 }
+  const lines = { left: 100, right: 250, top: 700, bottom: 760 }
+  // 300px high, laid at 700 in a window 900px high: raised until its bottom is 8px short of 892.
+  const raised = placeWhole({ ...laid, lines, tall: { drawn: 300, window: 900 }, window: 1440 })
+  assert.equal(raised.top, 592)
+  // Raised, it still covers the clamp's lines, as high as laid where it was.
+  assert.equal(raised.least?.block, 60)
+  // 150px high, it fits under 700 and stays where its first letter is on the cut one.
+  assert.equal(
+    placeWhole({ ...laid, lines, tall: { drawn: 150, window: 900 }, window: 1440 }).top,
+    700,
+  )
+  // Taller than the window, its top stands 8px under the window's.
+  assert.equal(placeWhole({ ...laid, tall: { drawn: 1000, window: 900 }, window: 1440 }).top, 8)
+  // A text laid nearer the top than that is never pushed down.
+  const high = { ...laid, letter: { left: 104, top: 6 } }
+  assert.equal(placeWhole({ ...high, tall: { drawn: 1000, window: 900 }, window: 1440 }).top, 2)
 })
 
 test('out of a list the room beside an element does not move a hint', () => {
