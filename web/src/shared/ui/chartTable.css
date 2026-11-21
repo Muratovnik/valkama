@@ -15,6 +15,10 @@
    table: placed against the panel instead, the comma before a quota share's remark, in a table
    scrolled past its frame, stood 150px past the panel at 390px and scrolled the panel sideways. */
 .chart-table-frame {
+  /* What the headings over figures give from their floor; the frame sets it as it measures
+     (`chartTableGive.ts`), and a frame inside another starts from none. */
+  --chart-table-give: 0px;
+
   position: relative;
   max-width: 100%;
   overflow-x: auto;
