@@ -878,6 +878,12 @@ class PlatformHTTPServer(ThreadingHTTPServer):
     # sharing it, and a listener that closed can still be rebound at once.
     allow_reuse_address = os.name != "nt"
 
+    # The listen queue, the same as the port `on_demand` holds before this module
+    # loads. socketserver's own default was five until Python 3.15: a burst of page
+    # loads faster than the accept loop was turned away, and a browser reports that
+    # as a refused connection.
+    request_queue_size = socket.SOMAXCONN
+
     def __init__(
         self,
         server_address: tuple[str, int],

@@ -171,7 +171,7 @@ def _bind(port: int) -> socket.socket:
         if os.name != "nt":
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listener.bind(("127.0.0.1", port))
-        listener.listen(128)
+        listener.listen(socket.SOMAXCONN)
     except OSError:
         listener.close()
         raise

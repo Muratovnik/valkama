@@ -3,6 +3,7 @@ from __future__ import annotations
 import http.client
 import io
 import json
+import socket
 import tempfile
 import threading
 import unittest
@@ -10,7 +11,7 @@ from email.message import Message
 from pathlib import Path
 from unittest import mock
 
-from server import http_security, http_surface
+from server import http_security, http_surface, on_demand
 
 
 def headers(**values: str) -> Message:
@@ -223,6 +224,38 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
                 token_path=Path(self._temporary.name) / "second-token",
             )
             second.server_close()
+
+    def test_a_burst_of_connections_waits_for_accept_instead_of_being_turned_away(self) -> None:
+        # A server binding its own port listened with socketserver's backlog of five:
+        # a burst of page loads that came faster than the accept loop took them was
+        # turned away, which a browser reports as a refused connection. The port the
+        # on-demand listener holds already listened with the larger backlog.
+        server = http_surface.PlatformHTTPServer(
+            ("127.0.0.1", 0),
+            http_surface.Handler,
+            token_path=Path(self._temporary.name) / "burst-token",
+        )
+        self.addCleanup(server.server_close)
+        clients: list[socket.socket] = []
+        self.addCleanup(lambda: [client.close() for client in clients])
+        # Nothing accepts: every connect has to wait in the listen queue.
+        for _ in range(40):
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            clients.append(client)
+            client.settimeout(2)
+            client.connect(("127.0.0.1", server.server_port))
+
+    def test_both_listeners_queue_as_many_connections(self) -> None:
+        listened: list[int] = []
+
+        class Recording(socket.socket):
+            def listen(self, backlog: int = 0) -> None:
+                listened.append(backlog)
+                super().listen(backlog)
+
+        with mock.patch.object(on_demand.socket, "socket", Recording):
+            on_demand._bind(0).close()
+        self.assertEqual([http_surface.PlatformHTTPServer.request_queue_size], listened)
 
     def test_a_closed_listener_port_can_be_bound_again_at_once(self) -> None:
         # The restart path stops one server and starts the next on the same
