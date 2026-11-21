@@ -311,6 +311,102 @@ class SkillOnCodexTests(unittest.TestCase):
         self.assertEqual(agent_probes_judge.PASSED, agent_probes_judge._verdict(results))
 
 
+class CodexSubagentTests(unittest.TestCase):
+    """Codex's subagents are counted from the store's rows and their reports read from their transcripts.
+
+    Codex 0.166 writes no `spawn_agent` item to its output and its `wait` names no
+    receiver and no message, so a session that delegated read as one with none.
+    """
+
+    def judged(self, children: set[str], kept: dict[str, list[dict[str, Any]]]) -> list[Any]:
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            wait = {
+                "type": "collab_tool_call",
+                "tool": "wait",
+                "sender_thread_id": "t-1",
+                "receiver_thread_ids": [],
+                "agents_states": {},
+                "status": "completed",
+            }
+            lines = [
+                {"type": "thread.started", "thread_id": "t-1"},
+                {"type": "item.completed", "item": wait},
+                {"type": "item.completed", "item": {"type": "agent_message", "text": "Done."}},
+            ]
+            (folder / "turn-1.jsonl").write_text(
+                "".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8"
+            )
+            for name, rollout in kept.items():
+                path = folder / agent_probes.SUBAGENT_TRANSCRIPTS / f"{name}.jsonl"
+                path.parent.mkdir(exist_ok=True)
+                path.write_text(
+                    "".join(json.dumps(line) + "\n" for line in rollout), encoding="utf-8"
+                )
+            session = {
+                "client": "codex",
+                "session_id": "t-1",
+                "turns": [{"output": "turn-1.jsonl"}],
+            }
+            record = agent_probes_judge.Record(folder, session)
+            view = agent_probes_judge.View(
+                record=record,
+                scenario=None,  # type: ignore[arg-type]
+                transcript=agent_probes_judge.read_transcript(record),
+                names={},
+                store=None,
+                boundary=agent_probes_judge._parse_time("2026-01-01T00:00:00Z"),  # type: ignore[arg-type]
+                children=children,
+                work=folder,
+            )
+            checks = [
+                {"check": "subagents", "count": {"min": 2}},
+                {"check": "subagent_reports", "count": 2, "each": [{"matches": "parse_percent"}]},
+            ]
+            return [agent_probes_judge.evaluate(view, check) for check in checks]
+
+    @staticmethod
+    def said(text: str) -> dict[str, Any]:
+        content = [{"type": "output_text", "text": text}]
+        return {
+            "type": "response_item",
+            "payload": {"type": "message", "role": "assistant", "content": content},
+        }
+
+    @staticmethod
+    def ended(text: str) -> dict[str, Any]:
+        return {
+            "type": "event_msg",
+            "payload": {"type": "task_complete", "last_agent_message": text},
+        }
+
+    def test_each_child_counts_and_hands_back_the_message_its_turn_ended_with(self) -> None:
+        launched, reports = self.judged(
+            {"t-1:c-1", "t-1:c-2"},
+            {
+                "c-1": [self.said("Working."), self.ended("Report: parse_percent has no test.")],
+                # A transcript cut before its turn's end: the last message it wrote.
+                "c-2": [self.said("Working."), self.said("Report: parse_percent untested.")],
+            },
+        )
+
+        self.assertEqual((PASSED, "2 launched"), (launched.result, launched.evidence))
+        self.assertEqual(PASSED, reports.result, reports.evidence)
+
+    def test_without_the_children_s_transcripts_there_is_no_report(self) -> None:
+        launched, reports = self.judged({"t-1:c-1", "t-1:c-2"}, {})
+
+        self.assertEqual(PASSED, launched.result)
+        self.assertEqual(
+            (FAILED, "0 report(s); not meeting each: []"), (reports.result, reports.evidence)
+        )
+
+    def test_a_session_without_children_launched_none(self) -> None:
+        launched, _reports = self.judged(set(), {})
+
+        self.assertEqual((FAILED, "0 launched"), (launched.result, launched.evidence))
+
+
 class FinalReplyTests(unittest.TestCase):
     """The answer is the whole final reply: the main agent's texts after its last tool call.
 

@@ -1255,6 +1255,64 @@ class StoreCopyRegistryTests(unittest.TestCase):
             self.assertEqual(caller / "gitconfig", prepared["git_config"])
 
 
+class SubagentTranscriptTests(unittest.TestCase):
+    """A session's subagents' transcripts are kept beside its record, and only from the run's home.
+
+    Codex's output names no subagent it starts and none of its messages; the
+    store's session rows name each child and its transcript, and the next run
+    clears the home those transcripts live in.
+    """
+
+    def test_the_children_of_the_session_are_kept_and_no_file_outside_the_home(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            base = Path(name)
+            home, outside, into = base / "home", base / "user", base / "record" / "subagents"
+            files = {
+                "child": home / ".codex" / "sessions" / "rollout-child.jsonl",
+                "users": outside / "rollout-users.jsonl",
+                "other": home / ".codex" / "sessions" / "rollout-other.jsonl",
+            }
+            for label, path in files.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(f'{{"from": "{label}"}}\n', encoding="utf-8")
+            store = base / "store.sqlite3"
+            with contextlib.closing(sqlite3.connect(store)) as conn:
+                conn.execute(
+                    "CREATE TABLE sessions (id TEXT, parent_session_id TEXT, agent_id TEXT,"
+                    " transcript_path TEXT, started_at TEXT)"
+                )
+                rows = [
+                    ("main", None, None, str(home / "main.jsonl"), "1"),
+                    ("main:c-1", "main", "c-1", str(files["child"]), "2"),
+                    ("main:c-2", "main", "c-2", str(files["users"]), "3"),
+                    ("main:c-3", "main", "c-3", str(home / "gone.jsonl"), "4"),
+                    ("else:c-4", "else", "c-4", str(files["other"]), "5"),
+                ]
+                conn.executemany("INSERT INTO sessions VALUES (?, ?, ?, ?, ?)", rows)
+                conn.commit()
+
+            kept = agent_probes.keep_subagent_transcripts(store, "main", home, into)
+
+            self.assertEqual(["c-1.jsonl"], kept)
+            self.assertEqual(["c-1.jsonl"], sorted(path.name for path in into.iterdir()))
+            self.assertIn('"child"', (into / "c-1.jsonl").read_text(encoding="utf-8"))
+
+    def test_a_session_without_subagents_keeps_no_directory(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            base = Path(name)
+            store = base / "store.sqlite3"
+            with contextlib.closing(sqlite3.connect(store)) as conn:
+                conn.execute(
+                    "CREATE TABLE sessions (id TEXT, parent_session_id TEXT, agent_id TEXT,"
+                    " transcript_path TEXT, started_at TEXT)"
+                )
+
+            kept = agent_probes.keep_subagent_transcripts(store, "main", base, base / "subagents")
+
+            self.assertEqual([], kept)
+            self.assertFalse((base / "subagents").exists())
+
+
 class CodexSkillConfigTests(unittest.TestCase):
     """The user's skills stay off, or the run is refused, whatever the user's own configuration."""
 

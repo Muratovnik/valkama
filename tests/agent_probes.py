@@ -181,6 +181,8 @@ CODEX_DIR = ".codex"
 WORK_DIR = ".probes"
 #: Where a session's record keeps the profile's project registry as the session left it.
 REGISTRY_COPY = "registry"
+#: Where a session's record keeps the transcripts of its subagents, one file each.
+SUBAGENT_TRANSCRIPTS = "subagents"
 
 #: The hooks the commit pickup needs beyond what the user registered: event,
 #: matcher and the `valkama hook` event, per client.
@@ -1498,6 +1500,38 @@ def foreign_transcripts(store_file: Path, after: int, home: Path) -> list[str]:
     )
 
 
+def keep_subagent_transcripts(store_file: Path, main: str, home: Path, into: Path) -> list[str]:
+    """Copy the transcripts of a session's subagents into `into`, one file per subagent.
+
+    Codex's output names no subagent it starts and carries none of its messages:
+    only the store's session rows name each child, and its transcript in the
+    profile's home holds its report. The home is cleared by the next run, so the
+    copy is the record. A file outside the home is never read: it is the user's.
+    Answers the names of the copies.
+    """
+
+    uri = f"{store_file.resolve().as_uri()}?mode=ro"
+    own = os.path.normcase(os.path.abspath(home)) + os.sep
+    with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
+        rows = conn.execute(
+            "SELECT id, agent_id, transcript_path FROM sessions"
+            " WHERE parent_session_id = ? ORDER BY started_at, id",
+            (main,),
+        ).fetchall()
+    kept = []
+    for identifier, agent, path in rows:
+        source = Path(path or "")
+        if not path or not os.path.normcase(os.path.abspath(source)).startswith(own):
+            continue
+        if not source.is_file():
+            continue
+        name = re.sub(r"[^\w.-]", "_", str(agent or identifier)) + ".jsonl"
+        into.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, into / name)
+        kept.append(name)
+    return kept
+
+
 class SessionRunner:
     """One scenario on one client, from its server's start to the copy of its store."""
 
@@ -1802,10 +1836,12 @@ class SessionRunner:
             )
 
     def _keep_store(self) -> None:
-        """The session's store, spool and project registry, kept beside its record.
+        """The session's store, spool, project registry and subagents' transcripts, kept beside its record.
 
         The registry is kept because the next scenario empties it, and a check
-        reads the projects this session registered.
+        reads the projects this session registered; the transcripts because the
+        next run empties the home, and the judge reads a Codex subagent's report
+        from its own.
         """
 
         if not self.store_file.is_file():
@@ -1822,6 +1858,16 @@ class SessionRunner:
         for path in self.profile.registry.glob("*"):
             if path.is_file():
                 shutil.copy2(path, kept / path.name)
+        if self.record.session_id is not None:
+            try:
+                keep_subagent_transcripts(
+                    self.directory / "store.sqlite3",
+                    self.record.session_id,
+                    self.profile.home,
+                    self.directory / SUBAGENT_TRANSCRIPTS,
+                )
+            except (OSError, sqlite3.Error) as error:
+                self.record.fail("record", f"the subagents' transcripts were not kept: {error}")
 
 
 # --- the user's files -------------------------------------------------------------------

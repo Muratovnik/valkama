@@ -462,6 +462,42 @@ def _codex(record: Record, transcript: Transcript) -> None:
                 reply = []
             _codex_item(transcript, item)
         transcript.answer = _final_reply(reply, None)
+    if not transcript.reports:
+        kept = record.directory / probes.SUBAGENT_TRANSCRIPTS
+        for path in sorted(kept.glob("*.jsonl")):
+            report = _codex_child_report(path)
+            if report is not None:
+                transcript.reports.append(report)
+
+
+def _codex_child_report(path: Path) -> str | None:
+    """A Codex subagent's report: the last message its own transcript says it ended a turn with.
+
+    Codex's output names neither the subagents it starts nor what they hand
+    back, so the run keeps each one's transcript; a turn's end there carries
+    its last message, and without one the last message the subagent wrote is
+    its report.
+    """
+
+    ended: str | None = None
+    written: str | None = None
+    for raw in path.read_bytes().splitlines():
+        with contextlib.suppress(ValueError):
+            line = json.loads(raw)
+            payload = line.get("payload") if isinstance(line, dict) else None
+            if not isinstance(payload, Mapping):
+                continue
+            message = payload.get("last_agent_message")
+            if payload.get("type") == "task_complete" and isinstance(message, str):
+                ended = message
+            if payload.get("type") == "message" and payload.get("role") == "assistant":
+                text = "".join(
+                    str(part.get("text") or "")
+                    for part in payload.get("content") or ()
+                    if isinstance(part, Mapping) and part.get("type") == "output_text"
+                )
+                written = text or written
+    return ended if ended is not None else written
 
 
 def _codex_item(transcript: Transcript, item: Mapping[str, Any]) -> None:
@@ -1110,6 +1146,9 @@ def _check_skill_loaded(view: View, check: Mapping[str, Any]) -> Outcome:
 
 def _check_subagents(view: View, check: Mapping[str, Any]) -> Outcome:
     found = view.transcript.subagents
+    if not found and view.record.session["client"] == "codex":
+        # Codex's output names no subagent it starts; the store's session rows do.
+        found = sorted(view.children)
     passed = _counted(found, check, {"min": 1})
     return Outcome(PASSED if passed else FAILED, f"{len(found)} launched")
 
