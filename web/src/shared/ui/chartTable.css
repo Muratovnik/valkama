@@ -45,9 +45,10 @@
 }
 
 /* A series named at length, a task by its title, wraps over its figures instead of widening
-   the table by its whole name; its figures still keep to one line. */
+   the table by its whole name; its figures still keep to one line. Where the floors would leave
+   the table a sliver past its frame, the headings at theirs give it (`chartTableGive.ts`). */
 .chart-heading[data-numeric='true'] {
-  min-inline-size: 8em;
+  min-inline-size: calc(8em - var(--chart-table-give, 0px));
   white-space: normal;
 }
 
