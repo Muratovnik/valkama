@@ -91,25 +91,30 @@ function inRow(boxes: readonly DOMRect[]): boolean {
   )
 }
 
-/** What makes the content reach `right`: a table, a row of like items, or something else. */
-function makerOf(scroller: Element, right: number): ScrollMaker {
+/**
+ * What makes the content of `node` as wide as it is: a table, a row of like items in the flow, or
+ * something else, found down the children that reach farthest. Where several reach as far, as a
+ * period plot's field and its row of period labels do, the first that is a table or a row makes
+ * it; a child out of the flow is followed too, as a plot's columns drawn over its field are.
+ * The search looks at `budget` boxes at most, since ties branch it.
+ */
+function makerOf(node: Element, budget = { left: 200 }): ScrollMaker {
   const help = window.sweepHelpers
-  let node: Element = scroller
-  for (let depth = 0; depth < 12; depth += 1) {
-    if (node instanceof HTMLTableElement) {
-      const cells = [...(node.rows[0]?.cells ?? [])].map(
-        (cell) => cell.getBoundingClientRect().width,
-      )
-      return { kind: 'table', unit: Math.min(...cells.filter((width) => width > 1)) }
-    }
-    const children = [...node.children].filter(
-      (child) => !help.outOfFlow(child) && child.getBoundingClientRect().width > 0,
-    )
-    const boxes = children.map((child) => child.getBoundingClientRect())
-    if (help.inRow(boxes)) return { kind: 'row', unit: Math.min(...boxes.map((one) => one.width)) }
-    const reaching = children.filter((child) => child.getBoundingClientRect().right >= right - 1)
-    if (reaching.length !== 1) break
-    node = reaching[0]
+  budget.left -= 1
+  if (node instanceof HTMLTableElement) {
+    const cells = [...(node.rows[0]?.cells ?? [])].map((cell) => cell.getBoundingClientRect().width)
+    return { kind: 'table', unit: Math.min(...cells.filter((width) => width > 1)) }
+  }
+  const drawn = [...node.children].filter((child) => child.getBoundingClientRect().width > 0)
+  const boxes = drawn
+    .filter((child) => !help.outOfFlow(child))
+    .map((child) => child.getBoundingClientRect())
+  if (help.inRow(boxes)) return { kind: 'row', unit: Math.min(...boxes.map((one) => one.width)) }
+  if (budget.left <= 0 || !drawn.length) return { kind: 'other', unit: 0 }
+  const farthest = Math.max(...drawn.map((child) => child.getBoundingClientRect().right))
+  for (const child of drawn.filter((one) => one.getBoundingClientRect().right >= farthest - 1)) {
+    const maker = help.makerOf(child, budget)
+    if (maker.kind !== 'other') return maker
   }
   return { kind: 'other', unit: 0 }
 }
@@ -140,7 +145,7 @@ function overflowOf(scroller: Element, scope: string | null): Overflowing | null
       reach: Math.round(one.getBoundingClientRect().right - start),
     })),
     inScope: !scope || Boolean(scroller.closest(scope)) || loose.some((one) => one.closest(scope)),
-    maker: help.makerOf(scroller, start + inflow),
+    maker: help.makerOf(scroller),
     path: help.path(scroller),
     owner: help.owner(scroller),
   }

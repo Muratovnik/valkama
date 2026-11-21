@@ -89,8 +89,8 @@ async function overflowMisses(page: Page, state: StateName, scope: string | null
   for (const box of await readOverflow(page, scope)) {
     const miss = scrollMiss(box)
     if (!miss || !box.inScope) continue
-    // Out-of-flow content belongs to the component that put it there, not to the box it widens.
-    const cause = miss.rule === 'out-of-flow' ? box.escapees[0] : undefined
+    // What widens a box out of the flow belongs to the component that put it there, not the box.
+    const cause = miss.rule === 'sliver' || miss.rule === 'not-a-row' ? undefined : box.escapees[0]
     misses.push({
       class: 'overflow',
       rule: miss.rule,

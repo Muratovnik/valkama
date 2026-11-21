@@ -43,14 +43,14 @@ const PATIENCE = 1200
 /** Where the pointer of each page stands, as the sweep last put it. */
 const pointers = new WeakMap<Page, Point>()
 
-/** `count` of `all`, spread evenly from the first to the last. */
+/** `count` of `all`, spread evenly from the first to the last; one is the middle one. */
 function spread<T>(all: readonly T[], count: number): T[] {
-  return all.length <= count
-    ? [...all]
-    : Array.from(
-        { length: count },
-        (_, index) => all[Math.round((index * (all.length - 1)) / (count - 1))],
-      )
+  if (all.length <= count) return [...all]
+  if (count < 2) return all.slice(0, count).map(() => all[Math.floor(all.length / 2)])
+  return Array.from(
+    { length: count },
+    (_, index) => all[Math.round((index * (all.length - 1)) / (count - 1))],
+  )
 }
 
 /** The marks to point at: of each sort, `perSort` spread along it. */
