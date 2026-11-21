@@ -17,7 +17,7 @@
     "check:ui-system": "node scripts/check-ui-system.mjs",
     "check:tokens": "node scripts/sync-tokens.mjs --check",
     "tokens:sync": "node scripts/sync-tokens.mjs",
-    "test:unit": "vitest run --config vitest.config.ts",
+    "test:unit": "node tests/unitRun.ts",
     "test:browser": "playwright test",
     "test:browser:allowed": "node tests/browser/allowedRun.ts",
     "typecheck": "vue-tsc --build",

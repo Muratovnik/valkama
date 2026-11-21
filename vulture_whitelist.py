@@ -23,6 +23,8 @@ _.allow_reuse_address  # unused variable (server\http_surface.py)
 _.daemon_threads  # unused attribute (tests\test_live_stream.py)
 _.row_factory  # unused attribute (server\projects\scopes.py)
 _.row_factory  # unused attribute (server\store.py)
+# unittest's runner reads this class attribute to build the result of every run.
+_.resultclass  # unused attribute (tests\__init__.py)
 
 # Hypothesis calls these by decorator, not by name: @rule and @invariant
 # register a method on the state machine, and teardown is the framework's own
@@ -65,3 +67,6 @@ _.xml  # unused variable (server\alerts\messages.py)
 
 # A key of the `/api/alerts/status` answer: the settings page reads it over HTTP.
 _.shortcut  # unused variable (server\alerts\readiness.py)
+
+# unittest calls a package's `load_tests` by name when a run reaches the package.
+_.load_tests  # unused function (tests\__init__.py)
