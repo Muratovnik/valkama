@@ -1,6 +1,7 @@
 """One lock for the heavy test runs of every Valkama checkout on this machine.
 
     python tests/machine_lock.py run --run WHAT [--pid PID] [--path FILE] -- COMMAND ...
+    python tests/machine_lock.py holder [--path FILE]
 
 A development tool beside the tests, as `tests/isolated.py` is. Two heavy runs
 at once — the whole unittest suite under coverage, the whole browser suite, the
@@ -8,7 +9,9 @@ Vitest suite — fail timing-sensitive tests that pass alone, so the second wait
 for the first instead of running beside it. The commands take it themselves:
 the `tests` package's `load_tests` for a run of the whole suite, and
 `web/tests/unitRun.ts` and `web/tests/browser/allowedRun.ts` through the command
-above, so there is one implementation and one protocol.
+above, so there is one implementation and one protocol. A targeted run takes
+none, and when it fails it says who holds the lock as it ends, the `tests`
+package for unittest and `holder` for Vitest, so the failure reads as load.
 
 A run started by a holder is covered by its hold: whatever holds the lock marks
 the environment of what it starts with `HELD_BY_ANCESTOR`, and a run that finds
@@ -142,6 +145,27 @@ def holder(path: Path) -> str:
         return "a run that has not recorded itself yet"
 
 
+def load_note(path: Path | None = None) -> str | None:
+    """What a failed run that took no lock says: who holds the lock now, or None.
+
+    None too when this process runs under the holder, since its load is then the
+    run's own. Asking takes a free lock for an instant, so a run that starts in
+    that instant waits once for a holder that has not recorded itself.
+    """
+
+    path = path or lock_path()
+    if os.environ.get(HELD_BY_ANCESTOR) == marker(path)[HELD_BY_ANCESTOR] or not path.is_file():
+        return None
+    with path.open("a+b") as handle:
+        if store_lock.try_lock(handle):
+            store_lock.unlock(handle)
+            return None
+    return (
+        f"the heavy-test lock {path} was held as this run ended, by {holder(path)}:"
+        " a failure here may come from that load rather than from a defect"
+    )
+
+
 @contextmanager
 def held(
     run: str,
@@ -216,7 +240,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument("--pid", type=int, help="the process the run belongs to; by default this one")
     run.add_argument("--path", type=Path, help="another lock file than the machine's")
     run.add_argument("argv", nargs=argparse.REMAINDER, metavar="-- COMMAND ...")
+    asked = commands.add_parser(
+        "holder", help="say who holds the lock, for a failed run; or nothing"
+    )
+    asked.add_argument("--path", type=Path, help="another lock file than the machine's")
     options = parser.parse_args(argv)
+    if options.command == "holder":
+        note = load_note(options.path)
+        if note is not None:
+            _say(note)
+        return 0
     command = options.argv[1:] if options.argv[:1] == ["--"] else options.argv
     if not command:
         parser.error("name the command to run after --")

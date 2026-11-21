@@ -21,17 +21,31 @@ export function lockedCommand(
   command: readonly string[],
   lockFile?: string,
 ): string[] {
-  const path = lockFile === undefined ? [] : [`--path=${lockFile}`]
   return [
     python,
     lockScript,
     'run',
     `--run=${run}`,
     `--pid=${process.pid}`,
-    ...path,
+    ...pathOption(lockFile),
     '--',
     ...command,
   ]
+}
+
+/**
+ * For a failed run that took no lock: the line saying who holds the lock as it ends, which the
+ * Python side prints, or `''` when it is free, held by this run's own holder, or cannot be asked.
+ */
+export function lockHolder(lockFile?: string): string {
+  const asked = spawnSync(python, [lockScript, 'holder', ...pathOption(lockFile)], {
+    encoding: 'utf8',
+  })
+  return asked.status === 0 ? asked.stdout : ''
+}
+
+function pathOption(lockFile: string | undefined): string[] {
+  return lockFile === undefined ? [] : [`--path=${lockFile}`]
 }
 
 /**
