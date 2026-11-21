@@ -1,7 +1,7 @@
 /**
- * How wide the list is, and so which of its columns stand (`fitFor`): the widest fit whose
+ * How wide the list is, and so which of its columns stand (`levelFor`): the widest level whose
  * table the list's own box holds, not the window's, since a panel beside it takes some of
- * the window.
+ * the window. A level is a fit, or the narrowest fit with its choice of order bare.
  *
  * A fit holds where its table is no wider than the list. The table is as wide as its
  * columns need — each as wide as its widest row and its heading, a tree's first column
@@ -27,8 +27,8 @@ import type { Ref } from 'vue'
 
 import { useResizeObserver } from '@vueuse/core'
 
-import { fitFor } from '@/widgets/work-item-views/utils/listColumns.ts'
-import type { Fit } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { fitOf, levelFor } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { Level } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 /** A table this much wider than its list is a rounding of the columns, not a fit that fails. */
 const ROUNDING = 1
@@ -43,9 +43,10 @@ export function useListFit(
 ) {
   const width = ref(0)
   const measured = ref(false)
-  const fit = ref<Fit>('full')
-  /** What each fit's table needed where the list did not hold it, for the rows of `drawing`. */
-  const needs = new Map<Fit, { drawing: number; need: number }>()
+  const level = ref<Level>('full')
+  const fit = computed(() => fitOf(level.value))
+  /** What each level's table needed where the list did not hold it, for the rows of `drawing`. */
+  const needs = new Map<Level, { drawing: number; need: number }>()
   let drawing = 0
   /** Whether wider fits are tried: after a new width, language or order, not after new rows. */
   let widening = true
@@ -56,11 +57,11 @@ export function useListFit(
     if (!list || !table || !measured.value) return
     const room = list.clientWidth
     const drawn = table.getBoundingClientRect().width
-    if (drawn > room + ROUNDING) needs.set(fit.value, { drawing, need: drawn })
-    else needs.delete(fit.value)
-    const known = new Map<Fit, number>()
+    if (drawn > room + ROUNDING) needs.set(level.value, { drawing, need: drawn })
+    else needs.delete(level.value)
+    const known = new Map<Level, number>()
     for (const [each, { drawing: at, need }] of needs) if (at === drawing) known.set(each, need)
-    fit.value = fitFor(room, known, widening ? 'full' : fit.value)
+    level.value = levelFor(room, known, widening ? 'full' : level.value)
   }
 
   useResizeObserver(root, ([entry]) => {
@@ -69,7 +70,7 @@ export function useListFit(
     settle()
   })
   watch(measured, settle, { flush: 'post' })
-  watch(fit, settle, { flush: 'post' })
+  watch(level, settle, { flush: 'post' })
   onMounted(() => {
     width.value = root.value?.clientWidth ?? 0
     measured.value = true
@@ -87,6 +88,7 @@ export function useListFit(
 
   return {
     fit,
+    level,
     measured,
     narrow: computed(() => fit.value === 'narrow'),
     width,

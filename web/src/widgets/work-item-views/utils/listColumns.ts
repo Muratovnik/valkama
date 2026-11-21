@@ -97,22 +97,38 @@ export const drawnColumns = ({ goal, project }: { goal: boolean; project: boolea
     (column) => (column.key !== 'goal' || goal) && (column.key !== 'project' || project),
   )
 
-/** The fits from the one that stands every column to the one that stands the fewest. */
-export const FITS: readonly Fit[] = ['full', 'wide', 'medium', 'narrow']
+/**
+ * What a list stands, from every column to the fewest: each fit, and last the narrowest
+ * again with the title's choice of order folded to its chevron, `bare`, its name in its hint.
+ * A reference column a tree's lead and an urgent glyph widen left the title of a phone's list
+ * 136px, and «Порядок» beside the title's sort needed 158.
+ */
+export type Level = Fit | 'bare'
+
+/** The levels from the one that stands every column to the one that stands the fewest. */
+export const LEVELS: readonly Level[] = ['full', 'wide', 'medium', 'narrow', 'bare']
+
+/** The fit a level stands its columns in. */
+export const fitOf = (level: Level): Fit => (level === 'bare' ? 'narrow' : level)
 
 /**
- * The fit for a list `room` pixels wide: the widest, from `from` on, whose table the room
- * holds. `needs` is how wide each fit's table was drawn where the room did not hold it; a
- * fit it does not name is tried, and the narrowest stands whatever it needs.
+ * The level for a list `room` pixels wide: the widest, from `from` on, whose table the room
+ * holds. `needs` is how wide each level's table was drawn where the room did not hold it; a
+ * level it does not name is tried, and the last stands whatever it needs.
  *
- * A fit's need is its table's own (`useListFit.ts`): every column as wide as its widest
+ * A level's need is its table's own (`useListFit.ts`): every column as wide as its widest
  * row and its heading, the title its 36 characters and its heading on one line, a tree's
  * first column its lead. Fixed widths chose it before, set where a typical title kept 36
  * characters beside a flat list's columns: longer states, holders and dates left the title
  * of a flat list 946px wide 172px and its heading on two lines.
  */
-export function fitFor(room: number, needs: ReadonlyMap<Fit, number>, from: Fit = 'full'): Fit {
-  return FITS.slice(FITS.indexOf(from)).find((fit) => (needs.get(fit) ?? 0) <= room) ?? 'narrow'
+export function levelFor(
+  room: number,
+  needs: ReadonlyMap<Level, number>,
+  from: Level = 'full',
+): Level {
+  const tried = LEVELS.slice(LEVELS.indexOf(from))
+  return tried.find((level) => (needs.get(level) ?? 0) <= room) ?? 'bare'
 }
 
 const urgency = new Map(PRIORITIES.map((priority, index) => [priority, PRIORITIES.length - index]))

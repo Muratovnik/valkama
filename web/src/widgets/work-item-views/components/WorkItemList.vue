@@ -127,7 +127,7 @@ const columns = drawnColumns({ goal: drawsGoal, project: drawsProject })
 const root = ref<HTMLElement | null>(null)
 // The table's own width decides the fit: drawn from the rows, in a language and an order.
 const order = () => `${locale.value} ${props.sort.key} ${props.sort.descending}`
-const { fit, measured, narrow, width } = useListFit(root, { order, rows: () => rows.value })
+const { fit, level, measured, narrow, width } = useListFit(root, { order, rows: () => rows.value })
 
 const tree = useListTreeRows({
   items: () => props.items,
@@ -267,7 +267,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
         <WorkItemListHead
           :columns="shownColumns"
           :folded="foldedColumns"
-          :fit="fit"
+          :level="level"
           :sort="props.sort"
           @sort="emit('sort', $event)"
         />

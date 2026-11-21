@@ -1740,8 +1740,12 @@ choice in the title's heading, in the heading's font, and an order's name is nev
 head folds before it wraps: as a run of buttons after the title's sort those five took three
 lines of a phone's head, and a second line of the head at 1024px once «Steps» became
 «Conditions». The two that fold first, «Goal and stage» and «Project», stay a run. A heading
-holds one line in every fit but the narrowest, which no other gives way to; there the longest
-order takes a line of its own under the title's sort.
+holds one line. Where even the narrowest fit's does not, the list stands that fit once more
+with the choice bare: its chevron alone, the words it shows otherwise still the value
+assistive technology reads and its hint's name. A tree's lead and an urgent glyph widened the
+reference column of a phone's list until the title kept 136px, and «Порядок» beside the
+title's sort needed 158, so the choice took a second line of the head. Only a title too narrow
+even for the bare choice lets its heading wrap, since that level gives way to none.
 Cards do not reserve empty tag or source regions.
 A board tile prints exceptions, not defaults. Its first line is a kind glyph
 when the item is not a plain task, the reference, a priority glyph when the
@@ -1919,8 +1923,9 @@ its own box holds. A fit's table is as wide as its columns need: each as wide as
 row and its heading, the first column of a tree with its lead, the arrow and the indent of
 its deepest row, and the title 36 characters with its heading on one line. A fit that needs
 more pushes the table past the list and gives way to the next within the frame, so a reader
-sees only the one that holds; the narrowest gives way to none, and its title keeps 16
-characters and what the reference leaves. Fixed widths decided before, 1100 and 1270 for
+sees only the one that holds. The narrowest keeps the title 16 characters and what the
+reference leaves, and gives way only to itself with its choice of order bare, as the head
+says above. Fixed widths decided before, 1100 and 1270 for
 every column, 920 for all but two and 560 for more than the reference and the title, set
 where a typical title kept its 36 characters beside a flat list's first column: a
 migrated store's longer states, holders and dates left a flat list of a 1280px window its

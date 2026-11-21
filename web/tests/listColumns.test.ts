@@ -9,14 +9,15 @@ import { describe, expect, it } from 'vitest'
 
 import {
   drawnColumns,
-  fitFor,
-  FITS,
+  fitOf,
   isFolded,
+  levelFor,
+  LEVELS,
   LIST_COLUMNS,
   sortedRows,
   sortsChosen,
 } from '@/widgets/work-item-views/utils/listColumns.ts'
-import type { Fit } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { Fit, Level } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import { boardItem } from './fixtures/board.ts'
 
@@ -60,39 +61,61 @@ describe('the list columns as the list narrows', () => {
 
   it('offer the folded sorts as one choice wherever the state, the priority and the holder fold', () => {
     // A run of five sorts after the title's took a second line of the head; of two it holds one.
-    expect(FITS.map((fit) => sortsChosen(fit))).toEqual([false, false, true, true])
+    expect(LEVELS.map((level) => sortsChosen(fitOf(level)))).toEqual([
+      false,
+      false,
+      true,
+      true,
+      true,
+    ])
   })
 })
 
-describe('the fit a list stands', () => {
-  // What each fit's table needed where it was drawn past the list.
-  const needs = new Map<Fit, number>([
+describe('the level a list stands', () => {
+  // What each level's table needed where it was drawn past the list.
+  const needs = new Map<Level, number>([
     ['full', 1260],
     ['wide', 1076],
     ['medium', 650],
   ])
 
   it('is the widest whose table the list holds', () => {
-    expect(fitFor(1260, needs)).toBe('full')
-    expect(fitFor(1259, needs)).toBe('wide')
-    expect(fitFor(1076, needs)).toBe('wide')
-    expect(fitFor(1075, needs)).toBe('medium')
-    expect(fitFor(649, needs)).toBe('narrow')
+    expect(levelFor(1260, needs)).toBe('full')
+    expect(levelFor(1259, needs)).toBe('wide')
+    expect(levelFor(1076, needs)).toBe('wide')
+    expect(levelFor(1075, needs)).toBe('medium')
+    expect(levelFor(649, needs)).toBe('narrow')
   })
 
-  it('tries a fit whose need is not known, the widest first', () => {
-    expect(fitFor(300, new Map())).toBe('full')
-    expect(fitFor(1100, new Map([['full', 1260]]))).toBe('wide')
+  it('tries a level whose need is not known, the widest first', () => {
+    expect(levelFor(300, new Map())).toBe('full')
+    expect(levelFor(1100, new Map([['full', 1260]]))).toBe('wide')
   })
 
-  it('is the narrowest wherever no wider one holds, whatever it needs', () => {
-    expect(fitFor(200, new Map([...needs, ['narrow', 274]]))).toBe('narrow')
+  it('bares the choice of order only where even the narrowest fit does not hold', () => {
+    const phone = new Map([...needs, ['narrow', 314]] as const)
+    expect(levelFor(314, phone)).toBe('narrow')
+    expect(levelFor(292, phone)).toBe('bare')
   })
 
-  it('stands no fit wider than the one it is told to start from', () => {
+  it('is the last wherever no wider one holds, whatever it needs', () => {
+    expect(levelFor(200, new Map([...needs, ['narrow', 274], ['bare', 240]]))).toBe('bare')
+  })
+
+  it('stands no level wider than the one it is told to start from', () => {
     // New rows only give way: the list stays medium though the wide fit is not known.
-    expect(fitFor(1200, new Map(), 'medium')).toBe('medium')
-    expect(fitFor(600, needs, 'medium')).toBe('narrow')
+    expect(levelFor(1200, new Map(), 'medium')).toBe('medium')
+    expect(levelFor(600, needs, 'medium')).toBe('narrow')
+  })
+
+  it('stands a bare level in the narrowest fit', () => {
+    expect(LEVELS.map((level) => fitOf(level))).toEqual<Fit[]>([
+      'full',
+      'wide',
+      'medium',
+      'narrow',
+      'narrow',
+    ])
   })
 })
 
