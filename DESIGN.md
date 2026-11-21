@@ -2745,6 +2745,9 @@ quota — «Five hours» and «Week» — and one for each dimension of the read
 organization, project, task, executor, role, launch class, model, effort and environment.
 «Account» is the subscription account the work was spent on (`seat`), «Organization» the
 organization it was billed to; an old link's `account` filter still filters by organization.
+«Executor» lists the sessions of agents that did the work; planning calls a session by the same
+word, so the name stays and its section's «ⓘ» says first what it means, «An executor is the
+agent session that did the work.», before the caveats every dimension's «ⓘ» says.
 An account is said by the name the owner gave it, and one known by its UUID by the name its
 weekly reset was given before; else by its organization's name, or the start of its id, with
 what tells it apart: the start of its UUID, or when its week resets in the reader's time for

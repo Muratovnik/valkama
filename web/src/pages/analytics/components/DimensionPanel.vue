@@ -105,7 +105,7 @@ const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_
 const before = computed(() => tileFigures(props.usage).before)
 /** The section's heading and the caveats its «ⓘ» says. */
 const title = computed(() => words.dimension(by.value))
-const about = computed(() => caveats.spending(props.usage))
+const about = computed(() => caveats.dimension(by.value, props.usage))
 
 /** The second dimension, where it is another than the section's own. */
 const across = computed(() => (props.across && props.across !== by.value ? props.across : null))
