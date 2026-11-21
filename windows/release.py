@@ -13,6 +13,9 @@ sources no longer build. The copy is removed when check ends, without entering a
 link inside it. The checkout's own `node_modules`, a directory or a link, is not
 read or changed.
 The desktop installer is a window for the source service, not a bundled server.
+The source archive has no Git history, so build writes into it the commit Release
+Kit names and the digest of every file (`server/source_archive.py`), which is what
+lets `launcher install` pin an unpacked archive; smoke checks that record.
 
 Release Kit runs every command here with its own interpreter as `{python}`, so
 `check` takes its Python tools from that interpreter's environment and nowhere
@@ -552,18 +555,38 @@ def fetch_price_list() -> Mapping[str, object]:
     return document
 
 
-def price_table() -> ModuleType:
-    """The server's price table, loaded from its file as the server prices with it."""
+def server_module(name: str, *parts: str) -> ModuleType | None:
+    """A standard-library-only server module, loaded from its file.
 
-    spec = importlib.util.spec_from_file_location(
-        "valkama_usage_prices", ROOT / "server" / "telemetry" / "usage_prices.py"
-    )
+    This script runs with `windows/` on its path and not the server package, so
+    the server's own code for a question is loaded where it lies.
+    """
+
+    spec = importlib.util.spec_from_file_location(name, ROOT.joinpath("server", *parts))
     if spec is None or spec.loader is None:
-        raise PriceCheckError("release check: the server's price table cannot be loaded")
+        return None
     module = importlib.util.module_from_spec(spec)
     # A dataclass resolves its annotations through the module's sys.modules entry.
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    return module
+
+
+def price_table() -> ModuleType:
+    """The server's price table, loaded from its file as the server prices with it."""
+
+    module = server_module("valkama_usage_prices", "telemetry", "usage_prices.py")
+    if module is None:
+        raise PriceCheckError("release check: the server's price table cannot be loaded")
+    return module
+
+
+def source_archive() -> ModuleType:
+    """The record format `launcher install` reads an unpacked source archive by."""
+
+    module = server_module("valkama_source_archive", "source_archive.py")
+    if module is None:
+        raise RuntimeError("the server's source archive record cannot be loaded")
     return module
 
 
@@ -680,7 +703,42 @@ def source_files() -> list[Path]:
     return files
 
 
-def build(assets: Path, expected: str, work_dir: Path) -> None:
+def write_source_archive(
+    target: Path, root: Path, files: list[Path], commit: str, version: str
+) -> None:
+    """Write `files` of `root` as the source archive, with the record that installs it.
+
+    The archive has no Git history, so the record names the commit it was built
+    from and the digest of each file it holds; `launcher install` run in the
+    unpacked directory checks those and pins that commit.
+    """
+
+    record = source_archive()
+    digests: dict[str, str] = {}
+
+    def entry(name: str) -> zipfile.ZipInfo:
+        item = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+        item.compress_type = zipfile.ZIP_DEFLATED
+        item.external_attr = 0o644 << 16
+        return item
+
+    try:
+        with zipfile.ZipFile(
+            target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+        ) as archive:
+            for path in files:
+                relative = path.relative_to(root).as_posix()
+                data = path.read_bytes()
+                digests[relative] = hashlib.sha256(data).hexdigest()
+                archive.writestr(entry(relative), data)
+            archive.writestr(entry(record.RECORD), record.record(commit, version, digests))
+    except BaseException:
+        # A half-written archive is not an asset.
+        target.unlink(missing_ok=True)
+        raise
+
+
+def build(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
     require_version(expected)
     if sys.platform != "win32":
         raise RuntimeError("Windows NSIS build requires Windows")
@@ -688,13 +746,7 @@ def build(assets: Path, expected: str, work_dir: Path) -> None:
         raise ValueError("release asset directory must be empty")
     assets.mkdir(parents=True, exist_ok=True)
     source = assets / f"valkama-{expected}-source.zip"
-    with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for path in source_files():
-            relative = path.relative_to(ROOT).as_posix()
-            item = zipfile.ZipInfo(relative, date_time=(2026, 1, 1, 0, 0, 0))
-            item.compress_type = zipfile.ZIP_DEFLATED
-            item.external_attr = 0o644 << 16
-            archive.writestr(item, path.read_bytes())
+    write_source_archive(source, ROOT, source_files(), commit, expected)
     sys.stdout.write("release build: npm ci\n")
     sys.stdout.flush()
     subprocess.run((NPM, "ci"), cwd=ROOT / "desktop", check=True)
@@ -719,8 +771,9 @@ def build(assets: Path, expected: str, work_dir: Path) -> None:
     (assets / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def smoke(assets: Path, expected: str, work_dir: Path) -> None:
+def smoke(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
     require_version(expected)
+    record = source_archive()
     names = {f"valkama-{expected}-source.zip", f"Valkama-Setup-{expected}.exe", "SHA256SUMS"}
     if {path.name for path in assets.iterdir()} != names:
         raise ValueError("release asset set differs from the declared set")
@@ -742,7 +795,7 @@ def smoke(assets: Path, expected: str, work_dir: Path) -> None:
     with zipfile.ZipFile(source) as archive:
         archived = {item.filename for item in archive.infolist()}
         expected_files = {path.relative_to(ROOT).as_posix() for path in source_files()}
-        if archived != expected_files:
+        if archived != expected_files | {record.RECORD}:
             raise ValueError("source archive differs from the Git-free source snapshot")
         if any(
             path.startswith((".git/", ".private/", ".state/", "tmp/", "node_modules/"))
@@ -755,6 +808,12 @@ def smoke(assets: Path, expected: str, work_dir: Path) -> None:
             if not target.is_relative_to(extracted.resolve()):
                 raise ValueError("source archive escapes smoke workspace")
         archive.extractall(extracted)
+    # What `launcher install` checks in an unpacked archive, against the candidate.
+    described = record.verify(extracted)
+    if (described.commit, described.version) != (commit, expected):
+        raise ValueError("source archive record names another commit or version")
+    if set(described.files) != expected_files:
+        raise ValueError("source archive record lists other files than the archive holds")
     if (extracted / "VERSION").read_text(encoding="utf-8").strip() != expected:
         raise ValueError("source archive version differs")
     if not (extracted / "web/dist/index.html").is_file():
@@ -868,6 +927,7 @@ def main() -> None:
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--work-dir", type=Path)
+    parser.add_argument("--commit", help="the commit the release is built from")
     args = parser.parse_args()
     if args.action == "check":
         try:
@@ -880,16 +940,16 @@ def main() -> None:
         except PriceCheckError as error:
             sys.exit(str(error))
         sys.stdout.write("".join(f"{line}\n" for line in lines))
-    elif args.assets is None or args.version is None:
-        parser.error("build and smoke require --assets and --version")
+    elif args.assets is None or args.version is None or args.commit is None:
+        parser.error("build and smoke require --assets, --version and --commit")
     elif args.action == "build":
         if args.work_dir is None:
             parser.error("build requires --work-dir")
-        build(args.assets, args.version, args.work_dir)
+        build(args.assets, args.version, args.work_dir, args.commit)
     elif args.work_dir is None:
         parser.error("smoke requires --work-dir")
     else:
-        smoke(args.assets, args.version, args.work_dir)
+        smoke(args.assets, args.version, args.work_dir, args.commit)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,19 @@ client configuration and listener ownership remain unchanged. See
 [`SERVICE.md`](../../SERVICE.md) for releases, ownership, safe listener
 reconciliation, drift handling, uninstall and relocation details.
 
+A release's `valkama-<version>-source.zip` installs without Git. Unpack it whole
+into an empty directory and, in that directory, run:
+
+```bash
+python valkama.py launcher install
+```
+
+The archive's `valkama-source.json` records the commit it was built from and the
+SHA-256 of every file it holds. The install checks each file against it and pins
+that commit, as a clone of the commit would. A file changed or missing since is
+refused by name: unpack the archive again. A file the record does not list is not
+copied, and `--revision` accepts only the archive's commit.
+
 ## Client registration
 
 The Codex registration names the absolute path `launcher status` returned. This

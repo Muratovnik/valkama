@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -13,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import cli, launcher, listener_owners, static_assets
+from server import cli, launcher, listener_owners, source_archive, static_assets
 
 
 def _refusal(winerror: int) -> PermissionError:
@@ -838,6 +839,138 @@ class LauncherTests(unittest.TestCase):
                     )
                 self.assertEqual(state, json.loads(output.getvalue())["state"])
                 called.assert_called_once_with(str(self.directory), port=8765)
+
+
+def unpack_archive(path: Path, commit: str, files: dict[str, bytes]) -> Path:
+    """A directory a source archive of `commit` holding `files` was unpacked into."""
+
+    for name, data in files.items():
+        (path / name).parent.mkdir(parents=True, exist_ok=True)
+        (path / name).write_bytes(data)
+    digests = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
+    (path / source_archive.RECORD).write_bytes(source_archive.record(commit, "9.9.9", digests))
+    return path
+
+
+#: What the archive in these tests holds.
+ARCHIVED = {"valkama.py": ENTRY.encode(), "server/module.py": b"VALUE = 1\n"}
+
+
+class SourceArchiveInstallTests(unittest.TestCase):
+    """`launcher install` in a directory a release's source archive was unpacked into.
+
+    The archive has no Git history, so it once failed with "not a git repository".
+    It now pins the commit the archive's record names, after checking every file
+    the record lists, and a directory that differs from its record is refused by
+    the name of the file, with nothing pinned and the launcher left as it was.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name).resolve()
+        self.directory = self.root / "bin"
+        self.releases = self.root / "releases"
+        self.commit = "0123456789abcdef0123456789abcdef01234567"
+        self.archive = unpack_archive(self.root / "unpacked", self.commit, ARCHIVED)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def install(self, checkout: Path | None = None, **options):
+        return launcher.install(
+            self.directory,
+            platform_name=os.name,
+            python=sys.executable,
+            checkout=checkout or self.archive,
+            releases=self.releases,
+            **options,
+        )
+
+    def assert_refused(self, *reasons: str, **options) -> None:
+        with self.assertRaises(launcher.LauncherError) as refused:
+            self.install(**options)
+        for reason in reasons:
+            self.assertIn(reason, str(refused.exception))
+        self.assertFalse(self.releases.exists() and any(self.releases.iterdir()))
+        self.assertEqual("missing", launcher.status(self.directory)["state"])
+
+    def test_an_unpacked_archive_installs_and_pins_its_commit(self) -> None:
+        installed = self.install()
+        self.assertEqual("installed", installed["state"])
+        self.assertEqual(self.commit, installed["revision"])
+        self.assertEqual(str(self.archive), installed["checkout"])
+        pinned = self.releases / self.commit
+        self.assertEqual(str(pinned / "valkama.py"), installed["source_script"])
+        for name, data in ARCHIVED.items():
+            self.assertEqual(data, (pinned / name).read_bytes())
+        ran = subprocess.run(
+            [sys.executable, str(installed["shim"]), "one"],
+            capture_output=True,
+            check=True,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assertEqual(["one"], json.loads(ran.stdout))
+        # The stable command installs again from the archive it was pinned from.
+        self.assertEqual(installed["source_script"], self.install()["source_script"])
+
+    def test_an_archive_pins_what_a_clone_of_its_commit_pins(self) -> None:
+        clone = make_checkout(self.root / "clone")
+        head = git(clone, "rev-parse", "HEAD")
+        unpacked = unpack_archive(
+            self.root / "from-clone", head, {"valkama.py": (clone / "valkama.py").read_bytes()}
+        )
+        from_clone = launcher.pin_release(clone, head, self.root / "a")
+        from_archive = launcher.pin_release(
+            unpacked, head, self.root / "b", source_archive.verify(unpacked)
+        )
+
+        def written(release: Path) -> dict:
+            return json.loads((release / launcher.RELEASE_RECORD).read_text(encoding="utf-8"))
+
+        self.assertEqual(head, from_archive.name)
+        self.assertEqual(written(from_clone)["files"], written(from_archive)["files"])
+
+    def test_an_archive_inside_a_git_work_tree_is_still_an_archive(self) -> None:
+        clone = make_checkout(self.root / "clone")
+        nested = unpack_archive(clone / "tmp" / "unpacked", self.commit, ARCHIVED)
+        self.assertEqual(self.commit, self.install(nested)["revision"])
+
+    def test_a_changed_file_is_refused_by_name(self) -> None:
+        (self.archive / "server" / "module.py").write_bytes(b"VALUE = 2\n")
+        self.assert_refused("server/module.py was changed", "Unpack valkama-9.9.9-source.zip again")
+
+    def test_a_missing_file_is_refused_by_name(self) -> None:
+        (self.archive / "server" / "module.py").unlink()
+        self.assert_refused("server/module.py is missing", "Unpack valkama-9.9.9-source.zip again")
+
+    def test_a_file_the_record_does_not_list_is_not_pinned(self) -> None:
+        # As an untracked file in a clone: running the archive writes bytecode, and
+        # an archive unpacked over an older one keeps the files the older one had.
+        (self.archive / "notes.txt").write_text("mine\n", encoding="utf-8")
+        (self.archive / "server" / "__pycache__").mkdir()
+        (self.archive / "server" / "__pycache__" / "module.pyc").write_bytes(b"\0")
+        pinned = Path(str(self.install()["source_script"])).parent
+        self.assertFalse((pinned / "notes.txt").exists())
+        self.assertFalse((pinned / "server" / "__pycache__").exists())
+
+    def test_a_directory_with_neither_git_nor_a_record_says_what_installs(self) -> None:
+        (self.archive / source_archive.RECORD).unlink()
+        self.assert_refused("Git clone", "valkama-<version>-source.zip", source_archive.RECORD)
+
+    def test_an_unreadable_record_is_refused_with_what_to_do(self) -> None:
+        (self.archive / source_archive.RECORD).write_text("{", encoding="utf-8")
+        self.assert_refused("cannot be read", "Unpack the release's source archive again")
+
+    def test_an_archive_holds_no_other_revision(self) -> None:
+        self.assert_refused("install it without --revision", revision="v1.0.0")
+        self.assertEqual(self.commit, self.install(revision=self.commit)["revision"])
+
+    def test_a_file_changed_after_the_check_is_not_copied(self) -> None:
+        checked = source_archive.verify(self.archive)
+        (self.archive / "valkama.py").write_bytes(b"raise SystemExit('swapped')\n")
+        with self.assertRaisesRegex(launcher.LauncherError, "valkama.py was changed"):
+            launcher.pin_release(self.archive, self.commit, self.releases, checked)
+        self.assertEqual([], list(self.releases.iterdir()))
 
 
 if __name__ == "__main__":
