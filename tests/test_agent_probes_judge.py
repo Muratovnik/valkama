@@ -359,7 +359,7 @@ class CodexSubagentTests(unittest.TestCase):
                 children=children,
                 work=folder,
             )
-            checks = [
+            checks: list[dict[str, Any]] = [
                 {"check": "subagents", "count": {"min": 2}},
                 {"check": "subagent_reports", "count": 2, "each": [{"matches": "parse_percent"}]},
             ]
@@ -380,11 +380,16 @@ class CodexSubagentTests(unittest.TestCase):
             "payload": {"type": "task_complete", "last_agent_message": text},
         }
 
-    def test_each_child_counts_and_hands_back_the_message_its_turn_ended_with(self) -> None:
+    def test_each_child_counts_and_hands_back_the_messages_its_turns_ended_with(self) -> None:
         launched, reports = self.judged(
             {"t-1:c-1", "t-1:c-2"},
             {
-                "c-1": [self.said("Working."), self.ended("Report: parse_percent has no test.")],
+                # Written to again by its parent, it ends a second turn: both are its report.
+                "c-1": [
+                    self.said("Working."),
+                    self.ended("Report: parse_percent has no test."),
+                    self.ended("Yes, the claim is released."),
+                ],
                 # A transcript cut before its turn's end: the last message it wrote.
                 "c-2": [self.said("Working."), self.said("Report: parse_percent untested.")],
             },
@@ -392,6 +397,16 @@ class CodexSubagentTests(unittest.TestCase):
 
         self.assertEqual((PASSED, "2 launched"), (launched.result, launched.evidence))
         self.assertEqual(PASSED, reports.result, reports.evidence)
+
+    def test_a_child_s_report_holds_every_answer_it_handed_back(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "c-1.jsonl"
+            lines = [self.ended("Report: parse_percent has no test."), self.ended("Released.")]
+            path.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+
+            report = agent_probes_judge._codex_child_report(path)
+
+        self.assertEqual("Report: parse_percent has no test.\n\nReleased.", report)
 
     def test_without_the_children_s_transcripts_there_is_no_report(self) -> None:
         launched, reports = self.judged({"t-1:c-1", "t-1:c-2"}, {})

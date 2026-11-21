@@ -471,15 +471,16 @@ def _codex(record: Record, transcript: Transcript) -> None:
 
 
 def _codex_child_report(path: Path) -> str | None:
-    """A Codex subagent's report: the last message its own transcript says it ended a turn with.
+    """A Codex subagent's report: the messages its own transcript says it ended its turns with.
 
     Codex's output names neither the subagents it starts nor what they hand
-    back, so the run keeps each one's transcript; a turn's end there carries
-    its last message, and without one the last message the subagent wrote is
-    its report.
+    back, so the run keeps each one's transcript. A turn's end there carries its
+    last message; a subagent the parent writes to again ends a turn per answer,
+    and all of them are what it handed back. Without a turn's end, the last
+    message the subagent wrote is its report.
     """
 
-    ended: str | None = None
+    ended: list[str] = []
     written: str | None = None
     for raw in path.read_bytes().splitlines():
         with contextlib.suppress(ValueError):
@@ -488,8 +489,8 @@ def _codex_child_report(path: Path) -> str | None:
             if not isinstance(payload, Mapping):
                 continue
             message = payload.get("last_agent_message")
-            if payload.get("type") == "task_complete" and isinstance(message, str):
-                ended = message
+            if payload.get("type") == "task_complete" and isinstance(message, str) and message:
+                ended.append(message)
             if payload.get("type") == "message" and payload.get("role") == "assistant":
                 text = "".join(
                     str(part.get("text") or "")
@@ -497,7 +498,7 @@ def _codex_child_report(path: Path) -> str | None:
                     if isinstance(part, Mapping) and part.get("type") == "output_text"
                 )
                 written = text or written
-    return ended if ended is not None else written
+    return "\n\n".join(ended) if ended else written
 
 
 def _codex_item(transcript: Transcript, item: Mapping[str, Any]) -> None:
