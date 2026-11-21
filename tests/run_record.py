@@ -9,7 +9,9 @@ commit and the uncommitted changes it ran on, each step's command and exit code,
 the tests each test step ran, and the versions of the tools. `check` accepts a
 record made in DIR, by default this checkout, at the state DIR is in now, and
 refuses one made in another working tree, at another commit or on other
-uncommitted changes, naming each difference.
+uncommitted changes, naming each difference. Its exit code tells an accepted
+record of a run that passed from one of a run that failed and from a refusal;
+`check --help` lists the codes.
 
 A record lives where the run's results live, so the result directory must be
 outside the tree or ignored by it, as `tmp/` is: one the tree's status sees
@@ -228,46 +230,63 @@ def differences(recorded: Mapping[str, object], current: Mapping[str, object]) -
     return found
 
 
-def check(path: Path, tree: Path) -> tuple[bool, str]:
-    """Whether the record at `path` was made in `tree` as it is now, and what to say."""
+#: What `check` exits with: the record is of this tree and its run passed, it is of this
+#: tree and its run failed, or it is not a record of this tree as it is now. 2 is left to
+#: argparse, which exits with it on a command line it cannot read.
+PASSED, FAILED, REFUSED = 0, 1, 3
+CHECK_CODES = f"""exit codes:
+  {PASSED}  accepted, and the run it records passed
+  {FAILED}  accepted, and the run it records failed; the failed steps are named
+  {REFUSED}  refused: not a readable record of this format, or not of this tree as it is now"""
+
+
+def check(path: Path, tree: Path) -> tuple[int, str]:
+    """Whether the record at `path` was made in `tree` as it is now and passed, and what to say."""
 
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
         recorded, steps, result = record["tree"], record["steps"], record["result"]
     except (OSError, ValueError, KeyError, TypeError) as error:
-        return False, f"refused: {path} is not a readable run record: {error}"
+        return REFUSED, f"refused: {path} is not a readable run record: {error}"
     if record.get("format") != FORMAT:
-        return False, (
+        return REFUSED, (
             f"refused: {path} is a run record of format {record.get('format')},"
             f" and this check compares a tree as format {FORMAT} records it"
         )
     found = differences(recorded, tree_state(tree))
     if found:
-        return False, f"refused: {path} does not describe {tree} as it is now: " + "; ".join(found)
+        return REFUSED, f"refused: {path} does not describe {tree} as it is now: " + "; ".join(
+            found
+        )
     ran = ", ".join(
         f"{entry['name']} exit={entry['exit']}"
         + (f" tests={entry['tests']}" if "tests" in entry else "")
         for entry in steps
     )
-    verdict = "passed" if result == 0 else "failed"
-    return (
-        True,
-        f"accepted: {path} was made in {recorded['worktree']} at {recorded['head']}; {verdict}: {ran}",
-    )
+    said = f"accepted: {path} was made in {recorded['worktree']} at {recorded['head']}"
+    if result == 0:
+        return PASSED, f"{said}; passed: {ran}"
+    failed = [entry["name"] for entry in steps if entry["exit"] != 0] or ["no step ran"]
+    return FAILED, f"{said}; failed: {', '.join(failed)}; ran: {ran}"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check a gates run record against a tree.")
     commands = parser.add_subparsers(dest="command", required=True)
-    checking = commands.add_parser("check", help="accept a record made in this tree as it is now")
+    checking = commands.add_parser(
+        "check",
+        help="accept a record made in this tree as it is now",
+        epilog=CHECK_CODES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     checking.add_argument("record", type=Path)
     checking.add_argument(
         "--tree", type=Path, default=ROOT, help="the tree; by default this checkout"
     )
     options = parser.parse_args(argv)
-    accepted, said = check(options.record, options.tree)
+    code, said = check(options.record, options.tree)
     sys.stdout.write(f"{said}\n")
-    return 0 if accepted else 1
+    return code
 
 
 if __name__ == "__main__":
