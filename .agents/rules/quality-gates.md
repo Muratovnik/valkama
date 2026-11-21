@@ -99,8 +99,10 @@ with `PermissionError`.
 
 Heavy runs wanting more CPUs than there are fail tests that pass alone, so each
 goes through one gate, `tests/machine_lock.py`, at a file in the system's
-temporary directory no TEMP or profile moves, declaring its CPUs: the whole
-unittest suite 2, from its package's `load_tests` until its process ends;
+temporary directory no TEMP or profile moves, declaring its CPUs:
+`tests/parallel.py` 2 for each process it runs at once (8 by default, half the
+CPUs on a smaller machine), and the whole unittest suite in one process 2, from
+its package's `load_tests` until its process ends;
 `npm run test:unit` up to 8 workers, all given `--maxWorkers`;
 `npm run test:browser:allowed` but `--list` all. In arrival order, a run goes in
 alone at once, beside others if it fits their CPUs and the load;

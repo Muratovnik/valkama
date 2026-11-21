@@ -180,18 +180,27 @@ class RunTest(unittest.TestCase):
             [*self.UNITTEST, "tests.test_a"], affected.run_command(["tests.test_a"], 4)
         )
 
-    def test_a_larger_selection_waits_for_the_machines_heavy_test_lock(self) -> None:
+    def test_a_larger_selection_runs_in_several_processes_through_the_runner(self) -> None:
+        # The runner goes through the machine's heavy-test gate itself, declaring its processes.
         command = affected.run_command(["tests.test_a", "tests.test_b"], 4)
+        self.assertEqual(
+            [sys.executable, str(affected.ROOT / "tests" / "parallel.py"), "--run"], command[:3]
+        )
+        self.assertEqual(["tests.test_a", "tests.test_b"], command[-2:])
+        self.assertNotIn("--jobs", command)
+
+        given = affected.run_command(["tests.test_a", "tests.test_b"], 4, jobs=3)
+        self.assertEqual(["--jobs", "3"], given[given.index("--jobs") : given.index("--jobs") + 2])
+
+    def test_one_job_runs_a_heavy_selection_in_one_process_through_the_gate(self) -> None:
+        command = affected.run_command(["tests.test_a", "tests.test_b"], 4, jobs=1)
         self.assertEqual(
             [sys.executable, str(affected.ROOT / "tests" / "machine_lock.py"), "run"], command[:3]
         )
         self.assertEqual(
             [*self.UNITTEST, "tests.test_a", "tests.test_b"], command[command.index("--") + 1 :]
         )
-
-    def test_a_heavy_selection_declares_the_cpus_of_the_whole_suite(self) -> None:
         # Declaring nothing asks the gate for the whole machine: nothing would go beside it.
-        command = affected.run_command(["tests.test_a", "tests.test_b"], 4)
         options = command[: command.index("--")]
         self.assertEqual(str(tests.WHOLE_SUITE_CPUS), options[options.index("--cpus") + 1])
 

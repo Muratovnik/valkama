@@ -53,7 +53,7 @@ vulture server tests valkama.py vulture_whitelist.py --min-confidence 60
 mypy
 lint-imports --cache-dir .cache/import-linter
 semgrep scan --config p/python --config p/security-audit --metrics off --error server valkama.py
-python -m coverage run -m unittest discover -s . -p "test_*.py"
+python tests/parallel.py --coverage
 python -m coverage report
 cd web
 npm test

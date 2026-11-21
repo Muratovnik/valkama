@@ -26,7 +26,7 @@ import urllib.parse
 from pathlib import Path
 from unittest import mock
 
-from tests import isolated, machine_lock
+from tests import isolated, machine_lock, parallel
 from tests.test_machine_lock import (
     DEADLINE_SECONDS,
     HELD_SECONDS,
@@ -401,10 +401,10 @@ class GateTests(Workspace):
             with self.subTest(step=step.name):
                 self.assertTrue(isolated._argv(step.command, tools))
         unittest_step = next(s for s in isolated.GATE_STEPS if s.name == "unittest")
-        # The quotes in the instructions are for a shell; the pattern arrives bare.
+        # The suite's runner, run by this interpreter as a script, measuring its processes.
         self.assertEqual(
-            "test_*.py",
-            isolated._argv(unittest_step.command, tools)[-1],
+            [sys.executable, "tests/parallel.py", "--coverage"],
+            isolated._argv(unittest_step.command, tools),
         )
 
     def test_selection_is_by_step_or_group_and_owner_reaches_only_the_audit(self) -> None:
@@ -563,11 +563,15 @@ class HeavyLockTests(Workspace):
         self.assertIn("\ntook the heavy-test lock after ", said)
         goes_in_at_once(self, self.lock)
 
-    def test_the_gated_step_declares_what_the_whole_suite_needs(self) -> None:
+    def test_the_gated_step_declares_what_the_suite_s_processes_need(self) -> None:
+        # The step's runner starts under this hold and declares nothing more of its own,
+        # so the hold is what its default number of processes would declare at the gate.
         heavy = isolated.Run("unittest", [sys.executable, "-c", "0"], ROOT, gated=True)
         with mock.patch.object(machine_lock, "held", wraps=machine_lock.held) as held:
             quietly(lambda: isolated.run_gates([heavy], self.out, os.environ, lock=self.lock))
-        self.assertEqual(2, held.call_args.kwargs["cpus"])
+        runner = parallel.gate_command([], "the whole suite", parallel.default_jobs())
+        declared = runner[runner.index("--cpus") + 1]
+        self.assertEqual(declared, str(held.call_args.kwargs["cpus"]))
 
     def taking_the_lock(self, name: str, *, gated: bool = False) -> isolated.Run:
         """A step that takes the lock itself, as the suite in the unittest step and `npm test` do."""
