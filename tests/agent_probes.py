@@ -2,7 +2,7 @@
 
     python tests/agent_probes.py run --cases DIR --sections FILE --claude-md FILE
         --claude-coordinator DIR --codex-agents FILE --client claude|codex|both
-        --client-home DIR --out DIR [--store-copy [SOURCE]] [--only ID ...]
+        --client-home DIR --out DIR [--store-copy [SOURCE]] [--only ID ...] [--jobs N]
     python tests/agent_probes.py judge --out DIR
 
 A development tool like `tests/isolated.py`, and not part of the product. A probe
@@ -49,6 +49,17 @@ A run holds the home's lock, `<client-home>.lock` beside it, from clearing the
 home to its last session: a second run on the same home waits for the first
 and says whose run it waits for, rather than clearing the home under it.
 
+`--jobs N` runs up to N sessions at once. One job builds its profile in
+`--client-home` itself, as above. More build one profile each in
+`<client-home>/jobs/<k>`, so each session has its own client directories,
+project registry, probe server, store copy and port; the store the copies are
+taken from is migrated once, in `<client-home>/.probes`. The logins stay in
+`--client-home`, given to a job's home before each session and taken back when
+the session refreshed one (`Logins`), and while Claude's login is near its
+expiry its sessions run one at a time (`Schedule`), so that two copies of one
+login are never refreshed at once. The record of a session is where it is with
+one job; `run.json` lists the sessions in the order they ended.
+
 The user's files, hook registrations and store are only read, and the store
 only through a connection that cannot write. The run holds itself to that:
 `LiveFiles` digests the user's instruction files, client settings, hook
@@ -87,6 +98,7 @@ import sys
 import threading
 import time
 import tomllib
+import traceback
 import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
@@ -168,7 +180,13 @@ CHECK_KINDS = frozenset(
 )
 
 #: What survives the clearing of the home between runs: the clients' logins.
-KEPT_LOGINS = (Path(".claude") / ".credentials.json", Path(".codex") / "auth.json")
+CLAUDE_LOGIN = Path(".claude") / ".credentials.json"
+KEPT_LOGINS = (CLAUDE_LOGIN, Path(".codex") / "auth.json")
+#: Where a run of several jobs builds the home of each, under `--client-home`.
+JOBS_DIR = "jobs"
+#: How long before its expiry a Claude login is taken as one a session may refresh.
+#: Claude Code refreshes it a few minutes before it expires; a session lasts minutes.
+REFRESH_MARGIN_SECONDS = 45 * 60.0
 #: The variables a client session gives every process it starts: its session, effort,
 #: entry point, plugin directories, subagent depth and MCP timeouts. A run started in
 #: an agent's shell would hand them on, and its clients would run as children of that
@@ -2031,6 +2049,114 @@ def home_lock(home: Path) -> Path:
     return home.with_name(f"{home.name}.lock")
 
 
+def job_homes(home: Path, jobs: int) -> list[Path]:
+    """The profile home of each job: `home` itself for one, a directory under it each for more."""
+
+    if jobs == 1:
+        return [home]
+    return [home / JOBS_DIR / str(number) for number in range(1, jobs + 1)]
+
+
+class Logins:
+    """The clients' logins in `--client-home`, lent to the homes of the jobs.
+
+    A client refreshes its login in the home it runs in, and after that only the
+    copy it wrote works. The home's own file is the one kept: a job's home is
+    given it before each session when it is newer than the job's copy, and the
+    job's copy goes back to the home when its session refreshed it, so the next
+    session of every job and the next run start from the refreshed login. With
+    one job the home is the job's, and nothing moves.
+    """
+
+    def __init__(self, home: Path) -> None:
+        self.home = home
+        self._lock = threading.Lock()
+
+    def give(self, job: Path) -> None:
+        self._copy_newer(self.home, job)
+
+    def take(self, job: Path) -> None:
+        self._copy_newer(job, self.home)
+
+    def _copy_newer(self, source: Path, target: Path) -> None:
+        if source == target:
+            return
+        with self._lock:
+            for path in KEPT_LOGINS:
+                given, kept = source / path, target / path
+                if not given.is_file():
+                    continue
+                if kept.is_file() and kept.stat().st_mtime_ns >= given.stat().st_mtime_ns:
+                    continue
+                kept.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(given, kept)
+
+    def claude_expiry(self) -> float | None:
+        """When the home's Claude login expires, in seconds since the epoch; None when it says not."""
+
+        with self._lock:
+            try:
+                login = json.loads((self.home / CLAUDE_LOGIN).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return None
+        oauth = login.get("claudeAiOauth") if isinstance(login, dict) else None
+        expires = oauth.get("expiresAt") if isinstance(oauth, dict) else None
+        if isinstance(expires, bool) or not isinstance(expires, (int, float)):
+            return None
+        return expires / 1000
+
+
+class Schedule:
+    """The sessions still to run, handed to the jobs in their order as each may start.
+
+    A Claude session does not start beside another Claude session while the login
+    it would start with expires within `REFRESH_MARGIN_SECONDS`: each would refresh
+    its own copy of the login with the same refresh token. It waits for the other
+    to end, and the sessions after it that may start go by it.
+    """
+
+    def __init__(
+        self,
+        sessions: Sequence[tuple[Scenario, str]],
+        expiry: Callable[[], float | None],
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        self._waiting = list(sessions)
+        self._running: list[tuple[str, str]] = []
+        self._condition = threading.Condition()
+        self._expiry, self._clock = expiry, clock
+
+    def take(self) -> tuple[Scenario, str] | None:
+        """The next session that may start, waiting while none may; None when none is left."""
+
+        with self._condition:
+            while self._waiting:
+                for index, (scenario, client) in enumerate(self._waiting):
+                    if self._may_start(client):
+                        del self._waiting[index]
+                        self._running.append((scenario.id, client))
+                        return scenario, client
+                self._condition.wait()
+            return None
+
+    def done(self, scenario: Scenario, client: str) -> None:
+        with self._condition:
+            self._running.remove((scenario.id, client))
+            self._condition.notify_all()
+
+    def running(self) -> list[tuple[str, str]]:
+        """The sessions started and not yet done, in the order they started."""
+
+        with self._condition:
+            return list(self._running)
+
+    def _may_start(self, client: str) -> bool:
+        if client != "claude" or all(other != "claude" for _, other in self._running):
+            return True
+        expiry = self._expiry()
+        return expiry is None or expiry - self._clock() > REFRESH_MARGIN_SECONDS
+
+
 def _run_locked(
     options: argparse.Namespace,
     chosen: Sequence[str],
@@ -2042,11 +2168,20 @@ def _run_locked(
     registry: Path | None,
     live: LiveFiles,
 ) -> int:
-    profile = build_profile(home, inputs)
-    programs = _programs(chosen, options.client_program or (), profile.environment["PATH"])
-    base, prepared = prepare_store(source, profile.work, registry)
+    jobs = int(options.jobs)
+    if jobs > 1:
+        # Each job's profile clears only its own home: what an earlier run left
+        # beside the jobs, their homes included, goes here.
+        clear_home(home)
+    profiles = [build_profile(job, inputs) for job in job_homes(home, jobs)]
+    logins = Logins(home)
+    for profile in profiles:
+        logins.give(profile.home)
+    first = profiles[0]
+    programs = _programs(chosen, options.client_program or (), first.environment["PATH"])
+    base, prepared = prepare_store(source, home / WORK_DIR, registry)
     versions = {
-        client: _run_command([*programs[client], "--version"], profile.environment)[1].strip()
+        client: _run_command([*programs[client], "--version"], first.environment)[1].strip()
         for client in chosen
     }
     head = _run_command(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], os.environ)
@@ -2062,6 +2197,11 @@ def _run_locked(
         "sessions": sessions,
         "finished": False,
     }
+    if jobs > 1:
+        record["jobs"] = jobs
+    lock = threading.Lock()
+    #: The changes of the user's files found while a session ran, by session.
+    pending: dict[tuple[str, str], list[list[str]]] = {}
 
     def write_record() -> None:
         # Written before the first session and after each one, so that a run cut
@@ -2071,27 +2211,75 @@ def _run_locked(
     # A profile that changed the user's files runs no session on them.
     prepared_ok = not live.check("profile")
     write_record()
-    for scenario in scenarios if prepared_ok else ():
-        for client in (item for item in chosen if item in scenario.clients):
-            _say(f"{scenario.id} {client}")
-            session = SessionRunner(
-                profile, scenario, client, programs[client], out / scenario.name / client, base
-            ).run()
-            changed = live.check(f"{scenario.id} {client}")
-            if changed:
-                session.fail("isolation", f"the user's files changed: {', '.join(changed)}")
-                session.write()
-            for failure in session.failures:
-                _say(f"  environment failure at {failure['stage']}: {failure['detail']}")
-            sessions.append(
-                {
-                    "scenario": scenario.id,
-                    "client": client,
-                    "record": str(session.directory.relative_to(out)),
-                    "failures": len(session.failures),
-                }
-            )
-            write_record()
+    schedule = Schedule(
+        [
+            (scenario, client)
+            for scenario in (scenarios if prepared_ok else ())
+            for client in chosen
+            if client in scenario.clients
+        ],
+        logins.claude_expiry,
+    )
+
+    def finish(session: Session, key: tuple[str, str]) -> None:
+        # A change found now happened while any of the running sessions ran: each fails on it.
+        running = schedule.running()
+        name = " ".join(key)
+        beside = [" ".join(other) for other in running if other != key]
+        changed = live.check(f"{name} (beside {', '.join(beside)})" if beside else name)
+        if changed:
+            for other in running:
+                pending.setdefault(other, []).append(changed)
+        found = pending.pop(key, [])
+        for files in found:
+            session.fail("isolation", f"the user's files changed: {', '.join(files)}")
+        if found:
+            session.write()
+        prefix = "" if jobs == 1 else f"{name}: "
+        for failure in session.failures:
+            _say(f"  {prefix}environment failure at {failure['stage']}: {failure['detail']}")
+        sessions.append(
+            {
+                "scenario": key[0],
+                "client": key[1],
+                "record": str(session.directory.relative_to(out)),
+                "failures": len(session.failures),
+            }
+        )
+        write_record()
+
+    def work(number: int, profile: Profile) -> None:
+        while (taken := schedule.take()) is not None:
+            scenario, client = taken
+            try:
+                _say(f"{scenario.id} {client}" + ("" if jobs == 1 else f" in job {number}"))
+                logins.give(profile.home)
+                runner = SessionRunner(
+                    profile, scenario, client, programs[client], out / scenario.name / client, base
+                )
+                try:
+                    session = runner.run()
+                except Exception as error:  # noqa: BLE001 -- one session's fault ends only it
+                    session = runner.record
+                    session.fail("runner", "".join(traceback.format_exception_only(error)).strip())
+                    session.write()
+                logins.take(profile.home)
+                with lock:
+                    finish(session, (scenario.id, client))
+            finally:
+                schedule.done(scenario, client)
+
+    if jobs == 1:
+        work(1, first)
+    else:
+        threads = [
+            threading.Thread(target=work, args=(number, profile), name=f"probe-job-{number}")
+            for number, profile in enumerate(profiles, start=1)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
     record["finished"] = True
     write_record()
     for change in live.changes:
@@ -2100,6 +2288,12 @@ def _run_locked(
     failed = sum(1 for item in sessions if item["failures"])
     _say(f"{len(sessions)} session(s), {failed} with an environment failure; record in {out}")
     return 1 if failed or live.changes or not sessions else 0
+
+
+def _jobs(value: str) -> int:
+    if not value.isdigit() or int(value) < 1:
+        raise argparse.ArgumentTypeError(f"--jobs takes a whole number of 1 or more, not {value!r}")
+    return int(value)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -2128,6 +2322,13 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         metavar="CLIENT=PATH",
         help="start CLIENT with PATH (a .py runs with this interpreter) instead of PATH's",
+    )
+    command.add_argument(
+        "--jobs",
+        type=_jobs,
+        default=1,
+        metavar="N",
+        help="run up to N sessions at once, each in a profile of its own (default 1)",
     )
     command = commands.add_parser("judge", help="judge the sessions a run recorded")
     command.add_argument("--out", type=Path, required=True, help="the directory of the run")

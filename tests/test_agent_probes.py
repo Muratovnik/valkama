@@ -631,6 +631,19 @@ class RunTests(RunCase):
                         ).fetchall()
                     self.assertEqual([("session_end",)], rows)
 
+    def test_one_job_builds_its_profile_in_the_home_itself(self) -> None:
+        home = str(self.home.resolve())
+        self.assertFalse((self.home / agent_probes.JOBS_DIR).exists())
+        self.assertNotIn("jobs", json.loads((self.out / "run.json").read_text(encoding="utf-8")))
+        for scenario in ("alpha", "beta"):
+            for client in agent_probes.CLIENTS:
+                with self.subTest(scenario=scenario, client=client):
+                    environment = self.record(scenario, client).session["environment"]
+                    self.assertEqual(home, environment["HOME"])
+                    self.assertEqual(
+                        str(self.home.resolve() / ".claude"), environment["CLAUDE_CONFIG_DIR"]
+                    )
+
 
 class OldReleaseHookTests(RunCase):
     """The start probe on the hooks an installed release for the older schema registers."""
@@ -1056,6 +1069,7 @@ class HomeLockTests(unittest.TestCase):
                 client_home=home,
                 out=base / "second",
                 client_program=None,
+                jobs=1,
             )
             said: list[str] = []
             built: list[tuple[Path, bool]] = []
@@ -1093,6 +1107,245 @@ class HomeLockTests(unittest.TestCase):
                 r" in .*, process \d+, since ",
             )
             self.assertEqual([(home.resolve(), True)], built)
+
+
+class JobsRunTests(RunCase):
+    """Two jobs at once, each in a profile of its own, and one session that breaks.
+
+    The two sessions of A1 wait for each other before they start, so a run that
+    ran them one after the other breaks that wait and fails both. A1 on Claude
+    refreshes its login as Claude Code does, in its own home. B1 on Codex fails
+    inside its session with an error the runner does not expect.
+    """
+
+    events: ClassVar[list[tuple[str, str, str]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.events = []
+        together = threading.Barrier(2, timeout=60.0)
+        start = agent_probes.SessionRunner.run
+        take = agent_probes.Logins.take
+
+        def run(runner: agent_probes.SessionRunner) -> agent_probes.Session:
+            key = f"{runner.scenario.id} {runner.client}"
+            login = runner.profile.home / agent_probes.CLAUDE_LOGIN
+            cls.events.append(("start", key, login.read_text(encoding="utf-8")))
+            if runner.scenario.id == "A1":
+                together.wait()
+            if key == "B1 codex":
+
+                def broken() -> None:
+                    raise RuntimeError("a fault inside the session")
+
+                runner._session = broken  # type: ignore[method-assign]
+            done = start(runner)
+            if key == "A1 claude":
+                login.write_text('{"login": 2}', encoding="utf-8")
+                later = login.stat().st_mtime_ns + 10**9
+                os.utime(login, ns=(later, later))
+            return done
+
+        def taken(logins: agent_probes.Logins, job: Path) -> None:
+            take(logins, job)
+            cls.events.append(("taken", str(job), ""))
+
+        with (
+            mock.patch.object(agent_probes.SessionRunner, "run", run),
+            mock.patch.object(agent_probes.Logins, "take", taken),
+        ):
+            cls.run_probes("--client", "both", "--store-copy", "--jobs", "2")
+
+    def run_record(self) -> dict[str, Any]:
+        return json.loads((self.out / "run.json").read_text(encoding="utf-8"))
+
+    def test_the_broken_session_fails_alone_and_every_session_is_recorded(self) -> None:
+        self.assertEqual(1, self.code, self.said)
+        run = self.run_record()
+        self.assertTrue(run["finished"])
+        self.assertEqual(2, run["jobs"])
+        self.assertEqual(
+            {("A1", "claude"): 0, ("A1", "codex"): 0, ("B1", "claude"): 0, ("B1", "codex"): 1},
+            {(item["scenario"], item["client"]): item["failures"] for item in run["sessions"]},
+        )
+        broken = self.record("beta", "codex").session
+        self.assertEqual(
+            [("runner", "RuntimeError: a fault inside the session")],
+            [(item["stage"], item["detail"]) for item in broken["failures"]],
+        )
+        self.assertIn(
+            "B1 codex: environment failure at runner: RuntimeError: a fault inside the session",
+            self.said,
+        )
+        # Its server was stopped and its store kept, as for a session that ended.
+        self.assertTrue((self.out / "beta" / "codex" / "store.sqlite3").is_file())
+
+    def test_the_other_sessions_are_judged_as_with_one_job(self) -> None:
+        for scenario, client in (("alpha", "claude"), ("alpha", "codex"), ("beta", "claude")):
+            with self.subTest(scenario=scenario, client=client):
+                verdict = self.start_verdict(scenario, client)
+                self.assertEqual("passed", verdict["verdict"], verdict)
+
+    def test_sessions_at_once_have_their_own_home_registry_store_and_port(self) -> None:
+        jobs = {str((self.home / agent_probes.JOBS_DIR / n).resolve()) for n in ("1", "2")}
+        claude, codex = self.record("alpha", "claude"), self.record("alpha", "codex")
+        first, second = claude.session["environment"], codex.session["environment"]
+        self.assertEqual(jobs, {first["HOME"], second["HOME"]})
+        for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "LOCALAPPDATA", "VALKAMA_DB", "PATH"):
+            with self.subTest(variable=name):
+                self.assertNotEqual(first[name], second[name])
+                self.assertTrue(first[name].startswith(first["HOME"]), first[name])
+                self.assertTrue(second[name].startswith(second["HOME"]), second[name])
+        self.assertNotEqual(claude.session["port"], codex.session["port"])
+        self.assertEqual(str(claude.session["port"]), first["VALKAMA_PORT"])
+        # Both registered the scenario's projects, each in a registry of its own.
+        for record in (claude, codex):
+            self.assertEqual(
+                {"app", "lib"},
+                {
+                    entry["project_id"]
+                    for entry in json.loads(
+                        (record.directory / agent_probes.REGISTRY_COPY / "projects.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )["projects"]
+                },
+            )
+
+    def test_every_job_has_the_login_and_a_refreshed_one_reaches_the_home_and_the_jobs(
+        self,
+    ) -> None:
+        refreshed = '{"login": 2}'
+        self.assertEqual(
+            refreshed, (self.home / agent_probes.CLAUDE_LOGIN).read_text(encoding="utf-8")
+        )
+        claude_job = self.record("alpha", "claude").session["environment"]["HOME"]
+        back = next(
+            index
+            for index, (event, where, _) in enumerate(self.events)
+            if event == "taken" and where == claude_job
+        )
+        started = [(key, login) for event, key, login in self.events if event == "start"]
+        self.assertEqual(4, len(started))
+        self.assertEqual({'{"login": 1}'}, {login for key, login in started if key[:2] == "A1"})
+        after = [login for event, _, login in self.events[back:] if event == "start"]
+        self.assertTrue(after, self.events)
+        self.assertEqual({refreshed}, set(after))
+
+    def test_the_users_files_registrations_and_store_are_unchanged(self) -> None:
+        self.assertEqual(self.before, tree_digest(self.user))
+        self.assertEqual([], self.run_record()["live_files"]["changes"])
+
+
+def _scenario(identifier: str) -> agent_probes.Scenario:
+    return agent_probes.Scenario(
+        id=identifier,
+        path=SAMPLES / "cases" / "alpha.json",
+        clients=agent_probes.CLIENTS,
+        workspace=SAMPLES / "workspace",
+        overlay=None,
+        repos=(),
+        registry=None,
+        mcp="tip",
+        setup=(),
+        turns=(),
+        expect={},
+        rubric={},
+    )
+
+
+class ScheduleTests(unittest.TestCase):
+    """Claude sessions run one at a time only while their login is near its expiry."""
+
+    def schedule(self, minutes_left: float) -> agent_probes.Schedule:
+        first, second = _scenario("S1"), _scenario("S2")
+        return agent_probes.Schedule(
+            [(first, "claude"), (second, "claude"), (second, "codex")],
+            lambda: 1000.0 + minutes_left * 60,
+            clock=lambda: 1000.0,
+        )
+
+    def taken(self, schedule: agent_probes.Schedule) -> tuple[str, str] | None:
+        found = schedule.take()
+        return None if found is None else (found[0].id, found[1])
+
+    def test_far_from_expiry_the_sessions_start_in_their_order(self) -> None:
+        schedule = self.schedule(minutes_left=120)
+        self.assertEqual(
+            [("S1", "claude"), ("S2", "claude"), ("S2", "codex")],
+            [self.taken(schedule) for _ in range(3)],
+        )
+        self.assertEqual(3, len(schedule.running()))
+
+    def test_near_expiry_a_claude_session_waits_and_the_next_goes_by_it(self) -> None:
+        schedule = self.schedule(minutes_left=20)
+        self.assertEqual(("S1", "claude"), self.taken(schedule))
+        self.assertEqual(("S2", "codex"), self.taken(schedule))
+        got: list[tuple[str, str] | None] = []
+        waiter = threading.Thread(target=lambda: got.append(self.taken(schedule)), daemon=True)
+        waiter.start()
+        waiter.join(0.5)
+        self.assertEqual([], got)
+        schedule.done(_scenario("S1"), "claude")
+        waiter.join(10.0)
+        self.assertEqual([("S2", "claude")], got)
+        self.assertEqual([("S2", "codex"), ("S2", "claude")], schedule.running())
+
+    def test_with_nothing_left_a_job_ends(self) -> None:
+        schedule = agent_probes.Schedule([], lambda: None)
+        self.assertIsNone(schedule.take())
+
+
+class LoginsTests(unittest.TestCase):
+    def test_the_newer_copy_wins_each_way_and_one_home_moves_nothing(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            home, job = Path(name) / "home", Path(name) / "home" / "jobs" / "1"
+            login = home / agent_probes.CLAUDE_LOGIN
+            login.parent.mkdir(parents=True)
+            login.write_text('{"claudeAiOauth": {"expiresAt": 1700000000000}}', "utf-8")
+            logins = agent_probes.Logins(home)
+            self.assertEqual(1700000000.0, logins.claude_expiry())
+            logins.give(job)
+            self.assertEqual(login.read_bytes(), (job / agent_probes.CLAUDE_LOGIN).read_bytes())
+            self.assertFalse((job / ".codex" / "auth.json").exists())
+            logins.take(job)
+            self.assertEqual('{"claudeAiOauth": {"expiresAt": 1700000000000}}', login.read_text())
+            copy = job / agent_probes.CLAUDE_LOGIN
+            copy.write_text('{"claudeAiOauth": {"expiresAt": 1800000000000}}', "utf-8")
+            later = login.stat().st_mtime_ns + 10**9
+            os.utime(copy, ns=(later, later))
+            logins.give(job)
+            self.assertIn("1800000000000", copy.read_text())
+            logins.take(job)
+            self.assertEqual(1800000000.0, logins.claude_expiry())
+            logins.give(home)
+            logins.take(home)
+            self.assertEqual(1800000000.0, logins.claude_expiry())
+
+    def test_a_login_without_an_expiry_says_none(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            login = Path(name) / agent_probes.CLAUDE_LOGIN
+            login.parent.mkdir(parents=True)
+            login.write_text('{"login": 1}', "utf-8")
+            self.assertIsNone(agent_probes.Logins(Path(name)).claude_expiry())
+            self.assertIsNone(agent_probes.Logins(Path(name) / "none").claude_expiry())
+
+
+class JobsOptionTests(unittest.TestCase):
+    def test_jobs_takes_a_whole_number_of_one_or_more(self) -> None:
+        self.assertEqual(1, agent_probes._parser().parse_args(RUN_ARGUMENTS).jobs)
+        self.assertEqual(3, agent_probes._parser().parse_args([*RUN_ARGUMENTS, "--jobs", "3"]).jobs)
+        for value in ("0", "-1", "two"):
+            with self.subTest(value=value), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    agent_probes._parser().parse_args([*RUN_ARGUMENTS, "--jobs", value])
+
+
+RUN_ARGUMENTS = [
+    "run",
+    *("--cases", "c", "--sections", "s", "--claude-md", "m", "--claude-coordinator", "d"),
+    *("--codex-agents", "a", "--client", "both", "--client-home", "h", "--out", "o"),
+]
 
 
 class ProgramTests(unittest.TestCase):
