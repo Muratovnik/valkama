@@ -369,14 +369,14 @@ describe('the quota panel', () => {
     // (DESIGN.md § Analytics): led by its 62 %, it read as the share spent now.
     expect(window.findAll('[data-lead]').map((one) => plain(one.text()))).toEqual([
       expect.stringMatching(/^Reset at \d{2}:\d{2}, no new readings$/u),
-      'before the reset: 62%',
+      '62% by the reset',
     ])
     expect(window.findAll('[data-fact]')).toHaveLength(0)
     expect(window.findAll('.window-ahead')).toHaveLength(0)
     // The bar's words say the reset and the share before it; its reading, read two minutes before
     // an answer five hours ago, is old by the page's clock.
     expect(plain(window.get('.window-track').attributes('aria-label') ?? '')).toMatch(
-      /^Five hours: reset at \d{2}:\d{2}, no new readings; 62% used before the reset\. No change since .+, 5 h 2 min ago, /u,
+      /^Five hours: reset at \d{2}:\d{2}, no new readings; 62% by the reset\. No change since .+, 5 h 2 min ago, /u,
     )
     expect(window.get('.step-line').attributes('aria-label')).toEqual(reset)
     // Its line shows the whole window, its right end the reset that has passed, drawn in the

@@ -1,10 +1,12 @@
 /**
  * A quota window past its reset by the page's clock, in the built app (`QuotaWindow`, `WindowBar`),
- * held to DESIGN.md § Analytics: it leads with that it reset and has no new reading, its share
- * before the reset follows as a quieter line, and its bar is drawn in the neutral ink of marks at
- * rest, not the series' hue, so its last share is not read as the share spent now. Led by its
- * share over a bar in the series' hue, an ended window once read as 90 % spent. A window still
- * standing leads with its share as before, its bar in the series' hue: the control.
+ * held to DESIGN.md § Analytics: it leads with that it reset and has no new reading, the share
+ * it ended at follows as a quieter line, «45% by the reset» as a past window says it — never
+ * «before the reset: 45%», which read as what is left until a reset to come — and its bar is drawn
+ * in the neutral ink of marks at rest, not the series' hue, so its last share is not read as the
+ * share spent now. Led by its share over a bar in the series' hue, an ended window once read as
+ * 90 % spent. A window still standing leads with its share as before, its bar in the series' hue:
+ * the control.
  *
  * «Work»'s five hours reset half an hour before the page's moment, last read at 45 %, and its week
  * two hours before, last read at 9 %; the unnamed account's windows stand. A forced palette keeps
@@ -113,8 +115,8 @@ for (const width of [1440, 1024])
     const measured: Record<string, unknown> = {}
     // Each kind with the account whose window of it stands and draws a fill: the control.
     for (const [by, kind, before, control] of [
-      ['quota_five_hour', 'five_hour', 'before the reset: 45%', SEATED_NAME],
-      ['quota_week', 'week', 'before the reset: 9%', NIGHT_NAME],
+      ['quota_five_hour', 'five_hour', '45% by the reset', SEATED_NAME],
+      ['quota_week', 'week', '9% by the reset', NIGHT_NAME],
     ] as const) {
       const panel = await open(page, by, width)
       const window = panel.locator(`[data-account="Work"] [data-window="${kind}"]`)
@@ -204,7 +206,7 @@ for (const lang of ['en', 'ru'] as const)
           shaped(words.ended, String.raw`\d{2}:\d{2}`),
         )
         await expect(value.locator('.chart-detail')).toHaveText(
-          shaped(words.beforeReset, String.raw`${before}\s?%`),
+          shaped(words.past.lead, String.raw`${before}\s?%`),
         )
         await expect(row.locator('td').nth(1)).toHaveText('—')
         await expect(row.locator('[data-cell="forecast"]')).toHaveText('—')

@@ -2954,11 +2954,13 @@ line's forecast are drawn from one mapping of the forecast (`forecastCourses`), 
 and none of their words disagree; a window past its reset by the page's clock forecasts nothing
 more, so none of them is drawn and its words say when it reset where they said its forecast.
 Such a window, with no reading since its reset, leads with that, «Reset at 21:20, no new
-readings», its share before the reset a quieter line under it, «before the reset: 90%», over its
+readings», the share it ended at a quieter line under it, «90% by the reset», as a past window
+says it, with «the limit ran out before it» where a reading reached 100 % — never «before the
+reset: 90%», which read as what is left until a reset still to come — over its
 bar drawn in the neutral ink of marks at rest with no pace tick, which a forced palette draws in
 its inactive ink: led by its share over a bar in the series' hue, the last window's figure read as
 the share spent now. As a table its row says the same where the share stood, the reset's words
-and under them the share before it, with a dash for its pace and its forecast, and its window
+and under them the share it ended at, with a dash for its pace and its forecast, and its window
 says no reset under the row. A reading after the reset starts a window that stands, which none
 of this touches.
 Its state is judged by the same clock: a reading older than the answer's `fresh_for_seconds`
