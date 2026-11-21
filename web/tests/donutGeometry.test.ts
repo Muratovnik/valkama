@@ -46,6 +46,26 @@ describe('the ring', () => {
     ])
   })
 
+  test('given a whole larger than its parts, draws each its share of it and leaves the rest open', () => {
+    // A part of 10 left out of a whole of 100 by the caller: the others keep their shares of 100.
+    const rows = [row('high', 60, { slot: 1 }), row('medium', 30, { slot: 2 })]
+    const ring = ringOf(rows, undefined, 100)
+    assert.equal(ring.whole, 100)
+    assert.deepEqual(
+      ring.sectors.map((one) => [
+        one.row?.key,
+        ...[one.share, one.start, one.end].map((at) => Math.round(at * 1000) / 1000),
+      ]),
+      [
+        ['high', 0.6, 0, 0.6],
+        ['medium', 0.3, 0.6, 0.9],
+      ],
+    )
+    // A whole no larger than the parts is their own sum, and the ring closes.
+    assert.equal(ringOf(rows, undefined, 50).whole, 90)
+    assert.equal(ringOf(rows, undefined, 50).sectors.at(-1)?.end, 1)
+  })
+
   test('keeps the hue the page gave a value, whatever its rank in the ring', () => {
     // Filtered, the value the page ranks fourth is the largest here: it stays in the fourth hue.
     assert.deepEqual(

@@ -83,12 +83,6 @@ export interface RankedRow extends MarkAction {
   /** The value as the reader reads it: formatted by the caller, units and all. */
   valueText: string
   /**
-   * Whether the row's figure is less than the least its words count, «under a minute» or
-   * «< $0.01»: the chart leaves it out while it has another row to draw, under any name, and its
-   * table twin lists it as every other row.
-   */
-  belowUnit?: boolean
-  /**
    * What the label leaves out, said in its hint: the client and the start of the id of a session
    * the label names by its title.
    */

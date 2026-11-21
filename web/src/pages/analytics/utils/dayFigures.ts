@@ -1,5 +1,6 @@
 import {
   breakdownOf,
+  drawnLines,
   figureOf,
   lineKeyOf,
   measureOf,
@@ -104,7 +105,8 @@ const NOT_CATEGORIES = ['none', 'unknown'] as const satisfies readonly ValueKind
  * The values a stack names, bottom first, which is also the legend's order: the answer's largest
  * categories in the measure that hold a hue of the page's key (`rankedSlots`), up to `STACKED`,
  * each in that hue, then work with no value there and unknown work, each its own series in the
- * darker neutral and never folded; only values with anything to draw. The rest of the answer is
+ * darker neutral and never folded; only values with anything to draw, and none whose figure says
+ * nothing of how much (`drawnLines`). The rest of the answer is
  * one «other» series in the lighter neutral, on top: under a filter a value the key gives no hue
  * is folded there rather than named in a grey beside it. Split by `across`, the values are the
  * pairs.
@@ -113,8 +115,11 @@ export function stackLines(source: StackSource) {
   const { usage, by: dimension, measure, across = null } = source
   // A value with no figure in the measure stays, so its days can say it has none.
   const breakdown = breakdownOf(dimension, across)
-  const lines = spendingLines(usage.rows, breakdown, measure, Number.POSITIVE_INFINITY).filter(
-    (line) => figureOf(measure, line.spent) !== 0,
+  const lines = drawnLines(
+    measure,
+    spendingLines(usage.rows, breakdown, measure, Number.POSITIVE_INFINITY).filter(
+      (line) => figureOf(measure, line.spent) !== 0,
+    ),
   )
   const slots = rankedSlots(source.places ?? usage.rows, dimension, measure, across)
   const hued = lines.filter(

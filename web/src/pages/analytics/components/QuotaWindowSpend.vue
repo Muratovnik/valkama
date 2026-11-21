@@ -33,7 +33,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { useWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
-import { addSpent, belowUnit, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { addSpent, drawnLines, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { shareOf, SPEND_BREAKDOWNS } from '@/pages/analytics/utils/windowSpend.ts'
 import type { SpendBy } from '@/pages/analytics/utils/windowSpend.ts'
@@ -169,11 +169,10 @@ const rows = computed<RankedRow[]>(() => {
   const held = answer.value
   if (!held) return []
   const { lines, total } = held.spent
-  return lines.map((line) => ({
+  return drawnLines('cost', lines).map((line) => ({
     ...rowOf(held, line),
     slot: line.kind === 'category' ? 1 : 'other',
     valueText: words.withShare(cost(line.spent), shareOf(line, total)),
-    belowUnit: belowUnit('cost', line.spent),
   }))
 })
 /**
@@ -183,12 +182,19 @@ const rows = computed<RankedRow[]>(() => {
 const parts = computed<RankedRow[]>(() => {
   const held = answer.value
   if (!held) return []
-  return held.spent.parts.map((line) => ({
+  return drawnLines('cost', held.spent.parts).map((line) => ({
     ...rowOf(held, line),
     slot: line.kind === 'category' ? undefined : 'apart',
     valueText: cost(line.spent),
   }))
 })
+/** What every item of the ring adds up to, the ones it leaves out too: what its shares are of. */
+const partsWhole = computed(() =>
+  (answer.value?.spent.parts ?? []).reduce(
+    (sum, line) => sum + (measureOf('cost', line.spent) ?? 0),
+    0,
+  ),
+)
 const ringWords = computed<DonutWords>(() => ({
   empty: t('analytics.quota.spent.none'),
   rest: (count) => t('analytics.values.other', { count }, count),
@@ -264,6 +270,7 @@ const failedAgain = computed(() =>
             v-if="shown === 'chart' && view === 'ring'"
             :label="chartLabel"
             :rows="parts"
+            :whole="partsWhole"
             :words="ringWords"
             :format-value="formatCost"
             :format-part="words.share"

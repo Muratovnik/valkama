@@ -57,8 +57,8 @@ import type { ValueBreakdown } from '@/pages/analytics/composables/useValueRead.
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import {
-  belowUnit,
   breakdownOf,
+  drawnLines,
   figureOf,
   measureOf,
   spendingLines,
@@ -246,20 +246,19 @@ function rankedOf(breakdown: ValueBreakdown, usage: Usage): RankedRow[] {
     Number.POSITIVE_INFINITY,
   )
   const whole = all.reduce((sum, line) => sum + weight(line), 0)
-  return all
+  const listed = all
     .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
     .sort((left, right) => weight(right) - weight(left))
-    .map((line) => ({
-      key: line.key,
-      label: words.lineLabel(breakdown, line),
-      labelRuns: words.lineRuns(breakdown, line),
-      detail: words.valueDetail(breakdown, line.value),
-      value: weight(line),
-      valueText: words.lineShare(props.measure, line.spent, whole),
-      belowUnit: belowUnit(props.measure, line.spent),
-      slot: hues.get(line.key) ?? 'other',
-      quiet: line.kind !== 'category',
-    }))
+  return drawnLines(props.measure, listed).map((line) => ({
+    key: line.key,
+    label: words.lineLabel(breakdown, line),
+    labelRuns: words.lineRuns(breakdown, line),
+    detail: words.valueDetail(breakdown, line.value),
+    value: weight(line),
+    valueText: words.lineShare(props.measure, line.spent, whole),
+    slot: hues.get(line.key) ?? 'other',
+    quiet: line.kind !== 'category',
+  }))
 }
 
 const lists = computed(() =>

@@ -71,7 +71,8 @@ export function measureOf(measure: Measure, spent: Spent): number | null {
 
 /**
  * Whether a line's figure in a measure is less than the least its words count, so that it reads as
- * a span «under a minute», a cost «< $0.01» or no token at all: a row that says nothing of how much.
+ * a span «under a minute», a cost «< $0.01» or no token at all: a row that says nothing of how much,
+ * which no chart draws (`drawnLines`).
  * It is judged from the amount and the unit the words use, never from the words: time taken to the
  * millisecond as its words take it, against a minute; a cost against a cent; tokens against one. A
  * line the measure has no amount for says why in words and is never below; nor is a cost that
@@ -83,6 +84,20 @@ export function belowUnit(measure: Measure, spent: Spent): boolean {
   if (amount === null) return false
   if (measure === 'tokens') return amount < 1
   return spent.unpriced === 0 && amount < LEAST_COST
+}
+
+/**
+ * The lines a chart draws of a breakdown: every line whose figure counts something in the measure,
+ * or every line where none does (`belowUnit`), so a chart of nothing else still draws them rather
+ * than reading as empty. A line left out says nothing of how much, under any name, so no view of a
+ * chart names it: not the ranked bars, the ring's sectors and legend, the small charts, the day
+ * chart's series, nor the table twin of any of them. Every total and share a chart says stays of
+ * all the lines, which its caller sums before it leaves any out; the section's own table, which
+ * holds every value in every measure, lists them all.
+ */
+export function drawnLines<T extends { spent: Spent }>(measure: Measure, lines: readonly T[]): T[] {
+  const counted = lines.filter((line) => !belowUnit(measure, line.spent))
+  return counted.length ? counted : [...lines]
 }
 
 /** Whether a line spent anything at all: some time, a token, a price or tokens without one. */

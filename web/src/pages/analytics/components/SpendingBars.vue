@@ -48,6 +48,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 import {
   breakdownOf,
+  drawnLines,
   measureOf,
   rankedLines,
   spendingLines,
@@ -137,9 +138,14 @@ const counted = computed(
 const allWords = computed(() =>
   t('analytics.panel.bars.all', { count: counted.value }, counted.value),
 )
+/**
+ * The lines every view of the chart draws — the ring and its legend, the bars and the table twin:
+ * every one whose figure counts something (`drawnLines`), while its shares stay of every value.
+ */
+const drawn = computed(() => drawnLines(props.measure, all.value))
 const ranked = useRankedLines({
   by: () => props.by,
-  lines: () => all.value,
+  lines: () => drawn.value,
   measure: () => props.measure,
   whole: () => whole.value,
   inspect: (value, label) => emit('inspect', value, label),
@@ -185,6 +191,7 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
         v-if="view === 'ring'"
         :label="title"
         :rows="parts"
+        :whole="whole"
         :words="ringWords"
         :format-value="formatValue"
         :format-part="words.share"

@@ -143,53 +143,6 @@ describe('ranked bars', () => {
   })
 })
 
-/** The rows a chart draws, by key, in its order. */
-const keys = (chart: ReturnType<typeof mountBars>) =>
-  chart.findAll('.ranked-line').map((line) => line.attributes('data-key'))
-
-/**
- * A row whose figure is less than its unit shows says nothing of how much: the chart leaves it out,
- * whatever its name, while another row is there to draw; its table lists it as any row.
- */
-describe('a row below its unit', () => {
-  const tiny: RankedRow[] = [
-    { key: 'core', label: 'Core', value: 2, valueText: '2 h', actionable: true },
-    { key: 'docs', label: 'Docs', value: 0.005, valueText: 'under a minute', belowUnit: true },
-    {
-      key: 'unknown',
-      label: 'Unknown',
-      value: 0.004,
-      valueText: 'under a minute',
-      kind: 'unknown',
-      belowUnit: true,
-    },
-    { key: 'web', label: 'Web', value: 1, valueText: '1 h', kind: 'unknown' },
-  ]
-
-  it('is not drawn, a category or a row apart alike, while another row is', () => {
-    const chart = mountBars(tiny)
-    expect(keys(chart)).toEqual(['core', 'web'])
-    // Unknown work of a full unit stays: it shows a gap in what is placed.
-    expect(chart.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
-      'category',
-      'unknown',
-    ])
-  })
-
-  it('is drawn where every row is below its unit, as a list of nothing else would be empty', () => {
-    const chart = mountBars(tiny.filter((row) => row.belowUnit))
-    expect(keys(chart)).toEqual(['docs', 'unknown'])
-  })
-
-  it('is listed by the table all the same', () => {
-    const table = mountTable(tiny)
-    expect(table.findAll('tbody th').map((cell) => cell.text())).toHaveLength(tiny.length)
-    expect(table.findAll('tbody th').map((cell) => cell.text())).toEqual(
-      expect.arrayContaining(['Docs', 'Unknown']),
-    )
-  })
-})
-
 /**
  * A list of names of free text, tasks by their titles: each name on lines of its own, two at most,
  * where the one-line chart cuts it to one; the rows that are not categories apart under a rule with

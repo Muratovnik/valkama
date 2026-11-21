@@ -1036,10 +1036,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   it read as one more row. Parts are compared by ranked bars on one base; a thin segmented strip
   belongs only over rows that print a name and a number and draw nothing, as a rail tile's
   `MiniShareBar` does. A row whose figure is less than the least its unit shows — «меньше
-  минуты», a cost under a cent, no token — says nothing of how much and is not drawn, under any
-  name, judged from its amount against that unit and never from its words; «unknown» of a unit or
-  more stays, since it shows a gap in what is placed. The section's total, every share and the
-  table twin still count and list such a row, and a list whose every row is one draws them all.
+  минуты», a cost under a cent, no token — says nothing of how much and is in no view of a chart,
+  under any name, judged from its amount against that unit and never from its words: not the
+  ranked bars, the ring's sectors and legend, the small charts, the day chart's series, nor the
+  table twin of any of them, which all take their lines from one rule (`drawnLines`). «Unknown» of
+  a unit or more stays, since it shows a gap in what is placed. The section's total and every
+  share still count such a row — a ring that leaves one out stays open by its share rather than
+  stretching the rest over it — the section's own table, which holds every value in every
+  measure, lists it, and a chart whose every row is one draws them all.
   `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
   draws one small chart of the span per leading value, all on one scale whose top is written
   once over them, each with its name on one line and its figure; the folded tail shares the
