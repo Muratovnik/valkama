@@ -175,7 +175,7 @@ describe('the split of a section', () => {
     expect([...charts]).toEqual([...bars])
   })
 
-  it('keeps its pairs in the bars and the table when a refresh cannot read them again', async () => {
+  it('keeps its pairs when a refresh cannot read them again, and the bar says so', async () => {
     let failing = false
     stubAnalyticsReads((query) =>
       failing && query.get('group_by') === 'model,role'
@@ -193,9 +193,22 @@ describe('the split of a section', () => {
     await flushPromises()
     expect(pairs(), 'the table keeps its pairs').toEqual(shown)
     expect(text(page, '.spending-bars .ranked-label'), 'and so do the bars').toEqual(shown)
-    expect(text(page, '.spending-table-head [role="status"]')).toEqual([
+    // The bar says the read failed, as it says the page's own reads do; the table says nothing.
+    expect(text(page, '.analytics-bar .refresh-failed:not(.refresh-failed-held)')).toEqual([
       'Could not refresh · Retry',
     ])
+    expect(
+      page.find('.spending-table [role="status"], .spending-table [role="alert"]').exists(),
+    ).toBe(false)
+
+    // Its retry reads the pairs again.
+    failing = false
+    await page.get('.analytics-bar .refresh-failed-retry').trigger('click')
+    await flushPromises()
+    expect(page.find('.analytics-bar .refresh-failed:not(.refresh-failed-held)').exists()).toBe(
+      false,
+    )
+    expect(pairs()).toEqual(shown)
   })
 
   it('is chosen in the section’s heading, written into the address as a step, and taken out with none', async () => {

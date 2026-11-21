@@ -13,19 +13,11 @@
  * there is nothing to count, so choosing a measure or a split moves nothing under it.
  *
  * The title and the controls keep one line; only a narrow table lets them wrap.
- *
- * While a split's pairs stand (`cross`), a read again of them that fails keeps them and says so,
- * «Could not refresh · Retry», in the place of the line about the rows, whose words step aside
- * while it is said (`heldRoom.css`): the pairs once gave their place to a line of words at the
- * first refresh that failed, and held beside the download its room took a line of its own in a
- * narrow table, 32px under the heading of a split section on a phone with nothing failed.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
-import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
-import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { tableCounts } from '@/pages/analytics/composables/useTableModel.ts'
 import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 
@@ -36,20 +28,20 @@ import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   by: UsageDimension
-  /** The read of the split by a second dimension; `off` while the section is not split. */
-  cross: CrossRead
   /** The rows the table lists. */
   lines: readonly TableLine[]
   /** The measure the rows are counted in: a value with nothing there is said apart. */
   measure: Measure
+  /** Whether the rows are pairs, the section being split by a second dimension. */
+  split: boolean
   /** The whole account of the rows and their order, the hint of the words about them. */
   summary: string
   title: string
   /** A split is chosen and its read has not landed: nothing to count or download. */
   waiting: boolean
 }>()
-/** The download asked for; the split read again. */
-const emit = defineEmits<{ download: []; reread: [] }>()
+/** The download asked for. */
+const emit = defineEmits<{ download: [] }>()
 
 const { t } = useI18n()
 
@@ -60,7 +52,7 @@ const { t } = useI18n()
 const parts = computed(() => {
   if (props.waiting || !props.lines.length) return []
   const { now, elsewhere, before } = tableCounts(props.lines)
-  const what = props.cross.status === 'off' ? `values.${props.by}` : 'pairs'
+  const what = props.split ? 'pairs' : `values.${props.by}`
   return [
     t(`analytics.panel.table.counts.${what}`, { count: now }, now),
     elsewhere
@@ -78,12 +70,6 @@ const counts = computed(() => parts.value.join(' · '))
 const shownParts = computed(() =>
   parts.value.map((part, index, all) => (index < all.length - 1 ? `${part} · ` : part)),
 )
-
-/** Whether a read again of the pairs on show failed; null while no pairs stand. */
-const again = computed(() => {
-  const { cross } = props
-  return 'usage' in cross && cross.usage ? cross.status === 'failed' : null
-})
 
 /** Nothing to download: no value to list. */
 const nothing = computed(() => !props.lines.length)
@@ -117,12 +103,11 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
         {{ t('analytics.table.download') }}
       </VButton>
     </div>
-    <div class="spending-table-counts held-room">
+    <div class="spending-table-counts">
       <p
         v-if="parts.length"
         v-tooltip.detail="{ text: summary, words: counts }"
         class="spending-table-summary"
-        :class="{ 'held-room-unseen': again }"
       >
         <span
           v-for="part in shownParts"
@@ -131,17 +116,9 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
           >{{ part }}</span
         >
       </p>
-      <RefreshFailed
-        v-if="again !== null"
-        :failed="again"
-        held
-        @retry="emit('reread')"
-      />
     </div>
   </div>
 </template>
-
-<style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
 /* The title and the controls on one line, and the line about the rows on a row of its own

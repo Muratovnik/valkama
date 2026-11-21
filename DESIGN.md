@@ -2905,10 +2905,10 @@ chooses it, and the ranked bars, the small charts, the period columns and the ta
 its pairs, «claude-opus-5-5 · high», each pair a value with its own colour and the tail folded
 into «other» as any series is. Chosen over the table alone, it left the charts beside a crossed
 table answering the first dimension only. A refresh whose pairs could not be read again keeps
-them in every one of those parts and says «Could not refresh · Retry» in the place of the line that
-counts the table's rows, whose words step aside while it is said: dropped, they left the charts
-and the table gave its place to one line of words, and held beside the download the words' room
-took a line of its own under the heading of a split section on a phone with nothing failed. A pair's name short of room on its line cuts its first
+them in every one of those parts, in the section and in the side panel of all its values, and the
+bar says «Could not refresh · Retry» as it says the page's own reads failed: dropped, they left the
+charts and the table gave its place to one line of words, and held beside the table's download the
+words' room took a line of its own under the heading of a split section on a phone with nothing failed. A pair's name short of room on its line cuts its first
 part and keeps the separator and the second whole, «claude-opus-5-… · medium», because the second
 is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
 chart. In the ranked bars a pair's name takes a line of its own over its bar at every width, as any

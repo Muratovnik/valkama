@@ -30,7 +30,10 @@ import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
 import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { beforeStepsQuery } from '@/pages/analytics/composables/usePeriodBefore.ts'
-import { providePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
+import {
+  providePanelParts,
+  providePanelStanding,
+} from '@/pages/analytics/composables/useReadStanding.ts'
 import { scopeFilters } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -188,9 +191,11 @@ export function useUsageRead(options: {
   const refreshFailed = shallowRef(false)
   /** Whether what is drawn with a new view's answer, read after it, could not be read. */
   const lateFailed = shallowRef(false)
+  /** Whether a part's own read again failed, what it showed kept: a split's pairs. */
+  const partFailed = providePanelParts()
   providePanelStanding({
     anew,
-    failed: computed(() => refreshFailed.value || lateFailed.value),
+    failed: computed(() => refreshFailed.value || lateFailed.value || partFailed.value),
   })
 
   /** The scope's own filter: its project, or nothing at the top. */

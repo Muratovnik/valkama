@@ -3,9 +3,6 @@
  * the rule every read wait keeps: nothing on screen for the first 500 ms, then the shared word for
  * at least 200 ms, and the table held away for that minimum. The page says the word once for all of
  * its waits (`analytics-read-wait`, see the view's spec); a read that fails says so in its alert.
- * A read again of the pairs on show that fails keeps them, and says so in room the heading row kept
- * for it (DESIGN.md § Analytics: nothing moves when a failure is said or when the next answer
- * replaces it).
  */
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -90,29 +87,5 @@ describe("the crossed read's wait", () => {
     await wrapper.setProps({ cross: { status: 'ready', usage: read } })
     expect(wrapper.find('table').exists()).toBe(true)
     expect(wrapper.find('.spending-table-reading').exists()).toBe(false)
-  })
-})
-
-/** Each row's name, in the table's order. */
-const names = (wrapper: ReturnType<typeof crossedTable>) =>
-  wrapper.findAll('tbody th').map((cell) => cell.text().replaceAll(/\s+/gu, ' ').trim())
-
-describe("the crossed read's read again", () => {
-  it('keeps its pairs when it fails, and says so in room the heading row kept', async () => {
-    const shown = crossedTable({ status: 'ready', usage: read })
-    const pairs = names(shown)
-    expect(pairs).toHaveLength(2)
-    const failure = () => shown.get('.spending-table-head [role="status"]')
-    // Held unseen while the pairs stand and nothing failed.
-    expect(failure().classes()).toContain('refresh-failed-held')
-
-    await shown.setProps({ cross: { status: 'reading', usage: read } })
-    await shown.setProps({ cross: { status: 'failed', usage: read } })
-    expect(names(shown), 'the pairs it showed stay').toEqual(pairs)
-    expect(shown.find('[role="alert"]').exists()).toBe(false)
-    expect(failure().classes()).not.toContain('refresh-failed-held')
-    expect(failure().text().replaceAll(/\s+/gu, ' ').trim()).toBe('Could not refresh · Retry')
-    await failure().get('button').trigger('click')
-    expect(shown.emitted('reread')).toHaveLength(1)
   })
 })

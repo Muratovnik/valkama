@@ -37,9 +37,9 @@ function countsOf(lines: TableLine[], measure: Measure, locale: 'en' | 'ru' = 'e
   const head = mount(SpendingTableHead, {
     props: {
       by: 'role',
-      cross: split ? { status: 'reading', usage: null } : { status: 'off' },
       lines,
       measure,
+      split,
       summary: '',
       title: 'Spending by role',
       waiting: false,
