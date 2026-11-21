@@ -15,14 +15,20 @@ export async function installHelpers(context: BrowserContext) {
   await context.addInitScript({ content: helperScript() })
 }
 
+/** How long the names wait for an answer's body, in ms: one a page never takes is never read. */
+const READ_PATIENCE = 3000
+
 /**
  * The names of the data the pages of `context` were shown, as the API gave them (`namesIn`), so
  * a forbidden text a task's title quotes is told from the product's own words: every JSON answer
- * under `/api/` is read, and the names are told once each answer that came is.
+ * under `/api/` is read, and the names are told once each answer that came is, or once
+ * `READ_PATIENCE` ran out, as it does for a body the browser never hands over; `unread` counts
+ * the answers so left out, which the run notes.
  */
-export function watchNames(context: BrowserContext): () => Promise<string[]> {
+export function watchNames(context: BrowserContext) {
   const names = new Set<string>()
   const reading = new Set<Promise<unknown>>()
+  const late = new Set<Promise<unknown>>()
   context.on('response', (response) => {
     const json = (response.headers()['content-type'] ?? '').includes('json')
     if (!json || !new URL(response.url()).pathname.startsWith('/api/')) return
@@ -38,9 +44,18 @@ export function watchNames(context: BrowserContext): () => Promise<string[]> {
       .finally(() => reading.delete(one))
     reading.add(one)
   })
-  return async () => {
-    await Promise.all(reading)
-    return [...names]
+  return {
+    names: async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const patience = new Promise((resolve) => {
+        timer = setTimeout(resolve, READ_PATIENCE)
+      })
+      await Promise.race([Promise.all(reading), patience])
+      clearTimeout(timer)
+      for (const one of reading) late.add(one)
+      return [...names]
+    },
+    unread: () => late.size,
   }
 }
 

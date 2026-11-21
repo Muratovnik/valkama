@@ -226,7 +226,8 @@ async function walkSection(
 ) {
   const context = await browser.newContext({ locale: 'ru-RU', viewport: { width, height: 1000 } })
   await installHelpers(context)
-  const names = watchNames(context)
+  const watched = watchNames(context)
+  const names = watched.names
   context.setDefaultTimeout(15_000)
   const page = await context.newPage()
   const results: Measured[] = []
@@ -245,6 +246,9 @@ async function walkSection(
       notes.push(`failed: ${width} ${section} ${period.period}: ${String(error).slice(0, 300)}`)
     }
   }
+  const unread = watched.unread()
+  if (unread)
+    notes.push(`${width} ${section}: ${unread} API answers not read in time, their names unknown`)
   await context.close()
   return { results, notes }
 }
