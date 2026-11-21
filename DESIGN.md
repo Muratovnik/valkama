@@ -1446,7 +1446,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   arrows show a panel as they reach its tab where it shows at once, and only
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
-  same control built again, and `check:ui-system` rejects one.
+  same control built again, and `check:ui-system` rejects one. A row that
+  scrolls sideways where its room is narrower than it — a card's sections, a
+  phone's periods — scrolls in a `ChoiceStrip`, which fades the end a choice is
+  cut at and keeps the chosen one, and the one the keyboard reaches, clear of
+  that fade. The periods had their own strip, which faded nothing and kept the
+  chosen by the browser's nearest edge, so a phone's row began at a sliver of
+  «Сейчас» and ended at one of «4 недели».
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
@@ -2681,9 +2687,10 @@ freshness with the refresh at its end. One row cannot hold them there: at 1024px
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
 panel moved down 44px when a span of days was chosen. On a phone the bar is three rows of one
-height whatever period is chosen: the periods, scrolling sideways, with the freshness at their
-end; the filter, a failure and the refresh; and the room of the reader's own days, which took a
-row of their own and moved the panel 44px when chosen. A refresh that fails keeps what is shown
+height whatever period is chosen: the periods, scrolling sideways with the chosen one in view
+and a cut end faded (`ChoiceStrip`), with the freshness at their end; the filter, a failure
+and the refresh; and the room of the reader's own days, which took a row of their own and moved
+the panel 44px when chosen. A refresh that fails keeps what is shown
 and says so in words before the age at every width, «Could not refresh» with a retry: given up
 on a short line, its words had left a red disc with no hint. The retry is reached at every width
 too: where the line has no room for «· Retry», the words themselves are the retry, named

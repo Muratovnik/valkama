@@ -122,7 +122,7 @@ export async function wordsUnderFade(strip: Locator, tab: Locator) {
   const { start, end } = await fadedEnds(strip)
   const [fade, row, words] = await Promise.all([
     strip.evaluate((node) =>
-      Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade')),
+      Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-strip-fade')),
     ),
     strip.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect),
     tab.evaluate((node) => {

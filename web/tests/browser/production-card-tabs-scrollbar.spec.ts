@@ -22,7 +22,7 @@ const rowParts = (strip: Locator) =>
     return {
       box: { left, top, right, bottom },
       bar: node.offsetHeight - node.clientHeight,
-      fade: Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade')),
+      fade: Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-strip-fade')),
       // Where the thumb runs, as the share the row shows and how far it is scrolled place it.
       thumb: {
         left: (node.scrollLeft / node.scrollWidth) * node.clientWidth + left,
