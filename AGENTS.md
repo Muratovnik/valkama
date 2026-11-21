@@ -137,9 +137,9 @@ split with it:
 - The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
-  The runner and the `unittest` step of `tests/isolated.py gates` enforce it with
-  one lock for every checkout on the machine: a second run waits, and says whose
-  run it waits for, when it starts and every minute until it gets the lock.
+  The runner, `npm test` and the whole `unittest` suite go through one gate for
+  every checkout on the machine, each declaring its CPUs, the runner all: a run
+  waits until it fits, saying why when it starts and every minute.
   A defect that depends on a neighbouring worktree shows up only at this run.
 
 How to run one browser spec, a probe spec kept outside the suite, or the whole
@@ -163,7 +163,8 @@ and the refusal used to be silent. When anything under `desktop/` changed, run
 web build touches, and reporting a desktop change as delivered without it hands
 the owner their previous binary. A browser an agent drives against a real listener
 opens a card through its route or `/open/<number>?in=browser`, because `/open/<number>`
-alone starts the desktop app on the person's screen.
+alone starts the desktop app on the person's screen, and a visible Electron
+window is opened only at a time agreed with the person.
 
 Every tool above is a development dependency pinned in `requirements-dev.txt`,
 configured in `pyproject.toml`. The server itself imports nothing outside the
@@ -359,7 +360,10 @@ force, and the gates hold each:
   and user runtime state out of Git. The one deliberate exception is `web/dist`,
   committed so a clone serves the built UI with no build step; rebuild it
   whenever `web/src` changes and include it in the next incremental local
-  commit after a coherent task-owned green boundary.
+  commit after a coherent task-owned green boundary. In a parallel worktree the
+  worker does not commit it and returns it to its branch's state before handing
+  off; the integrator rebuilds it once on the integrated head and commits it
+  there.
 - Test fixtures, comments and titles carry no value from a live store or the
   owner's own records: no figure, name or id. A case found on live data is
   rebuilt from made-up values, and its comment says the case, not where it was
