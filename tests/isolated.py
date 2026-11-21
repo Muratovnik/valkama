@@ -198,15 +198,19 @@ def isolated_environment(home: Path) -> dict[str, str]:
 
     `TEMP` is left alone on purpose. Nothing of the caller's `VALKAMA_*` comes
     through, because those are the variables that point a child back at real
-    state. `VALKAMA_PROTECTED_STORE` is the store's own guard for the one path
-    it must refuse, named from the caller's profile before the move.
+    state, and neither does a variable that moves a home location elsewhere:
+    `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and the `XDG_*` directories. Without them
+    a child derives each from `HOME`, which is inside the throwaway profile.
+    `VALKAMA_PROTECTED_STORE` is the store's own guard for the one path it must
+    refuse, named from the caller's profile before the move.
     """
 
     real_store = Path(store.data_root()) / f"{store.DATA_PREFIX}.sqlite3"
     environment = {
         name: value
         for name, value in os.environ.items()
-        if not name.upper().startswith("VALKAMA_") and name.upper() != "GIT_CONFIG_GLOBAL"
+        if not name.upper().startswith(("VALKAMA_", "XDG_"))
+        and name.upper() not in {"GIT_CONFIG_GLOBAL", "CLAUDE_CONFIG_DIR", "CODEX_HOME"}
     }
     environment.update(
         {

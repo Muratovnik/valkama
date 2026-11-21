@@ -159,6 +159,22 @@ class EnvironmentTests(Workspace):
         # And the caller's own environment is left as it was.
         self.assertEqual(str(self.real), os.environ["HOME"])
 
+    def test_no_variable_that_overrides_a_home_location_comes_through(self) -> None:
+        # Each of these names a real client or data directory outside HOME; a
+        # child that inherited one would refresh skills or read credentials there.
+        overrides = {
+            "CLAUDE_CONFIG_DIR": str(self.real / "claude"),
+            "CODEX_HOME": str(self.real / "codex"),
+            "XDG_DATA_HOME": str(self.real / "data"),
+            "XDG_BIN_HOME": str(self.real / "bin"),
+            "XDG_CONFIG_HOME": str(self.real / "config"),
+        }
+        with mock.patch.dict(os.environ, overrides):
+            environment = isolated.isolated_environment(self.home)
+
+        for name in overrides:
+            self.assertNotIn(name, environment)
+
     def test_a_child_writes_only_inside_the_throwaway_profile(self) -> None:
         before = files_under(self.real)
         report_file = self.root / "report.json"
