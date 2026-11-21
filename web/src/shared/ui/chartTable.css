@@ -9,8 +9,13 @@
  */
 
 /* A table wider than its column, as a phone makes one of a period table, scrolls in its own
-   frame instead of widening the page; Tab reaches the frame while it scrolls (`keyScroll`). */
+   frame instead of widening the page; Tab reaches the frame while it scrolls (`keyScroll`).
+   The frame is the containing block of what its table places out of the flow, the words only a
+   screen reader reads (`visually-hidden`) among them, so that scrolls and is clipped with the
+   table: placed against the panel instead, the comma before a quota share's remark, in a table
+   scrolled past its frame, stood 150px past the panel at 390px and scrolled the panel sideways. */
 .chart-table-frame {
+  position: relative;
   max-width: 100%;
   overflow-x: auto;
 }

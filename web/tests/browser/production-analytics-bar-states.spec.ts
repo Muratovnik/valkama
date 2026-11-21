@@ -13,8 +13,10 @@
  * the line leaves. A span of days chosen keeps the bar's height and the
  * panel's top wherever the bar is of one height for every period: on a phone, in the two rows of a
  * narrow bar, and on a line wide enough for the span; between 50rem and about 1360px the line
- * beside a span is two rows where a preset's is one, which `DESIGN.md` chose over one height. On a
- * phone the chosen period stands in view in its row, opened, chosen or beside a failure.
+ * beside a span is two rows where a preset's is one, which `DESIGN.md` chose over one height. The
+ * span's two days stand in one row inside the line, each with a date's whole room, from a phone of
+ * 360px up. On a phone the chosen period stands in view in its row, opened, chosen or beside a
+ * failure.
  *
  * The bar and the panel end on one right edge whether the panel scrolls or not.
  */
@@ -210,7 +212,29 @@ for (const width of WIDTHS)
   })
 
 /** Widths the bar is of one height for every period at: a phone, two rows, one line. */
-const ONE_HEIGHT = [390, 760, 1024, 1440, 1920] as const
+const ONE_HEIGHT = [360, 390, 760, 1024, 1440, 1920] as const
+
+/**
+ * The room a date has inside its field as the bar first gave it: 8.25rem at the root's 16px, less
+ * the field's air of 12px at each end and its edge of 1px (`AnalyticsOwnPeriod`).
+ */
+const DATE_ROOM = 8.25 * 16 - 2 * 12 - 2
+
+/** Each day's field: where it stands, and the room inside its air and edge. */
+const dayFields = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLInputElement>('.analytics-bar input[type="date"]')].map(
+      (field) => {
+        const { left, right, top } = field.getBoundingClientRect()
+        const style = getComputedStyle(field)
+        const room =
+          field.clientWidth -
+          Number.parseFloat(style.paddingLeft) -
+          Number.parseFloat(style.paddingRight)
+        return { left, right, top, room }
+      },
+    ),
+  )
 
 for (const width of ONE_HEIGHT)
   test(`a span of days moves neither the bar nor the panel at ${width}px`, async ({
@@ -223,9 +247,22 @@ for (const width of ONE_HEIGHT)
     await expect(page.locator('.analytics-bar input[type="date"]')).toHaveCount(2)
     await frames(page)
     const days = await barState(page)
-    await record(info, `bar-states days ${width}`, { week, days })
+    const fields = await dayFields(page)
+    await record(info, `bar-states days ${width}`, { week, days, fields })
     expect(days.bar, "the bar's height").toBe(week.bar)
     expect(days.body, 'the top under the bar').toBe(week.body)
+    // The two days stand in one row inside the bar's line, each with a date's whole room: at
+    // 360px they once needed 288px of a line of 264 and stood under each other.
+    const line = days.line ?? { left: Number.NaN, right: Number.NaN }
+    expect(fields, "the days' fields").toHaveLength(2)
+    const [from, to] = fields
+    expect(to?.top, 'the last day beside the first').toBe(from?.top)
+    expect(to?.left, 'the last day after the first').toBeGreaterThan(from?.right ?? Number.NaN)
+    for (const field of fields) {
+      expect(field.left, 'a day before the line').toBeGreaterThanOrEqual(line.left - 0.5)
+      expect(field.right, 'a day past the line').toBeLessThanOrEqual(line.right + 0.5)
+      expect(field.room, "a day's room for its date").toBeGreaterThanOrEqual(DATE_ROOM - 0.5)
+    }
   })
 
 /** How far the chosen period stands past either end of the periods' row, which scrolls sideways. */
