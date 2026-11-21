@@ -83,22 +83,22 @@ with `PermissionError`.
 
 Heavy runs wanting more CPUs than there are fail tests that pass alone, so each
 goes through one gate, `tests/machine_lock.py`, at a file in the system's
-temporary directory that no TEMP or profile moves, declaring its CPUs: the whole
+temporary directory no TEMP or profile moves, declaring its CPUs: the whole
 unittest suite 2, from its package's `load_tests` until its process ends;
 `npm run test:unit` in `npm test` its 8 workers; `npm run test:browser:allowed`
 but `--list` all. A run goes in, in arrival order, once it fits beside the others
-and the load; `VALKAMA_HEAVY_TEST_CPUS=1` lets one in at a time.
+and, for 3 min at most, the load; `VALKAMA_HEAVY_TEST_CPUS=1` lets one in at a time.
 Targeted runs take none — a unittest module, subpackage, `-p` or `-k`, Vitest
 given files or `-t`, `npx playwright test <file>` — nor do the light gate steps,
 and `npm test` with no Python says so and runs unlocked. What a holder starts goes
 in at once: `gates` holds a place for `unittest`, so that wait opens its log, and
-`npm test`'s is in `logs/web-test.log`. Its locks are the OS's, so they go with a
+`npm test`'s is in `logs/web-test.log`. Its locks are the OS's: they go with a
 run that dies. A waiter waits with no time limit, saying why when it starts and
 every minute, then how long it waited:
 
 ```text
-waiting for the heavy-test lock <file>: <who holds its CPUs, how many are free, or the waiter ahead>
-took the heavy-test lock after 2 min 41 s: 2 of 32 CPUs, the machine 31% busy, alone
+waiting for the heavy-test lock <file>: <who holds its CPUs, how many are free, or who is ahead>
+took the heavy-test lock after 41 s: 2 of 32 CPUs, the machine 31% busy, alone
 ```
 
 `tests/commit_subjects.py` reads the subject of every commit `HEAD` reaches,

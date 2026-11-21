@@ -728,6 +728,14 @@ class RuleTests(unittest.TestCase):
             "took the heavy-test lock after 0 s: 1 of 1 CPU, the load not measured, alone", alone
         )
 
+    def test_the_admission_line_of_a_run_that_went_in_without_its_room_says_so(self) -> None:
+        line = machine_lock.admission_line(185.0, 32, 32, 0.66, [], (10.8, 22.4))
+        self.assertEqual(
+            "took the heavy-test lock after 3 min 5 s without the room it asked for,"
+            " 10.8 CPUs free where it needs 22.4: 32 of 32 CPUs, the machine 66% busy, alone",
+            line,
+        )
+
 
 class GateCase(LockCase):
     """The gate on a machine of 32 CPUs whose load each test sets."""
@@ -864,6 +872,90 @@ class GateTests(GateCase):
         self.assertIn("vitest in", note)
         self.assertIn("with 2 CPUs", note)
         self.assertIn("with 8 CPUs", note)
+
+
+class RoomWaitTests(GateCase):
+    """A run that only the measured room keeps out waits for it `ROOM_WAIT_SECONDS` at most."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.now = [NOW]
+
+    def short_of_room(self, run: str, cpus: int, load: list[float]) -> Waiter:
+        """A run of `cpus` on the test's clock, at the load `load` holds."""
+
+        return self.place(run, cpus, measure=lambda: load[0], clock=lambda: self.now[0])
+
+    def test_a_run_that_gets_its_room_before_the_bound_goes_in_with_it(self) -> None:
+        load = [0.9]
+        waiter = self.short_of_room("vitest", 8, load)
+        self.outside(waiter)
+        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS - 1
+        self.outside(waiter)
+        load[0] = 0.1
+        self.inside(waiter)
+        self.assertTrue(
+            waiter.said[-1].endswith(": 8 of 32 CPUs, the machine 10% busy, alone"), waiter.said
+        )
+
+    def test_at_the_bound_a_run_goes_in_without_its_room_and_says_so(self) -> None:
+        waiter = self.short_of_room("browser", 32, [0.9])
+        self.outside(waiter)
+        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS - 1
+        self.outside(waiter)
+        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS
+        self.inside(waiter)
+        self.assertRegex(
+            waiter.said[-1],
+            r"^took the heavy-test lock after \d+ s without the room it asked for,"
+            r" 3\.2 CPUs free where it needs 22\.4: 32 of 32 CPUs, the machine 90% busy, alone$",
+        )
+
+    def test_a_wait_for_the_runs_going_starts_no_count(self) -> None:
+        first = self.place("big", 30)
+        self.inside(first)
+        waiter = self.short_of_room("vitest", 8, [0.9])
+        self.outside(waiter)
+        self.assertIn("30 of 32 CPUs the gate hands out", waiter.said[0])
+        self.now[0] = NOW + 10 * machine_lock.ROOM_WAIT_SECONDS
+        first.finish()
+        # Kept out by the room alone only from now: it waits for it the whole bound.
+        self.outside(waiter)
+        self.now[0] += machine_lock.ROOM_WAIT_SECONDS - 1
+        self.outside(waiter)
+        self.now[0] += 1
+        self.inside(waiter)
+        self.assertIn("without the room it asked for", waiter.said[-1])
+
+    def test_a_wait_for_an_earlier_versions_run_starts_no_count(self) -> None:
+        with self.path.open("a+b") as old:
+            # The lock taken as an earlier version takes it, by another handle.
+            self.assertTrue(store_lock.try_lock(old))
+            try:
+                waiter = self.short_of_room("vitest", 8, [0.9])
+                self.outside(waiter)
+                self.assertIn("it is held by a run that has not recorded itself", waiter.said[0])
+                self.now[0] = NOW + 10 * machine_lock.ROOM_WAIT_SECONDS
+            finally:
+                store_lock.unlock(old)
+        self.outside(waiter)
+        self.now[0] += machine_lock.ROOM_WAIT_SECONDS - 1
+        self.outside(waiter)
+        self.now[0] += 1
+        self.inside(waiter)
+
+    def test_a_later_run_does_not_pass_the_head_while_it_waits_for_room(self) -> None:
+        # 16 CPUs free at half busy: room for the later run, not for the head's 22.4.
+        load = [0.5]
+        head = self.short_of_room("big", 24, load)
+        self.assertTrue(head.said_something())
+        self.assertIn("16.0 of 32 CPUs are free", head.said[0])
+        later = self.short_of_room("unittest", 2, load)
+        self.outside(later)
+        self.assertIn("it is behind 1 earlier waiter, the first big in", later.said[0])
+        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS
+        self.inside(head)
+        self.assertIn("without the room it asked for", head.said[-1])
 
 
 class Process:

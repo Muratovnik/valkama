@@ -16,6 +16,15 @@ both hold:
   above `ROOM_FRACTION` of the machine held to that fraction. This is what sees
   load that never declares itself here: targeted runs, builds, an antivirus.
 
+The second rule only delays a run. One that it alone keeps out — the first rule
+holds, no waiter is ahead of it and no earlier version's run holds the lock —
+waits for that room `ROOM_WAIT_SECONDS` at most, counted from the first round
+that refused it for that alone, then goes in without it and says so, and the run
+record carries that: before the gate a run started once the lock was free,
+whatever the load, and load nothing here declares must not hold the head of the
+queue for ever. A wait for the first rule or for an earlier version's run starts
+no such count.
+
 A run that declares nothing asks for every CPU the gate hands out, so it goes
 alone and nothing joins it; the browser suite does, because it takes whatever
 the machine has. Where the load cannot be measured only the first rule decides.
@@ -24,7 +33,9 @@ one heavy run at a time, which is what this tool did before and the rollback.
 
 One run decides at a time, and waiters go in the order they came: a later run
 waits behind an earlier waiter even where it would fit, so a run that needs the
-whole machine is not passed for ever by smaller ones. A waiter says why it waits
+whole machine is not passed for ever by smaller ones. An earlier version's waiter
+is outside that order, so runs sharing the machine can pass it again and again;
+that lasts until no branch uses the earlier version any more. A waiter says why it waits
 when it starts and every minute; the run says on going in how long it waited,
 how busy the machine was and which runs it goes beside.
 
@@ -105,6 +116,10 @@ ROOM_FRACTION = 0.7
 #: How long a run that went in counts against the measured room by its need: it
 #: has not loaded the machine yet when it starts, so the load does not show it.
 RAMP_SECONDS = 60.0
+#: How long a run nothing here keeps out waits for the measured room, from the first
+#: round that refused it for that alone; then it goes in without it and says so.
+#: Before the gate a run started once the lock was free, whatever the machine's load.
+ROOM_WAIT_SECONDS = 180.0
 
 
 def logon_local_app_data() -> str | None:
@@ -501,6 +516,15 @@ def arithmetic_refusal(need: int, going: Sequence[Entry], capacity: int) -> str 
     )
 
 
+def _room(
+    need: int, going: Sequence[Entry], cpus: int, busy: float, now: float
+) -> tuple[float, float, int]:
+    """The CPUs free for `need`, the room it asks for, and the needs of runs still starting."""
+
+    ramping = sum(entry.cpus for entry in going if now - entry.since < RAMP_SECONDS)
+    return cpus * (1 - busy) - ramping, min(float(need), ROOM_FRACTION * cpus), ramping
+
+
 def room_refusal(
     need: int, going: Sequence[Entry], cpus: int, busy: float | None, now: float
 ) -> str | None:
@@ -508,9 +532,7 @@ def room_refusal(
 
     if busy is None:
         return None
-    ramping = sum(entry.cpus for entry in going if now - entry.since < RAMP_SECONDS)
-    free = cpus * (1 - busy) - ramping
-    wanted = min(float(need), ROOM_FRACTION * cpus)
+    free, wanted, ramping = _room(need, going, cpus, busy, now)
     if free >= wanted:
         return None
     starting = f", less {_cpus(ramping)} of runs still starting" if ramping else ""
@@ -530,10 +552,25 @@ def queue_refusal(ahead: Sequence[Entry]) -> str | None:
 
 
 def admission_line(
-    waited: float, need: int, capacity: int, busy: float | None, beside: Sequence[Entry]
+    waited: float,
+    need: int,
+    capacity: int,
+    busy: float | None,
+    beside: Sequence[Entry],
+    without_room: tuple[float, float] | None = None,
 ) -> str:
-    """What a run says as it goes in; `tests/run_record.py` reads its facts back."""
+    """What a run says as it goes in; `tests/run_record.py` reads its facts back.
 
+    `without_room` is the CPUs that were free and the room the run asked for, when
+    it went in after waiting `ROOM_WAIT_SECONDS` for that room.
+    """
+
+    short = (
+        ""
+        if without_room is None
+        else f" without the room it asked for, {max(0.0, without_room[0]):.1f} CPUs"
+        f" free where it needs {without_room[1]:g}"
+    )
     load = "the load not measured" if busy is None else f"the machine {busy:.0%} busy"
     runs = (
         "alone"
@@ -542,7 +579,7 @@ def admission_line(
         f" {'; '.join(entry.named() for entry in beside)}"
     )
     return (
-        f"took the heavy-test lock after {_duration(waited)}:"
+        f"took the heavy-test lock after {_duration(waited)}{short}:"
         f" {need} of {_cpus(capacity)}, {load}, {runs}"
     )
 
@@ -609,6 +646,8 @@ def held(
     ticket_seq = 0
     place: tuple[BinaryIO, Path] | None = None
     gate: BinaryIO | None = None
+    # When the measured room alone first kept this run out: nothing a run here declared.
+    room_since: float | None = None
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         while place is None:
@@ -617,6 +656,7 @@ def held(
                 going, waiting = entries(path, reclaim=True)
                 ahead = [entry for entry in waiting if ticket is None or entry.seq < ticket_seq]
                 busy: float | None = None
+                without_room: tuple[float, float] | None = None
                 reason = queue_refusal(ahead) or arithmetic_refusal(need, going, capacity)
                 # Asked before the load is measured, and the lock taken after: a run that is
                 # only measuring holds nothing an earlier version's run would wait for.
@@ -625,7 +665,14 @@ def held(
                     reason = f"it is held by {holder(path)}"
                 if reason is None:
                     busy = measure() if capacity > 1 else None
-                    reason = room_refusal(need, going, machine, busy, clock())
+                    measured = clock()
+                    reason = room_refusal(need, going, machine, busy, measured)
+                    if reason is not None and busy is not None:
+                        room_since = measured if room_since is None else room_since
+                        if measured - room_since >= ROOM_WAIT_SECONDS:
+                            free, wanted, _ramping = _room(need, going, machine, busy, measured)
+                            without_room = (free, wanted)
+                            reason = None
                 if reason is None:
                     gate = path.open("a+b")
                     if not _try_lock(gate, shared=shared):
@@ -640,7 +687,8 @@ def held(
                     if ticket is not None:
                         _leave(*ticket)
                         ticket = None
-                    say(admission_line(time.monotonic() - started, need, capacity, busy, going))
+                    waited = time.monotonic() - started
+                    say(admission_line(waited, need, capacity, busy, going, without_room))
                     break
                 if ticket is None:
                     ticket_seq = max((entry.seq for entry in waiting), default=0) + 1
