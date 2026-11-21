@@ -1,0 +1,1 @@
+import{Fr as e,Mr as t,pr as n,vr as r}from"./vendor-CQ9-mqmM.js";import{It as i}from"./SegmentedControl-DNqeit44.js";var a={class:`line-end`},o=i(r({__name:`LineEnd`,setup(r){return(r,i)=>(t(),n(`span`,a,[e(r.$slots,`default`,{},void 0,!0)]))}}),[[`__scopeId`,`data-v-226e8cfb`]]);export{o as t};
