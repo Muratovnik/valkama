@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import cli, launcher
+from server import atomic_files, cli, launcher
 from tests import RunKeyDouble
 from tests.test_launcher import commit, make_checkout
 
@@ -503,7 +503,7 @@ class InstallTests(OnDemandCase):
         self.spawned.clear()
         self.listener(installed, "--on-demand", "--port", str(PORT))
         self.new_release()
-        with mock.patch.object(launcher, "_atomic_write", side_effect=PermissionError("held")):
+        with mock.patch.object(atomic_files, "write", side_effect=PermissionError("held")):
             with self.assertRaises(PermissionError):
                 self.install()
         self.assertEqual(1, len(self.stopped))

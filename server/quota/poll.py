@@ -56,12 +56,12 @@ import re
 import sqlite3
 import ssl
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
+from .. import atomic_files
 from ..ops import skills
 from . import samples, seats
 from . import settings as quota_settings
@@ -478,32 +478,15 @@ def status_path(store_path: str) -> str:
     return f"{store_path}.quota-poll.json"
 
 
-#: How long a status write waits for a reader to let the file go. Windows refuses to replace a
-#: file another handle holds open, and the doctor may be reading it at that moment; a write that
-#: gave up at once lost its state, the last one a stopped poll writes among them.
-_REPLACE_SECONDS = 2.0
-
-
 def write_status(store_path: str, status: Status) -> None:
     """Replace the status file whole, so a reader never sees half of one.
 
-    A reader holding the file open is waited out for at most `_REPLACE_SECONDS`, then the
-    refusal is raised as it came.
+    The doctor may be reading it at that moment; `atomic_files` waits that reader out, and
+    the last state a stopped poll writes is not lost to it.
     """
 
-    path = status_path(store_path)
-    partial = f"{path}.partial"
-    with open(partial, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(asdict(status), handle, sort_keys=True)
-    deadline = time.monotonic() + _REPLACE_SECONDS
-    while True:
-        try:
-            os.replace(partial, path)
-            return
-        except PermissionError:
-            if time.monotonic() >= deadline:
-                raise
-            time.sleep(0.01)
+    document = json.dumps(asdict(status), sort_keys=True)
+    atomic_files.write(status_path(store_path), document.encode("utf-8"))
 
 
 def read_status(store_path: str) -> Status | None:

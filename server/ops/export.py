@@ -32,9 +32,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import tempfile
 from pathlib import Path
 
+from .. import atomic_files
 from ..planning import requests as planning_requests
 from ..planning import service as planning_service
 
@@ -178,17 +178,7 @@ def write(payload: dict, path: str | os.PathLike[str]) -> Path:
     """
 
     target = Path(path).absolute()
-    data = (render(payload) + "\n").encode("utf-8")
-    descriptor, name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
-    temporary = Path(name)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
-    finally:
-        temporary.unlink(missing_ok=True)
+    atomic_files.write(target, (render(payload) + "\n").encode("utf-8"))
     return target
 
 
