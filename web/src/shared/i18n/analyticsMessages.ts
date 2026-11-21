@@ -92,7 +92,6 @@ export const analyticsMessages = {
         other: 'Other',
         accounts: 'Account change: {change}',
         change: 'account change',
-        accountsFailed: 'The account data could not be loaded, so account changes are not marked.',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
       },
       marks: { share: '{share} of the total' },
@@ -279,8 +278,6 @@ export const analyticsMessages = {
         other: 'Остальное',
         accounts: 'Смена аккаунта: {change}',
         change: 'смена аккаунта',
-        accountsFailed:
-          'Не удалось загрузить данные аккаунтов, поэтому смены аккаунтов не отмечены.',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
       },
       marks: { share: '{share} от всего' },

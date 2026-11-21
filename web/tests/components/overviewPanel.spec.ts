@@ -237,13 +237,13 @@ describe('the overview on the page', () => {
     expect(page.findAll('.overview-changes-line')).toHaveLength(2)
   })
 
-  it('says the outline could not be read under the chart, and draws the period alone', async () => {
+  it('says in the bar that the outline could not be read, and draws the period alone', async () => {
     stubAnalyticsReads((query) => (outline(query) ? { status: 500 } : serveUsage(WORLD, query)))
     const page = await mountAnalytics()
-    const days = page.get('.spending-days')
-    expect(words(days.text())).toContain(
-      'The period before could not be loaded, so it is not outlined.',
+    expect(page.find('.analytics-bar .refresh-failed:not(.refresh-failed-held)').exists()).toBe(
+      true,
     )
+    expect(words(page.get('.spending-days').text())).not.toContain('could not')
     // The chart is handed its three periods with no figure of a period before to outline; the
     // test of the period before below shows the same figures handed over where it was read.
     const drawn = page.getComponent(PeriodColumns).props('columns')

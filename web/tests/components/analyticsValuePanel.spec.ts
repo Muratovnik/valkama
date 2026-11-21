@@ -14,6 +14,8 @@ import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
+import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
+
 import { noTask, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { stubAnalyticsReads } from '../support/analyticsReads.ts'
@@ -137,6 +139,50 @@ describe('what a value’s panel shows', () => {
     const seen = await caveatsOf(host, 'Об этих цифрах')
     expect(seen.inTip).toEqual([...CAVEAT_WORDS.ru.spending, CAVEAT_WORDS.ru.minutes].sort())
     expect(seen.asLines).toEqual([])
+  })
+
+  it('says beside its actions that its period before could not be read, and keeps it on a refresh', async () => {
+    // The value's period before, step by step: its own filter and no breakdown.
+    let failing = true
+    stubAnalyticsReads((query) =>
+      failing && query.has('work_item') && !query.has('group_by')
+        ? { status: 500 }
+        : serveUsage(WORLD, query),
+    )
+    const host = await mountPage({ by: 'work_item', detail: detailOf('work_item', task(1, '').id) })
+    const panel = panelOf(host)
+    const said = () =>
+      panel.find('[data-part="actions"] .refresh-failed:not(.refresh-failed-held)').exists()
+    const marked = () =>
+      panel
+        .getComponent(PeriodColumns)
+        .props('columns')
+        .filter((column) => column.before !== undefined).length
+    /** The key of the period before in the days' legend, in lines matching `line`. */
+    const beforeKey = (line = 'li') =>
+      panel.findAll(`[data-part="days"] [data-hint-list="legend"] ${line} [data-mark="outline"]`)
+    expect(said()).toBe(true)
+    expect(marked()).toBe(0)
+    expect(panel.get('[data-part="days"]').text()).not.toContain('could not')
+    // The legend keeps the room of the key of the mark it lacks, unseen.
+    expect(beforeKey('[data-unseen]')).toHaveLength(1)
+
+    failing = false
+    await panel.get('[data-part="actions"] .refresh-failed-retry').trigger('click')
+    await flushPromises()
+    expect(said()).toBe(false)
+    const steps = marked()
+    expect(steps).toBeGreaterThan(0)
+    // Read, the key is held no longer: the period before keys its mark where it spent anything.
+    expect(beforeKey('[data-unseen]')).toHaveLength(0)
+
+    // A refresh of the page that cannot read it again keeps the marks the panel shows.
+    failing = true
+    await host.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(said()).toBe(true)
+    expect(marked()).toBe(steps)
+    expect(beforeKey('[data-unseen]')).toHaveLength(0)
   })
 
   it('says a value with nothing in the period spent nothing', async () => {

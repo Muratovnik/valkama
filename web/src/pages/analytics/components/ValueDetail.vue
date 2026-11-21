@@ -28,7 +28,9 @@
  * failed says so with a retry, and a read again that failed keeps what it showed and says so as the
  * page's bar does (`RefreshFailed`), in room the actions' row keeps for it while nothing failed:
  * on a phone, said in room of its own, it took a line under the actions and moved the figures
- * 36px down, and gave it back with the next answer. A value with nothing in the period says that.
+ * 36px down, and gave it back with the next answer. A period before that could not be read is said
+ * there too: as a note under the days it moved the lists under them 25px down. A value with
+ * nothing in the period says that.
  *
  * What a reader of the panel selects it by: the content is `data-detail="value"`, each part of it
  * `data-part` (`actions`, `figures`, `all-time`, `days`, `model`, `account`) and each figure
@@ -51,7 +53,6 @@ import { useTaskAllTime } from '@/pages/analytics/composables/useTaskAllTime.ts'
 import {
   useValueRead,
   valueBreakdowns,
-  valueFilters,
   valueSteps,
 } from '@/pages/analytics/composables/useValueRead.ts'
 import type { ValueBreakdown } from '@/pages/analytics/composables/useValueRead.ts'
@@ -119,10 +120,15 @@ const { state, retry } = useValueRead({
   value: () => props.value,
   page: () => props.page,
   filters: () => props.filters,
+  compared: () => props.compared,
 })
 
 const answers = computed(() => (state.value.status === 'ready' ? state.value.answers : null))
 const steps = computed(() => (answers.value ? valueSteps(answers.value) : null))
+/** The steps of the period before, read with the answers. */
+const before = computed(() => (state.value.status === 'ready' ? state.value.before : null))
+/** Whether those steps were asked and could not be read. */
+const beforeFailed = computed(() => state.value.status === 'ready' && state.value.beforeFailed)
 
 /**
  * The value as the answers name it, with its title and number; as its id alone, or as work with
@@ -385,8 +391,8 @@ const lists = computed(() =>
         <ValueDays
           v-if="steps"
           data-part="days"
-          :compared="compared"
-          :filters="valueFilters(filters, by, value)"
+          :before="before"
+          :before-failed="beforeFailed"
           :measure="measure"
           :name="name"
           :name-runs="nameRuns"

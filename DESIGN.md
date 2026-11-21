@@ -1124,7 +1124,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   taller no longer holds the scale up. Its key stays, pressed while its layer shows
   (`aria-pressed`) and, while it is off, its swatch faint and its name in the tertiary ink struck
   through, a state said by more than a tone, and there to turn it back on; nothing else on the
-  chart says a layer is off, no banner and no note. A chart's table keeps every figure. A layer
+  chart says a layer is off, no banner and no note. A layer a chart lacks because its read failed,
+  the period before's steps or the accounts of a new view, keeps its key's room in the legend,
+  unseen and out of reach, until a read brings it: dropped, the legend stood a line shorter and
+  the retry that read them moved what stands under the chart 24px down. A chart's table keeps
+  every figure. A layer
   obeys its toggle only where the chart carries its key, so a layer turned off can always be
   found and turned on again: a window's bar has no legend, on its rail tile too, and keeps its
   pace tick and its forecast tail. The owner asked for «previous period» and the other added marks to be switches that turn their
@@ -2712,7 +2716,13 @@ and a cut end faded (`ChoiceStrip`), with the freshness at their end; the filter
 and the refresh; and the room of the reader's own days, which took a row of their own and moved
 the panel 44px when chosen. A refresh that fails keeps what is shown
 and says so in words before the age at every width, «Could not refresh» with a retry: given up
-on a short line, its words had left a red disc with no hint. The retry is reached at every width
+on a short line, its words had left a red disc with no hint. A refresh whose period before could
+not be read, where what is shown has it, fails so too: shown, it took every change and the table's columns
+of the period before away, and the words that said so came in over the figures. So does a refresh
+whose accounts or overview steps of the period before could not be read, and a new view whose
+accounts or steps could not be read shows its answer without their marks and says the same words
+here: said in a note under the chart, the failure moved what stands under it, and room held for the
+note stood empty under every chart at rest. The retry is reached at every width
 too: where the line has no room for «· Retry», the words themselves are the retry, named
 «Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
 Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
@@ -2832,7 +2842,10 @@ period with no agent time has no such line
 and a period before with none gives no «was», the line's place kept either way, and the chart
 draws no second axis for it. Across the panel under the cells stands the period chart, stacked
 by project, with the period before as a short line at its height; at a project's scope it is that
-project's one series of plain columns, which no legend names. Stacked by task it named a few per
+project's one series of plain columns, which no legend names. The period before's steps and the
+accounts that mark its changes are read after the chart is drawn; when either could not be read the
+chart draws no such mark and the bar says the read failed, so nothing under the chart moves and
+nothing stands empty there. Stacked by task it named a few per
 cent of the time, the rest «Other», and the tasks have their own section; and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
@@ -2909,9 +2922,16 @@ The second dimension is the section's, not the table's: «Split by» in the sect
 chooses it, and the ranked bars, the small charts, the period columns and the table all read
 its pairs, «claude-opus-5-5 · high», each pair a value with its own colour and the tail folded
 into «other» as any series is. Chosen over the table alone, it left the charts beside a crossed
-table answering the first dimension only. A pair's name short of room on its line cuts its first
-part and keeps the separator and the second whole, «claude-opus-5-… · medium», because the second
-is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
+table answering the first dimension only. A refresh whose pairs could not be read again keeps
+them in every one of those parts, in the section and in the side panel of all its values, and the
+bar says «Could not refresh · Retry» as it says the page's own reads failed; the side panel, which
+stands over the bar, says the same words beside its field, in room the field's row keeps for them
+while the section is split, as a value's panel says its own beside its actions. Dropped, the pairs
+left the charts and the table gave its place to one line of words; held beside the table's download
+the words' room took a line of its own under the heading of a split section on a phone with nothing
+failed; said only in the bar, they stood under the side panel, unseen. A pair's name short of
+room on its line cuts its first part and keeps the separator and the second whole,
+«claude-opus-5-… · medium», because the second is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
 chart. In the ranked bars a pair's name takes a line of its own over its bar at every width, as any
 name does in a narrow chart: the second part is a whole value's name, as wide as a model's, and
 the one-line name column, two-fifths of the row, held «claude-opus-5-5» with 13 pixels of the task
@@ -3094,7 +3114,8 @@ lines it names no sum, and work its organization recorded with no account known,
 not in it. It keeps the room of the headings a newer answer can give it, with no sum and with a
 sum of five figures before the point, so the breakdowns beside it and the lines under it stay
 where they stand when one does: a newer answer once made it a line longer, and the lines moved
-25px down under it. That it is the API price estimate and not quota points, and that
+25px down under it. It keeps as well the room of its moments as a later day says them, each dated,
+since past midnight its start is a moment of another day. That it is the API price estimate and not quota points, and that
 work in claude.ai and the desktop app, which the window's share counts, is not in it, the
 section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
 says for this one, never as a line of the panel. It is read by account, the account's and its
@@ -3154,7 +3175,10 @@ estimate at API prices, what the tokens count and, read by the minute, that a mi
 are shared out — the section's «ⓘ» says under the panel, so the «ⓘ» «About these figures» that
 ends the figures' heading says it for the value's own read, once and in that «ⓘ» alone,
 never as a line of the panel. Its days are the page's period and step with
-the period before marked, one series in the value's colour; under them dense ranked bars say the
+the period before marked, one series in the value's colour, its steps read with the panel's
+answers; when they could not be read the days draw no mark and the panel says so beside its actions,
+as a read again that failed: said in a note under the days, it moved the lists under them 25px down;
+under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
 the value's filter added, and wait and fail as the page's do: a read again that fails keeps what
 the panel shows and says «Could not refresh · Retry» beside its actions, in room their row keeps

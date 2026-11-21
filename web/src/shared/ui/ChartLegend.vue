@@ -20,9 +20,12 @@
  * `chartLayersStore`). The key stays in the legend either way, pressed while its layer shows
  * (`aria-pressed`), and off, its swatch faint and its name in the tertiary ink struck through, so
  * it says its state by more than a tone and is there to turn the layer back on; the chart says
- * nothing else of it. The hatch's key does not act: the hatch is no layer but how a period still
- * running is drawn, and the series are the data itself, which always shows, so a column's sum
- * never disagrees with the figures beside it.
+ * nothing else of it. A layer the chart lacks because its read failed keeps its key's room,
+ * unseen and out of reach (`unseen`), so nothing under the legend moves when a later read brings
+ * it: dropped, the legend could stand a line shorter and the retry moved the page under it. The
+ * hatch's key does not act: the hatch is no layer but how a period still running is drawn, and
+ * the series are the data itself, which always shows, so a column's sum never disagrees with the
+ * figures beside it.
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
@@ -54,12 +57,13 @@
  * What a reader of the page selects it by: the list declares itself (`data-hint-list="legend"`),
  * and each line is an item of it. A series' key carries the series' key (`data-series`), its
  * swatch the slot of its hue (`data-slot`); a mark's key carries its mark (`data-mark`, `hatch`,
- * `outline` or `change`), and a layer's key, a button, whether its layer shows (`aria-pressed`).
+ * `outline` or `change`), and a layer's key, a button, whether its layer shows (`aria-pressed`);
+ * the line of a key whose room is held unseen is `data-unseen`.
  * In either, the name is `data-part="name"`, and the figure at a line's end `data-part="figure"`.
  */
 import { computed, useId } from 'vue'
 
-import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
+import type { PeriodLayer, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 import { markPartId, markTag, markType } from '@/shared/ui/chartGeometry.ts'
 import LayerKey from '@/shared/ui/LayerKey.vue'
 import PairName from '@/shared/ui/PairName.vue'
@@ -78,6 +82,8 @@ const props = defineProps<{
   hints?: ReadonlyMap<string, TooltipValue>
   /** The name of the mark of the period compared with, when the chart draws one. */
   outline?: string
+  /** The layers whose keys, named above, keep their room unseen: their read failed. */
+  unseen?: readonly PeriodLayer[]
 }>()
 
 const emit = defineEmits<{
@@ -132,6 +138,11 @@ function hintOf(key: string): TooltipValue {
     key === 'outline' ? props.outline : props.series.find((one) => one.key === key)?.label
   return { text: null, words }
 }
+/**
+ * Whether a layer's key keeps its room unseen, as the hook a reader selects it by: absent rather
+ * than false on a key that shows, so the hook marks the held keys alone.
+ */
+const unseenOf = (layer: PeriodLayer) => props.unseen?.includes(layer) || undefined
 /** The figure an entry gives at the end of its line; none in a legend of names. */
 const figureOf = (key: string) => props.figures?.get(key)
 </script>
@@ -205,6 +216,7 @@ const figureOf = (key: string) => props.figures?.get(key)
     <li
       v-if="outline"
       class="chart-entry chart-entry-mark"
+      :data-unseen="unseenOf('outline')"
     >
       <LayerKey
         v-tooltip.detail="hintOf('outline')"
@@ -226,6 +238,7 @@ const figureOf = (key: string) => props.figures?.get(key)
     <li
       v-if="change"
       class="chart-entry chart-entry-mark"
+      :data-unseen="unseenOf('change')"
     >
       <LayerKey
         v-tooltip.clipped="change"
@@ -273,6 +286,12 @@ const figureOf = (key: string) => props.figures?.get(key)
   min-width: 0;
   max-inline-size: 100%;
   min-block-size: var(--space-6);
+}
+
+/* A layer's key whose read failed keeps its room: unseen, so no pointer, Tab or screen reader
+   reaches it. */
+.chart-entry[data-unseen] {
+  visibility: hidden;
 }
 
 /* Given figures, the legend reads down, an entry a line, its figure at the line's end; a name

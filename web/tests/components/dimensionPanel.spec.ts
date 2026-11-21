@@ -8,7 +8,10 @@
  * the section's heading writes it into the address as a step of its own.
  */
 import type { VueWrapper } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import ValueTable from '@/pages/analytics/components/ValueTable.vue'
 
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
@@ -172,6 +175,80 @@ describe('the split of a section', () => {
     // The small charts read the same pairs, in the same order, each in its bar's hue.
     const charts = huesIn(page, '.spending-multiples .multiple', '.multiple-name', '[data-slot]')
     expect([...charts]).toEqual([...bars])
+  })
+
+  it('keeps its pairs when a refresh cannot read them again, and the bar says so', async () => {
+    let failing = false
+    stubAnalyticsReads((query) =>
+      failing && query.get('group_by') === 'model,role'
+        ? { status: 500 }
+        : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics({ routeState: { by: 'model', across: 'role' } })
+    const pairs = () => text(page, '.spending-table tbody th')
+    const shown = pairs()
+    expect(shown).toHaveLength(4)
+    expect(text(page, '.spending-bars .ranked-label')).toEqual(shown)
+
+    failing = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(pairs(), 'the table keeps its pairs').toEqual(shown)
+    expect(text(page, '.spending-bars .ranked-label'), 'and so do the bars').toEqual(shown)
+    // The bar says the read failed, as it says the page's own reads do; the table says nothing.
+    expect(text(page, '.analytics-bar .refresh-failed:not(.refresh-failed-held)')).toEqual([
+      'Could not refresh · Retry',
+    ])
+    expect(
+      page.find('.spending-table [role="status"], .spending-table [role="alert"]').exists(),
+    ).toBe(false)
+
+    // Its retry reads the pairs again.
+    failing = false
+    await page.get('.analytics-bar .refresh-failed-retry').trigger('click')
+    await flushPromises()
+    expect(page.find('.analytics-bar .refresh-failed:not(.refresh-failed-held)').exists()).toBe(
+      false,
+    )
+    expect(pairs()).toEqual(shown)
+  })
+
+  it('keeps its pairs in the side panel of all its values when a refresh cannot read them again, and the panel says so beside its field', async () => {
+    let failing = false
+    stubAnalyticsReads((query) =>
+      failing && query.get('group_by') === 'model,role'
+        ? { status: 500 }
+        : serveUsage(WORLD, query),
+    )
+    const detail = JSON.stringify({ by: 'model', all: true })
+    const page = await mountAnalytics({ routeState: { by: 'model', across: 'role', detail } })
+    const panel = page.getComponent(ValueTable)
+    const inPanel = (selector: string) =>
+      panel.findAll(selector).map((one) => one.text().replaceAll(/\s+/gu, ' ').trim())
+    const pairs = () => inPanel('.spending-table tbody th')
+    /** The panel's own words of a failed read again, said rather than held unseen. */
+    const said = () => inPanel('.refresh-failed:not(.refresh-failed-held)')
+    const shown = pairs()
+    expect(shown).toHaveLength(4)
+    expect(said()).toEqual([])
+    // Its room is held unseen while nothing failed (DESIGN, Analytics: nothing moves when a
+    // failure is said or when the next answer replaces it).
+    expect(panel.findAll('.refresh-failed-held')).toHaveLength(1)
+
+    failing = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(pairs(), 'the panel keeps its pairs').toEqual(shown)
+    // The page's bar stands under the panel: the panel says it in its own room.
+    expect(said()).toEqual(['Could not refresh · Retry'])
+
+    // Its retry reads the pairs again.
+    failing = false
+    await panel.get('.refresh-failed-retry').trigger('click')
+    await flushPromises()
+    expect(said()).toEqual([])
+    expect(panel.findAll('.refresh-failed-held')).toHaveLength(1)
+    expect(pairs()).toEqual(shown)
   })
 
   it('is chosen in the section’s heading, written into the address as a step, and taken out with none', async () => {

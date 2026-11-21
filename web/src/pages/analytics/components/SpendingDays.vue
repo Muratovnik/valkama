@@ -10,8 +10,9 @@
  * legend names it, «account change», and that day's hint, name and table row say the change by
  * the accounts that came and left, «Account change: +b, −a» (`accountChanges`):
  * work whose organization nobody recorded is no account and marks nothing. The marks are the ones
- * read with the answer shown, and a read of the accounts that failed says the marks are not there
- * rather than leaving them out without a word.
+ * read with the answer shown; a read of the accounts that failed is said where the page says its
+ * reads failed (`useUsageRead`), and the chart draws no mark rather than a note of its own, its
+ * legend keeping the room of the mark's key (`unread`).
  *
  * Each period that has begun is a control, in the chart and in its table, that narrows the view to
  * that period alone and breaks it down by task: a day, an hour of a single day or a minute of the
@@ -31,8 +32,9 @@
  * to say, in its «ⓘ» (`useSectionCaveats`). Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
  * short mark at its height on the same scale, named in the legend and said in the period's hint
- * and the table; while those steps are read there is no mark, and when they could not be read a note
- * under the chart says so.
+ * and the table; while those steps are read, and when they could not be read, there is no mark,
+ * and the page says the read failed where it says its reads fail (`useUsageRead`); the legend
+ * keeps the room of the key of a mark whose read failed, so the retry that reads it moves nothing.
  *
  * Split by a second dimension (`across`), the answer is read by both and the stack is of its
  * pairs, «claude-opus-5-5 · high», each in its hue of the page, the rest folded into «other» as
@@ -57,7 +59,7 @@ import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
-import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
+import type { PeriodChartProps, PeriodLayer } from '@/shared/ui/chartGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
@@ -105,6 +107,14 @@ const titles = computed(() =>
 
 /** The steps of the period before, when they were read. */
 const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
+
+/** The marks whose read failed: the steps of the period before, the accounts. */
+const unread = computed(() => {
+  const failed: PeriodLayer[] = []
+  if (props.before === 'failed') failed.push('outline')
+  if (props.accounts === 'failed') failed.push('change')
+  return failed
+})
 
 /** What the step compared with the column at `index` holds; nothing when none is compared. */
 function beforeOf(index: number) {
@@ -189,6 +199,7 @@ const chart = computed<PeriodChartProps>(() => ({
           label: words.accounts(change.came, change.left),
         }))
       : [],
+  unread: unread.value,
   words: said.value.words,
   formatValue: said.value.formatValue,
   valueAxis: said.value.valueAxis,
@@ -229,18 +240,6 @@ function frame(firstKey: string, lastKey: string) {
         @series="marks.select"
         @follow="marks.follow"
       />
-      <p
-        v-if="before === 'failed'"
-        class="spending-days-note"
-      >
-        {{ t('analytics.overview.before.failed') }}
-      </p>
-      <p
-        v-if="accounts === 'failed'"
-        class="spending-days-note"
-      >
-        {{ t('analytics.days.accountsFailed') }}
-      </p>
     </template>
     <template #table>
       <PeriodColumnsTable
@@ -249,20 +248,6 @@ function frame(firstKey: string, lastKey: string) {
         @series="marks.select"
         @follow="marks.follow"
       />
-      <p
-        v-if="accounts === 'failed'"
-        class="spending-days-note"
-      >
-        {{ t('analytics.days.accountsFailed') }}
-      </p>
     </template>
   </ChartSection>
 </template>
-
-<style scoped>
-.spending-days-note {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-</style>

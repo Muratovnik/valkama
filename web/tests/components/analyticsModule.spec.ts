@@ -170,6 +170,12 @@ describe('the Analytics address', () => {
 })
 
 const serve = () => stubAnalyticsReads((query) => serveUsage(WORLD, query))
+/** Whether the bar says a read failed, rather than holding the room of the words unseen. */
+const saysFailed = (page: VueWrapper) =>
+  page.find('.analytics-bar .refresh-failed:not(.refresh-failed-held)').exists()
+/** The key of the line of an account change in the day chart's legend, in lines matching `line`. */
+const changeKey = (page: VueWrapper, line = 'li') =>
+  page.findAll(`.spending-days [data-hint-list="legend"] ${line} [data-mark="change"]`)
 const time = (page: VueWrapper) =>
   page.get('.tile-figure[data-measure="time"]').text().replaceAll(/\s/gu, ' ')
 const change = (page: VueWrapper) =>
@@ -285,17 +291,42 @@ describe('the Analytics page', () => {
     accounts?.release(serveUsage(WORLD, accounts.query))
     await flushPromises()
     expect(page.findAll('.period-mark')).toHaveLength(1)
-    expect(page.find('.spending-days-note').exists()).toBe(false)
+    expect(saysFailed(page)).toBe(false)
 
-    // An account read that fails says the marks are not there.
+    // An account read that fails draws no mark, and the bar says the read failed, nothing under
+    // the chart; the legend keeps the room of the change's key unseen, and its retry reads them
+    // again into the same key.
     await page.setProps({ routeState: { by: 'role', period: 'weeks4', filters: main } })
     await flushPromises()
     reads.held[1]?.release({ status: 500 })
     await flushPromises()
     expect(page.findAll('.period-mark')).toHaveLength(0)
-    expect(page.get('.spending-days-note').text()).toBe(
-      'The account data could not be loaded, so account changes are not marked.',
+    expect(saysFailed(page)).toBe(true)
+    expect(page.get('.spending-days').text()).not.toContain('could not')
+    expect(changeKey(page, '[data-unseen]')).toHaveLength(1)
+    await page.get('.analytics-bar .refresh-failed-retry').trigger('click')
+    await flushPromises()
+    const again = reads.held[2]
+    again?.release(serveUsage(WORLD, again.query))
+    await flushPromises()
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+    expect(saysFailed(page)).toBe(false)
+    expect(changeKey(page, '[data-unseen]')).toHaveLength(0)
+    expect(changeKey(page)).toHaveLength(1)
+  })
+
+  it('keeps the account marks on show when a refresh cannot read the accounts again', async () => {
+    let failing = false
+    stubAnalyticsReads((query) =>
+      failing && query.get('group_by') === 'seat' ? { status: 500 } : serveUsage(WORLD, query),
     )
+    const page = await mountAnalytics()
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+    failing = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+    expect(saysFailed(page)).toBe(true)
   })
 
   it('swaps a refreshed answer in whole: its figures and account marks land together', async () => {

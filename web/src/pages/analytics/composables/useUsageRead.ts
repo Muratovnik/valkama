@@ -12,8 +12,16 @@
  *
  * A refresh that fails leaves what is on show as it stood, an empty period too, and says so
  * (`refreshFailed`) until an answer replaces it; the next refresh — the bar's, its retry or the
- * live period's own — asks again. A new view whose read fails says it failed: the last view's
- * answer is not its own.
+ * live period's own — asks again. So does a refresh whose period before could not be read where
+ * the answer on show has one: shown, it would take the comparison away and with it every change,
+ * the table's columns of the period before, and push the words that say it was not read in over
+ * the figures, moving the panel under them. So does a refresh whose accounts or, on the overview,
+ * steps of the period before could not be read: shown, it would take the marks they draw away.
+ * A new view whose read fails says it failed: the last view's answer is not its own. A new view
+ * whose accounts or steps of the period before could not be read shows its answer without what
+ * they mark, and the bar says the read failed as it says a refresh did (`lateFailed`): said by
+ * the chart in a note of its own, the failure moved what stands under it, and held room for it
+ * stood empty under every chart that read them.
  *
  * Every read goes through the page's shared reads (`useSharedUsage`), as of the moment they keep
  * for the view: another section asks only what no other part of the page has asked already.
@@ -22,7 +30,10 @@ import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
 import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { beforeStepsQuery } from '@/pages/analytics/composables/usePeriodBefore.ts'
-import { providePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
+import {
+  providePanelParts,
+  providePanelStanding,
+} from '@/pages/analytics/composables/useReadStanding.ts'
 import { scopeFilters } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -61,6 +72,10 @@ function spentNothing(total: Usage['total']) {
 const nothingToShow = (usage: Usage) =>
   spentNothing(usage.total) && usage.comparison !== null && spentNothing(usage.comparison.total)
 
+/** Whether `usage`, shown in place of `kept`, would take away the period before `kept` holds. */
+const losesComparison = (kept: PlatformUiState<Usage>, usage: Usage) =>
+  'payload' in kept && kept.payload.comparison !== null && usage.comparison === null
+
 const ready = (payload: Usage): PlatformUiState<Usage> => ({
   interface_version: 'valkama-ui-state',
   status: 'ready',
@@ -98,8 +113,12 @@ interface ShownAnswer {
   period: PeriodBounds
 }
 
-/** Where an answer is shown and the read it belongs to, which a later read stops. */
+/**
+ * Where an answer is shown and the read it belongs to, which a later read stops; for a refresh,
+ * what stays on show if what is drawn with the answer cannot be read.
+ */
 interface ShowingWith {
+  kept: PlatformUiState<Usage> | null
   overview: boolean
   signal: AbortSignal
 }
@@ -170,7 +189,14 @@ export function useUsageRead(options: {
   const anew = shallowRef(false)
   /** Whether the last refresh of the view on show failed, what it showed kept on show. */
   const refreshFailed = shallowRef(false)
-  providePanelStanding({ anew, failed: refreshFailed })
+  /** Whether what is drawn with a new view's answer, read after it, could not be read. */
+  const lateFailed = shallowRef(false)
+  /** Whether a part's own read again failed, what it showed kept: a split's pairs. */
+  const partFailed = providePanelParts()
+  providePanelStanding({
+    anew,
+    failed: computed(() => refreshFailed.value || lateFailed.value || partFailed.value),
+  })
 
   /** The scope's own filter: its project, or nothing at the top. */
   const scope = computed<UsageFilters>(() => scopeFilters(options.projectId()))
@@ -264,6 +290,7 @@ export function useUsageRead(options: {
       bounds.value = period
       askedAt.value = at
       refreshFailed.value = false
+      lateFailed.value = false
     }
     if (!period) {
       shownFor = null
@@ -287,6 +314,10 @@ export function useUsageRead(options: {
       return
     }
     if (signal.aborted) return
+    if (kept && losesComparison(kept, usage)) {
+      fail(kept)
+      return
+    }
     options.places.take([by], usage, askedWith)
     const answer = {
       at,
@@ -296,7 +327,7 @@ export function useUsageRead(options: {
       period,
     }
     const showing = refresh ? showRefreshed : showNew
-    await showing(usage, askingAccounts, answer, { overview: view.by === OVERVIEW, signal })
+    await showing(usage, askingAccounts, answer, { kept, overview: view.by === OVERVIEW, signal })
   }
 
   /** Shows `usage` as the answer `answer` names, beside the accounts read with it. */
@@ -309,41 +340,58 @@ export function useUsageRead(options: {
     askedAt.value = answer.at
     anew.value = false
     refreshFailed.value = false
+    lateFailed.value = false
     const empty = nothingToShow(usage) ? uiEmpty<Usage>('analytics.empty.title') : null
     emptyRead.value = empty ? { shown: empty, newest: usage.last_event_at } : null
     state.value = empty ?? ready(usage)
   }
 
-  /** Shows a new view's answer as it lands, and its accounts as they follow it. */
+  /**
+   * The steps of the period before an overview's answer, asked through the shared reads for the
+   * part that draws them to take: whether they were read, or none were asked.
+   */
+  function stepsRead(usage: Usage, answer: ShownAnswer, { overview, signal }: ShowingWith) {
+    if (!overview || !answer.compared) return Promise.resolve(true)
+    const steps = beforeStepsQuery(answer.compared, answer.filters, usage.period.step)
+    return orNull(ask(steps, signal)).then(Boolean)
+  }
+
+  /**
+   * Shows a new view's answer as it lands, and its accounts as they follow it; that they or the
+   * overview's steps of the period before could not be read is said as a failed read is.
+   */
   async function showNew(
     usage: Usage,
     askingAccounts: Promise<Usage | null> | null,
     answer: ShownAnswer,
-    { signal }: ShowingWith,
+    showing: ShowingWith,
   ) {
     show(usage, askingAccounts ? 'loading' : usage, answer)
-    if (!askingAccounts) return
-    const byAccount = await askingAccounts
-    if (!signal.aborted) accounts.value = byAccount ?? 'failed'
+    const steps = stepsRead(usage, answer, showing)
+    const byAccount = askingAccounts ? await askingAccounts : usage
+    if (showing.signal.aborted) return
+    accounts.value = byAccount ?? 'failed'
+    const stepsInHand = await steps
+    if (!showing.signal.aborted) lateFailed.value = !byAccount || !stepsInHand
   }
 
   /**
    * Shows a refreshed answer once what is drawn with it is in hand too: its accounts and, on the
-   * overview, the steps of the period before, asked through the shared reads for the part that
-   * draws them to take at once.
+   * overview, the steps of the period before, which the part that draws them takes at once. When
+   * either could not be read the refresh failed, and what stood stays.
    */
   async function showRefreshed(
     usage: Usage,
     askingAccounts: Promise<Usage | null> | null,
     answer: ShownAnswer,
-    { overview, signal }: ShowingWith,
+    showing: ShowingWith,
   ) {
+    const steps = stepsRead(usage, answer, showing)
     const byAccount = askingAccounts ? await askingAccounts : usage
-    if (overview && answer.compared) {
-      const steps = beforeStepsQuery(answer.compared, answer.filters, usage.period.step)
-      await orNull(ask(steps, signal))
-    }
-    if (!signal.aborted) show(usage, byAccount ?? 'failed', answer)
+    const stepsInHand = await steps
+    if (showing.signal.aborted) return
+    if (byAccount && stepsInHand) show(usage, byAccount, answer)
+    else fail(showing.kept)
   }
 
   /**
