@@ -195,8 +195,9 @@ async function measure(page: Page, { find, follows = false, hinted, name }: Mark
       const moved = await shownHint(page)
       const now = await element.evaluate(find)
       const mark = now?.mark ?? found.mark
-      // A point that follows the pointer has the first hint at the first spot, the next at the next.
-      const first = verdict(shown, found.mark, window)
+      // A mark as drawn pointed at, which may be larger; a point that follows the pointer has the
+      // first hint at the first spot's point and the next at the next one's.
+      const first = verdict(shown, follows ? found.mark : mark, window)
       const where = follows && first === 'at its mark' ? verdict(moved, mark, window) : first
       measured.push({ at: `${name} ${index}`, first: shown, follows, mark, second: moved, where })
     }
