@@ -107,11 +107,17 @@ with open(path, "a+b") as handle:
 """
 
 
+class CancelledError(Exception):
+    """Raised in a waiter's thread when its test ends before it got in."""
+
+
 class Waiter:
     """A run that waits for a place in a thread and records what it said and when it got in.
 
-    `options` go to `machine_lock.held` as they are: the CPUs the run needs and the
-    stand-ins for the machine's load, clock and CPU count.
+    `options` go to `machine_lock.held`: the CPUs the run needs and the stand-ins for
+    the machine's load, clock and CPU count. The clock it is given is asked on every
+    round, so `finish` stops a waiter that never got in through it, and its thread
+    ends with every file it held closed.
     """
 
     def __init__(
@@ -125,13 +131,26 @@ class Waiter:
         self.said: list[str] = []
         self.inside = threading.Event()
         self.leave = threading.Event()
+        self.cancel = threading.Event()
+        clock = options.pop("clock", time.time)
+        assert callable(clock)
+
+        def cancellable() -> float:
+            if self.cancel.is_set():
+                raise CancelledError
+            return float(clock())
+
+        options["clock"] = cancellable
         self.thread = threading.Thread(
             target=self._hold, args=(path, run, report_every, options), daemon=True
         )
 
     def _hold(self, path: Path, run: str, report_every: float, options: dict) -> None:
-        with machine_lock.held(
-            run, path=path, say=self.said.append, report_every=report_every, **options
+        with (
+            contextlib.suppress(CancelledError),
+            machine_lock.held(
+                run, path=path, say=self.said.append, report_every=report_every, **options
+            ),
         ):
             self.inside.set()
             self.leave.wait(DEADLINE_SECONDS)
@@ -149,7 +168,10 @@ class Waiter:
         return bool(self.said)
 
     def finish(self) -> None:
+        """Leave, or stop waiting, and wait for its thread to end."""
+
         self.leave.set()
+        self.cancel.set()
         self.thread.join(DEADLINE_SECONDS)
 
 
@@ -694,15 +716,15 @@ class RuleTests(unittest.TestCase):
         # 8 free of 32 at three quarters busy: exactly the need.
         self.assertIsNone(machine_lock.room_refusal(8, [], 32, 0.75, NOW))
 
-    def test_a_whole_machine_need_is_held_to_the_fraction_of_the_machine(self) -> None:
-        # 0.7 of 32 is 22.4: free at 30 % busy, short at 31 %.
-        self.assertIsNone(machine_lock.room_refusal(32, [], 32, 0.3, NOW))
-        refused = machine_lock.room_refusal(32, [], 32, 0.31, NOW)
+    def test_a_large_need_asks_for_all_of_it(self) -> None:
+        # 24 free at a quarter busy: room for 24, not for 25.
+        self.assertIsNone(machine_lock.room_refusal(24, [], 32, 0.25, NOW))
+        refused = machine_lock.room_refusal(25, [], 32, 0.25, NOW)
         assert refused is not None
-        self.assertTrue(refused.endswith("and this run needs 22.4"), refused)
+        self.assertTrue(refused.endswith("and this run needs 25"), refused)
 
     def test_the_measured_room_is_skipped_where_the_load_is_unknown(self) -> None:
-        self.assertIsNone(machine_lock.room_refusal(32, [], 32, None, NOW))
+        self.assertIsNone(machine_lock.room_refusal(8, [], 32, None, NOW))
 
     def test_a_run_that_went_in_within_the_ramp_counts_by_its_need(self) -> None:
         # 16 free at half busy; a run of 8 that went in 59 s ago has not loaded it yet.
@@ -726,14 +748,6 @@ class RuleTests(unittest.TestCase):
         alone = machine_lock.admission_line(0.2, 1, 1, None, [])
         self.assertEqual(
             "took the heavy-test lock after 0 s: 1 of 1 CPU, the load not measured, alone", alone
-        )
-
-    def test_the_admission_line_of_a_run_that_went_in_without_its_room_says_so(self) -> None:
-        line = machine_lock.admission_line(185.0, 32, 32, 0.66, [], (10.8, 22.4))
-        self.assertEqual(
-            "took the heavy-test lock after 3 min 5 s without the room it asked for,"
-            " 10.8 CPUs free where it needs 22.4: 32 of 32 CPUs, the machine 66% busy, alone",
-            line,
         )
 
 
@@ -812,9 +826,30 @@ class GateTests(GateCase):
         self.assertIn(": 1 of 1 CPU, the load not measured, alone", first.said[0])
         unread.assert_not_called()
 
-    def test_a_run_waits_for_free_cpus_and_goes_in_once_the_load_falls(self) -> None:
-        load = [0.9]
-        waiter = self.place("vitest", 8, measure=lambda: load[0])
+    def test_a_run_alone_goes_in_at_once_whatever_the_load_and_measures_nothing(self) -> None:
+        for run, cpus in (("unittest", 2), ("browser", None)):
+            with self.subTest(run=run):
+                unread = mock.Mock(side_effect=AssertionError("the load was read"))
+                waiter = self.place(run, cpus, measure=unread)
+                self.inside(waiter)
+                self.assertEqual(1, len(waiter.said), waiter.said)
+                self.assertRegex(
+                    waiter.said[0],
+                    r"^took the heavy-test lock after 0 s: \d+ of 32 CPUs, the load not measured,"
+                    r" alone$",
+                )
+                unread.assert_not_called()
+                waiter.finish()
+
+    def test_a_run_joining_others_waits_for_free_cpus_and_goes_in_once_the_load_falls(
+        self,
+    ) -> None:
+        now, load = [NOW], [0.9]
+        first = self.place("unittest", 2, clock=lambda: now[0])
+        self.inside(first)
+        # Long enough after the first went in that its own load shows.
+        now[0] = NOW + machine_lock.RAMP_SECONDS
+        waiter = self.place("vitest", 8, measure=lambda: load[0], clock=lambda: now[0])
         self.outside(waiter)
         self.assertEqual(
             f"waiting for the heavy-test lock {self.path}: 3.2 of 32 CPUs are free"
@@ -823,19 +858,36 @@ class GateTests(GateCase):
         )
         load[0] = 0.1
         self.inside(waiter)
-        self.assertIn("8 of 32 CPUs, the machine 10% busy, alone", waiter.said[-1])
+        self.assertIn("8 of 32 CPUs, the machine 10% busy, beside 1 run: unittest", waiter.said[-1])
 
-    def test_a_whole_machine_run_starts_beside_light_background_work(self) -> None:
-        browser = self.place("browser", None, measure=lambda: 0.25)
-        self.inside(browser)
-        self.assertIn("32 of 32 CPUs, the machine 25% busy, alone", browser.said[0])
+    def test_a_run_short_of_room_goes_in_without_measuring_once_it_would_be_alone(self) -> None:
+        now = [NOW]
+        calls: list[float] = []
 
-    def test_where_the_load_cannot_be_measured_the_arithmetic_alone_decides(self) -> None:
-        browser = self.place("browser", None, measure=lambda: None)
-        self.inside(browser)
-        self.assertIn("the load not measured", browser.said[0])
-        small = self.place("unittest", 2, measure=lambda: None)
-        self.outside(small)
+        def measure() -> float:
+            calls.append(now[0])
+            return 0.9
+
+        first = self.place("unittest", 2, clock=lambda: now[0])
+        self.inside(first)
+        now[0] = NOW + machine_lock.RAMP_SECONDS
+        waiter = self.place("vitest", 8, measure=measure, clock=lambda: now[0])
+        self.outside(waiter)
+        first.finish()
+        ended = len(calls)
+        self.inside(waiter)
+        self.assertTrue(waiter.said[-1].endswith(", alone"), waiter.said)
+        # At most the measurement that was under way as the first run ended.
+        self.assertLessEqual(len(calls), ended + 1)
+
+    def test_where_the_load_cannot_be_measured_the_needs_alone_decide(self) -> None:
+        first = self.place("unittest", 2, measure=lambda: None)
+        self.inside(first)
+        joining = self.place("vitest", 8, measure=lambda: None)
+        self.inside(joining)
+        self.assertIn("the load not measured, beside 1 run: unittest", joining.said[0])
+        whole = self.place("browser", None, measure=lambda: None)
+        self.outside(whole)
 
     def test_a_later_small_run_waits_behind_an_earlier_whole_machine_waiter(self) -> None:
         first = self.place("unittest", 2)
@@ -852,6 +904,24 @@ class GateTests(GateCase):
         browser.finish()
         self.inside(later)
 
+    def test_a_later_run_does_not_pass_a_head_that_waits_for_room(self) -> None:
+        now, load = [NOW], [0.5]
+        first = self.place("unittest", 2, clock=lambda: now[0])
+        self.inside(first)
+        now[0] = NOW + machine_lock.RAMP_SECONDS
+        # 16 CPUs free at half busy: room for the later run, not for the head's 24.
+        head = self.place("big", 24, measure=lambda: load[0], clock=lambda: now[0])
+        self.assertTrue(head.said_something())
+        self.assertIn("16.0 of 32 CPUs are free", head.said[0])
+        later = self.place("vitest", 2, measure=lambda: load[0], clock=lambda: now[0])
+        self.outside(later)
+        self.assertIn("it is behind 1 earlier waiter, the first big in", later.said[0])
+        load[0] = 0.2
+        self.inside(head)
+        # Once the head's own load shows, the later run fits beside both.
+        now[0] += machine_lock.RAMP_SECONDS
+        self.inside(later)
+
     def test_a_run_that_went_in_a_moment_ago_counts_against_the_room_by_its_need(self) -> None:
         now = [NOW]
         first = self.place("vitest", 8, measure=lambda: 0.5, clock=lambda: now[0])
@@ -863,6 +933,78 @@ class GateTests(GateCase):
         now[0] = NOW + 61
         self.inside(second)
 
+    def test_two_runs_joining_on_one_reading_of_the_load_do_not_both_go_in(self) -> None:
+        # The reading never changes, so it never shows the first joiner's load: the
+        # second must count it by its need, and must not measure while the first does.
+        now = [NOW]
+        first = self.place("unittest", 2, clock=lambda: now[0])
+        self.inside(first)
+        now[0] = NOW + machine_lock.RAMP_SECONDS
+        measuring, measured = threading.Event(), threading.Event()
+        second_calls: list[float] = []
+
+        def head_reads() -> float:
+            measuring.set()
+            measured.wait(DEADLINE_SECONDS)
+            return 0.5
+
+        def second_reads() -> float:
+            second_calls.append(now[0])
+            return 0.5
+
+        head = self.place("big", 10, measure=head_reads, clock=lambda: now[0])
+        self.assertTrue(measuring.wait(DEADLINE_SECONDS))
+        second = self.place(
+            "other", 10, measure=second_reads, clock=lambda: now[0], report_every=0.1
+        )
+        self.outside(second)
+        self.assertIn("it is behind 1 earlier waiter, the first big in", second.said[0])
+        self.assertEqual([], second_calls, "it measured while the head was measuring")
+        measured.set()
+        self.inside(head)
+        # 16 free at half busy, less the 10 of the head that went in a moment ago.
+        self.outside(second)
+        self.assertTrue(
+            any(
+                "6.0 of 32 CPUs are free" in line and "less 10 CPUs" in line for line in second.said
+            ),
+            second.said,
+        )
+
+    def test_a_run_measuring_the_load_holds_up_no_other_runs_start_or_end(self) -> None:
+        first = self.place("unittest", 2)
+        self.inside(first)
+        measuring, stalled = threading.Event(), threading.Event()
+
+        def stall() -> float:
+            measuring.set()
+            stalled.wait(DEADLINE_SECONDS)
+            return 0.0
+
+        joining = self.place("vitest", 8, measure=stall)
+        self.assertTrue(measuring.wait(DEADLINE_SECONDS))
+        began = time.monotonic()
+        first.finish()
+        self.assertFalse(first.thread.is_alive(), "the first run never left")
+        self.assertLess(time.monotonic() - began, 2.0)
+        stalled.set()
+        self.inside(joining)
+
+    def test_the_record_for_an_earlier_version_names_the_runs_left_when_one_leaves(self) -> None:
+        unittest_run = self.place("unittest", 2)
+        self.inside(unittest_run)
+        vitest = self.place("vitest", 8)
+        self.inside(vitest)
+        self.assertTrue(
+            machine_lock.holder(self.path).startswith("2 heavy runs sharing the machine, the"),
+            machine_lock.holder(self.path),
+        )
+        vitest.finish()
+        self.assertTrue(
+            machine_lock.holder(self.path).startswith(f"unittest in {ROOT.as_posix()}, process"),
+            machine_lock.holder(self.path),
+        )
+
     def test_the_note_of_a_failed_run_names_every_heavy_run_going(self) -> None:
         self.inside(self.place("unittest", 2))
         self.inside(self.place("vitest", 8))
@@ -872,90 +1014,6 @@ class GateTests(GateCase):
         self.assertIn("vitest in", note)
         self.assertIn("with 2 CPUs", note)
         self.assertIn("with 8 CPUs", note)
-
-
-class RoomWaitTests(GateCase):
-    """A run that only the measured room keeps out waits for it `ROOM_WAIT_SECONDS` at most."""
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.now = [NOW]
-
-    def short_of_room(self, run: str, cpus: int, load: list[float]) -> Waiter:
-        """A run of `cpus` on the test's clock, at the load `load` holds."""
-
-        return self.place(run, cpus, measure=lambda: load[0], clock=lambda: self.now[0])
-
-    def test_a_run_that_gets_its_room_before_the_bound_goes_in_with_it(self) -> None:
-        load = [0.9]
-        waiter = self.short_of_room("vitest", 8, load)
-        self.outside(waiter)
-        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS - 1
-        self.outside(waiter)
-        load[0] = 0.1
-        self.inside(waiter)
-        self.assertTrue(
-            waiter.said[-1].endswith(": 8 of 32 CPUs, the machine 10% busy, alone"), waiter.said
-        )
-
-    def test_at_the_bound_a_run_goes_in_without_its_room_and_says_so(self) -> None:
-        waiter = self.short_of_room("browser", 32, [0.9])
-        self.outside(waiter)
-        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS - 1
-        self.outside(waiter)
-        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS
-        self.inside(waiter)
-        self.assertRegex(
-            waiter.said[-1],
-            r"^took the heavy-test lock after \d+ s without the room it asked for,"
-            r" 3\.2 CPUs free where it needs 22\.4: 32 of 32 CPUs, the machine 90% busy, alone$",
-        )
-
-    def test_a_wait_for_the_runs_going_starts_no_count(self) -> None:
-        first = self.place("big", 30)
-        self.inside(first)
-        waiter = self.short_of_room("vitest", 8, [0.9])
-        self.outside(waiter)
-        self.assertIn("30 of 32 CPUs the gate hands out", waiter.said[0])
-        self.now[0] = NOW + 10 * machine_lock.ROOM_WAIT_SECONDS
-        first.finish()
-        # Kept out by the room alone only from now: it waits for it the whole bound.
-        self.outside(waiter)
-        self.now[0] += machine_lock.ROOM_WAIT_SECONDS - 1
-        self.outside(waiter)
-        self.now[0] += 1
-        self.inside(waiter)
-        self.assertIn("without the room it asked for", waiter.said[-1])
-
-    def test_a_wait_for_an_earlier_versions_run_starts_no_count(self) -> None:
-        with self.path.open("a+b") as old:
-            # The lock taken as an earlier version takes it, by another handle.
-            self.assertTrue(store_lock.try_lock(old))
-            try:
-                waiter = self.short_of_room("vitest", 8, [0.9])
-                self.outside(waiter)
-                self.assertIn("it is held by a run that has not recorded itself", waiter.said[0])
-                self.now[0] = NOW + 10 * machine_lock.ROOM_WAIT_SECONDS
-            finally:
-                store_lock.unlock(old)
-        self.outside(waiter)
-        self.now[0] += machine_lock.ROOM_WAIT_SECONDS - 1
-        self.outside(waiter)
-        self.now[0] += 1
-        self.inside(waiter)
-
-    def test_a_later_run_does_not_pass_the_head_while_it_waits_for_room(self) -> None:
-        # 16 CPUs free at half busy: room for the later run, not for the head's 22.4.
-        load = [0.5]
-        head = self.short_of_room("big", 24, load)
-        self.assertTrue(head.said_something())
-        self.assertIn("16.0 of 32 CPUs are free", head.said[0])
-        later = self.short_of_room("unittest", 2, load)
-        self.outside(later)
-        self.assertIn("it is behind 1 earlier waiter, the first big in", later.said[0])
-        self.now[0] = NOW + machine_lock.ROOM_WAIT_SECONDS
-        self.inside(head)
-        self.assertIn("without the room it asked for", head.said[-1])
 
 
 class Process:
@@ -1124,18 +1182,23 @@ class OldProtocolTests(GateCase):
         old: list[Process] = []
         held_while_measuring: list[bool] = []
 
+        first = self.place("unittest", 2)
+        self.inside(first)
+
         def measure() -> float:
             if not old:
+                # The run it would join ends, and an old run comes, while it measures.
+                first.finish()
                 old.append(self.old_run())
                 held_while_measuring.append(old[0].says("held", 5.0) is not None)
             return 0.0
 
-        browser = self.place("browser", None, measure=measure)
-        self.assertTrue(browser.said_something())
+        joining = self.place("vitest", 8, measure=measure)
+        self.assertTrue(joining.said_something())
         self.assertEqual([True], held_while_measuring)
-        self.assertIn("it is held by an old run in C:/old-branch", browser.said[0])
+        self.assertIn("it is held by an old run in C:/old-branch", joining.said[0])
         old[0].release()
-        self.inside(browser)
+        self.inside(joining)
 
     def test_a_new_run_of_either_size_waits_for_an_old_holder(self) -> None:
         for run, cpus in (("unittest", 2), ("browser", None)):
