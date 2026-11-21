@@ -22,7 +22,7 @@ const lockTool = fileURLToPath(new URL('../../tests/machine_lock.py', import.met
 
 describe('the Vitest run of npm test', () => {
   it('runs the whole suite through the lock tool, with Vitest as the command it holds the lock for', () => {
-    const { command, note, targeted } = unitRun([], () => true)
+    const { command, note, targeted } = unitRun([], () => true, 32)
     expect(command.slice(0, 2)).toEqual([python, lockTool])
     const held = command.slice(command.indexOf('--') + 1)
     expect(held).toEqual([...vitest, '--maxWorkers=8'])
@@ -31,7 +31,7 @@ describe('the Vitest run of npm test', () => {
   })
 
   it('declares to the gate the pool of eight workers it runs the suite in', () => {
-    const { command } = unitRun(['--reporter=dot'], () => true)
+    const { command } = unitRun(['--reporter=dot'], () => true, 32)
     const gate = command.slice(0, command.indexOf('--'))
     expect(gate).toContain('--cpus=8')
     expect(command.slice(command.indexOf('--') + 1)).toEqual([
@@ -39,6 +39,12 @@ describe('the Vitest run of npm test', () => {
       '--maxWorkers=8',
       '--reporter=dot',
     ])
+  })
+
+  it('runs and declares no more workers than a smaller machine has CPUs', () => {
+    const { command } = unitRun([], () => true, 4)
+    expect(command.slice(0, command.indexOf('--'))).toContain('--cpus=4')
+    expect(command.slice(command.indexOf('--') + 1)).toEqual([...vitest, '--maxWorkers=4'])
   })
 
   it.each([[['--maxWorkers=16']], [['--max-workers', '4']]])(

@@ -163,4 +163,10 @@ describe('the heavy-test lock the web runners take', () => {
       'node',
     ])
   })
+
+  it('refuses a lock file passed as a path, the way an earlier version took it', () => {
+    // Untyped, as a caller on a branch from before the options reaches it at run time.
+    const earlier = lockedCommand as (run: string, command: string[], lockFile: string) => string[]
+    expect(() => earlier('a run', ['node'], 'L')).toThrow(TypeError)
+  })
 })

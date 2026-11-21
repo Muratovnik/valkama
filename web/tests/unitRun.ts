@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -34,7 +35,8 @@ const web = fileURLToPath(new URL('..', import.meta.url))
  * The pool the whole suite runs in, and the CPUs it declares to the gate. Vitest's own default
  * is every logical CPU but one, which on a 32-CPU machine would ask for nearly all of it, while
  * the suite measured there used 2.6 cores at the median and 7.4 at p95: eight workers is what it
- * uses, and what lets it share the machine with a smaller heavy run.
+ * uses, and what lets it share the machine with a smaller heavy run. On a machine of fewer CPUs
+ * it is all of them, so the pool never outnumbers the CPUs it declares.
  */
 const suiteWorkers = 8
 
@@ -48,8 +50,15 @@ function targeted(args: readonly string[]): boolean {
   })
 }
 
-/** What `npm run test:unit -- <args>` runs; `canLock` is asked only when the lock would be taken. */
-export function unitRun(args: readonly string[], canLock: () => boolean): UnitRun {
+/**
+ * What `npm run test:unit -- <args>` runs on a machine of `cpus` logical CPUs; `canLock` is asked
+ * only when the lock would be taken.
+ */
+export function unitRun(
+  args: readonly string[],
+  canLock: () => boolean,
+  cpus: number = availableParallelism(),
+): UnitRun {
   const start = [
     process.execPath,
     join(web, 'node_modules/vitest/vitest.mjs'),
@@ -67,13 +76,14 @@ export function unitRun(args: readonly string[], canLock: () => boolean): UnitRu
     }
   // A pool the caller sized is one this cannot count, so that run asks for the whole machine.
   const sized = args.some((argument) => /^--max-?workers(=|$)/i.test(argument))
+  const workers = Math.max(1, Math.min(suiteWorkers, cpus))
   return {
     command: sized
       ? lockedCommand('npm test: the Vitest suite', vitest)
       : lockedCommand(
           'npm test: the Vitest suite',
-          [...start, `--maxWorkers=${suiteWorkers}`, ...args],
-          { cpus: suiteWorkers },
+          [...start, `--maxWorkers=${workers}`, ...args],
+          { cpus: workers },
         ),
     note: null,
     targeted: false,
