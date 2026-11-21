@@ -544,6 +544,7 @@ export function useQuotaWords() {
     runOutWords,
     sectionName,
     share,
+    state,
     stateWords,
     uncollectedWords,
     windowName,
