@@ -99,16 +99,21 @@ interface FigureCell extends Figure {
   /** The hint as the cell's description; absent with no hint, so nothing empty is read out. */
   description: string | undefined
   key: 'baseline' | 'closed' | 'remaining' | 'spent' | 'spent-all'
-  /** Its time and its tokens, which stand on two lines where the table is short of room. */
-  parts: string[]
+  /**
+   * Its time and its tokens, which stand on two lines where the table is short of room; a part
+   * with no digit, such as «nothing spent», is words, which may break between them.
+   */
+  parts: { text: string; words: boolean }[]
 }
+
+const DIGIT = /\d/u
 
 const cell = (key: FigureCell['key'], figure: Figure, basis = ''): FigureCell => ({
   ...figure,
   key,
   basis,
   description: figure.hint || undefined,
-  parts: figure.text.split(PARTS),
+  parts: figure.text.split(PARTS).map((text) => ({ text, words: !DIGIT.test(text) })),
 })
 
 /** What the row says under its name: the row over a row past the indent, its space, its part. */
@@ -273,16 +278,17 @@ const { tabStop, toggle } = keys
               v-for="(part, at) in figure.parts"
               :key="at"
               class="volumes-figure-part"
+              :class="{ 'volumes-figure-words': part.words }"
               ><span
                 v-if="at"
                 class="volumes-figure-joint"
                 >{{ PARTS }}</span
-              >{{ part }}</span
+              >{{ part.text }}</span
             >
             <!-- The space keeps the basis a word of its own in the cell's text. -->
             <span
               v-if="figure.basis"
-              class="chart-detail"
+              class="chart-detail volumes-figure-basis"
               >{{ ` ${figure.basis}` }}</span
             >
           </td>
@@ -331,8 +337,9 @@ const { tabStop, toggle } = keys
 
 /* The indent and its arrow, then the row's words: its reference over its title, and under the
    title what the row says of itself, such as the goal over a row past the fifth indent, all on
-   the title's edge. The words keep their own width whatever the indent takes, so a deep row's
-   title reads on lines as long as a shallow one's: beside the reference, in a column held at its
+   the title's edge. While the table has room for it, the words keep their own width whatever the
+   indent takes, so a deep row's title reads on lines as long as a shallow one's (where it has not,
+   they give way, below): beside the reference, in a column held at its
    least, a goal six levels down kept some 54px of 276 for its title, which broke into six lines,
    and its «in MAIN-17» stood at the cell's start, 182px left of the title. The arrow stands on the
    reference's line. */
@@ -356,11 +363,27 @@ const { tabStop, toggle } = keys
 /* Where the table is too narrow for its headings on one line (`SectionTable`), a spend stands on
    two lines, its time over its tokens, and the column of names takes the room that gives: on one
    line the spends took 171px a column and left the names 276. */
-.volumes-goals-table[data-headings='two'] .volumes-figure-part {
+.volumes-goals-table:is([data-fit='two'], [data-fit='least']) .volumes-figure-part {
   display: block;
 }
 
-.volumes-goals-table[data-headings='two'] .volumes-figure-joint {
+.volumes-goals-table:is([data-fit='two'], [data-fit='least']) .volumes-figure-joint {
   display: none;
+}
+
+/* Where even two lines leave a column past the frame (`least`), the names give way down to their
+   longest word, the indent kept, and a figure said in words — «расхода нет», the done tasks an
+   estimate is judged by — breaks between its words; a figure with digits keeps its line. At 1280
+   in Russian, a goal six levels deep held the names at 320px and «Осталось ≈» stood 135px past
+   the frame. */
+.volumes-goals-table[data-fit='least'] {
+  & .volumes-goal-words {
+    min-inline-size: 0;
+  }
+
+  & :is(.volumes-figure-words, .volumes-figure-basis) {
+    overflow-wrap: normal;
+    white-space: normal;
+  }
 }
 </style>

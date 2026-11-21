@@ -1,14 +1,16 @@
 <script setup lang="ts">
 /**
  * The commits a session made that no card holds, opened from their number on the Volumes page:
- * one row each, the newest first — its hash, held at the row's start while the table scrolls
- * sideways, its subject, the repository, the session and when it was committed — read for the
- * page's scope (`readUnattachedCommits`): a project's commits, a space's projects', or every
- * commit of the store at the top.
+ * one row each, the newest first — its hash, its subject, the repository, the session and when it
+ * was committed — read for the page's scope (`readUnattachedCommits`): a project's commits, a
+ * space's projects', or every commit of the store at the top. Where those columns do not fit the
+ * frame (`useTableFit`, `data-fit` on the root), each commit stands as a block of its own: the hash
+ * and the subject on its first line, the repository under them, then the session and the time. As
+ * columns on a phone, the repository's name ran past the frame's edge mid-word.
  *
- * A row's «Attach to a card» stands under its subject, the column read first after the hash, so it
- * is in view wherever the table's frame is scrolled to the commit; in a column of its own at the
- * row's end it stood past the frame at 1280px in Russian and far past a phone's. It opens a line
+ * A row's «Attach to a card» stands under its subject, the column read first after the hash; in a
+ * column of its own at the row's end it stood past the frame at 1280px in Russian and far past a
+ * phone's. It opens a line
  * under the row where the card is found by its number or the
  * words of its title (`SearchCombobox`, `useCardSearch`), in the page's space or in any space at
  * the top, closed cards too, since a commit belongs to whichever card it was made for. «Attach»
@@ -23,6 +25,8 @@
  */
 import { computed, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useTableFit } from '@/widgets/section-table/composables/useTableFit.ts'
 
 import { useCardSearch } from '@/entities/work-item/composables/useCardSearch.ts'
 
@@ -168,12 +172,18 @@ async function attach(commit: UnattachedCommit) {
 }
 
 const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
+
+const root = ref<HTMLElement | null>(null)
+/** Its columns while they fit the frame, a block a commit where they do not. */
+const fit = useTableFit(root, [() => rows.value], () => ({ steps: ['one'], otherwise: 'stack' }))
 </script>
 
 <template>
   <section
+    ref="root"
     class="volumes-commits"
     :aria-label="t('volumes.commits.label')"
+    :data-fit="fit"
   >
     <h2 class="volumes-heading">{{ t('volumes.commits.label') }}</h2>
     <p
@@ -193,7 +203,7 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
         :label="t('volumes.commits.label')"
         :words="emptyWords"
       >
-        <thead>
+        <thead class="volumes-commits-head">
           <tr>
             <th
               scope="col"
@@ -230,9 +240,10 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
         <tbody
           v-for="row in rows"
           :key="row.key"
+          class="volumes-commit"
           :data-commit="row.commit.hash"
         >
-          <tr>
+          <tr class="volumes-commit-row">
             <th
               scope="row"
               class="chart-cell chart-name volumes-commit-code"
@@ -253,7 +264,9 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
                 </VButton>
               </span>
             </td>
-            <td class="chart-cell volumes-commit-words">{{ row.repository }}</td>
+            <td class="chart-cell volumes-commit-words volumes-commit-repository">
+              {{ row.repository }}
+            </td>
             <td
               v-tooltip.detail="row.sessionWhole"
               class="chart-cell volumes-commit-code"
@@ -262,9 +275,12 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
             </td>
             <td class="chart-cell volumes-commit-plain">{{ row.time }}</td>
           </tr>
-          <tr v-if="row.open">
+          <tr
+            v-if="row.open"
+            class="volumes-commit-row"
+          >
             <td
-              class="chart-cell"
+              class="chart-cell volumes-commit-line"
               colspan="5"
             >
               <form
@@ -333,17 +349,44 @@ const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
   margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
-/* On a phone the subject's column is what the frame has beside the commit's hash, which stays at
-   its start, and the action's name takes two lines there rather than one: on one line
-   «Прикрепить к карточке» held the column wider than the frame, past its edge. */
-@container volumes-commits (width <= 30rem) {
-  .volumes-commit-subject {
-    min-inline-size: 9rem;
+/* Where the columns do not fit (`stack`), a commit is a block whose cells flow on lines: the hash
+   and the subject, which takes what the hash leaves, with the action under it; the repository on
+   a line of its own, breaking between its words; then the session and the time. The headings name
+   nothing a block does not, so they are left to assistive technology. */
+.volumes-commits[data-fit='stack'] {
+  & :is(.volumes-commit, .volumes-commit-row) {
+    display: block;
   }
 
-  .volumes-commit-attach {
-    text-align: start;
-    white-space: normal;
+  & .volumes-commit-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+
+    & > .chart-cell {
+      position: static;
+      min-inline-size: 0;
+      padding: 0;
+    }
+  }
+
+  & .chart-cell.volumes-commit-subject {
+    flex: 1 1 0;
+    min-inline-size: min-content;
+  }
+
+  & :is(.volumes-commit-repository, .volumes-commit-line) {
+    flex-basis: 100%;
+  }
+
+  & .volumes-commits-head {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 }
 

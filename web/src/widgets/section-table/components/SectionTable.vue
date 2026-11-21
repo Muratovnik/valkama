@@ -10,10 +10,13 @@
  *
  * Each column's heading sorts by it (`sort`, through the page's `useColumnSort`), and the sorted
  * column's heading is marked, in the ink of the figures with its arrow and a rule under it. A
- * column of figures is as wide as its figures need, the first column takes the rest down to its
- * least, and headings over figures take one line while that keeps the table in its frame and two
- * once it would not (`useHeadingLines`). A window too narrow for the columns scrolls the table
- * sideways in its frame, the first column held at its start.
+ * column of figures is as wide as its figures need and the first column takes the rest. Whether
+ * the columns fit the frame decides how the table stands, never the window's width
+ * (`useTableFit`, its step on the root as `data-fit`): headings over figures on one line while
+ * that keeps every column in the frame (`one`), on two once it would not (`two`), and every
+ * column at the least that breaks no word where two lines still do not (`least`), the page
+ * letting its own columns give way there. Where even that does not fit, a table of figures keeps
+ * two lines and scrolls sideways in its frame, the first column held at its start.
  *
  * The page's rows (`rows`) are rows of the table's body, each written with the cells the columns
  * name; a page whose rows are a tree's says so (`tree`). While the page has nothing to table yet
@@ -24,15 +27,17 @@
  * table with `--size-section-table-over`.
  *
  * A table of records read as words rather than compared as figures, as Agent decisions' (`stack`),
- * stands on a phone (a table 30rem wide or narrower) as one block a record: the cells of a row
- * flow on lines one after another, a cell the page gives a line of its own taking it, and the
- * heading row is a line of its sort buttons over them, held at the frame's top. As columns its
- * frame showed two of five cells of a row before a sideways scroll.
+ * stands as one block a record as soon as its columns do not fit its frame (`data-fit="stack"`),
+ * at any width: the cells of a row flow on lines one after another, a cell the page gives a line
+ * of its own taking it, and the heading row is a line of its sort buttons over them, held at the
+ * frame's top. Stacked only on a phone, its frame showed «What was decided» past its edge at 1024
+ * and 760.
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { SortMark } from '@/widgets/section-table/composables/useColumnSort.ts'
-import { useHeadingLines } from '@/widgets/section-table/composables/useHeadingLines.ts'
+import { useTableFit } from '@/widgets/section-table/composables/useTableFit.ts'
+import type { TableFitRule } from '@/widgets/section-table/composables/useTableFit.ts'
 
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -54,7 +59,7 @@ const props = withDefaults(
     held?: boolean
     /** What changes what the table holds, which its headings' lines are measured again for. */
     holds?: readonly unknown[]
-    /** On a phone each row stands as a block of its cells rather than as columns. */
+    /** Where its columns do not fit, each row stands as a block of its cells rather than scrolling. */
     stack?: boolean
     /** The rows are a tree's, every one of them drawn (`ChartTable`). */
     tree?: boolean
@@ -80,8 +85,20 @@ defineSlots<{
 
 const root = ref<HTMLElement | null>(null)
 
-/** Its headings over figures on one line, or on two where one would widen it past its frame. */
-const headingLines = useHeadingLines(root, [() => props.holds, () => props.held])
+/**
+ * A table with figures has headings to give room, and scrolls with them on two lines where even
+ * its least does not fit; one of words alone stands as it is.
+ */
+const figures = computed(() => props.columns.some(({ numeric }) => numeric))
+const rule = computed((): TableFitRule =>
+  figures.value
+    ? { steps: ['one', 'two', 'least'], otherwise: 'two' }
+    : { steps: ['one'], otherwise: 'one' },
+)
+/** How it stands in its frame: the first step whose columns fit, else stacked or scrolling. */
+const fit = useTableFit(root, [() => props.holds, () => props.held], () =>
+  props.stack ? { ...rule.value, otherwise: 'stack' } : rule.value,
+)
 
 /** Brings the table into view, its heading row at the top, with the focus on it. */
 function reveal() {
@@ -98,8 +115,7 @@ defineExpose({ reveal })
     ref="root"
     class="section-table"
     tabindex="-1"
-    :class="{ 'section-table-stack': stack }"
-    :data-headings="headingLines"
+    :data-fit="fit"
     :aria-label="label"
   >
     <slot name="head" />
@@ -230,7 +246,7 @@ defineExpose({ reveal })
 
 /* A row is one line: each figure and its heading take what they need, the first column the rest.
    Where the headings on one line would widen the table past its frame, they take a second line
-   instead (`headingLines`). */
+   instead (`fit`). */
 .chart-cell[data-numeric='true'] {
   inline-size: 1px;
 }
@@ -243,51 +259,56 @@ defineExpose({ reveal })
 /* The headings over figures on two lines, each column at its least: the frame of a narrower table,
    or headings longer than its frame has room for on one line. A figure then stands inside the
    frame's edge rather than past it. */
-.section-table[data-headings='two'] .chart-heading[data-numeric='true'] {
+.section-table[data-fit='two'] .chart-heading[data-numeric='true'] {
   min-inline-size: 7em;
   white-space: normal;
 }
 
-/* A table of records as words on a phone (`stack`): each row a block whose cells flow on lines,
-   the heading row a line of its sort buttons that stays at the frame's top. */
-@container (width <= 30rem) {
-  .section-table-stack :is(.section-table-head, .section-table-body) {
-    display: block;
-  }
+/* Where two lines still leave a column past the frame, each heading over figures is as narrow as
+   its longest word, which it never breaks: at 1280 in Russian the goals of Volumes kept «Закрыто»
+   and «При принятии» at 7em, 18px wider than their words, with «Осталось ≈» past the frame. */
+.section-table[data-fit='least'] .chart-heading[data-numeric='true'] {
+  white-space: normal;
+}
 
-  .section-table-stack .section-table-head {
-    position: sticky;
-    inset-block-start: 0;
-    z-index: 3;
-    background: var(--color-chart-table-ground, var(--color-canvas));
-    box-shadow: inset 0 -1px var(--color-rule);
-  }
+/* A table of records as words whose columns do not fit (`stack`): each row a block whose cells
+   flow on lines, the heading row a line of its sort buttons that stays at the frame's top. */
+.section-table[data-fit='stack'] :is(.section-table-head, .section-table-body) {
+  display: block;
+}
 
-  .section-table-stack .table-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-4);
-    padding: var(--space-2) var(--space-3);
+.section-table[data-fit='stack'] .section-table-head {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  background: var(--color-chart-table-ground, var(--color-canvas));
+  box-shadow: inset 0 -1px var(--color-rule);
+}
 
-    & .chart-cell {
-      position: static;
-      padding: 0;
-      box-shadow: none;
-    }
-  }
+.section-table[data-fit='stack'] .table-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-2) var(--space-3);
 
-  .section-table-stack .section-table-body > :slotted(*) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-2);
-    padding: var(--space-2) var(--space-3);
-  }
-
-  .section-table-stack :slotted(.chart-cell) {
+  & .chart-cell {
     position: static;
-    min-inline-size: 0;
     padding: 0;
-    background: none;
+    box-shadow: none;
   }
+}
+
+.section-table[data-fit='stack'] .section-table-body > :slotted(*) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.section-table[data-fit='stack'] :slotted(.chart-cell) {
+  position: static;
+  min-inline-size: 0;
+  padding: 0;
+  background: none;
 }
 </style>

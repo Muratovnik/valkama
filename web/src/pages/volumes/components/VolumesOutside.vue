@@ -8,12 +8,17 @@
  * tasks first.
  *
  * Each table is a section's (`ChartTable`); each row carries `data-row`, its project's id or its
- * label (`-` for none, `*` for several projects), and each figure `data-category`.
+ * label (`-` for none, `*` for several projects), and each figure `data-category`. Where the
+ * columns do not fit the frame, the headings and the names come down to their longest words
+ * (`useTableFit`, `least`); where even that does not fit, the tables scroll sideways with their
+ * names held at the start.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useVolumesWords } from '@/pages/volumes/composables/useVolumesWords.ts'
+
+import { useTableFit } from '@/widgets/section-table/composables/useTableFit.ts'
 
 import { STATE_CATEGORIES } from '@/shared/api/planningModel.ts'
 import type { Volumes } from '@/shared/api/volumesReadApi.ts'
@@ -47,12 +52,21 @@ const tables = computed(() => [
   },
 ])
 const emptyWords = computed(() => ({ empty: t('volumes.outside.empty') }))
+
+const root = ref<HTMLElement | null>(null)
+/** Both tables at their words' width while it fits, at their least where it does not. */
+const fit = useTableFit(root, [() => tables.value], () => ({
+  steps: ['one', 'least'],
+  otherwise: 'one',
+}))
 </script>
 
 <template>
   <section
+    ref="root"
     class="volumes-outside"
     :aria-label="t('volumes.outside.label')"
+    :data-fit="fit"
   >
     <h2 class="volumes-heading">
       {{ t('volumes.outside.label') }}
@@ -129,5 +143,12 @@ const emptyWords = computed(() => ({ empty: t('volumes.outside.empty') }))
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
+}
+
+/* Where the categories at 8em leave a column past the frame (`least`), their headings and the
+   names come down to their longest words, never broken: at 1280 in Russian the tables stood 8 and
+   15px past a frame of 948. */
+.volumes-outside[data-fit='least'] :is(.chart-heading[data-numeric='true'], .chart-name) {
+  min-inline-size: 0;
 }
 </style>
