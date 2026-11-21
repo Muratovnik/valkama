@@ -327,8 +327,14 @@ def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
 
 
 def check(path: Path, tree: Path) -> tuple[int, str]:
-    """Whether the record at `path` was made in `tree` as it is now and passed, and what to say."""
+    """Whether the record at `path` was made in `tree` as it is now and passed, and what to say.
 
+    `path` is the record or the directory `run --out` wrote it in: given the directory, opening
+    it as the record answered Windows' «Permission denied» instead of reading the record there.
+    """
+
+    if path.is_dir():
+        path = path / NAME
     record, why = _describing(path, tree)
     if record is None:
         return REFUSED, f"refused: {why}"
@@ -449,7 +455,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         epilog=CHECK_CODES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    checking.add_argument("record", type=Path)
+    checking.add_argument(
+        "record", type=Path, help=f"the {NAME}, or the directory `run --out` wrote it in"
+    )
     checking.add_argument(
         "--tree", type=Path, default=ROOT, help="the tree; by default this checkout"
     )

@@ -336,6 +336,15 @@ class RunTests(TreeCase):
         self.assertEqual(run_record.FAILED, code, said)
         self.assertIn("; failed: unit, unit-2; ran: ", said)
 
+    def test_check_takes_the_directory_run_wrote_the_record_in(self) -> None:
+        self.ran("python", "-c", "pass", name="reads")
+
+        by_file = self.checked(self.out / run_record.NAME, self.repo)
+        by_directory = self.checked(self.out, self.repo)
+
+        self.assertEqual(run_record.PASSED, by_directory[0], by_directory[1])
+        self.assertEqual(by_file, by_directory)
+
     def test_a_tree_that_changed_since_the_record_gets_a_new_one_and_is_told_why(self) -> None:
         self.ran("python", "-c", "pass", name="first")
         self.write("server/app.py", "print('edited')\n")
