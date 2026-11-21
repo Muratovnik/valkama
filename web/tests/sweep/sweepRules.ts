@@ -208,20 +208,39 @@ export function hintSays(text: string, marks: readonly HintedWords[]): string[] 
 }
 
 /**
- * The mark whose place a hint that answered the pointer is judged at: the one aimed at, where it
- * may answer and the hint says it; else the first of those that may answer that the hint says, as
- * the nearer of two places within a mark's reach of each other is, whose hint says the other's
- * words after its own. Judged at the one aimed at, a restart's hint standing at its own mark, the
- * nearer, read as a hint 12px from the restart 3px beside it.
+ * The marks whose place a hint that answered the pointer may be judged at, in order: the one
+ * aimed at, where it may answer and the hint says it; then the places (`places`) that may answer
+ * that the hint says, as the nearer of two places within a mark's reach of each other is, whose
+ * hint says the other's words after its own; else the one aimed at alone. Judged at the one aimed
+ * at, a restart's hint standing at its own mark, the nearer, read as a hint 12px from the restart
+ * 3px beside it. Only a place answers for a neighbour: a step line finds a reading by its moment
+ * on a continuum of them, one at every pixel, and a reading 3px off another is a third, or one of
+ * several that say the same, whose hint stands at its own dot; judged there, a reading on a steep
+ * rise read as a hint 27px from the pointer and one of three equal readings as a hint 13px off.
  */
-export function answeringMark(
+export function answeringMarks(
   says: readonly string[],
   expected: readonly string[],
-  aimed: string,
-): string {
-  return says.includes(aimed) && expected.includes(aimed)
-    ? aimed
-    : (expected.find((id) => says.includes(id)) ?? aimed)
+  { aimed, places }: { aimed: string; places: readonly string[] },
+): string[] {
+  const mine = says.includes(aimed) && expected.includes(aimed) ? [aimed] : []
+  const near = expected.filter((id) => id !== aimed && places.includes(id) && says.includes(id))
+  return mine.length || near.length ? [...mine, ...near] : [aimed]
+}
+
+/**
+ * Which of the marks that may have answered (`answeringMarks`) a hint at `hint` is judged at: the
+ * first its hint stands right at, else the first. Two places as near the pointer as each other
+ * (`TWINS`) may either answer, and a hint standing at either stands right: «now» 2.1px off the
+ * pointer and the forecast's end 3px off it, «now» answered and its hint stood 6px from its dot,
+ * which judged at the forecast's end read as a hint 13px off.
+ */
+export function judgedMark<T extends { id: string; place: MarkPlace | null }>(
+  marks: readonly T[],
+  hint: Box,
+  at: Point,
+): T | undefined {
+  return marks.find((one) => one.place && !placementMiss(hint, one.place, at)) ?? marks[0]
 }
 
 /** What the page answered where the pointer stood: the hint shown, if any, and what it says. */

@@ -10,11 +10,12 @@ import type { Page } from '@playwright/test'
 import type { Hinted, MarkAround, Surface } from './sweepInPage.ts'
 import { readAround, readHinted, readSurface } from './sweepPage.ts'
 import {
-  answeringMark,
+  answeringMarks,
   boxDistance,
   expectedAmong,
   expectedOnLine,
   judge,
+  judgedMark,
   NUDGE,
   occurrences,
 } from './sweepRules.ts'
@@ -102,19 +103,24 @@ interface Found {
 }
 
 /**
- * The mark whose hint answered (`answeringMark`) and its place as it declares it once the pointer
- * stands there: a ring's sector names the point of its band where the pointer stands on it.
+ * The mark whose hint answered (`answeringMarks`, `judgedMark`) and its place as it declares it
+ * once the pointer stands there: a ring's sector names the point of its band where the pointer
+ * stands on it.
  */
 async function answeredMark(
   page: Page,
-  surface: Surface | null,
-  expected: readonly string[],
+  { surface, expected, at }: { at: Point; expected: readonly string[]; surface: Surface | null },
   { mark, around }: { around: MarkAround; mark: Hinted },
 ) {
-  const id = surface ? answeringMark(surface.says, expected, mark.id) : mark.id
-  if (id === mark.id) return { id, place: surface?.place ?? around.place }
-  const other = await readSurface(page, id)
-  return { id, place: other?.place ?? null }
+  if (!surface) return { id: mark.id, place: around.place }
+  const places = around.line?.marks.filter((one) => one.place).map((one) => one.id) ?? []
+  const ids = answeringMarks(surface.says, expected, { aimed: mark.id, places })
+  const marks = []
+  for (const id of ids) {
+    const read = id === mark.id ? surface : await readSurface(page, id)
+    marks.push({ id, place: read?.place ?? (id === mark.id ? around.place : null) })
+  }
+  return judgedMark(marks, surface.box, at) ?? { id: mark.id, place: around.place }
 }
 
 /** Points at each point of one mark and adds what missed and what forbidden text a hint said. */
@@ -137,7 +143,7 @@ async function pointAround(
         path: mark.path,
         owner: mark.owner,
       })
-    const answered = await answeredMark(page, surface, expected, { mark, around })
+    const answered = await answeredMark(page, { surface, expected, at: point.at }, { mark, around })
     for (const verdict of judge(surface, expected, answered, point.at)) {
       const what =
         'ids' in verdict.found
