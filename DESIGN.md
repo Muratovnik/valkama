@@ -2946,7 +2946,9 @@ while every account stood as the start of its id, and with both at once «Name»
 menu said. The menu and «Name» are one unit on one centre line at every width: beside the name
 while both fit there, and on the next line together where they do not, the name keeping its own;
 as two items of the heading's row, a phone's wrapped «Name» alone, 40px under the menu at the
-name's end.
+name's end. The field stands on the name's edge and line, as wide as its line leaves up to a
+name's width, with the menu on its line; laid out at a name's width, a phone's field wrapped
+under the unseen name 12px past the edge, the menu 40px above it.
 What stands now leads with one line, the share as the window's figure and its state beside it,
 «41% used · up to date», «13% used · reading 5 h ago», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the

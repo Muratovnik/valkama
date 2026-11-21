@@ -360,10 +360,15 @@ const lineOf = (window: QuotaShareWindow) => props.lines?.get(lineKey(props.acco
 
 /* The field that renames the account, in the name's place, as wide as a name reads. The name
    stands unseen in the heading for the outline, which leaves the heading row's gap (`--space-3`)
-   before the field: the field takes that gap back, so it starts where the name did. */
+   before the field: the field takes that gap back, so it starts where the name did. It grows into
+   the room its line leaves, from the least a name is typed in to that width, so it shares the
+   unseen name's line at every width and the controls stay on its line where they fit there. Laid
+   out at that width, on a phone it wrapped under the unseen name, where taking the gap back put it
+   12px past the account's content edge, and the menu went 40px under it. */
 .quota-account-field {
-  flex: 0 1 20rem;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: min(10rem, 100%);
+  max-width: 20rem;
   margin-inline-start: calc(-1 * var(--space-3));
 }
 
