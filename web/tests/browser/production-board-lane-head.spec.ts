@@ -354,6 +354,10 @@ async function readReach(page: Page, width: number) {
   return { found, read }
 }
 
+// Each test opens a page of its own and shares nothing with another, so they run side by side:
+// one after another, the four sweeps held one worker for ten minutes and more.
+test.describe.configure({ mode: 'parallel' })
+
 for (const locale of ['en-US', 'ru-RU']) {
   test.describe(`${locale}, with a pointer`, () => {
     test.use({ locale })
