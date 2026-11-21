@@ -3,8 +3,8 @@
  * 1024 and 390 pixels — in English and in Russian, drawn as charts. The oracle is the rule of the
  * hatch: a figure not final yet is hatched and named, a final one never is.
  *
- * Every window's share spent is solid, a silent one's too, which says in words how long it has
- * been silent. Its forecast is one hatched tail inside the track, from the share spent: a week's
+ * Every window's share spent is solid, a silent one's too, which says in words how old its latest
+ * reading is. Its forecast is one hatched tail inside the track, from the share spent: a week's
  * range to its high end, with no gap inside it; five hours that last to the share their
  * answer says they spend by the reset; five hours that run out to the track's end; none for a
  * window too new for a forecast, for one spent or read past 100 %; and from the track's start at
@@ -275,12 +275,12 @@ const casesIn = (cases: Record<string, Drawn>, lang: 'en' | 'ru') =>
     ]),
   )
 
-/** A window's state at the end of its lead: «up to date», or «no data» and for how long. */
+/** A window's state at the end of its lead: «up to date», or the age of its reading, «reading 3 h ago». */
 const stateWords = (lang: 'en' | 'ru') => {
   const { states, silentFor } = messages[lang].analytics.quota
   return {
     fresh: new RegExp(`· ${states.fresh}$`, 'u'),
-    silent: new RegExp(`· ${silentFor.replace('{for}', '[0-9]')}`, 'u'),
+    silent: new RegExp(`· ${silentFor.replace('{for}', '[^·]+')}`, 'u'),
   } as Record<string, RegExp>
 }
 
@@ -326,7 +326,7 @@ for (const lang of ['en', 'ru'] as const)
         )
         expect(drawn, `${section}: what each window draws`).toEqual(cases)
         for (const one of windows) {
-          // The share spent is solid, silent or fresh; a silent window says for how long.
+          // The share spent is solid, silent or fresh; a silent window says how old its reading is.
           expect(one.solid, `${one.key}: its fill solid`).toBe(true)
           expect(one.lead, `${one.key}: its state`).toMatch(states[one.state] ?? /^$/u)
           // The one tail inside the track, 2px of ground past the fill; the forecast after its

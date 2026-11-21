@@ -104,7 +104,7 @@ describe('the quota tiles', () => {
     expect(says(page, 'quota_week')).toEqual({
       lead: NIGHT_NAME,
       aside: '88%',
-      count: 'no data for 3\u{A0}h',
+      count: 'reading 3\u{A0}h ago',
     })
     // Silent or fresh, the share spent is solid; each forecast is one hatched tail past it, the
     // week's range to its high end, and the bar's words name the hatch.
@@ -216,7 +216,7 @@ describe('the quota panel', () => {
     // The usage credits are a line of their name and state, never a figure, and how old their
     // reading is and who read it is the line's hint, as a window of a share keeps it in its bar's.
     const credits = work.get('.quota-account-others li span')
-    expect(plain(credits.text())).toBe('Usage credits: no data')
+    expect(plain(credits.text())).toBe('Usage credits: older reading')
     expect(plain(credits.attributes('data-tooltip') ?? '')).toMatch(
       /^No change since .+, 2 d ago, from the poll$/u,
     )
@@ -227,7 +227,7 @@ describe('the quota panel', () => {
     const table = await mountAnalytics({ routeState: { by: 'quota_week' } })
     await showTable(table)
     expect(plain(accountNamed(table, 'Work').get('.quota-account-others').text())).toBe(
-      'Usage credits: no data, read 2 d ago from the poll',
+      'Usage credits: older reading, read 2 d ago from the poll',
     )
   })
 
@@ -251,7 +251,7 @@ describe('the quota panel', () => {
     const silent = windowOf(accountNamed(week, 'Work'), 'week_model')
     expect(silent).toMatchObject({
       state: 'silent',
-      lead: '13% used · no data for 5 h',
+      lead: '13% used · reading 5 h ago',
       filled: true,
       tail: 0,
     })

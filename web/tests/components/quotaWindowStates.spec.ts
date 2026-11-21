@@ -101,6 +101,12 @@ function wordsIn(locale: 'en' | 'ru') {
 /** Words as a reader reads them: a figure and its unit are kept together with a no-break space. */
 const plain = (text: string) => text.replaceAll('\u{A0}', ' ')
 
+/** A week at 41 % whose latest reading, the only one, is `age` ms before the panel's moment. */
+function aged(age: number): QuotaShareWindow {
+  const reading = { at: at(NOW - age), used_percent: 41, source: 'mod' as const }
+  return { ...window('week', { used: 41, left: 3 * HOUR }), latest: reading, readings: [reading] }
+}
+
 const KINDS: Kind[] = ['five_hour', 'week', 'week_model']
 
 describe('a window past its reset', () => {
@@ -146,6 +152,31 @@ describe('a window past its reset', () => {
 
   it('stands, and says no ended share, while its reset is ahead', () => {
     expect(wordsIn('en').ended(window('week', { used: 40, left: HOUR }), NOW, TODAY)).toBeNull()
+  })
+})
+
+describe('a window whose latest reading is past the freshness threshold', () => {
+  const MINUTE = 60_000
+
+  it('says the age of its reading in both languages, and never that there is no data', () => {
+    const old = aged(18 * MINUTE)
+    const en = wordsIn('en')
+    const ru = wordsIn('ru')
+    expect(plain(en.stateWords(old, NOW, 900))).toBe('reading 18 min ago')
+    expect(plain(ru.stateWords(old, NOW, 900))).toBe('показание 18 мин назад')
+    expect(plain(en.barLabel(old, NOW, TODAY, 900))).toMatch(
+      /^Week: 41% used, reading 18 min ago\. /u,
+    )
+    // The step line's «now» says the same reading as its age, with its moment and source.
+    expect(plain(en.nowTarget(old, NOW, TODAY, 900).notes[0] ?? '')).toBe(
+      'Last reading 18 min ago, at 09:42, from the mod',
+    )
+    expect(plain(ru.nowTarget(old, NOW, TODAY, 900).notes[0] ?? '')).toBe(
+      'Последнее показание 18 мин назад, в 09:42, источник: мод',
+    )
+    for (const text of [en.stateWords(old, NOW, 900), ru.stateWords(old, NOW, 900)]) {
+      expect(text).not.toMatch(/no data|нет данных/u)
+    }
   })
 })
 

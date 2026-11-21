@@ -2,7 +2,8 @@
  * The subscription quota on the Analytics page: its two tiles on the rail and its panel. A share
  * of a window is always one account's and one window's: no message adds two of them, and none
  * names money beside a share. A window with no source, a silent one and a fresh 0 % each have
- * words of their own; a silent one says how long it has been silent (`silentFor`). Wherever a
+ * words of their own; a silent one says how old its latest reading is (`silentFor`), since a source
+ * writes one only when a value changes, so an idle account and a dead source read alike. Wherever a
  * window's forecast is drawn hatched, its words lead with the key that names the hatch
  * (`forecastKey`, `forecastLine`), and what a step line points at past its readings — the window
  * now and its forecast at the reset — has its own words (`readings.now`, `readings.forecast`).
@@ -31,7 +32,7 @@ export const analyticsQuotaMessages = {
     },
     states: {
       fresh: 'up to date',
-      silent: 'no data',
+      silent: 'older reading',
     },
     sources: {
       statusline: 'the status line',
@@ -60,7 +61,7 @@ export const analyticsQuotaMessages = {
       noFiveHours: 'no window',
     },
     lead: '{share} used · {state}',
-    silentFor: 'no data for {for}',
+    silentFor: 'reading {for} ago',
     bar: '{window}: {share} used, steady use since the window started would be at {even} now, {state}. {forecast}',
     barNoPace: '{window}: {share} used, {state}. {forecast}',
     barEnded: '{window}: reset at {at}, no new readings; {ended}',
@@ -174,7 +175,7 @@ export const analyticsQuotaMessages = {
       quietSince: 'no readings since {at}',
       now: 'Now',
       last: 'Last reading at {at}, {ago}, from {source}',
-      silent: 'No data for {for}; last reading at {at}, from {source}',
+      silent: 'Last reading {for} ago, at {at}, from {source}',
       forecast: 'Forecast by the reset',
       past: 'The reset is past the right edge of the framed span',
       restart: 'Counter zeroed',
@@ -213,7 +214,7 @@ export const analyticsQuotaMessages = {
     },
     states: {
       fresh: 'актуально',
-      silent: 'нет данных',
+      silent: 'давнее показание',
     },
     sources: {
       statusline: 'строка состояния',
@@ -242,7 +243,7 @@ export const analyticsQuotaMessages = {
       noFiveHours: 'нет окна',
     },
     lead: '{share} израсходовано · {state}',
-    silentFor: 'нет данных {for}',
+    silentFor: 'показание {for} назад',
     bar: '{window}: израсходовано {share}, при ровном расходе с начала окна сейчас было бы {even}, {state}. {forecast}',
     barNoPace: '{window}: израсходовано {share}, {state}. {forecast}',
     barEnded: '{window}: сброшено в {at}, новых показаний нет; {ended}',
@@ -356,7 +357,7 @@ export const analyticsQuotaMessages = {
       quietSince: 'нет показаний с {at}',
       now: 'Сейчас',
       last: 'Последнее показание в {at}, {ago}, источник: {source}',
-      silent: 'Нет данных {for}; последнее показание в {at}, источник: {source}',
+      silent: 'Последнее показание {for} назад, в {at}, источник: {source}',
       forecast: 'Прогноз к сбросу',
       past: 'Сброс — правее выделенного отрезка',
       restart: 'Счётчик обнулён',

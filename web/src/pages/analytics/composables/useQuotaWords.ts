@@ -71,7 +71,7 @@ export function useQuotaWords() {
   /** A share of a window in the page's whole percents, never claiming more or less than it is. */
   const share = (percent: number) => words.share(percent / 100)
 
-  /** A window's state at `now` (ms) in a word, «up to date» or «no data» (`stateAt`). */
+  /** A window's state at `now` (ms) in a word, «up to date» or «older reading» (`stateAt`). */
   const state = (window: QuotaWindow, now: number, freshFor: number) =>
     t(`analytics.quota.states.${stateAt(window, now, freshFor)}`)
   const source = (window: QuotaWindow) => t(`analytics.quota.sources.${window.latest.source}`)
@@ -80,7 +80,7 @@ export function useQuotaWords() {
   const silence = (window: QuotaWindow, now: number) =>
     spanWords(Math.max(0, now - Date.parse(window.latest.at)), span)
 
-  /** A window's state at `now` as its bar's words say it: «up to date», or «no data for 3 h» with how long. */
+  /** A window's state at `now` as its bar's words say it: «up to date», or «reading 3 h ago» with its age. */
   const stateWords = (window: QuotaWindow, now: number, freshFor: number) =>
     silent(window, now, freshFor)
       ? t('analytics.quota.silentFor', { for: silence(window, now) })

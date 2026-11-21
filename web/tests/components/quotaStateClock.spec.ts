@@ -77,11 +77,25 @@ describe('a quota window’s state by the panel’s clock', () => {
     // At the next tick of the clock it is older, and every word of the window says it is silent.
     await wait(5 * SECOND)
     const silent = workWeek(page)
-    expect(silent).toMatchObject({ state: 'silent', lead: '41% used · no data for 10 min' })
+    expect(silent).toMatchObject({ state: 'silent', lead: '41% used · reading 10 min ago' })
     expect(silent.latest).toMatch(/^No change since \d{2}:\d{2}, 10 min ago, from the poll$/u)
     expect(silent.label).toMatch(
-      /^Week: 41% used, steady use since the window started would be at \d+% now, no data for 10 min\. /u,
+      /^Week: 41% used, steady use since the window started would be at \d+% now, reading 10 min ago\. /u,
     )
+  })
+
+  it('says the age of a reading past the threshold, never that there is no data', async () => {
+    const answer = answered()
+    stubAnalyticsReads(usage, () => answer)
+    const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
+    // The reading was two minutes old when the answer was read: sixteen minutes on, it is eighteen.
+    await wait(16 * MINUTE + 5 * SECOND)
+    const old = workWeek(page)
+    expect(old).toMatchObject({ state: 'silent', lead: '41% used · reading 18 min ago' })
+    expect(old.label).toMatch(
+      /^Week: 41% used, steady use since the window started would be at \d+% now, reading 18 min ago\. /u,
+    )
+    expect(old.lead).not.toMatch(/no data/u)
   })
 
   it('names on the tile the fresh window of two at the same share, by the clock', async () => {
@@ -123,7 +137,7 @@ describe('a quota window’s state by the panel’s clock', () => {
     expect(says(page, 'quota_five_hour')).toEqual({
       lead: 'Work',
       aside: '62%',
-      count: 'no data for 11\u{A0}min',
+      count: 'reading 11\u{A0}min ago',
     })
   })
 })
