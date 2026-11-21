@@ -2,7 +2,8 @@
  * A sweep of the Analytics page and its value panel on a running Valkama, for three classes of
  * defect that a test on one named spot kept missing elsewhere on real data: hover reach (the hint
  * or the hover state the pointer gets at and around every mark), sideways overflow that is none of
- * the design's, and text that must never show (`--forbid`). It walks every section the rail
+ * the design's, and text that must never show (`--forbid`) as the product's own words, not where
+ * a name of the data shown quotes it. It walks every section the rail
  * offers, every period the bar offers, every view each chart's switch offers and the value panel
  * opened from a mark of each section, at each width, and writes every miss with where it stood.
  *
@@ -27,9 +28,9 @@ import { parseArgs } from 'node:util'
 import { chromium } from '@playwright/test'
 import type { Browser, Page } from '@playwright/test'
 
-import { installHelpers, readForbidden, readOverflow } from './sweepPage.ts'
+import { installHelpers, readForbidden, readOverflow, watchNames } from './sweepPage.ts'
 import { rest, sweepReach } from './sweepReach.ts'
-import { scrollMiss } from './sweepRules.ts'
+import { occurrences, scrollMiss } from './sweepRules.ts'
 import { chartViews, chooseView, discover, openPanel, openView } from './sweepStates.ts'
 import type { PeriodChoice } from './sweepStates.ts'
 import { summarize } from './sweepSummary.ts'
@@ -109,17 +110,20 @@ async function overflowMisses(page: Page, state: StateName, scope: string | null
   return misses
 }
 
-/** Every place of `scope` where a forbidden text stands, once per place and words. */
+/**
+ * Every place of `scope` where a forbidden text stands as the product's own words, not inside a
+ * name of the data shown (`names`), once per place and words.
+ */
 async function forbiddenMisses(
   page: Page,
   state: StateName,
-  scope: string | null,
+  { scope, names }: { names: readonly string[]; scope: string | null },
 ): Promise<Miss[]> {
   const seen = new Set<string>()
   const misses: Miss[] = []
   for (const found of await readForbidden(page, forbid, scope)) {
     const key = `${found.path}|${found.said}`
-    if (seen.has(key)) continue
+    if (seen.has(key) || !occurrences(found.raw, found.text, names, found.contexts)) continue
     seen.add(key)
     misses.push({
       class: 'forbidden',
@@ -133,17 +137,25 @@ async function forbiddenMisses(
   return misses
 }
 
+/** The names of the data a page was shown so far (`watchNames`). */
+type Names = () => Promise<string[]>
+
 /**
  * Measures the page as it stands: overflow and forbidden text of `scope` (all of it where null),
  * read with no hint up, then the reach of its marks.
  */
-async function measure(page: Page, state: StateName, scope: string | null): Promise<Measured> {
+async function measure(
+  page: Page,
+  state: StateName,
+  { scope, names }: { names: Names; scope: string | null },
+): Promise<Measured> {
   await rest(page)
+  const known = await names()
   const misses = [
     ...(await overflowMisses(page, state, scope)),
-    ...(await forbiddenMisses(page, state, scope)),
+    ...(await forbiddenMisses(page, state, { scope, names: known })),
   ]
-  const reach = await sweepReach(page, { forbid, perSort, scope })
+  const reach = await sweepReach(page, { forbid, names: known, perSort, scope })
   for (const miss of reach.misses)
     misses.push({
       class: 'reach',
@@ -170,27 +182,37 @@ async function walkPeriod(
   page: Page,
   view: Record<string, string>,
   state: (name: string, panel?: boolean) => StateName,
-  notes: string[],
+  { notes, names }: { names: Names; notes: string[] },
 ) {
   const results: Measured[] = []
   const named = state('')
   const at = `${named.width} ${named.section} ${named.period}`
   if (!(await openView(page, base, view))) notes.push(`${at}: did not settle`)
-  results.push(await measure(page, state('opening'), null))
+  results.push(await measure(page, state('opening'), { scope: null, names }))
   for (const chart of await chartViews(page)) {
     const others = Array.from({ length: chart.options }, (_, option) => option).filter(
       (option) => option !== chart.chosen,
     )
     for (const option of others) {
       const shown = await chooseView(page, chart.chart, option)
-      results.push(await measure(page, state(`${chart.chart}:${shown}`), '[data-sweep-scope]'))
+      results.push(
+        await measure(page, state(`${chart.chart}:${shown}`), {
+          scope: '[data-sweep-scope]',
+          names,
+        }),
+      )
     }
     if (others.length) await chooseView(page, chart.chart, chart.chosen)
   }
   await openView(page, base, view)
   const opener = await openPanel(page, base, view)
   if (opener)
-    results.push(await measure(page, state(`panel from ${opener}`, true), '.analytics-detail'))
+    results.push(
+      await measure(page, state(`panel from ${opener}`, true), {
+        scope: '.analytics-detail',
+        names,
+      }),
+    )
   else notes.push(`${at}: no mark opened the value panel`)
   return results
 }
@@ -204,6 +226,7 @@ async function walkSection(
 ) {
   const context = await browser.newContext({ locale: 'ru-RU', viewport: { width, height: 1000 } })
   await installHelpers(context)
+  const names = watchNames(context)
   context.setDefaultTimeout(15_000)
   const page = await context.newPage()
   const results: Measured[] = []
@@ -217,7 +240,7 @@ async function walkSection(
       panel,
     })
     try {
-      results.push(...(await walkPeriod(page, { ...period, by: section }, state, notes)))
+      results.push(...(await walkPeriod(page, { ...period, by: section }, state, { notes, names })))
     } catch (error) {
       notes.push(`failed: ${width} ${section} ${period.period}: ${String(error).slice(0, 300)}`)
     }

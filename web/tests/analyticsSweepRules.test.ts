@@ -4,7 +4,8 @@
  * them: within a mark's reach its own hint wins, the nearest of several, twins within a pixel
  * answering either; a step line finds a place before a reading; a mark's hint stands at the mark;
  * only a table or a row of like items scrolls sideways, by a reachable amount, and never the page
- * or because of content out of flow. A sweep whose rules pass a defect closes no remark.
+ * or because of content out of flow; a forbidden text counts where the product writes it, not
+ * where a name of the data shown quotes it. A sweep whose rules pass a defect closes no remark.
  */
 import assert from 'node:assert/strict'
 
@@ -14,6 +15,7 @@ import {
   expectedAmong,
   expectedOnLine,
   judge,
+  namesIn,
   occurrences,
   placementMiss,
   scrollMiss,
@@ -209,6 +211,40 @@ test('a forbidden text is counted wherever it stands, whatever space it is writt
     2,
   )
   assert.equal(occurrences('a minute', 'less than a minute'), 0)
+})
+
+describe('a forbidden text a name of the data quotes', () => {
+  const UNDER = 'less than a minute'
+  const TITLE = 'Fix «less than a minute» in the legend'
+
+  test('in a hint, is the name’s and not counted, while the product’s own words beside it are', () => {
+    const hint = `MAIN-7 ${TITLE} 3 min`
+    assert.equal(occurrences(hint, UNDER, [TITLE]), 0)
+    assert.equal(occurrences(`${hint} · Unknown ${UNDER} <1 %`, UNDER, [TITLE]), 1)
+    // Without the names a sweep counts the title as the product's words.
+    assert.equal(occurrences(hint, UNDER), 1)
+  })
+
+  test('in a title drawn in runs, whose code stands alone and without its backticks', () => {
+    // The code run's own text, read in the name it stands in, four letters after the name's start.
+    const contexts = [{ context: `Say ${UNDER} once`, at: 4 }]
+    assert.equal(occurrences(UNDER, UNDER, [`Say \`${UNDER}\` once`], contexts), 0)
+  })
+
+  test('in a cell beside a name that quotes it, the cell is still the product’s', () => {
+    const name = `MAIN-7 ${TITLE}`
+    const contexts = [{ context: `${name}${UNDER}`, at: name.length }]
+    assert.equal(occurrences(UNDER, UNDER, [TITLE], contexts), 1)
+  })
+})
+
+test('the names of the data are every title and name an answer holds, at any depth', () => {
+  const answer = {
+    label: 'no name',
+    rows: [{ group: { work_item: { id: 'w-1', title: 'A task' }, model: { name: 'model-a' } } }],
+    total: { title: 7 },
+  }
+  assert.deepEqual(namesIn(answer), ['A task', 'model-a'])
 })
 
 test('misses are grouped by class, rule and owner, counted by width, period and section', () => {

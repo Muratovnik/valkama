@@ -7,11 +7,41 @@ import type { BrowserContext, Page } from '@playwright/test'
 import type { Hinted, MarkAround, Surface } from './sweepInPage.ts'
 import { helperScript } from './sweepInPage.ts'
 import type { Occurrence, Overflowing } from './sweepInPageLayout.ts'
+import { namesIn } from './sweepRules.ts'
 import type { Point } from './sweepRules.ts'
 
 /** Installs the helpers into every page of `context`, before the page's own scripts. */
 export async function installHelpers(context: BrowserContext) {
   await context.addInitScript({ content: helperScript() })
+}
+
+/**
+ * The names of the data the pages of `context` were shown, as the API gave them (`namesIn`), so
+ * a forbidden text a task's title quotes is told from the product's own words: every JSON answer
+ * under `/api/` is read, and the names are told once each answer that came is.
+ */
+export function watchNames(context: BrowserContext): () => Promise<string[]> {
+  const names = new Set<string>()
+  const reading = new Set<Promise<unknown>>()
+  context.on('response', (response) => {
+    const json = (response.headers()['content-type'] ?? '').includes('json')
+    if (!json || !new URL(response.url()).pathname.startsWith('/api/')) return
+    const one: Promise<unknown> = response
+      .json()
+      .then(
+        (answer: unknown) => {
+          for (const name of namesIn(answer)) names.add(name)
+        },
+        // An answer that went with its page has no names left to read.
+        () => null,
+      )
+      .finally(() => reading.delete(one))
+    reading.add(one)
+  })
+  return async () => {
+    await Promise.all(reading)
+    return [...names]
+  }
 }
 
 /**
