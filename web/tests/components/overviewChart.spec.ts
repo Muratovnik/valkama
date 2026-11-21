@@ -44,6 +44,9 @@ afterEach(() => {
 })
 
 const words = (text: string) => text.replaceAll(/\s+/gu, ' ').trim()
+/** Names in their alphabetical order, whatever order the stack ranks them in. */
+const sorted = (names: readonly string[]) =>
+  [...names].sort((one, other) => one.localeCompare(other))
 
 /** The days chart the page shows, its dimension, its series' names and what its legend names. */
 function chartOf(page: VueWrapper) {
@@ -73,8 +76,8 @@ describe('the overview’s chart', () => {
       const page = await mountAnalytics({}, locale)
       const chart = chartOf(page)
       expect(chart.by).toBe('project')
-      expect([...chart.series].sort()).toEqual(['alpha', 'beta', 'gamma'])
-      expect([...chart.legend].sort()).toEqual(['alpha', 'beta', 'gamma'])
+      expect(sorted(chart.series)).toEqual(['alpha', 'beta', 'gamma'])
+      expect(sorted(chart.legend)).toEqual(['alpha', 'beta', 'gamma'])
       expect(chart.title).toContain(title)
       // Nothing on the overview says it is split by task.
       expect(words(page.get('.analytics-panel').text())).not.toContain(byTask)
