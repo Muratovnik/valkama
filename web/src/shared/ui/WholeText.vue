@@ -12,11 +12,16 @@
  * - Its first letter stands on the cut text's first letter, in that letter's type and ink, and it
  *   runs on to the right up to 8px short of the window's edge, wrapping by words only where the
  *   whole text does not fit there (`placeWhole`). On one line it covers its own line alone. Over
- *   a text a clamp cuts to its lines it keeps the clamp's own column and grows down past it, so it
- *   reads as the clamp opened in place, over every line it shows and its ellipsis, with no empty
- *   room under its last line: run on to the window's edge, a board tile's title cut at its third
- *   line lay on one line across the next columns over 38px of empty frame. Where the window has
- *   no room under it for all its lines, it stands higher, 8px short of the window's bottom edge.
+ *   a text a clamp cuts to its lines it takes the clamp's whole column and the clamp's alignment
+ *   and grows down past it, so it reads as the clamp opened in place: its words wrap where the
+ *   clamp's did, so its first line is the clamp's and its first letter the cut one, it breaks a
+ *   word only where the clamp does, and it lies over every line the clamp shows and its ellipsis,
+ *   with no empty room under its last line. Run on to the window's edge, a board tile's title cut
+ *   at its third line lay on one line across the next columns over 38px of empty frame; laid from
+ *   the first letter, the whole words over a table's column heading, whose lines end at the
+ *   column's end, stood inside the column, narrower than it, broke words in two and left the
+ *   clamp's second line showing beside them. Where the window has no room under it for all its
+ *   lines, it stands higher, 8px short of the window's bottom edge.
  * - It is laid on the ground its text stands on, every see-through ground down to the first
  *   opaque one laid together as the page lays them (`groundOf`), so over its own element it reads
  *   as the element's words running on, and a rim and a shadow mark where it lies over the rest of
@@ -35,6 +40,7 @@
  *   in the page however the screen cuts them.
  */
 import { computed, nextTick, shallowRef, watch } from 'vue'
+import type { CSSProperties } from 'vue'
 
 import { useEventListener, useRafFn, useResizeObserver } from '@vueuse/core'
 
@@ -106,6 +112,8 @@ const opened = computed(() =>
 
 /** The type, the ground and the scale the whole text is drawn in, read as it is laid. */
 const look = shallowRef<{
+  /** How the cut text's lines are aligned: a clamp's whole words take it, wrapping as it did. */
+  align: CSSProperties['textAlign']
   ground: string
   ink: string
   scale: number
@@ -127,6 +135,7 @@ const boxStyle = computed(() => {
         maxInlineSize: `${at.widest}px`,
         minInlineSize: at.least ? `${at.least.inline}px` : undefined,
         minBlockSize: at.least ? `${at.least.block}px` : undefined,
+        textAlign: at.least ? seen.align : undefined,
         transform: seen.scale === 1 ? 'none' : `scale(${seen.scale})`,
       }
     : null
@@ -163,11 +172,19 @@ function groundOf(element: Element): string {
   return laid([canvas, ...grounds])?.color ?? canvas
 }
 
+/** How far in from its left edge `box`'s lines start, in px of its own type: its padding. */
+function padOf(box: HTMLElement): number {
+  const style = getComputedStyle(box)
+  return (
+    (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.borderLeftWidth) || 0)
+  )
+}
+
 /**
  * Lays the whole text over `element`'s cut one: first where its own first letter would stand
- * with no inset, then, once drawn, moved by where its letter came out inside its box, and, drawn
- * that wide, raised where it is taller than the window leaves under it. All of it happens before
- * the frame is painted.
+ * with no inset, then, once drawn, moved by where its letter came out inside its box, or over a
+ * clamp by how far in its lines start, and, drawn that wide, raised where it is taller than the
+ * window leaves under it. All of it happens before the frame is painted.
  */
 async function lay(element: HTMLElement) {
   const letter = firstLetterOf(element)
@@ -180,6 +197,8 @@ async function lay(element: HTMLElement) {
   const drawn = element.getBoundingClientRect().width
   const scale = element.offsetWidth > 0 ? drawn / element.offsetWidth : 1
   look.value = {
+    // The page computes one of the keywords the property takes.
+    align: style.textAlign as CSSProperties['textAlign'],
     ground: groundOf(letter.inked),
     ink: style.color,
     scale: Math.abs(scale - 1) < 0.01 ? 1 : scale,
@@ -193,10 +212,15 @@ async function lay(element: HTMLElement) {
   }
   place.value = placeWhole({ ...setting, inset: { left: 0, top: 0 } })
   await nextTick()
-  const box = surface.value?.getBoundingClientRect()
-  const own = surface.value ? firstLetterOf(surface.value) : null
-  if (!box || !own || anchor.value !== element) return
-  const laid = { ...setting, inset: { left: own.box.left - box.left, top: own.box.top - box.top } }
+  const drawnBox = surface.value
+  const box = drawnBox?.getBoundingClientRect()
+  const own = drawnBox ? firstLetterOf(drawnBox) : null
+  if (!drawnBox || !box || !own || anchor.value !== element) return
+  const laid = {
+    ...setting,
+    inset: { left: own.box.left - box.left, top: own.box.top - box.top },
+    pad: padOf(drawnBox) * setting.scale,
+  }
   place.value = placeWhole(laid)
   await nextTick()
   const laidBox = surface.value?.getBoundingClientRect()
@@ -286,8 +310,9 @@ useEventListener(window, 'resize', relay, { passive: true })
 /* Laid in the window over the cut text: as wide as its words up to the room the place leaves,
    then wrapped by words. A word longer than that room breaks rather than run out of the window.
    Its box is its line high, with a pixel over and under for the rim, so it covers no other line;
-   over a clamp of several lines, as wide as the clamp's column and as high as its words take
-   there, never lower than the lines the clamp shows (`placeWhole`).
+   over a clamp of several lines, its lines as wide as the clamp's column and aligned as the
+   clamp's, as high as its words take there, never lower than the lines the clamp shows
+   (`placeWhole`).
    It stands over the menus and sheets (120) whose rows it speaks for: level with them, the menu
    opened after it was drawn over it, and a cut state in the card's state menu never read whole. */
 .whole-text {

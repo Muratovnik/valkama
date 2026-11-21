@@ -955,12 +955,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   on to the right up to 8px short of the window's edge and wrapping by words only where the
   whole text does not fit there, so on one line it covers no other row; over a text a clamp
   cuts to its lines, as a graph card's title, a board tile's, an outcome's preview, a title in
-  the task finder and a name a chart's table keeps to two lines, it keeps the clamp's own column
-  and grows down past the clamp, reading as the clamp opened in place: it covers every line the
-  clamp shows, so neither a line nor its ellipsis reads again beside it, and since its words were
-  cut at that width they take more lines there, so no empty room stands under them. Run on to the
-  window's edge instead, a board tile's title cut at its third line lay on one line across the
-  next columns over 38px of empty frame. Where the window has no room under it for all its lines
+  the task finder and a name a chart's table keeps to two lines, it takes the clamp's whole column
+  and the clamp's alignment and grows down past the clamp, reading as the clamp opened in place:
+  its words wrap where the clamp's did, so its first line is the clamp's and its first letter the
+  cut one, it breaks a word only where the clamp does, and it covers every line the clamp shows,
+  so neither a line nor its ellipsis reads again beside it, and since its words were cut at that
+  width they take more lines there, so no empty room stands under them. Run on to the window's
+  edge instead, a board tile's title cut at its third line lay on one line across the next
+  columns over 38px of empty frame; laid from the first letter, the whole words over a table's
+  column heading, whose lines end at the column's end, stood inside the column, narrower than
+  it, broke words in two and left the clamp's second line showing beside them. Where the window
+  has no room under it for all its lines
   it stands higher, 8px short of the window's bottom edge. A label a narrow place
   hides whole, as the icon rail's and the board's sign-only action's, is hidden rather than cut:
   no letter of it is on screen to lay its words from, and a glyph beside it hidden from assistive
