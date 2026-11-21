@@ -3059,7 +3059,10 @@ no switch, the rest and the work on no task apart after the five under their rul
 names the stretch it covers and what its lines add up to, said as a line's estimate is, «Window
 breakdown: 05:00 – 13:20 · ≈ $151.90»: the lines added up and nothing said their sum. With no
 lines it names no sum, and work its organization recorded with no account known, said apart, is
-not in it. That it is the API price estimate and not quota points, and that
+not in it. It keeps the room of the headings a newer answer can give it, with no sum and with a
+sum of five figures before the point, so the breakdowns beside it and the lines under it stay
+where they stand when one does: a newer answer once made it a line longer, and the lines moved
+25px down under it. That it is the API price estimate and not quota points, and that
 work in claude.ai and the desktop app, which the window's share counts, is not in it, the
 section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
 says for this one, never as a line of the panel. It is read by account, the account's and its

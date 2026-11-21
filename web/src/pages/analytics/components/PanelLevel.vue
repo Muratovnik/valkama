@@ -167,7 +167,7 @@ const levelStyle = computed(() => ({
       </component>
       <span
         v-else-if="title && rivals.length"
-        class="level-title"
+        class="held-room"
       >
         <component
           :is="headingAs"
@@ -179,7 +179,7 @@ const levelStyle = computed(() => ({
           v-for="rival in rivals"
           :key="rival"
           v-slash-breaks="rival"
-          class="level-title-room"
+          class="held-room-unseen level-title-room"
           aria-hidden="true"
           :class="`heading-${level}`"
         />
@@ -250,6 +250,8 @@ const levelStyle = computed(() => ({
 
 <style scoped src="@/shared/ui/headingLevels.css"></style>
 
+<style scoped src="@/shared/ui/heldRoom.css"></style>
+
 <style scoped>
 /* The heading row 12px over what the level holds, as every heading stands over its content.
    What stands on a line of the row is centred on it: the heading, the words and the controls
@@ -280,21 +282,9 @@ const levelStyle = computed(() => ({
   overflow-wrap: anywhere;
 }
 
-/* The heading and the others it takes in turn in one cell, those unseen: the cell is as wide and
-   as tall as the widest of them, whichever stands. */
-.level-title {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
-
-  > * {
-    grid-area: 1 / 1;
-  }
-}
-
+/* The others it takes in turn, unseen in the heading's cell (`heldRoom.css`), break as it does. */
 .level-title-room {
   overflow-wrap: anywhere;
-  visibility: hidden;
 }
 
 /* The «ⓘ» ends the heading's line, centred on it in the heading's own font (`LineEnd`, the
