@@ -10,6 +10,7 @@ import type { Page } from '@playwright/test'
 import type { Hinted, MarkAround, Surface } from './sweepInPage.ts'
 import { readAround, readHinted, readSurface } from './sweepPage.ts'
 import {
+  answeringMark,
   boxDistance,
   expectedAmong,
   expectedOnLine,
@@ -100,6 +101,22 @@ interface Found {
   said: HintSaid[]
 }
 
+/**
+ * The mark whose hint answered (`answeringMark`) and its place as it declares it once the pointer
+ * stands there: a ring's sector names the point of its band where the pointer stands on it.
+ */
+async function answeredMark(
+  page: Page,
+  surface: Surface | null,
+  expected: readonly string[],
+  { mark, around }: { around: MarkAround; mark: Hinted },
+) {
+  const id = surface ? answeringMark(surface.says, expected, mark.id) : mark.id
+  if (id === mark.id) return { id, place: surface?.place ?? around.place }
+  const other = await readSurface(page, id)
+  return { id, place: other?.place ?? null }
+}
+
 /** Points at each point of one mark and adds what missed and what forbidden text a hint said. */
 async function pointAround(
   page: Page,
@@ -120,10 +137,8 @@ async function pointAround(
         path: mark.path,
         owner: mark.owner,
       })
-    // The place as the mark declares it once the pointer stands there: a ring's sector names the
-    // point of its band where the pointer stands on it.
-    const place = surface?.place ?? around.place
-    for (const verdict of judge(surface, expected, { id: mark.id, place }, point.at)) {
+    const answered = await answeredMark(page, surface, expected, { mark, around })
+    for (const verdict of judge(surface, expected, answered, point.at)) {
       const what =
         'ids' in verdict.found
           ? verdict.found.ids.map((id) => options.name(id)).join(' | ')

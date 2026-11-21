@@ -11,8 +11,10 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'vitest'
 
 import {
+  answeringMark,
   expectedAmong,
   expectedOnLine,
+  hintSays,
   judge,
   occurrences,
   panelNote,
@@ -200,6 +202,69 @@ describe('how the page answered the pointer', () => {
     const away = { ...answer(['a']), box: box(170, 100, 120, 40) }
     assert.deepEqual(judge(away, ['a'], aimed, at), [
       { rule: 'away-from-mark', found: { text: 'hint 30px off' } },
+    ])
+  })
+})
+
+describe('which marks a shown hint says', () => {
+  test("a hint says its element's words, the one whose words it is whole before the others", () => {
+    const marks = [
+      { id: 'name', own: 'Alpha', words: 'Alpha' },
+      { id: 'longer', own: 'Alphabet', words: 'Alphabet' },
+      { id: 'other', own: 'Beta', words: 'Beta' },
+    ]
+    assert.deepEqual(hintSays('Alpha', marks), ['name'])
+    assert.deepEqual(hintSays('Gamma', marks), [])
+  })
+
+  test('a detail on cut words says them whole before the detail, as the hint of a row name', () => {
+    // A rail tile cut to its first value's name, marked with that value's detail alone, and a
+    // table's row name, marked with the name and the detail: both hints read the same.
+    const marks = [
+      { id: 'tile', own: 'Planningthesystem', words: 'agent·a1b2' },
+      { id: 'row', own: 'Planningthesystemagent·a1b2', words: 'Planningthesystemagent·a1b2' },
+    ]
+    assert.deepEqual(hintSays('Planningthesystemagent·a1b2', marks), ['tile', 'row'])
+  })
+
+  test("a place's hint says the words of the place near it after its own", () => {
+    const marks = [
+      { id: 'first', own: '', words: 'Reset13:00Reset13:05' },
+      { id: 'second', own: '', words: 'Reset13:05Reset13:00' },
+    ]
+    assert.deepEqual(hintSays('Reset13:05Reset13:00', marks), ['second'])
+    // Its words read twice, as a hint drawn as a grid holds them, hold the other's in between.
+    assert.deepEqual(hintSays('Reset13:05Reset13:00Reset13:05', marks), ['first', 'second'])
+  })
+})
+
+describe("which mark's place a hint that answered is judged at", () => {
+  test('the one aimed at, where it may answer and the hint says it', () => {
+    assert.equal(answeringMark(['a'], ['a'], 'a'), 'a')
+    assert.equal(answeringMark(['a', 'b'], ['a', 'b'], 'a'), 'a')
+  })
+
+  test('the nearer place, where it alone may answer, though the hint says both', () => {
+    assert.equal(answeringMark(['a', 'b'], ['b'], 'a'), 'b')
+    assert.equal(answeringMark(['b'], ['a', 'b'], 'a'), 'b')
+  })
+
+  test("the one aimed at, where the hint is another's, which is a miss of its own", () => {
+    assert.equal(answeringMark(['c'], ['a'], 'a'), 'a')
+  })
+
+  test("a hint at the nearer place's mark is judged there, not at the place aimed at", () => {
+    // Two restarts 3px apart on falls of their own, the pointer 3px past the first onto the
+    // second: the second's hint stands 6px past its mark, 22px from the first's.
+    const first = { kind: 'box' as const, box: box(97, 80, 6, 6) }
+    const second = { kind: 'box' as const, box: box(100, 106, 6, 6) }
+    const shown = { ...answer(['a', 'b']), box: box(112, 106, 120, 40) }
+    const pointer = { x: 103, y: 109 }
+    const judged = answeringMark(shown.says, ['b'], 'a')
+    const place = judged === 'b' ? second : first
+    assert.deepEqual(judge(shown, ['b'], { id: judged, place }, pointer), [])
+    assert.deepEqual(judge(shown, ['b'], { id: 'a', place: first }, pointer), [
+      { rule: 'away-from-mark', found: { text: 'hint 22px off' } },
     ])
   })
 })
