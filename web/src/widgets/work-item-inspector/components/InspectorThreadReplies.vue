@@ -88,7 +88,7 @@ const toggleLabel = computed(() =>
 const failedMark = computed(() => props.root !== null && unmarked.value.has(props.root))
 const writing = computed(() => isOpen(props.threadKey, 'reply'))
 const canReply = computed(() => props.writable && props.parent !== null)
-watch(reachedAgain, () => composer.value?.focus())
+watch(reachedAgain, () => composer.value?.takeFocus())
 const replyError = computed(() => errorAt(props.threadKey, 'reply'))
 const text = computed({
   get: () => drafts.value[props.threadKey] ?? '',

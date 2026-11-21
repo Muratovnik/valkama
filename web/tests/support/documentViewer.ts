@@ -70,12 +70,15 @@ export function viewerSuite() {
     HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
       scrolledInto.push(this)
     }
+    // How Chromium shows a placed focus (`placeFocus`), apart from what the viewer scrolls to.
+    Object.assign(HTMLElement.prototype, { scrollIntoViewIfNeeded() {} })
     copied.mockClear()
     vi.stubGlobal('navigator', { clipboard: { writeText: copied } })
   })
 
   afterEach(async () => {
     Reflect.deleteProperty(HTMLElement.prototype, 'offsetTop')
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoViewIfNeeded')
     for (const wrapper of mounted.splice(0)) wrapper.unmount()
     await flushPromises()
     vi.unstubAllGlobals()

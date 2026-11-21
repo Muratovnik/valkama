@@ -3,6 +3,7 @@ import { computed, nextTick, ref, useId, watch } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
@@ -61,7 +62,7 @@ function toggle(event?: Event) {
 /** Closes the panel; focus goes back to the control that opened it when asked. */
 function close(restoreFocus = false) {
   isOpen.value = false
-  if (restoreFocus) anchor.value?.focus()
+  if (restoreFocus) placeFocus(anchor.value)
 }
 
 /**
@@ -107,7 +108,7 @@ watch(isOpen, async (open) => {
   await nextTick()
   updatePosition()
   // A dialog's first control takes focus, so the keyboard reaches it at once; a tooltip never takes focus.
-  if (props.interactive) panel.value?.querySelector('button')?.focus()
+  if (props.interactive) placeFocus(panel.value?.querySelector('button'))
 })
 
 useEventListener(window, 'resize', updatePosition)

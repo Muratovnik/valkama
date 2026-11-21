@@ -15,9 +15,9 @@ import '@fontsource-variable/inter'
 import { router } from '@/app/router.ts'
 
 import { i18n } from '@/shared/i18n/index'
-import { installScriptedFocus } from '@/shared/lib/scriptedFocus.ts'
+import { quietFocusAfterPress } from '@/shared/lib/pressFocus.ts'
 import '@/app/styles/index.css'
 
-installScriptedFocus()
+quietFocusAfterPress()
 document.documentElement.lang = i18n.global.locale.value
 createApp(App).use(createPinia()).use(router).use(i18n).mount('#app')

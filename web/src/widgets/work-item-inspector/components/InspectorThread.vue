@@ -169,7 +169,7 @@ watch(
 )
 watch(rows, settleFocus, { flush: 'post' })
 
-type CardHandle = { focus: () => void; reveal: () => void }
+type CardHandle = { reveal: () => void; takeFocus: () => void }
 const cards: Record<string, CardHandle | null> = {}
 /** Brings the question still waiting, the newest of them, into view. */
 function revealQuestion() {
@@ -183,7 +183,7 @@ async function showAll() {
   const first = hiddenRows.value[0]
   emit('show-all')
   await nextTick()
-  if (first?.kind === 'question') cards[first.key]?.focus()
+  if (first?.kind === 'question') cards[first.key]?.takeFocus()
   else if (first?.kind === 'comment') moveFocus(anchored(entryAnchor(first.comment.id)))
 }
 

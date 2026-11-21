@@ -46,7 +46,7 @@ const room = computed(() => ({
 
 const { at, close, input, open, searching, step, total, type } = useListFind<WorkItemBrief>({
   bar: () => bar.value?.element() ?? null,
-  focusBar: () => bar.value?.focus(),
+  focusBar: () => bar.value?.takeFocus(),
   key: (item) => item.work_item_id,
   list: {
     center: (index) => props.list.center(index),

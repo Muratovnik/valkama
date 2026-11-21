@@ -318,7 +318,7 @@ function writeNote(note: string) {
   stepBack()
   emit('update:draft', { ...props.draft, note })
 }
-defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
+defineExpose({ takeFocus: focus, focusOutcome, holdsFocus, reveal, send })
 </script>
 
 <template>

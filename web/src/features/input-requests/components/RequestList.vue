@@ -182,10 +182,10 @@ const answeredLabel = computed(() =>
 )
 type CardHandle = {
   $el: Element | null
-  focus: () => void
   focusOutcome: () => void
   holdsFocus: () => boolean
   send: (draft: RequestDraft, right: FocusRight) => Promise<Outcome>
+  takeFocus: () => void
 }
 const cards: Record<string, CardHandle | null> = {}
 const errorLine = ref<HTMLElement | null>(null)
@@ -215,7 +215,7 @@ async function dismiss(entry: InputRequestEntry) {
   const neighbour = shownAll.value[at + 1] ?? shownAll.value[at - 1]
   emit('dismiss', entry)
   await nextTick()
-  if (neighbour) cards[requestIdentity(neighbour)]?.focus()
+  if (neighbour) cards[requestIdentity(neighbour)]?.takeFocus()
   else moveFocus(emptyRefresh.value?.$el as HTMLElement | undefined)
 }
 /** Whether the keyboard is inside this question, which the list must not take away. */
@@ -283,7 +283,7 @@ async function updated(entry: InputRequestEntry, right: FocusRight) {
     props.waiting.has(requestIdentity(candidate)),
   )
   right.take(() => {
-    if (next) cards[requestIdentity(next)]?.focus()
+    if (next) cards[requestIdentity(next)]?.takeFocus()
     else cards[key]?.focusOutcome()
   })
 }

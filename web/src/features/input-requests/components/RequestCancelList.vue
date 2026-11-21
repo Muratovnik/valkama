@@ -58,7 +58,7 @@ const groups = computed((): { heading: string; name: string; rows: Row[] }[] => 
     { name: 'waiting', heading: t('requests.kinds.dependents'), rows: waiting },
   ].filter(({ rows }) => rows.length)
 })
-defineExpose({ focus: () => moveFocus(lead.value) })
+defineExpose({ takeFocus: () => moveFocus(lead.value) })
 </script>
 
 <template>

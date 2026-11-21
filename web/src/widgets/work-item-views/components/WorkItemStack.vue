@@ -40,6 +40,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { walkFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 /** Where a move left the tile, for the sentence that announces it. */
 export interface StackLanding {
@@ -250,7 +251,7 @@ function walked(event: KeyboardEvent, index: number) {
 
 /** Focus the tile drawn at `index`, as the cell does with the first one it reveals. */
 function focusAt(index: number) {
-  if (list.value !== null) tilesOf(list.value)[index]?.focus()
+  if (list.value !== null) placeFocus(tilesOf(list.value)[index])
 }
 
 /** A walk that starts on the cell's toggle rather than on a tile. */

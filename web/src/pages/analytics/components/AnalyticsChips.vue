@@ -34,6 +34,7 @@ import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts
 import { filterKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -123,7 +124,7 @@ watch(
     const next =
       removers[Math.min(left.index, removers.length - 1)] ??
       ((folded.value ? count.value : add.value)?.$el as HTMLElement | undefined)
-    next?.focus()
+    placeFocus(next)
   },
   { flush: 'post' },
 )
@@ -146,7 +147,7 @@ useEventListener(fields, 'keydown', (event: KeyboardEvent) => {
   // A field's open list hears Escape first, and closes alone.
   if (event.key !== 'Escape' || event.defaultPrevented) return
   adding.value = false
-  ;(add.value?.$el as HTMLElement | undefined)?.focus()
+  placeFocus(add.value?.$el as HTMLElement | undefined)
 })
 
 const removeLabel = (label: string) => t('analytics.filters.remove', { label })

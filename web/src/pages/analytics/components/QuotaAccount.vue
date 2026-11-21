@@ -45,6 +45,7 @@ import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type { QuotaAccount } from '@/shared/api/analyticsApi.ts'
 import { MAX_ACCOUNT_ALIAS_LENGTH } from '@/shared/lib/accountAliases.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VMenu from '@/shared/ui/VMenu.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -79,7 +80,7 @@ const fieldId = `${useId()}-name`
 const actions = useAccountActions({
   account: () => props.account,
   fieldId,
-  focusMenu: () => menuBox.value?.querySelector<HTMLElement>('button')?.focus(),
+  focusMenu: () => placeFocus(menuBox.value?.querySelector<HTMLElement>('button')),
   renamed: () => emit('renamed'),
 })
 const { draft, entries, failure, note, noteFailed } = actions

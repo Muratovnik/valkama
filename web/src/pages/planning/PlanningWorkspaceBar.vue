@@ -170,9 +170,9 @@ const labelsAny = computed(() => filter.value.labelsMatch === 'any')
 /** A project's name and a goal's title for its chip, from the work the bar counts. */
 const tokenWords = computed(() => filterWords(props.items))
 /** Where focus goes when the last chip on the narrow line is taken out. */
-const field = useTemplateRef<{ focus: () => void }>('field')
+const field = useTemplateRef<{ takeFocus: () => void }>('field')
 function focusField() {
-  field.value?.focus()
+  field.value?.takeFocus()
 }
 /** Reset takes the button that did it away, so the caret goes to the field. */
 function reset() {

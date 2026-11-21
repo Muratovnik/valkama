@@ -1,14 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { walkFocus } from '@/shared/lib/moveFocus.ts'
-import { installScriptedFocus } from '@/shared/lib/scriptedFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
-// The browser's own focus, watched before the wrap goes round it. happy-dom lays nothing out,
-// so a frame states its widths, and showing a node does what the browser does to show it:
-// centre it, across as well as down. Chromium's centre-if-needed is stubbed beside the
-// standard call; a frame built `bare` lacks it, as a browser without it does.
+// The browser's own focus, watched under the helper. happy-dom lays nothing out, so a frame
+// states its widths, and showing a node does what the browser does to show it: centre it,
+// across as well as down. Chromium's centre-if-needed is stubbed beside the standard call; a
+// frame built `bare` lacks it, as a browser without it does.
 const native = vi.spyOn(HTMLElement.prototype, 'focus')
-installScriptedFocus()
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -36,12 +35,12 @@ function frame(left: number, node: Centred = document.createElement('button'), b
 
 const NEAREST = { block: 'nearest', inline: 'nearest' }
 
-it('a focus leaves a frame that scrolls across where it stood, and still shows its target', () => {
+it('a placed focus leaves a frame that scrolls across where it stood, and still shows its target', () => {
   const { box, node, shown, centred } = frame(30)
-  node.focus()
+  placeFocus(node, { focusVisible: true })
   expect(document.activeElement).toBe(node)
-  // The browser is asked not to scroll; the wrap shows the target as the browser would.
-  expect(native.mock.lastCall?.[0]).toMatchObject({ preventScroll: true })
+  // The browser is asked not to scroll; the helper shows the target as the browser would.
+  expect(native).toHaveBeenCalledExactlyOnceWith({ focusVisible: true, preventScroll: true })
   expect(centred).toHaveBeenCalledExactlyOnceWith(true)
   expect(shown).not.toHaveBeenCalled()
   expect(box.scrollLeft).toBe(30)
@@ -49,7 +48,7 @@ it('a focus leaves a frame that scrolls across where it stood, and still shows i
 
 it('a browser without the centring call shows the target by the nearest edge', () => {
   const { box, node, shown } = frame(30, undefined, true)
-  node.focus()
+  placeFocus(node)
   expect(shown).toHaveBeenCalledExactlyOnceWith(NEAREST)
   expect(box.scrollLeft).toBe(30)
 })
@@ -57,24 +56,27 @@ it('a browser without the centring call shows the target by the nearest edge', (
 it('what the focus handlers scroll themselves stands', () => {
   const { box, node } = frame(0)
   node.addEventListener('focus', () => (box.scrollLeft = 120))
-  node.focus()
+  placeFocus(node)
   expect(box.scrollLeft).toBe(120)
 })
 
-it('a focus that scrolls for itself, one already there and one not taken scroll nothing', () => {
+it('a focus that scrolls for itself, one already there, one not taken and none scroll nothing', () => {
   const { box, node, shown, centred } = frame(30)
-  node.focus({ preventScroll: true })
-  expect(native.mock.lastCall?.[0]).toEqual({ preventScroll: true })
-  node.focus()
+  placeFocus(node, { preventScroll: true })
+  expect(native).toHaveBeenCalledExactlyOnceWith({ preventScroll: true })
+  placeFocus(node)
   expect(shown).not.toHaveBeenCalled()
   expect(centred).not.toHaveBeenCalled()
   expect(box.scrollLeft).toBe(30)
   // A control the reader cannot use takes no focus, and the page is not moved to it.
   const refused = frame(30, Object.assign(document.createElement('button'), { disabled: true }))
-  refused.node.focus()
+  placeFocus(refused.node)
   expect(document.activeElement).not.toBe(refused.node)
   expect(refused.shown).not.toHaveBeenCalled()
   expect(refused.centred).not.toHaveBeenCalled()
+  native.mockClear()
+  placeFocus(null)
+  expect(native).not.toHaveBeenCalled()
 })
 
 it('a walk with the arrows goes across, to the nearest edge', () => {

@@ -9,8 +9,8 @@
  * pointer and the choice hands focus back to the trigger, each by script, and each stood
  * ringed after a click.
  * Nothing in the library takes a ring's say, so the say is given where every such focus
- * passes (`scriptedFocus`): a `focus()` naming no `focusVisible` after a press, and before the
- * next key, names it false. After a key nothing changes. Where typing goes the browser's own verdict
+ * passes: a `focus()` naming no `focusVisible` after a press, and before the next key,
+ * names it false. After a key nothing changes. Where typing goes the browser's own verdict
  * stands (`takesTyping`): it shows focus there after a press too, since a writer must see
  * where the letters go, and a field a press took the reader to stood unframed until Enter.
  *
@@ -80,12 +80,18 @@ export function recordInput(): void {
   )
 }
 
-/**
- * What a scripted focus of `node` asks the browser for: after a press, and before the next key,
- * a focus that names no `focusVisible` names it false. The wrap of every `focus()` asks this
- * (`scriptedFocus`).
- */
-export function ringAsked(node: Element, options?: FocusOptions): FocusOptions | undefined {
-  const quiet = pressedLast() && options?.focusVisible === undefined && !takesTyping(node)
-  return quiet ? { ...options, focusVisible: false } : options
+let installed = false
+
+export function quietFocusAfterPress(): void {
+  if (installed) return
+  installed = true
+  recordInput()
+  for (const prototype of [HTMLElement.prototype, SVGElement.prototype]) {
+    const focus = Object.getOwnPropertyDescriptor(prototype, 'focus')?.value as unknown
+    if (typeof focus !== 'function') continue
+    prototype.focus = function (this: HTMLElement | SVGElement, options?: FocusOptions) {
+      const quiet = pressedLast() && options?.focusVisible === undefined && !takesTyping(this)
+      Reflect.apply(focus, this, [quiet ? { ...options, focusVisible: false } : options])
+    }
+  }
 }

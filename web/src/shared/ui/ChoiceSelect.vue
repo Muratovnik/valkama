@@ -21,6 +21,7 @@ import {
   SelectViewport,
 } from 'reka-ui'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import {
   choicesMatching,
   choiceValueCodec,
@@ -104,7 +105,7 @@ function updateOpen(value: boolean) {
     query.value = ''
     return
   }
-  if (props.searchable) void nextTick(() => searchInput.value?.focus())
+  if (props.searchable) void nextTick(() => placeFocus(searchInput.value))
 }
 
 /** Opens the list, for a host whose own action asks for this choice to be made. */

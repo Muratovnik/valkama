@@ -50,6 +50,7 @@ import type { LiveSession } from '@/shared/api/liveFrameModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { ShownSpace } from '@/shared/lib/liveWorkRows.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -211,7 +212,7 @@ function escape(event: KeyboardEvent) {
       event.preventDefault()
       event.stopPropagation()
       props.open.set(node, false)
-      group.querySelector<HTMLElement>(`#${CSS.escape(group.dataset.navFold ?? '')}`)?.focus()
+      placeFocus(group.querySelector<HTMLElement>(`#${CSS.escape(group.dataset.navFold ?? '')}`))
       return
     }
     group = group.parentElement?.closest<HTMLElement>('[data-nav-node]') ?? null

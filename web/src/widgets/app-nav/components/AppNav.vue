@@ -41,6 +41,7 @@ import type {
   NavigationGroup,
 } from '@/shared/api/platformModuleContract.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import {
   NAV_DEFAULT_WIDTH,
   NAV_ICONS_ONLY_WIDTH,
@@ -189,7 +190,7 @@ function settle() {
     '.app-nav-frame button, .app-nav-frame a',
   )
   const current = rail.value?.querySelector<HTMLElement>('.app-nav-frame [aria-current]')
-  ;(current ?? entries?.[0])?.focus()
+  placeFocus(current ?? entries?.[0])
 }
 
 /** A list reports what was chosen; the shell above decides what to do about it. */

@@ -47,6 +47,7 @@ import type { Ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 
 import { walkFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 /** The list's rows by place, drawn or not. */
 interface ListRows {
@@ -147,7 +148,7 @@ export function useListKeys(
     // A row the window placed is focused once it is drawn as one: it may not be
     // drawn yet, or drawn collapsed for its widths, which takes no focus.
     if (list().reveal(index)) void nextTick(() => targetOf(id)?.focus({ preventScroll: true }))
-    else targetOf(id)?.focus()
+    else placeFocus(targetOf(id))
   }
 
   function screen(): number {
@@ -194,7 +195,7 @@ export function useListKeys(
     // By its place among the row's cells, which a row of cards has one a heading.
     const place = cell ? [...(cell.parentElement?.children ?? [])].indexOf(cell) : -1
     const above = root.value?.querySelectorAll('thead th')[place]
-    ;(above?.querySelector<HTMLElement>('button') ?? controls[0]).focus()
+    placeFocus(above?.querySelector<HTMLElement>('button') ?? controls[0])
     return true
   }
 

@@ -17,7 +17,7 @@ import a11y from 'eslint-plugin-vuejs-accessibility'
 import globals from 'globals'
 import ts from 'typescript-eslint'
 
-import { componentChannels, templateExpressions, watchSources } from './eslint-restricted-syntax.js'
+import { appScript, templateExpressions } from './eslint-restricted-syntax.js'
 
 // `max-lines` stays a warning until package A5 has split the inherited large
 // files; making it an error now would block the very commits that shrink them.
@@ -474,11 +474,10 @@ export default ts.config(
       'vue-scoped-css/no-unused-selector': 'error',
       'vue-scoped-css/require-selector-used-inside': 'error',
 
-      // What a template expression may be, and what a component may publish an
-      // event about. Both lists carry their argument in the module beside this
-      // config, because both need one longer than a rule line.
+      // What a template expression may be. The list carries its argument in the
+      // module beside this config, because it needs one longer than a rule line;
+      // what the script may hold is wired below, for a component and a module alike.
       'vue/no-restricted-syntax': ['error', ...templateExpressions],
-      'no-restricted-syntax': ['error', ...componentChannels, ...watchSources],
 
       // What an SFC in this repository is, stated so a new one cannot be
       // something else: TypeScript, `<script setup>`, and a `<style scoped>`
@@ -607,6 +606,9 @@ export default ts.config(
       'vue/no-undef-components': 'error',
     },
   },
+  // What the app's script may not hold, in a component and in a module alike: an event that
+  // doubles a model, a watcher on a fresh array, a bare focus. The lists say why.
+  { files: ['src/**/*.{ts,vue}'], rules: { 'no-restricted-syntax': ['error', ...appScript] } },
   {
     // A doc comment that restates the name of the thing it sits above is worse
     // than none: it takes a line, survives every rename, and teaches the reader

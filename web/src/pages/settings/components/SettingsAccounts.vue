@@ -33,6 +33,7 @@ import { accountNamesFailure } from '@/shared/api/quotaApi.ts'
 import { aliasOf, cleanAlias, MAX_ACCOUNT_ALIAS_LENGTH } from '@/shared/lib/accountAliases.ts'
 import type { AccountAliases } from '@/shared/lib/accountAliases.ts'
 import { accountLabel, idStart, resetWords } from '@/shared/lib/accountLabel.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -163,7 +164,7 @@ function press(key: string, event: KeyboardEvent) {
 function clear(key: string) {
   drafts.value = { ...drafts.value, [key]: '' }
   void commit(key)
-  document.querySelector<HTMLElement>(`#${CSS.escape(fieldId(key))}`)?.focus()
+  placeFocus(document.querySelector<HTMLElement>(`#${CSS.escape(fieldId(key))}`))
 }
 
 const retryable = computed(

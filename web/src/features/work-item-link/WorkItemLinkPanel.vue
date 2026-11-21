@@ -16,6 +16,7 @@ import type { WorkItemLinkAnswer } from '@/features/work-item-link/workItemLink.
 
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -67,7 +68,7 @@ async function retry() {
   await nextTick()
   if (document.activeElement !== document.body) return
   const button = retryButton.value?.$el as HTMLElement | undefined
-  ;(button ?? region.value)?.focus()
+  placeFocus(button ?? region.value)
 }
 
 const absence = computed(() => {

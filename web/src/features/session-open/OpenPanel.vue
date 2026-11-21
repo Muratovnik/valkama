@@ -29,6 +29,7 @@ import {
 import type { PlanOpens } from '@/shared/api/openPlanModel.ts'
 import { grantFocus } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { agoWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import { isStrayPress } from '@/shared/ui/strayPress.ts'
@@ -99,7 +100,7 @@ function buttonAt(index: number): HTMLElement | null {
 
 onMounted(async () => {
   await nextTick()
-  buttonAt(0)?.focus()
+  placeFocus(buttonAt(0))
 })
 
 /** The same explanation twice says nothing new; the step's own word goes on instead. */
