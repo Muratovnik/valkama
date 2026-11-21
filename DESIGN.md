@@ -3124,7 +3124,11 @@ ends the figures' heading says it for the value's own read, once and in that «�
 never as a line of the panel. Its days are the page's period and step with
 the period before marked, one series in the value's colour; under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
-the value's filter added, and wait and fail as the page's do. «Add to filter» adds the value to
+the value's filter added, and wait and fail as the page's do: a read again that fails keeps what
+the panel shows and says «Could not refresh · Retry» beside its actions, in room their row keeps
+for it while nothing failed, so nothing under them moves when it is said or when the next answer
+takes it away; said in room of its own on a phone, it took a line and moved the panel's figures
+36px down. «Add to filter» adds the value to
 its dimension's filter beside the values already there, as choosing it in the filter's menu
 does, so A and B and then C is A, B and C: the page stays on its section and the panel closes, a
 step of the history too. A value the filter holds already offers it disabled, «Already in
