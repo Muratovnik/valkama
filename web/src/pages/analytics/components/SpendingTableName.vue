@@ -174,9 +174,12 @@ function inspect() {
     display: block;
   }
 
+  /* On the name's line, in the table's line height (`--font-line`): in the detail's own, taller
+     one, a session's row stood 1.3px taller than the rows of a name with no detail. */
   & .chart-detail {
     display: inline;
     margin-inline-start: var(--space-2);
+    line-height: var(--line-height-tight);
   }
 }
 
