@@ -311,6 +311,77 @@ class SkillOnCodexTests(unittest.TestCase):
         self.assertEqual(agent_probes_judge.PASSED, agent_probes_judge._verdict(results))
 
 
+class FinalReplyTests(unittest.TestCase):
+    """The answer is the whole final reply: the main agent's texts after its last tool call.
+
+    A hook that stops a turn can send the agent back for one more message, such as
+    a report table the owner's skills ask for, so the reply the owner reads may be
+    two messages, of which the client's own result names only the last.
+    """
+
+    def transcript(self, client: str, lines: list[dict[str, Any]]) -> str | None:
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "turn-1.jsonl").write_text(
+                "".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8"
+            )
+            session = {"client": client, "session_id": "s-1", "turns": [{"output": "turn-1.jsonl"}]}
+            record = agent_probes_judge.Record(folder, session)
+            return agent_probes_judge.read_transcript(record).answer
+
+    @staticmethod
+    def claude(*parts: dict[str, Any], parent: str | None = None) -> dict[str, Any]:
+        return {
+            "type": "assistant",
+            "parent_tool_use_id": parent,
+            "message": {"content": list(parts)},
+        }
+
+    def test_claude_answers_with_every_text_after_its_last_tool_call(self) -> None:
+        answer = self.transcript(
+            "claude",
+            [
+                self.claude({"type": "text", "text": "Looking at PRB-1 first."}),
+                self.claude({"type": "tool_use", "id": "u1", "name": "Bash", "input": {}}),
+                self.claude({"type": "text", "text": "Inside the subagent."}, parent="u0"),
+                self.claude({"type": "text", "text": "Done: PRB-1 closed, the typo is PRB-2."}),
+                {"type": "system", "subtype": "hook_response", "hook_event": "Stop"},
+                self.claude({"type": "text", "text": "| Status | Check | Result |"}),
+                {"type": "result", "subtype": "success", "result": "| Status | Check | Result |"},
+            ],
+        )
+        self.assertEqual(
+            "Done: PRB-1 closed, the typo is PRB-2.\n\n| Status | Check | Result |", answer
+        )
+
+    def test_claude_without_texts_answers_with_its_result(self) -> None:
+        answer = self.transcript("claude", [{"type": "result", "result": "Only the result."}])
+        self.assertEqual("Only the result.", answer)
+
+    def test_codex_answers_with_every_message_after_its_last_action(self) -> None:
+        def message(text: str) -> dict[str, Any]:
+            return {"type": "item.completed", "item": {"type": "agent_message", "text": text}}
+
+        answer = self.transcript(
+            "codex",
+            [
+                message("I will look first."),
+                {
+                    "type": "item.completed",
+                    "item": {"type": "command_execution", "command": "rg x"},
+                },
+                message("Which directory should I delete? data-old (Recommended) or data-legacy."),
+                {"type": "item.completed", "item": {"type": "reasoning", "text": "..."}},
+                message("Nothing deleted yet."),
+            ],
+        )
+        self.assertEqual(
+            "Which directory should I delete? data-old (Recommended) or data-legacy."
+            "\n\nNothing deleted yet.",
+            answer,
+        )
+
+
 class ConditionTests(unittest.TestCase):
     def test_probe_stands_for_the_main_agent_and_its_subagents(self) -> None:
         main, subagent, setup = (

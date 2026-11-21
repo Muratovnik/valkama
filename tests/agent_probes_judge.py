@@ -15,7 +15,9 @@ What a check reads:
   things those answers do not carry are read from the recorded store itself:
   which items the session can have touched, and the session behind a comment;
 - calls, their order and the final answer: the client's own output, Claude
-  Code's `stream-json` or Codex's `--json`, read into one list of calls;
+  Code's `stream-json` or Codex's `--json`, read into one list of calls; the
+  answer is every text the main agent wrote after its last tool call in the
+  last turn;
 - files, Git and commands: the session's workspace as the run left it.
 
 A probe passes when every check that decides passed. A check that only records
@@ -304,6 +306,7 @@ def _claude(record: Record, transcript: Transcript) -> None:
     backgrounded: set[str] = set()
     for lines in record.turns():
         answer = None
+        reply: list[str] = []
         for line in lines:
             kind = line.get("type")
             if kind == "system" and line.get("subtype") == "init":
@@ -313,8 +316,14 @@ def _claude(record: Record, transcript: Transcript) -> None:
             elif kind == "assistant":
                 parent = line.get("parent_tool_use_id")
                 for part in (line.get("message") or {}).get("content") or ():
-                    if isinstance(part, Mapping) and part.get("type") == "tool_use":
+                    if not isinstance(part, Mapping):
+                        continue
+                    if part.get("type") == "tool_use":
                         _claude_use(transcript, part, parent, pending, launches)
+                        if not parent:
+                            reply = []
+                    elif part.get("type") == "text" and not parent:
+                        reply.append(str(part.get("text") or ""))
             elif kind == "user":
                 for part in (line.get("message") or {}).get("content") or ():
                     if isinstance(part, Mapping) and part.get("type") == "tool_result":
@@ -338,8 +347,22 @@ def _claude(record: Record, transcript: Transcript) -> None:
                     output=usage.get("output_tokens"),
                     reasoning=details.get("thinking_tokens"),
                 )
-        transcript.answer = answer if isinstance(answer, str) else None
+        transcript.answer = _final_reply(reply, answer)
     transcript.reports.extend(report for report in launches.values() if report is not None)
+
+
+def _final_reply(texts: Sequence[str], result: object) -> str | None:
+    """A turn's answer: every text the main agent wrote after its last tool call.
+
+    A Stop hook may send the agent back for one more message, such as the report
+    table the owner's skills ask for, and the client's own result names only that
+    last one; the owner reads them all. Without any, the client's result.
+    """
+
+    written = [text for text in texts if text.strip()]
+    if written:
+        return "\n\n".join(written)
+    return result if isinstance(result, str) else None
 
 
 def _claude_use(
@@ -410,9 +433,13 @@ def _claude_result(
         transcript.calls[index] = dataclasses.replace(call, result=_parsed(text))
 
 
+#: Codex's items that are not an action: a message after one of them still ends the turn's reply.
+CODEX_QUIET_ITEMS = frozenset({"agent_message", "reasoning", "error", "todo_list"})
+
+
 def _codex(record: Record, transcript: Transcript) -> None:
     for lines in record.turns():
-        answer = None
+        reply: list[str] = []
         for line in lines:
             if line.get("type") == "turn.completed":
                 usage = line.get("usage") or {}
@@ -429,10 +456,12 @@ def _codex(record: Record, transcript: Transcript) -> None:
             if line.get("type") != "item.completed" or not isinstance(item, Mapping):
                 continue
             if item.get("type") == "agent_message":
-                answer = item.get("text")
-            else:
-                _codex_item(transcript, item)
-        transcript.answer = answer if isinstance(answer, str) else None
+                reply.append(str(item.get("text") or ""))
+                continue
+            if item.get("type") not in CODEX_QUIET_ITEMS:
+                reply = []
+            _codex_item(transcript, item)
+        transcript.answer = _final_reply(reply, None)
 
 
 def _codex_item(transcript: Transcript, item: Mapping[str, Any]) -> None:
