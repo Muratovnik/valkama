@@ -23,7 +23,6 @@ const mountDays = (usage: Usage) =>
       usage,
       by: 'work_item',
       measure: 'time',
-      narrow: false,
       readAt: WEDNESDAY,
       accounts: 'loading',
     },

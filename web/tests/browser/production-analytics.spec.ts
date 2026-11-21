@@ -1,8 +1,8 @@
 /**
  * The Analytics page in the real app at the widths it is used at: the tiles, the bars and the
- * days stand whole, nothing clips its own words, the page never scrolls sideways, a narrow page
- * reads each chart as a table whose row names stay in view while its figures scroll, and Tab
- * reaches every control. The double answers on the route the page really reads,
+ * days stand whole, nothing clips its own words, the page never scrolls sideways, each chart
+ * opens on its drawing at every width, a phone's too, its table a press away with its row names
+ * in view while its figures scroll, and Tab reaches every control. The double answers on the route the page really reads,
  * `/api/analytics/usage`, by the period, the filters and the grouping each read asks for.
  *
  * Each state the page has is opened and measured, and the run prints what it measured: the page
@@ -71,15 +71,14 @@ for (const width of [1440, 1024, 390]) {
       /^5\sd\s17\sh$/u,
     )
 
-    // A report narrower than a chart reads well opens each chart as its table: on a phone. At
-    // 1024px the panel beside the rail would have left the report under 560px, so the section
-    // has the page to itself instead, and its charts their room.
-    const narrow = width < 1024
+    // Each chart opens drawn at every width, as wide as a phone too: its bars give a name its own
+    // line over its bar and its days scroll inside their frame. A phone once opened each chart as
+    // its table, though every one of them reads drawn there.
     // The tasks' bars and their days: the tasks, named by free text, draw no small charts.
     const sections = analytics.locator('[data-shown]')
     await expect(sections).toHaveCount(2)
     for (const section of await sections.all())
-      await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : LINED_SHOWN)
+      await expect(section).toHaveAttribute('data-shown', LINED_SHOWN)
 
     // The day not over yet and the change of accounts are each said where their day is read, in
     // its row of the table or in its day's hint on the chart; no word stands under a name.
@@ -87,7 +86,7 @@ for (const width of [1440, 1024, 390]) {
     // The axis the chart draws, where it is drawn rather than its table, names its days, and none
     // of them with a word under it.
     const axis = analytics.locator('.spending-days [data-chart="periods"] [data-region="axis"]')
-    await expect(axis).toHaveCount(narrow ? 0 : 1)
+    await expect(axis).toHaveCount(1)
     for (const drawn of await axis.all()) {
       await expect(drawn).toContainText(/\d/u)
       await expect(drawn).not.toContainText('running')
@@ -130,7 +129,10 @@ test('a phone scrolls the days table under its days, which stay in view', async 
   page,
 }, info) => {
   await serve(page)
-  await openReport(page, 390)
+  const analytics = await openReport(page, 390)
+  const days = analytics.locator('.spending-days')
+  await days.getByRole('radio', { name: 'Table', exact: true }).click()
+  await expect(days).toHaveAttribute('data-shown', 'table')
   const names = await scrolledNames(page)
   await record(info, 'analytics row names scrolled 390', names)
   // The days table is wider than a phone: it scrolls in its frame, and its days stand still.

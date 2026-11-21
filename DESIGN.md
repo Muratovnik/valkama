@@ -1051,7 +1051,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls sideways in its own frame
-  (`ChartTable`, `keyScroll`) rather than widening the page. They are boxes of HTML on the tokens, not a chart library, which the
+  (`ChartTable`, `keyScroll`) rather than widening the page. A chart opens on the drawing it
+  opens on at 1440 at every width, a phone's too, and its table is a press away: in a panel
+  of 294 px at 390 the ring, the ranked bars (each name on its own line over its bar), the days
+  (scrolling in their frame, a day 24 px at least) and the quota's windows each stand whole, with
+  no word cut but by a designed ellipsis. A panel under 560 px once opened every chart as its
+  table, though none needed it. They are boxes of HTML on the tokens, not a chart library, which the
   product removed for its weight. A value axis starts at zero and names a few round steps; a
   time axis names what it has room for, counted back from the last period. A series takes
   its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
@@ -3030,8 +3035,8 @@ recorded on the account from the window's start to the answer's moment, held to 
 minutes, as ranked bars — the first five items by the API price estimate, each with its share
 of the account's estimate, and one line for the rest — or as a ring of every item that folds its
 own rest, chosen with «Ring | Bars» beside the breakdowns, or as the bars' table, which the
-panel's own «Chart | Table» under its title chooses and which hides «Ring | Bars»; the panel's
-width chooses first, as a page's does. It opens by task and offers projects and models; the
+panel's own «Chart | Table» under its title chooses and which hides «Ring | Bars»; it opens
+drawn at every width, as a page's charts do. It opens by task and offers projects and models; the
 choice of breakdown holds for that window when the panel turns to its table or opens again. By
 project or model it opens on the ring, as every split named by identifiers does, and a person's
 choice of drawing holds until the page is left; by task it is the list of free text alone, with

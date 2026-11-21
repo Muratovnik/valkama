@@ -270,7 +270,7 @@ describe('the breakdown beside the period before', () => {
       global,
     })
     const bars = mount(SpendingBars, {
-      props: { ...props, rows: usage.rows, narrow: false, slots: new Map() },
+      props: { ...props, rows: usage.rows, slots: new Map() },
       global,
     })
     const bar = (bars.getComponent(RankedBars).props('rows') as RankedRow[])[0]

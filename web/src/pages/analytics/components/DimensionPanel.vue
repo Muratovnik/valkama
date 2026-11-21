@@ -47,7 +47,6 @@ import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useCrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -166,9 +165,6 @@ function chooseSplit(value: string) {
   emit('update:across', props.dimensions.find((dimension) => dimension === value) ?? null)
 }
 
-const root = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(root)
-
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
 /** Dimmed while a new view is read in place of this answer (`readPending.css`). */
@@ -181,7 +177,6 @@ const showTable = () => table.value?.reveal()
 
 <template>
   <div
-    ref="root"
     class="dimension-panel"
     :class="{ 'read-pending': pending }"
   >
@@ -243,7 +238,6 @@ const showTable = () => table.value?.reveal()
             :by="by"
             :across="ranked.across"
             :measure="measure"
-            :narrow="narrow"
             :notice="noticeIn('bars')"
             :rows="ranked.usage.rows"
             :slots="ranked.slots"
@@ -255,7 +249,6 @@ const showTable = () => table.value?.reveal()
             :by="by"
             :across="ranked.across"
             :measure="measure"
-            :narrow="narrow"
             :slots="ranked.slots"
             :usage="ranked.usage"
             @inspect="(value, label) => emit('inspect', by, value, label, 'bars')"
@@ -269,7 +262,6 @@ const showTable = () => table.value?.reveal()
         :across="ranked.across"
         :live="live"
         :measure="measure"
-        :narrow="narrow"
         :notice="noticeIn('days')"
         :read-at="readAt"
         :usage="ranked.usage"

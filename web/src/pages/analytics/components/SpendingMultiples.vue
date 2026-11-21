@@ -35,7 +35,6 @@ import SmallMultiplesTable from '@/shared/ui/SmallMultiplesTable.vue'
 const props = defineProps<{
   by: UsageDimension
   measure: Measure
-  narrow: boolean
   /** The hue of each value, or each pair, on the page, by its key. */
   slots: ReadonlyMap<string, SeriesSlot>
   usage: Usage
@@ -116,7 +115,6 @@ const valueAxis = computed(() => words.axis(props.measure))
   <ChartSection
     class="spending-multiples"
     :title="heading"
-    :narrow="narrow"
   >
     <template #chart>
       <SmallMultiples

@@ -67,7 +67,6 @@ const props = defineProps<{
   accounts: AccountsRead
   by: UsageDimension
   measure: Measure
-  narrow: boolean
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
@@ -224,7 +223,6 @@ function frame(firstKey: string, lastKey: string) {
     class="spending-days"
     :title="title"
     :titles="titles"
-    :narrow="narrow"
     :notice="notice"
   >
     <template #chart>

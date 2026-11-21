@@ -23,12 +23,11 @@
  * What used each window opens from the window's block in the side panel over the page
  * (`WindowDetail`), which reads it to the answer's moment.
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import QuotaAccount from '@/pages/analytics/components/QuotaAccount.vue'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
@@ -86,9 +85,6 @@ const lines = computed(() => {
     ? sectionLines(read.quota.accounts, section, answerMoment(read.quota), read.from ?? null)
     : undefined
 })
-
-const root = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(root)
 </script>
 
 <template>
@@ -97,15 +93,11 @@ const narrow = useNarrowCharts(root)
     @retry="emit('retry')"
   >
     <template #default="{ payload }">
-      <div
-        ref="root"
-        class="quota-panel"
-      >
+      <div class="quota-panel">
         <ChartSection
           level="section"
           :title="title"
           :about="about"
-          :narrow="narrow"
           :list-label="t('analytics.quota.panel.heading')"
         >
           <template #chart>

@@ -28,6 +28,7 @@ import {
 } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { showView } from '../support/chartViews.ts'
 import { saidBy } from '../support/liveRegion.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
@@ -309,7 +310,7 @@ describe('the period before on the overview', () => {
 })
 
 describe('the overview’s chart', () => {
-  it('holds the period before in a column of the table, step by step', () => {
+  it('holds the period before in a column of the table, step by step', async () => {
     const usage = usageAnswer({
       first: MONDAY,
       days: 3,
@@ -332,12 +333,12 @@ describe('the overview’s chart', () => {
         before,
         by: 'work_item',
         measure: 'time',
-        narrow: true,
         readAt: NOW,
         accounts: 'loading',
       },
       global: { plugins: [analyticsI18n()] },
     })
+    await showView(days, '.spending-days', 'Table')
     const headings = days.findAll('thead th').map((one) => one.text())
     const at = headings.indexOf('period before')
     expect(at).toBeGreaterThan(headings.indexOf('Total'))
@@ -362,7 +363,6 @@ describe('the overview’s chart', () => {
         usage,
         by: 'work_item',
         measure: 'time',
-        narrow: false,
         readAt: NOW,
         accounts: 'loading',
       },

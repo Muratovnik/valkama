@@ -12,9 +12,8 @@
  * The hint stands beside the day's stack, the column drawn, 6 pixels from its edge — to its
  * right, or to its left where the chart's frame has no room there — with its top level with the
  * stack's, so it moves with the stack from one day to the next and covers nothing of it: at 1440
- * and 1280 pixels and at the narrowest window that opens the days as a plot. At 360 pixels, where
- * the plot is chosen over the table, it stands beside the stack where the window holds it, else
- * over the stack, 6 pixels over its top. It never runs out of the window. Beside the day's slot, the
+ * and 1280 pixels and at 664, the window under which the days once opened as their table. At 360
+ * pixels it stands beside the stack where the window holds it, else over the stack, 6 pixels over its top. It never runs out of the window. Beside the day's slot, the
  * whole place the pointer takes for it, a day of a two-day chart had its hint at the plot's top
  * some 300 pixels from its stack. Along four weeks of days it stays inside the chart's frame
  * and on the right up to the days past which the right has no room, then on the left: its side
@@ -42,8 +41,8 @@ import {
 import { test } from './test.ts'
 
 /**
- * The narrowest window, in pixels, whose task section opens its days as a plot rather than as
- * their table (`useNarrowCharts`); one pixel less opens the table.
+ * A window, in pixels, whose task section leaves its days a frame of 560: one pixel less once
+ * opened them as their table, which no width does now.
  */
 const NARROWEST = 664
 
@@ -326,10 +325,15 @@ for (const [width, scrolls] of [
     }
   })
 
-test(`the narrowest window that draws the days as a plot is ${NARROWEST}px`, async ({ page }) => {
+// Under 664 pixels the days once opened as their table; they open as a plot at every width.
+test('the days open as a plot narrower than that window too, as wide as a phone', async ({
+  page,
+}) => {
   await openDays(page, NARROWEST)
-  const analytics = await openReport(page, NARROWEST - 1)
-  await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'table')
+  for (const width of [NARROWEST - 1, 390]) {
+    const analytics = await openReport(page, width)
+    await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'chart')
+  }
 })
 
 // The host opens a hint once per element until the pointer leaves it, and a day is one element

@@ -32,7 +32,7 @@
  * `data-part` (`actions`, `figures`, `all-time`, `days`, `model`, `account`) and each figure
  * `data-figure` (`time`, `tokens`, `cost`, `share`; of all time `agents`, `cost` or `failed`).
  */
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
@@ -41,7 +41,6 @@ import ValueDays from '@/pages/analytics/components/ValueDays.vue'
 import ValueFigures from '@/pages/analytics/components/ValueFigures.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { usePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
@@ -282,10 +281,6 @@ const lists = computed(() =>
     ]
   }),
 )
-
-/** The panel's own width decides whether its chart opens as its table. */
-const body = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(body)
 </script>
 
 <template>
@@ -333,7 +328,6 @@ const narrow = useNarrowCharts(body)
       </FieldError>
     </template>
     <div
-      ref="body"
       class="value-detail"
       data-detail="value"
     >
@@ -393,7 +387,6 @@ const narrow = useNarrowCharts(body)
           :measure="measure"
           :name="name"
           :name-runs="nameRuns"
-          :narrow="narrow"
           :read-at="readAt"
           :hue="hue"
           :usage="steps"

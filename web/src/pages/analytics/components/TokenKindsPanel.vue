@@ -21,7 +21,7 @@
  * What the tokens count and leave apart is no line of the panel: the «ⓘ» of its heading says it
  * once (`useSectionCaveats`).
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
@@ -30,7 +30,6 @@ import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import TokenKindsTable from '@/pages/analytics/components/TokenKindsTable.vue'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
@@ -61,9 +60,6 @@ const kindWords = useKindWords()
 const lines = computed(() => kindLines(props.usage))
 const counted = computed(() => countedTotal(lines.value))
 const total = computed(() => kindWords.count(counted.value))
-
-const root = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(root)
 
 const barsTitle = computed(() => t('analytics.kinds.bars'))
 /** The kinds are a few, named by identifiers: the split opens on its ring, the first offered. */
@@ -137,10 +133,7 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="kinds-panel"
-  >
+  <div class="kinds-panel">
     <PanelLevel
       level="section"
       as="div"
@@ -162,7 +155,6 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
         <ChartSection
           class="kinds-bars"
           :title="barsTitle"
-          :narrow="narrow"
           :views="views"
         >
           <template #chart="{ view }">
@@ -194,7 +186,6 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
         <ChartSection
           class="kinds-multiples"
           :title="multiplesHeading"
-          :narrow="narrow"
         >
           <template #chart>
             <SmallMultiples

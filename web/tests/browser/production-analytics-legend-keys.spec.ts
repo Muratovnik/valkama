@@ -141,7 +141,7 @@ for (const legend of LEGENDS)
         await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
         await serve(page, legend.world)
         await openReport(page, width, legend.address)
-        // A panel too narrow for the charts opens each as its table; it is chosen back.
+        // Every section drawn as its one chart, whichever drawing it opens on.
         const tables = page.getByRole('radio', { name: CHART[locale], checked: false })
         while ((await tables.count()) > 0) await tables.first().click()
         const chartLegend = page.locator('.spending-days [data-hint-list="legend"]')

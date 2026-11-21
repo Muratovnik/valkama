@@ -198,8 +198,7 @@ for (const width of [390, 1440])
   test(`at ${width}px every control of a drawn window stands inside the window`, async ({
     page,
   }, info) => {
-    // A narrow page opens on the table; drawn, a window's switch of its line's span once ran past
-    // its edge. The switch is gone; «Breakdown» and the line of the window before stand there.
+    // Drawn, a window's switch of its line's span once ran past its edge. The switch is gone; «Breakdown» and the line of the window before stand there.
     await serve(page)
     await page.setViewportSize({ width, height: 1000 })
     await page.goto(pageAt())

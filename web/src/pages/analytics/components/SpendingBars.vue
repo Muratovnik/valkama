@@ -67,7 +67,6 @@ import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 const props = defineProps<{
   by: UsageDimension
   measure: Measure
-  narrow: boolean
   rows: readonly UsageRow[]
   /** The hue of each value, or each pair, on the page, by its key. */
   slots: ReadonlyMap<string, SeriesSlot>
@@ -182,7 +181,6 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
     class="spending-bars"
     :title="title"
     :titles="titles"
-    :narrow="narrow"
     :notice="notice"
     :views="views"
   >

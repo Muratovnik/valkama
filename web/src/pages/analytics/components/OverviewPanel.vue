@@ -30,7 +30,6 @@ import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { OVERVIEW_CARDS } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
@@ -103,10 +102,6 @@ const top = useTopValues({
   period: () => props.period,
   dimensions: () => cards.value,
 })
-
-/** The chart's own column decides whether it opens as its table. */
-const chartColumn = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(chartColumn)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
@@ -183,16 +178,12 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
         :usage="usage"
         :read-at="readAt"
       />
-      <div
-        ref="chartColumn"
-        class="overview-chart"
-      >
+      <div class="overview-chart">
         <SpendingDays
           :accounts="accounts"
           :before="beforeSteps"
           :by="by"
           :measure="measure"
-          :narrow="narrow"
           :live="live"
           :notice="noticeIn('days')"
           :read-at="readAt"

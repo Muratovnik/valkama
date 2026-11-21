@@ -270,8 +270,7 @@ test('a span wider than the chart keeps its start, the reader’s place and the 
   await expect.poll(scrolled, { message: 'opened off its start' }).toBe(0)
 
   // The window made narrower: the plot is as wide as it was, and the first days stay in view.
-  // Narrower, not narrow: beside the rail, a window of 1200px leaves the report wide enough to
-  // keep its charts, where 1024px would open each as its table.
+  // Beside the rail still: at 1200px the report keeps the rail beside it.
   await page.setViewportSize({ width: 1200, height: 900 })
   await expect(days).toHaveAttribute('data-shown', 'chart')
   const narrowed = await chartPlace(page)

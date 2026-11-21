@@ -46,7 +46,6 @@ const SLOTS = new Map<string, SeriesSlot>([
 const props = (stretches?: readonly Stretch[]) => ({
   by: 'model' as const,
   measure: 'time' as const,
-  narrow: false,
   slots: SLOTS,
   usage: usageOf(stretches),
 })
