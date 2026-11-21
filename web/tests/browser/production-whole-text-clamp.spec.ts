@@ -227,13 +227,13 @@ const openBoard = (page: Page, width: number) =>
 /**
  * The whole words laid over the marked cut text, against the clamp that cuts it: the content
  * width and height of each and its line's height, how many lines the whole words take, and how
- * far past the window's edges their box stands.
+ * far past the window's edges their box stands. Either missing fails the reading.
  */
 const wholeAgainstClamp = (page: Page) =>
   page.evaluate(() => {
     const clamp = document.querySelector<HTMLElement>('[data-probe-cut]')
     const laid = document.querySelector<HTMLElement>('.whole-text')
-    if (!clamp || !laid) return null
+    if (!clamp || !laid) throw new Error('no whole words over the marked clamp')
     const inner = (element: HTMLElement) => {
       const style = getComputedStyle(element)
       const box = element.getBoundingClientRect()
@@ -319,9 +319,7 @@ test.describe('a clamp off the graph', () => {
       await openBoard(page, width)
       const tile = page.locator(`[data-reference="${workItemRef.reference}"] .work-item-tile`)
       await expectWholeOver(page, tile.locator('.tile-title'), LONG_TITLE)
-      const read = await wholeAgainstClamp(page)
-      if (!read) throw new Error('no whole words over the clamp')
-      const { clamp, whole, wholeLines, past } = read
+      const { clamp, whole, wholeLines, past } = await wholeAgainstClamp(page)
       expect(Math.round(clamp.height / clamp.line), 'the lines the clamp shows').toBe(3)
       expect(wholeLines, 'the lines the whole words take at the width the clamp cut them').toBe(
         lines,
