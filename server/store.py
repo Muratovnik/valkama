@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import math
 import os
 import platform
 import sqlite3
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
@@ -1139,12 +1141,14 @@ def migrate_work_model(
     this build is left alone and reported `current`; any other is refused as
     `store_generation` refuses it, untouched.
 
-    Under the store's migration lock the conditions to start are read first, from
-    the store, the project registry and the file `item_projects` names, which
-    `valkama projects map-items` wrote (`planning.item_projects_map`); one that does
-    not hold raises `WorkModelPreconditionError`, the report `refused`, before any
-    write. Then a verified recovery point labelled `WORK_MODEL_LABEL` is taken,
-    with the pictures beside it. Then, with
+    Under the store's migration lock the conditions to start are read first: that no
+    Valkama server was seen running in the last `liveness.BREAK_SECONDS`
+    (`_refuse_a_live_server`), then those read from the store, the project registry
+    and the file `item_projects` names, which `valkama projects map-items` wrote
+    (`planning.item_projects_map`); one that does not hold raises
+    `WorkModelPreconditionError`, the report `refused`, before any write. Then a
+    verified recovery point labelled `WORK_MODEL_LABEL` is taken, with the pictures
+    beside it. Then, with
     foreign keys off -- set before the transaction, since SQLite ignores the pragma
     inside one -- schema 18's step (`QUOTA_NAMES`), which a store at 17 needs and one
     at 18 does not, and the steps of `planning.work_model_migration` run in one
@@ -1165,6 +1169,33 @@ def migrate_work_model(
             report["status"] = "failed"
             raise
     return report
+
+
+def _refuse_a_live_server(path: str, report: dict[str, Any]) -> None:
+    """Refuse the migration while a Valkama server may still hold the store.
+
+    A server 2.9 left open would go on reading and writing the store after the
+    migration commits, with the code of 2.9. The long-lived servers, MCP and HTTP,
+    tick the store's liveness file once every `liveness.TICK_SECONDS`, so an interval
+    that ended less than `liveness.BREAK_SECONDS` ago may belong to one still running.
+    Hooks are short processes and do not tick; closing the clients rules them out. A
+    store with no liveness file, such as the copy a dry run makes, has none to wait
+    for. Only reads, and writes nothing to the store.
+    """
+
+    seen = liveness.intervals(path)
+    if not seen:
+        return
+    ago = time.time() - seen[-1][1]
+    if ago >= liveness.BREAK_SECONDS:
+        return
+    message = (
+        f"a Valkama server was running {max(0, math.floor(ago))} s ago: stop the listener"
+        f" and every agent client, wait {math.ceil(liveness.BREAK_SECONDS - ago)} s and"
+        " run this again; nothing was written"
+    )
+    report.update(status="refused", message=message)
+    raise WorkModelPreconditionError(message, report)
 
 
 def _preconditions(
@@ -1195,6 +1226,7 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
             report.update(status="current", message=_ALREADY)
             return
         report["schema"]["from"] = _read_stored_version_without_write(path)
+        _refuse_a_live_server(path, report)
         conn = sqlite3.connect(path, timeout=5)
         conn.row_factory = sqlite3.Row
         try:

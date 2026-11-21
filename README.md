@@ -68,7 +68,8 @@ explains releases, going back to one and moving the clone.
 
 This release opens only a store at schema 23. It refuses the store Valkama 2.9 left,
 at schema 18, or 17 from a 2.9 build before 2.9.0, until you carry it over once with
-`valkama migrate work-model`, every session stopped:
+`valkama migrate work-model`, every session stopped at least three minutes
+before, since it refuses while a server may still hold the store:
 [Migrating a 2.9 store](docs/guides/store-upgrades.md#migrating-a-29-store) gives
 the order.
 
