@@ -19,8 +19,8 @@ import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
  * set when `--with-clipboard` names a spec, and without it otherwise.
  *
  * A run holds the machine's heavy-test lock, `tests/machine_lock.py`, for as long as Playwright
- * runs, so a second heavy run of any checkout waits for it and says whose run it waits for. A
- * run under `--list` runs no test, and takes no lock.
+ * runs, asking for the whole machine, so any other heavy run of any checkout waits for it and
+ * says whose run it waits for. A run under `--list` runs no test, and takes no lock.
  *
  *   npm run test:browser:allowed -- --list                 what would run, and the total
  *   npm run test:browser:allowed -- --specs=<file>         the specs a file names, one a line
@@ -173,6 +173,7 @@ const suiteDirectory = join(web, 'tests/browser')
 export const realIo: RunnerIo = {
   playwright: (args, clipboard, lock) => {
     const command = [process.execPath, join(web, 'node_modules/@playwright/test/cli.js'), ...args]
+    // It declares no CPUs, so it asks for the whole machine: the browsers take whatever it has.
     return spawnInherited(lock === null ? command : lockedCommand(lock, command), {
       cwd: web,
       env: playwrightEnvironment(process.env, clipboard),

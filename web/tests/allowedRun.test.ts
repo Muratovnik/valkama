@@ -10,6 +10,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { playwrightEnvironment, realIo, runAllowed } from './browser/allowedRun.ts'
 import type { RunnerIo } from './browser/allowedRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './browser/clipboardSpecs.ts'
+import { spawnInherited } from './heavyLock.ts'
+
+// The process start the real runner goes through, stood in for: no Playwright starts here.
+vi.mock('./heavyLock.ts', async (actual) => ({
+  ...(await actual<typeof import('./heavyLock.ts')>()),
+  spawnInherited: vi.fn(() => Promise.resolve(0)),
+}))
 
 const allowed = ['production-settings.spec.ts', 'ui-buttons.spec.ts']
 const notes = 'production-card-notes.spec.ts'
@@ -159,5 +166,17 @@ describe('the allowed browser run', () => {
 
   it('finds the suite on disk, clipboard specs among it', () => {
     expect(realIo.suiteSpecs()).toEqual(expect.arrayContaining([...clipboardSpecs]))
+  })
+
+  it('runs Playwright through the gate declaring no CPUs, so it asks for the whole machine', async () => {
+    expect(await realIo.playwright(['--workers=4'], false, 'the whole browser suite')).toBe(0)
+    expect(spawnInherited).toHaveBeenCalledTimes(1)
+    const [call] = vi.mocked(spawnInherited).mock.calls
+    const command = call?.[0] ?? []
+    const gate = command.slice(0, command.indexOf('--'))
+    expect(gate).toContain('--run=the whole browser suite')
+    // The present control is the Vitest run's `--cpus=8`, in `unitRun.test.ts`.
+    expect(gate.some((word) => word.startsWith('--cpus'))).toBe(false)
+    expect(command.at(-1)).toBe('--workers=4')
   })
 })

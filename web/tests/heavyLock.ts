@@ -4,28 +4,37 @@ import { fileURLToPath } from 'node:url'
 import { python } from './browser/serverStore.ts'
 
 /**
- * The machine's heavy-test lock, `tests/machine_lock.py`, as the web runners take it: the whole
- * browser suite (`tests/browser/allowedRun.ts`) and the Vitest suite (`tests/unitRun.ts`). The
- * Python side owns the lock and its one protocol; these only start a command through it.
+ * The machine's heavy-test gate, `tests/machine_lock.py`, as the web runners go through it: the
+ * whole browser suite (`tests/browser/allowedRun.ts`) and the Vitest suite (`tests/unitRun.ts`),
+ * each declaring the CPUs it needs. The Python side owns the gate and its one protocol; these
+ * only start a command through it.
  */
 
 const lockScript = fileURLToPath(new URL('../../tests/machine_lock.py', import.meta.url))
 
+/** What a run tells the gate besides its name. */
+interface GateOptions {
+  /** The logical CPUs the run needs; without it, the whole machine, so it goes alone. */
+  cpus?: number
+  /** Stands in for the machine's lock, for a test. */
+  lockFile?: string
+}
+
 /**
- * `command` as run holding the heavy-test lock for `run`: the Python side waits, says for whom,
- * runs the command and gives the lock back when it ends. `lockFile` stands in for the machine's
- * lock, for a test.
+ * `command` as run holding a place at the heavy-test gate for `run`: the Python side waits
+ * until the run fits, says why it waits, runs the command and gives the place back when it ends.
  */
 export function lockedCommand(
   run: string,
   command: readonly string[],
-  lockFile?: string,
+  { cpus, lockFile }: GateOptions = {},
 ): string[] {
   return [
     python,
     lockScript,
     'run',
     `--run=${run}`,
+    ...(cpus === undefined ? [] : [`--cpus=${cpus}`]),
     `--pid=${process.pid}`,
     ...pathOption(lockFile),
     '--',
