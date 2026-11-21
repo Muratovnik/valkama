@@ -8,13 +8,13 @@ import json
 import os
 import re
 import stat
-import tempfile
 import tomllib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from .. import atomic_files
 from . import project_registry
 
 SCHEMA_VERSION = 1
@@ -106,16 +106,7 @@ def _replace(path: Path, expected: bytes | None, replacement: bytes | None) -> b
         path.unlink(missing_ok=True)
         return True
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    temporary = Path(name)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(replacement)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
+    atomic_files.write(path, replacement)
     return True
 
 

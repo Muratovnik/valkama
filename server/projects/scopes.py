@@ -17,6 +17,8 @@ import os
 import re
 import sqlite3
 
+from .. import atomic_files
+
 REGISTRY_NAME = "scopes.json"
 # The store that existed before federation. It is always present, always first,
 # and is never migrated: it simply becomes the first scope.
@@ -111,11 +113,8 @@ def save(primary_db: str, scopes: list[dict]) -> str:
     }
     path = registry_path(primary_db)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    temporary = path + ".tmp"
-    with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
-    os.replace(temporary, path)
+    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    atomic_files.write(path, text.encode("utf-8"))
     return path
 
 
