@@ -2705,7 +2705,11 @@ the panel 44px when chosen. A refresh that fails keeps what is shown
 and says so in words before the age at every width, «Could not refresh» with a retry: given up
 on a short line, its words had left a red disc with no hint. A refresh whose period before could
 not be read, where what is shown has it, fails so too: shown, it took every change and the table's columns
-of the period before away, and the words that said so came in over the figures. The retry is reached at every width
+of the period before away, and the words that said so came in over the figures. So does a refresh
+whose accounts or overview steps of the period before could not be read, and a new view whose
+accounts or steps could not be read shows its answer without their marks and says the same words
+here: said in a note under the chart, the failure moved what stands under it, and room held for the
+note stood empty under every chart at rest. The retry is reached at every width
 too: where the line has no room for «· Retry», the words themselves are the retry, named
 «Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
 Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
@@ -2826,9 +2830,9 @@ and a period before with none gives no «was», the line's place kept either way
 draws no second axis for it. Across the panel under the cells stands the period chart, stacked
 by project, with the period before as a short line at its height; at a project's scope it is that
 project's one series of plain columns, which no legend names. The period before's steps and the
-accounts that mark its changes are read after the chart is drawn, and a note under it that either
-could not be read stands in room the chart keeps for it, so the cards under it stay where they
-stand when it is said or taken away. Stacked by task it named a few per
+accounts that mark its changes are read after the chart is drawn; when either could not be read the
+chart draws no such mark and the bar says the read failed, so nothing under the chart moves and
+nothing stands empty there. Stacked by task it named a few per
 cent of the time, the rest «Other», and the tasks have their own section; and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
@@ -3149,9 +3153,10 @@ estimate at API prices, what the tokens count and, read by the minute, that a mi
 are shared out — the section's «ⓘ» says under the panel, so the «ⓘ» «About these figures» that
 ends the figures' heading says it for the value's own read, once and in that «ⓘ» alone,
 never as a line of the panel. Its days are the page's period and step with
-the period before marked, one series in the value's colour, and a note that the period before
-could not be read stands under them in room the days keep for it: read after the days are drawn
-and said in room of its own, it moved the lists under them 25px down; under them dense ranked bars say the
+the period before marked, one series in the value's colour, its steps read with the panel's
+answers; when they could not be read the days draw no mark and the panel says so beside its actions,
+as a read again that failed: said in a note under the days, it moved the lists under them 25px down;
+under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
 the value's filter added, and wait and fail as the page's do: a read again that fails keeps what
 the panel shows and says «Could not refresh · Retry» beside its actions, in room their row keeps
