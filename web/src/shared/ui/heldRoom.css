@@ -4,8 +4,9 @@
  * and nothing beside or under it moves when another takes its place. A level's heading that
  * changes with the page's measure keeps the room of each (`PanelLevel`'s `titles`); a window
  * breakdown keeps that of the headings a newer answer can give it and of the words a read again
- * that fails says (`QuotaWindowSpend`). Read by each as its own scoped style, so each writes both
- * classes in its own template.
+ * that fails says (`QuotaWindowSpend`); a table's line about its rows, that of the words a read
+ * again of its pairs that fails says in its place (`SpendingTableHead`). Read by each as its own
+ * scoped style, so each writes both classes in its own template.
  */
 .held-room {
   display: grid;

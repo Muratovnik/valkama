@@ -14,10 +14,11 @@
  *
  * The title and the controls keep one line; only a narrow table lets them wrap.
  *
- * While a split's pairs stand (`cross`), a read again of them that fails keeps them and says so
- * before the download, «Could not refresh · Retry», in room the controls keep for it while nothing
- * failed (`RefreshFailed`'s `held`), as a value's panel says its own beside its actions: the pairs
- * once gave their place to a line of words at the first refresh that failed.
+ * While a split's pairs stand (`cross`), a read again of them that fails keeps them and says so,
+ * «Could not refresh · Retry», in the place of the line about the rows, whose words step aside
+ * while it is said (`heldRoom.css`): the pairs once gave their place to a line of words at the
+ * first refresh that failed, and held beside the download its room took a line of its own in a
+ * narrow table, 32px under the heading of a split section on a phone with nothing failed.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -99,12 +100,6 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
       :title="title"
     />
     <div class="spending-table-controls">
-      <RefreshFailed
-        v-if="again !== null"
-        :failed="again"
-        held
-        @retry="emit('reread')"
-      />
       <span
         v-if="nothing"
         :id="nothingId"
@@ -122,11 +117,12 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
         {{ t('analytics.table.download') }}
       </VButton>
     </div>
-    <div class="spending-table-counts">
+    <div class="spending-table-counts held-room">
       <p
         v-if="parts.length"
         v-tooltip.detail="{ text: summary, words: counts }"
         class="spending-table-summary"
+        :class="{ 'held-room-unseen': again }"
       >
         <span
           v-for="part in shownParts"
@@ -135,9 +131,17 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
           >{{ part }}</span
         >
       </p>
+      <RefreshFailed
+        v-if="again !== null"
+        :failed="again"
+        held
+        @retry="emit('reread')"
+      />
     </div>
   </div>
 </template>
+
+<style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
 /* The title and the controls on one line, and the line about the rows on a row of its own
