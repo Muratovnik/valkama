@@ -585,10 +585,13 @@ def write_marks(path: str, marks: dict[str, Mark], budget: Budget = NO_BUDGET) -
         f" {int(held)} {heard} {int(waiting)}"
         for item, (mark, signature, held, heard, waiting) in sorted(marks.items())
     ]
-    temporary = f"{path}.{os.getpid()}.tmp"
-    with open(temporary, "wb") as handle:
-        handle.write(("\n".join(lines) + "\n").encode("ascii"))
-    os.replace(temporary, path)
+    # Imported here, as the cost note at the top asks: only a call with something to write
+    # loads it. Another hook of this recipient may be reading the file outside the lock, and
+    # the rename waits that reader out. A file lost to a crash reads as empty, so the bytes
+    # are not forced to disk.
+    from .. import atomic_files
+
+    atomic_files.write(path, ("\n".join(lines) + "\n").encode("ascii"), durable=False)
 
 
 class _Lock:

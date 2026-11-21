@@ -26,11 +26,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .. import launcher
+from .. import atomic_files, launcher
 
 SKILL_NAME = "valkama"
 
@@ -345,17 +344,7 @@ def copies(skill: Skill | None = None) -> list[dict[str, object]]:
 
 def _atomic_write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    handle, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(handle, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+    atomic_files.write(path, data)
 
 
 def _remove(path: Path, name: str) -> None:

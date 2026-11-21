@@ -35,9 +35,8 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
-from . import listener_owners, processes
+from . import atomic_files, listener_owners, processes
 from .ops import configuration, desktop_app
-from .store_adoption import rename_when_free
 
 SCHEMA_VERSION = 1
 MANIFEST_NAME = "valkama-launcher.json"
@@ -295,7 +294,7 @@ def pin_release(checkout: Path, revision: str, releases: Path) -> Path:
                 "utf-8"
             )
         )
-        rename_when_free(str(staging), str(target))
+        atomic_files.rename_when_free(str(staging), str(target))
     finally:
         if staging.exists():
             shutil.rmtree(staging)
@@ -339,22 +338,6 @@ def _command_bytes(platform_name: str, python: Path) -> tuple[bytes, int]:
         f'exec {interpreter} "$SCRIPT_DIR/{SHIM_NAME}" "$@"\n'
     )
     return text.encode("utf-8"), 0o755
-
-
-def _atomic_write(path: Path, data: bytes, mode: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(handle, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temporary, mode)
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
 
 
 def _read_manifest(path: Path) -> tuple[dict[str, object] | None, str | None]:
@@ -1142,9 +1125,10 @@ def install(
     stopped = _stop_on_demand(root, platform, port, used) if holding else None
 
     try:
-        _atomic_write(paths["shim"], shim, stat.S_IREAD | stat.S_IWRITE)
-        _atomic_write(paths["command"], command, command_mode)
-        _atomic_write(paths["manifest"], manifest_bytes, stat.S_IREAD | stat.S_IWRITE)
+        paths["shim"].parent.mkdir(parents=True, exist_ok=True)
+        atomic_files.write(paths["shim"], shim, mode=stat.S_IREAD | stat.S_IWRITE)
+        atomic_files.write(paths["command"], command, mode=command_mode)
+        atomic_files.write(paths["manifest"], manifest_bytes, mode=stat.S_IREAD | stat.S_IWRITE)
     except OSError:
         # The install failed, and that is what the caller hears, but the address of a
         # work item has to go on working from whatever the pin still says.
