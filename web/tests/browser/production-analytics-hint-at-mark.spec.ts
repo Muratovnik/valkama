@@ -11,7 +11,9 @@
  * 2 of a border and rounding from a corner, or the middle of the top or bottom edge, of the mark;
  * one the window's edge holds in, as a day's hint of twenty series at 390 pixels is lifted, stands
  * against that edge 6 pixels from the mark across it. It covers no part of the mark, keeps inside
- * the window and stays where it stood while the pointer moves to another spot of the same mark.
+ * the window and stays where it stood while the pointer moves to another spot of the same mark,
+ * save a ring's sector, whose point is the spot of its band by the pointer: its hint goes with it.
+ * A sector three quarters round the ring once had its hint at its middle, 70 pixels away.
  *
  * Before, a column of a small chart had its hint at the top left corner of the small chart's frame,
  * over the columns, and a ranked row's past the ranking's right edge, far from a short bar.
@@ -146,6 +148,8 @@ async function shownHint(page: Page): Promise<Box> {
 interface Measured {
   at: string
   first: Box
+  /** Whether the mark's point follows the pointer along it, and its hint with it. */
+  follows: boolean
   mark: Box
   second: Box
   where: string
@@ -156,6 +160,8 @@ interface Marks {
   find: Finder
   hinted: Locator
   name: string
+  /** Whether the mark's point follows the pointer along it, as a ring's sector's does. */
+  follows?: boolean
 }
 
 /**
@@ -163,7 +169,7 @@ interface Marks {
  * no hint for the first and from the first for the others, and says where each hint stood
  * against its mark; `pick` chooses the marks by their order, a negative one from the last.
  */
-async function measure(page: Page, { find, hinted, name }: Marks, pick: number[]) {
+async function measure(page: Page, { find, follows = false, hinted, name }: Marks, pick: number[]) {
   const count = await hinted.count()
   expect(count, `${name}: marks drawn`).toBeGreaterThan(0)
   const window = page.viewportSize() ?? { height: 0, width: 0 }
@@ -189,13 +195,10 @@ async function measure(page: Page, { find, hinted, name }: Marks, pick: number[]
       const moved = await shownHint(page)
       const now = await element.evaluate(find)
       const mark = now?.mark ?? found.mark
-      measured.push({
-        at: `${name} ${index}`,
-        first: shown,
-        mark,
-        second: moved,
-        where: verdict(shown, mark, window),
-      })
+      // A point that follows the pointer has the first hint at the first spot, the next at the next.
+      const first = verdict(shown, found.mark, window)
+      const where = follows && first === 'at its mark' ? verdict(moved, mark, window) : first
+      measured.push({ at: `${name} ${index}`, first: shown, follows, mark, second: moved, where })
     }
   }
   // Every kind asked for is measured at a mark of its own, not left out by its finder.
@@ -211,7 +214,7 @@ async function expectAtMarks(info: TestInfo, label: string, measured: Measured[]
     measured.filter((one) => one.where !== 'at its mark').map((one) => `${one.at}: ${one.where}`),
     label,
   ).toEqual([])
-  for (const one of measured)
+  for (const one of measured.filter(({ follows }) => !follows))
     for (const side of ['left', 'top', 'right', 'bottom'] as const)
       expect(
         Math.abs(one.first[side] - one.second[side]),
@@ -447,7 +450,7 @@ for (const width of [1440, 390]) {
     await expect(sectors.first()).toBeVisible()
     const measured = await measure(
       page,
-      { name: 'sector', hinted: sectors, find: sector },
+      { name: 'sector', hinted: sectors, find: sector, follows: true },
       [0, 1, -1],
     )
     await goToSection(page, width, { by: 'quota_five_hour', view: 'Chart' })
