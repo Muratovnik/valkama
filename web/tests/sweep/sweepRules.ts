@@ -177,7 +177,7 @@ export function placementMiss(
  */
 export interface HintedWords {
   id: string
-  /** The words it shows, its text. */
+  /** The words it shows, its text as written, code between its backticks (`sweepInPage.ts`). */
   own: string
   /** The words it is marked with (`data-tooltip`). */
   words: string
