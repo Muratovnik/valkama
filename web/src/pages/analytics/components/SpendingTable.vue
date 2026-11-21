@@ -3,7 +3,7 @@
  * The table of a dimension's panel: every value beside the period before, or with the section split
  * by a second dimension every pair, «claude-opus-5-5 · high», read from the answer by both, with
  * each row's tokens by kind under the measure «tokens» (`useTableModel`). A figure the read does not hold says so in words; a period before that was
- * not read is said once, over the table.
+ * not read is said once, over the table; a read again of the pairs that failed, in its heading row.
  *
  * Its frame is held to about the window's height and scrolls inside itself both ways: its heading
  * row stays at the frame's top edge, its total at the bottom edge and its names at its start,
@@ -215,13 +215,14 @@ defineExpose({ reveal })
   >
     <SpendingTableHead
       :by="by"
+      :cross="cross"
       :lines="lines"
       :measure="measure"
-      :split="Boolean(across)"
       :summary="summary"
       :title="model.title"
       :waiting="waiting"
       @download="download"
+      @reread="emit('reread')"
     />
     <FieldError
       v-if="notice"

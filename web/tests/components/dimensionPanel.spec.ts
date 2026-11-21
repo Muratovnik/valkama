@@ -8,6 +8,7 @@
  * the section's heading writes it into the address as a step of its own.
  */
 import type { VueWrapper } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
@@ -172,6 +173,29 @@ describe('the split of a section', () => {
     // The small charts read the same pairs, in the same order, each in its bar's hue.
     const charts = huesIn(page, '.spending-multiples .multiple', '.multiple-name', '[data-slot]')
     expect([...charts]).toEqual([...bars])
+  })
+
+  it('keeps its pairs in the bars and the table when a refresh cannot read them again', async () => {
+    let failing = false
+    stubAnalyticsReads((query) =>
+      failing && query.get('group_by') === 'model,role'
+        ? { status: 500 }
+        : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics({ routeState: { by: 'model', across: 'role' } })
+    const pairs = () => text(page, '.spending-table tbody th')
+    const shown = pairs()
+    expect(shown).toHaveLength(4)
+    expect(text(page, '.spending-bars .ranked-label')).toEqual(shown)
+
+    failing = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(pairs(), 'the table keeps its pairs').toEqual(shown)
+    expect(text(page, '.spending-bars .ranked-label'), 'and so do the bars').toEqual(shown)
+    expect(text(page, '.spending-table-head [role="status"]')).toEqual([
+      'Could not refresh · Retry',
+    ])
   })
 
   it('is chosen in the section’s heading, written into the address as a step, and taken out with none', async () => {

@@ -451,7 +451,7 @@ describe('the table of a section split by a second dimension', () => {
     expect(reading.get('.spending-download').attributes('disabled')).toBeDefined()
 
     // A failed read says so in the alert, and announces no wait.
-    const failed = crossedTable({ status: 'failed' })
+    const failed = crossedTable({ status: 'failed', usage: null })
     expect(failed.get('[role="alert"]').text()).toBe('The breakdown by model could not be loaded.')
     await failed.get('.spending-table-waiting button').trigger('click')
     expect(failed.emitted('reread')).toHaveLength(1)

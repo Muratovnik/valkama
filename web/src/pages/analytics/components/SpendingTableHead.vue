@@ -13,11 +13,18 @@
  * there is nothing to count, so choosing a measure or a split moves nothing under it.
  *
  * The title and the controls keep one line; only a narrow table lets them wrap.
+ *
+ * While a split's pairs stand (`cross`), a read again of them that fails keeps them and says so
+ * before the download, «Could not refresh · Retry», in room the controls keep for it while nothing
+ * failed (`RefreshFailed`'s `held`), as a value's panel says its own beside its actions: the pairs
+ * once gave their place to a line of words at the first refresh that failed.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
+import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { tableCounts } from '@/pages/analytics/composables/useTableModel.ts'
 import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 
@@ -28,20 +35,20 @@ import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   by: UsageDimension
+  /** The read of the split by a second dimension; `off` while the section is not split. */
+  cross: CrossRead
   /** The rows the table lists. */
   lines: readonly TableLine[]
   /** The measure the rows are counted in: a value with nothing there is said apart. */
   measure: Measure
-  /** Whether the rows are pairs, the section being split by a second dimension. */
-  split: boolean
   /** The whole account of the rows and their order, the hint of the words about them. */
   summary: string
   title: string
   /** A split is chosen and its read has not landed: nothing to count or download. */
   waiting: boolean
 }>()
-/** The download asked for. */
-const emit = defineEmits<{ download: [] }>()
+/** The download asked for; the split read again. */
+const emit = defineEmits<{ download: []; reread: [] }>()
 
 const { t } = useI18n()
 
@@ -52,7 +59,7 @@ const { t } = useI18n()
 const parts = computed(() => {
   if (props.waiting || !props.lines.length) return []
   const { now, elsewhere, before } = tableCounts(props.lines)
-  const what = props.split ? 'pairs' : `values.${props.by}`
+  const what = props.cross.status === 'off' ? `values.${props.by}` : 'pairs'
   return [
     t(`analytics.panel.table.counts.${what}`, { count: now }, now),
     elsewhere
@@ -71,6 +78,12 @@ const shownParts = computed(() =>
   parts.value.map((part, index, all) => (index < all.length - 1 ? `${part} · ` : part)),
 )
 
+/** Whether a read again of the pairs on show failed; null while no pairs stand. */
+const again = computed(() => {
+  const { cross } = props
+  return 'usage' in cross && cross.usage ? cross.status === 'failed' : null
+})
+
 /** Nothing to download: no value to list. */
 const nothing = computed(() => !props.lines.length)
 const nothingId = useId()
@@ -86,6 +99,12 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
       :title="title"
     />
     <div class="spending-table-controls">
+      <RefreshFailed
+        v-if="again !== null"
+        :failed="again"
+        held
+        @retry="emit('reread')"
+      />
       <span
         v-if="nothing"
         :id="nothingId"
