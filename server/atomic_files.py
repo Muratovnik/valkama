@@ -31,14 +31,18 @@ if TYPE_CHECKING:
 _PASSING_WINERRORS = frozenset({5, 32})
 # A reader in a tight loop holds the file most of the time, so the rename is tried
 # often rather than a few times: each try is cheap, and one in many lands.
-_ATTEMPTS = 200
 _WAIT_SECONDS = 0.01
+# A file being replaced is waited for about two seconds: a reader of it lets go
+# within that. A store or a release renamed into place, about one, so that a holder
+# that does not let go is refused promptly.
+_REPLACE_ATTEMPTS = 200
+_RENAME_ATTEMPTS = 100
 
 _FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
 
 
-def _when_free(move: Callable[[str, str], None], source: str, target: str) -> None:
-    for _ in range(_ATTEMPTS - 1):
+def _when_free(move: Callable[[str, str], None], source: str, target: str, attempts: int) -> None:
+    for _ in range(attempts - 1):
         try:
             move(source, target)
         except OSError as error:
@@ -53,13 +57,13 @@ def _when_free(move: Callable[[str, str], None], source: str, target: str) -> No
 def rename_when_free(source: str, target: str) -> None:
     """`os.rename`, waiting out a holder that lets go by itself; for a directory too."""
 
-    _when_free(os.rename, source, target)
+    _when_free(os.rename, source, target, _RENAME_ATTEMPTS)
 
 
 def replace_when_free(source: str, target: str) -> None:
     """`os.replace`, waiting out a reader that has the target open."""
 
-    _when_free(os.replace, source, target)
+    _when_free(os.replace, source, target, _REPLACE_ATTEMPTS)
 
 
 def write(
