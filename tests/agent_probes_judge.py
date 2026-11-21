@@ -1665,12 +1665,36 @@ def judge_session(
     return found
 
 
+def _check_cases_unchanged(run: Mapping[str, Any]) -> None:
+    """Refuse to judge a run on scenario files that changed after it ran.
+
+    `run.json` names the cases by path and records each file's digest; the path
+    names a directory its owner goes on editing. A file whose digest differs, or
+    that is gone, would judge the record against expectations the run never had.
+    A run recorded before the digests were kept is judged as before.
+    """
+
+    recorded = (run.get("text") or {}).get("cases")
+    if not recorded:
+        return
+    cases = Path(run["cases"])
+    changed = sorted(
+        name for name, digest in recorded.items() if probes._sha256(cases / name) != digest
+    )
+    if changed:
+        raise probes.ProbeError(
+            f"the scenarios in {cases} changed after the run: {', '.join(changed)};"
+            " judge a copy of the run whose run.json names the cases it ran with"
+        )
+
+
 def judge(out: Path) -> int:
     """Judge every session `run.json` names; 0 when every probe passed."""
 
     run = probes._read_json(out / "run.json")
     if not run:
         raise probes.ProbeError(f"{out} holds no run.json of a probe run")
+    _check_cases_unchanged(run)
     scenarios = {item.id: item for item in probes.load_cases(Path(run["cases"]), None)}
     sessions = []
     started = time.monotonic()

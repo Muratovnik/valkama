@@ -147,7 +147,7 @@ RUBRIC_KEYS = ("shows", "lines")
 #: What a reviewer's file may show: an item by a bound name, the answer, the reports.
 RUBRIC_SHOWS = re.compile(r"answer|subagent_reports|item:\{\{[^{}]+\}\}")
 CALL_KEYS = ("tool", "author", "session", "as", "args")
-TURN_KEYS = ("before", "prompt")
+TURN_KEYS = ("before", "during", "prompt")
 #: The sessions a setup call may run as: the runner's own, and a foreign one
 #: that stays alive for the whole session.
 SETUP_SESSIONS = ("setup", "other")
@@ -234,6 +234,8 @@ HANDSHAKE_PROTOCOL = "2025-06-18"
 
 #: How long one turn of a client may take, one MCP answer, and any other command.
 TURN_SECONDS = 1800.0
+#: How long a turn's `during` steps wait for its session to start again.
+DURING_SECONDS = 120.0
 ANSWER_SECONDS = 60.0
 COMMAND_SECONDS = 300.0
 _NO_WINDOW = processes.NO_WINDOW
@@ -359,6 +361,8 @@ def load_scenario(path: Path) -> Scenario:
         if not isinstance(found.get("prompt"), str):
             raise _refuse(path, f"turns[{index}] has no prompt")
         _check_calls(path, f"turns[{index}].before", found.get("before", []))
+        if _check_calls(path, f"turns[{index}].during", found.get("during", [])) and index == 0:
+            raise _refuse(path, "turns[0] has during steps: no session runs yet to act beside")
     expect = data["expect"]
     if not isinstance(expect, Mapping):
         raise _refuse(path, "expect is not an object of probes")
@@ -1552,6 +1556,19 @@ def _last_event(store_file: Path) -> int:
     return int(found[0])
 
 
+def _session_started(store_file: Path, after: int, session: str | None) -> int | None:
+    """The first session start of `session` the store holds after event `after`, if any."""
+
+    uri = f"{store_file.resolve().as_uri()}?mode=ro"
+    with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
+        found = conn.execute(
+            "SELECT MIN(id) FROM execution_events"
+            " WHERE id > ? AND kind = 'session_start' AND session_id = ?",
+            (after, session),
+        ).fetchone()
+    return None if found[0] is None else int(found[0])
+
+
 def foreign_transcripts(store_file: Path, after: int, home: Path) -> list[str]:
     """The sessions whose transcript a run's servers archived from outside the run's home.
 
@@ -1720,7 +1737,9 @@ class SessionRunner:
                 self._calls(turn.get("before") or ())
                 if self.record.failures:
                     return
-            if not self._turn(index, substitute(turn["prompt"], self.names)):
+            if not self._turn(
+                index, substitute(turn["prompt"], self.names), turn.get("during") or ()
+            ):
                 return
 
     def _role(self, name: str) -> str:
@@ -1848,7 +1867,8 @@ class SessionRunner:
             result = {"error": str(error)}
         _write_json(self.directory / "handshake.json", result)
 
-    def _turn(self, index: int, prompt: str) -> bool:
+    def _turn(self, index: int, prompt: str, during: Sequence[Mapping[str, Any]] = ()) -> bool:
+        mark = _last_event(self.store_file) if during else 0
         argv = client_argv(
             self.client, self.program, prompt, self.workspace, self.record.session_id, self.choice
         )
@@ -1877,6 +1897,9 @@ class SessionRunner:
             except OSError as error:
                 self.record.fail(f"turn {index}", f"{argv[0]} did not start: {error}")
                 return False
+            if during and not self._during(index, process, mark, during, turn):
+                processes.stop_process_tree(process)
+                return False
             try:
                 code = process.wait(timeout=TURN_SECONDS)
             except subprocess.TimeoutExpired:
@@ -1895,6 +1918,37 @@ class SessionRunner:
         if self.record.session_id is None:
             self.record.session_id = session_id(self.client, output)
         return True
+
+    def _during(
+        self,
+        index: int,
+        process: subprocess.Popen[bytes],
+        mark: int,
+        calls: Sequence[Mapping[str, Any]],
+        turn: dict[str, Any],
+    ) -> bool:
+        """Make a turn's `during` steps once its session has started again, while it runs.
+
+        A headless client ends its session with each turn and starts it again with
+        the next, and the server asks nothing of an ended session: a step made
+        between turns, such as cancelling work the session takes part in, finds
+        nobody to ask. The steps wait for the turn's session start in the store.
+        """
+
+        deadline = time.monotonic() + DURING_SECONDS
+        while time.monotonic() < deadline:
+            started = _session_started(self.store_file, mark, self.record.session_id)
+            if started is not None:
+                turn["during_after_event"] = started
+                self._calls(calls)
+                return not self.record.failures
+            if process.poll() is not None:
+                break
+            time.sleep(0.2)
+        self.record.fail(
+            f"turn {index}", "the session did not start again before its during steps could run"
+        )
+        return False
 
     def _check_transcripts(self) -> None:
         """The session is the environment's failure when a server read a user's transcript."""

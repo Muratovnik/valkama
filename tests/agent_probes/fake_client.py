@@ -8,7 +8,8 @@ as it would a real one. The prompt is a JSON object:
 
     {"skill": true, "calls": [{"tool": "claim_work_item", "args": {...}}],
      "files": {"app/NOTES.md": "text"}, "subagent": {"calls": [...], "report": "..."},
-     "subagents": [{"calls": [...], "report": "...", "background": true}], "answer": "..."}
+     "subagents": [{"calls": [...], "report": "...", "background": true}],
+     "wait_for_question": {"id": "MAIN-1", "seconds": 60}, "answer": "..."}
 
 Every key is optional. `skill` loads the Valkama skill first, as each client
 does: Claude Code by its Skill tool, Codex by reading the skill's file in a
@@ -40,6 +41,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import tomllib
 import uuid
 from pathlib import Path
@@ -190,6 +192,9 @@ def main(argv: list[str]) -> int:
     if script.get("skill") and mcp is not None:
         load_skill(client)
     turn = Turn(client, hooks, common, mcp)
+    wait = script.get("wait_for_question")
+    if wait and mcp is not None:
+        answer = f"{answer} ({'asked' if turn.wait_for_question(wait) else 'not asked'})"
     for call in script.get("calls") or () if mcp is not None else ():
         turn.call(call)
     for name, text in (script.get("files") or {}).items():
@@ -202,6 +207,9 @@ def main(argv: list[str]) -> int:
     if mcp is not None:
         mcp.close()
     run_hooks(client, hooks, "Stop", common, None)
+    # Claude Code under -p ends its session with each turn, as the real client does.
+    if client == "claude":
+        run_hooks(client, hooks, "SessionEnd", {**common, "reason": "other"}, None)
     if client == "claude":
         emit(
             {
@@ -262,6 +270,17 @@ class Turn:
     ) -> None:
         self.client, self.hooks, self.common, self.mcp = client, hooks, common, mcp
         self.session = str(common["session_id"])
+
+    def wait_for_question(self, wait: dict[str, Any]) -> bool:
+        """Read an item until it holds an open question, as a session still at work would."""
+
+        deadline = time.monotonic() + float(wait.get("seconds", 60))
+        while time.monotonic() < deadline:
+            result, error = self.mcp.call("get_work_item", {"id": wait["id"]}, {})
+            if not error and ((result or {}).get("questions") or {}).get("open"):
+                return True
+            time.sleep(0.2)
+        return False
 
     def call(
         self, call: dict[str, Any], *, parent: str | None = None, thread: str | None = None

@@ -767,6 +767,21 @@ class RunRecordTests(RunCase):
         )
         self.assertIn("the run was cut short: 1 session(s) recorded", output.getvalue())
 
+    def test_the_judge_refuses_scenarios_that_changed_after_the_run(self) -> None:
+        edited = Path(self.directory.name) / "edited"
+        shutil.copytree(self.out, edited)
+        (edited / agent_probes_judge.REPORT).unlink(missing_ok=True)
+        cases = Path(self.directory.name) / "edited-cases"
+        shutil.copytree(SAMPLES / "cases", cases)
+        run = json.loads((edited / "run.json").read_text(encoding="utf-8"))
+        run["cases"] = str(cases)
+        (edited / "run.json").write_text(json.dumps(run), encoding="utf-8")
+        changed = sorted(cases.glob("*.json"))[0]
+        changed.write_bytes(changed.read_bytes() + b"\n")
+        with self.assertRaisesRegex(agent_probes.ProbeError, changed.name):
+            agent_probes_judge.judge(edited)
+        self.assertFalse((edited / agent_probes_judge.REPORT).exists())
+
 
 class LiveFileTests(RunCase):
     """A session that writes one of the user's hook registrations fails the run's isolation.
@@ -905,6 +920,111 @@ class CancelListTests(RunCase):
                 (int(record.session["bindings"]["g"].split("-")[1]),),
             ).fetchall()
         self.assertEqual(["cancel", "consent"], sorted(purpose for (purpose,) in asked))
+
+
+class DuringTurnTests(RunCase):
+    """A step made while a turn runs reaches the session as a live one.
+
+    A headless client's session ends with each turn, and a step between turns
+    finds it ended: a cancel of the goal it works under asks it nothing. A
+    `during` step waits for the turn's session to start again and runs beside it.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.run_probes("--client", "claude")
+
+    @classmethod
+    def main(cls, *arguments: str) -> tuple[int, str]:
+        # The user's registration ends each session as Claude Code under -p does,
+        # so the profile carries a SessionEnd hook and the fake client runs it.
+        settings = cls.paths["claude"] / "settings.json"
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        (start,) = [g for g in data["hooks"]["SessionStart"] if "session-start" in json.dumps(g)]
+        data["hooks"]["SessionEnd"] = [
+            json.loads(json.dumps(start).replace("session-start", "session-end"))
+        ]
+        settings.write_text(json.dumps(data), encoding="utf-8")
+        return super().main(*arguments)
+
+    @classmethod
+    def cases(cls) -> Path:
+        cases = Path(cls.directory.name) / "cases"
+        cases.mkdir()
+        goal = {
+            "space": "ALPHA",
+            "kind": "goal",
+            "title": "Release 2.0",
+            "acceptance": "assignment",
+        }
+        task = {
+            "space": "ALPHA",
+            "kind": "task",
+            "title": "Rename the flag",
+            "parent": "{{g}}",
+            "acceptance": "assignment",
+        }
+        cancel = {
+            "id": "{{g}}",
+            "summary": {"done": "The release is dropped.", "next": "Nothing."},
+            "transition": {"state": "cancelled", "reason": "Dropped."},
+        }
+        claim = {
+            "calls": [{"tool": "claim_work_item", "args": {"id": "{{t}}"}}],
+            "answer": "Took it.",
+        }
+        wait = {"wait_for_question": {"id": "{{g}}", "seconds": 60}, "answer": "Waited."}
+        scenario = {
+            "id": "D1",
+            "clients": ["claude"],
+            "workspace": str(SAMPLES / "workspace"),
+            "overlay": str(SAMPLES / "overlay"),
+            "repos": ["app", "lib"],
+            "registry": {"space": "ALPHA", "projects": ["app", "lib"], "default": "app"},
+            "mcp": "tip",
+            "setup": [
+                {"tool": "create_work_item", "session": "setup", "as": "g", "args": goal},
+                {"tool": "create_work_item", "session": "setup", "as": "t", "args": task},
+            ],
+            "turns": [
+                {"prompt": json.dumps(claim)},
+                {
+                    "during": [
+                        {"tool": "apply_work_item_changes", "session": "other", "args": cancel}
+                    ],
+                    "prompt": json.dumps(wait),
+                },
+            ],
+            "expect": {
+                "start": [{"check": "session", "event": "session_start", "client": "{{client}}"}]
+            },
+            "rubric": {},
+        }
+        (cases / "during.json").write_text(json.dumps(scenario), encoding="utf-8")
+        return cases
+
+    def test_the_cancel_made_during_the_turn_asks_the_live_session_for_its_consent(self) -> None:
+        record = self.record("during", "claude")
+        self.assertEqual([], record.session["failures"])
+        self.assertIn("during_after_event", record.session["turns"][1])
+        with contextlib.closing(record.store()) as conn:
+            asked = conn.execute(
+                "SELECT r.addressee FROM work_item_requests r"
+                " JOIN work_items w ON w.work_item_id = r.work_item_id"
+                " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
+                " WHERE p.key = 'ALPHA' AND w.number = ? AND r.purpose = 'consent'",
+                (int(record.session["bindings"]["g"].split("-")[1]),),
+            ).fetchall()
+        # The setup's session that filed the work is asked too; the probe's own must be.
+        self.assertIn(record.session["session_id"], [addressee for (addressee,) in asked])
+
+    def test_a_first_turn_with_during_steps_is_refused(self) -> None:
+        scenario = json.loads((self.out.parent / "cases" / "during.json").read_text("utf-8"))
+        scenario["turns"] = [scenario["turns"][1]]
+        path = self.out.parent / "first-during.json"
+        path.write_text(json.dumps(scenario), encoding="utf-8")
+        with self.assertRaisesRegex(agent_probes.ProbeError, "turns\\[0\\] has during steps"):
+            agent_probes.load_scenario(path)
 
 
 class AncestorInstructionTests(unittest.TestCase):
