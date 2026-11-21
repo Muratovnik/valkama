@@ -12,7 +12,10 @@
  *
  * A refresh that fails leaves what is on show as it stood, an empty period too, and says so
  * (`refreshFailed`) until an answer replaces it; the next refresh — the bar's, its retry or the
- * live period's own — asks again. A new view whose read fails says it failed: the last view's
+ * live period's own — asks again. So does a refresh whose period before could not be read where
+ * the answer on show has one: shown, it would take the comparison away and with it every change,
+ * the table's columns of the period before, and push the words that say it was not read in over
+ * the figures, moving the panel under them. A new view whose read fails says it failed: the last view's
  * answer is not its own.
  *
  * Every read goes through the page's shared reads (`useSharedUsage`), as of the moment they keep
@@ -60,6 +63,10 @@ function spentNothing(total: Usage['total']) {
  */
 const nothingToShow = (usage: Usage) =>
   spentNothing(usage.total) && usage.comparison !== null && spentNothing(usage.comparison.total)
+
+/** Whether `usage`, shown in place of `kept`, would take away the period before `kept` holds. */
+const losesComparison = (kept: PlatformUiState<Usage>, usage: Usage) =>
+  'payload' in kept && kept.payload.comparison !== null && usage.comparison === null
 
 const ready = (payload: Usage): PlatformUiState<Usage> => ({
   interface_version: 'valkama-ui-state',
@@ -287,6 +294,10 @@ export function useUsageRead(options: {
       return
     }
     if (signal.aborted) return
+    if (kept && losesComparison(kept, usage)) {
+      fail(kept)
+      return
+    }
     options.places.take([by], usage, askedWith)
     const answer = {
       at,
