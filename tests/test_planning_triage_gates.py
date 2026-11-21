@@ -267,7 +267,9 @@ class TaskInGoalTests(SettingHarness):
         self.at(participation.MANUAL)
         answer = self.move(kept, "ready")
         action = self.kept_for_the_owner(kept, answer)
-        self.assertEqual(("accept", {"parent": self.id(self.goal)}), (action.kind, action.params))
+        self.assertEqual(
+            ("accept", {"parent": self.item_id(self.goal)}), (action.kind, action.params)
+        )
         self.assertEqual([answer["waits_for_owner"]["question"]], self.owners_list())
         self.assertEqual([("task_in_goal", task, self.accepted(task))], self.decided())
 
@@ -288,7 +290,7 @@ class TaskInGoalTests(SettingHarness):
         self.assertEqual(
             (
                 "transition",
-                {"parent": self.id(self.goal), "state": done, "reason": REASON},
+                {"parent": self.item_id(self.goal), "state": done, "reason": REASON},
             ),
             (action.kind, action.params),
         )
@@ -322,13 +324,16 @@ class TaskInGoalTests(SettingHarness):
         self.assertEqual(("review", "inherited"), self.where(task))
         review = self.card(task)["state"]["key"]
         self.assertEqual(
-            ("transition", {"parent": self.id(self.goal), "state": review, "to_check": TO_CHECK}),
+            (
+                "transition",
+                {"parent": self.item_id(self.goal), "state": review, "to_check": TO_CHECK},
+            ),
             (action.kind, action.params),
         )
         # The move into review asks what the agent asked checked.
         [asked] = self.conn.execute(
             "SELECT prompt FROM work_item_requests WHERE work_item_id = ? AND purpose = 'review'",
-            (self.id(task),),
+            (self.item_id(task),),
         ).fetchall()
         self.assertIn(TO_CHECK, str(asked["prompt"]))
 
