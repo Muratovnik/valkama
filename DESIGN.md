@@ -2947,7 +2947,7 @@ while both fit there, and on the next line together where they do not, the name 
 as two items of the heading's row, a phone's wrapped «Name» alone, 40px under the menu at the
 name's end.
 What stands now leads with one line, the share as the window's figure and its state beside it,
-«41% used · up to date», «13% used · no data for 5 h», over its bar, its share solid and its forecast a
+«41% used · up to date», «13% used · reading 5 h ago», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the
 name the step line's legend gives its dashed line, its words starting where the lines under it do and
 nothing of it in the card's inset — the five hours a point, lasting to the reset with the share spent by
@@ -3027,8 +3027,8 @@ window's reset, under the moments they stand at; it marks now while the window r
 «now» and at its forecast past its readings, and a frame dragged along it narrows that line alone,
 «Whole span» taking it back. Its words for a screen reader end with the windows before it, «Before
 it: Oct 10, 14:30 – Oct 17, 14:30, 27%; …», and its table holds their readings and a row for each
-reset between them. An account no source read says so and draws no window; a silent window is as solid as a fresh one, says how long it
-has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
+reset between them. An account no source read says so and draws no window; a silent window is as solid as a fresh one, says how old its
+latest reading is and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
 empty track and says «0% used · up to date». A window of money past a limit is a line of its name and
 its state, its age and its source in the line's hint as a window of a share keeps them in its
 bar's and in words as a table, with no figure. No share is added to another, of two windows or

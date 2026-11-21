@@ -7,7 +7,7 @@
  * stood alone, far from the name of what it breaks down.
  *
  * What stands now leads with one line, the share spent as the window's figure and its state in
- * words beside it, «75% used · no data for 3 d», over the bar with its pace tick (`WindowBar`), then
+ * words beside it, «75% used · reading 3 d ago», over the bar with its pace tick (`WindowBar`), then
  * the forecast in the text's ink and when the window resets, in absolute and relative time,
  * quieter. The bar draws the forecast as a hatched tail past the share spent, and the forecast's
  * line, right under it, leads with «Forecast ·», as the step line's legend names its corridor: the
@@ -26,7 +26,7 @@
  * forecasts a range, said never past 100 % (`useQuotaWords`); both are drawn from one mapping
  * (`forecastCourses`). A window too new for a forecast says so in the quiet ink and draws no
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
- * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
+ * old: it says how old its latest reading is, «reading 3 d ago», and its hint when that reading last changed; a fresh 0 %
  * is a bar with no fill that says «0% used» and «up to date». The bar and the figures over it are
  * the current window's; the step line under them is decided for the whole section (`line`,
  * `sectionLines`): where the page's period starts no further back from now than the window lasts,

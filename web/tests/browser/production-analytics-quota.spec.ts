@@ -120,7 +120,8 @@ for (const colorScheme of ['light', 'dark'] as const)
       // The five hours run out before their reset, so the tile says when in place of its state.
       await expect(entry(page, 'quota_five_hour')).toContainText('runs out at 15:10')
       await expect(entry(page, 'quota_week')).toContainText('88%')
-      await expect(entry(page, 'quota_week')).toContainText('no data for')
+      await expect(entry(page, 'quota_week')).toContainText(/reading .+ ago/u)
+      await expect(entry(page, 'quota_week')).not.toContainText('no data')
       await expectNoSilentClipping(page, `rail at ${width}px`, '.analytics-rail')
       // The pointer over the quota's tiles moves no tile.
       const rail = await boxes(page)
