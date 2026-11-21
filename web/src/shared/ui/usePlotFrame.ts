@@ -110,18 +110,42 @@ export function usePlotFrame(
     return Math.min(Math.max(room - after, 0), room)
   }
 
+  /**
+   * Where the frame's own last scroll left it, until the scroll event that scroll causes arrives.
+   * The browser sends that event a frame later, after a layout that may have moved the running
+   * period's place: a frame laid out a few pixels narrower once the words beside its chart were,
+   * judged its own scroll against the new place, took it for the reader's and stopped following.
+   */
+  let ownScroll: number | null = null
+
+  /** Scrolls the frame to `left` on the frame's own account, never the reader's. */
+  function scrollFrame(box: HTMLElement, left: number) {
+    const from = box.scrollLeft
+    box.scrollLeft = left
+    if (box.scrollLeft !== from) ownScroll = box.scrollLeft
+  }
+
+  /** Whether the frame stands where its own last scroll left it; asked once per scroll event. */
+  function scrolledByFrame(box: HTMLElement) {
+    const own = ownScroll !== null && Math.abs(box.scrollLeft - ownScroll) <= ROUNDING
+    ownScroll = null
+    return own
+  }
+
   const toRunning = () => {
     const place = runningPlace()
-    if (frame.value && place !== null) frame.value.scrollLeft = place
+    if (frame.value && place !== null) scrollFrame(frame.value, place)
   }
 
   useEventListener(
     frame,
     'scroll',
     () => {
-      const place = runningPlace()
-      if (frame.value && openedLive)
-        following = place !== null && Math.abs(frame.value.scrollLeft - place) <= ROUNDING
+      const box = frame.value
+      if (box && !scrolledByFrame(box) && openedLive) {
+        const place = runningPlace()
+        following = place !== null && Math.abs(box.scrollLeft - place) <= ROUNDING
+      }
       measure()
     },
     { passive: true },
@@ -153,7 +177,7 @@ export function usePlotFrame(
     const slot = anchor ? slotOf(anchor.key) : undefined
     if (!box || !slot || !anchor) return
     const left = slot.getBoundingClientRect().left - box.getBoundingClientRect().left
-    box.scrollLeft += left - anchor.left
+    scrollFrame(box, box.scrollLeft + left - anchor.left)
   }
 
   watch(
@@ -166,7 +190,7 @@ export function usePlotFrame(
         if (live && movedOn(keys)) {
           if (!following) holdPlace()
         } else {
-          frame.value.scrollLeft = 0
+          scrollFrame(frame.value, 0)
           openedLive = live
           following = live
         }
