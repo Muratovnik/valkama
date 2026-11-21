@@ -5,11 +5,15 @@
  * answering either; a step line finds a place before a reading; a mark's hint stands at the mark;
  * only a table or a row of like items scrolls sideways, by a reachable amount, and never the page
  * or because of content out of flow; a forbidden text counts where the product writes it, not
- * where a name of the data shown quotes it. A sweep whose rules pass a defect closes no remark.
+ * where a name of the data shown quotes it. Its misses are counted by the measure each view was
+ * opened with too, and the measures it may open with are the page's. A sweep whose rules pass a
+ * defect closes no remark.
  */
 import assert from 'node:assert/strict'
 
 import { describe, test } from 'vitest'
+
+import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 
 import {
   answeringMarks,
@@ -25,6 +29,7 @@ import {
   scrollMiss,
 } from './sweep/sweepRules.ts'
 import type { Answer, Box, ScrollReading } from './sweep/sweepRules.ts'
+import { MEASURES as SWEPT_MEASURES } from './sweep/sweepStates.ts'
 import { summarize } from './sweep/sweepSummary.ts'
 import type { Miss } from './sweep/sweepSummary.ts'
 
@@ -48,13 +53,18 @@ const frame = (more: Partial<ScrollReading>): ScrollReading => ({
 })
 
 /** A sliver of `path` at `width` and `period`, owned by `owner`. */
-const miss = (width: number, period: string, path: string, owner = 'ChartTable'): Miss => ({
+const miss = (
+  width: number,
+  period: string,
+  path: string,
+  { owner = 'ChartTable', measure = '' } = {},
+): Miss => ({
   class: 'overflow',
   rule: 'sliver',
   owner,
   path,
   detail: {},
-  state: { width, period, section: 'one', view: 'opening', panel: false },
+  state: { width, period, section: 'one', measure, view: 'opening', panel: false },
 })
 
 /** A hint 6px right of the box mark at 100..140, saying `says`, painting `painted`. */
@@ -393,7 +403,7 @@ test('misses are grouped by class, rule and owner, counted by width, period and 
     miss(1280, 'week', 'a'),
     miss(1280, 'today', 'a'),
     miss(390, 'week', 'b'),
-    miss(390, 'week', 'c', 'Other'),
+    miss(390, 'week', 'c', { owner: 'Other' }),
   ])
   assert.equal(summary.total, 4)
   assert.deepEqual(summary.byClass, { overflow: 4 })
@@ -404,4 +414,21 @@ test('misses are grouped by class, rule and owner, counted by width, period and 
   assert.equal(table.paths, 2)
   assert.deepEqual(table.byWidth, { 1280: 2, 390: 1 })
   assert.deepEqual(table.byPeriod, { week: 2, today: 1 })
+})
+
+test('misses are counted by the measure their view was opened with, the opening one apart', () => {
+  const summary = summarize([
+    miss(1280, 'week', 'a', { measure: 'cost' }),
+    miss(1280, 'week', 'b', { measure: 'cost' }),
+    miss(1024, 'week', 'a', { measure: 'tokens' }),
+    miss(1024, 'week', 'a'),
+  ])
+  const [table] = summary.groups
+  assert.equal(summary.groups.length, 1)
+  assert.deepEqual(table.byMeasure, { cost: 2, tokens: 1, opening: 1 })
+  assert.equal(table.examples[0]?.state, '1280 one week cost opening')
+})
+
+test('the sweep opens views with the measures the page has, every one of them', () => {
+  assert.deepEqual([...SWEPT_MEASURES].sort(), [...MEASURES].sort())
 })

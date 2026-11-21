@@ -6,11 +6,15 @@
  * a name of the data shown quotes it. It walks every section the rail
  * offers, every period the bar offers, every view each chart's switch offers and the value panel
  * opened from a mark of each section, at each width, and writes every miss with where it stood.
+ * It walks the measure the page opens on; `--measures time,tokens,cost` walks each one named
+ * instead, since a column a measure adds or a figure it words otherwise changes what a table
+ * holds and how wide it is.
  *
  *   python tests/isolated.py serve --out tmp/<name>/stand --store-copy
  *   cd web
  *   node tests/sweep/analyticsSweep.ts --url http://127.0.0.1:<port>/ --out ../tmp/<name>/sweep \
  *     --forbid "меньше минуты" [--widths 1440,390] [--sections quota_week] [--periods week]
+ *     [--measures time,tokens,cost]
  *   cd ..
  *   python tests/isolated.py stop --out tmp/<name>/stand
  *
@@ -31,7 +35,7 @@ import type { Browser, Page } from '@playwright/test'
 import { installHelpers, readForbidden, readOverflow, watchNames } from './sweepPage.ts'
 import { rest, sweepReach } from './sweepReach.ts'
 import { occurrences, panelNote, scrollMiss } from './sweepRules.ts'
-import { chartViews, chooseView, discover, openPanel, openView } from './sweepStates.ts'
+import { chartViews, chooseView, discover, MEASURES, openPanel, openView } from './sweepStates.ts'
 import type { PeriodChoice } from './sweepStates.ts'
 import { summarize } from './sweepSummary.ts'
 import type { Miss, StateName } from './sweepSummary.ts'
@@ -40,6 +44,7 @@ const { values } = parseArgs({
   options: {
     forbid: { type: 'string', multiple: true, default: [] },
     marks: { type: 'string', default: '6' },
+    measures: { type: 'string' },
     out: { type: 'string' },
     periods: { type: 'string' },
     sections: { type: 'string' },
@@ -77,6 +82,10 @@ const base = values.url
 const forbid = values.forbid
 const perSort = Number(values.marks)
 const widths = (list(values.widths) ?? []).map(Number)
+/** The measures each view is opened with; the empty one is the measure the page opens on. */
+const measures = list(values.measures) ?? ['']
+const unknown = measures.filter((one) => one && !MEASURES.includes(one))
+if (unknown.length) refuse(`--measures names no measure of the page: ${unknown.join(', ')}`)
 
 /** What one state of the page gave: its misses and how many points the pointer stood on. */
 interface Measured {
@@ -218,7 +227,10 @@ async function walkPeriod(
   return results
 }
 
-/** Walks one section at one width: every period, every view of every chart, and the panel. */
+/**
+ * Walks one section at one width: every period under each measure asked for, every view of every
+ * chart, and the panel.
+ */
 async function walkSection(
   browser: Browser,
   width: number,
@@ -233,20 +245,24 @@ async function walkSection(
   const page = await context.newPage()
   const results: Measured[] = []
   const notes: string[] = []
-  for (const period of periods) {
-    const state = (name: string, panel = false): StateName => ({
-      width,
-      section,
-      period: period.period,
-      view: name,
-      panel,
-    })
-    try {
-      results.push(...(await walkPeriod(page, { ...period, by: section }, state, { notes, names })))
-    } catch (error) {
-      notes.push(`failed: ${width} ${section} ${period.period}: ${String(error).slice(0, 300)}`)
+  for (const measure of measures)
+    for (const period of periods) {
+      const state = (name: string, panel = false): StateName => ({
+        width,
+        section,
+        period: period.period,
+        measure,
+        view: name,
+        panel,
+      })
+      const view = { ...period, by: section, ...(measure ? { measure } : {}) }
+      try {
+        results.push(...(await walkPeriod(page, view, state, { notes, names })))
+      } catch (error) {
+        const at = [width, section, period.period, measure].filter(Boolean).join(' ')
+        notes.push(`failed: ${at}: ${String(error).slice(0, 300)}`)
+      }
     }
-  }
   const unread = watched.unread()
   if (unread)
     notes.push(`${width} ${section}: ${unread} API answers not read in time, their names unknown`)
@@ -300,6 +316,7 @@ async function main() {
     widths,
     sections,
     periods,
+    measures,
     forbid,
     perSort,
     states,

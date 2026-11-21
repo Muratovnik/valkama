@@ -11,6 +11,13 @@ import { markPressables, pressPoint } from './sweepPage.ts'
 /** A view of the page, as its address holds it. */
 export type ViewState = Record<string, string>
 
+/**
+ * The measures a view's address may name, as the page's own list has them (`MEASURES` of
+ * `analyticsAddress.ts`, which the sweep's unit test holds this to): the sweep runs under Node,
+ * which does not resolve the page's `@/` imports.
+ */
+export const MEASURES: readonly string[] = ['time', 'tokens', 'cost']
+
 /** A period the page offers, as the address holds it once it is chosen. */
 export type PeriodChoice = Partial<Record<'from' | 'to', string>> & { period: string }
 

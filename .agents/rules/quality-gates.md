@@ -74,7 +74,12 @@ python tests/isolated.py stop --out tmp/<name>/stand
 ```
 
 `--widths`, `--sections` and `--periods` narrow it; `--marks` sets how many
-marks of each sort it samples. It writes `sweep.json`, every miss with its
+marks of each sort it samples. It walks the measure the page opens on unless
+`--measures time,tokens,cost` names the ones to open each view with: a column
+a measure adds and the words it gives a figure change what a table holds, so a
+table that fits under the time may scroll a few pixels under the cost, and a
+sweep of the default measure never sees it. Its summary counts each group by
+measure too. It writes `sweep.json`, every miss with its
 state, selector path, owner, offset and what was found instead, prints a
 summary by class and owner, and exits 1 when anything missed. A hover or
 overflow remark is closed by its group's number falling on a store copy, not
