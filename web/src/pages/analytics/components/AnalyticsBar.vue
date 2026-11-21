@@ -38,11 +38,12 @@
  * height nor its controls.
  *
  * On a phone the bar is three rows of one height whatever period is chosen: the periods in one row
- * that scrolls sideways, the chosen one scrolled into view, with the freshness at its end; under
- * it the filter, a failure and the read again, by its icon; and the room of the reader's own days.
+ * that scrolls sideways (`ChoiceStrip`), the chosen one in view and a cut end faded, with the
+ * freshness at its end; under it the filter, a failure and the read again, by its icon; and the
+ * room of the reader's own days.
  * With a filter set, the chips' row stands right under the field's, before the room of the days.
  */
-import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsChipRow from '@/pages/analytics/components/AnalyticsChipRow.vue'
@@ -60,6 +61,7 @@ import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { PERIODS } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView, PeriodPreset } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
+import ChoiceStrip from '@/shared/ui/ChoiceStrip.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -105,16 +107,10 @@ function choosePeriod(period: PeriodPreset) {
 }
 
 /**
- * The periods' row, which scrolls sideways on a phone, and keeps the chosen one in view: when it is
- * chosen, and once the line is fitted, which changes the row's room.
+ * The place of the chosen period in the periods' row, which scrolls sideways on a phone as a
+ * `ChoiceStrip`: the strip fades the end a period is cut at and keeps the chosen one in view.
  */
-const periods = ref<{ $el: HTMLElement } | null>(null)
-function showChosen() {
-  periods.value?.$el
-    .querySelector<HTMLElement>('.active')
-    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-}
-onMounted(showChosen)
+const chosenPeriod = computed(() => PERIODS.indexOf(props.view.period))
 
 /** The filter on the shared field and chips (`useAnalyticsFilter`), which the bar places. */
 const filter = useAnalyticsFilter({
@@ -142,7 +138,6 @@ const { bare, brief, held, phone, short, spanCut, tight, twoRows } = useBarForm(
   holds: [() => props.live, () => [props.view.period, props.view.from, props.view.to], locale],
 })
 const { failed } = usePageStanding()
-watch([() => props.view.period, held], showChosen, { flush: 'post' })
 
 /** Whether a read failed: a read again, its figures kept, or the view's, with none to show. */
 const readsFailed = computed(() => failed.value || props.readFailed)
@@ -182,15 +177,18 @@ const freshHint = computed(() =>
       ref="line"
       class="analytics-bar-line"
     >
-      <SegmentedControl
-        ref="periods"
+      <ChoiceStrip
         class="analytics-period"
-        size="compact"
-        :label="t('analytics.period.label')"
-        :model-value="view.period"
-        :options="periodOptions"
-        @update:model-value="choosePeriod"
-      />
+        :chosen="chosenPeriod"
+      >
+        <SegmentedControl
+          size="compact"
+          :label="t('analytics.period.label')"
+          :model-value="view.period"
+          :options="periodOptions"
+          @update:model-value="choosePeriod"
+        />
+      </ChoiceStrip>
       <AnalyticsOwnPeriod
         v-if="view.period === 'custom'"
         class="analytics-bar-own"
@@ -297,9 +295,12 @@ const freshHint = computed(() =>
   min-width: 0;
 }
 
+/* The periods' strip (`ChoiceStrip`), as wide as its row: a bar too narrow for it scrolls it, its
+   cut ends faded, rather than wrapping it. A flex box, so it is as tall as the row it holds and
+   not as the line a row of its own would stand on. */
 .analytics-period {
+  display: flex;
   flex: none;
-  flex-wrap: wrap;
   max-width: 100%;
 }
 
@@ -410,9 +411,7 @@ const freshHint = computed(() =>
   }
 
   .analytics-period {
-    flex-wrap: nowrap;
     grid-area: 1 / 1 / 2 / 3;
-    overflow-x: auto;
     overscroll-behavior-inline: contain;
     scrollbar-width: none;
 

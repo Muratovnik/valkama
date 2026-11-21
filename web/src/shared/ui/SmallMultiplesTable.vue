@@ -19,6 +19,7 @@ import type {
   SmallMultiple,
 } from '@/shared/ui/multiplesGeometry.ts'
 import PairName from '@/shared/ui/PairName.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   /** What the table shows, as its caption. */
@@ -102,26 +103,34 @@ const rows = computed(() => {
           scope="row"
           class="chart-cell chart-name"
         >
-          <component
-            :is="markTag(row, 'span')"
-            v-if="markActs(row)"
-            class="chart-press"
-            :type="markType(row)"
-            :href="row.href"
-            :aria-description="row.action"
-            @click="(event: MouseEvent) => press(row, event)"
-            @auxclick="(event: MouseEvent) => pressAside(row, event)"
+          <span
+            v-tooltip.clipped="row.label"
+            class="chart-name-line"
           >
-            <PairName
-              :name="row.label"
-              :runs="row.labelRuns"
-            />
-          </component>
-          <PairName
-            v-else
-            :name="row.label"
-            :runs="row.labelRuns"
-          />
+            <component
+              :is="markTag(row, 'span')"
+              v-if="markActs(row)"
+              class="chart-press"
+              :type="markType(row)"
+              :href="row.href"
+              :aria-description="row.action"
+              @click="(event: MouseEvent) => press(row, event)"
+              @auxclick="(event: MouseEvent) => pressAside(row, event)"
+            >
+              <span class="two-lines"
+                ><PairName
+                  :name="row.label"
+                  :runs="row.labelRuns"
+              /></span>
+            </component>
+            <span
+              v-else
+              class="two-lines"
+              ><PairName
+                :name="row.label"
+                :runs="row.labelRuns"
+            /></span>
+          </span>
         </th>
         <td
           v-for="cell in row.cells"

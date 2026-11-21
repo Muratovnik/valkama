@@ -1059,9 +1059,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls sideways in its own frame
-  (`ChartTable`, `keyScroll`) rather than widening the page. A chart opens on the drawing it
-  opens on at 1440 at every width, a phone's too, and its table is a press away: in a panel
-  of 294 px at 390 the ring, the ranked bars (each name on its own line over its bar), the days
+  (`ChartTable`, `keyScroll`) rather than widening the page. A twin's name, a row's or a series'
+  over its figures, takes two lines at most, then an ellipsis, whole in its hint, as the side
+  panel's narrow names do (`.two-lines`), and a detail a line of its own under it: unbounded, a
+  task's name in the ranked twin at 390 stood on fourteen lines and its row 234 px tall, and the
+  days' twin by task stood its heading row 336 px tall over seventeen lines of a name. A chart
+  opens on the drawing it opens on at 1440 at every width, a phone's too, and its table is a
+  press away: in a panel of 294 px at 390 the ring, the ranked bars (each name on its own line
+  over its bar), the days
   (scrolling in their frame, a day 24 px at least) and the quota's windows each stand whole, with
   no word cut but by a designed ellipsis. A panel under 560 px once opened every chart as its
   table, though none needed it. They are boxes of HTML on the tokens, not a chart library, which the
@@ -1452,7 +1457,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   arrows show a panel as they reach its tab where it shows at once, and only
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
-  same control built again, and `check:ui-system` rejects one.
+  same control built again, and `check:ui-system` rejects one. A row that
+  scrolls sideways where its room is narrower than it — a card's sections, a
+  phone's periods — scrolls in a `ChoiceStrip`, which fades the end a choice is
+  cut at and keeps the chosen one, and the one the keyboard reaches, clear of
+  that fade. The periods had their own strip, which faded nothing and kept the
+  chosen by the browser's nearest edge, so a phone's row began at a sliver of
+  «Сейчас» and ended at one of «4 недели».
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
@@ -2687,9 +2698,10 @@ freshness with the refresh at its end. One row cannot hold them there: at 1024px
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
 panel moved down 44px when a span of days was chosen. On a phone the bar is three rows of one
-height whatever period is chosen: the periods, scrolling sideways, with the freshness at their
-end; the filter, a failure and the refresh; and the room of the reader's own days, which took a
-row of their own and moved the panel 44px when chosen. A refresh that fails keeps what is shown
+height whatever period is chosen: the periods, scrolling sideways with the chosen one in view
+and a cut end faded (`ChoiceStrip`), with the freshness at their end; the filter, a failure
+and the refresh; and the room of the reader's own days, which took a row of their own and moved
+the panel 44px when chosen. A refresh that fails keeps what is shown
 and says so in words before the age at every width, «Could not refresh» with a retry: given up
 on a short line, its words had left a red disc with no hint. The retry is reached at every width
 too: where the line has no room for «· Retry», the words themselves are the retry, named

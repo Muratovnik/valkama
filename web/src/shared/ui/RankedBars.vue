@@ -175,7 +175,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
               class="ranked-label"
               :class="{
                 'one-line': !freeText,
-                'ranked-clamp': freeText && !row.labelEnd,
+                'two-lines': freeText && !row.labelEnd,
                 'ranked-quiet': row.quiet,
               }"
               ><PairName
@@ -365,14 +365,6 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
     margin-block-start: 0;
     border-block-start: 1px solid var(--color-rule);
   }
-}
-
-.ranked-clamp {
-  display: -webkit-box;
-  overflow-wrap: break-word;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 /* Dense, at any width: the name and the value on one line, the bar a thin line under both. Each

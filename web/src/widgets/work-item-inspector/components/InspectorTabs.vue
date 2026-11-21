@@ -5,34 +5,17 @@
  * It stays pinned at every position, so it holds to one row: two rows of sections were
  * a third of what a phone kept pinned. Where one row cannot hold them it scrolls inside
  * itself, over the thin bar every scroller here has, because a cut that fell between
- * two sections read as the whole strip. The one shown is brought into the row whenever
- * it changes, and so is each one the keyboard reaches, which the browser leaves where
- * it is while a sliver of it shows, and the one a press focused once the press is over.
+ * two sections read as the whole strip. The strip is a `ChoiceStrip`: it fades the end a
+ * section is cut at, and brings the one shown into the row whenever it changes, each one
+ * the keyboard reaches, and the one a press focused once the press is over.
  *
  * They are tabs over the card's body, and every section shows the moment it is chosen —
  * what one reads is read with the card — so the arrows show a section as they reach it.
- *
- * A strip cut by its width fades out at each end where a section is cut, and at no other.
- * The bar alone did not say so: an overlay scrollbar shows only while the strip moves, and
- * a phone's row ended at a cut word with nothing after it. The fade is keyed to that cut,
- * never to how far the strip has scrolled: a strip moved two pixels had faded the start
- * over a whole first section, since the row's own inset hides nothing.
- *
- * A section already in sight and clear of the fade stays where it is when it is picked;
- * one that is not is brought in as far as the fade is wide, so its words stand clear of it.
- * A browser asked to keep a fade's width clear of every pick moved the strip by the two
- * pixels a section already in sight stood inside that width.
- *
- * The strip is what scrolls, and a mask on it takes its bar too: drawn over the whole strip,
- * the fade ate the thumb wherever it ran under a cut end. So the fade stops over the bar's
- * strip, as tall as the strip draws its bar, read off the strip as it stands (`bar`): none
- * where the bar lies over the sections and draws no room of its own, as a phone's does.
  */
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-
-import { useEventListener, useResizeObserver } from '@vueuse/core'
+import { computed } from 'vue'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+import ChoiceStrip from '@/shared/ui/ChoiceStrip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import type { TabIds } from '@/shared/ui/tabIds.ts'
 
@@ -43,124 +26,14 @@ const props = defineProps<{
   tabs: TabIds
 }>()
 const shown = defineModel<string>({ required: true })
-const strip = ref<HTMLElement | null>(null)
 
-/** A zoomed page scrolls by fractions and never quite reaches its end: a pixel is no cut. */
-const SLACK = 1
-
-const sectionsIn = (node: HTMLElement) => [...node.querySelectorAll('button')]
-
-/** Whether a section is cut at either end of the row, read off the strip as it stands. */
-const more = reactive({ before: false, after: false })
-/** How tall the strip draws its bar, in pixels: the room it takes under the sections. */
-const bar = ref(0)
-function measure() {
-  const node = strip.value
-  if (!node) return
-  bar.value = node.offsetHeight - node.clientHeight
-  const row = node.getBoundingClientRect()
-  const sections = sectionsIn(node)
-  const first = sections[0]?.getBoundingClientRect()
-  const last = sections.at(-1)?.getBoundingClientRect()
-  more.before = first !== undefined && row.left - first.left > SLACK
-  more.after = last !== undefined && last.right - row.right > SLACK
-}
-// The strip changes width with the card, and its row with the sections it holds: the one
-// shown widens as it takes the heavier weight, after the pick that brought it in.
-useResizeObserver(
-  computed(() => [strip.value, strip.value?.firstElementChild as HTMLElement | null]),
-  () => {
-    measure()
-    revealShown()
-  },
-)
-
-/** Where a section's words are drawn: the section's own box holds its padding too. */
-function wordsOf(section: HTMLElement): DOMRect {
-  const range = document.createRange()
-  range.selectNodeContents(section)
-  return range.getBoundingClientRect()
-}
-
-/**
- * Into the row, and only when it is not in sight already: the strip is the only thing that
- * scrolls for it. The first and the last section go to the row's ends, which no fade covers.
- */
-function reveal(target: Element | null | undefined) {
-  const node = strip.value
-  if (!node || !(target instanceof HTMLElement)) return
-  measure()
-  const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade'))
-  const row = node.getBoundingClientRect()
-  const words = wordsOf(target)
-  const start = row.left + (more.before ? fade : 0)
-  const end = row.right - (more.after ? fade : 0)
-  if (words.left >= start - SLACK && words.right <= end + SLACK) return
-  const sections = sectionsIn(node)
-  const box = target.getBoundingClientRect()
-  if (words.left < start) {
-    node.scrollLeft = target === sections[0] ? 0 : node.scrollLeft + box.left - row.left - fade
-  } else {
-    node.scrollLeft =
-      target === sections.at(-1) ? node.scrollWidth : node.scrollLeft + box.right - row.right + fade
-  }
-}
-
-function revealShown() {
-  const index = props.sections.findIndex((section) => section.value === shown.value)
-  reveal(strip.value?.querySelectorAll('button')[index])
-}
-
-onMounted(revealShown)
-// Once the whole flush is over, and not in its post queue. Overview is `v-show`, which
-// shows it from that same queue and behind this watcher, so a section leaving had left
-// nothing to measure: asking for layout there collapsed the scroller to an empty body,
-// the browser clamped it to 0, and the strip left from under the pointer that pressed it.
-watch(shown, () => nextTick(revealShown))
-
-/**
- * Focus brought by a press is not brought in as it lands; any other is. A press focuses a
- * section on its way down and chooses it on its way up, and a strip moved in between left
- * another section, or none, under the pointer, so the press chose nothing; a finger's tap,
- * whose press the browser sends after the finger lifts, lost its first try the same way.
- *
- * The section a press focused is brought in once the press is over, wherever it was let go,
- * in the task after the click it makes. Its being shown could not say so: a press on the
- * section already shown changes nothing, and one let go off the row chooses nothing, and
- * either left a focused section under the fade.
- */
-let pressing = false
-useEventListener(strip, 'mousedown', () => {
-  pressing = true
-})
-useEventListener(
-  window,
-  'mouseup',
-  () => {
-    if (pressing) setTimeout(pressed)
-  },
-  { capture: true },
-)
-
-function pressed() {
-  pressing = false
-  const section = document.activeElement
-  if (strip.value?.contains(section)) reveal(section)
-}
-
-function focused(event: FocusEvent) {
-  if (!pressing) reveal(event.target as Element | null)
-}
+const chosen = computed(() => props.sections.findIndex((section) => section.value === shown.value))
 </script>
 
 <template>
-  <div
-    ref="strip"
+  <ChoiceStrip
     class="inspector-tabs"
-    :class="{ 'more-before': more.before, 'more-after': more.after }"
-    :style="{ '--size-tabs-bar': `${bar}px` }"
-    @focusin="focused"
-    @scroll="measure"
+    :chosen="chosen"
   >
     <SegmentedControl
       v-model="shown"
@@ -169,44 +42,11 @@ function focused(event: FocusEvent) {
       :options="sections"
       :tabs="tabs"
     />
-  </div>
+  </ChoiceStrip>
 </template>
 
 <style scoped>
 .inspector-tabs {
-  --size-tabs-fade: var(--space-8);
-  --size-tabs-bar: 0px;
-  --tabs-fade-start: black;
-  --tabs-fade-end: black;
-
   width: 100%;
-  overflow-x: auto;
-
-  &.more-before {
-    --tabs-fade-start: transparent;
-  }
-
-  &.more-after {
-    --tabs-fade-end: transparent;
-  }
-
-  /* A mask reads only how opaque its image is, so the colour stands for "shown". The fade over
-     the sections, and under it the bar's strip laid whole (`--size-tabs-bar`). */
-  &:is(.more-before, .more-after) {
-    mask-image:
-      linear-gradient(
-        to right,
-        var(--tabs-fade-start),
-        black var(--size-tabs-fade),
-        black calc(100% - var(--size-tabs-fade)),
-        var(--tabs-fade-end)
-      ),
-      linear-gradient(black, black);
-    mask-repeat: no-repeat;
-    mask-position: top, bottom;
-    mask-size:
-      100% calc(100% - var(--size-tabs-bar)),
-      100% var(--size-tabs-bar);
-  }
 }
 </style>
