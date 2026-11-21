@@ -342,18 +342,22 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
 
 /**
  * Where the first reading's hint stands against its mark, pointed at in its middle with the
- * page scrolled until the mark's top stands `top` pixels under the window's: the room from the
- * mark's right edge to the hint's left, and from the mark's top to the hint's bottom, or from
- * its bottom to the hint's top where the hint stands under it.
+ * harness's pane scrolled until the mark's top stands `top` pixels under the window's: the room
+ * from the mark's right edge to the hint's left, and from the mark's top to the hint's bottom, or
+ * from its bottom to the hint's top where the hint stands under it.
  */
 async function firstReadingHint(page: Page, top: number) {
   const figure = page.locator(LINE)
   const mark = figure.locator('[data-mark="reading"]').first()
-  const box = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
-  await page.evaluate((by) => window.scrollBy(0, by), box.top - top)
+  // At rest: a reading pointed at draws its mark larger, so its box is measured with none pointed.
   await page.mouse.move(1, 1)
   await expect(page.getByRole('tooltip')).toHaveCount(0)
+  const box = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  await mark.evaluate((node, by) => node.closest('.charts-harness')?.scrollBy(0, by), box.top - top)
   const at = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  // A pane that ends before the mark reaches `top` leaves room over it, and the hint then stands
+  // where that room is, not where this asks.
+  expect(Math.abs(at.top - top), 'the mark where the pane was scrolled to').toBeLessThan(1)
   await page.mouse.move(at.left + at.width / 2, at.top + at.height / 2)
   await expect(page.getByRole('tooltip')).toHaveText('11:30, 10%, the poll')
   return page.evaluate(() => {
