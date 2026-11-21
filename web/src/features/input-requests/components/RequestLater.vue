@@ -56,7 +56,7 @@ const reasonRef = computed(() => (reason.value ? reasonId : undefined))
 const fieldsDisabled = computed(() => props.disabled || props.busy)
 
 defineExpose({
-  focus: () => root.value?.querySelector<HTMLElement>('input')?.focus({ preventScroll: true }),
+  takeFocus: () => root.value?.querySelector<HTMLElement>('input')?.focus({ preventScroll: true }),
 })
 </script>
 

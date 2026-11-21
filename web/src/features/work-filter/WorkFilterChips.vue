@@ -22,6 +22,7 @@ import type { FilterWords } from '@/features/work-filter/filterOptions.ts'
 
 import type { ValueToken, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import ToggleChip from '@/shared/ui/ToggleChip.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -88,7 +89,7 @@ const list = useTemplateRef<HTMLElement>('list')
 function focusAt(index: number): boolean {
   const button = list.value?.querySelectorAll<HTMLButtonElement>('.filter-chip')[index]
   if (!button || button.offsetParent === null) return false
-  button.focus()
+  placeFocus(button)
   return true
 }
 

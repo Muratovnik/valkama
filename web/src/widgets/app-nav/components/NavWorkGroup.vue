@@ -31,6 +31,7 @@ import { provideRowOpen } from '@/widgets/app-nav/composables/useRowOpen.ts'
 import OpenPanel from '@/features/session-open/OpenPanel.vue'
 
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
 import CountBadge from '@/shared/ui/CountBadge.vue'
 import SidePanel from '@/shared/ui/SidePanel.vue'
@@ -74,7 +75,7 @@ async function landFocus() {
     : [document.querySelector<HTMLElement>(`#${CSS.escape(props.foldId)}`), railButton.value].find(
         (control) => control?.checkVisibility(),
       )
-  head?.focus()
+  placeFocus(head)
 }
 
 watch(openPanel, (now, before) => {
@@ -91,7 +92,7 @@ function escape(event: KeyboardEvent) {
   if (!props.open.isOpen('work')) return
   event.preventDefault()
   props.open.set('work', false)
-  document.querySelector<HTMLElement>(`#${CSS.escape(props.foldId)}`)?.focus()
+  placeFocus(document.querySelector<HTMLElement>(`#${CSS.escape(props.foldId)}`))
 }
 
 const listShown = computed(() => props.open.isOpen('work'))

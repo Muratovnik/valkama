@@ -23,6 +23,7 @@ import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 import SettingsScopedRow from '@/pages/settings/components/SettingsScopedRow.vue'
 
 import type { ParticipationEdit, ParticipationLabel } from '@/shared/api/participationApi.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -57,7 +58,7 @@ watch(
     await nextTick()
     const focused = document.activeElement
     if (focused === null || focused === document.body)
-      addRow.value?.$el.querySelector<HTMLInputElement>('input')?.focus()
+      placeFocus(addRow.value?.$el.querySelector<HTMLInputElement>('input'))
   },
 )
 

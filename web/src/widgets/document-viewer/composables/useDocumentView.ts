@@ -16,6 +16,7 @@ import type { ProjectDocument } from '@/shared/api/documentApi.ts'
 import { latestFocusRight } from '@/shared/lib/focusRight.ts'
 import { inlineWords, parseRichDocument } from '@/shared/lib/richText.ts'
 import type { RichDocument } from '@/shared/lib/richText.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 /** A document and where in it, as the server names it and a link wrote the suffix. */
 export interface DocumentPlace {
@@ -225,7 +226,7 @@ export function useDocumentView() {
     const link = openedFrom
     openedFrom = null
     void nextTick(() => {
-      if (link?.isConnected) link.focus()
+      if (link?.isConnected) placeFocus(link)
     })
   }
 

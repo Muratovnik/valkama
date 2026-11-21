@@ -98,36 +98,37 @@ export const drawnColumns = ({ goal, project }: { goal: boolean; project: boolea
   )
 
 /**
- * Where every column stands: «Goal and stage» or «Project» from 1100px of list, both of
- * them from 1270px. Each is 10rem at most, and the two at that measure left the title of
- * a list 1100px wide 21 characters; from 1270px it keeps 37 in English and 36 in Russian,
- * as one alone does from 1100px.
+ * What a list stands, from every column to the fewest: each fit, and last the narrowest
+ * again with the title's choice of order folded to its chevron, `bare`, its name in its hint.
+ * A reference column a tree's lead and an urgent glyph widen left the title of a phone's list
+ * 136px, and «Порядок» beside the title's sort needed 158.
  */
-const FULL_FROM = { both: 1270, one: 1100 }
+export type Level = Fit | 'bare'
+
+/** The levels from the one that stands every column to the one that stands the fewest. */
+export const LEVELS: readonly Level[] = ['full', 'wide', 'medium', 'narrow', 'bare']
+
+/** The fit a level stands its columns in. */
+export const fitOf = (level: Level): Fit => (level === 'bare' ? 'narrow' : level)
 
 /**
- * Where every column but «Goal and stage» and «Project» stands: from 920px, where the title
- * keeps 38 characters in English and 36 in Russian. From 900px, where it kept 36 beside
- * «Steps», it kept 35.6 and 34.2 beside «Conditions» and «Условия».
+ * The level for a list `room` pixels wide: the widest, from `from` on, whose table the room
+ * holds. `needs` is how wide each level's table was drawn where the room did not hold it; a
+ * level it does not name is tried, and the last stands whatever it needs.
+ *
+ * A level's need is its table's own (`useListFit.ts`): every column as wide as its widest
+ * row and its heading, the title its 36 characters and its heading on one line, a tree's
+ * first column its lead. Fixed widths chose it before, set where a typical title kept 36
+ * characters beside a flat list's columns: longer states, holders and dates left the title
+ * of a flat list 946px wide 172px and its heading on two lines.
  */
-const WIDE_FROM = 920
-
-/**
- * The fit for a list `width` pixels wide, `both` where it draws «Goal and stage» and
- * «Project»; unmeasured, the list is wide. The thresholds are where the columns
- * that stay leave the title room for a typical title on two lines, 36 characters,
- * in either language, beside a flat list's first column. A tree's first column is wider by its `lead`,
- * the arrow and the indent of its deepest row, so it is the width less the lead that
- * meets them: measured on the list's width alone, a tree three levels deep stood every
- * column but two beside a first column 222px wide, left its title 131px and ran 24px
- * past the list's frame at 1280px.
- */
-export function fitFor(width: number, both = false, lead = 0): Fit {
-  if (width === 0) return 'full'
-  const room = width - lead
-  if (room >= FULL_FROM[both ? 'both' : 'one']) return 'full'
-  if (room >= WIDE_FROM) return 'wide'
-  return room >= 560 ? 'medium' : 'narrow'
+export function levelFor(
+  room: number,
+  needs: ReadonlyMap<Level, number>,
+  from: Level = 'full',
+): Level {
+  const tried = LEVELS.slice(LEVELS.indexOf(from))
+  return tried.find((level) => (needs.get(level) ?? 0) <= room) ?? 'bare'
 }
 
 const urgency = new Map(PRIORITIES.map((priority, index) => [priority, PRIORITIES.length - index]))

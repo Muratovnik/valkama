@@ -21,6 +21,7 @@ import {
   SelectViewport,
 } from 'reka-ui'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import {
   choicesMatching,
   choiceValueCodec,
@@ -37,6 +38,11 @@ const props = withDefaults(
     label: string
     modelValue: string
     options: readonly Option[]
+    /**
+     * The chevron alone, for a host whose line has no room for the value's words: they stay
+     * the value assistive technology reads, and the button's hint names them.
+     */
+    bare?: boolean
     /** The id of the message that says why the choice was refused. */
     describedby?: string
     disabled?: boolean
@@ -55,6 +61,7 @@ const props = withDefaults(
   }>(),
   {
     size: 'default',
+    bare: false,
     searchable: false,
     placeholder: '',
     searchLabel: 'Search',
@@ -82,6 +89,8 @@ const selected = computed(() => props.options.find((option) => option.value === 
 // choosing it again changed nothing and sent nothing.
 const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? null)
 const filtered = computed(() => choicesMatching(props.options, query.value))
+/** What a bare button's hint says: the words it does not show. */
+const bareName = computed(() => (props.bare ? selected.value?.label || props.placeholder : ''))
 /** Out of the Tab order where the host's keys reach the button. */
 const triggerTab = computed(() => (props.keyed ? -1 : undefined))
 
@@ -104,7 +113,7 @@ function updateOpen(value: boolean) {
     query.value = ''
     return
   }
-  if (props.searchable) void nextTick(() => searchInput.value?.focus())
+  if (props.searchable) void nextTick(() => placeFocus(searchInput.value))
 }
 
 /** Opens the list, for a host whose own action asks for this choice to be made. */
@@ -114,7 +123,7 @@ defineExpose({ show: () => updateOpen(true) })
 <template>
   <div
     class="choice-select"
-    :class="`size-${size}`"
+    :class="[`size-${size}`, { bare }]"
   >
     <SelectRoot
       :model-value="internalValue"
@@ -124,6 +133,7 @@ defineExpose({ show: () => updateOpen(true) })
       @update:open="updateOpen"
     >
       <SelectTrigger
+        v-tooltip.name="bareName"
         class="choice-trigger"
         :class="{ 'has-icon': selected?.icon }"
         :aria-label="label"
@@ -140,6 +150,7 @@ defineExpose({ show: () => updateOpen(true) })
         <span
           v-tooltip.clipped="$slots.value && selected?.label"
           class="choice-value"
+          :class="{ 'visually-hidden': bare }"
         >
           <SelectValue
             class="choice-value-content"

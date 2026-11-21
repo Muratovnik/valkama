@@ -60,7 +60,7 @@ import { useListTreeRows } from '@/widgets/work-item-views/composables/useListTr
 import type { ListTreeScope } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
 import type { SpaceProject } from '@/widgets/work-item-views/utils/boardLanes.ts'
-import { drawnColumns, isFolded, sortsChosen } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { drawnColumns, isFolded } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 import { ROW_FACETS } from '@/widgets/work-item-views/utils/listRowWords.ts'
 import { orderedWork, QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
@@ -125,10 +125,9 @@ const drawsProject = Boolean(projects())
 const columns = drawnColumns({ goal: drawsGoal, project: drawsProject })
 
 const root = ref<HTMLElement | null>(null)
-// The tree's first column is wider by its lead, which the other columns do not have.
-const { fit, measured, narrow, width } = useListFit(root, drawsGoal && drawsProject, () =>
-  tree.lead(),
-)
+// The table's own width decides the fit: drawn from the rows, in a language and an order.
+const order = () => `${locale.value} ${props.sort.key} ${props.sort.descending}`
+const { fit, level, measured, narrow, width } = useListFit(root, { order, rows: () => rows.value })
 
 const tree = useListTreeRows({
   items: () => props.items,
@@ -268,7 +267,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
         <WorkItemListHead
           :columns="shownColumns"
           :folded="foldedColumns"
-          :choice="sortsChosen(fit)"
+          :level="level"
           :sort="props.sort"
           @sort="emit('sort', $event)"
         />
@@ -410,6 +409,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
   &[data-fit='narrow'] {
     --space-list-inset: var(--space-2);
     --list-slot-size: var(--space-4);
+    --list-title-least: 16ch;
   }
 }
 
@@ -462,7 +462,8 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
 }
 
 .list-title {
-  min-width: 16ch;
+  /* 36 characters but in the narrowest fit (`useListFit.ts`), counting the cell's inset. */
+  min-width: var(--list-title-least, 36ch);
   color: var(--color-text);
   overflow-wrap: anywhere;
   white-space: normal;

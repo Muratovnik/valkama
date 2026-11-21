@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from 'reka-ui'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
 import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -123,7 +124,7 @@ function closed(event: Event) {
   opening = null
   if (!run) return
   event.preventDefault()
-  trigger.value?.querySelector<HTMLElement>('.menu-trigger')?.focus()
+  placeFocus(trigger.value?.querySelector<HTMLElement>('.menu-trigger'))
   run()
 }
 </script>

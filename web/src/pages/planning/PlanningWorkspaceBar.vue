@@ -124,17 +124,23 @@ const countsBusy = computed(() => (props.busy || props.reading ? true : undefine
 /** The held condition's count, which a space still being read does not have. */
 const heldCount = computed(() => (props.reading ? null : props.counts.held))
 
-/**
- * «319 открытых из 1267», or what the filter let through of the open work; and, named apart
- * as not this space's work, «и 3 из других пространств».
- */
+/** «319 открытых из 1267», or what the filter let through of the open work. */
 const countsText = computed(() => {
-  const { elsewhere, matchedOpen, open, total } = props.counts
-  const own = props.filtered
+  const { matchedOpen, open, total } = props.counts
+  return props.filtered
     ? t('workItem.filter.matched', { matched: matchedOpen, open }, open)
     : t('workItem.filter.open', { open, total }, open)
-  return elsewhere ? `${own} ${t('workItem.filter.elsewhere', { count: elsewhere })}` : own
 })
+/**
+ * Named apart as not this space's work, «и 3 из других пространств»: a fact of its own, so the
+ * line breaks before it where both do not fit. Held to the count in one fact, the line ran
+ * 15px past a phone's screen and its end was cut.
+ */
+const elsewhereText = computed(() =>
+  props.counts.elsewhere ? t('workItem.filter.elsewhere', { count: props.counts.elsewhere }) : '',
+)
+/** The space the line breaks at between two facts with no separator; markup drops a bare one. */
+const BETWEEN = ' '
 /**
  * The closed items a filter let through, said only when it let through no open
  * one: beside open matches they are the views' own extra items and the line
@@ -164,9 +170,9 @@ const labelsAny = computed(() => filter.value.labelsMatch === 'any')
 /** A project's name and a goal's title for its chip, from the work the bar counts. */
 const tokenWords = computed(() => filterWords(props.items))
 /** Where focus goes when the last chip on the narrow line is taken out. */
-const field = useTemplateRef<{ focus: () => void }>('field')
+const field = useTemplateRef<{ takeFocus: () => void }>('field')
 function focusField() {
-  field.value?.focus()
+  field.value?.takeFocus()
 }
 /** Reset takes the button that did it away, so the caret goes to the field. */
 function reset() {
@@ -267,6 +273,8 @@ function removeChip(token: WorkFilterToken) {
           v-if="!reading"
           class="workspace-fact"
           >{{ countsText }}</span
+        ><template v-if="!reading && elsewhereText"
+          >{{ BETWEEN }}<span class="workspace-fact">{{ elsewhereText }}</span></template
         ><span
           v-if="closedText"
           class="workspace-closed"
@@ -385,7 +393,8 @@ function removeChip(token: WorkFilterToken) {
 }
 
 /* A fact never breaks inside itself: «319 открытых из 1267» wrapped mid-number
-   at 390. A separator rides on the start of the fact after it. */
+   at 390. The line breaks between facts, and a separator rides on the start of the
+   fact after it. */
 .workspace-fact {
   white-space: nowrap;
 }

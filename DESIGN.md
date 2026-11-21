@@ -957,13 +957,24 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   action stands under the words that name the row, in the columns read first,
   never in a column of its own at the row's end: a table wider than its frame
   scrolls that column out of sight, and «Attach to a card» stood past the frame
-  at 1280px and three frames' width away on a phone. A table of records read as
-  words rather than compared as figures, as Agent decisions', stands on a phone
-  as one block a record, its cells on lines one after another and its headings
-  a line of sort buttons over them (`SectionTable`'s `stack`): as columns, a
-  phone's frame showed two of its five before a sideways scroll. A table of
-  figures keeps its columns and scrolls sideways in its frame, its names held
-  at the frame's start.
+  at 1280px and three frames' width away on a phone. Whether a table's columns
+  fit its frame decides how it stands, never the window's width
+  (`useTableFit`): it is laid out at each step in turn and stands at the first
+  that keeps every column inside the frame. A table of figures has three: its
+  headings on one line; the headings over figures on two; and every column at
+  the least that breaks no word, the headings over figures as narrow as their
+  longest word and the page's words, such as a goal's title, giving way to
+  theirs. A table of records read as words rather than compared as figures, as
+  Agent decisions' and the commits on no card, stands as one block a record as
+  soon as its columns do not fit, at any width, its cells on lines one after
+  another and its headings a line of sort buttons over them (`SectionTable`'s
+  `stack`). Sideways scroll is the last resort: only a table of figures whose
+  least does not fit scrolls, at its second step, its names held at the
+  frame's start. Analytics' tables take no third step: their owner chose a
+  second line and the sideways scroll for them. Stacked by a phone's width alone, Agent decisions left «What
+  was decided» past the frame at 1024 and 760; held to their widths, the goals
+  of Volumes left «Left ≈» past it at 1280, under a scroll bar below the
+  fold.
 - **Status:** one semantic-state primitive owns label, dot/badge geometry, and
   palette across work items, executions, references, and Settings.
 - **Choice controls:** one accessible custom control owns search, icons,
@@ -1736,11 +1747,16 @@ whole, since then nothing on the field says work is running. The header's hover 
 it whole, as a zoomed-out card's does, and so does its button's name: over the work under no
 parent, whose one button is the fold, the fold's.
 Wherever the list folds the state, the priority and the holder, its folded orders are one
-choice in the title's heading, in the heading's font, and an order's name is never cut: the
-longest takes a line of its own under the title's sort. So the head folds before it wraps:
-as a run of buttons after the title's sort those five took three lines of a phone's head, and
-a second line of the head at 1024px once «Steps» became «Conditions». The two that fold
-first, «Goal and stage» and «Project», stay a run, which holds one line.
+choice in the title's heading, in the heading's font, and an order's name is never cut. So the
+head folds before it wraps: as a run of buttons after the title's sort those five took three
+lines of a phone's head, and a second line of the head at 1024px once «Steps» became
+«Conditions». The two that fold first, «Goal and stage» and «Project», stay a run. A heading
+holds one line. Where even the narrowest fit's does not, the list stands that fit once more
+with the choice bare: its chevron alone, the words it shows otherwise still the value
+assistive technology reads and its hint's name. A tree's lead and an urgent glyph widened the
+reference column of a phone's list until the title kept 136px, and «Порядок» beside the
+title's sort needed 158, so the choice took a second line of the head. Only a title too narrow
+even for the bare choice lets its heading wrap, since that level gives way to none.
 Cards do not reserve empty tag or source regions.
 A board tile prints exceptions, not defaults. Its first line is a kind glyph
 when the item is not a plain task, the reference, a priority glyph when the
@@ -1897,12 +1913,12 @@ After its title a list row's «Goal and stage» («Цель и этап») names
 stages it stands under, goal first, «Launch › Beta», read from the whole space, so a
 filter that leaves the goal out of the rows still names it. Work under no goal says a
 dash; a card of another space says nothing there, since this space's read does not name
-that card's goal. The column sorts by the path. It stands from 1100px of list and gives
-way first: beside every other column a list of 900px left the title 20 characters and
-pushed the table past its edge. Folded, the path leads what the row prints under its
-title, on one line cut at the row's edge and whole on hover: a line of its own above an
-open blocker and the labels down to 920px, and the first fact of the line of facts below
-that, where it folds with the state, the priority and the holder. The list by goal draws
+that card's goal. The column sorts by the path. It gives way first: beside every other
+column a list of 900px left the title 20 characters and pushed the table past its edge.
+Folded, the path leads what the row prints under its title, on one line cut at the row's
+edge and whole on hover: a line of its own above an open blocker and the labels while the
+state, the priority and the holder stand, and the first fact of the line of facts once they
+fold with it. The list by goal draws
 no such column, since a row's place there is its goal; the list by project does.
 After it «Project» («Проект») names what a row changes, drawn by the rule of a tile's
 project mark: the space has several projects and «All projects» is chosen. It says the one
@@ -1911,18 +1927,22 @@ lane by project does, and a dash for work naming none; a card of another space i
 this space's projects alone. It sorts by the project's name, work naming none first and
 work naming several last. The list by project draws no such column, since a row's group
 names it. It folds with «Goal and stage» and follows the path wherever that leads, a name
-saying nothing for work naming none. Each of the two is at most 10rem wide, and side by
-side at that measure they left the title of a 1100px list 21 characters, so where the list
-draws both they stand from 1270px, where it keeps 37 in English and 36 in Russian.
-These widths, 1100 and 1270 for every column, 920 for all but those two and 560 for
-more than the reference and the title, are met by the room beside a flat list's first
-column, and hold the title's 36 characters in both languages: a heading's longer word moves
-them, and beside «Conditions» the 900 and 1240 that «Steps» had left 35.6 and 34.2 characters
-in English, 34.2 and 32.8 in Russian. A tree's first column is wider by its lead, the arrow and the indent of its
-deepest row, 24px a level up to the fifth, so a tree meets them with that lead taken
-out of its width: measured on the width alone, a list by goal three levels deep at
-1280px stood every column but two, left its title 131px with words broken inside and ran
-24px past its frame. A narrow list's cells take half the inset, 8px, as its head's sorts do,
+saying nothing for work naming none. Each of the two is at most 10rem wide.
+The list stands the widest of its four fits — every column; all but those two; the
+reference, the title, the conditions and the date; the reference and the title — whose table
+its own box holds. A fit's table is as wide as its columns need: each as wide as its widest
+row and its heading, the first column of a tree with its lead, the arrow and the indent of
+its deepest row, and the title 36 characters with its heading on one line. A fit that needs
+more pushes the table past the list and gives way to the next within the frame, so a reader
+sees only the one that holds. The narrowest keeps the title 16 characters and what the
+reference leaves, and gives way only to itself with its choice of order bare, as the head
+says above. Fixed widths decided before, 1100 and 1270 for
+every column, 920 for all but two and 560 for more than the reference and the title, set
+where a typical title kept its 36 characters beside a flat list's first column: a
+migrated store's longer states, holders and dates left a flat list of a 1280px window its
+title 172px and its head two lines, and a list by goal three levels deep at 1280px, measured
+on the width alone, left its title 131px with words broken inside and ran 24px past its
+frame. A narrow list's cells take half the inset, 8px, as its head's sorts do,
 so a heading's word starts where its column's words do: at 12px a tree five levels deep at
 390px left its title 16 characters, broke «Переосмысление» inside, and stood «Название» 4px
 left of the titles under it. The priority's glyph that follows a reference where its column
@@ -2011,7 +2031,7 @@ for want of room does the priority (but medium) follow the reference as its
 glyph, because a blank cell in a sortable column
 reads as unknown; the holder column
 says nobody with a dash, never «Workable»; the labels sit under the title
-from 920px of list; an open blocker is named, «Waiting on MAIN-12», wherever it
+while the state, the priority and the holder stand; an open blocker is named, «Waiting on MAIN-12», wherever it
 lives. A graph node leads with the kind, says its state as a dot and a name
 in the hue of its chain edge, says workable quietly in the state's place and
 never in heavier ink, and reads high or urgent after its reference; its glyphs are read,
@@ -3275,7 +3295,8 @@ column, the moment newest first and words A to Z first. Over the table a line co
 decisions. The page reads them page by page of 200, the first page drawn as soon as it lands
 with «Read 200 of 1000…» over it, so a long period of a thousand decisions shows its newest at
 once and ends as one table; past 5000 it shows the newest and says how many there are in all.
-On a phone a decision is a block of its own: when and the point on its first line, the card
+Where its columns do not fit the frame, at any width, a decision is a block of its own: when and
+the point on its first line, the point breaking between its words beside the moment, the card
 under them, then the session and what was decided, with the headings a line of sort buttons over
 the blocks (Rows and tables).
 
@@ -3370,13 +3391,14 @@ no board of its own, the portfolio standing there, so at the top no category ope
 on no card» is «—» where their list cannot be read for the scope.
 
 «Commits on no card» shows their list under the numbers and hides it again, the number saying
-which. A row is a commit, the newest first: its hash as its short form, held at the row's start
-while a phone's table scrolls sideways, its subject, the repository, the session as its short
-form with the whole one in the hint, and when it was committed. «Attach to a card» stands under the
-subject, so it is in view wherever the frame is scrolled to the commit, and the repository's name
-wraps between its words. On a phone the subject's column is what the frame has beside the hash and
-the action's name takes two lines there: on one, «Прикрепить к карточке» held the column past the
-frame's edge. It opens a line under the row where the card is found by its number or the words of
+which. A row is a commit, the newest first: its hash as its short form at the row's start, its
+subject, the repository, the session as its short form with the whole one in the hint, and when
+it was committed. «Attach to a card» stands under the subject, and the repository's name wraps
+between its words. Where its columns do not fit the frame, a commit is a block of its own (Rows
+and tables): the hash and the subject on its first line, the action under the subject, then the
+repository, and the session and the time on the last; as columns scrolling sideways, a phone's
+frame cut the repository's name inside a word and kept the time three frames' width away. It
+opens a line under the row where the card is found by its number or the words of
 its title: the scope's space's cards, closed ones too, since a commit belongs to the card it was
 made for, and every space's at the top. «Attach» is the person's attach, the module's own
 action: the commit leaves the list, the attach is said aloud, and the page reads its numbers
@@ -3396,11 +3418,13 @@ everything under it — and what its open tasks have left by their estimates, ro
 a parent by its column. A row past the fifth level stands at the fifth indent and names its
 parent. A row's name is its reference over its title, and what the row says of itself, the
 parent it names among it, stands under the title on the title's edge; the words keep a width of
-their own whatever the indent takes, so a deep goal's title reads on lines as long as a shallow
-one's. Beside the reference, a goal six levels down kept some 54px of a 276px column and broke
-into six lines, and its parent stood at the cell's start, 182px left of its title. Where the
-table is too narrow for its headings on one line, a spend stands on two, its time over its
-tokens, and the column of names takes the room that gives. The table's frame is held to the panel's
+their own whatever the indent takes while the table has room for them, so a deep goal's title
+reads on lines as long as a shallow one's. Beside the reference, a goal six levels down kept some
+54px of a 276px column and broke into six lines, and its parent stood at the cell's start, 182px
+left of its title. Where the table is too narrow for its headings on one line, a spend stands on
+two, its time over its tokens, and the column of names takes the room that gives; where even that
+leaves a column past the frame, the words come down to their longest word and the figures' words
+to theirs, so at 1280 every column stands in the frame (Rows and tables). The table's frame is held to the panel's
 height, which the page's layout gives it, so a long tree scrolls in its frame under a heading row
 that stays, whatever rows the bar takes.
 
@@ -3510,7 +3534,12 @@ title in the list of everything waiting describe or name the question, which tak
 and the ring. Words that stay where focus lands, because taking it to their whole would send
 the next Tab to the start of a long form — why a write or a read did not go through, a reply
 just written, a list's heading — carry `.focus-landing` from `base.css`: the ring stands 4px
-clear of the words and turns at a control's corner, so one line never closes into a capsule. A text field shows focus by turning its own
+clear of the words and turns at a control's corner, so one line never closes into a capsule.
+Wherever the interface puts focus (`placeFocus`; lint refuses a bare `focus()` in the app), a
+frame that scrolls sideways stays where the reader left it, and what takes focus is shown up and down as the browser shows it: opening the board's folded
+column at 390px once slid the board 441px to centre the button that folds it again, and the
+tiles' links went off the screen. Only a walk with the arrows takes a frame across, as far as
+the place walked to needs. A text field shows focus by turning its own
 edge the focus colour, for a press as for Tab, and that colour holds 3:1 on every
 ground and fill it stands against.
 

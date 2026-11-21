@@ -37,6 +37,7 @@ import {
   ComboboxRoot,
 } from 'reka-ui'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { choiceToken, freshToken, searchChoices, tokenValue } from '@/shared/ui/searchChoices.ts'
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
@@ -205,7 +206,7 @@ function keydown(event: KeyboardEvent) {
 
 function remove(index: number) {
   emit('update:modelValue', chosen.value.filter((_, place) => place !== index) as Value)
-  field.value?.$el.focus()
+  placeFocus(field.value?.$el)
 }
 
 /**
@@ -216,7 +217,7 @@ function remove(index: number) {
  */
 function show() {
   const input = field.value?.$el
-  input?.focus()
+  placeFocus(input)
   input?.click()
 }
 
@@ -228,7 +229,7 @@ function pressBox(event: MouseEvent) {
   const input = field.value?.$el
   if (props.disabled || !input || event.target === input) return
   if ((event.target as Element).closest('button')) return
-  input.focus()
+  placeFocus(input)
   input.click()
 }
 

@@ -95,12 +95,6 @@ export function useListTreeRows({ items, narrow, ordered, tree: live }: ListTree
       : { kind: 'opener' }) satisfies ListFocus as ListFocus,
     indentOf: (item: WorkItemBrief) =>
       tree ? Math.min(tree.depthOf(item), levels.value - 1) * step.value : 0,
-    /**
-     * What the first column takes before its widest reference beyond a flat list's: the
-     * arrow's step and the deepest row's indent, as a list too wide to be narrow draws
-     * them, which is the list the room decides about (`fitFor`).
-     */
-    lead: () => (tree ? (Math.min(tree.deepest(), WIDE.levels - 1) + 1) * WIDE.step : 0),
     /** What a group's row counts, as a lane's heading does. */
     groupCounts(item: WorkItemBrief): string {
       const { open, closed } = groups.value?.counts.get(item.work_item_id) ?? { open: 0, closed: 0 }

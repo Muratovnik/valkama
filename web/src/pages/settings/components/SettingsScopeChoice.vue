@@ -56,6 +56,7 @@ function choose(next: SettingsScope) {
       :model-value="shown"
       :options="options"
       :aria-describedby="describedBy"
+      wrap
       @update:model-value="choose"
     />
     <small
@@ -71,10 +72,8 @@ function choose(next: SettingsScope) {
 /* At its own width from the start of the column, and a space's name is as long as it was
    given: on a phone the two segments take a line each rather than run out of the row. */
 .settings-scope-segments {
-  flex-wrap: wrap;
   justify-self: start;
   min-width: 0;
-  max-width: 100%;
 }
 
 .settings-scope-note {

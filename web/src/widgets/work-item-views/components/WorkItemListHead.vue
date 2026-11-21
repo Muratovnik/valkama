@@ -18,7 +18,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { fitOf, sortsChosen } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { Level, ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 import { nextSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 import type { ViewSort, ViewSortKey } from '@/widgets/work-item-views/utils/workOrder.ts'
 
@@ -26,10 +27,10 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
-  /** The folded sorts as one choice rather than a run of buttons (`sortsChosen`). */
-  choice: boolean
   columns: readonly ListColumn[]
   folded: readonly ListColumn[]
+  /** The list's level, which decides how the folded sorts are offered and whether they wrap. */
+  level: Level
   /** The order in force: by a column's key, or by one no column shows, such as the queue's. */
   sort: ViewSort
 }>()
@@ -38,6 +39,15 @@ const props = defineProps<{
 const emit = defineEmits<{ sort: [sort: ViewSort] }>()
 const { t } = useI18n()
 
+/** The folded sorts as one choice rather than a run of buttons. */
+const choice = computed(() => sortsChosen(fitOf(props.level)))
+/**
+ * Whether the choice shows its chevron alone, its name in its hint and to assistive technology,
+ * and the title's heading may take a second line: only in the last level, which no other gives
+ * way to. In every other a heading too long for its column pushes the table past the list, and
+ * the level gives way (`useListFit.ts`).
+ */
+const bare = computed(() => props.level === 'bare')
 const sortKey = computed(() => props.sort.key)
 const descending = computed(() => props.sort.descending)
 const sortState = (key: SortKey) => {
@@ -57,7 +67,7 @@ const holdsTitle = (column: ListColumn) => column.key === 'title'
 
 /** The sorts a heading offers as buttons: its own, and on the title's those folded under it. */
 function sortsIn(column: ListColumn): readonly ListColumn[] {
-  return !holdsTitle(column) || props.choice ? [column] : [column, ...props.folded]
+  return !holdsTitle(column) || choice.value ? [column] : [column, ...props.folded]
 }
 
 function headClass(column: ListColumn) {
@@ -99,7 +109,7 @@ function choose(value: string) {
   <thead>
     <tr
       aria-rowindex="1"
-      :class="{ choice }"
+      :class="{ choice, wraps: bare }"
     >
       <th
         v-for="column in columns"
@@ -137,6 +147,7 @@ function choose(value: string) {
             :placeholder="t('workItem.list.sortOther')"
             :model-value="chosen"
             :options="choices"
+            :bare="bare"
             keyed
             @update:model-value="choose"
           />
@@ -178,11 +189,14 @@ function choose(value: string) {
 }
 
 /* A heading's sorts: one, or on the title's heading the title's and those of
-   the columns folded under it, side by side. */
+   the columns folded under it, side by side on one line. */
 .list-sorts {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+
+  .wraps & {
+    flex-wrap: wrap;
+  }
 
   .list-head[data-numeric='true'] & {
     justify-content: flex-end;
@@ -243,8 +257,11 @@ function choose(value: string) {
   padding-inline-start: max(var(--space-list-inset), var(--list-reference-start, 0px));
 }
 
+/* An order's name is never cut: a heading too narrow for the choice pushes the table past the
+   list, which gives way to a level where it stands, at the last bare (`useListFit.ts`). */
 .list-sort-choice {
-  flex: 0 1 auto;
+  flex: none;
+  min-width: max-content;
 }
 
 /* One chevron, turned over. The icon set holds no upward chevron, and adding a

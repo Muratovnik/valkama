@@ -6,8 +6,9 @@
  * period of a thousand decisions is read in the table while the bar stays above it. Each
  * column's heading sorts by it: the moment newest first, words A to Z first.
  *
- * On a phone a decision stands as a block of its own (`stack`): when and the point on its first
- * line, the card under them, then the session and what it decided.
+ * Where its columns do not fit the frame, at any width, a decision stands as a block of its own
+ * (`stack`): when and the point on its first line, the card under them, then the session and what
+ * it decided.
  *
  * Over the table a line counts the decisions of the view, and while further pages are still being
  * read it says how many of how many are in (`reading`); where the view holds more than the page
@@ -145,7 +146,7 @@ function follow(row: (typeof rows.value)[number], event: MouseEvent) {
         <td class="chart-cell chart-name decisions-at">
           <time :datetime="row.decision.at">{{ row.at }}</time>
         </td>
-        <td class="chart-cell">{{ row.point }}</td>
+        <td class="chart-cell decisions-point">{{ row.point }}</td>
         <th
           scope="row"
           class="chart-cell decisions-item"
@@ -211,10 +212,17 @@ function follow(row: (typeof rows.value)[number], event: MouseEvent) {
   overflow-wrap: anywhere;
 }
 
-/* A phone (`stack`): the card and what was decided each take a line of their own. */
-@container (width <= 30rem) {
-  .decisions-item,
-  .decisions-what {
+/* Stacked, where the columns do not fit (`SectionTable`'s `stack`): the moment and the point on the
+   first line, the point taking what the moment leaves and breaking between its words there rather
+   than going to a line of its own, as it did at 390 in Russian; the card and what was decided each
+   on a line of their own. */
+.decisions-table[data-fit='stack'] {
+  & .chart-cell.decisions-point {
+    flex: 1 1 0;
+    min-inline-size: min-content;
+  }
+
+  & :is(.decisions-item, .decisions-what) {
     flex-basis: 100%;
   }
 }

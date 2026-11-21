@@ -22,6 +22,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener } from '@vueuse/core'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -77,9 +78,9 @@ useEventListener(root, 'keydown', (event: KeyboardEvent) => {
 defineExpose({
   element: () => root.value,
   /** Focus in the field, its text selected, so typing replaces the last term. */
-  focus() {
+  takeFocus() {
     const control = field.value?.control()
-    control?.focus()
+    placeFocus(control)
     if (control instanceof HTMLInputElement) control.select()
   },
 })

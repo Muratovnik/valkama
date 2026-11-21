@@ -306,6 +306,51 @@ for (const locale of ['en', 'ru'] as const)
         ).toBeLessThanOrEqual(1)
     })
 
+/**
+ * Where a wide choice cannot stand on one line, as on a phone, its segments wrap and share
+ * each line evenly: every line's segments reach from the track's start to its end. Wrapped
+ * with each segment at its own width, the scope's two stood 135 and 110px on lines of 240.
+ */
+for (const locale of ['en', 'ru'] as const)
+  test(`a wide choice that wraps at 390px fills each of its lines in ${locale}`, async ({
+    page,
+  }) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await installBackend(page)
+    await installParticipation(page)
+    await open(page, 390)
+    await expect(row(page, 'launch').getByRole('radio').first()).toBeVisible()
+    const choices = await page.evaluate(() =>
+      [
+        '.settings-row:has(.settings-scope-segments)',
+        '[data-participation-row="set"]',
+        '[data-participation-row="launch"]',
+      ].map((selector) => {
+        const track = document.querySelector(selector)?.querySelector('[role="radiogroup"]')
+        if (!track) return { lines: 0, ragged: [] }
+        const style = getComputedStyle(track)
+        const box = track.getBoundingClientRect()
+        const start = box.left + Number.parseFloat(style.paddingLeft)
+        const end = box.right - Number.parseFloat(style.paddingRight)
+        const lines = new Map<number, DOMRect[]>()
+        for (const segment of track.querySelectorAll('[role="radio"]')) {
+          const rect = segment.getBoundingClientRect()
+          lines.set(Math.round(rect.top), [...(lines.get(Math.round(rect.top)) ?? []), rect])
+        }
+        const ragged = [...lines.values()]
+          .map((line) => [line[0]?.left ?? Number.NaN, line.at(-1)?.right ?? Number.NaN])
+          .filter(
+            ([left = 0, right = 0]) => Math.abs(left - start) > 1 || Math.abs(right - end) > 1,
+          )
+        return { lines: lines.size, ragged }
+      }),
+    )
+    expect(choices.map((choice) => choice.lines)).not.toContain(0)
+    // The scope's two segments do not fit one line of a phone's row: the case this is about.
+    expect(choices[0]?.lines).toBeGreaterThan(1)
+    expect(choices.map((choice) => choice.ragged)).toEqual([[], [], []])
+  })
+
 const ground = (place: Locator) => place.evaluate((one) => getComputedStyle(one).backgroundColor)
 
 /** A segment not pressed takes a ground under the pointer, a step under the pressed one's. */

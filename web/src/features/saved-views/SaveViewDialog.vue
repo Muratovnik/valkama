@@ -12,6 +12,7 @@ import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { VIEW_NAME_CHARS, viewName } from '@/shared/lib/savedViews.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -40,7 +41,7 @@ watch(
  * leaves it there.
  */
 const field = useTemplateRef<{ control: () => HTMLInputElement | null }>('field')
-watch(field, (shown) => shown?.control()?.focus(), { flush: 'post' })
+watch(field, (shown) => placeFocus(shown?.control()), { flush: 'post' })
 
 const kept = computed(() => viewName(name.value))
 const replaces = computed(() => props.taken.includes(kept.value))

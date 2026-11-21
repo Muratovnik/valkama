@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import { LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { Level } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { i18n as appI18n } from '@/shared/i18n/index.ts'
@@ -17,6 +18,7 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardItem } from '../fixtures/board.ts'
+import { atListWidth } from '../fixtures/listRoom.ts'
 import { keptOrder } from '../support/listOrder.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
@@ -260,22 +262,15 @@ describe('the facets a list row prints', () => {
   })
 
   it('where the priority column folds away, its glyph follows the reference, after the kind', async () => {
-    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
     // A list of 700px folds the goal and stage, the state, the priority and the holder columns.
-    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
-      configurable: true,
-      get: () => 700,
-    })
-    try {
+    await atListWidth(700, async () => {
       const wrapper = await rows([boardItem(1, 'backlog', { kind: 'bug', priority: 'urgent' })])
       const head = cells(wrapper, 0)[0]
         .findAll('[data-facet], .list-open')
         .map((part) => part.attributes('data-facet') ?? 'reference')
       expect(head).toEqual(['kind', 'reference', 'priority'])
       wrapper.unmount()
-    } finally {
-      if (width) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width)
-    }
+    })
   })
 
   it('filters by a glyph without opening the row, and keeps the row one Tab stop', async () => {
@@ -311,12 +306,12 @@ describe('the facets a list row prints', () => {
 describe('the list head on a narrow list', () => {
   const folded = LIST_COLUMNS.filter((column) => !['reference', 'title'].includes(column.key))
 
-  function head(sortKey: (typeof LIST_COLUMNS)[number]['key']) {
+  function head(sortKey: (typeof LIST_COLUMNS)[number]['key'], level: Level = 'narrow') {
     return mount(WorkItemListHead, {
       props: {
         columns: LIST_COLUMNS.filter((column) => !folded.includes(column)),
         folded,
-        choice: true,
+        level,
         sort: { key: sortKey, descending: true },
       },
       global: { plugins: [i18n()] },
@@ -344,5 +339,20 @@ describe('the list head on a narrow list', () => {
     expect(turn?.label).toBe('Sort ascending')
     choice.vm.$emit('update:modelValue', turn?.value)
     expect(wrapper.emitted('sort')).toEqual([[{ key: 'updated', descending: false }]])
+  })
+
+  it('shows its words in every level but the last, which bares the choice to its chevron', () => {
+    const named = head('title').get('.list-sort-choice')
+    expect(named.classes()).not.toContain('bare')
+    expect(named.get('.choice-value').classes()).not.toContain('visually-hidden')
+    expect(named.get('.choice-trigger').attributes('aria-describedby')).toBeUndefined()
+    const bare = head('title', 'bare').get('.list-sort-choice')
+    expect(bare.classes()).toContain('bare')
+    // The words stay the value assistive technology reads, and the hint says them.
+    expect(bare.get('.choice-value').classes()).toContain('visually-hidden')
+    expect(bare.get('.choice-value').text()).toBe('Order')
+    const trigger = bare.get('.choice-trigger')
+    expect(trigger.attributes('aria-label')).toBe('Sort by')
+    expect(trigger.attributes('aria-describedby')).toBeTruthy()
   })
 })

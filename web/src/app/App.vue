@@ -36,6 +36,7 @@ import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { provideSpaceNames } from '@/shared/lib/spaceNames.ts'
 import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
 import TooltipHost from '@/shared/ui/TooltipHost.vue'
@@ -97,7 +98,7 @@ const {
 )
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
-  mainContent.value?.focus()
+  placeFocus(mainContent.value)
 }
 
 const contextReady = computed(() =>

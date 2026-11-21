@@ -139,12 +139,12 @@ function press(event: KeyboardEvent, value: Value | null, update: (value: Value)
     <template #default="{ names, value, update }">
       <SegmentedControl
         v-if="point !== null"
-        class="participation-choice"
         :aria-describedby="names['aria-describedby']"
         :aria-labelledby="names['aria-labelledby']"
         :label="label"
         :model-value="deciderOf(value)"
         :options="deciders"
+        wrap
         @update:model-value="update"
       />
       <ToggleSwitch
@@ -177,11 +177,6 @@ function press(event: KeyboardEvent, value: Value | null, update: (value: Value)
 </template>
 
 <style scoped>
-.participation-choice {
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-
 .participation-number {
   max-width: 8rem;
 }

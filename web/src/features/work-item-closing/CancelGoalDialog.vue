@@ -30,6 +30,7 @@ import { CancelListError } from '@/shared/api/planningApi.ts'
 import { cancelWorkItem } from '@/shared/api/planningClosingApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -159,7 +160,7 @@ function submit() {
   if (busy.value || !list.value) return
   if (!reason.value.trim()) {
     asked.value = true
-    field.value?.control()?.focus()
+    placeFocus(field.value?.control())
     return
   }
   void send(list.value.list_token)

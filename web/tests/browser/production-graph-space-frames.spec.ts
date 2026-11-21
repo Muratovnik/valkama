@@ -212,7 +212,7 @@ for (const { width, locale, words } of [
     }, info) => {
       await openField(page, width)
       // ALPHA-41 and ALPHA-42 name this space's project; BETA-7 is only a link's far end.
-      const counts = page.locator('.workspace-fact')
+      const counts = page.locator('.workspace-figures')
       await expect(counts).toHaveText(new RegExp(` ${words.elsewhere}$`, 'u'))
       await shoot(page, info, `graph-${width}-counts-elsewhere-${locale}`)
 

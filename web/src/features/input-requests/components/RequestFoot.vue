@@ -103,8 +103,8 @@ const day = ref<InstanceType<typeof RequestLater> | null>(null)
 const list = ref<InstanceType<typeof RequestCancelList> | null>(null)
 
 defineExpose({
-  focusDay: () => day.value?.focus(),
-  focusError: () => (list.value ? list.value.focus() : moveFocus(errorLine.value)),
+  focusDay: () => day.value?.takeFocus(),
+  focusError: () => (list.value ? list.value.takeFocus() : moveFocus(errorLine.value)),
   focusWayOut: () => actions.value?.focusWayOut(),
 })
 </script>

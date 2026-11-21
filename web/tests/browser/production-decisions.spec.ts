@@ -1,14 +1,17 @@
 /**
  * The Agent decisions page in the real app, against a double of the server's summary
- * (`decisionsDouble`), at 1280px in English and at 390px in English and in Russian. The oracle is
+ * (`decisionsDouble`), at 1280px in English and at 390px in English and in Russian, and its
+ * table at every width the shell takes a form at in both languages. The oracle is
  * the page's contract in DESIGN.md: a decision is found by its point and its period, and its
  * card opens over the page on its System events, which Back closes; a long period's thousand
  * decisions stand in one table that scrolls inside its own frame while the bar stays where it
  * was; an empty period says so in the page's words. On the card's System events the event the
  * decision was recorded by carries the decision's mark, the point in the page's words, and an
- * event with no point carries none. On a phone a decision stands as one block whose every part is
- * in the table's frame, its headings still sorting (Rows and tables). Each run prints what it
- * measured and keeps a picture of each state.
+ * event with no point carries none. Wherever its columns do not fit the frame, at any width, a
+ * decision stands as one block whose every part is in the table's frame, when and the point on its
+ * first line, its headings still sorting; at no width is a cell past the frame (Rows and tables):
+ * stacked by a phone's width alone, the table left «What was decided» past it at 1024 and 760.
+ * Each run prints what it measured and keeps a picture of each state.
  */
 import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
@@ -53,6 +56,11 @@ const SIZES = [
   { lang: 'ru', width: 390, height: 844 },
 ] as const
 
+/** The widths the shell takes a form at, where the table must stand in its frame. */
+const FIT_SIZES = [1280, 1024, 760, 620, 390].flatMap((width) =>
+  (['en', 'ru'] as const).map((lang) => ({ lang, width, height: width < 600 ? 844 : 800 })),
+)
+
 /** What a call that proved nobody carries on an event. */
 const UNPROVED = { state: 'unconfirmed', source: null, session_id: null, agent_id: null }
 
@@ -96,7 +104,7 @@ function withSought() {
 
 async function openPage(
   page: Page,
-  size: (typeof SIZES)[number],
+  size: { height: number; lang: string; width: number },
   decisions: ReturnType<typeof decisionsBack>,
   state: Record<string, string> = {},
 ) {
@@ -128,6 +136,9 @@ async function starts(page: Page, selectors: readonly string[]) {
   }
   return found
 }
+
+// Playwright hides scrollbars, and one that arrives narrows the frame on a real screen.
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 for (const size of SIZES) {
   const words = WORDS[size.lang]
@@ -254,51 +265,74 @@ for (const size of SIZES) {
       ])
     })
 
-    if (size.width < 600)
-      test('on a phone a decision stands as one block, every part of it in the frame', async ({
-        page,
-      }, info) => {
-        await openPage(page, size, withSought())
-        const rows = page.locator('.decisions-table tbody tr[data-event]')
-        await expect(rows).toHaveCount(30)
-        const frame = page.locator('.decisions-table [data-region="table-frame"]')
-        const measured = await frame.evaluate((element) => {
-          const box = element.getBoundingClientRect()
-          const past = (one: Element) => {
-            const own = one.getBoundingClientRect()
-            return Math.max(box.left - own.left, own.right - box.right, 0)
-          }
-          const row = element.querySelector('tbody tr[data-event]')
-          const headings = [...element.querySelectorAll('thead th')]
-          return {
-            sideways: element.scrollWidth - element.clientWidth,
-            cells: [...(row?.children ?? [])].map((one) => past(one)),
-            headings: headings.map((one) => past(one)),
-          }
-        })
-        await record(info, `decisions phone ${tag}`, measured)
-        // The when, the point, the card, the session and what was decided: all five in the frame,
-        // and every heading's sort with them, with nothing to scroll sideways.
-        expect(measured.cells).toHaveLength(5)
-        expect(measured.headings).toHaveLength(5)
-        for (const past of [...measured.cells, ...measured.headings])
-          expect.soft(past).toBeLessThanOrEqual(0.5)
-        expect(measured.sideways).toBeLessThanOrEqual(0)
-        // A heading still sorts: the oldest first.
-        await page.getByRole('button', { name: words.when }).click()
-        await expect(page.locator('.decisions-table thead th').first()).toHaveAttribute(
-          'aria-sort',
-          'ascending',
-        )
-        await shoot(page, info, `phone-${tag}`)
-      })
-
     test('an empty period says so in the page’s words', async ({ page }, info) => {
       await openPage(page, size, [])
       await expect(page.getByText(words.empty)).toBeVisible()
       await expect(page.locator('.decisions-table')).toHaveCount(0)
       await expect(page.getByRole('radio', { name: words.weeks4 })).toBeVisible()
       await shoot(page, info, `empty-${tag}`)
+    })
+  })
+}
+
+for (const size of FIT_SIZES) {
+  const words = WORDS[size.lang]
+  const tag = `${size.lang} ${size.width}`
+
+  test.describe(`Agent decisions' table, ${tag}px`, () => {
+    test.use({ locale: size.lang === 'ru' ? 'ru-RU' : 'en-US' })
+
+    test('every part of a decision stands in the frame, stacked where its columns do not fit', async ({
+      page,
+    }, info) => {
+      await openPage(page, size, withSought())
+      const rows = page.locator('.decisions-table tbody tr[data-event]')
+      await expect(rows).toHaveCount(30)
+      await page.evaluate(() => document.fonts.ready)
+      const frame = page.locator('.decisions-table [data-region="table-frame"]')
+      const measured = await frame.evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        const past = (one: Element) => {
+          const own = one.getBoundingClientRect()
+          return Math.max(box.left - own.left, own.right - box.right, 0)
+        }
+        const top = (selector: string) =>
+          element.querySelector(`tbody tr[data-event] ${selector}`)?.getBoundingClientRect().top ??
+          Number.NaN
+        const pastRows = [...element.querySelectorAll('tbody tr[data-event]')].map((row) =>
+          Math.max(...[...row.children].map((one) => past(one))),
+        )
+        const fit = element.closest<HTMLElement>('.decisions-table')?.dataset.fit
+        const at = top('.decisions-at')
+        // Stacked, when and the point stand on the first line and the card under them; as columns
+        // the three share a line, which says nothing here.
+        const stacked = fit === 'stack'
+        return {
+          fit,
+          sideways: element.scrollWidth - element.clientWidth,
+          cells: Math.max(...pastRows),
+          headings: [...element.querySelectorAll('thead th')].map((one) => past(one)),
+          firstLine: stacked ? Math.abs(top('.decisions-point') - at) : 0,
+          cardUnder: stacked ? top('.decisions-item') - at : 1,
+        }
+      })
+      await record(info, `decisions fit ${tag}`, measured)
+      // Every cell of every row and every heading's sort in the frame, nothing to scroll sideways.
+      expect(measured.headings).toHaveLength(5)
+      for (const past of [measured.cells, ...measured.headings])
+        expect.soft(past).toBeLessThanOrEqual(0.5)
+      expect(measured.sideways).toBeLessThanOrEqual(0)
+      expect.soft(measured.firstLine).toBeLessThanOrEqual(1)
+      expect.soft(measured.cardUnder).toBeGreaterThan(0)
+      // A phone's frame has no room for five columns of words.
+      expect.soft(size.width >= 600 || measured.fit === 'stack', 'stacked on a phone').toBe(true)
+      // A heading still sorts: the oldest first.
+      await page.getByRole('button', { name: words.when }).click()
+      await expect(page.locator('.decisions-table thead th').first()).toHaveAttribute(
+        'aria-sort',
+        'ascending',
+      )
+      await shoot(page, info, `fit-${tag}`)
     })
   })
 }

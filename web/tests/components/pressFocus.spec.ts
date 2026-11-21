@@ -17,9 +17,10 @@ const key = (name: string) =>
 it('leaves a focus to the browser until the page has had a press', () => {
   button.focus()
   expect(asked()).toBeUndefined()
-  // With nothing used yet, a move the interface makes keeps the ring a key would give it.
+  // With nothing used yet, a move the interface makes keeps the ring a key would give it. It
+  // shows the target itself (`placeFocus`), so the browser is asked not to scroll.
   moveFocus(button)
-  expect(asked()).toEqual({ focusVisible: true })
+  expect(asked()).toEqual({ focusVisible: true, preventScroll: true })
 })
 
 it('after a press, a focus that does not say asks for no ring, and one that says keeps it', () => {
@@ -40,16 +41,16 @@ it('a move the interface makes is ringed after a key and quiet after a press', (
   expect(asked()).toEqual({ preventScroll: true, focusVisible: false })
   key('Enter')
   moveFocus(button)
-  expect(asked()).toEqual({ focusVisible: true })
+  expect(asked()).toEqual({ focusVisible: true, preventScroll: true })
   // Holding a modifier, or a pointer only passing over the page, leaves the key's word standing.
   key('Control')
   document.body.dispatchEvent(new Event('pointermove', { bubbles: true }))
   moveFocus(button)
-  expect(asked()).toEqual({ focusVisible: true })
+  expect(asked()).toEqual({ focusVisible: true, preventScroll: true })
   press()
   key('Shift')
   moveFocus(button)
-  expect(asked()).toEqual({ focusVisible: false })
+  expect(asked()).toEqual({ focusVisible: false, preventScroll: true })
 })
 
 it('a modifier held for a click is not the keyboard; any other key gives the browser back', () => {
@@ -85,7 +86,7 @@ it('after a press, a field typed into keeps the browser verdict on its focus', (
     field.focus({ preventScroll: true })
     expect(asked(), field.outerHTML).toEqual({ preventScroll: true })
     moveFocus(field)
-    expect(asked(), field.outerHTML).toEqual({})
+    expect(asked(), field.outerHTML).toEqual({ preventScroll: true })
   }
   // What takes no letters stays quiet after a press, a field that cannot be written in included.
   const quiet = [
@@ -97,7 +98,7 @@ it('after a press, a field typed into keeps the browser verdict on its focus', (
     field.focus()
     expect(asked(), field.outerHTML).toEqual({ focusVisible: false })
     moveFocus(field)
-    expect(asked(), field.outerHTML).toEqual({ focusVisible: false })
+    expect(asked(), field.outerHTML).toEqual({ focusVisible: false, preventScroll: true })
   }
 })
 

@@ -1,7 +1,8 @@
 /**
  * The list grouped by goal on a space as large as a long-lived one, at the list's
- * widths: 1280 and 1024, where its indent steps 24px to the fifth level, and 390,
- * a phone's, where it steps 16px to the second (`listTreePage.ts`).
+ * widths: 1280, 1024 and 390, a phone's. Its indent steps 24px to the fifth level, and in
+ * the narrowest fit, which a five-level tree takes where the room is short of what its
+ * table needs, 16px to the second (`listTreePage.ts`).
  *
  * A goal five levels deep stands as five rows, each a level deeper, its
  * references stepping in by the indent until the indent's last level. Under a
@@ -19,12 +20,20 @@ import { DEEP, drawnOf, rowOf, treeSpace } from './listTreePage.ts'
 import { serveSpace, stillFrames } from './longSpace.ts'
 import { test } from './test.ts'
 
-/** The list's widths: a desktop's, the list's middle fit, a phone's. */
+/** The list's widths: a desktop's, a laptop's, a phone's. */
 const WIDTHS = [
-  { width: 1280, height: 900, step: 24, levels: 5 },
-  { width: 1024, height: 800, step: 24, levels: 5 },
-  { width: 390, height: 844, step: 16, levels: 2 },
+  { width: 1280, height: 900 },
+  { width: 1024, height: 800 },
+  { width: 390, height: 844 },
 ] as const
+
+/** How far a level steps in, and to which level, in each fit. */
+const INDENT: Record<string, { levels: number; step: number }> = {
+  full: { step: 24, levels: 5 },
+  wide: { step: 24, levels: 5 },
+  medium: { step: 24, levels: 5 },
+  narrow: { step: 16, levels: 2 },
+}
 
 /** The deepest task's title, which no other card's begins: «Work item 110 …» does not. */
 const DEEPEST_TITLE = 'item 11 with'
@@ -57,10 +66,10 @@ for (const size of WIDTHS) {
 
     const starts = await referenceStarts(page, DEEP)
     expect(starts).toHaveLength(DEEP.length)
+    const fit = (await page.locator('.work-item-list').getAttribute('data-fit')) ?? ''
+    const { levels, step } = INDENT[fit] ?? { levels: 0, step: 0 }
     // Each level a step in, until the indent's last level; deeper rows stand there.
-    const expected = DEEP.map(
-      (_, depth) => (starts[0] ?? 0) + Math.min(depth, size.levels - 1) * size.step,
-    )
+    const expected = DEEP.map((_, depth) => (starts[0] ?? 0) + Math.min(depth, levels - 1) * step)
     for (const [depth, start] of starts.entries())
       expect(Math.abs(start - (expected[depth] ?? 0)), `level ${depth + 1}`).toBeLessThanOrEqual(1)
   })

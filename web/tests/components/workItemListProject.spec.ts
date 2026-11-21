@@ -22,6 +22,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
+import { atListWidth } from '../fixtures/listRoom.ts'
 import { goalRow, serveGoalVolumes, spentOf } from '../support/volumesDouble.ts'
 
 const named = (id: string, name: string) => ({
@@ -83,20 +84,6 @@ async function list(props: Partial<InstanceType<typeof WorkItemList>['$props']>)
   return wrapper
 }
 
-/** The list at `width` pixels of its own, as the list reads its box. */
-async function at(width: number, run: () => Promise<void>) {
-  const held = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-  Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
-    configurable: true,
-    get: () => width,
-  })
-  try {
-    await run()
-  } finally {
-    if (held) Object.defineProperty(HTMLElement.prototype, 'clientWidth', held)
-  }
-}
-
 describe('the project column', () => {
   it('stands after «Goal and stage» and names what each row changes', async () => {
     await list({ projects: PROJECTS })
@@ -137,7 +124,7 @@ describe('the project column', () => {
     [700, 'medium'],
   ] as const) {
     it(`folds with «Goal and stage» and follows the path under the title of a ${fit} list`, () =>
-      at(width, async () => {
+      atListWidth(width, async () => {
         const wrapper = await list({ projects: PROJECTS })
         expect(document.querySelector<HTMLElement>('.work-item-list')?.dataset.fit).toBe(fit)
         expect(heads()).not.toContain('Project')

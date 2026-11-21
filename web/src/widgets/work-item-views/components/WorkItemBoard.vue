@@ -50,6 +50,7 @@ import type {
   WorkflowState,
   WorkItemBrief,
 } from '@/shared/api/planningModel.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { useStandingName, useStateName } from '@/shared/lib/useStateName.ts'
 
 const props = withDefaults(
@@ -170,7 +171,7 @@ const { columnWidth } = useColumnFit(
 function fold(state: WorkflowState) {
   folds.toggle(state)
   void nextTick(() =>
-    root.value?.querySelector<HTMLElement>(`[data-column-fold="${state.state_id}"]`)?.focus(),
+    placeFocus(root.value?.querySelector<HTMLElement>(`[data-column-fold="${state.state_id}"]`)),
   )
 }
 

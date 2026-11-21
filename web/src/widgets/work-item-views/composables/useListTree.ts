@@ -76,12 +76,6 @@ export function useListTree({ items, matches, ordered, space, source }: ListTree
     })
     return new Map(whole.rows.map((row) => [row.id, row.depth]))
   })
-  /** The depth of the deepest thing of the scope, shown or folded away. */
-  const deepest = computed(() => {
-    let most = 0
-    for (const depth of depths.value.values()) most = Math.max(most, depth)
-    return most
-  })
 
   /**
    * Fold an open row or open a folded one. Outside a filter, a choice that
@@ -97,7 +91,6 @@ export function useListTree({ items, matches, ordered, space, source }: ListTree
   return {
     /** A thing's depth in the tree, a row folded away included. */
     depthOf: (item: WorkItemBrief) => depths.value.get(item.work_item_id) ?? 0,
-    deepest: () => deepest.value,
     expanded: (id: string) => rowOf.value.get(id)?.expanded ?? null,
     /** A row's parent, as the item it is. */
     parentItem: (row: TreeRow<WorkItemBrief>) =>

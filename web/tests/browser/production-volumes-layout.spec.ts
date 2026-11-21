@@ -4,9 +4,13 @@
  * of four figures, ages of months, a goal six levels deep under titles of a sentence and a half,
  * and commits whose subjects and repositories run long. The oracle is DESIGN.md: the figures of a
  * row of numbers stand at one height (System rules, «A KPI figure»); a row's action stands in the
- * columns read first, so «Attach to a card» is in the commits' frame before any sideways scroll
- * (Rows and tables); a goal's title keeps a width of its own whatever its indent, and the parent
- * it names stands under it on its edge (Volumes); on a phone the periods stand whole in their row,
+ * columns read first, so «Attach to a card» is in the commits' frame, and a table stands by whether
+ * its columns fit its frame (Rows and tables): at 1280 every column of the goals stands in it, and
+ * the commits, stacked where their columns do not fit, never scroll sideways or cut a word; a
+ * goal's title keeps a width of its own whatever its indent while the table has room for it, and
+ * comes down to no less than its longest word where it has not, and the parent it names stands
+ * under it on its edge (Volumes) — held to 11rem, the titles left «Left ≈» past the frame at 1280;
+ * on a phone the periods stand whole in their row,
  * and no row is held for the reader's own days until they are chosen (Analytics, the bar). Each
  * run prints what it measured.
  */
@@ -24,8 +28,18 @@ import { test } from './test.ts'
 const WIDTHS = [1280, 1024, 760, 620, 390] as const
 
 const WORDS = {
-  en: { commits: 'Commits on no card', attach: 'Attach to a card', period: 'Period' },
-  ru: { commits: 'Коммиты без карточки', attach: 'Прикрепить к карточке', period: 'Период' },
+  en: {
+    commits: 'Commits on no card',
+    attach: 'Attach to a card',
+    period: 'Period',
+    goals: 'Goals',
+  },
+  ru: {
+    commits: 'Коммиты без карточки',
+    attach: 'Прикрепить к карточке',
+    period: 'Период',
+    goals: 'Цели',
+  },
 } as const
 
 /** The space between the bar's last control and the first number: the bar's foot and the panel's top. */
@@ -34,8 +48,17 @@ const BAND = 16 + 12
 const TITLE =
   'Move the volumes read onto the new work model, counting what each stage spent and judging the estimates by the closed tasks of the alpha/beta/gamma service'
 
-/** The least width a goal's words keep whatever its indent: 11rem. */
+/** The least width a goal's words keep whatever its indent while the table has room: 11rem. */
 const WORDS_LEAST = 11 * 16
+
+/**
+ * How far a column of the goals may stand past the frame, by width: none at the layouts' desktop;
+ * at the narrower ones they scroll where even their least does not fit.
+ */
+const GOALS_PAST: Partial<Record<number, number>> = { 1280: 0.5 }
+
+/** The least width of a goal's words by the goals' step: their longest word's alone at `least`. */
+const WORDS_LEAST_AT: Partial<Record<string, number>> = { least: 0 }
 
 /** A goal six levels deep, each level under a title of a sentence and a half, with large figures. */
 function deepGoals() {
@@ -118,6 +141,58 @@ async function openPage(page: Page, width: number) {
   await page.evaluate(() => document.fonts.ready)
 }
 
+/**
+ * How a table stands in its frame: how far its widest cell or heading reaches past the frame's
+ * inner edges, what is left to scroll sideways, its step and the words its cells break inside, a
+ * word being broken when its letters stand on more than one line.
+ */
+const tableFit = (page: Page, region: string) =>
+  // The section first: its frame is a region of the same name once it scrolls.
+  page
+    .getByRole('region', { name: region, exact: true })
+    .first()
+    .evaluate((section) => {
+      const frame = section.querySelector<HTMLElement>('[data-region="table-frame"]')
+      if (!frame) return null
+      const box = frame.getBoundingClientRect()
+      const left = box.left + frame.clientLeft
+      const right = left + frame.clientWidth
+      // A stacked table's heading row is cut away, read only aloud: its cells are not drawn.
+      const heads = [...frame.querySelectorAll('thead')]
+      const hidden = new Set(heads.filter((head) => getComputedStyle(head).clipPath !== 'none'))
+      const drawn = [...frame.querySelectorAll('th, td')].filter(
+        (one) => !hidden.has(one.closest('thead') as HTMLTableSectionElement),
+      )
+      const cells = drawn.map((one) => {
+        const own = one.getBoundingClientRect()
+        return { cell: one.className, by: Math.max(left - own.left, own.right - right) }
+      })
+      const worst = cells.toSorted((one, other) => other.by - one.by)[0] ?? { cell: '', by: 0 }
+      const past = Math.max(0, worst.by)
+      const broken: string[] = []
+      const walker = document.createTreeWalker(frame, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        for (const found of (node.textContent ?? '').matchAll(/[^\s/]+/gu)) {
+          const range = document.createRange()
+          range.setStart(node, found.index)
+          range.setEnd(node, found.index + found[0].length)
+          const lines = new Set(
+            [...range.getClientRects()]
+              .filter((rect) => rect.width > 0)
+              .map((rect) => Math.round(rect.top)),
+          )
+          if (lines.size > 1) broken.push(found[0])
+        }
+      }
+      return {
+        fit: section.closest<HTMLElement>('[data-fit]')?.dataset.fit,
+        past,
+        worst: worst.cell,
+        sideways: frame.scrollWidth - frame.clientWidth,
+        broken,
+      }
+    })
+
 /** The numbers by the row they stand in: for each row, the top of each figure. */
 const figureRows = (page: Page) =>
   page.locator('[data-number]').evaluateAll((numbers) => {
@@ -194,6 +269,15 @@ for (const lang of ['en', 'ru'] as const)
         }, words.attach)
         expect.soft(attachPast).toBeLessThanOrEqual(0.5)
 
+        // The commits stand in their frame at every width, as columns or as blocks, and no word of
+        // theirs is cut: on a phone, scrolling sideways, the repository's name was cut inside a word.
+        const commitsFit = await tableFit(page, words.commits)
+        expect(commitsFit).not.toBeNull()
+        expect.soft(commitsFit?.past).toBeLessThanOrEqual(0.5)
+        expect.soft(commitsFit?.sideways).toBeLessThanOrEqual(0)
+        expect.soft(commitsFit?.broken).toEqual([])
+        expect.soft(width >= 600 || commitsFit?.fit === 'stack', 'stacked on a phone').toBe(true)
+
         // The deepest goal's title keeps its width, and the parent it names stands on its edge.
         const deepest = page.locator('tr[data-reference="MAIN-17"]')
         const title = await deepest.locator('[data-part="title"]').boundingBox()
@@ -205,9 +289,20 @@ for (const lang of ['en', 'ru'] as const)
           detailOff: Math.abs((detail?.x ?? Number.NaN) - (title?.x ?? Number.NaN)),
           referenceOff: Math.abs((reference?.x ?? Number.NaN) - (title?.x ?? Number.NaN)),
         }
-        expect.soft(goal.title).toBeGreaterThanOrEqual(WORDS_LEAST - 0.5)
+        const goalsFit = await tableFit(page, words.goals)
+        expect(goalsFit).not.toBeNull()
+        // The words keep 11rem unless every column stands in the frame only without it, and are
+        // never narrower than their longest word.
+        expect
+          .soft(goal.title)
+          .toBeGreaterThanOrEqual((WORDS_LEAST_AT[goalsFit?.fit ?? ''] ?? WORDS_LEAST) - 0.5)
+        expect.soft(goalsFit?.broken).toEqual([])
         expect.soft(goal.detailOff).toBeLessThanOrEqual(0.5)
         expect.soft(goal.referenceOff).toBeLessThanOrEqual(0.5)
+        // At the layouts' desktop every column of the goals stands in the frame, «Left ≈» with them.
+        const whole = GOALS_PAST[width] ?? Number.POSITIVE_INFINITY
+        expect.soft(goalsFit?.past).toBeLessThanOrEqual(whole)
+        expect.soft(goalsFit?.sideways).toBeLessThanOrEqual(whole)
 
         await record(info, `volumes layout ${lang} ${width}`, {
           spreads,
@@ -215,6 +310,8 @@ for (const lang of ['en', 'ru'] as const)
           band,
           attachPast,
           goal,
+          goalsFit,
+          commitsFit,
         })
       })
     })

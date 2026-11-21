@@ -43,6 +43,7 @@ import { useEventListener } from '@vueuse/core'
 import { HoverCardContent, HoverCardPortal, HoverCardRoot } from 'reka-ui'
 
 import type { ReferencePreview } from '@/shared/lib/referenceLinks.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import {
   closeHint,
   hintAnchorGone,
@@ -187,19 +188,19 @@ function tabThroughCard(event: KeyboardEvent) {
     if (focusBefore) giveFocusBack()
     else if (document.activeElement === anchor && !event.shiftKey && mine.value?.by === 'focus') {
       event.preventDefault()
-      controls[0]?.focus()
+      placeFocus(controls[0])
     }
     return
   }
   const next = controls[at + step]
   if (next) {
     event.preventDefault()
-    next.focus()
+    placeFocus(next)
     return
   }
   // Back on the reference: Shift+Tab stops there, and Tab goes on from it as the browser moves it.
   if (event.shiftKey) event.preventDefault()
-  anchor?.focus()
+  placeFocus(anchor)
 }
 
 /** Whether the point stands on a line of the card's text, where a press starts a selection. */

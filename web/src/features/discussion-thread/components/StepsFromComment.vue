@@ -23,6 +23,7 @@ import {
 } from '@/features/discussion-thread/utils/stepPoints.ts'
 import type { ListPoint, PointStanding } from '@/features/discussion-thread/utils/stepPoints.ts'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -82,7 +83,7 @@ const { cancel } = useAskedCancel(
 /** The first box that can be ticked, or the way out when none can. */
 function focusFirst() {
   const box = form.value?.querySelector<HTMLElement>('input:not(:disabled)')
-  ;(box ?? form.value?.querySelector<HTMLElement>('.steps-cancel'))?.focus()
+  placeFocus(box ?? form.value?.querySelector<HTMLElement>('.steps-cancel'))
 }
 onMounted(focusFirst)
 

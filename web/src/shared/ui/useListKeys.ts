@@ -46,6 +46,9 @@ import type { Ref } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
 
+import { walkFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+
 /** The list's rows by place, drawn or not. */
 interface ListRows {
   count: () => number
@@ -145,7 +148,7 @@ export function useListKeys(
     // A row the window placed is focused once it is drawn as one: it may not be
     // drawn yet, or drawn collapsed for its widths, which takes no focus.
     if (list().reveal(index)) void nextTick(() => targetOf(id)?.focus({ preventScroll: true }))
-    else targetOf(id)?.focus()
+    else placeFocus(targetOf(id))
   }
 
   function screen(): number {
@@ -192,7 +195,7 @@ export function useListKeys(
     // By its place among the row's cells, which a row of cards has one a heading.
     const place = cell ? [...(cell.parentElement?.children ?? [])].indexOf(cell) : -1
     const above = root.value?.querySelectorAll('thead th')[place]
-    ;(above?.querySelector<HTMLElement>('button') ?? controls[0]).focus()
+    placeFocus(above?.querySelector<HTMLElement>('button') ?? controls[0])
     return true
   }
 
@@ -210,7 +213,7 @@ export function useListKeys(
       event.key
     ]
     if (to === undefined) return false
-    controls[Math.min(Math.max(to, 0), controls.length - 1)]?.focus()
+    walkFocus(controls[Math.min(Math.max(to, 0), controls.length - 1)])
     return true
   }
 
@@ -221,12 +224,12 @@ export function useListKeys(
     const cell = event.target === row ? null : within(event, 'td')
     if (cell) {
       const next = besideCell(cell, forward) ?? (forward ? null : row)
-      next?.focus()
+      walkFocus(next)
       return true
     }
     const expanded = tree.expanded(id)
     if (forward && expanded === false) toggle(id)
-    else if (forward) row.querySelector<HTMLElement>('td')?.focus()
+    else if (forward) walkFocus(row.querySelector<HTMLElement>('td'))
     else if (expanded === true) toggle(id)
     else {
       const parent = tree.parentOf(id)

@@ -12,6 +12,7 @@ import { grantFocus } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { chosenTasks } from '@/shared/lib/mentionSuggest.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
 export type ThreadForm = 'reply' | 'resolve' | 'steps'
@@ -127,7 +128,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     const first = anchored(back === 'resolve' ? resolveAnchor(key) : replyAnchor(key))
     const to = opener?.isConnected ? opener : first
     opener = null
-    right.take(() => to?.focus())
+    right.take(() => placeFocus(to))
   }
   /** Escape, or Cancel: the words go with it, since asking first is the form's. */
   function cancel() {
@@ -197,7 +198,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     const right = grantFocus()
     void writes.reopen(root).then(async () => {
       await nextTick()
-      right.take(() => anchored(resolveAnchor(key))?.focus())
+      right.take(() => placeFocus(anchored(resolveAnchor(key))))
     })
   }
   function markAgain(key: string, root: number) {

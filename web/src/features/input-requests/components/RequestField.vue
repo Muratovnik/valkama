@@ -175,9 +175,9 @@ const radioStop = (option: string) =>
   chosenOption.value || standing.value === option ? undefined : -1
 
 /** Moves focus, ringed after a key, to what is to be fixed: the text, or the group. */
-function focus() {
+function takeFocus() {
   if (editor.value) {
-    editor.value.focus()
+    editor.value.takeFocus()
     return
   }
   const target =
@@ -197,7 +197,7 @@ const {
 )
 /** A field held for its verdict offers no comment, unless one was written there. */
 const noteAway = computed(() => props.held && !noteWritten.value)
-defineExpose({ focus })
+defineExpose({ takeFocus })
 </script>
 
 <template>

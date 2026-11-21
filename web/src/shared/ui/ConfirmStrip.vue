@@ -18,6 +18,7 @@
 import { onMounted, onUnmounted, ref, useId } from 'vue'
 
 import { levelWithGround } from '@/shared/lib/ground.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -44,12 +45,12 @@ const opener = active instanceof HTMLElement && active !== document.body ? activ
 
 onMounted(() => {
   if (strip.value) onSheet.value = levelWithGround(strip.value)
-  strip.value?.querySelector<HTMLButtonElement>('.confirm-cancel')?.focus()
+  placeFocus(strip.value?.querySelector<HTMLButtonElement>('.confirm-cancel'))
 })
 
 onUnmounted(() => {
   const now = document.activeElement
-  if (opener?.isConnected && (now === null || now === document.body)) opener.focus()
+  if (opener?.isConnected && (now === null || now === document.body)) placeFocus(opener)
 })
 </script>
 

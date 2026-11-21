@@ -1,5 +1,7 @@
 import { shallowRef } from 'vue'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+
 /** A live host lease; its focus target belongs to the surface it covered. */
 export interface OverlayOwnership {
   readonly id: number
@@ -33,7 +35,7 @@ function scheduleRestore() {
     const target = pendingFocus
     pendingFocus = null
     if (top) {
-      if (target?.isConnected && top.surface()?.contains(target)) target.focus()
+      if (target?.isConnected && top.surface()?.contains(target)) placeFocus(target)
       return
     }
     const finished = session
@@ -42,7 +44,7 @@ function scheduleRestore() {
       document.body.style.overflow = finished.overflow
       document.removeEventListener('keydown', dismissTop)
     }
-    if (finished?.focus?.isConnected) finished.focus.focus()
+    if (finished?.focus?.isConnected) placeFocus(finished.focus)
   })
 }
 

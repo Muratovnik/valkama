@@ -30,6 +30,12 @@
  * A host that gives the row a line of its own makes it its line's width with a class on the
  * tag, and shares that width among the segments by `--segmented-option-grow`.
  *
+ * A row that may be wider than what holds it, as a settings row's choice (`SettingsRow`'s
+ * `wide`), says so (`wrap`): it stays one line where that line holds it, and where it does
+ * not its segments wrap and share each line evenly, every line as wide as what holds it.
+ * Each host used to state the wrap and only some the sharing: on a phone the scope choice of
+ * Participation stood its two segments 135 and 110px wide on lines of 240.
+ *
  * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
  * lays its bar out by the row's whole width, as the Analytics periods, reads that width. A row
  * that nothing scrolls and that must stand inside what holds it, as a chart's head in a phone's
@@ -69,8 +75,10 @@ const props = withDefaults(
     size?: 'default' | 'compact' | 'inline' | 'tile'
     /** The ids that make the row a tab list over the panel it shows. */
     tabs?: TabIds | null
+    /** Where one line cannot hold the row, its segments wrap and share each line evenly. */
+    wrap?: boolean
   }>(),
-  { size: 'default', tabs: null, activation: 'automatic', fit: false },
+  { size: 'default', tabs: null, activation: 'automatic', fit: false, wrap: false },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
@@ -161,7 +169,7 @@ function move(event: KeyboardEvent) {
   <div
     class="segmented"
     :role="groupRole"
-    :class="[`size-${size}`, { fit }]"
+    :class="[`size-${size}`, { fit, wrap }]"
     :aria-label="label"
   >
     <button
@@ -287,6 +295,19 @@ function move(event: KeyboardEvent) {
     padding-block: var(--space-half);
     text-wrap: balance;
     white-space: normal;
+  }
+}
+
+/* A row that may be wider than what holds it (`wrap`) wraps only where one line cannot hold
+   it, and each line's segments then share its width: a segment grows into the room its line
+   leaves, so a segment alone on a line is as wide as the line. On one line the track is as
+   wide as its segments and leaves none to share. */
+.segmented.wrap {
+  flex-wrap: wrap;
+  max-inline-size: 100%;
+
+  .segmented-option {
+    flex-grow: 1;
   }
 }
 

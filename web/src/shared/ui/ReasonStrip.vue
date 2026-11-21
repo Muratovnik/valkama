@@ -10,6 +10,7 @@
  */
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -37,13 +38,13 @@ const asked = ref(false)
 const error = computed(() => (asked.value && !reason.value.trim() ? props.missing : props.failure))
 const field = useTemplateRef<{ control: () => HTMLInputElement | null }>('field')
 
-onMounted(() => field.value?.control()?.focus())
+onMounted(() => placeFocus(field.value?.control()))
 
 function confirm() {
   if (props.busy) return
   if (!reason.value.trim()) {
     asked.value = true
-    field.value?.control()?.focus()
+    placeFocus(field.value?.control())
     return
   }
   emit('confirm', reason.value.trim())

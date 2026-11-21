@@ -28,6 +28,7 @@ import type { RailTileModel } from '@/pages/analytics/composables/useRailTiles.t
 
 import { isQuotaSection, OVERVIEW } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection } from '@/shared/api/analyticsAddress.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -90,7 +91,7 @@ const rail = ref<HTMLElement | null>(null)
 
 /** Puts focus on the entry of the section on show, as a return to the list leaves it. */
 function focusSelected() {
-  rail.value?.querySelector<HTMLElement>('[aria-current="page"]')?.focus()
+  placeFocus(rail.value?.querySelector<HTMLElement>('[aria-current="page"]'))
 }
 defineExpose({ focusSelected })
 </script>

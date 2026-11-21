@@ -9,21 +9,24 @@ import { describe, expect, it } from 'vitest'
 
 import {
   drawnColumns,
-  fitFor,
+  fitOf,
   isFolded,
+  levelFor,
+  LEVELS,
   LIST_COLUMNS,
   sortedRows,
   sortsChosen,
 } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { Fit, Level } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import { boardItem } from './fixtures/board.ts'
 
-const standing = (width: number, columns = LIST_COLUMNS) =>
-  columns.filter((column) => !isFolded(fitFor(width), column.key)).map((column) => column.key)
+const standing = (fit: Fit, columns = LIST_COLUMNS) =>
+  columns.filter((column) => !isFolded(fit, column.key)).map((column) => column.key)
 
 describe('the list columns as the list narrows', () => {
-  it('stand all nine in a list 1100px wide, and when the width is not yet known', () => {
-    const all = [
+  it('stand all nine in the full fit', () => {
+    expect(standing('full')).toEqual([
       'reference',
       'title',
       'goal',
@@ -33,32 +36,11 @@ describe('the list columns as the list narrows', () => {
       'claim',
       'checklist',
       'updated',
-    ]
-    expect(standing(1280)).toEqual(all)
-    expect(standing(1100)).toEqual(all)
-    expect(standing(0)).toEqual(all)
+    ])
   })
 
-  it('fold the goal and stage and the project first, keeping the rest down to 920px', () => {
-    const rest = ['reference', 'title', 'state', 'priority', 'claim', 'checklist', 'updated']
-    expect(standing(1099)).toEqual(rest)
-    expect(standing(920)).toEqual(rest)
-  })
-
-  it('then fold the state, the priority and the holder, keeping the conditions and the date', () => {
-    expect(standing(919)).toEqual(['reference', 'title', 'checklist', 'updated'])
-    expect(standing(900)).toEqual(['reference', 'title', 'checklist', 'updated'])
-    expect(standing(703)).toEqual(['reference', 'title', 'checklist', 'updated'])
-    expect(standing(560)).toEqual(['reference', 'title', 'checklist', 'updated'])
-  })
-
-  it('stand «Goal and stage» and «Project» together from 1270px, and fold them together', () => {
-    const both = (width: number) =>
-      LIST_COLUMNS.filter((column) => !isFolded(fitFor(width, true), column.key)).map(
-        (column) => column.key,
-      )
-    expect(both(1270).slice(2, 4)).toEqual(['goal', 'project'])
-    expect(both(1269)).toEqual([
+  it('fold the goal and stage and the project first, together', () => {
+    expect(standing('wide')).toEqual([
       'reference',
       'title',
       'state',
@@ -67,41 +49,72 @@ describe('the list columns as the list narrows', () => {
       'checklist',
       'updated',
     ])
-    expect(fitFor(1269, true)).toBe('wide')
-    expect(fitFor(919, true)).toBe('medium')
-    expect(fitFor(0, true)).toBe('full')
   })
 
-  it("meet a tree's lead out of the width before choosing", () => {
-    // A list of 956px at 1280 whose tree stands four levels deep leads by 96px:
-    // the room beside it is 860, where a flat list of that width would be wide.
-    expect(fitFor(956, true)).toBe('wide')
-    expect(fitFor(956, true, 96)).toBe('medium')
-    expect(fitFor(1196, false, 96)).toBe('full')
-    expect(fitFor(1195, false, 96)).toBe('wide')
-    expect(fitFor(656, false, 96)).toBe('medium')
-    expect(fitFor(655, false, 96)).toBe('narrow')
-    // Unmeasured, the list stays wide whatever its lead.
-    expect(fitFor(0, true, 96)).toBe('full')
+  it('then fold the state, the priority and the holder, keeping the conditions and the date', () => {
+    expect(standing('medium')).toEqual(['reference', 'title', 'checklist', 'updated'])
   })
 
   it('leave the reference and the title on a phone', () => {
-    expect(standing(559)).toEqual(['reference', 'title'])
-    expect(standing(292)).toEqual(['reference', 'title'])
+    expect(standing('narrow')).toEqual(['reference', 'title'])
   })
 
   it('offer the folded sorts as one choice wherever the state, the priority and the holder fold', () => {
     // A run of five sorts after the title's took a second line of the head; of two it holds one.
-    expect([1440, 1100, 920].map((width) => sortsChosen(fitFor(width)))).toEqual([
+    expect(LEVELS.map((level) => sortsChosen(fitOf(level)))).toEqual([
       false,
       false,
-      false,
+      true,
+      true,
+      true,
     ])
-    expect([919, 703, 560, 292].map((width) => sortsChosen(fitFor(width)))).toEqual([
-      true,
-      true,
-      true,
-      true,
+  })
+})
+
+describe('the level a list stands', () => {
+  // What each level's table needed where it was drawn past the list.
+  const needs = new Map<Level, number>([
+    ['full', 1260],
+    ['wide', 1076],
+    ['medium', 650],
+  ])
+
+  it('is the widest whose table the list holds', () => {
+    expect(levelFor(1260, needs)).toBe('full')
+    expect(levelFor(1259, needs)).toBe('wide')
+    expect(levelFor(1076, needs)).toBe('wide')
+    expect(levelFor(1075, needs)).toBe('medium')
+    expect(levelFor(649, needs)).toBe('narrow')
+  })
+
+  it('tries a level whose need is not known, the widest first', () => {
+    expect(levelFor(300, new Map())).toBe('full')
+    expect(levelFor(1100, new Map([['full', 1260]]))).toBe('wide')
+  })
+
+  it('bares the choice of order only where even the narrowest fit does not hold', () => {
+    const phone = new Map([...needs, ['narrow', 314]] as const)
+    expect(levelFor(314, phone)).toBe('narrow')
+    expect(levelFor(292, phone)).toBe('bare')
+  })
+
+  it('is the last wherever no wider one holds, whatever it needs', () => {
+    expect(levelFor(200, new Map([...needs, ['narrow', 274], ['bare', 240]]))).toBe('bare')
+  })
+
+  it('stands no level wider than the one it is told to start from', () => {
+    // New rows only give way: the list stays medium though the wide fit is not known.
+    expect(levelFor(1200, new Map(), 'medium')).toBe('medium')
+    expect(levelFor(600, needs, 'medium')).toBe('narrow')
+  })
+
+  it('stands a bare level in the narrowest fit', () => {
+    expect(LEVELS.map((level) => fitOf(level))).toEqual<Fit[]>([
+      'full',
+      'wide',
+      'medium',
+      'narrow',
+      'narrow',
     ])
   })
 })
@@ -138,7 +151,7 @@ describe('the columns a list draws', () => {
   it('leaves the goal and stage out of the tree by goal, at every width', () => {
     const tree = drawnColumns({ goal: false, project: false })
     expect(tree.map((column) => column.key)).not.toContain('goal')
-    expect(standing(1280, tree)).toEqual([
+    expect(standing('full', tree)).toEqual([
       'reference',
       'title',
       'state',
