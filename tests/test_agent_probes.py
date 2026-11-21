@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -40,6 +41,19 @@ from tests.test_registry_owner import _former_projection as former_projection
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "tests" / "agent_probes"
 FAKE = SAMPLES / "fake_client.py"
+
+
+def _load_fake_client() -> Any:
+    """The fake client as a module, to read a command line the way it does."""
+
+    spec = importlib.util.spec_from_file_location("probe_fake_client", FAKE)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+fake_client = _load_fake_client()
 
 #: What a coordinator hook of the user's does: print one file, for the main agent only.
 PRINT_FILE = (
@@ -689,7 +703,12 @@ class RunRecordTests(RunCase):
             return start(runner)
 
         with mock.patch.object(agent_probes.SessionRunner, "run", run):
-            cls.run_probes("--client", "claude")
+            cls.run_probes("--client", "claude", "--claude-model", "m1", "--claude-effort", "e1")
+
+    def test_the_record_names_the_model_each_client_was_asked_to_run(self) -> None:
+        self.assertEqual(0, self.code, self.said)
+        final = json.loads((self.out / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual({"claude": {"model": "m1", "effort": "e1"}}, final["models"])
 
     def test_the_record_names_each_finished_session_before_the_next_starts(self) -> None:
         self.assertEqual(0, self.code, self.said)
@@ -1192,6 +1211,54 @@ class SandboxRefusalTests(unittest.TestCase):
         argv = agent_probes.client_argv("codex", ["codex"], "go", Path("W"), None)
 
         self.assertIn('windows.sandbox="mxc"', argv)
+
+
+class ModelChoiceTests(unittest.TestCase):
+    """A run can ask each client for a model and an effort other than its profile's.
+
+    The probes ran on the profile's model; the owner moved them to a cheaper pair,
+    which each client takes as its own flags, on every turn.
+    """
+
+    CHOICE = agent_probes.ModelChoice("m1", "e1")
+
+    def test_without_a_choice_neither_client_is_told_a_model(self) -> None:
+        for client in agent_probes.CLIENTS:
+            for session in (None, "S"):
+                argv = agent_probes.client_argv(client, [client], "go", Path("W"), session)
+                with self.subTest(client=client, session=session):
+                    self.assertFalse({"--model", "-m", "--effort"} & set(argv))
+                    self.assertFalse([word for word in argv if "reasoning_effort" in word])
+
+    def test_claude_takes_its_model_and_effort_flags_on_every_turn(self) -> None:
+        first = agent_probes.client_argv("claude", ["claude"], "go", Path("W"), None, self.CHOICE)
+        later = agent_probes.client_argv("claude", ["claude"], "go", Path("W"), "S", self.CHOICE)
+
+        for argv in (first, later):
+            start = argv.index("--model")
+            self.assertEqual(["--model", "m1", "--effort", "e1"], argv[start : start + 4])
+        self.assertEqual(["--resume", "S"], later[-2:])
+        self.assertEqual(("claude", "go", "S"), fake_client.parse(later))
+
+    def test_codex_takes_its_model_and_effort_setting_before_the_resumed_session(self) -> None:
+        first = agent_probes.client_argv("codex", ["codex"], "go", Path("W"), None, self.CHOICE)
+        later = agent_probes.client_argv("codex", ["codex"], "go", Path("W"), "S", self.CHOICE)
+
+        for argv in (first, later):
+            start = argv.index("-m")
+            self.assertEqual(
+                ["-m", "m1", "-c", 'model_reasoning_effort="e1"'], argv[start : start + 4]
+            )
+        self.assertEqual(["resume", "S", "go"], later[-3:])
+        self.assertEqual(("codex", "go", None), fake_client.parse(first))
+        self.assertEqual(("codex", "go", "S"), fake_client.parse(later))
+
+    def test_a_model_without_an_effort_keeps_the_profile_s_effort(self) -> None:
+        choice = agent_probes.ModelChoice("m1")
+
+        self.assertEqual(["--model", "m1"], choice.flags("claude"))
+        self.assertEqual(["-m", "m1"], choice.flags("codex"))
+        self.assertEqual({"model": "m1", "effort": None}, choice.record())
 
 
 class StoreCopyRegistryTests(unittest.TestCase):

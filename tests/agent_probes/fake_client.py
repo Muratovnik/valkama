@@ -71,7 +71,7 @@ def parse(argv: list[str]) -> tuple[str, str, str | None]:
     index = 0
     while index < len(words):
         word = words[index]
-        index += 2 if word in ("-C", "-s", "-c") else 1
+        index += 2 if word in ("-C", "-s", "-c", "-m") else 1
         if not word.startswith("-"):
             positional.append(word)
     if positional[0] == "resume":

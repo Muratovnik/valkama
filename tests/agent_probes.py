@@ -1293,8 +1293,42 @@ def substitute(value: Any, names: Mapping[str, str]) -> Any:
     return value
 
 
+@dataclasses.dataclass(frozen=True)
+class ModelChoice:
+    """The model and reasoning effort a client is asked to run; None keeps the profile's."""
+
+    model: str | None = None
+    effort: str | None = None
+
+    def flags(self, client: str) -> list[str]:
+        """The client's own flags for this choice: Claude Code's `--model` and `--effort`,
+        Codex's `-m` and its `model_reasoning_effort` setting."""
+
+        flags: list[str] = []
+        if self.model:
+            flags += ["--model" if client == "claude" else "-m", self.model]
+        if self.effort:
+            if client == "claude":
+                flags += ["--effort", self.effort]
+            else:
+                flags += ["-c", f'model_reasoning_effort="{self.effort}"']
+        return flags
+
+    def record(self) -> dict[str, str | None]:
+        return {"model": self.model, "effort": self.effort}
+
+
+#: No choice: each client runs the model its profile's settings name.
+PROFILE_MODEL = ModelChoice()
+
+
 def client_argv(
-    client: str, program: Sequence[str], prompt: str, workspace: Path, session: str | None
+    client: str,
+    program: Sequence[str],
+    prompt: str,
+    workspace: Path,
+    session: str | None,
+    choice: ModelChoice = PROFILE_MODEL,
 ) -> list[str]:
     """The command line of one turn; `session` continues the session of the first."""
 
@@ -1311,6 +1345,7 @@ def client_argv(
             "stream-json",
             "--verbose",
             "--include-hook-events",
+            *choice.flags(client),
         ]
         return argv + (["--resume", session] if session else [])
     argv = [
@@ -1330,6 +1365,7 @@ def client_argv(
         "-c",
         'windows.sandbox="mxc"',
         "--dangerously-bypass-hook-trust",
+        *choice.flags(client),
     ]
     return argv + (["resume", session, prompt] if session else [prompt])
 
@@ -1543,9 +1579,11 @@ class SessionRunner:
         program: Sequence[str],
         directory: Path,
         base_store: Path,
+        choice: ModelChoice = PROFILE_MODEL,
     ) -> None:
         self.profile, self.scenario, self.client = profile, scenario, client
         self.program = list(program)
+        self.choice = choice
         self.directory = directory
         self.base_store = base_store
         self.workspace = directory / "workspace"
@@ -1771,7 +1809,7 @@ class SessionRunner:
 
     def _turn(self, index: int, prompt: str) -> bool:
         argv = client_argv(
-            self.client, self.program, prompt, self.workspace, self.record.session_id
+            self.client, self.program, prompt, self.workspace, self.record.session_id, self.choice
         )
         output = self.directory / f"turn-{index}.jsonl"
         errors = self.directory / f"turn-{index}.stderr.txt"
@@ -2043,6 +2081,10 @@ def _run_locked(
     live: LiveFiles,
 ) -> int:
     profile = build_profile(home, inputs)
+    choices = {
+        "claude": ModelChoice(options.claude_model, options.claude_effort),
+        "codex": ModelChoice(options.codex_model, options.codex_effort),
+    }
     programs = _programs(chosen, options.client_program or (), profile.environment["PATH"])
     base, prepared = prepare_store(source, profile.work, registry)
     versions = {
@@ -2059,6 +2101,8 @@ def _run_locked(
         "text": text_digests(inputs.sections, options.cases.resolve()),
         "store": prepared,
         "versions": versions,
+        # What each client was asked to run; the judge's report names what each session ran.
+        "models": {client: choices[client].record() for client in chosen},
         "sessions": sessions,
         "finished": False,
     }
@@ -2075,7 +2119,13 @@ def _run_locked(
         for client in (item for item in chosen if item in scenario.clients):
             _say(f"{scenario.id} {client}")
             session = SessionRunner(
-                profile, scenario, client, programs[client], out / scenario.name / client, base
+                profile,
+                scenario,
+                client,
+                programs[client],
+                out / scenario.name / client,
+                base,
+                choices[client],
             ).run()
             changed = live.check(f"{scenario.id} {client}")
             if changed:
@@ -2112,6 +2162,14 @@ def _parser() -> argparse.ArgumentParser:
     command.add_argument("--claude-coordinator", type=Path, required=True)
     command.add_argument("--codex-agents", type=Path, required=True)
     command.add_argument("--client", choices=(*CLIENTS, "both"), required=True)
+    for client in CLIENTS:
+        command.add_argument(
+            f"--{client}-model", help=f"the model {client} runs; by default the profile's"
+        )
+        command.add_argument(
+            f"--{client}-effort",
+            help=f"the reasoning effort {client} runs at; by default the profile's",
+        )
     command.add_argument("--client-home", type=Path, required=True, help="the clients' home")
     command.add_argument("--out", type=Path, required=True, help="where the records go")
     command.add_argument(
