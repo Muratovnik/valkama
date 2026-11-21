@@ -186,9 +186,9 @@ function readForbidden(texts: readonly string[], scope: string | null): Occurren
 /**
  * What a reader may press in the panel's charts to open a value, in reading order, each marked
  * `data-sweep-press`: the hinted marks of a chart that are controls first, then the other buttons,
- * never a switch's option or a menu. Answers their paths.
+ * never a switch's option or a menu. Answers their paths, and how many are marks that act.
  */
-function markPressables(): string[] {
+function markPressables(): { acting: number; paths: string[] } {
   const help = window.sweepHelpers
   const pressable = ':is(button, [role="button"]):not([aria-haspopup]):not([role="radio"])'
   const all = [...document.querySelectorAll<HTMLElement>(`.analytics-panel ${pressable}`)].filter(
@@ -198,10 +198,11 @@ function markPressables(): string[] {
     (one) => one.closest('[data-shown]') && one.matches('[data-tooltip], :has([data-tooltip])'),
   )
   const ordered = [...marks, ...all.filter((one) => !marks.includes(one))].slice(0, 12)
-  return ordered.map((one, index) => {
+  const paths = ordered.map((one, index) => {
     one.dataset.sweepPress = String(index)
     return help.path(one)
   })
+  return { acting: marks.length, paths }
 }
 
 /** Brings the pressable `index` into view and answers a point where the pointer reaches it. */

@@ -15,14 +15,19 @@
  * text roles of the rows apart under it, under a name too long to stand beside them: the numbers
  * are read there, and no sector carries words, which no hue of the palette held well. A row's
  * figure (`valueText`) is its figure alone, since the legend says its share after it. The sectors
- * stand apart by a gap of ground.
+ * stand apart by a gap of ground, and each takes the pointer over its half of the ground beside
+ * it, a stroke of nothing as wide as the gap (`RING_GAP`): a sector thinner than the pointer's
+ * reach answers beside its edge, and the ground between two sectors answers for the nearer one.
  *
  * A sector is a mark of its chart: its one hint, under the pointer or the keyboard, gives its
  * name beside its hue, its figure and its share of the whole, and for the rest its five largest
  * parts and one line for the others (`ringHint` in `markHints.ts`). It stands at the top right of
- * the middle of the sector's band, as a chart's hint stands at its point (`data-hint-point`,
- * `hintPlacement.ts`). The sectors are one stop for Tab, walked round the ring with the arrows,
- * Home and End; a sector whose row opens something (`actionable`) is a button there, pressed with
+ * a point on the middle of the sector's band, as a chart's hint stands at its point
+ * (`data-hint-point`, `hintPlacement.ts`): the point level with the pointer round the ring while
+ * the pointer stands on the sector, so a sector that runs round most of the ring has its hint by
+ * the pointer wherever it stands, and the middle of the band under the keyboard (`bandAt`). Its
+ * hint stood 70px from the pointer three quarters round a sector of 95 %, at its middle. The
+ * sectors are one stop for Tab, walked round the ring with the arrows, Home and End; a sector whose row opens something (`actionable`) is a button there, pressed with
  * Enter or Space as with the pointer, and sent out as `select` with the row's key, as its legend
  * entry is. A row that leads somewhere (`href`) is followed from its legend entry and the table.
  * A sector under the pointer or the keyboard lifts (`seriesFill.css`), and so does the sector of a
@@ -38,7 +43,15 @@ import type { PeriodSeries, RankedRow } from '@/shared/ui/chartGeometry.ts'
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import type { RingSector } from '@/shared/ui/donutGeometry.ts'
-import { bandMiddle, RING_BOX, ringOf, sectorPath } from '@/shared/ui/donutGeometry.ts'
+import {
+  bandAt,
+  bandMiddle,
+  RING_BOX,
+  RING_GAP,
+  ringOf,
+  sectorPath,
+  turnAt,
+} from '@/shared/ui/donutGeometry.ts'
 import { ringHint, ringPart } from '@/shared/ui/markHints.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -71,22 +84,32 @@ const props = defineProps<{
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
 const ring = computed(() => ringOf(props.rows, undefined, props.whole))
-/**
- * The sectors drawn, each with its outline and the point its hint stands at, the middle of its
- * band in the drawing's units; one too thin to show past its gap is in the legend.
- */
+/** The sectors drawn, each with its outline; one too thin to show past its gap is in the legend. */
 const drawn = computed(() =>
   ring.value.sectors
-    .map((sector) => {
-      const middle = bandMiddle(sector)
-      return {
-        ...sector,
-        path: sectorPath(sector.start, sector.end),
-        point: `${middle.x} ${middle.y}`,
-      }
-    })
+    .map((sector) => ({ ...sector, path: sectorPath(sector.start, sector.end) }))
     .filter((sector) => sector.path),
 )
+
+/** The sector the pointer stands on, by its place, and how far round the ring it stands. */
+const aim = ref<{ index: number; turn: number } | null>(null)
+
+/** Where on the ring the pointer stands on sector `index`, from a move over it. */
+function aimAt(event: PointerEvent, index: number) {
+  const toBox = drawing.value?.getScreenCTM()?.inverse()
+  if (!toBox) return
+  const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(toBox)
+  aim.value = { index, turn: turnAt(at.x, at.y) }
+}
+
+/**
+ * The point a sector's hint stands at, in the drawing's units (`data-hint-point`): its band's
+ * middle where the pointer stands on it (`bandAt`), else the middle of its band.
+ */
+function pointOf(sector: RingSector, index: number) {
+  const at = aim.value?.index === index ? bandAt(sector, aim.value.turn) : bandMiddle(sector)
+  return `${at.x} ${at.y}`
+}
 
 /** How a sector's hint and its legend entry read its figures and name the rest. */
 const hintChart = computed(() => ({
@@ -206,14 +229,18 @@ async function walk(event: KeyboardEvent, index: number) {
             :key="sector.key"
             v-tooltip.detail="hintOf(sector)"
             class="donut-sector series-fill"
+            stroke="transparent"
             :class="{ 'donut-acts': pressable(sector) }"
             :d="sector.path"
+            :stroke-width="RING_GAP"
             :data-slot="sector.slot"
             :data-key="sector.key"
             :data-sector="index"
-            :data-hint-point="sector.point"
+            :data-hint-point="pointOf(sector, index)"
             :data-lifted="liftedBy(sector)"
             v-bind="sectorAttrs(sector, index)"
+            @pointermove="(event: PointerEvent) => aimAt(event, index)"
+            @pointerleave="aim = null"
             @click="press(sector)"
             @keydown="(event: KeyboardEvent) => walk(event, index)"
             @focus="stood = index"

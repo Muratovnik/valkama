@@ -10,8 +10,9 @@
  *
  * Every row is a subgrid of the one grid, so a row's band spans the whole hint and its cells keep
  * the grid's columns. The row of the part the pointer or the keyboard stands on (`current`) is
- * marked by a band and a semibold name, and the width of every name that can be marked is held as
- * wide as it is semibold, so marking one moves nothing and the hint is not measured again.
+ * marked by a band and a semibold name, and every name that can be marked is held as wide and as
+ * tall as it is drawn semibold, its lines wrapped as they wrap then, so marking one moves nothing
+ * and the hint is not measured again.
  *
  * A name its mark draws in runs, a task's title with code in it, is drawn here in the same runs
  * (`runs`, `textRuns.ts`): its code is code in the hint as on the chart.
@@ -39,9 +40,6 @@ const shares = computed(() => props.body.rows.some((row) => Boolean(row.share)))
 
 /** Whether the row is the one the pointer or the keyboard stands on. */
 const isCurrent = (row: TooltipRow) => Boolean(row.key) && row.key === props.current
-
-/** The words whose semibold width a row that can be marked holds, else none. */
-const heldName = (row: TooltipRow) => (row.key ? row.name : undefined)
 </script>
 
 <template>
@@ -102,14 +100,26 @@ const heldName = (row: TooltipRow) => (row.key ? row.name : undefined)
         v-if="row.runs"
         v-text-runs="row.runs"
         class="tooltip-body-name"
-        :data-name="heldName(row)"
       />
       <span
         v-else
         class="tooltip-body-name"
-        :data-name="heldName(row)"
         >{{ row.name }}</span
       >
+      <!-- The name as it is drawn marked, unseen in its cell: it holds the row's width and its
+           lines whether the row is marked or not. -->
+      <template v-if="row.key">
+        <span
+          v-if="row.runs"
+          v-text-runs="row.runs"
+          class="tooltip-body-held"
+        />
+        <span
+          v-else
+          class="tooltip-body-held"
+          >{{ row.name }}</span
+        >
+      </template>
       <span
         v-if="row.figure"
         class="tooltip-body-figure"
@@ -177,17 +187,21 @@ const heldName = (row: TooltipRow) => (row.key ? row.name : undefined)
   .tooltip-body-head & {
     font: var(--font-label);
   }
+}
 
-  /* As wide as it is semibold, marked or not: a hidden semibold copy of its words holds the
-     width, no taller than nothing. */
-  &[data-name]::after {
-    content: attr(data-name);
-    display: block;
-    block-size: 0;
-    font: var(--font-label);
-    overflow: hidden;
-    visibility: hidden;
-  }
+/* A name that can be marked and its unseen semibold copy share one cell, so the row is as wide
+   and as tall as the name marked, marked or not. Held to its width alone, a name the hint's
+   room wrapped took more lines once marked, and on a phone the hint grew and moved while the
+   pointer crossed one day. */
+.tooltip-body-main .tooltip-body-name,
+.tooltip-body-held {
+  grid-row: 1;
+}
+
+.tooltip-body-held {
+  grid-column: name / figure;
+  font: var(--font-label);
+  visibility: hidden;
 }
 
 .tooltip-body-figure,

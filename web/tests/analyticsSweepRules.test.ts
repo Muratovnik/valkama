@@ -15,6 +15,7 @@ import {
   expectedOnLine,
   judge,
   occurrences,
+  panelNote,
   placementMiss,
   scrollMiss,
 } from './sweep/sweepRules.ts'
@@ -72,11 +73,25 @@ describe('what may answer the pointer among boxes', () => {
     assert.deepEqual(expectedAmong(marks, 'a', { x: 23, y: 10 }), ['b'])
   })
 
+  test('the pointer is taken as the pixel square right and down of its point', () => {
+    // Columns 3px wide and 2px apart, as a day's minutes stand at a phone's width.
+    const marks = [
+      { id: 'a', box: box(0, 0, 3, 100) },
+      { id: 'b', box: box(5, 0, 3, 100) },
+    ]
+    // 0.4px past a and 1.6px short of b: the square reaches within 0.6px of b, and either answers.
+    assert.deepEqual(expectedAmong(marks, 'b', { x: 3.4, y: 50 }), ['a', 'b'])
+    // On a, 2px short of b: the square stays 1px short, and a is the nearer by more than a pixel.
+    assert.deepEqual(expectedAmong(marks, 'a', { x: 2, y: 50 }), ['a'])
+    // 0.4px past b's right edge the square gains nothing: b is still 0.4px away.
+    assert.deepEqual(expectedAmong(marks, 'b', { x: 8.4, y: 50 }), ['b'])
+  })
+
   test('a point no mark reaches within 3px still expects the mark aimed at', () => {
     assert.deepEqual(expectedAmong([{ id: 'a', box: box(0, 0, 2, 2) }], 'a', { x: 8, y: 1 }), ['a'])
   })
 
-  test('a drawn shape answers only where its fill holds the point', () => {
+  test('a drawn shape answers only where it takes the pointer, on its fill or its stroke', () => {
     const marks = [
       { id: 'ring', box: box(0, 0, 100, 100), onShape: false },
       { id: 'key', box: box(40, 40, 20, 20) },
@@ -130,6 +145,28 @@ describe("where a mark's hint stands", () => {
       rule: 'far-from-pointer',
       by: 80,
     })
+  })
+
+  test('a point a drawn shape names off the shape is no place of its mark, however near', () => {
+    const hint = box(206, 154, 120, 40)
+    const on = { kind: 'point' as const, box: box(200, 200, 0, 0), onShape: true }
+    assert.equal(placementMiss(hint, on, { x: 201, y: 199 }), null)
+    // The same corner 6px off the point and by the pointer, the point beside the sector.
+    assert.deepEqual(placementMiss(hint, { ...on, onShape: false }, { x: 201, y: 199 }), {
+      rule: 'away-from-mark',
+      by: 8,
+    })
+  })
+})
+
+describe('what the sweep notes of the value panel', () => {
+  test('a state whose marks act and open no panel is noted', () => {
+    assert.equal(panelNote(3, false), 'no mark opened the value panel')
+  })
+
+  test('nothing is noted where a mark opened it, or where no mark acts, as a token kind', () => {
+    assert.equal(panelNote(3, true), null)
+    assert.equal(panelNote(0, false), null)
   })
 })
 

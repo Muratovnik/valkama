@@ -29,11 +29,14 @@ import type { FacetContext, FacetSubject, FacetSurface } from '@/entities/work-i
 import { chipsThatFit } from '@/entities/work-item/utils/labelRoom.ts'
 
 import { drawnWidth } from '@/shared/lib/textWidth.ts'
+import type { Figures } from '@/shared/lib/textWidth.ts'
 
 /** What every line measures with, read from the first drawn chip and kept for the page. */
 interface ChipMetrics {
   /** The chip's padding and borders, face included, in px. */
   chrome: number
+  /** How the chip draws its figures, which a canvas font does not say. */
+  figures: Figures
   /** The canvas font the chip's words are drawn in. */
   font: string
   /** The gap between two marks on the line, in px. */
@@ -51,10 +54,10 @@ const textWidths = new Map<string, number>()
 const LAYOUT_UNIT = 64
 
 /** The drawn width of some words in the chips' font, cached for the page. */
-function textWidth(text: string, font: string): number {
+function textWidth(text: string, font: string, figures: Figures): number {
   const known = textWidths.get(text)
   if (known !== undefined) return known
-  const width = Math.ceil(drawnWidth(text, font) * LAYOUT_UNIT) / LAYOUT_UNIT
+  const width = Math.ceil(drawnWidth(text, font, figures) * LAYOUT_UNIT) / LAYOUT_UNIT
   textWidths.set(text, width)
   return width
 }
@@ -75,6 +78,7 @@ function readMetrics(line: Element, chip: Element): ChipMetrics {
   const chrome = [chip, ...chip.children].reduce((sum, part) => sum + inlineChrome(part), 0)
   return {
     chrome,
+    figures: style.fontVariantNumeric.includes('tabular-nums') ? 'tabular' : 'proportional',
     font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
     gap: Number.parseFloat(getComputedStyle(line).columnGap) || 0,
   }
@@ -163,9 +167,11 @@ function useLabelRoom(
   function fit(drawn: ChipMetrics, room: number) {
     const more = run.more()
     return chipsThatFit({
-      chips: run.candidates().map((label) => textWidth(label, drawn.font) + drawn.chrome),
+      chips: run
+        .candidates()
+        .map((label) => textWidth(label, drawn.font, drawn.figures) + drawn.chrome),
       gap: drawn.gap,
-      more: more === undefined ? 0 : textWidth(more, drawn.font),
+      more: more === undefined ? 0 : textWidth(more, drawn.font, drawn.figures),
       line: room,
       total: run.total(),
     })

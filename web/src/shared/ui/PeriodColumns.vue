@@ -184,11 +184,14 @@ useEventListener(
   () => (fontsArrived.value += 1),
 )
 
-/** The names of the time axis, each measured in the axis's font (`ChartTicks`, `--font-count`). */
+/**
+ * The names of the time axis, each measured in the axis's font and its figures of one width
+ * (`ChartTicks`, `--font-count`, `tabular-nums`).
+ */
 const days = computed(() => {
   void fontsArrived.value
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-count').trim()
-  const measure = (text: string) => drawnWidth(text, font)
+  const measure = (text: string) => drawnWidth(text, font, 'tabular')
   return dayTicks(props.columns, width.value, measure)
 })
 

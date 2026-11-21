@@ -261,6 +261,46 @@ test('in a window 360px wide a day’s hint stands beside its stack or over it, 
   }
 })
 
+/**
+ * Points at day `index` over its stack, then walks the pointer through its segments and the
+ * ground between them, and reads the hint's height at each step and every step where the hint
+ * said other words or stood elsewhere.
+ */
+async function walkDay(page: Page, parts: Parts) {
+  await page.mouse.move(0, 0)
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  await page.mouse.move(middleOf(parts.column).x, parts.field.top + 2, { steps: 4 })
+  const first = await settledHint(page)
+  const heights = [first.box.bottom - first.box.top]
+  const moved: string[] = []
+  for (const point of crossing(parts, parts.slot.right - 0.5)) {
+    await page.mouse.move(point.x, point.y, { steps: 4 })
+    await frames(page)
+    const [shown] = await hintsNow(page)
+    heights.push((shown?.box.bottom ?? 0) - (shown?.box.top ?? 0))
+    if (shown?.text !== first.text || JSON.stringify(shown.box) !== JSON.stringify(first.box))
+      moved.push(`${point.name}: ${JSON.stringify(shown?.box)} from ${JSON.stringify(first.box)}`)
+  }
+  return { heights, moved }
+}
+
+test('in a window 360px wide a day’s hint stands still as the pointer walks its segments', async ({
+  page,
+}, info) => {
+  // A segment pointed at marks its row of the grid in semibold: on a hint this narrow a long name
+  // drawn wider took one more line, the hint grew and stood elsewhere while the pointer stayed
+  // on its day.
+  const days = await openDays(page, 360)
+  const count = await days.locator('.period-slot').count()
+  const all = await Promise.all(Array.from({ length: count }, (_, index) => dayParts(page, index)))
+  const walked: { day: number; heights: number[]; moved: string[] }[] = []
+  const twoOrMore = [...all.entries()].filter(([, parts]) => parts.segments.length > 1)
+  for (const [day, parts] of twoOrMore) walked.push({ day, ...(await walkDay(page, parts)) })
+  await record(info, 'day-hint-360-walk', walked)
+  expect(walked.length, 'days of two segments or more').toBeGreaterThan(0)
+  expect(walked.flatMap(({ day, moved }) => moved.map((one) => `day ${day}, ${one}`))).toEqual([])
+})
+
 /** Four weeks of the task section: twenty-eight days. */
 const WEEKS = pageAt({ period: 'weeks4', by: 'work_item' })
 

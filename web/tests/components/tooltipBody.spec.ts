@@ -140,10 +140,13 @@ describe('a hint drawn as a grid', () => {
       'STORE_SCHEMA_VERSION',
       'web/src/a-b.ts',
     ])
-    // The row that can be marked holds its width by its name as written.
-    expect(
-      hint?.querySelector<HTMLElement>('.tooltip-body-main .tooltip-body-name')?.dataset.name,
-    ).toBe(row)
+    // The row that can be marked holds its room by an unseen copy of its name in the same runs;
+    // the head, which is never marked, holds none.
+    expect(cells(hint, '.tooltip-body-main .tooltip-body-held')).toEqual([
+      'MAIN-8 Move web/src/a-b.ts',
+    ])
+    expect(cells(hint, '.tooltip-body-main .tooltip-body-held code')).toEqual(['web/src/a-b.ts'])
+    expect(hint?.querySelectorAll('.tooltip-body-head .tooltip-body-held')).toHaveLength(0)
     // A name with no runs is the text it is, backticks and all: only a title is cut into runs.
     mounted.unmount()
     mounted = mount(surface, {

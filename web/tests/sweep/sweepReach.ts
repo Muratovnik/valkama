@@ -120,12 +120,10 @@ async function pointAround(
         path: mark.path,
         owner: mark.owner,
       })
-    for (const verdict of judge(
-      surface,
-      expected,
-      { id: mark.id, place: around.place },
-      point.at,
-    )) {
+    // The place as the mark declares it once the pointer stands there: a ring's sector names the
+    // point of its band where the pointer stands on it.
+    const place = surface?.place ?? around.place
+    for (const verdict of judge(surface, expected, { id: mark.id, place }, point.at)) {
       const what =
         'ids' in verdict.found
           ? verdict.found.ids.map((id) => options.name(id)).join(' | ')

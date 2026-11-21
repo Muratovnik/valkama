@@ -1354,7 +1354,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   ring given figures that already carried it read «90 M · 60 % · 60 %». No words stand on a
   sector: the near-black written there read badly on the darker hues, and the legend holds
   every number. A sector's one hint gives its figure and share, and the rest's each part it
-  holds; the sectors are one Tab stop walked round with the arrows. Rows that are no part of
+  holds; it stands at the point of the sector's band by the pointer, on the band's middle where
+  the pointer stands round the ring, and at the middle of the sector under the keyboard: a
+  sector three quarters round the ring once had its hint at its middle, 70px from the pointer.
+  Each sector takes the pointer over its half of the gap to the next, and a sector too thin to
+  show past its gap still takes it there. The sectors are one Tab stop walked round with the
+  arrows. Rows that are no part of
   the whole close it by name and figure under the legend, their figures ending with the
   legend's. Its table twin is `RankedBarsTable`.
 - **Empty and error states:** one shared state component (`DataEmptyState`)

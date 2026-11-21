@@ -63,6 +63,22 @@ export function boxDistance(box: Box, at: Point): number {
   return Math.hypot(dx, dy)
 }
 
+/**
+ * The side of the square the browser takes the pointer as, in px. Chromium finds a box under the
+ * pointer from a pixel before its left or top edge, and none past its right or bottom edge: on a
+ * bare page a box at 100px answered a pointer at 99.05px and none at 109.95px past its 10px. Two
+ * columns of a day's minutes 2.8px wide and 2px apart, each reaching over its half of the gap,
+ * meet a pixel before the gap's middle, and the later takes the pointer there.
+ */
+const POINTER = 1
+
+/** The distance from the pointer at `at`, taken as the browser takes it, to a box. */
+function pointerDistance(box: Box, at: Point): number {
+  const dx = Math.max(box.left - (at.x + POINTER), 0, at.x - box.right)
+  const dy = Math.max(box.top - (at.y + POINTER), 0, at.y - box.bottom)
+  return Math.hypot(dx, dy)
+}
+
 /** Ids of the nearest of `distances`, with every one within `TWINS` of it; none for none. */
 function nearest(distances: readonly { distance: number; id: string }[]): string[] {
   if (!distances.length) return []
@@ -79,15 +95,16 @@ export interface Reachable {
 }
 
 /**
- * Which elements may answer the pointer at `at`: the nearest whose box or shape the point is
- * within `NUDGE` of, ties within `TWINS`. With none that close, the one the pointer was aimed
- * at, whose reach then fails to cover `NUDGE`, which is what a miss there reports.
+ * Which elements may answer the pointer at `at`: the nearest whose box or shape the pointer is
+ * within `NUDGE` of, as the browser takes it (`POINTER`), ties within `TWINS`. With none that
+ * close, the one the pointer was aimed at, whose reach then fails to cover `NUDGE`, which is what
+ * a miss there reports.
  */
 export function expectedAmong(all: readonly Reachable[], aimed: string, at: Point): string[] {
   const distances = all
     .map((one) => ({
       id: one.id,
-      distance: one.onShape === false ? Infinity : boxDistance(one.box, at),
+      distance: one.onShape === false ? Infinity : pointerDistance(one.box, at),
     }))
     .filter((one) => one.distance <= NUDGE)
   const found = nearest(distances)
@@ -124,17 +141,21 @@ export function expectedOnLine(marks: readonly LineMark[], x: number, reach: num
 
 /**
  * What a mark declares its hint stands at: a box (`data-hint-mark`), or a point
- * (`data-hint-point`), whose box is its dot, or nothing for a point a drawn shape names.
+ * (`data-hint-point`), whose box is its dot, or nothing for a point a drawn shape names. A point
+ * a drawn shape names says whether it stands on that shape (`onShape`): a ring's sector names the
+ * point of its band where the pointer stands, and a point off the sector is no place of its mark.
  */
 export interface MarkPlace {
   box: Box
   kind: 'box' | 'point'
+  onShape?: boolean
 }
 
 /**
  * Why a shown hint stands where its mark's rule does not put it; null where it stands right. A
  * box's hint stands `OFFSET` past one of its edges or over it; a point's has a corner `OFFSET` off
  * the point's dot on both axes, or stands over it, and stands within `POINT_REACH` of the pointer.
+ * A point a drawn shape names off the shape is away from its mark wherever the hint stands.
  */
 export function placementMiss(
   hint: Box,
@@ -143,7 +164,8 @@ export function placementMiss(
 ): { by: number; rule: 'away-from-mark' | 'far-from-pointer' } | null {
   const gap = boxGap(hint, mark.box)
   const allowed = (mark.kind === 'point' ? Math.SQRT2 * OFFSET : OFFSET) + PLACE_SLACK
-  if (gap > allowed) return { rule: 'away-from-mark', by: Math.round(gap) }
+  if (gap > allowed || mark.onShape === false)
+    return { rule: 'away-from-mark', by: Math.round(gap) }
   if (mark.kind === 'box') return null
   const far = boxDistance(hint, pointer)
   return far > POINT_REACH ? { rule: 'far-from-pointer', by: Math.round(far) } : null
@@ -191,6 +213,17 @@ export function judge(
       : null
   if (placed) verdicts.push({ rule: placed.rule, found: { text: `hint ${placed.by}px off` } })
   return verdicts
+}
+
+/**
+ * What the sweep notes of a state's value panel, from how many marks of its charts act when
+ * pressed (`acting`) and whether a press opened the panel: nothing where it opened; nothing where
+ * no mark acts, as the token kinds' do not, a kind being a part of the tokens and no value the
+ * page narrows to or a panel names (`DESIGN.md`: a value pressed opens its side panel, and marks
+ * that lead nowhere show a hint and do nothing when pressed); else that no mark opened it.
+ */
+export function panelNote(acting: number, opened: boolean): string | null {
+  return opened || acting === 0 ? null : 'no mark opened the value panel'
 }
 
 /** The gap between two boxes: none where they touch or overlap. */

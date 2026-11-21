@@ -15,7 +15,9 @@
  * share of the whole where the caller says how a share reads (`formatShare`), whole however it is
  * cut; a period of a chart, where the caller names the periods (`periods`), says its figure and
  * its name. A hint stands at its mark (`data-hint-mark`): a name's at the name, a period's at its
- * column, or at its floor where it has none, and may stand over a neighbouring chart.
+ * column, or at its floor where it has none, and may stand over a neighbouring chart. A period
+ * takes the pointer over its whole height and its half of the gap to each neighbour, and a little
+ * past the plot's ends and under its floor, so a column a pixel wide answers a pointer aimed at it.
  * Presentational: a name whose value acts (`MarkAction`) is pressed as its value's row is, a link
  * sent out as `follow` with the press, a button as `select` with the key; the rest only show. A
  * name named by what it does is described by its whole words where that names a part of them.
@@ -308,11 +310,31 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
 }
 
 .multiple-period {
+  position: relative;
   display: flex;
   flex: 1 1 0;
   align-items: flex-end;
   min-width: 0;
   block-size: 100%;
+
+  /* Where the pointer finds a period: its whole height and its half of the gap to each
+     neighbour, and past the plot's ends and under its floor as far as a pointer aimed at the
+     column may stand off it (`hintReach.ts`). A span of sixty minutes draws columns a pixel
+     wide, and 3px past the last one the pointer stood on nothing. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset-block: 0 calc(-1 * var(--space-1));
+    inset-inline: calc(-0.5 * var(--space-half));
+  }
+
+  &:first-child::after {
+    inset-inline-start: calc(-1 * var(--space-1));
+  }
+
+  &:last-child::after {
+    inset-inline-end: calc(-1 * var(--space-1));
+  }
 }
 
 /* A period's column lifts under the pointer (`seriesFill.css`): the period's whole height is

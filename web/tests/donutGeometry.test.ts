@@ -11,7 +11,7 @@ import { describe, test } from 'vitest'
 
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
-import { ringOf, sectorPath } from '@/shared/ui/donutGeometry.ts'
+import { bandAt, ringOf, sectorPath, turnAt } from '@/shared/ui/donutGeometry.ts'
 
 const row = (key: string, value: number, more: Partial<RankedRow> = {}): RankedRow => ({
   key,
@@ -221,5 +221,40 @@ describe('the ring', () => {
     assert.ok(start !== undefined && start > 50 && start < 51.5)
     assert.match(quarter, / L /)
     assert.equal(sectorPath(0.5, 0.5001), '')
+  })
+})
+
+/** A point rounded to a tenth of the ring's box units. */
+const near = ({ x, y }: { x: number; y: number }) => ({
+  x: Math.round(x * 10) / 10,
+  y: Math.round(y * 10) / 10,
+})
+
+describe("a sector's hint point", () => {
+  // The box is 100 units a side, its centre at 50, 50, the middle of the band 40.5 from it.
+  test("reads a point of the box as its turn from 12 o'clock clockwise", () => {
+    assert.equal(turnAt(50, 10), 0)
+    assert.equal(turnAt(90, 50), 0.25)
+    assert.equal(turnAt(50, 90), 0.5)
+    assert.equal(turnAt(10, 50), 0.75)
+  })
+
+  test('stands on the middle of the band where the pointer stands on a large sector', () => {
+    // Three quarters round a sector of 95 %: at 9 o'clock, not at its middle near 6 o'clock.
+    assert.deepEqual(near(bandAt({ start: 0, end: 0.95 }, 0.75)), { x: 9.5, y: 50 })
+    assert.deepEqual(near(bandAt({ start: 0, end: 1 }, 0.25)), { x: 90.5, y: 50 })
+  })
+
+  test("is held inside the sector, across 12 o'clock from the nearer end", () => {
+    // A pointer on the ground just before 12 o'clock: the sector's start, two half gaps in
+    // (asin(0.6 / 40.5) a turn of 0.0047), and not its end at 0.95.
+    assert.deepEqual(near(bandAt({ start: 0, end: 0.95 }, 0.99)), { x: 51.2, y: 9.5 })
+    // Past the end of a sector from 3 to 6 o'clock it stays two half gaps short of 6 o'clock.
+    assert.deepEqual(near(bandAt({ start: 0.25, end: 0.5 }, 0.6)), { x: 51.2, y: 90.5 })
+  })
+
+  test('keeps the middle of its band on a sector with no room between its ends', () => {
+    // From 0.5 to 0.505 of a turn, narrower than two gaps: the middle, at 0.5025.
+    assert.deepEqual(near(bandAt({ start: 0.5, end: 0.505 }, 0.5)), { x: 49.4, y: 90.5 })
   })
 })
