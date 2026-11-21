@@ -24,10 +24,10 @@ import { REMARK_JOINT } from '@/shared/ui/chartGeometry.ts'
 const props = defineProps<{ cell: TableCell }>()
 
 /**
- * The remark with a break allowed wherever a no-break space joins words, «тыс. токенов»,
- * and kept inside a count, «40 тыс.», whose space follows its digits.
+ * The remark with a break allowed wherever a no-break space joins words, «тыс. токенов»,
+ * and kept inside a count, «40 тыс.», whose space follows its digits.
  */
-const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d) /gu, ' '))
+const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' '))
 </script>
 
 <template>
@@ -52,8 +52,8 @@ const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d) /gu, ' '))
    figures give the column and wraps in it, between words, its last line never one short word
    alone («цены»). */
 .figure-remark {
-  contain: inline-size;
-  white-space: normal;
   text-wrap: balance;
+  white-space: normal;
+  contain: inline-size;
 }
 </style>
