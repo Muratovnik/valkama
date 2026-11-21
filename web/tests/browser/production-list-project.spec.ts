@@ -2,9 +2,9 @@
  * «Project» in the built list, on a space of two projects with «All projects» chosen,
  * at the list's widths. Where the list stands every column it names what each row
  * changes after «Goal and stage»; narrower it folds with that column and follows the
- * path on the line under the title. At 1270px of list, the narrowest that stands both,
+ * path on the line under the title. Down to what its table needs, the list stands both,
  * the title keeps 36 characters beside both at their widest in either language, and nothing
- * is pushed past the edge.
+ * is pushed past the edge; narrower, the two fold together.
  */
 import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
@@ -114,12 +114,12 @@ for (const [width, fit] of [
 }
 
 // In both languages: beside «Conditions» the title of a list 1240px wide kept 34.2 characters
-// in English and 32.8 in Russian.
+// in English and 32.8 in Russian, when fixed widths chose the fit.
 for (const [locale, goal, project] of [
   ['en', 'Goal and stage', 'Project'],
   ['ru', 'Цель и этап', 'Проект'],
 ] as const)
-  test(`from 1270px «Project» stands beside «Goal and stage», and the title keeps 36 characters in ${locale}`, async ({
+  test(`down to what its table needs «Project» stands beside «Goal and stage», and the title keeps 36 characters in ${locale}`, async ({
     page,
   }, info) => {
     await open(page, 1600, locale)
@@ -149,8 +149,23 @@ for (const [locale, goal, project] of [
     expect(room.characters).toBeGreaterThanOrEqual(36)
     expect(room.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
     await page.screenshot(shot(info, `list-project-1270-of-list-${locale}.png`))
-    // A pixel narrower, the two fold together and the rest of the columns stand.
-    await sized(1269)
+    // What the table needs: the other columns as drawn and the title's 36 characters. A
+    // little narrower, the two fold together and the rest of the columns stand; as wide
+    // again, they stand again.
+    const need = await list(page).evaluate((element) => {
+      const others = [...element.querySelectorAll('thead th:not(.list-head-title)')]
+      const title = element.querySelector<HTMLElement>('tbody tr.list-row .list-title')
+      const probe = document.createElement('span')
+      probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:36ch'
+      title?.append(probe)
+      const least = probe.getBoundingClientRect().width
+      probe.remove()
+      const bars = (element as HTMLElement).offsetWidth - element.clientWidth
+      return others.reduce((sum, th) => sum + th.getBoundingClientRect().width, least + bars)
+    })
+    await sized(need - 6)
     await expect(list(page)).toHaveAttribute('data-fit', 'wide')
     await expect(list(page).locator('thead th .list-sort.folded')).toHaveText([goal, project])
+    await sized(need + 6)
+    await expect(list(page)).toHaveAttribute('data-fit', 'full')
   })
