@@ -11,7 +11,8 @@
  * - A `clipped` text is no hint beside its element: its whole words are laid over the cut ones,
  *   its first letter on theirs, and run on to `EDGE` short of the window's right edge, wrapping
  *   by words only where they do not fit there (`placeWhole`, drawn by `WholeText`). On one line
- *   it covers its own line and nothing over or under it, in a list as anywhere.
+ *   it covers its own line and nothing over or under it, in a list as anywhere; over a clamp of
+ *   several lines its words keep the clamp's column and run on down past it.
  * - A hint of a chart's mark stands at that mark, whatever the chart: a day's stack, a column of a
  *   small chart and the small chart's name, a ranked row's bar, a reading of a step line, a sector
  *   of a ring. The mark declares itself, and the place of its hint follows from the mark alone:
@@ -216,6 +217,8 @@ export interface WholeSetting {
   window: number
   /** The box the cut text's lines show in where they are cut down, as a clamp's (`cutLinesOf`). */
   lines?: Box | null
+  /** How tall the whole text came out as drawn and how tall the window is, in px, once drawn. */
+  tall?: { drawn: number; window: number } | null
 }
 
 export interface WholePlace {
@@ -231,26 +234,33 @@ export interface WholePlace {
 /**
  * Where the whole of a cut text is laid: its box placed so that its first letter stands on the
  * cut text's, and as wide as the room from there to `EDGE` short of the window's right edge.
- * Over a text cut down to its lines it is at least as large as they are, standing as far past
- * their end as it stands before their start, so none of them and no ellipsis shows beside or
- * under it, however few lines its own words take.
+ * Over a text cut down to its lines it is as wide as they are, standing as far past their end as
+ * it stands before their start, and at least as high: its words wrap at the width the clamp cut
+ * them at and take the lines they need under the clamp's, so no line and no ellipsis shows beside
+ * or under it, and no empty room stands under its last line. Run on to the window's edge, a
+ * board tile's title cut at its third line lay on one line 560 to 660px wide, past the next
+ * columns, with 38px of empty frame under it. Drawn taller than the room under where it is laid
+ * (`tall`), it stands higher, its bottom `EDGE` short of the window's and its top no higher than
+ * `EDGE` under the window's top.
  */
-export function placeWhole({ inset, letter, lines, scale, window }: WholeSetting): WholePlace {
+export function placeWhole({
+  inset,
+  letter,
+  lines,
+  scale,
+  tall,
+  window,
+}: WholeSetting): WholePlace {
   const left = letter.left - inset.left
-  const top = letter.top - inset.top
-  const widest = Math.max(0, (window - EDGE - left) / scale)
-  if (!lines) return { left, top, widest }
+  const laidTop = letter.top - inset.top
+  const top = tall ? Math.min(laidTop, Math.max(EDGE, tall.window - EDGE - tall.drawn)) : laidTop
+  const room = Math.max(0, (window - EDGE - left) / scale)
+  if (!lines) return { left, top, widest: room }
   const past = (start: number, end: number, from: number) =>
     Math.max(0, end - from + Math.max(0, start - from)) / scale
-  return {
-    left,
-    top,
-    widest,
-    least: {
-      block: past(lines.top, lines.bottom, top),
-      inline: Math.min(widest, past(lines.left, lines.right, left)),
-    },
-  }
+  const widest = Math.min(room, past(lines.left, lines.right, left))
+  const block = past(lines.top, lines.bottom, laidTop)
+  return { left, top, widest, least: { block, inline: widest } }
 }
 
 /**

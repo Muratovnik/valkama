@@ -224,6 +224,44 @@ const openBoard = (page: Page, width: number) =>
     },
   )
 
+/**
+ * The whole words laid over the marked cut text, against the clamp that cuts it: the content
+ * width and height of each and its line's height, how many lines the whole words take, and how
+ * far past the window's edges their box stands.
+ */
+const wholeAgainstClamp = (page: Page) =>
+  page.evaluate(() => {
+    const clamp = document.querySelector<HTMLElement>('[data-probe-cut]')
+    const laid = document.querySelector<HTMLElement>('.whole-text')
+    if (!clamp || !laid) return null
+    const inner = (element: HTMLElement) => {
+      const style = getComputedStyle(element)
+      const box = element.getBoundingClientRect()
+      const inset = (side: 'Left' | 'Right' | 'Top' | 'Bottom') =>
+        Number.parseFloat(style[`padding${side}`]) + Number.parseFloat(style[`border${side}Width`])
+      return {
+        width: box.width - inset('Left') - inset('Right'),
+        height: box.height - inset('Top') - inset('Bottom'),
+        line: Number.parseFloat(style.lineHeight),
+      }
+    }
+    const range = document.createRange()
+    range.selectNodeContents(laid)
+    const tops = new Set(
+      [...range.getClientRects()]
+        .filter((line) => line.width > 0)
+        .map((line) => Math.round(line.top)),
+    )
+    const box = laid.getBoundingClientRect()
+    const { clientHeight, clientWidth } = document.documentElement
+    return {
+      clamp: inner(clamp),
+      whole: inner(laid),
+      wholeLines: tops.size,
+      past: Math.max(0, -box.left, -box.top, box.right - clientWidth, box.bottom - clientHeight),
+    }
+  })
+
 const SHORT = 'MAIN-265'
 
 /** What was done, as an agent writes it: markdown, which the preview draws as words. */
@@ -267,6 +305,37 @@ test.describe('a clamp off the graph', () => {
       await page.mouse.down()
       await page.mouse.up()
       await expect(page.locator('.drawer')).toBeVisible()
+    })
+
+  // `LONG_TITLE` takes five lines at the width of a board column's tile title in a 1440px
+  // window, 319px, and six at a phone's, 254px; the clamp shows three.
+  for (const [width, lines] of [
+    [1440, 5],
+    [390, 6],
+  ] as const)
+    test(`at ${width}px the whole words of a tile's title cut at its third line keep its column and take its ${lines} lines`, async ({
+      page,
+    }) => {
+      await openBoard(page, width)
+      const tile = page.locator(`[data-reference="${workItemRef.reference}"] .work-item-tile`)
+      await expectWholeOver(page, tile.locator('.tile-title'), LONG_TITLE)
+      const read = await wholeAgainstClamp(page)
+      if (!read) throw new Error('no whole words over the clamp')
+      const { clamp, whole, wholeLines, past } = read
+      expect(Math.round(clamp.height / clamp.line), 'the lines the clamp shows').toBe(3)
+      expect(wholeLines, 'the lines the whole words take at the width the clamp cut them').toBe(
+        lines,
+      )
+      // As wide as the clamp's column, and as high as its own lines: no empty room under them.
+      expect(
+        Math.abs(whole.width - clamp.width),
+        `${whole.width}px over ${clamp.width}px`,
+      ).toBeLessThanOrEqual(1)
+      expect(
+        Math.abs(whole.height - lines * whole.line),
+        `${whole.height}px for ${lines} lines`,
+      ).toBeLessThanOrEqual(1)
+      expect(past, 'how far past the window').toBe(0)
     })
 
   for (const width of [1440, 390])
@@ -329,10 +398,25 @@ test.describe('a clamp off the graph', () => {
       await expect(whole(page)).toHaveCount(0)
     })
 
-  test("an outcome's preview cut at its two lines shows its whole words", async ({ page }) => {
+  test("an outcome's preview cut at its two lines shows its whole words, raised to stay in the window", async ({
+    page,
+  }) => {
     const preview = await outcomePreview(page, DONE)
     await expect(preview).toContainText('Shipped the reader for')
-    await expectWholeOver(page, preview, DONE_WORDS)
+    const point = await markClamp(preview)
+    expect(point, 'a text its clamp cuts, in sight').not.toBeNull()
+    await restAt(page, point ?? { x: 0, y: 0 })
+    await expect(whole(page)).toHaveText(DONE_WORDS)
+    expect(await uncovered(page)).toEqual([])
+    // At the width the clamp cut them the words take more lines than the 900px window leaves
+    // under the preview: they stand higher, their bottom 8px short of the window's, their first
+    // letter still level with the cut text's start.
+    const laid = await whole(page).evaluate((element) => {
+      const { bottom } = element.getBoundingClientRect()
+      return { bottom, window: document.documentElement.clientHeight }
+    })
+    expect(laid.bottom).toBeCloseTo(laid.window - 8, 0)
+    await expect.poll(() => standing(page)).toMatch(/^off by -?0\.0, -\d/u)
   })
 
   test("an outcome's preview left whole shows none", async ({ page }) => {

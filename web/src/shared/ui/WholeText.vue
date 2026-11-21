@@ -11,8 +11,12 @@
  *   it down where the text no longer stands in sight.
  * - Its first letter stands on the cut text's first letter, in that letter's type and ink, and it
  *   runs on to the right up to 8px short of the window's edge, wrapping by words only where the
- *   whole text does not fit there (`placeWhole`). On one line it covers its own line alone; over
- *   a text a clamp cuts to its lines it covers every line the clamp shows, and its ellipsis.
+ *   whole text does not fit there (`placeWhole`). On one line it covers its own line alone. Over
+ *   a text a clamp cuts to its lines it keeps the clamp's own column and grows down past it, so it
+ *   reads as the clamp opened in place, over every line it shows and its ellipsis, with no empty
+ *   room under its last line: run on to the window's edge, a board tile's title cut at its third
+ *   line lay on one line across the next columns over 38px of empty frame. Where the window has
+ *   no room under it for all its lines, it stands higher, 8px short of the window's bottom edge.
  * - It is laid on the ground its text stands on, every see-through ground down to the first
  *   opaque one laid together as the page lays them (`groundOf`), so over its own element it reads
  *   as the element's words running on, and a rim and a shadow mark where it lies over the rest of
@@ -161,8 +165,9 @@ function groundOf(element: Element): string {
 
 /**
  * Lays the whole text over `element`'s cut one: first where its own first letter would stand
- * with no inset, then, once drawn, moved by where its letter came out inside its box. Both
- * happen before the frame is painted.
+ * with no inset, then, once drawn, moved by where its letter came out inside its box, and, drawn
+ * that wide, raised where it is taller than the window leaves under it. All of it happens before
+ * the frame is painted.
  */
 async function lay(element: HTMLElement) {
   const letter = firstLetterOf(element)
@@ -191,10 +196,13 @@ async function lay(element: HTMLElement) {
   const box = surface.value?.getBoundingClientRect()
   const own = surface.value ? firstLetterOf(surface.value) : null
   if (!box || !own || anchor.value !== element) return
-  place.value = placeWhole({
-    ...setting,
-    inset: { left: own.box.left - box.left, top: own.box.top - box.top },
-  })
+  const laid = { ...setting, inset: { left: own.box.left - box.left, top: own.box.top - box.top } }
+  place.value = placeWhole(laid)
+  await nextTick()
+  const laidBox = surface.value?.getBoundingClientRect()
+  if (!laidBox || anchor.value !== element) return
+  const tall = { drawn: laidBox.height, window: document.documentElement.clientHeight }
+  place.value = placeWhole({ ...laid, tall })
 }
 
 /** Further than this, in px, the cut text's first letter has moved or changed its size. */
@@ -278,7 +286,8 @@ useEventListener(window, 'resize', relay, { passive: true })
 /* Laid in the window over the cut text: as wide as its words up to the room the place leaves,
    then wrapped by words. A word longer than that room breaks rather than run out of the window.
    Its box is its line high, with a pixel over and under for the rim, so it covers no other line;
-   over a clamp of several lines, as high and wide as the lines the clamp shows (`placeWhole`).
+   over a clamp of several lines, as wide as the clamp's column and as high as its words take
+   there, never lower than the lines the clamp shows (`placeWhole`).
    It stands over the menus and sheets (120) whose rows it speaks for: level with them, the menu
    opened after it was drawn over it, and a cut state in the card's state menu never read whole. */
 .whole-text {
