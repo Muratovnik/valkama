@@ -37,6 +37,8 @@ Each rule here is a way a hand-written wrapper went wrong:
   timing budgets that hold alone, so a second such run waits and says for whom in
   the summary. No other step is held here; the Vitest run of `npm test` takes the
   lock on its own and says so in its step's log.
+- A run is cited, not retold: reports that retyped results got them wrong, so
+  each `gates` run leaves the record `tests/run_record.py` describes and checks.
 
 A served store copy holds whatever the live store holds, so it lives inside the
 throwaway profile, together with any backup a migration writes beside it, and
@@ -422,6 +424,7 @@ def run_gates(
     environment: Mapping[str, str],
     *,
     lock: Path | None = None,
+    record: Mapping[str, object] | None = None,
 ) -> int:
     """Run every step; the result is 0 only when at least one ran and none failed or was refused.
 
@@ -429,10 +432,11 @@ def run_gates(
     may have replaced them while the steps before it ran. An exclusive step waits
     for the heavy-test lock, the machine's unless `lock` names another file, and
     runs marked as under it, so the suite inside does not wait for its own step.
+    Given the start of a `record`, it writes the whole record into `out` at the end.
     """
 
     # Imported here, not at the top, for the reason `_refusal` gives.
-    from tests import machine_lock
+    from tests import machine_lock, run_record
 
     # A hold of the run that started this one covers the steps too, though their
     # environment was built without the caller's `VALKAMA_*`.
@@ -445,6 +449,7 @@ def run_gates(
     logs.mkdir(parents=True, exist_ok=True)
     failed: list[str] = []
     refused: dict[str, list[str]] = {}
+    steps: list[dict[str, object]] = []
     with (out / SUMMARY).open("w", encoding="utf-8", newline="\n") as summary:
 
         def report(line: str) -> None:
@@ -460,6 +465,7 @@ def run_gates(
                 refused.setdefault(cause, []).append(run.name)
                 log.write_text(f"{detail}\n", encoding="utf-8", newline="\n")
                 report(f"{run.name:<14} refused  {detail}")
+                steps.append(run_record.step(run.name, run.argv, run.cwd, log, None))
                 continue
             if run.exclusive:
                 holding: contextlib.AbstractContextManager[None] = machine_lock.held(
@@ -474,17 +480,19 @@ def run_gates(
             if code != 0:
                 failed.append(run.name)
             report(f"{run.name:<14} exit={code}  {_tail(log)}")
+            steps.append(run_record.step(run.name, run.argv, run.cwd, log, code))
         if not runs:
             report("no gate step ran")
-            return 1
         if failed:
             report(f"failed: {', '.join(failed)}")
         for cause, names in refused.items():
             report(f"not run, because {cause}: {', '.join(names)}")
-        if failed or refused:
-            return 1
-        report(f"all {len(runs)} steps passed")
-    return 0
+        result = 1 if failed or refused or not runs else 0
+        if result == 0:
+            report(f"all {len(runs)} steps passed")
+        if record is not None:
+            report(f"record: {run_record.write(out, record, steps, result)}")
+    return result
 
 
 def select_steps(only: Sequence[str] | None, *, owner: bool) -> list[Step]:
@@ -546,7 +554,14 @@ def gates(steps: Sequence[Step], out: Path) -> int:
         refusal = modules_refusal(package)
         if refusal is not None:
             _say(f"the npm steps here will be refused. {refusal}")
-    return run_gates(runs, out, environment)
+    # Imported here, not at the top, for the reason `_refusal` gives.
+    from tests import run_record
+
+    warning = run_record.placement_warning(ROOT, out)
+    if warning is not None:
+        _say(warning)
+    versions = run_record.tool_versions(interpreter, npm=any(run.needs_modules for run in runs))
+    return run_gates(runs, out, environment, record=run_record.begin(ROOT, versions))
 
 
 # --- the bundle --------------------------------------------------------------

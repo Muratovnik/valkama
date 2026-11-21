@@ -74,16 +74,16 @@ and otherwise runs the shared copy.
 venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
 `LOCALAPPDATA`, `APPDATA` and `VALKAMA_DB`, and every step's exit code counts.
 `--only python` is the Python half; `--owner` is the audit with the owner policy.
-Use it instead of a wrapper of your own, and `serve --out DIR` with
-`stop --out DIR` for a live check; a test compares its steps with `AGENTS.md`.
+A report cites its `DIR/record.json`, which `python tests/run_record.py check`
+refuses for another tree or state. Use it instead of a wrapper of your own, and
+`serve --out DIR` with `stop --out DIR` for a live check; a test compares its
+steps with `AGENTS.md`.
 It does not move `TEMP`, which is what keeps the suite's renames from failing
-with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
+with `PermissionError`.
 
-Two heavy runs on one machine fail tests that pass alone: a timing budget of the
-suite was missed by half while another checkout's full suite ran beside it. So
-each heavy run takes one lock itself, `tests/machine_lock.py`, a file in the
-system's temporary directory that no TEMP or profile a run was given moves: the
-whole unittest suite, from its package's `load_tests` to the end of the process;
+Two heavy runs on one machine fail tests that pass alone, so each heavy run
+takes one lock itself, `tests/machine_lock.py`, a file in the system's temporary
+directory that no TEMP or profile a run was given moves: the whole unittest suite, from its package's `load_tests` to the end of the process;
 `npm run test:unit` in `npm test`; `npm run test:browser:allowed` but `--list`.
 Targeted runs take none — a unittest module, subpackage, `-p` or `-k`, Vitest
 given files or `-t`, `npx playwright test <file>` — nor do the light gate steps,

@@ -379,6 +379,7 @@ files = [
   "tests/affected.py",
   "tests/commit_subjects.py",
   "tests/machine_lock.py",
+  "tests/run_record.py",
 ]
 check_untyped_defs = true
 strict_equality = true
