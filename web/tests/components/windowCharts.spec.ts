@@ -283,13 +283,13 @@ describe('the step line past its readings', () => {
     ])
     await pointAt(line, null)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, false])
-    // Along the forecast's line, far from either mark, the forecast; at now's ring, now.
+    // Along the forecast's line, far from either mark, the forecast; at now's dot, now.
     await pointAt(line, 210)
     expect(targets(line).map(({ shown }) => shown)).toEqual([false, true])
     await pointAt(line, 180 + HIT - 1)
     expect(targets(line).map(({ shown }) => shown)).toEqual([true, false])
     // The forecast's mark is a dot at the run-out, on the level of the whole window, one place and
-    // no range; «now» keeps its ring.
+    // no range; «now» is drawn as that dot is (DESIGN.md § Charts, the step line's places).
     expect(declared(line.get('.step-reset-mark'))).toEqual({
       '--step-high': 0,
       '--step-low': 0,
@@ -297,7 +297,7 @@ describe('the step line past its readings', () => {
     })
     expect(
       line.findAll('[data-mark="place"]').map((mark) => mark.attributes('data-shape')),
-    ).toEqual(['ring', 'dot'])
+    ).toEqual(['dot', 'dot'])
     line.unmount()
   })
 

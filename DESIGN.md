@@ -1248,10 +1248,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   The reading pointed at or focused draws its dot and says its moment, its share and its source
   in its hint, as every mark does; the one a key stands on keeps its dot whatever the pointer
   does, and Tab lands on the latest. Past the readings the line has two places of its own, each
-  with its hint and painted only while pointed at or focused, neither a reading's dot: «now»
-  where the line ends, a ring, its share, when the latest reading was and how long the window has
-  been silent, which takes the pointer from the line's end on and leaves the latest reading its
-  own dot farther than a mark's reach from its ring, the latest found as «now» within it; and,
+  with its hint and painted only while pointed at or focused: «now» where the line ends, a round
+  dot drawn as the forecast's end is, its share, when the latest reading was and how long the
+  window has been silent, which takes the pointer from the line's end on and leaves the latest
+  reading its own dot farther than a mark's reach from it, the latest found as «now» within it; a
+  ring there, which a restart keeps, read as a second kind of point on the one line; and,
   while the window stands and its forecast has a share to draw to, the end of the forecast's line,
   its share at the reset, what that leaves out and when the reset is. The forecast is a line,
   not a band: 2px like the readings' line, in their hue, dashed, the conventional cue for a
@@ -1275,7 +1276,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   at a reading, and the restart is a place on the line at that moment with its hint, painted only
   while pointed at or focused as the others are: a round ring on the middle of the fall, «Counter
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
-  the readings cannot tell what zeroed it. Every place's mark, a ring or the forecast's dot, is a
+  the readings cannot tell what zeroed it. Every place's mark, a restart's ring or the dot of «now» and of the forecast, is a
   true circle at every width, at rest and pointed at, the line's own fall saying how far it fell:
   a restart's ring once stretched over the fall, a capsule up to 89px tall, and an oval 12×8 at a
   fall from 0 % to 0 %. On a window past its reset and on the windows before the current one the
@@ -1287,9 +1288,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   within that reach of each other the pointer finds the nearer, and its hint says the other's
   words after its own, so no place's facts are out of the pointer's reach; each keeps its own name
   for the keyboard. A place's box, which the keyboard's ring is drawn on, has its middle where the
-  pointer finds it: the least width of a box around a restart's or «now»'s ring, and the
+  pointer finds it: the least width of a box around a restart's ring or «now»'s dot, and the
   forecast's from past «now»'s along its line to half that width past its dot; a box that started
-  at «now» put its middle 12px past the ring, where the forecast's line took the pointer.
+  at «now» put its middle 12px past its mark, where the forecast's line took the pointer.
   The arrows walk the readings, each restart before the
   reading at its moment, then «now», then the forecast. A step line shows its whole window, from
   its start to its reset, running or past its reset alike, and its axis names its two ends for

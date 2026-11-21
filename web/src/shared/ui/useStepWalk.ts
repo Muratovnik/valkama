@@ -7,7 +7,7 @@
  *
  * A restart is a place on the line at its moment, where the line falls with the window's reset
  * unchanged, with its hint, as the forecast at the reset is a place past the readings. Its mark is
- * a round ring, as «now»'s is, centred on the middle of the fall the line draws there
+ * a round ring, as no other place's is, centred on the middle of the fall the line draws there
  * (`restartFall`), so it never reads as a reading's dot. The pointer finds it at its ring, and at the moment itself before
  * the reading it restarted at, which keeps its step past the ring; its box, which the keyboard's
  * ring is drawn on, is the least width of a box (`--step-reach`) centred on its moment; it covers

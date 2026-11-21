@@ -418,7 +418,8 @@ test('in a forced palette a window bar and a step line keep their marks in the p
       path: found('[data-harness="step"] [data-mark="line"]').stroke,
       mark: found('[data-harness="step"] [data-mark="reading"]').backgroundColor,
       tail: found('[data-case="spent"] [data-mark="ahead"]').backgroundColor,
-      ring: found('[data-harness="step"] [data-target="now"] [data-mark="place"]').boxShadow,
+      nowDot: found('[data-harness="step"] [data-target="now"] [data-mark="place"]')
+        .backgroundColor,
       forecast: found('[data-harness="step"] [data-mark="forecast"]').stroke,
       range: found('[data-harness="step"] [data-mark="range"]').fill,
       dot: found('[data-harness="step"] [data-target="reset"] [data-mark="place"]').backgroundColor,
@@ -444,7 +445,8 @@ test('in a forced palette a window bar and a step line keep their marks in the p
     paints.canvasText,
     paints.canvasText,
   ])
-  expect(paints.ring).toContain(paints.canvasText)
+  // «Now» is a dot as the forecast's end is, in the palette's ink.
+  expect(paints.nowDot).toBe(paints.canvasText)
   // The pace and now are drawn in the palette's inactive ink, and their keys say that ink: kept
   // in their own colours, the keys showed a grey the palette does not have.
   expect([paints.now, paints.even]).toEqual([paints.grayText, paints.grayText])
