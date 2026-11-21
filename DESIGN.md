@@ -957,13 +957,23 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   action stands under the words that name the row, in the columns read first,
   never in a column of its own at the row's end: a table wider than its frame
   scrolls that column out of sight, and «Attach to a card» stood past the frame
-  at 1280px and three frames' width away on a phone. A table of records read as
-  words rather than compared as figures, as Agent decisions', stands on a phone
-  as one block a record, its cells on lines one after another and its headings
-  a line of sort buttons over them (`SectionTable`'s `stack`): as columns, a
-  phone's frame showed two of its five before a sideways scroll. A table of
-  figures keeps its columns and scrolls sideways in its frame, its names held
-  at the frame's start.
+  at 1280px and three frames' width away on a phone. Whether a table's columns
+  fit its frame decides how it stands, never the window's width
+  (`useTableFit`): it is laid out at each step in turn and stands at the first
+  that keeps every column inside the frame. A table of figures has three: its
+  headings on one line; the headings over figures on two; and every column at
+  the least that breaks no word, the headings over figures as narrow as their
+  longest word and the page's words, such as a goal's title, giving way to
+  theirs. A table of records read as words rather than compared as figures, as
+  Agent decisions' and the commits on no card, stands as one block a record as
+  soon as its columns do not fit, at any width, its cells on lines one after
+  another and its headings a line of sort buttons over them (`SectionTable`'s
+  `stack`). Sideways scroll is the last resort: only a table of figures whose
+  least does not fit scrolls, at its second step, its names held at the
+  frame's start. Stacked by a phone's width alone, Agent decisions left «What
+  was decided» past the frame at 1024 and 760; held to their widths, the goals
+  of Volumes left «Left ≈» past it at 1280, under a scroll bar below the
+  fold.
 - **Status:** one semantic-state primitive owns label, dot/badge geometry, and
   palette across work items, executions, references, and Settings.
 - **Choice controls:** one accessible custom control owns search, icons,
@@ -3275,7 +3285,8 @@ column, the moment newest first and words A to Z first. Over the table a line co
 decisions. The page reads them page by page of 200, the first page drawn as soon as it lands
 with «Read 200 of 1000…» over it, so a long period of a thousand decisions shows its newest at
 once and ends as one table; past 5000 it shows the newest and says how many there are in all.
-On a phone a decision is a block of its own: when and the point on its first line, the card
+Where its columns do not fit the frame, at any width, a decision is a block of its own: when and
+the point on its first line, the point breaking between its words beside the moment, the card
 under them, then the session and what was decided, with the headings a line of sort buttons over
 the blocks (Rows and tables).
 
@@ -3370,13 +3381,14 @@ no board of its own, the portfolio standing there, so at the top no category ope
 on no card» is «—» where their list cannot be read for the scope.
 
 «Commits on no card» shows their list under the numbers and hides it again, the number saying
-which. A row is a commit, the newest first: its hash as its short form, held at the row's start
-while a phone's table scrolls sideways, its subject, the repository, the session as its short
-form with the whole one in the hint, and when it was committed. «Attach to a card» stands under the
-subject, so it is in view wherever the frame is scrolled to the commit, and the repository's name
-wraps between its words. On a phone the subject's column is what the frame has beside the hash and
-the action's name takes two lines there: on one, «Прикрепить к карточке» held the column past the
-frame's edge. It opens a line under the row where the card is found by its number or the words of
+which. A row is a commit, the newest first: its hash as its short form at the row's start, its
+subject, the repository, the session as its short form with the whole one in the hint, and when
+it was committed. «Attach to a card» stands under the subject, and the repository's name wraps
+between its words. Where its columns do not fit the frame, a commit is a block of its own (Rows
+and tables): the hash and the subject on its first line, the action under the subject, then the
+repository, and the session and the time on the last; as columns scrolling sideways, a phone's
+frame cut the repository's name inside a word and kept the time three frames' width away. It
+opens a line under the row where the card is found by its number or the words of
 its title: the scope's space's cards, closed ones too, since a commit belongs to the card it was
 made for, and every space's at the top. «Attach» is the person's attach, the module's own
 action: the commit leaves the list, the attach is said aloud, and the page reads its numbers
@@ -3396,11 +3408,13 @@ everything under it — and what its open tasks have left by their estimates, ro
 a parent by its column. A row past the fifth level stands at the fifth indent and names its
 parent. A row's name is its reference over its title, and what the row says of itself, the
 parent it names among it, stands under the title on the title's edge; the words keep a width of
-their own whatever the indent takes, so a deep goal's title reads on lines as long as a shallow
-one's. Beside the reference, a goal six levels down kept some 54px of a 276px column and broke
-into six lines, and its parent stood at the cell's start, 182px left of its title. Where the
-table is too narrow for its headings on one line, a spend stands on two, its time over its
-tokens, and the column of names takes the room that gives. The table's frame is held to the panel's
+their own whatever the indent takes while the table has room for them, so a deep goal's title
+reads on lines as long as a shallow one's. Beside the reference, a goal six levels down kept some
+54px of a 276px column and broke into six lines, and its parent stood at the cell's start, 182px
+left of its title. Where the table is too narrow for its headings on one line, a spend stands on
+two, its time over its tokens, and the column of names takes the room that gives; where even that
+leaves a column past the frame, the words come down to their longest word and the figures' words
+to theirs, so at 1280 every column stands in the frame (Rows and tables). The table's frame is held to the panel's
 height, which the page's layout gives it, so a long tree scrolls in its frame under a heading row
 that stays, whatever rows the bar takes.
 
