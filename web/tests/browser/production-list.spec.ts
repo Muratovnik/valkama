@@ -4,13 +4,34 @@
  * columns that give way on a narrow list are folded under the title rather
  * than cut, the head stays one line at every width, and the rows are one Tab
  * stop walked with the arrows and the page keys and opened by a click anywhere.
+ * The oracle for which columns stand is the list's rule in DESIGN.md («Work»): the
+ * widest fit whose table the list holds, the title keeping 36 characters and its
+ * heading one line in every fit but the narrowest.
  */
 import { expect } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { openList, serve, shot } from './boardPage.ts'
+import { boardRoute, openList, serve, shot } from './boardPage.ts'
+import { brief, identity, serveSpace, stateOf, stillFrames } from './longSpace.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
+
+// The scroll bars are drawn, as the reader sees them: hidden, a list was 10px wider.
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
+
+/** How many characters of its own font the first title's cell is wide. */
+const titleCharacters = (list: Locator) =>
+  list.evaluate((element) => {
+    const title = element.querySelector<HTMLElement>('tbody .list-title')
+    const probe = document.createElement('span')
+    probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
+    title?.append(probe)
+    const characters =
+      (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
+    probe.remove()
+    return characters
+  })
 
 // Where the state, the priority and the holder fold, the folded sorts are one choice: as a
 // run of buttons after the title's they took three lines of a phone's head, and a second
@@ -225,42 +246,96 @@ test('a phone-width list offers the folded orders as one choice that turns them 
   await expect(page.locator('.drawer')).toHaveCount(1)
 })
 
+/** What the title keeps in a fit: 36 characters, but in the narrowest, which gives way to none. */
+const leastCharacters = (fit: string | undefined) => (fit === 'narrow' ? 0 : 36)
+
+/** The fits from the one that stands every column to the narrowest. */
+const FITS = ['full', 'wide', 'medium', 'narrow']
+
+/**
+ * The list at each of `sizes` pixels of its own, a frame apart: its fit, how it stands, and
+ * what the fit's table needs, the other columns as drawn and the title its 36 characters or
+ * its heading on one line, whichever is wider.
+ */
+const walk = (list: Locator, sizes: readonly number[]) =>
+  list.evaluate(async (element, widths) => {
+    const seen = []
+    for (const size of widths) {
+      element.style.inlineSize = `${size}px`
+      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+      const title = element.querySelector<HTMLElement>('tbody .list-title')
+      const probe = document.createElement('span')
+      probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:36ch'
+      title?.append(probe)
+      const least = probe.getBoundingClientRect().width
+      probe.remove()
+      const [others, run] = [
+        element.querySelectorAll('thead th:not(.list-head-title)'),
+        element.querySelector('thead .list-head-title .list-sorts')?.children ?? [],
+      ].map((parts) =>
+        [...parts].reduce((sum, part) => sum + part.getBoundingClientRect().width, 0),
+      )
+      seen.push({
+        size,
+        room: element.clientWidth,
+        fit: element.dataset.fit ?? '',
+        overflow: element.scrollWidth - element.clientWidth,
+        head: element.querySelector('thead')?.getBoundingClientRect().height ?? 0,
+        characters: ((title?.getBoundingClientRect().width ?? 0) * 36) / least,
+        need: others + Math.max(least, run),
+      })
+    }
+    return seen
+  }, sizes)
+
 // In both languages, so a longer word for a heading in either shows here: «Conditions» took
 // the title of a list 900px wide down to 35.6 characters in English and «Условия» to 34.2.
-for (const [locale, workable] of [
-  ['en', 'Workable'],
-  ['ru', 'Можно брать'],
+for (const [locale, workable, goal] of [
+  ['en', 'Workable', 'Goal and stage'],
+  ['ru', 'Можно брать', 'Цель и этап'],
 ] as const)
-  test(`at the fold the title keeps 36 characters in ${locale}, the references align and nobody reads as workable`, async ({
+  test(`each fit stands down to what its table needs in ${locale}, the references align and nobody reads as workable`, async ({
     page,
   }, info) => {
     await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-    await page.setViewportSize({ width: 1440, height: 800 })
+    await page.setViewportSize({ width: 1600, height: 800 })
     await installBackend(page)
     await serve(page)
     await openList(page)
     const list = page.locator('.work-item-list')
     await expect(list.locator('tbody tr').first()).toBeVisible()
-    // The narrowest list that still stands every column but «Goal and stage» side by side.
-    await list.evaluate((element) => {
-      element.style.inlineSize = '920px'
-    })
+    const sizes = Array.from({ length: 101 }, (_, at) => 1400 - at * 10)
+    const seen = await walk(list, sizes)
+    for (const at of seen) {
+      const said = `${at.size}px of list, ${at.fit}`
+      expect(at.overflow, `${said}: nothing past the right edge`).toBeLessThanOrEqual(0)
+      expect(at.head, `${said}: the head is one line`).toBeLessThanOrEqual(41)
+      expect(at.characters, said).toBeGreaterThanOrEqual(leastCharacters(at.fit))
+    }
+    // Narrower, the list only folds more, each fit in turn, and a fit gives way only where
+    // the room is less than its table needs.
+    const turns = seen.slice(1).filter((at, index) => at.fit !== seen[index].fit)
+    expect([seen[0].fit, ...turns.map((at) => at.fit)]).toEqual(FITS)
+    for (const at of turns) {
+      const before = seen[seen.indexOf(at) - 1]
+      expect(before.need, `${before.fit} gives way at ${at.size}px`).toBeGreaterThan(at.room)
+    }
+    // As wide again, every column stands again, «Goal and stage» after the title.
+    await walk(list, [1400])
+    await expect(list).toHaveAttribute('data-fit', 'full')
+    await expect(list.locator('thead th .list-sort:not(.folded)').nth(2)).toHaveText(goal)
+    // The widest list that folds «Goal and stage» alone.
+    const wide = seen.find((at) => at.fit === 'wide')?.size ?? 0
+    await walk(list, [wide])
     await expect(list).toHaveAttribute('data-fit', 'wide')
     const measured = await list.evaluate((element) => {
-      const title = element.querySelector<HTMLElement>('tbody .list-title')
-      const probe = document.createElement('span')
-      probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
-      title?.append(probe)
-      const characters =
-        (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
-      probe.remove()
       const starts = [...element.querySelectorAll('tbody .list-open')].map((open) =>
         Math.round(open.getBoundingClientRect().left),
       )
       const glyphs = [...element.querySelectorAll('tbody .list-ref-cell')].map(
         (cell) => cell.querySelectorAll('.facet-glyph').length,
       )
-      return { characters, starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
+      return { starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
     })
     // A row says its priority once: while its column is shown, the column says the
     // word in its tone, and the reference leads with the kind alone.
@@ -281,50 +356,86 @@ for (const [locale, workable] of [
     const plain = priority.find((row) => row.word && !hued.includes(row))
     expect(hued.length).toBeGreaterThan(0)
     for (const row of hued) expect(row.word).not.toBe(plain?.word)
-    expect(measured.characters).toBeGreaterThanOrEqual(36)
     // Rows with and without glyphs, and every reference starts at one edge.
     expect(measured.glyphs.length).toBeGreaterThan(1)
     expect(measured.starts).toHaveLength(1)
     await expect(list.locator('tbody')).not.toContainText(workable)
-    await expectNoSilentClipping(page, `list at 920px of list in ${locale}`)
-    await page.screenshot(shot(info, `w-list-920-${locale}.png`))
-    // A pixel narrower, the state, the priority and the holder fold under the title.
-    await list.evaluate((element) => {
-      element.style.inlineSize = '919px'
-    })
-    await expect(list).toHaveAttribute('data-fit', 'medium')
+    await expectNoSilentClipping(page, `list at ${wide}px of list in ${locale}`)
+    await page.screenshot(shot(info, `w-list-wide-${locale}.png`))
   })
 
-for (const [locale, goal] of [
-  ['en', 'Goal and stage'],
-  ['ru', 'Цель и этап'],
-] as const)
-  test(`from 1100px «Goal and stage» stands too, and the title still keeps 36 characters in ${locale}`, async ({
-    page,
-  }) => {
-    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-    await page.setViewportSize({ width: 1440, height: 800 })
-    await installBackend(page)
-    await serve(page)
-    await openList(page)
-    const list = page.locator('.work-item-list')
-    await expect(list.locator('tbody tr').first()).toBeVisible()
-    // The narrowest list that stands every column, «Goal and stage» with them.
-    await list.evaluate((element) => {
-      element.style.inlineSize = '1100px'
+/** A state of the space's own workflow, named in a sentence. */
+const CONFIRMING = {
+  state_id: identity(950),
+  key: 'confirming',
+  name: 'Waiting for the owner to confirm',
+  category: 'review',
+  is_terminal: false,
+}
+
+/** Every condition met, which the column says in full. */
+const MET = Array.from({ length: 24 }, (_, at) => ({
+  id: identity(600 + at),
+  text: `Condition ${at + 1}`,
+  done: true,
+  claimed_by: '',
+  done_by: 'worker-a',
+  by_previous_holder: false,
+}))
+
+/**
+ * Words as long as a space's own: a state named in a sentence, long holders, a date of
+ * last year, a long goal's path. Fixed widths chose the fit before, set for shorter words:
+ * beside these the flat list of a 1280px window stood every column but two, left its title
+ * a few characters and put its head on two lines.
+ */
+function longWords() {
+  const items = [
+    brief(1, stateOf(1), {
+      kind: 'goal',
+      title: 'A goal whose title runs on past what any title column of the list holds',
+    }),
+    brief(2, stateOf(2), {
+      kind: 'stage',
+      parent_id: identity(1),
+      title: 'A stage named at length under that goal',
+    }),
+  ]
+  for (let number = 3; number <= 10; number += 1)
+    items.push(
+      brief(number, stateOf(number), {
+        parent_id: identity(2),
+        ...(number % 2 ? { state: CONFIRMING } : {}),
+        priority: number % 3 ? 'urgent' : 'high',
+        claim_ref: `worker-${number} agent 0123456789abcdef (session ${identity(700 + number)})`,
+        claim_state: 'live',
+        checklist: MET,
+        updated_at: `${new Date().getFullYear() - 1}-11-08T00:40:00Z`,
+      }),
+    )
+  return items
+}
+
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [1440, 1280, 1100, 1024, 760, 620, 390])
+    test(`beside long words at ${width}px in ${locale} the head is one line and the title keeps 36 characters`, async ({
+      page,
+    }, info) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      await page.setViewportSize({ width, height: 800 })
+      await installBackend(page)
+      await serveSpace(page, longWords(), [], { states: [{ ...CONFIRMING, position: 6 }] })
+      await page.goto(boardRoute({ view: 'list', sort: 'reference' }))
+      const list = page.locator('.work-item-list')
+      await expect(list.locator('tbody tr').first()).toBeVisible()
+      await stillFrames(page)
+      const drawn = await list.evaluate((element) => ({
+        fit: (element as HTMLElement).dataset.fit,
+        head: element.querySelector('thead')?.getBoundingClientRect().height ?? 0,
+        overflow: element.scrollWidth - element.clientWidth,
+      }))
+      expect(drawn.head, `the head of a ${drawn.fit} list is one line`).toBeLessThanOrEqual(41)
+      expect(drawn.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
+      expect(await titleCharacters(list)).toBeGreaterThanOrEqual(leastCharacters(drawn.fit))
+      await page.screenshot(shot(info, `w-list-long-${width}-${locale}.png`))
     })
-    await expect(list).toHaveAttribute('data-fit', 'full')
-    await expect(list.locator('thead th .list-sort:not(.folded)').nth(2)).toHaveText(goal)
-    const room = await list.evaluate((element) => {
-      const title = element.querySelector<HTMLElement>('tbody .list-title')
-      const probe = document.createElement('span')
-      probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
-      title?.append(probe)
-      const characters =
-        (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
-      probe.remove()
-      return { characters, overflow: element.scrollWidth - element.clientWidth }
-    })
-    expect(room.characters).toBeGreaterThanOrEqual(36)
-    expect(room.overflow, 'nothing is pushed past the right edge').toBeLessThanOrEqual(0)
-  })
