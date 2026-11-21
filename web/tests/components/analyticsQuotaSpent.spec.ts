@@ -49,6 +49,8 @@ const usage = (query: URLSearchParams) => serveUsage(WORLD, query)
 
 /** Words as a reader reads them: the app keeps a figure and its unit together with a no-break space. */
 const plain = (text: string) => text.replaceAll('\u{A0}', ' ')
+/** Figures are of one width each, so a heading's room is kept by its shape, whichever minute. */
+const shape = (text: string) => text.replaceAll(/\d/gu, '0')
 /** What a part says to a reader: its words without the room it keeps unseen (`aria-hidden`). */
 function said(part: Omit<DOMWrapper<Element>, 'exists'>) {
   const copy = part.element.cloneNode(true) as Element
@@ -441,9 +443,7 @@ describe('the states of what used a window', () => {
         .findAll('.window-spend-heading [aria-hidden="true"]')
         .map((one) => plain(one.text()))
     expect(heading()).toBe('Window breakdown: 20:50 – 23:50')
-    // Figures are of one width each, so a heading is kept for by its shape, whichever minute.
-    const shape = (text: string) => text.replaceAll(/[0-9]/gu, '0')
-    const kept = [heading(), ...room()].map(shape)
+    const kept = [heading(), ...room()].map((one) => shape(one))
 
     at = night
     vi.setSystemTime(night)
