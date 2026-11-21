@@ -1053,9 +1053,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls sideways in its own frame
-  (`ChartTable`, `keyScroll`) rather than widening the page. A chart opens on the drawing it
-  opens on at 1440 at every width, a phone's too, and its table is a press away: in a panel
-  of 294 px at 390 the ring, the ranked bars (each name on its own line over its bar), the days
+  (`ChartTable`, `keyScroll`) rather than widening the page. A twin's name, a row's or a series'
+  over its figures, takes two lines at most, then an ellipsis, whole in its hint, as the side
+  panel's narrow names do (`.two-lines`), and a detail a line of its own under it: unbounded, a
+  task's name in the ranked twin at 390 stood on fourteen lines and its row 234 px tall, and the
+  days' twin by task stood its heading row 336 px tall over seventeen lines of a name. A chart
+  opens on the drawing it opens on at 1440 at every width, a phone's too, and its table is a
+  press away: in a panel of 294 px at 390 the ring, the ranked bars (each name on its own line
+  over its bar), the days
   (scrolling in their frame, a day 24 px at least) and the quota's windows each stand whole, with
   no word cut but by a designed ellipsis. A panel under 560 px once opened every chart as its
   table, though none needed it. They are boxes of HTML on the tokens, not a chart library, which the

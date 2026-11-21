@@ -56,7 +56,7 @@ const stacked = computed(() => wraps.value && Boolean(props.line.nameEnd))
 /** How the name's words keep to their lines: one, cut; two, clamped; stacked, a part a line. */
 const wordsRule = computed(() => {
   if (!wraps.value) return 'one-line'
-  return stacked.value ? '' : 'table-clamp'
+  return stacked.value ? '' : 'two-lines'
 })
 
 function follow(event: MouseEvent) {
@@ -170,7 +170,8 @@ function inspect() {
     max-inline-size: 100%;
   }
 
-  & .press-words {
+  /* A block, unless it keeps to two lines (`.two-lines`), whose own box that is. */
+  & .press-words:not(.two-lines) {
     display: block;
   }
 
@@ -184,25 +185,18 @@ function inspect() {
 }
 
 /* On two lines the name's words take the press's whole width and break between words, an
-   ellipsis ending the second line, as a ranked list of free text draws them. Each part of a pair
-   and a detail is a line of its own, cut at its end; the line under the pointer still says the
-   whole name. The press stands on the line's top, so the row's figures stand on its first line. */
+   ellipsis ending the second line (`.two-lines`), as a ranked list of free text draws them. Each
+   part of a pair and a detail is a line of its own, cut at its end; the line under the pointer
+   still says the whole name. The press stands on the line's top, so the row's figures stand on its
+   first line. */
 .table-wraps {
-  & .plain-words {
+  & .plain-words:not(.two-lines) {
     display: block;
   }
 
   & .chart-detail {
     display: block;
     margin-inline-start: 0;
-  }
-
-  /* After the words' own display, which it takes the place of. */
-  & .table-clamp {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
   }
 }
 </style>

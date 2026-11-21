@@ -164,12 +164,12 @@ describe('a ranked list of free text', () => {
     const list = mountList(true)
     const label = list.get('[data-key="t1"] .ranked-label')
     expect(list.get('figure').classes()).toContain('ranked-free')
-    expect(label.classes()).toContain('ranked-clamp')
+    expect(label.classes()).toContain('two-lines')
     expect(label.classes()).not.toContain('one-line')
     // The control: the chart of identifiers keeps its one line.
     const chart = mountList(false).get('[data-key="t1"] .ranked-label')
     expect(chart.classes()).toContain('one-line')
-    expect(chart.classes()).not.toContain('ranked-clamp')
+    expect(chart.classes()).not.toContain('two-lines')
   })
 
   it('sets the rows that are not categories apart, each with a neutral bar on one scale', () => {
