@@ -23,6 +23,7 @@ import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { dayMultiples } from '@/pages/analytics/utils/dayMultiples.ts'
+import { breakdownOf, measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
@@ -34,7 +35,6 @@ import SmallMultiplesTable from '@/shared/ui/SmallMultiplesTable.vue'
 const props = defineProps<{
   by: UsageDimension
   measure: Measure
-  narrow: boolean
   /** The hue of each value, or each pair, on the page, by its key. */
   slots: ReadonlyMap<string, SeriesSlot>
   usage: Usage
@@ -61,6 +61,15 @@ const title = computed(() =>
 )
 
 const drawn = computed(() => dayMultiples(props))
+/** What every value adds up to, the ones with no chart too: what each name's share is of. */
+const whole = computed(() =>
+  spendingLines(
+    props.usage.rows,
+    breakdownOf(props.by, props.across),
+    props.measure,
+    Number.POSITIVE_INFINITY,
+  ).reduce((sum, line) => sum + (measureOf(props.measure, line.spent) ?? 0), 0),
+)
 const marks = useLineMarks({
   by: () => props.by,
   lines: () => drawn.value.map(({ line }) => line),
@@ -106,13 +115,13 @@ const valueAxis = computed(() => words.axis(props.measure))
   <ChartSection
     class="spending-multiples"
     :title="heading"
-    :narrow="narrow"
   >
     <template #chart>
       <SmallMultiples
         :label="title"
         :multiples="multiples"
         :periods="periods"
+        :whole="whole"
         :words="chartWords"
         :format-share="words.markShare"
         :format-value="formatValue"

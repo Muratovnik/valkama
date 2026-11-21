@@ -69,9 +69,6 @@ const { shown: pastShown, status } = past
 const lineButton = useTemplateRef<InstanceType<typeof VButton>>('lineButton')
 const currentButton = useTemplateRef<InstanceType<typeof VButton>>('currentButton')
 
-const ranOut = (window: QuotaShareWindow) =>
-  window.latest.used_percent >= 100 || window.readings.some((one) => one.used_percent >= 100)
-
 /** «until Nov 19, 05:00 — 9%», with that it ran out where it did, for the line and «Earlier». */
 function endedWords(ended: QuotaEndedWindow) {
   const values = {
@@ -99,14 +96,7 @@ const span = computed(() => {
 const heading = computed(() =>
   span.value ? t('analytics.quota.past.shown', span.value) : line.value,
 )
-const lead = computed(() => {
-  const shown = pastShown.value
-  if (!shown) return ''
-  const share = words.share(shown.latest.used_percent)
-  return ranOut(shown)
-    ? t('analytics.quota.past.leadRanOut', { share })
-    : t('analytics.quota.past.lead', { share })
-})
+const lead = computed(() => (pastShown.value ? words.endedShare(pastShown.value) : ''))
 const earlier = computed(() => {
   const before = pastShown.value?.previous
   if (!before) return null

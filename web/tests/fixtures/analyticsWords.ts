@@ -31,6 +31,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.scope.aboutProject': 'value',
   'analytics.scope.aboutAll': 'value',
   'analytics.dimensions': 'label',
+  'analytics.dimensionNotes': 'caveat',
   'analytics.roles': 'label',
   'analytics.values': 'label',
   'analytics.chart': 'label',
@@ -118,19 +119,23 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.time.estimate': 'caveat',
 }
 
-/** A section of the page, as the «ⓘ» of its heading speaks for it. */
-export type CaveatSection = 'kinds' | 'quota' | 'spending'
+/**
+ * A section of the page, as the «ⓘ» of its heading speaks for it: `executor` is the executors'
+ * section, which says what an executor is before the caveats of the figures every dimension's says.
+ */
+export type CaveatSection = 'executor' | 'kinds' | 'quota' | 'spending'
 
 /**
  * Where each caveat is said: the sections whose «ⓘ» holds it — `spending` is the overview and a
- * dimension's section, which show the same figures — and whether it holds only for a period read
+ * dimension's section, which show the same figures, the executors' among them — and whether it holds only for a period read
  * by the minute.
  */
 export const CAVEATS: Record<string, { sections: readonly CaveatSection[]; minutes?: boolean }> = {
-  'analytics.figures.costNote': { sections: ['spending'] },
-  'analytics.figures.timeNote': { sections: ['spending'] },
-  'analytics.panel.table.kinds.note': { sections: ['spending', 'kinds'] },
-  'analytics.time.estimate': { sections: ['spending', 'kinds'], minutes: true },
+  'analytics.figures.costNote': { sections: ['spending', 'executor'] },
+  'analytics.figures.timeNote': { sections: ['spending', 'executor'] },
+  'analytics.panel.table.kinds.note': { sections: ['spending', 'executor', 'kinds'] },
+  'analytics.time.estimate': { sections: ['spending', 'executor', 'kinds'], minutes: true },
+  'analytics.dimensionNotes.executor': { sections: ['executor'] },
   'analytics.quota.panel.intro': { sections: ['quota'] },
   'analytics.quota.panel.account': { sections: ['quota'] },
   'analytics.quota.spent.basis': { sections: ['quota'] },

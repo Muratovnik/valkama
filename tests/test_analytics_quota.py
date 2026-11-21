@@ -27,6 +27,7 @@ from collections.abc import Iterator
 from server import http_surface
 from server.analytics import api, quota, usage
 from server.quota import names, samples
+from server.quota import settings as quota_settings
 from tests.analytics_fixtures import START, UsageStore
 
 ORG_A = "org-a"
@@ -402,6 +403,30 @@ class WindowTests(_Quota):
             [("week", None, 30.0), ("week_model", "claude-opus-5-5", 70.0)],
             [(one["kind"], one["model"], one["latest"]["used_percent"]) for one in read["windows"]],
         )
+
+
+class PollTests(_Quota):
+    """The answer says whether the poll is on and which kinds it alone of the live sources reads."""
+
+    def test_the_answer_says_the_poll_is_off_until_the_owner_turns_it_on(self) -> None:
+        read = self.quota()["poll"]
+        self.assertEqual({"on": False, "only": ["extra_usage", "week_model"]}, read)
+        quota_settings.write(self.conn, {"poll": True})
+        self.assertEqual({"on": True, "only": ["extra_usage", "week_model"]}, self.quota()["poll"])
+
+    def test_only_the_poll_names_a_models_week_and_the_usage_credits(self) -> None:
+        # Held against the sources' own vocabularies, not the module's set: every other live
+        # source names neither kind, and the poll names both.
+        others = {
+            kind
+            for source, kinds in samples.SOURCE_WINDOWS.items()
+            if source != "poll"
+            for kind in kinds.values()
+        }
+        self.assertNotIn("week_model", others)
+        self.assertNotIn("extra_usage", others)
+        self.assertIn("five_hour", others)
+        self.assertEqual({"week_model", "extra_usage"}, set(samples.POLL_ONLY))
 
 
 class SumTests(_Quota):

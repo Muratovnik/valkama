@@ -45,6 +45,11 @@ const props = defineProps<{
   periods?: readonly MultiplePeriod[]
   /** The scale, where its top is other than a round step said as `formatValue` says it. */
   valueAxis?: ValueAxis
+  /**
+   * What each name's share is of, where the caller left out values that say nothing of how much
+   * (`drawnLines`); what every chart adds up to by default.
+   */
+  whole?: number
   /** A share of the whole as the reader reads it, «42 % of the total», for each name's hint. */
   formatShare?: (ratio: number) => string
   /** A value as the reader reads it, for the scale's top and each period's hint. */
@@ -65,8 +70,10 @@ const figureOf = (one: SmallMultiple) =>
     0,
   )
 
-/** What every chart adds up to, of which each name's hint says its share. */
-const whole = computed(() => props.multiples.reduce((sum, one) => sum + figureOf(one), 0))
+/** What each name's hint says its share of: the caller's whole, or what every chart adds up to. */
+const whole = computed(
+  () => props.whole ?? props.multiples.reduce((sum, one) => sum + figureOf(one), 0),
+)
 
 /** The hue a chart's swatch draws in: its columns', where it draws a chart; none apart. */
 const slotOf = (one: PlacedMultiple) =>

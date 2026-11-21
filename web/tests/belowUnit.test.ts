@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 
 import { describe, test } from 'vitest'
 
-import { belowUnit } from '@/pages/analytics/utils/usageFigures.ts'
+import { belowUnit, drawnLines } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 const spent = (given: Partial<Spent>): Spent => ({
@@ -43,5 +43,25 @@ describe('a line below the unit its figure is written in', () => {
     assert.equal(belowUnit('tokens', spent({ tokens: 0 })), true)
     assert.equal(belowUnit('tokens', spent({ tokens: 1 })), false)
     assert.equal(belowUnit('tokens', spent({ tokens: null, seconds: 60 })), false)
+  })
+})
+
+const line = (key: string, seconds: number) => ({ key, spent: spent({ seconds }) })
+
+describe('the lines a chart draws', () => {
+  test('leave out every line under its unit, under any name, and keep one at the unit', () => {
+    const lines = [line('big', 3600), line('half', 30), line('unknown', 59), line('minute', 60)]
+    assert.deepEqual(
+      drawnLines('time', lines).map((one) => one.key),
+      ['big', 'minute'],
+    )
+  })
+
+  test('keep every line where each is under its unit, so the chart is not empty', () => {
+    const lines = [line('a', 20), line('b', 10)]
+    assert.deepEqual(
+      drawnLines('time', lines).map((one) => one.key),
+      ['a', 'b'],
+    )
   })
 })

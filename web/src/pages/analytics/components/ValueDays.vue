@@ -41,8 +41,6 @@ const props = defineProps<{
   measure: Measure
   /** The value's name, which its one series says. */
   name: string
-  /** Whether the panel is too narrow to read a chart, which makes the table the first view. */
-  narrow: boolean
   /** When the page's answer was asked for, which says which step is not over yet. */
   readAt: Date
   /** An answer of the value, whose steps are its figures by step. */
@@ -105,7 +103,6 @@ const chart = computed<PeriodChartProps>(() => {
   <ChartSection
     class="value-days"
     :title="title"
-    :narrow="narrow"
   >
     <template #chart>
       <PeriodColumns

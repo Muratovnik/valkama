@@ -19,7 +19,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { noTask, task } from '../fixtures/analytics.ts'
+import { noTask, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
@@ -35,6 +35,7 @@ const MARGIN = 1
 /** What a box's edge may stray from another's by rounding alone. */
 const HALF_PIXEL = 0.5
 
+/** Hours of work at ten on a day, the work on a task in its project and the rest in none. */
 const worked = (
   month: number,
   day: number,
@@ -42,13 +43,16 @@ const worked = (
   hours: number,
 ) => ({
   at: new Date(2026, month, day, 10),
-  group: { work_item: workItem },
+  group: {
+    work_item: workItem,
+    project: workItem === noTask ? { id: null, unknown: false } : value('plans'),
+  },
   spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours },
 })
 
 /**
- * This week to Wednesday, running, with work on no task stacked over a task's, against the same
- * days of the week before: Monday's tick crosses the grey of «No task», Tuesday's stands over its
+ * This week to Wednesday, running, with work on no task and in no project stacked over a task's,
+ * against the same days of the week before: Monday's tick crosses the grey of «No project», Tuesday's stands over its
  * column and Wednesday's crosses it. Three days in September and October give the four weeks
  * before the past four their ticks too, which stand over columns 24px wide.
  */
@@ -149,7 +153,7 @@ function expectTickShape(one: Tick) {
   expect(one.tick.bottom - one.tick.top, `${one.key}: a line, not a box`).toBeLessThanOrEqual(3)
 }
 
-/** Opens the overview's chart of days, stacked by task, at `width`: its chart rather than its table. */
+/** Opens the overview's chart of days, stacked by project, at `width`: its chart rather than its table. */
 async function openDays(page: Page, width: number, state: Record<string, string> = {}) {
   const analytics = await openReport(page, width, pageAt(state))
   const days = analytics.locator('.spending-days')
@@ -175,7 +179,7 @@ for (const width of WIDTHS)
     })
     // Monday, Tuesday and Wednesday each have a day before to stand against.
     expect(seen.ticks).toHaveLength(3)
-    // The case the tick is for: Monday's crosses the grey of work on no task.
+    // The case the tick is for: Monday's crosses the grey of work in no project.
     expect(seen.ticks[0]?.crosses).toEqual(['none'])
     for (const one of seen.ticks) {
       // A three-day week leaves every day the room for the whole overhang.

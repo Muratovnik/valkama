@@ -44,6 +44,11 @@ before it that reset after that start (`earlier`), each whole from its start to 
 so a step line can draw every window the period overlaps; the read then reaches a window's
 length before that start, where the first of them begins, and finds them among its samples.
 
+The answer says whether the owner's poll of the usage endpoint is on (`poll.on`, the setting
+`quota.settings` keeps) and which kinds only the poll reads among the live sources
+(`poll.only`, `samples.POLL_ONLY`): with the poll off, such a window is read by nothing now, and
+its readings are history rather than an account gone quiet.
+
 The read reaches a week further back than its span, so the previous window of a current
 one is found among the samples already read. Further back the samples are looked for by
 their seats (`_Past._search`): a seat names one week, and the seats that may be an
@@ -60,6 +65,7 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from ..quota import accounts, forecast, names, samples, seats
+from ..quota import settings as quota_settings
 from ..quota import store as quota_store
 from . import usage
 
@@ -536,6 +542,7 @@ def read(
         "utc_offset": utc_offset,
         "fresh_for_seconds": forecast.FRESH_FOR // 1000,
         "retained_from": clock.time(retained),
+        "poll": {"on": quota_settings.read(conn)["poll"], "only": sorted(samples.POLL_ONLY)},
         "accounts": sorted(entries, key=lambda entry: entry["account"]),
     }
 

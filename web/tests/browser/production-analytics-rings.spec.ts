@@ -64,7 +64,7 @@ async function openRing(
   await page.setViewportSize({ width, height: 900 })
   // A phone opens on the rail: its chosen section is a press away.
   await openPanel(page, pageAt(state))
-  // A narrow page starts on the table; the ring is a press away.
+  // The ring, where the section opens on its bars, is a press away.
   const section = page.locator('.analytics-panel .chart-section').first()
   await expect(section).toBeVisible()
   const chart = section.getByRole('radio', { name: ringName, exact: true })

@@ -305,6 +305,9 @@ test.describe('in Russian', () => {
   }, info) => {
     await serve(page)
     const analytics = await openReport(page, 390)
+    // Each chart opens drawn at every width; its table is pressed, as a reader presses it.
+    for (const section of await analytics.locator('.chart-section').all())
+      await section.getByRole('radio', { name: 'Таблица', exact: true }).click()
     await expect(analytics.locator('.spending-days table')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     const broken = await brokenWords(page, '.analytics-panel :is(th, td)')

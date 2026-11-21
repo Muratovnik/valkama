@@ -55,8 +55,8 @@ describe('an ended window in its account’s table', () => {
     const row = work.get('.quota-account-table tbody tr')
     // Its state is the reading's, as any window's: how long it has had no data.
     const [lead, pace, , forecast] = cellsOf(row)
-    expect(lead).toMatch(/^Reset at \d{2}:\d{2}, no new readings, before the reset: 62%$/u)
-    expect(row.get('[data-cell="value"] .chart-detail').text()).toBe('before the reset: 62%')
+    expect(lead).toMatch(/^Reset at \d{2}:\d{2}, no new readings, 62% by the reset$/u)
+    expect(row.get('[data-cell="value"] .chart-detail').text()).toBe('62% by the reset')
     expect([pace, forecast]).toEqual(['—', '—'])
     expect(work.find('[data-fact="reset"]').exists()).toBe(false)
 

@@ -2,7 +2,8 @@
  * The period day by day. The oracle is the requirement: a column per day of the chosen measure,
  * stacked by the largest values of the dimension plus «other»; the last day, while it is not
  * over, marked as such and not drawn as a fall; a mark where the set of accounts that worked
- * changes from one day to the next, read from the period by account; and a table on a narrow page.
+ * changes from one day to the next, read from the period by account; and their table, a press
+ * away at every width.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,6 +27,7 @@ import {
 } from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { showView } from '../support/chartViews.ts'
 import { plotWords } from '../support/plotWords.ts'
 
 // What the panel asks is counted and ordered here; the rail's own reads are held elsewhere.
@@ -101,7 +103,7 @@ const fiveDays = () =>
 
 function mountDays(
   usage: Usage,
-  options: { accounts?: AccountsRead; measure?: Measure; narrow?: boolean; readAt?: Date } = {},
+  options: { accounts?: AccountsRead; measure?: Measure; readAt?: Date } = {},
   locale: 'en' | 'ru' = 'en',
 ) {
   return mount(SpendingDays, {
@@ -109,12 +111,17 @@ function mountDays(
       usage,
       by: 'work_item',
       measure: options.measure ?? 'time',
-      narrow: options.narrow ?? false,
       readAt: options.readAt ?? WEDNESDAY,
       accounts: options.accounts ?? 'loading',
     },
     global: { plugins: [analyticsI18n(locale)] },
   })
+}
+
+/** The days' table, as a reader opens it by the chart's switch. */
+async function daysTable(days: ReturnType<typeof mountDays>) {
+  await showView(days, '.spending-days', 'Table')
+  return days.getComponent(PeriodColumnsTable)
 }
 
 describe('the days', () => {
@@ -166,7 +173,7 @@ describe('the days', () => {
     expect(legend).toContain('Unknown')
   })
 
-  it('show a day whose work has no price as absent, never as a zero', () => {
+  it('show a day whose work has no price as absent, never as a zero', async () => {
     // Monday is priced, Tuesday spent with no price, Wednesday spent nothing.
     const usage = week([
       { day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600, cost: 2 } },
@@ -182,8 +189,8 @@ describe('the days', () => {
       chart.findAll('.period-slot').map((slot) => slot.findAll('.period-segment').length),
     ).toEqual([1, 0, 0])
     expect(spokenDays(chart)[1]?.holds).toContain('No price: MAIN-2 Two')
-    const rows = mountDays(usage, { ...options, narrow: true })
-      .getComponent(PeriodColumnsTable)
+    const priced = await daysTable(mountDays(usage, options))
+    const rows = priced
       .findAll('tbody tr')
       .map((row) => row.findAll('td').map((cell) => cell.text()))
     // The columns: MAIN-1, MAIN-2, the total and the note.
@@ -264,22 +271,19 @@ describe('the days', () => {
     )
   })
 
-  it('read as a table on a narrow page, with the same days, the running one and the marks', () => {
-    const table = mountDays(week(), { narrow: true })
-    expect(table.findComponent(PeriodColumns).exists()).toBe(false)
-    const rows = table.getComponent(PeriodColumnsTable).findAll('tbody tr')
+  it('read as their table, pressed, with the same days, the running one and the marks', async () => {
+    const days = mountDays(week())
+    const rows = await daysTable(days).then((table) => table.findAll('tbody tr'))
+    expect(days.findComponent(PeriodColumns).exists()).toBe(false)
     expect(rows).toHaveLength(3)
     expect(rows.at(-1)?.text()).toContain('running')
 
-    const marked = mountDays(fiveDays(), { narrow: true, accounts: byAccount(), readAt: AFTER })
-    const notes = marked
-      .getComponent(PeriodColumnsTable)
-      .findAll('tbody tr')
-      .map((row) => row.findAll('td').at(-1)?.text() ?? '')
+    const marked = await daysTable(mountDays(fiveDays(), { accounts: byAccount(), readAt: AFTER }))
+    const notes = marked.findAll('tbody tr').map((row) => row.findAll('td').at(-1)?.text() ?? '')
     expect(notes).toEqual(['', '', '', 'Account change: +acc-b, −acc-a', 'Account change: +acc-a'])
   })
 
-  it('name the month on the axis at its first day and where a new month starts', () => {
+  it('name the month on the axis at its first day and where a new month starts', async () => {
     // 27 October to 2 November; unmeasured, the axis names the first day and the last.
     const usage = usageAnswer({
       first: new Date(2026, 9, 27),
@@ -294,10 +298,8 @@ describe('the days', () => {
     expect(names('en')).toEqual(['Oct 27', 'Nov 2'])
     expect(names('ru')).toEqual(['27 окт.', '2 нояб.'])
     // The table names every day in full, its month included.
-    const rows = mountDays(usage, { readAt: AFTER, narrow: true })
-      .getComponent(PeriodColumnsTable)
-      .findAll('tbody th')
-      .map((name) => name.text())
+    const named = await daysTable(mountDays(usage, { readAt: AFTER }))
+    const rows = named.findAll('tbody th').map((name) => name.text())
     expect(rows[0]).toBe('Tuesday, October 27')
     expect(rows[5]).toBe('Sunday, November 1')
   })
@@ -398,7 +400,7 @@ describe('the account marks', () => {
     expect(changesOf(daysOf([A, B], [A]))).toEqual([gone])
   })
 
-  it('say the change in the hint of its day and to a screen reader by the known accounts alone', () => {
+  it('say the change in the hint of its day and to a screen reader by the known accounts alone', async () => {
     const accounts = daysOf([A], [UNRECORDED], [B, UNPLACED, UNRECORDED], [B])
     const days = mountDays(everyDay(4), { accounts, readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(1)
@@ -415,11 +417,8 @@ describe('the account marks', () => {
     // A day is a button named by what pressing it does, then by the change at its start.
     expect(spokenDays(days)[2]?.name).toMatch(/\. Account change: \+acc-b, −acc-a$/u)
 
-    const table = mountDays(everyDay(4), { narrow: true, accounts, readAt: AFTER })
-    const notes = table
-      .getComponent(PeriodColumnsTable)
-      .findAll('tbody tr')
-      .map((row) => row.findAll('td').at(-1)?.text() ?? '')
+    const table = await daysTable(mountDays(everyDay(4), { accounts, readAt: AFTER }))
+    const notes = table.findAll('tbody tr').map((row) => row.findAll('td').at(-1)?.text() ?? '')
     expect(notes).toEqual(['', '', 'Account change: +acc-b, −acc-a', ''])
   })
 })
@@ -477,11 +476,11 @@ describe('the days across the spring change of time', () => {
     vi.unstubAllEnvs()
   })
 
-  it('label each day by the date the read gave it, not the browser’s date that night', () => {
+  it('label each day by the date the read gave it, not the browser’s date that night', async () => {
     // The zone is fixed: the first two days are still at +01:00 in the browser's own time.
     expect(new Date(2026, 2, 27).getTimezoneOffset()).toBe(-60)
     const readAt = new Date(2026, 3, 1)
-    const table = mountDays(acrossTheChange(), { narrow: true, readAt })
+    const table = await daysTable(mountDays(acrossTheChange(), { readAt }))
     expect(table.findAll('tbody th').map((name) => name.text())).toEqual([
       'Friday, March 27',
       'Saturday, March 28',

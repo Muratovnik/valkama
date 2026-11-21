@@ -55,6 +55,11 @@ const props = defineProps<{
   label: string
   rows: readonly RankedRow[]
   words: DonutWords
+  /**
+   * What the parts are shares of, where the caller left out rows that say nothing of how much
+   * (`drawnLines`); the rows' own sum by default (`ringOf`).
+   */
+  whole?: number
   /** A share bare, «42 %», in the legend and against each part of the rest in its hint. */
   formatPart?: (ratio: number) => string
   /** A share of the whole as the reader reads it, «42 % of the total», in hints. */
@@ -65,7 +70,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
-const ring = computed(() => ringOf(props.rows))
+const ring = computed(() => ringOf(props.rows, undefined, props.whole))
 /**
  * The sectors drawn, each with its outline and the point its hint stands at, the middle of its
  * band in the drawing's units; one too thin to show past its gap is in the legend.

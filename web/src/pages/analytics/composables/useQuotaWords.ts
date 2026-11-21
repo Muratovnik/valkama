@@ -119,16 +119,31 @@ export function useQuotaWords() {
   }
 
   /**
+   * The share an ended window ended at, as every ended window says it: «90% by the reset», and
+   * with that the limit ran out before it where any reading reached 100 % (`past.lead`). Said of a
+   * window whose reset has passed, which spends nothing more: never «before the reset: 90%», which
+   * read as what is left until a reset still to come.
+   */
+  function endedShare(window: Pick<QuotaShareWindow, 'latest' | 'readings'>) {
+    const at = share(window.latest.used_percent)
+    const ranOut =
+      window.latest.used_percent >= 100 || window.readings.some((one) => one.used_percent >= 100)
+    return ranOut
+      ? t('analytics.quota.past.leadRanOut', { share: at })
+      : t('analytics.quota.past.lead', { share: at })
+  }
+
+  /**
    * The bar's words for a reader who cannot see it: the share, the pace, the state with how long
    * the window has been silent at `now` (ms), and the forecast its tail draws, after its key; past
-   * its reset, that it reset with no reading since, and its share before then (`ended`).
+   * its reset, that it reset with no reading since, and the share it ended at (`endedShare`).
    */
   function barLabel(window: QuotaShareWindow, now: number, today: string, freshFor: number) {
     if (window.resets_at !== null && !stands(window, now))
       return t('analytics.quota.barEnded', {
         window: windowName(window),
         at: moment(window.resets_at, today),
-        share: share(window.latest.used_percent),
+        ended: endedShare(window),
       })
     const values = {
       window: windowName(window),
@@ -158,16 +173,27 @@ export function useQuotaWords() {
   /**
    * What a window past its reset at `now` (ms) leads with, though its answer was read before the
    * reset: that it reset with no reading since, «Reset at 21:20, no new readings», and then, as
-   * a quieter line, its share before the reset, «before the reset: 90%», since its share is the
-   * last window's and leading with it read as the share spent now. Null while it stands.
+   * a quieter line, the share it ended at, «90% by the reset» (`endedShare`), since its share is
+   * the last window's and leading with it read as the share spent now. Null while it stands.
    */
   function ended(window: QuotaShareWindow, now: number, today: string) {
     if (window.resets_at === null || stands(window, now)) return null
     return {
       lead: t('analytics.quota.ended', { at: moment(window.resets_at, today) }),
-      before: t('analytics.quota.beforeReset', { share: share(window.latest.used_percent) }),
+      before: endedShare(window),
     }
   }
+
+  /**
+   * What a window nothing reads now says in place of its share (`uncollected`): that only the
+   * quota poll reads it and the poll is off, and the name of the way to the switch; a window of
+   * money says it after its name, on its line.
+   */
+  const uncollectedWords = (window: QuotaWindow) => ({
+    lead: t('analytics.quota.uncollected.lead'),
+    line: t('analytics.quota.uncollected.line', { window: windowName(window) }),
+    settings: t('analytics.quota.uncollected.settings'),
+  })
 
   /**
    * A week's range, never past 100 %, which a quota cannot pass: a low end there runs the window
@@ -498,6 +524,7 @@ export function useQuotaWords() {
     barLabel,
     barRead,
     ended,
+    endedShare,
     even,
     forecast,
     forecastLine,
@@ -518,6 +545,7 @@ export function useQuotaWords() {
     sectionName,
     share,
     stateWords,
+    uncollectedWords,
     windowName,
   }
 }

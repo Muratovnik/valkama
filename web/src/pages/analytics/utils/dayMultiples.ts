@@ -6,6 +6,7 @@ import { stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 import type { StackSource } from '@/pages/analytics/utils/dayFigures.ts'
 import {
   breakdownOf,
+  drawnLines,
   figureOf,
   lineKeyOf,
   rankedLines,
@@ -36,13 +37,16 @@ export interface DayMultiple {
 /**
  * The lines of the small charts: the largest values in the measure, or split by `across` the
  * largest pairs, work with no value there and work nobody can place among them by their figures,
- * the rest folded into one «other» (`rankedLines`), each with its figure day by day. A day a line
- * spent in without a figure in the measure is null, not zero.
+ * the rest folded into one «other» (`rankedLines`), each with its figure day by day; a line whose
+ * figure says nothing of how much has no chart (`drawnLines`). A day a line spent in without a
+ * figure in the measure is null, not zero.
  */
 export function dayMultiples({ usage, by, measure, across = null }: StackSource): DayMultiple[] {
   const breakdown = breakdownOf(by, across)
-  const lines = rankedLines(usage.rows, breakdown, measure, CHARTED)
-  const named = new Set(lines.map((line) => line.key))
+  const ranked = rankedLines(usage.rows, breakdown, measure, CHARTED)
+  // A line left out keeps its own days, so none of them lands in «other».
+  const named = new Set(ranked.map((line) => line.key))
+  const lines = drawnLines(measure, ranked)
   const days = usage.series.map((point) => {
     const sums = new Map<string, number | null>()
     for (const group of point.groups) {

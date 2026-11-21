@@ -15,7 +15,7 @@ import { runOut, tightest } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import type { Quota, QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 
-import { share } from './fixtures/quota.ts'
+import { POLL_ON, share } from './fixtures/quota.ts'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -73,6 +73,7 @@ const quota = (...accounts: QuotaAccount[]): Quota => ({
   utc_offset: OFFSET,
   fresh_for_seconds: 900,
   retained_from: new Date(NOW - 365 * DAY).toISOString(),
+  poll: POLL_ON,
   accounts,
 })
 

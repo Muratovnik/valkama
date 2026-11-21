@@ -13,7 +13,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { seatValue, task } from '../fixtures/analytics.ts'
+import { seatValue, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { expectNoLineOverPlot } from './plotWords.ts'
@@ -25,7 +25,10 @@ const FIRST = seatValue(`${ORGANIZATION}/f0f0f0f0-5d6e-4f70-8a9b-0c1d2e3f4a5b`)
 const SECOND = seatValue(`${ORGANIZATION}/2a2a2a2a-1111-4222-8333-444455556666`)
 const HOUR = 3600
 
-/** An hour of `hours` at ten on a day of November 2026, on a task, under an account. */
+/**
+ * An hour of `hours` at ten on a day of November 2026, on a task, under an account, each task in a
+ * project of its own: the overview stacks its chart by project.
+ */
 const worked = (
   day: number,
   account: typeof FIRST,
@@ -35,6 +38,7 @@ const worked = (
   at: new Date(2026, 10, day, 10),
   group: {
     work_item: task(number, `Rework the import of very long planning documents, part ${number}`),
+    project: value(`planning-documents-importer-${number}`),
     seat: account,
   },
   spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours * 2 },
@@ -42,8 +46,8 @@ const worked = (
 
 /**
  * The week to Wednesday afternoon and the Monday a week before, the second account joining on
- * Tuesday and alone on Wednesday: two changes. Tuesday holds five tasks and the change, so its
- * hint runs to many lines.
+ * Tuesday and alone on Wednesday: two changes. Tuesday holds five tasks, each of its project, and the
+ * change, so its hint runs to many lines.
  */
 const TWO: TimedStretch[] = [
   worked(9, FIRST, 5, 1),
@@ -185,7 +189,7 @@ for (const lang of ['en', 'ru'] as const)
         }
         await record(info, `hint-${lang}-${width}`, seen)
         for (const one of seen) expect(one.cut, one.text).toBe(false)
-        // Tuesday, five tasks and a change, says each on a line of its own.
+        // Tuesday, five projects and a change, says each on a line of its own.
         expect(seen[1]?.lines).toBeGreaterThan(5)
       })
   })

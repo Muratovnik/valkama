@@ -1036,10 +1036,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   it read as one more row. Parts are compared by ranked bars on one base; a thin segmented strip
   belongs only over rows that print a name and a number and draw nothing, as a rail tile's
   `MiniShareBar` does. A row whose figure is less than the least its unit shows — «меньше
-  минуты», a cost under a cent, no token — says nothing of how much and is not drawn, under any
-  name, judged from its amount against that unit and never from its words; «unknown» of a unit or
-  more stays, since it shows a gap in what is placed. The section's total, every share and the
-  table twin still count and list such a row, and a list whose every row is one draws them all.
+  минуты», a cost under a cent, no token — says nothing of how much and is in no view of a chart,
+  under any name, judged from its amount against that unit and never from its words: not the
+  ranked bars, the ring's sectors and legend, the small charts, the day chart's series, nor the
+  table twin of any of them, which all take their lines from one rule (`drawnLines`). «Unknown» of
+  a unit or more stays, since it shows a gap in what is placed. The section's total and every
+  share still count such a row — a ring that leaves one out stays open by its share rather than
+  stretching the rest over it — the section's own table, which holds every value in every
+  measure, lists it, and a chart whose every row is one draws them all.
   `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
   draws one small chart of the span per leading value, all on one scale whose top is written
   once over them, each with its name on one line and its figure; the folded tail shares the
@@ -1047,7 +1051,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls sideways in its own frame
-  (`ChartTable`, `keyScroll`) rather than widening the page. They are boxes of HTML on the tokens, not a chart library, which the
+  (`ChartTable`, `keyScroll`) rather than widening the page. A chart opens on the drawing it
+  opens on at 1440 at every width, a phone's too, and its table is a press away: in a panel
+  of 294 px at 390 the ring, the ranked bars (each name on its own line over its bar), the days
+  (scrolling in their frame, a day 24 px at least) and the quota's windows each stand whole, with
+  no word cut but by a designed ellipsis. A panel under 560 px once opened every chart as its
+  table, though none needed it. They are boxes of HTML on the tokens, not a chart library, which the
   product removed for its weight. A value axis starts at zero and names a few round steps; a
   time axis names what it has room for, counted back from the last period. A series takes
   its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
@@ -2736,6 +2745,9 @@ quota — «Five hours» and «Week» — and one for each dimension of the read
 organization, project, task, executor, role, launch class, model, effort and environment.
 «Account» is the subscription account the work was spent on (`seat`), «Organization» the
 organization it was billed to; an old link's `account` filter still filters by organization.
+«Executor» lists the sessions of agents that did the work; planning calls a session by the same
+word, so the name stays and its section's «ⓘ» says first what it means, «An executor is the
+agent session that did the work.», before the caveats every dimension's «ⓘ» says.
 An account is said by the name the owner gave it, and one known by its UUID by the name its
 weekly reset was given before; else by its organization's name, or the start of its id, with
 what tells it apart: the start of its UUID, or when its week resets in the reader's time for
@@ -2783,8 +2795,10 @@ measure of everything else on the page. Under its change the tokens cell and the
 what an hour of agent time took of them beside the period before's, «$17.9/h, was 8.1»; a
 period with no agent time has no such line
 and a period before with none gives no «was», the line's place kept either way, and the chart
-draws no second axis for it. Across the panel under the cells stands the period chart, with the
-period before as a short line at its height, and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
+draws no second axis for it. Across the panel under the cells stands the period chart, stacked
+by project, with the period before as a short line at its height; at a project's scope it is that
+project's one series of plain columns, which no legend names. Stacked by task it named a few per
+cent of the time, the rest «Other», and the tasks have their own section; and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
 hovered ground under the pointer, and nothing moves. The overview may scroll: the chart's
@@ -2950,13 +2964,27 @@ line's forecast are drawn from one mapping of the forecast (`forecastCourses`), 
 and none of their words disagree; a window past its reset by the page's clock forecasts nothing
 more, so none of them is drawn and its words say when it reset where they said its forecast.
 Such a window, with no reading since its reset, leads with that, «Reset at 21:20, no new
-readings», its share before the reset a quieter line under it, «before the reset: 90%», over its
+readings», the share it ended at a quieter line under it, «90% by the reset», as a past window
+says it, with «the limit ran out before it» where a reading reached 100 % — never «before the
+reset: 90%», which read as what is left until a reset still to come — over its
 bar drawn in the neutral ink of marks at rest with no pace tick, which a forced palette draws in
 its inactive ink: led by its share over a bar in the series' hue, the last window's figure read as
 the share spent now. As a table its row says the same where the share stood, the reset's words
-and under them the share before it, with a dash for its pace and its forecast, and its window
+and under them the share it ended at, with a dash for its pace and its forecast, and its window
 says no reset under the row. A reading after the reset starts a window that stands, which none
 of this touches.
+A window nothing reads now is no account gone quiet. A model's week and the usage credits come
+from the quota poll alone — the client gives the status line and the mod neither — and the
+answer says whether the poll is on and which kinds only it reads (`poll`). With the poll off and
+no reading of the poll in the window's current span, the card says so in place of its share,
+«Only the quota poll reads this window, and the poll is off», with the way to the switch,
+«Quota settings», and draws no bar, no facts, no readings and no «Breakdown»; an imported
+reading of an earlier window, drawn, read as «Reset at …, no new readings» of an account that
+went silent. Such a window is never the rail's tightest and its card forecasts nothing; the
+alerts, which take only a reading fresher than `fresh_for_seconds`, warn of nothing from its
+history.
+A window of money says the same on its line, and as a table the row says it where the share
+stood, a dash for the rest. With the poll on, every window is read as before.
 Its state is judged by the same clock: a reading older than the answer's `fresh_for_seconds`
 reads silent, on the tile and in the panel, though the answer called it fresh.
 Where steady use from the window's start would stand now is drawn — the bar's tick, the line's
@@ -3012,8 +3040,8 @@ recorded on the account from the window's start to the answer's moment, held to 
 minutes, as ranked bars — the first five items by the API price estimate, each with its share
 of the account's estimate, and one line for the rest — or as a ring of every item that folds its
 own rest, chosen with «Ring | Bars» beside the breakdowns, or as the bars' table, which the
-panel's own «Chart | Table» under its title chooses and which hides «Ring | Bars»; the panel's
-width chooses first, as a page's does. It opens by task and offers projects and models; the
+panel's own «Chart | Table» under its title chooses and which hides «Ring | Bars»; it opens
+drawn at every width, as a page's charts do. It opens by task and offers projects and models; the
 choice of breakdown holds for that window when the panel turns to its table or opens again. By
 project or model it opens on the ring, as every split named by identifiers does, and a person's
 choice of drawing holds until the page is left; by task it is the list of free text alone, with

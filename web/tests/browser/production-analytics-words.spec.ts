@@ -162,6 +162,12 @@ const SPENDING: View[] = [
     section: 'spending',
   },
   {
+    name: 'executors',
+    address: pageAt({ by: 'executor' }),
+    ready: '.spending-table tbody tr',
+    section: 'executor',
+  },
+  {
     name: 'token kinds',
     address: pageAt({ by: 'token_kind' }),
     ready: '.kinds-panel',
@@ -218,7 +224,7 @@ async function speak(page: Page, locale: Locale) {
 }
 
 for (const locale of ['ru', 'en'] as const) {
-  test(`${locale}: the overview, a dimension and the token kinds say each caveat once, in their «ⓘ»`, async ({
+  test(`${locale}: the overview, a dimension, the executors and the token kinds say each caveat once, in their «ⓘ»`, async ({
     page,
   }, info) => {
     await speak(page, locale)

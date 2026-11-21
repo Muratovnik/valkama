@@ -5,6 +5,13 @@
     "utc_offset": 180,
     "fresh_for_seconds": 900,
     "retained_from": "2026-01-02T03:04:05.000+03:00",
+    "poll": {
+      "on": false,
+      "only": [
+        "extra_usage",
+        "week_model"
+      ]
+    },
     "accounts": [
       {
         "account": "00000000-0000-4000-8000-000000000019/00000000-0000-4000-8000-000000000020",

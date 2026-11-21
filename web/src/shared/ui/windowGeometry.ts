@@ -33,7 +33,7 @@ export interface WindowRow {
   valueText: string
   /**
    * What the share's cell says under it in the quiet ink, where it has more to say: past the
-   * reset, the share before it, «before the reset: 62%».
+   * reset, the share it ended at, «62% by the reset».
    */
   valueDetail?: string
 }

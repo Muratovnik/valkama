@@ -32,7 +32,7 @@
  * `data-part` (`actions`, `figures`, `all-time`, `days`, `model`, `account`) and each figure
  * `data-figure` (`time`, `tokens`, `cost`, `share`; of all time `agents`, `cost` or `failed`).
  */
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
@@ -41,7 +41,6 @@ import ValueDays from '@/pages/analytics/components/ValueDays.vue'
 import ValueFigures from '@/pages/analytics/components/ValueFigures.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { usePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
@@ -57,8 +56,8 @@ import type { ValueBreakdown } from '@/pages/analytics/composables/useValueRead.
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import {
-  belowUnit,
   breakdownOf,
+  drawnLines,
   figureOf,
   measureOf,
   spendingLines,
@@ -246,20 +245,19 @@ function rankedOf(breakdown: ValueBreakdown, usage: Usage): RankedRow[] {
     Number.POSITIVE_INFINITY,
   )
   const whole = all.reduce((sum, line) => sum + weight(line), 0)
-  return all
+  const listed = all
     .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
     .sort((left, right) => weight(right) - weight(left))
-    .map((line) => ({
-      key: line.key,
-      label: words.lineLabel(breakdown, line),
-      labelRuns: words.lineRuns(breakdown, line),
-      detail: words.valueDetail(breakdown, line.value),
-      value: weight(line),
-      valueText: words.lineShare(props.measure, line.spent, whole),
-      belowUnit: belowUnit(props.measure, line.spent),
-      slot: hues.get(line.key) ?? 'other',
-      quiet: line.kind !== 'category',
-    }))
+  return drawnLines(props.measure, listed).map((line) => ({
+    key: line.key,
+    label: words.lineLabel(breakdown, line),
+    labelRuns: words.lineRuns(breakdown, line),
+    detail: words.valueDetail(breakdown, line.value),
+    value: weight(line),
+    valueText: words.lineShare(props.measure, line.spent, whole),
+    slot: hues.get(line.key) ?? 'other',
+    quiet: line.kind !== 'category',
+  }))
 }
 
 const lists = computed(() =>
@@ -283,10 +281,6 @@ const lists = computed(() =>
     ]
   }),
 )
-
-/** The panel's own width decides whether its chart opens as its table. */
-const body = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(body)
 </script>
 
 <template>
@@ -334,7 +328,6 @@ const narrow = useNarrowCharts(body)
       </FieldError>
     </template>
     <div
-      ref="body"
       class="value-detail"
       data-detail="value"
     >
@@ -394,7 +387,6 @@ const narrow = useNarrowCharts(body)
           :measure="measure"
           :name="name"
           :name-runs="nameRuns"
-          :narrow="narrow"
           :read-at="readAt"
           :hue="hue"
           :usage="steps"

@@ -186,14 +186,13 @@ for (const { changes, world } of CHANGES)
     expect(documentBox[0]).toBe(documentBox[1])
   })
 
-/** Opens the overview of the full week at a window and draws its chart, where it opens as a table. */
+/** Opens the overview of the full week at a window, its days drawn as their chart. */
 async function fieldAt(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height })
   await page.goto(pageAt({ open: 'section' }))
   const days = page.locator('.analytics-panel .spending-days')
   await expect(days).toBeVisible()
-  if ((await days.getAttribute('data-shown')) === 'table')
-    await days.getByRole('radio', { name: 'Chart' }).click()
+  await expect(days).toHaveAttribute('data-shown', 'chart')
   await expect(days.locator('.period-field')).toBeVisible()
   await expect.poll(async () => fieldHeight(page)).toBeGreaterThanOrEqual(200)
   const measured = await plotAndRoom(page)

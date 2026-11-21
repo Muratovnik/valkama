@@ -3,8 +3,11 @@
  * A chart of the page under its title, drawn or as its table: the same numbers either way. A
  * chart of one whole split into parts named by identifiers is drawn two ways, as a ring or as
  * ranked bars (`views`, `splitView.ts`), and opens on the first it offers; any other chart has
- * one drawing. A narrow page starts on the table, which a phone reads where a plot of columns does
- * not; a person's own choice stands until the page is left, and where the chart stops offering
+ * one drawing. It opens on that drawing at every width, a phone's as a desktop's: each drawing
+ * reads in the narrowest panel, the ranked bars giving a name its own line over its bar, the days
+ * scrolling sideways inside their frame, and the table is a press away. Once a narrow page opened
+ * every chart as its table, though none needed it. A person's own choice stands until the page is
+ * left, and where the chart stops offering
  * the drawing chosen, as a split section does the ring, it opens on its first again. Why a press
  * in it did nothing stands under its title, said to a screen reader as it comes (`notice`).
  *
@@ -31,8 +34,6 @@ type Shown = Drawn | 'table'
 
 const props = withDefaults(
   defineProps<{
-    /** Whether the page is too narrow to read a chart, which makes the table the first view. */
-    narrow: boolean
     title: string
     /** The caveats of the whole section, said in the «ⓘ» of its heading. */
     about?: readonly string[]
@@ -63,8 +64,7 @@ const offered = computed<Shown[]>(() => [...props.views, 'table'])
 const opening = computed<Drawn>(() => props.views[0] ?? 'chart')
 const chosen = ref<Shown | null>(null)
 const shown = computed<Shown>(() => {
-  if (chosen.value && offered.value.includes(chosen.value)) return chosen.value
-  return props.narrow ? 'table' : opening.value
+  return chosen.value && offered.value.includes(chosen.value) ? chosen.value : opening.value
 })
 const options = computed(() =>
   offered.value.map((value) => ({ value, label: t(`analytics.shown.${value}`) })),

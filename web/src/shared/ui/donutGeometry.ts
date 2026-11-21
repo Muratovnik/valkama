@@ -65,11 +65,18 @@ const drawable = (value: number) => (Number.isFinite(value) && value > 0 ? value
  * never folded while a smaller one is named. On a page whose ranking is the ring's the first four
  * hues are named; filtered, a value of the fifth or sixth hue can stand among them, and the ring
  * then names fewer rather than two parts a reader could take for one.
+ *
+ * `whole` is what the shares are of where the caller leaves parts out that say nothing of how
+ * much (`drawnLines`): each sector is then its share of that whole, as the bars of the same rows
+ * say it, and the ring stays open by what was left out rather than stretching the rest over it.
+ * The rows' own sum, and a closed ring, by default and wherever the given whole is no larger.
  */
-export function ringOf(rows: readonly RankedRow[], limit = RING_SECTORS): Ring {
+export function ringOf(rows: readonly RankedRow[], limit = RING_SECTORS, whole?: number): Ring {
   const { ranked, rest } = rankRows(rows, true)
   const drawn = ranked.filter((row) => drawable(row.value) > 0)
-  const whole = drawn.reduce((sum, row) => sum + drawable(row.value), 0)
+  const sum = drawn.reduce((total, row) => total + drawable(row.value), 0)
+  const open = whole !== undefined && Number.isFinite(whole) && whole > sum
+  const of = open ? whole : sum
   const room = drawn.length > limit ? Math.max(0, limit - 1) : drawn.length
   const hueOf = (row: RankedRow, index: number) => row.slot ?? ((index + 1) as SeriesSlot)
   const named: RankedRow[] = []
@@ -97,15 +104,15 @@ export function ringOf(rows: readonly RankedRow[], limit = RING_SECTORS): Ring {
     })
   let at = 0
   const sectors = parts.map((part) => {
-    const share = whole ? part.value / whole : 0
+    const share = of ? part.value / of : 0
     const sector = { ...part, share, start: at, end: at + share }
     at += share
     return sector
   })
-  // The last sector closes the ring whatever the sum's rounding left.
+  // The last sector closes the ring whatever the sum's rounding left, unless parts were left out.
   const last = sectors.at(-1)
-  if (last) last.end = 1
-  return { sectors, whole, notes: rest }
+  if (last && !open) last.end = 1
+  return { sectors, whole: of, notes: rest }
 }
 
 /** The point at `radius` from the centre, `turn` of the way round from 12 o'clock. */

@@ -15,10 +15,6 @@
  * figure says how much of the whole each one is. No strip of the whole stands over the rows: as
  * thin as their bars and with no words of its own, it read as one more row.
  *
- * A row whose figure is less than its unit shows (`belowUnit`), «Unknown · under a minute», says
- * nothing of how much and is not drawn, under any name, unless every row is such a row; the
- * caller's shares and totals still count it, and `RankedBarsTable` lists it.
- *
  * Presentational: rows and words come in, a press on a row that opens something goes out as
  * `select` with the row's key, and a press on a row that leads somewhere (`href`) as `follow`
  * with the press, for the host to open it in place or leave it to the browser. A row that acts
@@ -73,14 +69,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
-/** The rows drawn: every one whose figure counts something, or every row where none does. */
-const drawn = computed(() => {
-  const counted = props.rows.filter((row) => !row.belowUnit)
-  return counted.length ? counted : props.rows
-})
-const placed = computed(() => rankRows(drawn.value, props.rankAll, props.freeText))
+const placed = computed(() => rankRows(props.rows, props.rankAll, props.freeText))
 /** Whether the rows are pairs, whose names take a line of their own; a dense chart keeps its. */
-const pairs = computed(() => !props.dense && drawn.value.some((row) => row.labelEnd))
+const pairs = computed(() => !props.dense && props.rows.some((row) => row.labelEnd))
 /** Names of free text on lines of their own, two at most; a dense chart keeps its one line. */
 const freeText = computed(() => !props.dense && props.freeText)
 /** The ranked categories as an ordered list, and the rows that are not ranked after them. */

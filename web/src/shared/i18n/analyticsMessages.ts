@@ -56,6 +56,10 @@ export const analyticsMessages = {
         effort: 'Effort',
         environment: 'Environment',
       },
+      /** What a dimension's own name means, where the name alone does not say it. */
+      dimensionNotes: {
+        executor: 'An executor is the agent session that did the work.',
+      },
       roles: {
         main: 'Main agent',
         subagent: 'Subagent',
@@ -239,6 +243,9 @@ export const analyticsMessages = {
         model: 'Модель',
         effort: 'Усилие',
         environment: 'Среда',
+      },
+      dimensionNotes: {
+        executor: 'Исполнитель — сессия агента, которая делала работу.',
       },
       roles: {
         main: 'Основной агент',
