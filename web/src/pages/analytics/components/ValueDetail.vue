@@ -127,6 +127,8 @@ const answers = computed(() => (state.value.status === 'ready' ? state.value.ans
 const steps = computed(() => (answers.value ? valueSteps(answers.value) : null))
 /** The steps of the period before, read with the answers. */
 const before = computed(() => (state.value.status === 'ready' ? state.value.before : null))
+/** Whether those steps were asked and could not be read. */
+const beforeFailed = computed(() => state.value.status === 'ready' && state.value.beforeFailed)
 
 /**
  * The value as the answers name it, with its title and number; as its id alone, or as work with
@@ -390,6 +392,7 @@ const lists = computed(() =>
           v-if="steps"
           data-part="days"
           :before="before"
+          :before-failed="beforeFailed"
           :measure="measure"
           :name="name"
           :name-runs="nameRuns"

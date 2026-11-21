@@ -239,6 +239,9 @@ export interface PeriodMark {
   label: string
 }
 
+/** A layer a period chart draws beside its data, keyed in its legend (`usePeriodLayers`). */
+export type PeriodLayer = 'change' | 'outline'
+
 export interface PeriodWords {
   empty: string
   /**
@@ -284,6 +287,12 @@ export interface PeriodChartProps {
   series: readonly PeriodSeries[]
   words: PeriodWords
   marks?: readonly PeriodMark[]
+  /**
+   * The layers beside the data whose read failed: the period compared with (`outline`), the
+   * changes at a period's start (`change`). While the chart has no such layer, the legend keeps
+   * the room of its key unseen, so nothing under the legend moves when a later read brings it.
+   */
+  unread?: readonly PeriodLayer[]
   /**
    * The value axis, where its steps are other than round steps said as `formatValue` says a
    * value: a span of time in one unit (`durationAxis`).

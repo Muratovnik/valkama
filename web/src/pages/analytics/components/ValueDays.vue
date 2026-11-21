@@ -9,7 +9,9 @@
  *
  * Each column carries the figure of the step it is compared with in the period before (`before`),
  * read with the value's answers (`useValueRead`), drawn as a short mark at its height; when those
- * steps could not be read there is no mark, and the panel says the read failed beside its actions.
+ * steps could not be read there is no mark, and the panel says the read failed beside its actions,
+ * the legend keeping the room of the mark's key (`beforeFailed`) so the retry that reads it moves
+ * nothing.
  * Its steps narrow nothing: the page is under the panel.
  */
 import { computed } from 'vue'
@@ -41,6 +43,8 @@ const props = defineProps<{
   readAt: Date
   /** An answer of the value, whose steps are its figures by step. */
   usage: Usage
+  /** Whether the read of the period before failed: the legend keeps the room of its mark's key. */
+  beforeFailed?: boolean
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
   /** The value's name in runs, where it holds a task's title (`valueRuns`). */
@@ -84,6 +88,7 @@ const chart = computed<PeriodChartProps>(() => {
     }),
     formatShare: words.markShare,
     formatPart: words.share,
+    unread: props.beforeFailed ? ['outline'] : [],
     words: said.words,
     formatValue: said.formatValue,
     valueAxis: said.valueAxis,

@@ -158,9 +158,14 @@ describe('what a value’s panel shows', () => {
         .getComponent(PeriodColumns)
         .props('columns')
         .filter((column) => column.before !== undefined).length
+    /** The key of the period before in the days' legend, in lines matching `line`. */
+    const beforeKey = (line = 'li') =>
+      panel.findAll(`[data-part="days"] [data-hint-list="legend"] ${line} [data-mark="outline"]`)
     expect(said()).toBe(true)
     expect(marked()).toBe(0)
     expect(panel.get('[data-part="days"]').text()).not.toContain('could not')
+    // The legend keeps the room of the key of the mark it lacks, unseen.
+    expect(beforeKey('[data-unseen]')).toHaveLength(1)
 
     failing = false
     await panel.get('[data-part="actions"] .refresh-failed-retry').trigger('click')
@@ -168,6 +173,8 @@ describe('what a value’s panel shows', () => {
     expect(said()).toBe(false)
     const steps = marked()
     expect(steps).toBeGreaterThan(0)
+    // Read, the key is held no longer: the period before keys its mark where it spent anything.
+    expect(beforeKey('[data-unseen]')).toHaveLength(0)
 
     // A refresh of the page that cannot read it again keeps the marks the panel shows.
     failing = true
@@ -175,6 +182,7 @@ describe('what a value’s panel shows', () => {
     await flushPromises()
     expect(said()).toBe(true)
     expect(marked()).toBe(steps)
+    expect(beforeKey('[data-unseen]')).toHaveLength(0)
   })
 
   it('says a value with nothing in the period spent nothing', async () => {

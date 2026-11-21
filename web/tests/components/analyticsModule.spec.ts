@@ -173,6 +173,9 @@ const serve = () => stubAnalyticsReads((query) => serveUsage(WORLD, query))
 /** Whether the bar says a read failed, rather than holding the room of the words unseen. */
 const saysFailed = (page: VueWrapper) =>
   page.find('.analytics-bar .refresh-failed:not(.refresh-failed-held)').exists()
+/** The key of the line of an account change in the day chart's legend, in lines matching `line`. */
+const changeKey = (page: VueWrapper, line = 'li') =>
+  page.findAll(`.spending-days [data-hint-list="legend"] ${line} [data-mark="change"]`)
 const time = (page: VueWrapper) =>
   page.get('.tile-figure[data-measure="time"]').text().replaceAll(/\s/gu, ' ')
 const change = (page: VueWrapper) =>
@@ -291,7 +294,8 @@ describe('the Analytics page', () => {
     expect(saysFailed(page)).toBe(false)
 
     // An account read that fails draws no mark, and the bar says the read failed, nothing under
-    // the chart; its retry reads them again.
+    // the chart; the legend keeps the room of the change's key unseen, and its retry reads them
+    // again into the same key.
     await page.setProps({ routeState: { by: 'role', period: 'weeks4', filters: main } })
     await flushPromises()
     reads.held[1]?.release({ status: 500 })
@@ -299,6 +303,7 @@ describe('the Analytics page', () => {
     expect(page.findAll('.period-mark')).toHaveLength(0)
     expect(saysFailed(page)).toBe(true)
     expect(page.get('.spending-days').text()).not.toContain('could not')
+    expect(changeKey(page, '[data-unseen]')).toHaveLength(1)
     await page.get('.analytics-bar .refresh-failed-retry').trigger('click')
     await flushPromises()
     const again = reads.held[2]
@@ -306,6 +311,8 @@ describe('the Analytics page', () => {
     await flushPromises()
     expect(page.findAll('.period-mark')).toHaveLength(1)
     expect(saysFailed(page)).toBe(false)
+    expect(changeKey(page, '[data-unseen]')).toHaveLength(0)
+    expect(changeKey(page)).toHaveLength(1)
   })
 
   it('keeps the account marks on show when a refresh cannot read the accounts again', async () => {

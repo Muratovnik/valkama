@@ -128,7 +128,7 @@ const emit = defineEmits<{
 
 const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
 /** The layers beside the data, as the plot draws them and as the legend names them. */
-const { change, columns: drawnColumns, marks: drawnMarks, outline } = usePeriodLayers(() => props)
+const { columns: drawnColumns, keys, marks: drawnMarks, outline } = usePeriodLayers(() => props)
 const chart = computed(() =>
   stackColumns(drawnColumns.value, props.series, drawnMarks.value, axis.value),
 )
@@ -314,11 +314,12 @@ function focus(event: FocusEvent, index: number, at: number | null) {
     />
     <template v-else>
       <ChartLegend
-        v-if="series.length > 1 || outline || hatch || change"
+        v-if="series.length > 1 || keys.outline || hatch || keys.change"
         :series="series"
         :hatch="hatch"
-        :outline="outline"
-        :change="change"
+        :outline="keys.outline"
+        :change="keys.change"
+        :unseen="keys.unseen"
         :hints="legendHints"
         @follow="(key, event) => emit('follow', key, event)"
         @select="(key) => emit('series', key)"

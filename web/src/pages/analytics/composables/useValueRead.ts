@@ -39,6 +39,8 @@ export type ValueRead =
       answers: ValueAnswers
       /** The steps of the period before, to mark over the days; null when not read. */
       before: Usage['series'] | null
+      /** Whether the steps of the period before were asked with these answers and not read. */
+      beforeFailed: boolean
       failedAgain: boolean
       refreshing: boolean
       status: 'ready'
@@ -124,6 +126,7 @@ export function useValueRead(options: {
         status: 'ready',
         answers,
         before,
+        beforeFailed,
         refreshing: false,
         failedAgain: beforeFailed,
       }

@@ -6,12 +6,20 @@
  * while its layer shows; a layer turned off is not drawn and no hint, name or step of the scale
  * counts it, while its key stays and the data — the stacked series, the readings — is unchanged.
  * The hatch of a period still running, a step line's readings and its now are no layer, and their
- * keys do not act.
+ * keys do not act. A layer the chart lacks because its read failed keeps its key's room in the
+ * legend, unseen, so nothing under the legend moves when a later read brings it (DESIGN,
+ * Analytics: nothing moves when a failure is said or when the next answer replaces it); a layer
+ * the chart lacks with nothing failed drops its key.
  */
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import type { PeriodColumn, PeriodMark, PeriodWords } from '@/shared/ui/chartGeometry.ts'
+import type {
+  PeriodChartProps,
+  PeriodColumn,
+  PeriodMark,
+  PeriodWords,
+} from '@/shared/ui/chartGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import type { StepAhead } from '@/shared/ui/windowGeometry.ts'
 
@@ -47,7 +55,7 @@ afterEach(() => {
   for (const one of mounted.splice(0)) one.unmount()
 })
 
-function mountDays() {
+function mountDays(given: Partial<PeriodChartProps> = {}) {
   const chart = mount(PeriodColumns, {
     attachTo: document.body,
     props: {
@@ -60,6 +68,7 @@ function mountDays() {
       words,
       marks,
       formatValue: (value: number) => `${value} h`,
+      ...given,
     },
   })
   mounted.push(chart)
@@ -142,6 +151,56 @@ describe('the keys of the layers of a period chart', () => {
     expect(chart.findAll('.hatched').length).toBeGreaterThan(0)
     expect(legendKey(chart, 'outline').attributes('aria-pressed')).toBe('true')
     expect(legendKey(chart, 'change').attributes('aria-pressed')).toBe('true')
+  })
+})
+
+/** The same days with neither the period before nor the accounts read: no tick and no change. */
+const unreadDays = {
+  columns: columns.map((column) => ({ ...column, before: undefined })),
+  marks: [],
+}
+/** The lines of the legend, and those whose key keeps its room unseen, by the mark they key. */
+const legendLines = (chart: Chart) => chart.findAll('[data-hint-list="legend"] li')
+const unseenKeys = (chart: Chart) =>
+  chart
+    .findAll('[data-hint-list="legend"] [data-unseen] [data-mark]')
+    .map((key) => [key.attributes('data-mark'), key.text()])
+
+describe('the keys of the layers whose read failed', () => {
+  it('keeps the room of each key unseen while the chart lacks the layer, and shows the same keys once a read brings it', async () => {
+    const chart = mountDays({ ...unreadDays, unread: ['outline', 'change'] })
+    expect(chart.findAll('[data-region="field"] [data-mark="before"]')).toHaveLength(0)
+    expect(chart.findAll('[data-region="field"] [data-mark="change"]')).toHaveLength(0)
+    // Two series and the hatch, then the two keys whose layers' reads failed, unseen.
+    expect(legendLines(chart)).toHaveLength(5)
+    expect(unseenKeys(chart)).toEqual([
+      ['outline', 'period before'],
+      ['change', 'account change'],
+    ])
+
+    await chart.setProps({ columns, marks, unread: [] })
+    expect(chart.findAll('[data-region="field"] [data-mark="before"]')).toHaveLength(3)
+    expect(chart.findAll('[data-region="field"] [data-mark="change"]')).toHaveLength(1)
+    // The same lines, in the same order, every key seen.
+    expect(legendLines(chart)).toHaveLength(5)
+    expect(unseenKeys(chart)).toEqual([])
+    expect(legendKey(chart, 'outline').attributes('aria-pressed')).toBe('true')
+    expect(legendKey(chart, 'change').attributes('aria-pressed')).toBe('true')
+  })
+
+  it('holds the key of the layer whose read failed alone, and shows a layer the chart has', () => {
+    const chart = mountDays({ marks: [], unread: ['change'] })
+    expect(unseenKeys(chart)).toEqual([['change', 'account change']])
+    expect(legendKey(chart, 'outline').attributes('aria-pressed')).toBe('true')
+    // A layer the chart has is drawn and keyed whatever its read says.
+    expect(unseenKeys(mountDays({ unread: ['outline', 'change'] }))).toEqual([])
+  })
+
+  it('drops the keys of layers the chart lacks with nothing failed', () => {
+    const chart = mountDays(unreadDays)
+    expect(legendLines(chart)).toHaveLength(3)
+    expect(chart.findAll('[data-hint-list="legend"] [data-mark="outline"]')).toHaveLength(0)
+    expect(chart.findAll('[data-hint-list="legend"] [data-mark="change"]')).toHaveLength(0)
   })
 })
 
