@@ -17,6 +17,7 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardItem } from '../fixtures/board.ts'
+import { atListWidth } from '../fixtures/listRoom.ts'
 import { keptOrder } from '../support/listOrder.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
@@ -260,22 +261,15 @@ describe('the facets a list row prints', () => {
   })
 
   it('where the priority column folds away, its glyph follows the reference, after the kind', async () => {
-    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
     // A list of 700px folds the goal and stage, the state, the priority and the holder columns.
-    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
-      configurable: true,
-      get: () => 700,
-    })
-    try {
+    await atListWidth(700, async () => {
       const wrapper = await rows([boardItem(1, 'backlog', { kind: 'bug', priority: 'urgent' })])
       const head = cells(wrapper, 0)[0]
         .findAll('[data-facet], .list-open')
         .map((part) => part.attributes('data-facet') ?? 'reference')
       expect(head).toEqual(['kind', 'reference', 'priority'])
       wrapper.unmount()
-    } finally {
-      if (width) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width)
-    }
+    })
   })
 
   it('filters by a glyph without opening the row, and keeps the row one Tab stop', async () => {
@@ -316,7 +310,7 @@ describe('the list head on a narrow list', () => {
       props: {
         columns: LIST_COLUMNS.filter((column) => !folded.includes(column)),
         folded,
-        choice: true,
+        fit: 'narrow',
         sort: { key: sortKey, descending: true },
       },
       global: { plugins: [i18n()] },

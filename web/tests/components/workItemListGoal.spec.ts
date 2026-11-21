@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import { boardId, boardItem } from '../fixtures/board.ts'
+import { atListWidth } from '../fixtures/listRoom.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
 afterEach(() => {
@@ -91,13 +92,8 @@ describe('the goal and stage column', () => {
     [1000, 'wide'],
     [700, 'medium'],
   ] as const) {
-    it(`folds under the title and leads what a ${fit} list prints there`, async () => {
-      const held = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-      Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
-        configurable: true,
-        get: () => width,
-      })
-      try {
+    it(`folds under the title and leads what a ${fit} list prints there`, () =>
+      atListWidth(width, async () => {
         await list({})
         expect(document.querySelector<HTMLElement>('.work-item-list')?.dataset.fit).toBe(fit)
         expect(document.querySelector('.list-goal')).toBeNull()
@@ -108,10 +104,7 @@ describe('the goal and stage column', () => {
         expect(lines.some((line) => line.classList.contains('list-under'))).toBe(fit === 'wide')
         // Work under no goal says nothing there: the dash is the column's word.
         expect(rowOf('MAIN-4')?.querySelector('.list-title')?.textContent).not.toContain('—')
-      } finally {
-        if (held) Object.defineProperty(HTMLElement.prototype, 'clientWidth', held)
-      }
-    })
+      }))
   }
 })
 

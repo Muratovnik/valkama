@@ -97,37 +97,22 @@ export const drawnColumns = ({ goal, project }: { goal: boolean; project: boolea
     (column) => (column.key !== 'goal' || goal) && (column.key !== 'project' || project),
   )
 
-/**
- * Where every column stands: «Goal and stage» or «Project» from 1100px of list, both of
- * them from 1270px. Each is 10rem at most, and the two at that measure left the title of
- * a list 1100px wide 21 characters; from 1270px it keeps 37 in English and 36 in Russian,
- * as one alone does from 1100px.
- */
-const FULL_FROM = { both: 1270, one: 1100 }
+/** The fits from the one that stands every column to the one that stands the fewest. */
+export const FITS: readonly Fit[] = ['full', 'wide', 'medium', 'narrow']
 
 /**
- * Where every column but «Goal and stage» and «Project» stands: from 920px, where the title
- * keeps 38 characters in English and 36 in Russian. From 900px, where it kept 36 beside
- * «Steps», it kept 35.6 and 34.2 beside «Conditions» and «Условия».
+ * The fit for a list `room` pixels wide: the widest, from `from` on, whose table the room
+ * holds. `needs` is how wide each fit's table was drawn where the room did not hold it; a
+ * fit it does not name is tried, and the narrowest stands whatever it needs.
+ *
+ * A fit's need is its table's own (`useListFit.ts`): every column as wide as its widest
+ * row and its heading, the title its 36 characters and its heading on one line, a tree's
+ * first column its lead. Fixed widths chose it before, set where a typical title kept 36
+ * characters beside a flat list's columns: longer states, holders and dates left the title
+ * of a flat list 946px wide 172px and its heading on two lines.
  */
-const WIDE_FROM = 920
-
-/**
- * The fit for a list `width` pixels wide, `both` where it draws «Goal and stage» and
- * «Project»; unmeasured, the list is wide. The thresholds are where the columns
- * that stay leave the title room for a typical title on two lines, 36 characters,
- * in either language, beside a flat list's first column. A tree's first column is wider by its `lead`,
- * the arrow and the indent of its deepest row, so it is the width less the lead that
- * meets them: measured on the list's width alone, a tree three levels deep stood every
- * column but two beside a first column 222px wide, left its title 131px and ran 24px
- * past the list's frame at 1280px.
- */
-export function fitFor(width: number, both = false, lead = 0): Fit {
-  if (width === 0) return 'full'
-  const room = width - lead
-  if (room >= FULL_FROM[both ? 'both' : 'one']) return 'full'
-  if (room >= WIDE_FROM) return 'wide'
-  return room >= 560 ? 'medium' : 'narrow'
+export function fitFor(room: number, needs: ReadonlyMap<Fit, number>, from: Fit = 'full'): Fit {
+  return FITS.slice(FITS.indexOf(from)).find((fit) => (needs.get(fit) ?? 0) <= room) ?? 'narrow'
 }
 
 const urgency = new Map(PRIORITIES.map((priority, index) => [priority, PRIORITIES.length - index]))

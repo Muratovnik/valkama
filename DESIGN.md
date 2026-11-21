@@ -1736,11 +1736,12 @@ whole, since then nothing on the field says work is running. The header's hover 
 it whole, as a zoomed-out card's does, and so does its button's name: over the work under no
 parent, whose one button is the fold, the fold's.
 Wherever the list folds the state, the priority and the holder, its folded orders are one
-choice in the title's heading, in the heading's font, and an order's name is never cut: the
-longest takes a line of its own under the title's sort. So the head folds before it wraps:
-as a run of buttons after the title's sort those five took three lines of a phone's head, and
-a second line of the head at 1024px once «Steps» became «Conditions». The two that fold
-first, «Goal and stage» and «Project», stay a run, which holds one line.
+choice in the title's heading, in the heading's font, and an order's name is never cut. So the
+head folds before it wraps: as a run of buttons after the title's sort those five took three
+lines of a phone's head, and a second line of the head at 1024px once «Steps» became
+«Conditions». The two that fold first, «Goal and stage» and «Project», stay a run. A heading
+holds one line in every fit but the narrowest, which no other gives way to; there the longest
+order takes a line of its own under the title's sort.
 Cards do not reserve empty tag or source regions.
 A board tile prints exceptions, not defaults. Its first line is a kind glyph
 when the item is not a plain task, the reference, a priority glyph when the
@@ -1897,12 +1898,12 @@ After its title a list row's «Goal and stage» («Цель и этап») names
 stages it stands under, goal first, «Launch › Beta», read from the whole space, so a
 filter that leaves the goal out of the rows still names it. Work under no goal says a
 dash; a card of another space says nothing there, since this space's read does not name
-that card's goal. The column sorts by the path. It stands from 1100px of list and gives
-way first: beside every other column a list of 900px left the title 20 characters and
-pushed the table past its edge. Folded, the path leads what the row prints under its
-title, on one line cut at the row's edge and whole on hover: a line of its own above an
-open blocker and the labels down to 920px, and the first fact of the line of facts below
-that, where it folds with the state, the priority and the holder. The list by goal draws
+that card's goal. The column sorts by the path. It gives way first: beside every other
+column a list of 900px left the title 20 characters and pushed the table past its edge.
+Folded, the path leads what the row prints under its title, on one line cut at the row's
+edge and whole on hover: a line of its own above an open blocker and the labels while the
+state, the priority and the holder stand, and the first fact of the line of facts once they
+fold with it. The list by goal draws
 no such column, since a row's place there is its goal; the list by project does.
 After it «Project» («Проект») names what a row changes, drawn by the rule of a tile's
 project mark: the space has several projects and «All projects» is chosen. It says the one
@@ -1911,18 +1912,21 @@ lane by project does, and a dash for work naming none; a card of another space i
 this space's projects alone. It sorts by the project's name, work naming none first and
 work naming several last. The list by project draws no such column, since a row's group
 names it. It folds with «Goal and stage» and follows the path wherever that leads, a name
-saying nothing for work naming none. Each of the two is at most 10rem wide, and side by
-side at that measure they left the title of a 1100px list 21 characters, so where the list
-draws both they stand from 1270px, where it keeps 37 in English and 36 in Russian.
-These widths, 1100 and 1270 for every column, 920 for all but those two and 560 for
-more than the reference and the title, are met by the room beside a flat list's first
-column, and hold the title's 36 characters in both languages: a heading's longer word moves
-them, and beside «Conditions» the 900 and 1240 that «Steps» had left 35.6 and 34.2 characters
-in English, 34.2 and 32.8 in Russian. A tree's first column is wider by its lead, the arrow and the indent of its
-deepest row, 24px a level up to the fifth, so a tree meets them with that lead taken
-out of its width: measured on the width alone, a list by goal three levels deep at
-1280px stood every column but two, left its title 131px with words broken inside and ran
-24px past its frame. A narrow list's cells take half the inset, 8px, as its head's sorts do,
+saying nothing for work naming none. Each of the two is at most 10rem wide.
+The list stands the widest of its four fits — every column; all but those two; the
+reference, the title, the conditions and the date; the reference and the title — whose table
+its own box holds. A fit's table is as wide as its columns need: each as wide as its widest
+row and its heading, the first column of a tree with its lead, the arrow and the indent of
+its deepest row, and the title 36 characters with its heading on one line. A fit that needs
+more pushes the table past the list and gives way to the next within the frame, so a reader
+sees only the one that holds; the narrowest gives way to none, and its title keeps 16
+characters and what the reference leaves. Fixed widths decided before, 1100 and 1270 for
+every column, 920 for all but two and 560 for more than the reference and the title, set
+where a typical title kept its 36 characters beside a flat list's first column: a
+migrated store's longer states, holders and dates left a flat list of a 1280px window its
+title 172px and its head two lines, and a list by goal three levels deep at 1280px, measured
+on the width alone, left its title 131px with words broken inside and ran 24px past its
+frame. A narrow list's cells take half the inset, 8px, as its head's sorts do,
 so a heading's word starts where its column's words do: at 12px a tree five levels deep at
 390px left its title 16 characters, broke «Переосмысление» inside, and stood «Название» 4px
 left of the titles under it. The priority's glyph that follows a reference where its column
@@ -2011,7 +2015,7 @@ for want of room does the priority (but medium) follow the reference as its
 glyph, because a blank cell in a sortable column
 reads as unknown; the holder column
 says nobody with a dash, never «Workable»; the labels sit under the title
-from 920px of list; an open blocker is named, «Waiting on MAIN-12», wherever it
+while the state, the priority and the holder stand; an open blocker is named, «Waiting on MAIN-12», wherever it
 lives. A graph node leads with the kind, says its state as a dot and a name
 in the hue of its chain edge, says workable quietly in the state's place and
 never in heavier ink, and reads high or urgent after its reference; its glyphs are read,

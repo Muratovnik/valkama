@@ -16,6 +16,7 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 import { boardId, boardItem } from '../fixtures/board.ts'
+import { atListWidth } from '../fixtures/listRoom.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
 afterEach(() => {
@@ -154,12 +155,7 @@ describe('the list as one Tab stop', () => {
   })
 
   it('keeps a narrow head’s choice of orders out of the Tab order, reached from the title', async () => {
-    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
-      configurable: true,
-      get: () => 300,
-    })
-    try {
+    await atListWidth(300, async () => {
       await list(false)
       const choice = document.querySelector<HTMLElement>('thead [role="combobox"]')
       expect(choice?.getAttribute('tabindex')).toBe('-1')
@@ -168,9 +164,7 @@ describe('the list as one Tab stop', () => {
       await press('ArrowUp')
       await press('End')
       expect(document.activeElement).toBe(choice)
-    } finally {
-      if (width) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width)
-    }
+    })
   })
 })
 
