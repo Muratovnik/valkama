@@ -6,8 +6,9 @@
  * Under the window stands one quiet line: «Previous window: until Nov 19, 05:00 — 9%», the moment
  * that window reset and its last share, with «ran out» where a reading of it
  * reached the whole window; or «Previous window: no readings» where the store keeps none, which is
- * text and no control. A window narrower than the line gives it a second row from its start. Where the window's step line holds that window already (`held`), as it does
- * over a period longer than the window, no line stands: it would name a window drawn right above
+ * text and no control. A window narrower than the line gives it a second row from its start.
+ * Where the window's step line holds that window already (`held`), as it does over a period
+ * longer than the window, no line stands: it would name a window drawn right above
  * it. The line with a window is a button: it opens that window in the card, read
  * when asked (`usePastWindow`). While a past window is open, the card holds it and nothing of the
  * current window — its share, its bar, its forecast and its breakdown stand hidden — and says so
