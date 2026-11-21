@@ -148,10 +148,9 @@ class AFailedLaunchTests(ReaperHarness):
 
 class TheLoopTests(ReaperHarness):
     def run_loop(self, registry: watchers.Watchers, **options: object) -> None:
-        """The loop on this test's connection: its own stays open by design, for its life."""
+        """The loop on a connection of its own to this test's store, as the listener's is."""
 
-        with mock.patch.object(watchers, "connect", return_value=self.conn):
-            registry.run(interval=0, **options)
+        registry.run(interval=0, **options)
 
     def test_the_loop_tells_the_owner_about_the_launch_it_reaped(self) -> None:
         alert_settings.write(self.conn, {"locale": "en", "events": {"launchFailed": True}})

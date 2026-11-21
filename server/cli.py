@@ -71,8 +71,8 @@ from .telemetry import journal, usage_rebuild
 def summary_main(space: str | None) -> None:
     """One planning space in a few lines, for a terminal or a hook."""
 
-    conn = connect()
-    payload = planning_views.planning_payload(conn, space=space)
+    with contextlib.closing(connect()) as conn:
+        payload = planning_views.planning_payload(conn, space=space)
     identity = payload["planning_space"]
     if identity is None:
         print("- no planning space exists yet")
@@ -550,9 +550,7 @@ def _map_items(options: argparse.Namespace) -> dict[str, Any]:
     listing = project_registry.read_registry()
     with tempfile.TemporaryDirectory(prefix="valkama-map-", ignore_cleanup_errors=True) as tmp:
         copy = store.copy_store(source, tmp)
-        with contextlib.closing(
-            sqlite3.connect(Path(copy).as_uri() + "?mode=ro", uri=True)
-        ) as conn:
+        with store.read_only(copy) as conn:
             started = time.perf_counter()
             document, summary = item_projects_map.build(conn, listing, chosen)
             seconds = round(time.perf_counter() - started, 6)
@@ -624,10 +622,7 @@ def _projects_main(options: argparse.Namespace) -> None:
                 )
             # Only the space's identity and the store's are read, never the rest of
             # the space's row: a binding is made before the store is migrated too.
-            database = Path(selected["path"])
-            with contextlib.closing(
-                sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
-            ) as conn:
+            with store.read_only(selected["path"]) as conn:
                 space = conn.execute(
                     "SELECT planning_space_id, key, name FROM planning_spaces"
                     " WHERE planning_space_id = ? OR key = ? OR name = ?",

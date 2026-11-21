@@ -148,3 +148,9 @@ class RunKeyDouble:
 from server import launcher
 
 launcher.AUTOSTART_STORE = RunKeyDouble()
+
+# A test that leaves an SQLite connection open fails, here for every way the suite
+# is run: the gates' `unittest discover`, `tests/affected.py` and one module alone.
+from tests import sqlite_leaks
+
+sqlite_leaks.install()
