@@ -77,8 +77,10 @@ split with it:
 - The worker of one worktree runs, right after each commit and each through
   `python tests/run_record.py run`, whose record its report cites: the targeted
   tests of what the commit changed and `python tests/commit_subjects.py`;
-  when the commit touches `web/`, also `npm run lint`, `npm run typecheck` and
-  `npm run check:ui-system` there. The worker does not run the whole browser
+  when the commit touches `web/`, also `npm run lint`, `npm run typecheck`,
+  `npm run check:ui-system` and `npm run lint:dead` there; an export a commit
+  leaves unused fails nothing else short of the whole `npm test`. The worker
+  does not run the whole browser
   suite, nor `python .github/relkit.pyz audit --history` after each commit: the
   history audit reads every commit, so it runs before publication, on the
   clean head about to be pushed.
