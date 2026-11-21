@@ -9,7 +9,7 @@
  * heading one line in every fit but the narrowest.
  */
 import { expect } from '@playwright/test'
-import type { Locator } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { boardRoute, openList, serve, shot } from './boardPage.ts'
@@ -416,19 +416,26 @@ function longWords() {
   return items
 }
 
+/** The list of long words in a window `width` wide, in `locale`, by `group` or flat. */
+async function openLong(page: Page, locale: string, width: number, group = '') {
+  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+  await page.setViewportSize({ width, height: 800 })
+  await installBackend(page)
+  await serveSpace(page, longWords(), [], { states: [{ ...CONFIRMING, position: 6 }] })
+  const grouped = group ? { group } : {}
+  await page.goto(boardRoute({ view: 'list', sort: 'reference', ...grouped }))
+  const list = page.locator('.work-item-list')
+  await expect(list.locator('tbody tr').first()).toBeVisible()
+  await stillFrames(page)
+  return list
+}
+
 for (const locale of ['en', 'ru'] as const)
   for (const width of [1440, 1280, 1100, 1024, 760, 620, 390])
     test(`beside long words at ${width}px in ${locale} the head is one line and the title keeps 36 characters`, async ({
       page,
     }, info) => {
-      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-      await page.setViewportSize({ width, height: 800 })
-      await installBackend(page)
-      await serveSpace(page, longWords(), [], { states: [{ ...CONFIRMING, position: 6 }] })
-      await page.goto(boardRoute({ view: 'list', sort: 'reference' }))
-      const list = page.locator('.work-item-list')
-      await expect(list.locator('tbody tr').first()).toBeVisible()
-      await stillFrames(page)
+      const list = await openLong(page, locale, width)
       const drawn = await list.evaluate((element) => ({
         fit: (element as HTMLElement).dataset.fit,
         head: element.querySelector('thead')?.getBoundingClientRect().height ?? 0,
@@ -439,3 +446,31 @@ for (const locale of ['en', 'ru'] as const)
       expect(await titleCharacters(list)).toBeGreaterThanOrEqual(leastCharacters(drawn.fit))
       await page.screenshot(shot(info, `w-list-long-${width}-${locale}.png`))
     })
+
+// The tree's lead and an urgent glyph widen the reference column of a phone's list until the
+// title's heading cannot hold «Порядок» beside its sort: there the choice shows its chevron
+// alone, its name the value assistive technology reads and its hint. Where the heading holds
+// the name, it shows it, in English on a phone too.
+for (const { bare, group, locale, name, width } of [
+  { bare: true, group: 'goal', locale: 'ru', name: 'Порядок', width: 390 },
+  { bare: false, group: 'goal', locale: 'ru', name: 'Порядок', width: 620 },
+  { bare: false, group: 'goal', locale: 'en', name: 'Order', width: 390 },
+  { bare: false, group: '', locale: 'ru', name: 'Порядок', width: 390 },
+] as const)
+  test(`the choice of order at ${width}px in ${locale} ${group || 'flat'}: bare ${bare}, the head one line`, async ({
+    page,
+  }, info) => {
+    const list = await openLong(page, locale, width, group)
+    const head = await list.locator('thead').boundingBox()
+    expect(head?.height, 'the head is one line').toBeLessThanOrEqual(41)
+    const choice = list.locator('thead .list-sort-choice')
+    const value = choice.locator('.choice-value')
+    expect(await choice.evaluate((element) => element.classList.contains('bare'))).toBe(bare)
+    expect(await value.evaluate((element) => element.getBoundingClientRect().width > 1)).toBe(!bare)
+    // Bare or not, the name stays the value assistive technology reads after the label.
+    await expect(value).toHaveText(name)
+    // Only a bare choice hints its name; a shown one says it on screen.
+    await choice.locator('.choice-trigger').hover()
+    await expect(page.getByRole('tooltip').filter({ hasText: name })).toHaveCount(Number(bare))
+    await page.screenshot(shot(info, `w-list-choice-${group || 'flat'}-${width}-${locale}.png`))
+  })

@@ -144,8 +144,14 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   // The list opens in the queue's order, which no column names, so the choice names
   // none of them.
   await expect(choice).toHaveText('Порядок')
+  // How much of the name a shown choice cuts. A choice with no room for a name beside the
+  // title's sort is bare: the name is its hint and the value read out, never cut on screen.
   const cut = () =>
-    choice.locator('.choice-title').evaluate((title) => title.scrollWidth - title.clientWidth)
+    choice.evaluate((trigger) => {
+      const title = trigger.querySelector('.choice-title') as HTMLElement
+      const shown = !trigger.closest('.choice-select')?.classList.contains('bare')
+      return Number(shown) * (title.scrollWidth - title.clientWidth)
+    })
   expect(await cut(), 'the order the list opens on is whole').toBeLessThanOrEqual(0)
   for (const order of ['Состояние', 'Приоритет', 'Исполнитель', 'Условия', 'Обновлено']) {
     await choice.click()
