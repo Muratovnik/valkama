@@ -2,8 +2,15 @@
 
     python tests/agent_probes.py run --cases DIR --sections FILE --claude-md FILE
         --claude-coordinator DIR --codex-agents FILE --client claude|codex|both
+        --claude-model MODEL --claude-effort EFFORT --codex-model MODEL --codex-effort EFFORT
         --client-home DIR --out DIR [--store-copy [SOURCE]] [--only ID ...] [--jobs N]
     python tests/agent_probes.py judge --out DIR
+
+Every client the run starts takes the model and reasoning effort its two flags
+name, on every turn, in every job; the flags of a client the run does not start
+may be left out. A run that misses one is refused before it builds anything:
+the profile's own pair is never a default, since nobody chose it for the run.
+`run.json` keeps the pair each client ran with under `models`.
 
 A development tool like `tests/isolated.py`, and not part of the product. A probe
 asks whether an agent, given the user's instructions with some sections
@@ -1313,31 +1320,47 @@ def substitute(value: Any, names: Mapping[str, str]) -> Any:
 
 @dataclasses.dataclass(frozen=True)
 class ModelChoice:
-    """The model and reasoning effort a client is asked to run; None keeps the profile's."""
+    """The model and reasoning effort a client is asked to run.
 
-    model: str | None = None
-    effort: str | None = None
+    Both are named for every client a run starts: a run on the profile's own
+    pair is one nobody chose for it.
+    """
+
+    model: str
+    effort: str
 
     def flags(self, client: str) -> list[str]:
         """The client's own flags for this choice: Claude Code's `--model` and `--effort`,
         Codex's `-m` and its `model_reasoning_effort` setting."""
 
-        flags: list[str] = []
-        if self.model:
-            flags += ["--model" if client == "claude" else "-m", self.model]
-        if self.effort:
-            if client == "claude":
-                flags += ["--effort", self.effort]
-            else:
-                flags += ["-c", f'model_reasoning_effort="{self.effort}"']
-        return flags
+        if client == "claude":
+            return ["--model", self.model, "--effort", self.effort]
+        return ["-m", self.model, "-c", f'model_reasoning_effort="{self.effort}"']
 
-    def record(self) -> dict[str, str | None]:
+    def record(self) -> dict[str, str]:
         return {"model": self.model, "effort": self.effort}
 
 
-#: No choice: each client runs the model its profile's settings name.
-PROFILE_MODEL = ModelChoice()
+def model_choices(options: argparse.Namespace, chosen: Sequence[str]) -> dict[str, ModelChoice]:
+    """The model and effort of each chosen client, refused while any of them is not named."""
+
+    missing = [
+        f"--{client}-{part}"
+        for client in chosen
+        for part in ("model", "effort")
+        if not getattr(options, f"{client}_{part}", None)
+    ]
+    if missing:
+        raise ProbeError(
+            "every client a run starts needs its model and reasoning effort named;"
+            f" missing {', '.join(missing)}. A run does not fall back to the profile's own pair."
+        )
+    return {
+        client: ModelChoice(
+            getattr(options, f"{client}_model"), getattr(options, f"{client}_effort")
+        )
+        for client in chosen
+    }
 
 
 def client_argv(
@@ -1346,7 +1369,7 @@ def client_argv(
     prompt: str,
     workspace: Path,
     session: str | None,
-    choice: ModelChoice = PROFILE_MODEL,
+    choice: ModelChoice,
 ) -> list[str]:
     """The command line of one turn; `session` continues the session of the first."""
 
@@ -1597,7 +1620,7 @@ class SessionRunner:
         program: Sequence[str],
         directory: Path,
         base_store: Path,
-        choice: ModelChoice = PROFILE_MODEL,
+        choice: ModelChoice,
     ) -> None:
         self.profile, self.scenario, self.client = profile, scenario, client
         self.program = list(program)
@@ -2058,6 +2081,7 @@ def run(
     """
 
     chosen = list(CLIENTS) if options.client == "both" else [options.client]
+    choices = model_choices(options, chosen)
     scenarios = load_cases(options.cases.resolve(), options.only)
     inputs = Inputs(
         sections=options.sections.resolve(),
@@ -2072,7 +2096,9 @@ def run(
         f"a probe run into {out}", path=home_lock(home), say=_say, name="probe-home lock"
     ):
         live = LiveFiles.of(inputs, registry, git_config)
-        return _run_locked(options, chosen, scenarios, inputs, home, out, source, registry, live)
+        return _run_locked(
+            options, chosen, choices, scenarios, inputs, home, out, source, registry, live
+        )
 
 
 def home_lock(home: Path) -> Path:
@@ -2198,6 +2224,7 @@ class Schedule:
 def _run_locked(
     options: argparse.Namespace,
     chosen: Sequence[str],
+    choices: Mapping[str, ModelChoice],
     scenarios: Sequence[Scenario],
     inputs: Inputs,
     home: Path,
@@ -2216,10 +2243,6 @@ def _run_locked(
     for profile in profiles:
         logins.give(profile.home)
     first = profiles[0]
-    choices = {
-        "claude": ModelChoice(options.claude_model, options.claude_effort),
-        "codex": ModelChoice(options.codex_model, options.codex_effort),
-    }
     programs = _programs(chosen, options.client_program or (), first.environment["PATH"])
     base, prepared = prepare_store(source, home / WORK_DIR, registry)
     versions = {
@@ -2358,11 +2381,12 @@ def _parser() -> argparse.ArgumentParser:
     command.add_argument("--client", choices=(*CLIENTS, "both"), required=True)
     for client in CLIENTS:
         command.add_argument(
-            f"--{client}-model", help=f"the model {client} runs; by default the profile's"
+            f"--{client}-model",
+            help=f"the model {client} runs; required when the run starts {client}",
         )
         command.add_argument(
             f"--{client}-effort",
-            help=f"the reasoning effort {client} runs at; by default the profile's",
+            help=f"the reasoning effort {client} runs at; required when the run starts {client}",
         )
     command.add_argument("--client-home", type=Path, required=True, help="the clients' home")
     command.add_argument("--out", type=Path, required=True, help="where the records go")

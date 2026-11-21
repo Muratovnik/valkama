@@ -232,6 +232,13 @@ def make_user(root: Path) -> dict[str, Path]:
 LIVE_SESSION = "0c0ffee0-0000-4000-8000-00000000live"
 
 
+#: A pair for each client, told apart by client; a run's own arguments may name others.
+MODEL_ARGUMENTS = (
+    *("--claude-model", "m-claude", "--claude-effort", "e-claude"),
+    *("--codex-model", "m-codex", "--codex-effort", "e-codex"),
+)
+
+
 class RunCase(unittest.TestCase):
     """A user, a home and an output directory, and one run over them."""
 
@@ -308,6 +315,7 @@ class RunCase(unittest.TestCase):
             f"claude={FAKE}",
             "--client-program",
             f"codex={FAKE}",
+            *MODEL_ARGUMENTS,
             *arguments,
         ]
         output = io.StringIO()
@@ -1044,6 +1052,7 @@ class ScenarioFormatTests(unittest.TestCase):
                     "a",
                     "--client",
                     "both",
+                    *MODEL_ARGUMENTS,
                     "--client-home",
                     str(home),
                     "--out",
@@ -1089,6 +1098,8 @@ class HomeLockTests(unittest.TestCase):
                 out=base / "second",
                 client_program=None,
                 jobs=1,
+                claude_model="m-claude",
+                claude_effort="e-claude",
             )
             said: list[str] = []
             built: list[tuple[Path, bool]] = []
@@ -1138,13 +1149,20 @@ class JobsRunTests(RunCase):
     """
 
     events: ClassVar[list[tuple[str, str, str]]]
+    turns: ClassVar[list[tuple[Path, list[str]]]]
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.events = []
+        cls.events, cls.turns = [], []
         together = threading.Barrier(2, timeout=60.0)
         start = agent_probes.SessionRunner.run
         take = agent_probes.Logins.take
+        command_line = agent_probes.client_argv
+
+        def argv(client: str, *arguments: Any) -> list[str]:
+            built = command_line(client, *arguments)
+            cls.turns.append((Path(arguments[2]), built))
+            return built
 
         def run(runner: agent_probes.SessionRunner) -> agent_probes.Session:
             key = f"{runner.scenario.id} {runner.client}"
@@ -1172,6 +1190,7 @@ class JobsRunTests(RunCase):
         with (
             mock.patch.object(agent_probes.SessionRunner, "run", run),
             mock.patch.object(agent_probes.Logins, "take", taken),
+            mock.patch.object(agent_probes, "client_argv", argv),
         ):
             cls.run_probes("--client", "both", "--store-copy", "--jobs", "2")
 
@@ -1230,6 +1249,34 @@ class JobsRunTests(RunCase):
                     )["projects"]
                 },
             )
+
+    def test_every_turn_in_every_job_runs_its_clients_model_and_effort(self) -> None:
+        pairs = {
+            "claude": ["--model", "m-claude", "--effort", "e-claude"],
+            "codex": ["-m", "m-codex", "-c", 'model_reasoning_effort="e-codex"'],
+        }
+        self.assertEqual(
+            {client: {"model": f"m-{client}", "effort": f"e-{client}"} for client in pairs},
+            self.run_record()["models"],
+        )
+        homes: set[str] = set()
+        # The sample scenarios' turns; B1 on Codex breaks before its first.
+        for scenario, client, turns in (
+            ("alpha", "claude", 2),
+            ("alpha", "codex", 2),
+            ("beta", "claude", 1),
+        ):
+            workspace = self.record(scenario, client).directory / "workspace"
+            argvs = [argv for where, argv in self.turns if where.resolve() == workspace.resolve()]
+            home = self.record(scenario, client).session["environment"]["HOME"]
+            homes.add(home)
+            with self.subTest(scenario=scenario, client=client):
+                self.assertEqual(turns, len(argvs))
+                for argv in argvs:
+                    start = argv.index(pairs[client][0])
+                    self.assertEqual(pairs[client], argv[start : start + 4])
+        # The sessions ran in both jobs, so neither job's command line went without the pair.
+        self.assertEqual(2, len(homes))
 
     def test_every_job_has_the_login_and_a_refreshed_one_reaches_the_home_and_the_jobs(
         self,
@@ -1461,27 +1508,47 @@ class SandboxRefusalTests(unittest.TestCase):
         self.assertIsNone(agent_probes.sandbox_refusal("claude", output))
 
     def test_codex_turns_ask_for_the_sandbox_that_needs_no_setup(self) -> None:
-        argv = agent_probes.client_argv("codex", ["codex"], "go", Path("W"), None)
+        choice = agent_probes.ModelChoice("m1", "e1")
+        argv = agent_probes.client_argv("codex", ["codex"], "go", Path("W"), None, choice)
 
         self.assertIn('windows.sandbox="mxc"', argv)
 
 
 class ModelChoiceTests(unittest.TestCase):
-    """A run can ask each client for a model and an effort other than its profile's.
+    """A run names the model and effort of every client it starts, and each takes them.
 
-    The probes ran on the profile's model; the owner moved them to a cheaper pair,
-    which each client takes as its own flags, on every turn.
+    A full run went out on the profile's own pair because the runner passed no
+    model and nobody chose one. Each client takes its pair as its own flags, on
+    every turn, and a run that misses one is refused before it builds anything.
     """
 
     CHOICE = agent_probes.ModelChoice("m1", "e1")
 
-    def test_without_a_choice_neither_client_is_told_a_model(self) -> None:
-        for client in agent_probes.CLIENTS:
-            for session in (None, "S"):
-                argv = agent_probes.client_argv(client, [client], "go", Path("W"), session)
-                with self.subTest(client=client, session=session):
-                    self.assertFalse({"--model", "-m", "--effort"} & set(argv))
-                    self.assertFalse([word for word in argv if "reasoning_effort" in word])
+    def test_a_run_that_misses_a_flag_is_refused_naming_each_missing_one(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as name:
+            home = Path(name) / "home"
+            argv = [*RUN_ARGUMENTS, "--client-home", str(home), "--claude-model", "m1"]
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = agent_probes.main(argv)
+
+            self.assertEqual(2, code)
+            self.assertEqual(
+                "refused: every client a run starts needs its model and reasoning effort named;"
+                " missing --claude-effort, --codex-model, --codex-effort. A run does not fall"
+                " back to the profile's own pair.\n",
+                output.getvalue(),
+            )
+            self.assertFalse(home.exists())
+            self.assertFalse(agent_probes.home_lock(home).exists())
+
+    def test_an_empty_name_is_missing_and_a_client_left_out_needs_none(self) -> None:
+        options = argparse.Namespace(claude_model="m1", claude_effort="", codex_model=None)
+        with self.assertRaisesRegex(agent_probes.ProbeError, r"missing --claude-effort\."):
+            agent_probes.model_choices(options, ["claude"])
+
+        options.claude_effort = "e1"
+        self.assertEqual({"claude": self.CHOICE}, agent_probes.model_choices(options, ["claude"]))
 
     def test_claude_takes_its_model_and_effort_flags_on_every_turn(self) -> None:
         first = agent_probes.client_argv("claude", ["claude"], "go", Path("W"), None, self.CHOICE)
@@ -1505,13 +1572,6 @@ class ModelChoiceTests(unittest.TestCase):
         self.assertEqual(["resume", "S", "go"], later[-3:])
         self.assertEqual(("codex", "go", None), fake_client.parse(first))
         self.assertEqual(("codex", "go", "S"), fake_client.parse(later))
-
-    def test_a_model_without_an_effort_keeps_the_profile_s_effort(self) -> None:
-        choice = agent_probes.ModelChoice("m1")
-
-        self.assertEqual(["--model", "m1"], choice.flags("claude"))
-        self.assertEqual(["-m", "m1"], choice.flags("codex"))
-        self.assertEqual({"model": "m1", "effort": None}, choice.record())
 
 
 class StoreCopyRegistryTests(unittest.TestCase):
