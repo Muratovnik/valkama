@@ -358,13 +358,18 @@ export function pointerAnchorOf(
 }
 
 /**
- * The element whose hint focus on `target` shows: its own, or its area's. A control inside a
- * hinted element outside any area shows none: it is not that element.
+ * The element whose hint focus on `target` shows: its own, its area's, or, for a control with no
+ * hint of its own inside an element whose hint is its words whole (`clipped`), that element's,
+ * since the control's words are a part of the words it cuts: a table's row name with an id after
+ * it holds that hint on the line, and focus on the name's press showed nothing of what the
+ * pointer saw there. A control inside an element with any other hint shows none: it is not that
+ * element, and what the element's hint says is not its own.
  */
 export function focusAnchorOf(target: EventTarget | null): HTMLElement | null {
   const anchor = tooltipAnchorOf(target)
   if (!anchor || !(target instanceof Element)) return null
-  return anchor === target || areaOf(target)?.contains(anchor) ? anchor : null
+  if (anchor === target || areaOf(target)?.contains(anchor)) return anchor
+  return tooltipOf(anchor)?.kind === 'clipped' ? anchor : null
 }
 
 /** The element whose hover holds `anchor`'s hint up: its area, or itself. */

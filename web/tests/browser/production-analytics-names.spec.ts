@@ -24,6 +24,7 @@ import { openDimension } from './analyticsFilter.ts'
 import { openPanel, pageAt, record, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { drawLined } from './drawnViews.ts'
+import { wholeText } from './hintFramesPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -152,6 +153,47 @@ test('a session is named by its title, its id in the hint, and an account by the
       'data-tooltip',
       new RegExp(id, 'u'),
     )
+})
+
+test('a session’s cut name with its id after it says itself whole under the keyboard as under the pointer', async ({
+  page,
+}) => {
+  // The longest session leads the table, its title too long for the name's column, so the line
+  // of its title and its client with the id's start is cut. The line holds the hint, since the id
+  // stands outside the press, and the keyboard's focus lands on the press inside the line.
+  const title = 'Rework how the overview reads every long title a session was given by its client'
+  const long = session('2c3d4e5f-0000-4000-8000-000000000004', 'claude', title)
+  const world: TimedStretch[] = [
+    ...WORLD,
+    ...[0, 1, 2].map((day) => ({
+      at: on(9 + day),
+      group: { executor: long, ...MAIN, work_item: task(9, 'Task 9') },
+      spend: { seconds: 8 * 3600, tokens: 1000, cost: 1 },
+    })),
+  ]
+  await serve(page, {}, world)
+  const executors = await open(page, { by: 'executor' })
+  await page.evaluate(() => document.fonts.ready)
+  const line = executors.locator('.spending-table tbody .table-name').first()
+  await expect(line).toContainText(title)
+  const cut = await line.evaluate((name) => name.scrollWidth - name.clientWidth)
+  expect(cut, 'the line is cut').toBeGreaterThan(0)
+  const whole = `${title} claude · 2c3d4e5f`
+  const hint = wholeText(page)
+
+  await page.mouse.move(0, 0)
+  await expect(hint).toHaveCount(0)
+  await line.hover()
+  await expect(hint).toHaveText(whole)
+
+  await page.mouse.move(0, 0)
+  await expect(hint).toHaveCount(0)
+  // From the last heading of the table, the next stop of the keyboard is the first row's press.
+  await executors.locator('.spending-table thead th button').last().focus()
+  await page.keyboard.press('Tab')
+  await expect(line.locator('button')).toBeFocused()
+  await expect(hint).toBeVisible()
+  await expect(hint).toHaveText(whole)
 })
 
 test('a name typed in Settings is the name Analytics gives the account', async ({ page }) => {
