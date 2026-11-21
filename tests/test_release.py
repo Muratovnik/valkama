@@ -26,8 +26,10 @@ refused rather than passed.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
+import json
 import os
 import shutil
 import stat
@@ -35,6 +37,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
@@ -737,6 +740,81 @@ class ReleasePriceTests(unittest.TestCase):
     def test_the_servers_own_table_loads_from_its_file(self) -> None:
         table = release.price_table()
         self.assertEqual("anthropic", table.listings()["claude-fable-5-2"].vendor)
+
+
+#: A made-up commit id of the full length Git writes.
+COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+
+class SourceArchiveTests(unittest.TestCase):
+    """The source archive carries the record `launcher install` pins it by.
+
+    The archive has no Git history, so a directory it was unpacked into could not
+    be installed. Build now writes the commit it was built from, the version and
+    the digest of each file; the record has to list exactly the files the archive
+    holds, or the install would check something other than what it copies.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name).resolve()
+        self.tree = self.root / "tree"
+        self.contents = {
+            "valkama.py": b"print('entry')\n",
+            "VERSION": b"9.9.9\n",
+            "server/cli.py": b"# a module\n",
+            "web/dist/assets/app.js": bytes(range(256)),
+            "docs/guides/установка.md": "текст\n".encode(),
+        }
+        for name, data in self.contents.items():
+            path = self.tree / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        self.target = self.root / "valkama-9.9.9-source.zip"
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def write(self, commit: str = COMMIT) -> None:
+        files = sorted(path for path in self.tree.rglob("*") if path.is_file())
+        release.write_source_archive(self.target, self.tree, files, commit, "9.9.9")
+
+    def test_the_record_lists_every_file_the_archive_holds_and_nothing_else(self) -> None:
+        self.write()
+        with zipfile.ZipFile(self.target) as archive:
+            held = {name: archive.read(name) for name in archive.namelist()}
+        record = json.loads(held.pop("valkama-source.json"))
+        self.assertEqual(self.contents, held)
+        self.assertEqual(
+            {name: hashlib.sha256(data).hexdigest() for name, data in held.items()},
+            record["files"],
+        )
+        # Only what any public archive may hold: no checkout path, no host, no account.
+        self.assertEqual({"schema_version", "commit", "version", "files"}, set(record))
+        self.assertEqual(
+            (1, COMMIT, "9.9.9"), (record["schema_version"], record["commit"], record["version"])
+        )
+
+    def test_an_archive_whose_commit_is_not_a_full_id_is_not_left_behind(self) -> None:
+        for commit in ("HEAD", COMMIT[:12], COMMIT.upper()):
+            with self.subTest(commit=commit):
+                with self.assertRaisesRegex(ValueError, "not a full commit id"):
+                    self.write(commit)
+                self.assertFalse(self.target.exists())
+
+    def test_build_and_smoke_require_the_commit(self) -> None:
+        for action in ("build", "smoke"):
+            argv = ["release.py", action, "--assets", "a", "--version", "9.9.9", "--work-dir", "w"]
+            with self.subTest(action=action):
+                with (
+                    mock.patch.object(release.sys, "argv", argv),
+                    mock.patch.object(release, action) as called,
+                    mock.patch("sys.stderr", io.StringIO()) as said,
+                    self.assertRaises(SystemExit),
+                ):
+                    release.main()
+                called.assert_not_called()
+                self.assertIn("--commit", said.getvalue())
 
 
 if __name__ == "__main__":
