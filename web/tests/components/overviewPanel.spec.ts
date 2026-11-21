@@ -241,7 +241,7 @@ describe('the overview on the page', () => {
     stubAnalyticsReads((query) => (outline(query) ? { status: 500 } : serveUsage(WORLD, query)))
     const page = await mountAnalytics()
     const days = page.get('.spending-days')
-    expect(words(days.text())).toContain(
+    expect(words(days.get('[data-held="said"]').text())).toBe(
       'The period before could not be loaded, so it is not outlined.',
     )
     // The chart is handed its three periods with no figure of a period before to outline; the

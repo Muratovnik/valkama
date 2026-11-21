@@ -285,7 +285,12 @@ describe('the Analytics page', () => {
     accounts?.release(serveUsage(WORLD, accounts.query))
     await flushPromises()
     expect(page.findAll('.period-mark')).toHaveLength(1)
-    expect(page.find('.spending-days-note').exists()).toBe(false)
+    // Nothing said, in the room the note keeps for it (`HeldNote`).
+    const note = (held: 'room' | 'said') => page.get(`.spending-days [data-held="${held}"]`)
+    expect(note('said').text()).toBe('')
+    expect(note('room').text()).toBe(
+      'The account data could not be loaded, so account changes are not marked.',
+    )
 
     // An account read that fails says the marks are not there.
     await page.setProps({ routeState: { by: 'role', period: 'weeks4', filters: main } })
@@ -293,7 +298,7 @@ describe('the Analytics page', () => {
     reads.held[1]?.release({ status: 500 })
     await flushPromises()
     expect(page.findAll('.period-mark')).toHaveLength(0)
-    expect(page.get('.spending-days-note').text()).toBe(
+    expect(note('said').text()).toBe(
       'The account data could not be loaded, so account changes are not marked.',
     )
   })

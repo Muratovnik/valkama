@@ -10,13 +10,15 @@
  * Each column carries the figure of the step it is compared with in the period before, read with
  * the value's filters through the period the page's answer is compared with (`usePeriodBefore`),
  * drawn as a short mark at its height; while those steps are read there is no mark, and when they
- * could not be read a note under the chart says so. Its steps narrow nothing: the page is under
- * the panel.
+ * could not be read a note under the chart says so, in room the chart keeps for it whatever they
+ * do (`HeldNote`): those steps are read after the answer is drawn, and the note said in room of its
+ * own moved what stands under the chart. Its steps narrow nothing: the page is under the panel.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import HeldNote from '@/pages/analytics/components/HeldNote.vue'
 import { useDayWords } from '@/pages/analytics/composables/useDayWords.ts'
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -67,6 +69,9 @@ const before = usePeriodBefore({
   compared: () => props.compared,
 })
 const beforeSteps = computed(() => (Array.isArray(before.value) ? before.value : null))
+/** The note under the chart, kept in its room: what it says once the period before failed. */
+const unread = computed(() => t('analytics.overview.before.failed'))
+const unreadSaid = computed(() => (before.value === 'failed' ? unread.value : ''))
 
 /** The one series: the value. */
 const SERIES = 'value'
@@ -113,23 +118,13 @@ const chart = computed<PeriodChartProps>(() => {
         v-bind="chart"
         :live="live"
       />
-      <p
-        v-if="before === 'failed'"
-        class="value-days-note"
-      >
-        {{ t('analytics.overview.before.failed') }}
-      </p>
+      <HeldNote
+        :room="[unread]"
+        :said="unreadSaid"
+      />
     </template>
     <template #table>
       <PeriodColumnsTable v-bind="chart" />
     </template>
   </ChartSection>
 </template>
-
-<style scoped>
-.value-days-note {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-</style>
