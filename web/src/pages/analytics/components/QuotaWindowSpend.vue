@@ -15,7 +15,9 @@
  * line, and no share here is a share of the quota.
  *
  * Its heading names the stretch it covers and, where it has lines, their sum, said as each line's
- * estimate is: the lines add up, and a reader added them by hand. That it is an estimate at API prices, not quota points,
+ * estimate is: the lines add up, and a reader added them by hand. It keeps the room of the
+ * headings a newer answer can give it (`rivals`), so its breakdowns beside it and its lines under
+ * it stay where they stand when one does. That it is an estimate at API prices, not quota points,
  * and that work in claude.ai and the desktop app, which the window's share counts, is not in it,
  * the section's «ⓘ» says once for every window (`useSectionCaveats`), and the side panel under its
  * names. No work on the account,
@@ -126,30 +128,60 @@ const state = computed(() => {
 
 const cost = (spent: Parameters<typeof words.lineFigure>[1]) => words.lineFigure('cost', spent)
 
-/** The sum of the lines the block shows, said as a line's estimate is; none with no lines. */
-const total = computed(() => {
+/** What the lines the block shows add up to; none with no lines. */
+const sum = computed(() => {
   const [first, ...rest] = (answer.value?.spent.lines ?? []).map((line) => line.spent)
   if (!first) return null
-  let sum = first
-  for (const spent of rest) sum = addSpent(sum, spent)
-  return cost(sum)
+  let all = first
+  for (const spent of rest) all = addSpent(all, spent)
+  return all
 })
 
-/**
- * The heading, with the stretch the figures cover — the window's start to the moment read to —
- * and the sum of its lines where it has any.
- */
-const heading = computed(() => {
+/** The stretch the figures cover, the window's start to the moment read to, in words. */
+const stretch = computed(() => {
   const period = answer.value?.period
   const from = period?.from ?? props.window.started_at ?? props.today
   const to = period?.to ?? props.today
-  const stretch = {
+  return {
     from: quotaWords.moment(from, props.today),
     to: quotaWords.moment(to, props.today),
   }
-  return total.value === null
-    ? t('analytics.quota.spent.title', stretch)
-    : t('analytics.quota.spent.titleTotal', { ...stretch, total: total.value })
+})
+
+/** The heading: the stretch, and the sum of its lines where it has any, said as a line's estimate is. */
+const heading = computed(() =>
+  sum.value === null
+    ? t('analytics.quota.spent.title', stretch.value)
+    : t('analytics.quota.spent.titleTotal', { ...stretch.value, total: cost(sum.value) }),
+)
+
+/**
+ * The widest sum the heading's room is kept for: five figures of dollars before the point. The
+ * page's figures are of one width each (`tabular-nums`), so a sum this long is as wide as any sum
+ * under it, and a sum that gains a figure, as a window's does from its first dollars on, takes
+ * no room the heading did not keep.
+ */
+const WIDEST_SUM = 99_999.99
+
+/**
+ * The headings a newer answer can give the block, kept unseen in the heading's place
+ * (`heldRoom.css`), as a level keeps every heading it takes in turn (`PanelLevel`'s `titles`):
+ * with no sum, and with the widest (`WIDEST_SUM`) and the tokens it leaves out now, at the
+ * moments it covers now, each said at one width whichever minute it names. A newer answer once
+ * changed the heading, which took a line more, and the block's lines moved 25px down under it.
+ */
+const rivals = computed(() => {
+  const widest = cost({
+    cost: WIDEST_SUM,
+    seconds: 0,
+    tokens: null,
+    unpriced: sum.value?.unpriced ?? 0,
+  })
+  const others = [
+    t('analytics.quota.spent.title', stretch.value),
+    t('analytics.quota.spent.titleTotal', { ...stretch.value, total: widest }),
+  ]
+  return [...new Set(others)].filter((other) => other !== heading.value)
 })
 
 /** A line as a row of either drawing: its name, what it leaves out and its estimate. */
@@ -242,13 +274,22 @@ const again = computed(() => {
     :aria-labelledby="titleId"
   >
     <div class="window-spend-head">
-      <component
-        :is="headingAs"
-        :id="titleId"
-        class="window-spend-title"
-      >
-        {{ heading }}
-      </component>
+      <span class="window-spend-heading held-room">
+        <component
+          :is="headingAs"
+          :id="titleId"
+          class="window-spend-title"
+        >
+          {{ heading }}
+        </component>
+        <span
+          v-for="rival in rivals"
+          :key="rival"
+          class="window-spend-title-room held-room-unseen"
+          aria-hidden="true"
+          >{{ rival }}</span
+        >
+      </span>
       <SegmentedControl
         size="compact"
         :model-value="by"
@@ -320,10 +361,10 @@ const again = computed(() => {
         <!-- The words' room, unseen, under the status that says them once a read again fails. -->
         <div
           v-if="again"
-          class="window-spend-again"
+          class="window-spend-again held-room"
         >
           <p
-            class="window-spend-room"
+            class="window-spend-room held-room-unseen"
             aria-hidden="true"
           >
             {{ again.words }}
@@ -381,6 +422,8 @@ const again = computed(() => {
 
 <style scoped src="@/pages/analytics/components/readPending.css"></style>
 
+<style scoped src="@/shared/ui/heldRoom.css"></style>
+
 <style scoped>
 /* Under the window's readings, a line of its block on an axis of its own: its title and its
    breakdowns on one line, then its bars. */
@@ -400,7 +443,8 @@ const again = computed(() => {
   min-width: 0;
 }
 
-.window-spend-title {
+.window-spend-title,
+.window-spend-title-room {
   margin: 0;
   font: var(--font-field-label);
 }
@@ -421,19 +465,5 @@ const again = computed(() => {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
-}
-
-/* A read again that failed, said over the room its words keep unseen. */
-.window-spend-again {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-
-  > * {
-    grid-area: 1 / 1;
-  }
-}
-
-.window-spend-room {
-  visibility: hidden;
 }
 </style>

@@ -395,6 +395,21 @@ describe('the states of what used a window', () => {
     expect(lines(blockIn(page))[0]).toEqual(['MAIN-1 Answer a review', '≈ $6.00 · 46%'])
   })
 
+  it('keeps the room of the headings a newer answer can give it, with no sum and with five figures of one', async () => {
+    stubAnalyticsReads(usage, quota)
+    const page = await openFiveHours()
+    const block = await openSpend(page, 'Work')
+    const stretch = 'Window breakdown: 11:30 – 14:30'
+    expect(plain(block.get('.window-spend-title').text())).toBe(`${stretch} · ≈ $13.00`)
+    // Unseen in the heading's place (DESIGN.md § Analytics: the breakdowns beside it and the
+    // lines under it stay where they stand when a newer answer changes it).
+    const room = block
+      .findAll('.window-spend-heading [aria-hidden="true"]')
+      .map((one) => plain(one.text()))
+    expect(room).toEqual([stretch, `${stretch} · ≈ $99,999.99`])
+    expect(said(block.get('.window-spend-head'))).not.toContain('99,999')
+  })
+
   it('keeps its lines when a read again fails, and says so in the room it kept for those words', async () => {
     let at = NOW
     let fails = false

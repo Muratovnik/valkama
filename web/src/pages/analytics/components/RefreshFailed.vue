@@ -13,7 +13,7 @@
  * failure on a phone and beside a span of days said in Russian offered no retry of its own.
  *
  * A part that reads apart from the page — the side panel over it — says its own failure the same
- * way (`failed`), whatever the page's reads say.
+ * way (`failed`), whatever the page's reads say, and holds its room as the bar does (`held`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

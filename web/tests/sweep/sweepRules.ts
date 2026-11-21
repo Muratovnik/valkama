@@ -171,6 +171,78 @@ export function placementMiss(
   return far > POINT_REACH ? { rule: 'far-from-pointer', by: Math.round(far) } : null
 }
 
+/**
+ * A hinted element as a shown hint is read against: its id, its hint's words and its own words,
+ * each with no whitespace, as the hint's text is read: a hint lays its lines out as it will.
+ */
+export interface HintedWords {
+  id: string
+  /** The words it shows, its text. */
+  own: string
+  /** The words it is marked with (`data-tooltip`). */
+  words: string
+}
+
+/**
+ * The hinted elements whose words a shown hint, reading `text` with no whitespace, says. A hint says its element's
+ * words (`data-tooltip`); a cut text's whole words are its own words laid over it; a detail on
+ * words of its element that are cut says those words whole before the detail, while it is marked
+ * with the detail alone. The element whose words it is whole, else every element whose words it
+ * holds: a place's hint says the words of the places near it after its own. Read by the marked
+ * words alone, a rail tile whose cut name was a table's row name held the hint of that name,
+ * which says the name and its detail as one: the tile's hint was found to be the table's.
+ *
+ * Run inside the page as well (`sweepInPage.ts`), so it reaches nothing outside itself.
+ */
+export function hintSays(text: string, marks: readonly HintedWords[]): string[] {
+  const matching = marks.filter(
+    (one) => (one.words && text.includes(one.words)) || (one.own && one.own === text),
+  )
+  const whole = matching.filter(
+    (one) =>
+      one.words === text ||
+      one.own === text ||
+      (one.own !== '' && one.words !== '' && `${one.own}${one.words}` === text),
+  )
+  return (whole.length ? whole : matching).map((one) => one.id)
+}
+
+/**
+ * The marks whose place a hint that answered the pointer may be judged at, in order: the one
+ * aimed at, where it may answer and the hint says it; then the places (`places`) that may answer
+ * that the hint says, as the nearer of two places within a mark's reach of each other is, whose
+ * hint says the other's words after its own; else the one aimed at alone. Judged at the one aimed
+ * at, a restart's hint standing at its own mark, the nearer, read as a hint 12px from the restart
+ * 3px beside it. Only a place answers for a neighbour: a step line finds a reading by its moment
+ * on a continuum of them, one at every pixel, and a reading 3px off another is a third, or one of
+ * several that say the same, whose hint stands at its own dot; judged there, a reading on a steep
+ * rise read as a hint 27px from the pointer and one of three equal readings as a hint 13px off.
+ */
+export function answeringMarks(
+  says: readonly string[],
+  expected: readonly string[],
+  { aimed, places }: { aimed: string; places: readonly string[] },
+): string[] {
+  const mine = says.includes(aimed) && expected.includes(aimed) ? [aimed] : []
+  const near = expected.filter((id) => id !== aimed && places.includes(id) && says.includes(id))
+  return mine.length || near.length ? [...mine, ...near] : [aimed]
+}
+
+/**
+ * Which of the marks that may have answered (`answeringMarks`) a hint at `hint` is judged at: the
+ * first its hint stands right at, else the first. Two places as near the pointer as each other
+ * (`TWINS`) may either answer, and a hint standing at either stands right: «now» 2.1px off the
+ * pointer and the forecast's end 3px off it, «now» answered and its hint stood 6px from its dot,
+ * which judged at the forecast's end read as a hint 13px off.
+ */
+export function judgedMark<T extends { id: string; place: MarkPlace | null }>(
+  marks: readonly T[],
+  hint: Box,
+  at: Point,
+): T | undefined {
+  return marks.find((one) => one.place && !placementMiss(hint, one.place, at)) ?? marks[0]
+}
+
 /** What the page answered where the pointer stood: the hint shown, if any, and what it says. */
 export interface Answer {
   box: Box
@@ -190,7 +262,8 @@ export interface Verdict {
 /**
  * How the page answered the pointer at `at` aimed at `aimed`, against the marks that may answer
  * there (`expected`): no hint at all, another mark's hint, another mark drawn as pointed at, or
- * the mark's own hint standing where its place (`place`) does not put it.
+ * the mark's own hint standing where its place (`place`) does not put it. `aimed` is the mark
+ * whose hint answered (`answeringMark`), the one aimed at unless another may answer there.
  */
 export function judge(
   answer: Answer | null,

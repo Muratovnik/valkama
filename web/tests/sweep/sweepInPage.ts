@@ -9,6 +9,7 @@
  * regions (`.analytics-page`, `.analytics-panel`, `.analytics-detail`) only to bound the reading.
  */
 import { layoutHelpers } from './sweepInPageLayout.ts'
+import { hintSays } from './sweepRules.ts'
 import type { Box, MarkPlace, Point, Reachable } from './sweepRules.ts'
 
 /** A component's root class and its name, to say who owns what was found. */
@@ -409,22 +410,16 @@ function readSurface(aimed: string): Surface | null {
   )
   if (!surface) return null
   const text = help.flat(surface.textContent)
-  // A hint says its element's words; a cut text's whole words are its own words laid over it.
-  const matching = [...document.querySelectorAll<HTMLElement>('[data-sweep]')]
-    .map((one) => ({
-      id: one.dataset.sweep ?? '',
-      words: help.flat(one.dataset.tooltip),
-      own: help.flat(one.textContent),
-    }))
-    .filter((one) => (one.words && text.includes(one.words)) || (one.own && one.own === text))
-  // The element whose words it is whole, else every element whose words it holds: a place's hint
-  // says the words of the places near it after its own.
-  const whole = matching.filter((one) => one.words === text || one.own === text)
+  const marks = [...document.querySelectorAll<HTMLElement>('[data-sweep]')].map((one) => ({
+    id: one.dataset.sweep ?? '',
+    words: help.flat(one.dataset.tooltip),
+    own: help.flat(one.textContent),
+  }))
   const pointed = document.querySelector(`[data-sweep="${aimed}"]`)
   return {
     box: help.box(surface),
     text: (surface.textContent ?? '').replaceAll(/\s+/gu, ' ').trim(),
-    says: (whole.length ? whole : matching).map((one) => one.id),
+    says: help.hintSays(text, marks),
     painted: help.paintedNear(pointed),
     place: pointed ? help.markPlace(pointed).place : null,
   }
@@ -438,6 +433,7 @@ const hintHelpers = {
   cut,
   flat,
   hides,
+  hintSays,
   hookText,
   lineAround,
   markPlace,

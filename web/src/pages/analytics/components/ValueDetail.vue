@@ -26,7 +26,9 @@
  * A task deleted since has no card to open. The first read's wait is
  * one quiet line, reported to the panel's status region (`useReadWaitReport`); a first read that
  * failed says so with a retry, and a read again that failed keeps what it showed and says so as the
- * page's bar does (`RefreshFailed`). A value with nothing in the period says that.
+ * page's bar does (`RefreshFailed`), in room the actions' row keeps for it while nothing failed:
+ * on a phone, said in room of its own, it took a line under the actions and moved the figures
+ * 36px down, and gave it back with the next answer. A value with nothing in the period says that.
  *
  * What a reader of the panel selects it by: the content is `data-detail="value"`, each part of it
  * `data-part` (`actions`, `figures`, `all-time`, `days`, `model`, `account`) and each figure
@@ -317,6 +319,7 @@ const lists = computed(() =>
         </VButton>
         <RefreshFailed
           :failed="failedAgain"
+          held
           @retry="retry"
         />
       </div>

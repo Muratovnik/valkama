@@ -3077,7 +3077,10 @@ no switch, the rest and the work on no task apart after the five under their rul
 names the stretch it covers and what its lines add up to, said as a line's estimate is, «Window
 breakdown: 05:00 – 13:20 · ≈ $151.90»: the lines added up and nothing said their sum. With no
 lines it names no sum, and work its organization recorded with no account known, said apart, is
-not in it. That it is the API price estimate and not quota points, and that
+not in it. It keeps the room of the headings a newer answer can give it, with no sum and with a
+sum of five figures before the point, so the breakdowns beside it and the lines under it stay
+where they stand when one does: a newer answer once made it a line longer, and the lines moved
+25px down under it. That it is the API price estimate and not quota points, and that
 work in claude.ai and the desktop app, which the window's share counts, is not in it, the
 section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
 says for this one, never as a line of the panel. It is read by account, the account's and its
@@ -3139,7 +3142,11 @@ ends the figures' heading says it for the value's own read, once and in that «�
 never as a line of the panel. Its days are the page's period and step with
 the period before marked, one series in the value's colour; under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
-the value's filter added, and wait and fail as the page's do. «Add to filter» adds the value to
+the value's filter added, and wait and fail as the page's do: a read again that fails keeps what
+the panel shows and says «Could not refresh · Retry» beside its actions, in room their row keeps
+for it while nothing failed, so nothing under them moves when it is said or when the next answer
+takes it away; said in room of its own on a phone, it took a line and moved the panel's figures
+36px down. «Add to filter» adds the value to
 its dimension's filter beside the values already there, as choosing it in the filter's menu
 does, so A and B and then C is A, B and C: the page stays on its section and the panel closes, a
 step of the history too. A value the filter holds already offers it disabled, «Already in
