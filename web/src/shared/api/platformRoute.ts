@@ -129,7 +129,22 @@ function encodeBase64Url(value: string, path: string, maxBytes: number): string 
   return encodeBytesBase64Url(new TextEncoder().encode(value), path, maxBytes)
 }
 
-function decodeBase64Url(value: string, path: string, maxBytes: number): string {
+/**
+ * A payload in the one spelling the service writes, base64url without padding (RFC 4648 §5),
+ * from any spelling of the same sextets a person or another encoder gives: with the `=`
+ * padding most encoders add, and in standard base64 (§4), whose `+` and `/` name what `-` and
+ * `_` do, so no value means two things whichever alphabet it is in. A query reads a bare `+` as
+ * a space, which is in neither alphabet, so a space is the `+` it was. Padding is read only
+ * where it completes the last quartet; any other `=` is left for the refusal below.
+ */
+function oneSpelling(value: string): string {
+  const spelled = value.replaceAll(' ', '+').replaceAll('+', '-').replaceAll('/', '_')
+  const bare = spelled.replace(/={1,2}$/u, '')
+  return bare === spelled || spelled.length % 4 === 0 ? bare : spelled
+}
+
+function decodeBase64Url(written: string, path: string, maxBytes: number): string {
+  const value = oneSpelling(written)
   if (
     value.length === 0 ||
     value.length > Math.ceil((maxBytes * 4) / 3) + 8 ||
@@ -148,7 +163,7 @@ function decodeBase64Url(value: string, path: string, maxBytes: number): string 
   if (bytes.byteLength > maxBytes) invalid(path, `payload exceeds ${maxBytes} bytes`)
   // RFC 4648 allows multiple textual aliases for the same bytes when the
   // final sextet carries non-zero unused bits. Re-encoding the decoded bytes
-  // rejects those aliases as well as any implicit padding form.
+  // rejects those aliases, whichever spelling they came in.
   if (encodeBytesBase64Url(bytes, path, maxBytes) !== value)
     invalid(path, 'base64url payload is not canonical')
   try {
