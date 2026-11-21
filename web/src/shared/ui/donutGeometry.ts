@@ -19,8 +19,12 @@ const RING_SECTORS = 5
 export const RING_BOX = 100
 const OUTER = 50
 const INNER = 31
-/** The ground between two sectors, in the box's units: two pixels across a ring of 11rem. */
-const GAP = 1.2
+/**
+ * The ground between two sectors, in the box's units: two pixels across a ring of 11rem. Each
+ * sector takes the pointer over its half of it (`DonutChart`), so the ground answers for the
+ * nearer sector.
+ */
+export const RING_GAP = 1.2
 
 /** The key of the sector the smaller parts fold into; no value's key is written so. */
 const REST_KEY = ' rest'
@@ -133,7 +137,7 @@ function circle(radius: number, sweep: 0 | 1) {
 }
 
 /** How far in from a sector's edge, in turns, its outline starts at `radius`: half the gap. */
-const inset = (radius: number) => Math.asin(GAP / 2 / radius) / (2 * Math.PI)
+const inset = (radius: number) => Math.asin(RING_GAP / 2 / radius) / (2 * Math.PI)
 /** An arc's large-arc flag: whether it runs past half the ring. */
 const largeArc = (from: number, to: number) => (to - from > 0.5 ? 1 : 0)
 
@@ -163,7 +167,40 @@ export function sectorPath(start: number, end: number): string {
   ].join(' ')
 }
 
-/** The middle of a sector's band, in the ring's box: the point its hint stands at (`data-hint-point`). */
+/** The radius of the middle of the band, where a sector's hint stands. */
+const MIDDLE = (OUTER + INNER) / 2
+
+/**
+ * The middle of a sector's band, in the ring's box: the point its hint stands at
+ * (`data-hint-point`) where no pointer stands on it, as under the keyboard.
+ */
 export function bandMiddle(sector: Pick<RingSector, 'start' | 'end'>) {
-  return pointAt((sector.start + sector.end) / 2, (OUTER + INNER) / 2)
+  return pointAt((sector.start + sector.end) / 2, MIDDLE)
+}
+
+/** How far round the ring the point `x`, `y` of its box stands, in turns from 12 o'clock clockwise. */
+export function turnAt(x: number, y: number): number {
+  const turn = Math.atan2(x - RING_BOX / 2, RING_BOX / 2 - y) / (2 * Math.PI)
+  return turn < 0 ? turn + 1 : turn
+}
+
+/**
+ * The point of a sector's band where the pointer stands on it at `turn`: on the band's middle, at
+ * that turn, held a gap inside the sector's ends, so a sector that runs round most of the ring has
+ * its hint by the pointer wherever it stands on it rather than at the middle of the sector, half
+ * the ring away. A turn read across 12 o'clock counts from whichever side is nearer the sector.
+ * A sector with no room between its ends keeps the middle of its band.
+ */
+export function bandAt(sector: Pick<RingSector, 'start' | 'end'>, turn: number) {
+  if (sector.end - sector.start >= 1) return pointAt(turn, MIDDLE)
+  const from = sector.start + 2 * inset(MIDDLE)
+  const to = sector.end - 2 * inset(MIDDLE)
+  if (to <= from) return bandMiddle(sector)
+  const held = (one: number) => Math.min(Math.max(one, from), to)
+  let nearest = { at: held(turn), off: Math.abs(held(turn) - turn) }
+  for (const one of [turn - 1, turn + 1]) {
+    const off = Math.abs(held(one) - one)
+    if (off < nearest.off) nearest = { at: held(one), off }
+  }
+  return pointAt(nearest.at, MIDDLE)
 }
