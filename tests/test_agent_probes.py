@@ -669,6 +669,65 @@ class OldReleaseHookTests(RunCase):
         self.assertEqual([0], list(set(new_sidecars(self.user, self.before).values()) or {0}))
 
 
+class RunRecordTests(RunCase):
+    """`run.json` is written as the run goes, with the text the run was given.
+
+    A run takes hours, and one cut short by a restart left no record at all: the
+    judge refused it, and what text it had run on could only be pieced together.
+    """
+
+    seen: ClassVar[list[dict[str, Any]]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.seen = []
+        start = agent_probes.SessionRunner.run
+
+        def run(runner: agent_probes.SessionRunner) -> agent_probes.Session:
+            # What a run cut short at this session would have left.
+            cls.seen.append(json.loads((cls.out / "run.json").read_text(encoding="utf-8")))
+            return start(runner)
+
+        with mock.patch.object(agent_probes.SessionRunner, "run", run):
+            cls.run_probes("--client", "claude")
+
+    def test_the_record_names_each_finished_session_before_the_next_starts(self) -> None:
+        self.assertEqual(0, self.code, self.said)
+        self.assertEqual(
+            [[], [("A1", "claude")]],
+            [[(item["scenario"], item["client"]) for item in run["sessions"]] for run in self.seen],
+        )
+        self.assertEqual([False, False], [run["finished"] for run in self.seen])
+        self.assertIn("before", self.seen[0]["live_files"])
+        final = json.loads((self.out / "run.json").read_text(encoding="utf-8"))
+        self.assertTrue(final["finished"])
+        self.assertEqual(2, len(final["sessions"]))
+
+    def test_the_record_names_the_text_the_run_was_given(self) -> None:
+        def digest(path: Path) -> str:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        text = json.loads((self.out / "run.json").read_text(encoding="utf-8"))["text"]
+        self.assertEqual(digest(SAMPLES / "sections.md"), text["sections"])
+        cases = SAMPLES / "cases"
+        self.assertEqual({path.name: digest(path) for path in cases.glob("*.json")}, text["cases"])
+
+    def test_a_run_cut_short_is_judged_on_what_it_finished_and_says_so(self) -> None:
+        cut = Path(self.directory.name) / "cut"
+        shutil.copytree(self.out, cut)
+        (cut / "run.json").write_text(json.dumps(self.seen[1]), encoding="utf-8")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = agent_probes.main(["judge", "--out", str(cut)])
+        report = json.loads((cut / agent_probes_judge.REPORT).read_text(encoding="utf-8"))
+        self.assertEqual(1, code)
+        self.assertFalse(report["finished"])
+        self.assertEqual(
+            [("A1", "claude")], [(s["scenario"], s["client"]) for s in report["sessions"]]
+        )
+        self.assertIn("the run was cut short: 1 session(s) recorded", output.getvalue())
+
+
 class LiveFileTests(RunCase):
     """A session that writes one of the user's hook registrations fails the run's isolation.
 

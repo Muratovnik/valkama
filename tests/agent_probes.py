@@ -55,7 +55,11 @@ only through a connection that cannot write. The run holds itself to that:
 registrations, Git configuration, project registry and installed skill when the
 run starts, once the profile is built and after each session, `run.json` keeps
 the first and last digests, and a change is an isolation failure, a session's
-own when it happened during one. The clients run without the variables a client
+own when it happened during one. `run.json` is written before the first session
+and again after each, with the checkout's head and uncommitted changes and the
+digests of the sections and scenario files, so a run cut short is still judged
+on what it finished and says what text it ran on; `finished` says whether it
+reached its end. The clients run without the variables a client
 session hands its children (`CALLER_SESSION`), so a run started in an agent's
 shell does not run them as that agent's children. Each session's record goes to
 `--out/<scenario>/<client>/`: the client's output of every turn, the handshake,
@@ -1895,6 +1899,30 @@ class LiveFiles:
 # --- the run ----------------------------------------------------------------------------
 
 
+def checkout_changes() -> list[str]:
+    """This checkout's uncommitted changes, as `git status --porcelain` lists them.
+
+    With the head they name the skill, tool descriptions and hooks the run gave
+    the clients: a change left in the tree is part of what a session read.
+    """
+
+    done = _run_command(["git", "-C", str(ROOT), "status", "--porcelain"], os.environ)
+    return [line for line in done[1].splitlines() if line.strip()]
+
+
+def text_digests(sections: Path, cases: Path) -> dict[str, Any]:
+    """The SHA-256 of the sections file and of each scenario file the run was given.
+
+    Their paths name files their owner goes on editing; the digests say which
+    text a run ran on after they changed.
+    """
+
+    return {
+        "sections": _sha256(sections),
+        "cases": {path.name: _sha256(path) for path in sorted(cases.glob("*.json"))},
+    }
+
+
 def _programs(chosen: Sequence[str], given: Sequence[str], path: str) -> dict[str, list[str]]:
     """The command that starts each client: the one named, or the one on the profile's PATH."""
 
@@ -1976,41 +2004,50 @@ def _run_locked(
         for client in chosen
     }
     head = _run_command(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], os.environ)
-    sessions = []
+    sessions: list[dict[str, Any]] = []
+    record: dict[str, Any] = {
+        "head": head[1].strip(),
+        "changed": checkout_changes(),
+        "cases": str(options.cases.resolve()),
+        "sections": str(inputs.sections),
+        "text": text_digests(inputs.sections, options.cases.resolve()),
+        "store": prepared,
+        "versions": versions,
+        "sessions": sessions,
+        "finished": False,
+    }
+
+    def write_record() -> None:
+        # Written before the first session and after each one, so that a run cut
+        # short still says what it ran on and which sessions it finished.
+        _write_json(out / "run.json", {**record, "live_files": live.record()})
+
     # A profile that changed the user's files runs no session on them.
     prepared_ok = not live.check("profile")
+    write_record()
     for scenario in scenarios if prepared_ok else ():
         for client in (item for item in chosen if item in scenario.clients):
             _say(f"{scenario.id} {client}")
-            record = SessionRunner(
+            session = SessionRunner(
                 profile, scenario, client, programs[client], out / scenario.name / client, base
             ).run()
             changed = live.check(f"{scenario.id} {client}")
             if changed:
-                record.fail("isolation", f"the user's files changed: {', '.join(changed)}")
-                record.write()
-            for failure in record.failures:
+                session.fail("isolation", f"the user's files changed: {', '.join(changed)}")
+                session.write()
+            for failure in session.failures:
                 _say(f"  environment failure at {failure['stage']}: {failure['detail']}")
             sessions.append(
                 {
                     "scenario": scenario.id,
                     "client": client,
-                    "record": str(record.directory.relative_to(out)),
-                    "failures": len(record.failures),
+                    "record": str(session.directory.relative_to(out)),
+                    "failures": len(session.failures),
                 }
             )
-    _write_json(
-        out / "run.json",
-        {
-            "head": head[1].strip(),
-            "cases": str(options.cases.resolve()),
-            "sections": str(inputs.sections),
-            "store": prepared,
-            "versions": versions,
-            "sessions": sessions,
-            "live_files": live.record(),
-        },
-    )
+            write_record()
+    record["finished"] = True
+    write_record()
     for change in live.changes:
         _say(f"isolation failure: {change['stage']} changed {', '.join(change['changed'])}")
     _say(f"the user's files: {len(live.after)} checked, {len(live.changes)} stage(s) changed them")

@@ -1654,10 +1654,16 @@ def judge(out: Path) -> int:
         probes.remove_tree(out / WORK)
     verdicts = [probe["verdict"] for item in sessions for probe in item["probes"]]
     totals = {verdict: verdicts.count(verdict) for verdict in dict.fromkeys(verdicts)}
+    # A run writes its record as it goes; one written before `finished` came in
+    # wrote it only at its end.
+    finished = run.get("finished", True)
+    if not finished:
+        probes._say(f"the run was cut short: {len(sessions)} session(s) recorded")
     probes._write_json(
         out / REPORT,
         {
             "head": run.get("head"),
+            "finished": finished,
             "cases": run.get("cases"),
             "versions": run.get("versions"),
             "seconds": round(time.monotonic() - started, 1),
@@ -1668,7 +1674,7 @@ def judge(out: Path) -> int:
     probes._say(
         f"{len(verdicts)} probe(s): {json.dumps(totals, ensure_ascii=False)}; {out / REPORT}"
     )
-    return 0 if verdicts and all(verdict == PASSED for verdict in verdicts) else 1
+    return 0 if finished and verdicts and all(verdict == PASSED for verdict in verdicts) else 1
 
 
 # --- the scenario format ----------------------------------------------------------------
