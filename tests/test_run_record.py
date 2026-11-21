@@ -18,7 +18,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import git_worktrees, processes
-from tests import isolated, run_record
+from tests import isolated, machine_lock, run_record
 
 ROOT = Path(__file__).resolve().parents[1]
 #: The mark the spec reporter of `node --test` starts its totals with: INFORMATION SOURCE.
@@ -278,6 +278,131 @@ class CheckTests(TreeCase):
         ignored.mkdir(parents=True)
         self.assertIsNone(run_record.placement_warning(self.repo, ignored))
         self.assertIsNone(run_record.placement_warning(self.repo, self.root / "outside"))
+
+
+class RunTests(TreeCase):
+    """`run`: the checks no gate step is, a command at a time, into one record of one tree state."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.out = self.repo / "tmp" / "checks"
+        versions = mock.patch.object(run_record, "tool_versions", return_value={"python": "3"})
+        versions.start()
+        self.addCleanup(versions.stop)
+        # The machine's lock is another checkout's business; a test asks a stand-in.
+        note = mock.patch.object(machine_lock, "load_note", return_value=None)
+        self.load_note = note.start()
+        self.addCleanup(note.stop)
+
+    def ran(
+        self, *command: str, name: str | None = None, environment: dict[str, str] | None = None
+    ) -> tuple[int, str]:
+        with contextlib.redirect_stdout(io.StringIO()) as said:
+            code = run_record.run(
+                self.out,
+                command,
+                cwd=self.repo,
+                name=name,
+                environment=os.environ if environment is None else environment,
+                root=self.repo,
+            )
+        return code, said.getvalue()
+
+    def recorded(self) -> dict:
+        return json.loads((self.out / run_record.NAME).read_text(encoding="utf-8"))
+
+    def test_each_command_joins_the_record_of_the_tree_as_it_is_and_check_holds_it(self) -> None:
+        passing = ("python", "-c", "print('Ran 4 tests in 0.2s')")
+        failing = ("python", "-c", "import sys; sys.stderr.write('broke\\n'); raise SystemExit(5)")
+
+        self.assertEqual(0, self.ran(*passing)[0])
+        code, said = self.ran(*failing, name="unit")
+        self.assertEqual(5, code, "the exit code is the command's")
+        self.assertEqual(5, self.ran(*failing, name="unit")[0])
+
+        record = self.recorded()
+        names = ["python--c-print-Ran-4-tests-in-0.2s", "unit", "unit-2"]
+        self.assertEqual(names, [entry["name"] for entry in record["steps"]])
+        self.assertEqual([0, 5, 5], [entry["exit"] for entry in record["steps"]])
+        self.assertEqual(4, record["steps"][0]["tests"])
+        self.assertNotIn("tests", record["steps"][1], "a log that counts nothing is no test step")
+        self.assertEqual(sys.executable, record["steps"][0]["argv"][0])
+        self.assertEqual(1, record["result"])
+        self.assertIn(b"broke", (self.out / "logs" / "unit.log").read_bytes())
+        self.assertRegex(said, r"(?m)^unit +exit=5  broke$")
+        code, said = self.checked(self.out / run_record.NAME, self.repo)
+        self.assertEqual(run_record.FAILED, code, said)
+        self.assertIn("; failed: unit, unit-2; ran: ", said)
+
+    def test_a_tree_that_changed_since_the_record_gets_a_new_one_and_is_told_why(self) -> None:
+        self.ran("python", "-c", "pass", name="first")
+        self.write("server/app.py", "print('edited')\n")
+
+        code, said = self.ran("python", "-c", "pass", name="second")
+
+        self.assertEqual(0, code)
+        self.assertIn("a new record replaces ", said)
+        self.assertIn("it was made in a clean tree, and this tree has uncommitted changes", said)
+        self.assertEqual(["second"], [entry["name"] for entry in self.recorded()["steps"]])
+        self.assertTrue(self.recorded()["tree"]["dirty"])
+        self.assertEqual(run_record.PASSED, self.checked(self.out / run_record.NAME, self.repo)[0])
+
+    def test_a_failed_command_says_who_holds_the_heavy_test_lock_and_a_passing_one_does_not(
+        self,
+    ) -> None:
+        self.load_note.return_value = "the heavy-test lock L was held as this run ended, by R"
+
+        said = self.ran("python", "-c", "pass")[1]
+        self.assertNotIn("heavy-test lock", said)
+        self.load_note.assert_not_called()
+        said = self.ran("python", "-c", "raise SystemExit(1)")[1]
+        self.assertIn("the heavy-test lock L was held as this run ended, by R\n", said)
+
+    def test_the_command_runs_in_the_environment_given_and_under_no_lock(self) -> None:
+        show = "import os; print(os.environ.get('VALKAMA_PROBE'), os.environ.get(sys.argv[1]))"
+        given = {
+            name: value
+            for name, value in os.environ.items()
+            if name != machine_lock.HELD_BY_ANCESTOR
+        }
+        with (
+            mock.patch.object(machine_lock, "held", side_effect=AssertionError("took a lock")),
+            mock.patch.object(machine_lock, "hold_until_exit", side_effect=AssertionError),
+        ):
+            code, _ = self.ran(
+                "python",
+                "-c",
+                f"import sys; {show}",
+                machine_lock.HELD_BY_ANCESTOR,
+                name="env",
+                environment={**given, "VALKAMA_PROBE": "given"},
+            )
+
+        self.assertEqual(0, code)
+        # No marker of a holder, so a targeted test run in it still names the holder when it fails.
+        self.assertEqual(b"given None", (self.out / "logs" / "env.log").read_bytes().strip())
+
+    def test_the_command_line_runs_a_command_and_refuses_none(self) -> None:
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = run_record.main(
+                [
+                    "run",
+                    "--out",
+                    str(self.root / "cli"),
+                    "--cwd",
+                    str(self.root),
+                    "--",
+                    "python",
+                    "-c",
+                    "raise SystemExit(4)",
+                ]
+            )
+        self.assertEqual(4, code)
+        record = json.loads((self.root / "cli" / run_record.NAME).read_text(encoding="utf-8"))
+        self.assertEqual([4], [entry["exit"] for entry in record["steps"]])
+        self.assertEqual(git_worktrees.canonical(ROOT), record["tree"]["worktree"])
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            run_record.main(["run", "--out", str(self.root / "cli"), "--"])
 
 
 class CountTests(unittest.TestCase):
