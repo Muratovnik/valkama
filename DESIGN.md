@@ -3139,7 +3139,9 @@ last share, with «ran out» where it did; or «Previous window: no readings» w
 the store keeps none, which is words and no control. Where the step line over it holds that window
 already, as it does over a period longer than the window, no such line stands: it named a window
 drawn right above it. The line is one row, never wrapped or cut,
-at 1440 and 1024 pixels. The line with a window is a button that shows that window in the card,
+at 1440 and 1024 pixels; a phone-wide window narrower than the line gives it a second row from
+the same start, where on one row it stood past the window and scrolled the panel sideways. The
+line with a window is a button that shows that window in the card,
 read when asked (`GET /api/analytics/quota/window`) and never for a window nobody opened. While a
 past window is open, nothing of the current window stands in the card — its share, its bar, its
 facts, its forecast, its readings and «Breakdown» are hidden, not mixed with the past window's —
