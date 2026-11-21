@@ -46,6 +46,8 @@ import type { Ref } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
 
+import { walkFocus } from '@/shared/lib/moveFocus.ts'
+
 /** The list's rows by place, drawn or not. */
 interface ListRows {
   count: () => number
@@ -210,7 +212,7 @@ export function useListKeys(
       event.key
     ]
     if (to === undefined) return false
-    controls[Math.min(Math.max(to, 0), controls.length - 1)]?.focus()
+    walkFocus(controls[Math.min(Math.max(to, 0), controls.length - 1)])
     return true
   }
 
@@ -221,12 +223,12 @@ export function useListKeys(
     const cell = event.target === row ? null : within(event, 'td')
     if (cell) {
       const next = besideCell(cell, forward) ?? (forward ? null : row)
-      next?.focus()
+      walkFocus(next)
       return true
     }
     const expanded = tree.expanded(id)
     if (forward && expanded === false) toggle(id)
-    else if (forward) row.querySelector<HTMLElement>('td')?.focus()
+    else if (forward) walkFocus(row.querySelector<HTMLElement>('td'))
     else if (expanded === true) toggle(id)
     else {
       const parent = tree.parentOf(id)

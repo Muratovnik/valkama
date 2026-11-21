@@ -2,7 +2,8 @@
  * The board of the default workflow's eight states, as a 3.0 read answers it, in the built
  * application, in English and in Russian, at a desk's width and a phone's.
  *
- * «Deferred» starts folded to a strip with its count and opens on a press; a goal or stage
+ * «Deferred» starts folded to a strip with its count and opens on a press, which at a phone's
+ * width leaves the board where it stood while a walk with the arrows takes it across; a goal or stage
  * stands as a tile only while it is not accepted, in «Triage» or «Deferred»; a tile that stands
  * ready and the queue would still not give is muted and says why with a sign and a word, the
  * whole sentence its name; a drag to another column moves the tile, a drop in its own moves
@@ -302,6 +303,61 @@ for (const locale of ['en', 'ru'] as const)
       await expect.poll(() => openedCard(page)).toBe('MAIN-604')
     })
   }
+
+/**
+ * Where the board stands across; whether each tile of `state` stands inside its box; and
+ * whether the tile focus is in does.
+ */
+async function place(page: Page, state: string) {
+  return board(page).evaluate((node, key) => {
+    const box = node.getBoundingClientRect()
+    const inside = (item: Element) => {
+      const { left, right } = item.getBoundingClientRect()
+      return left >= box.left - 1 && right <= box.right + 1
+    }
+    const focused = document.activeElement?.closest('li[data-reference]')
+    return {
+      across: Math.round(node.scrollLeft),
+      shown: [...node.querySelectorAll(`ul[data-state="${key}"] li[data-reference]`)].map((item) =>
+        inside(item),
+      ),
+      focused: focused ? inside(focused) : null,
+    }
+  }, state)
+}
+
+for (const locale of ['en', 'ru'] as const)
+  test(`opening Deferred at 390px leaves the board where it stood, its tiles in sight (${locale})`, async ({
+    page,
+  }) => {
+    await serve(page, locale, 390)
+    await page.goto(boardRoute())
+    await expect(board(page).locator('.column-fold')).toHaveCount(1)
+    const before = await place(page, 'triage')
+    expect(before.shown.length).toBeGreaterThan(0)
+    expect(before).toEqual({ across: 0, shown: before.shown.map(() => true), focused: null })
+    await page.getByRole('button', { name: WORDS[locale].unfold, exact: true }).click()
+    // Focus goes to what folds it again, and the board does not slide to show it.
+    await expect(page.getByRole('button', { name: WORDS[locale].fold, exact: true })).toBeFocused()
+    await expect.poll(() => place(page, 'triage')).toEqual(before)
+  })
+
+// The control for the case above: a walk the reader makes does take the board across.
+test('a walk across to a column past the edge of the board brings it in (390px)', async ({
+  page,
+}) => {
+  await serve(page, 'en', 390)
+  await page.goto(boardRoute())
+  await tile(page, 'MAIN-601').getByRole('button').focus()
+  const before = await place(page, 'ready')
+  expect(before.shown.length).toBeGreaterThan(0)
+  expect(before.shown).not.toContain(true)
+  await page.keyboard.press('ArrowRight')
+  await expect(cell(board(page), 'ready').locator('li[data-reference] :focus')).toHaveCount(1)
+  const after = await place(page, 'ready')
+  expect(after.across).toBeGreaterThan(0)
+  expect(after.focused).toBe(true)
+})
 
 /** Drops a tile back on its own column, which asks the server for nothing. */
 async function dropHome(page: Page, moves: Move[]) {

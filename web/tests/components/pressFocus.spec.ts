@@ -1,15 +1,21 @@
 import { expect, it, vi } from 'vitest'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
-import { quietFocusAfterPress } from '@/shared/lib/pressFocus.ts'
+import { installScriptedFocus } from '@/shared/lib/scriptedFocus.ts'
 
 // The browser's own focus, watched before the wrap goes round it: what it is asked for is
-// what decides the ring, which happy-dom does not draw.
+// what decides the ring, which happy-dom does not draw. The wrap also asks it never to scroll
+// and shows the target itself (`scriptedFocus.spec.ts`), so only the ring is read here.
 const native = vi.spyOn(HTMLElement.prototype, 'focus')
-quietFocusAfterPress()
+installScriptedFocus()
 
 const button = document.body.appendChild(document.createElement('button'))
-const asked = () => native.mock.lastCall?.[0]
+/** What the last focus asked the browser for about the ring; undefined where it left it. */
+function asked(): FocusOptions | undefined {
+  const ring = { ...native.mock.lastCall?.[0] }
+  delete ring.preventScroll
+  return Object.keys(ring).length ? ring : undefined
+}
 const press = () => document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
 const key = (name: string) =>
   document.body.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }))
@@ -27,7 +33,7 @@ it('after a press, a focus that does not say asks for no ring, and one that says
   button.focus()
   expect(asked()).toEqual({ focusVisible: false })
   button.focus({ preventScroll: true })
-  expect(asked()).toEqual({ preventScroll: true, focusVisible: false })
+  expect(asked()).toEqual({ focusVisible: false })
   button.focus({ focusVisible: true })
   expect(asked()).toEqual({ focusVisible: true })
 })
@@ -37,7 +43,7 @@ it('after a press, a focus that does not say asks for no ring, and one that says
 it('a move the interface makes is ringed after a key and quiet after a press', () => {
   press()
   moveFocus(button, { preventScroll: true })
-  expect(asked()).toEqual({ preventScroll: true, focusVisible: false })
+  expect(asked()).toEqual({ focusVisible: false })
   key('Enter')
   moveFocus(button)
   expect(asked()).toEqual({ focusVisible: true })
@@ -83,9 +89,9 @@ it('after a press, a field typed into keeps the browser verdict on its focus', (
   press()
   for (const field of typed) {
     field.focus({ preventScroll: true })
-    expect(asked(), field.outerHTML).toEqual({ preventScroll: true })
+    expect(asked(), field.outerHTML).toBeUndefined()
     moveFocus(field)
-    expect(asked(), field.outerHTML).toEqual({})
+    expect(asked(), field.outerHTML).toBeUndefined()
   }
   // What takes no letters stays quiet after a press, a field that cannot be written in included.
   const quiet = [
@@ -102,7 +108,7 @@ it('after a press, a field typed into keeps the browser verdict on its focus', (
 })
 
 it('wraps the browser once however often it is installed', () => {
-  quietFocusAfterPress()
+  installScriptedFocus()
   press()
   native.mockClear()
   button.focus()

@@ -39,6 +39,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { walkFocus } from '@/shared/lib/moveFocus.ts'
 
 /** Where a move left the tile, for the sentence that announces it. */
 export interface StackLanding {
@@ -237,13 +238,14 @@ function target(key: string, index: number): HTMLElement | undefined {
 
 /**
  * A walk past the last tile stays where it is. It does not fall through to the
- * scroller either, which would slide the focused tile away from the reader.
+ * scroller either, which would slide the focused tile away from the reader. A walk
+ * across to a column past the board's edge brings that column in (`walkFocus`).
  */
 function walked(event: KeyboardEvent, index: number) {
   if (!WALKS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
     return
   event.preventDefault()
-  target(event.key, index)?.focus()
+  walkFocus(target(event.key, index))
 }
 
 /** Focus the tile drawn at `index`, as the cell does with the first one it reveals. */

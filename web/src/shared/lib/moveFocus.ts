@@ -23,3 +23,15 @@ export function moveFocus(
   if (!target) return
   target.focus(takesTyping(target) ? options : { ...options, focusVisible: !pressedLast() })
 }
+
+/**
+ * Takes focus where the reader walked with the arrows, and shows it by the nearest edge both
+ * ways: a walk may go across a frame that scrolls sideways, to a column or a cell past its end,
+ * which a scripted focus otherwise leaves where it stood (`scriptedFocus`). Ringed as
+ * `moveFocus` rings.
+ */
+export function walkFocus(target: HTMLElement | SVGElement | null | undefined) {
+  if (!target) return
+  moveFocus(target, { preventScroll: true })
+  target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+}

@@ -3510,7 +3510,12 @@ title in the list of everything waiting describe or name the question, which tak
 and the ring. Words that stay where focus lands, because taking it to their whole would send
 the next Tab to the start of a long form — why a write or a read did not go through, a reply
 just written, a list's heading — carry `.focus-landing` from `base.css`: the ring stands 4px
-clear of the words and turns at a control's corner, so one line never closes into a capsule. A text field shows focus by turning its own
+clear of the words and turns at a control's corner, so one line never closes into a capsule.
+Wherever the interface puts focus, a frame that scrolls sideways stays where the reader left
+it, and what takes focus is shown up and down by the nearest edge: opening the board's folded
+column at 390px once slid the board 441px to centre the button that folds it again, and the
+tiles' links went off the screen. Only a walk with the arrows takes a frame across, as far as
+the place walked to needs. A text field shows focus by turning its own
 edge the focus colour, for a press as for Tab, and that colour holds 3:1 on every
 ground and fill it stands against.
 
