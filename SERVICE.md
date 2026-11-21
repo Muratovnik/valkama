@@ -41,6 +41,13 @@ with `git archive` into the releases directory (`--releases` overrides it):
 - macOS/Linux: `$XDG_DATA_HOME/valkama/releases/<commit>` or
   `~/.local/share/valkama/releases/<commit>`
 
+A directory a release's source archive was unpacked into has no `.git`. There
+it writes the commit the archive was built from, which the archive's
+`valkama-source.json` records with the SHA-256 of every file it holds. Each file
+is checked against the record as it is copied: a changed or missing one is
+refused by name, one the record does not list is not copied, and `--revision`
+accepts only that commit.
+
 Only committed files reach a release, so an unfinished edit in the checkout
 cannot break or migrate anything a client session opens. Each new client session
 spawns its own server, and that server opens the live store; with a pinned

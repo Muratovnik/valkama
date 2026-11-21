@@ -18,7 +18,7 @@ directory, and the MCP server only exists while a client is talking to it.
 | | Needed for | Version |
 | --- | --- | --- |
 | Python | the server, the MCP tools, the CLI | 3.11 or newer |
-| Git | cloning, and `launcher install`, which pins a commit of the clone | any |
+| Git | cloning, and `launcher install` from a clone; not for a release's source archive | any |
 | Node.js | rebuilding the web UI or the desktop app | 22.22.2+ or 24.15+ (only if you build) |
 
 The server and launcher import **nothing outside the Python standard library** —
@@ -43,10 +43,12 @@ git clone https://github.com/Muratovnik/valkama.git
 cd valkama
 ```
 
-The launcher in the next step pins a commit of this clone, so it needs a Git
-clone. A release's `valkama-<version>-source.zip` holds the Python service and
-the built web UI without Git history; it does not need Node.js to run, but
-`launcher install` refuses a directory that is not a Git checkout.
+Or download a release's `valkama-<version>-source.zip`: the Python service and
+the built web UI without Git history, so it needs neither Git nor Node.js.
+Unpack it whole into an empty directory and run the next step there. The archive
+records the commit it was built from, and `python valkama.py launcher install`
+pins that commit after checking every file against the record; a file changed
+or missing since is refused by name.
 
 ### 2. Install the stable launcher
 
@@ -61,8 +63,9 @@ register:
 - Windows: `%LOCALAPPDATA%\Valkama\bin\valkama.cmd`
 - macOS/Linux: `$XDG_BIN_HOME/valkama` or `~/.local/bin/valkama`
 
-That command runs a pinned release, a copy of the clone's current commit, so
-uncommitted work never reaches a client session. Run `launcher install` again to
+That command runs a pinned release, a copy of one commit (the clone's current
+one, or the archive's), so uncommitted work never reaches a client session. Run
+`launcher install` again to
 publish newer commits. [Installation and setup](docs/guides/installation.md#what-the-launcher-pins)
 explains releases, going back to one and moving the clone.
 
