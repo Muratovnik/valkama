@@ -11,7 +11,9 @@
  * the comma between them, as the bars and a hint say them (`besides`).
  *
  * The table lays the cell out (`SpendingTable`): its width, its ink when it holds the chosen
- * measure, and its place in the total row that stays at the panel's edge.
+ * measure, and its place in the total row that stays at the panel's edge. The cell is marked
+ * with its column's key (`data-measure`: a measure, `before`, `change` or a kind of tokens), for
+ * a reader of the page to find a column's cells by.
  */
 import { computed } from 'vue'
 
