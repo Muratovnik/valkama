@@ -38,7 +38,8 @@ from server.executions import artifacts
 from windows import release
 
 NAME = "record.json"
-FORMAT = 1
+#: 2 judges uncommitted changes by the files' content, which 1 did by Git's status.
+FORMAT = 2
 
 #: How each test step says how many tests it ran, by step name: unittest's closing
 #: line, Vitest's `Tests` line, and the `tests` count of `node --test`, in its spec
@@ -50,47 +51,75 @@ TEST_COUNTS: dict[str, re.Pattern[bytes]] = {
 }
 
 
-def _git_bytes(root: Path, *arguments: str) -> bytes:
+def _git_bytes(root: Path, *arguments: str, stdin: bytes | None = None) -> bytes:
     # A digest needs the exact bytes, whatever encoding a changed file is in, and
     # surrogateescape gives back every byte strict UTF-8 would refuse, unchanged.
     found = processes.run_text(
-        ["git", "-C", str(root), *arguments], encoding="utf-8", errors="surrogateescape"
+        ["git", "-C", str(root), *arguments],
+        encoding="utf-8",
+        errors="surrogateescape",
+        stdin=stdin,
     )
     if found.returncode != 0:
         raise OSError(f"git {' '.join(arguments)} failed in {root}: {found.stderr.strip()}")
     return found.stdout.encode("utf-8", "surrogateescape")
 
 
-def _changes(root: Path) -> str:
-    """One digest of every uncommitted change: the status, the diff and each untracked file."""
+def _names(listed: bytes) -> set[bytes]:
+    return {name for name in listed.split(b"\0") if name}
 
+
+def _path(top: Path, name: bytes) -> Path:
+    return top / name.decode("utf-8", "surrogateescape")
+
+
+def _changes(top: Path) -> str | None:
+    """One digest of every file that differs from the commit, or None when none does.
+
+    Judged by what is on disk: each path whose content is not the commit's, with
+    the blob that content would be, so staging it or not, and whether Git's status
+    shows untracked files, changes nothing. Git only proposes the paths: those the
+    diff with the commit names, renames split, and every untracked one.
+    """
+
+    proposed = _names(_git_bytes(top, "diff", "HEAD", "--name-only", "-z", "--no-renames"))
+    proposed |= _names(_git_bytes(top, "ls-files", "-z", "--others", "--exclude-standard"))
+    if not proposed:
+        return None
+    committed = {}
+    for entry in _names(_git_bytes(top, "ls-tree", "-r", "-z", "--full-tree", "HEAD")):
+        meta, name = entry.split(b"\t", 1)
+        committed[name] = meta.split()[2]
+    files = sorted(name for name in proposed if _path(top, name).is_file())
+    # Hashed as `git add` would store it, line-ending conversion included, and not written.
+    hashed = _git_bytes(
+        top, "hash-object", "--stdin-paths", stdin=b"".join(f + b"\n" for f in files)
+    )
+    blobs = dict(zip(files, hashed.split(), strict=True))
     digest = hashlib.sha256()
-    digest.update(_git_bytes(root, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
-    digest.update(_git_bytes(root, "diff", "HEAD", "--binary", "--no-ext-diff", "--no-textconv"))
-    untracked = _git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard")
-    for name in sorted(part for part in untracked.split(b"\0") if part):
-        digest.update(name + b"\0")
-        try:
-            content = (root / name.decode("utf-8", "surrogateescape")).read_bytes()
-        except OSError:
-            # A nested repository is listed as its directory; its name is all there is.
-            content = b""
-        digest.update(hashlib.sha256(content).digest())
-    return digest.hexdigest()
+    differs = False
+    for name in sorted(proposed):
+        # No blob: gone from disk, or a nested repository listed as its directory.
+        now = blobs.get(name) or (b"directory" if _path(top, name).exists() else b"gone")
+        if now != committed.get(name):
+            differs = True
+            digest.update(name + b"\0" + now + b"\0")
+    return digest.hexdigest() if differs else None
 
 
 def tree_state(root: Path) -> dict[str, object]:
-    """Which working tree `root` is, its commit, and whether and how it differs from it."""
+    """Which working tree `root` is, its commit, and whether and how its files differ from it."""
 
     found = artifacts.baseline(str(root))
     if found["quality"] != "observed":
         return {"worktree": git_worktrees.canonical(root), "head": "", "dirty": None}
+    changes = _changes(Path(found["repository"]))
     return {
         "worktree": found["repository"],
         "head": found["head"],
         "branch": found["branch"],
-        "dirty": found["dirty"],
-        "changes": _changes(root) if found["dirty"] else None,
+        "dirty": changes is not None,
+        "changes": changes,
     }
 
 
@@ -207,6 +236,11 @@ def check(path: Path, tree: Path) -> tuple[bool, str]:
         recorded, steps, result = record["tree"], record["steps"], record["result"]
     except (OSError, ValueError, KeyError, TypeError) as error:
         return False, f"refused: {path} is not a readable run record: {error}"
+    if record.get("format") != FORMAT:
+        return False, (
+            f"refused: {path} is a run record of format {record.get('format')},"
+            f" and this check compares a tree as format {FORMAT} records it"
+        )
     found = differences(recorded, tree_state(tree))
     if found:
         return False, f"refused: {path} does not describe {tree} as it is now: " + "; ".join(found)
