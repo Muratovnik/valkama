@@ -47,7 +47,7 @@ export type ValueRead =
     }
 
 /** The filters a value is read with: the page's, the value's dimension admitting it alone. */
-export const valueFilters = (
+const valueFilters = (
   filters: UsageFilters,
   by: UsageDimension,
   value: string | null,
