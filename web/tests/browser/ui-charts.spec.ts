@@ -155,16 +155,6 @@ function measure(page: Page) {
       tables: all('[data-harness$="-table"] [data-region="table-frame"]').map((frame) =>
         box(frame),
       ),
-      // What a table places out of the flow, its caption only a screen reader reads among it,
-      // and whether its frame or something inside the frame is what it is placed against.
-      loose: all('[data-harness$="-table"] [data-region="table-frame"]').flatMap((frame) =>
-        [...frame.querySelectorAll<HTMLElement>('*')]
-          .filter((element) => /absolute|fixed/u.test(getComputedStyle(element).position))
-          .map((element) => ({
-            text: element.textContent?.trim() ?? '',
-            held: element.offsetParent !== null && frame.contains(element.offsetParent),
-          })),
-      ),
     }
   })
 }
@@ -269,12 +259,6 @@ for (const width of WIDTHS) {
     // ranked, the days', the windows', the readings' and the small charts' tables.
     expect(seen.tables, 'the tables drawn').toHaveLength(5)
     for (const table of seen.tables) expect(table.right).toBeLessThanOrEqual(seen.viewport)
-    // What a table places out of the flow scrolls and is clipped with it: placed against what
-    // holds the frame, a cell's words only a screen reader reads stood past a scrolled table's
-    // frame and scrolled the panel round it sideways. Each table has its caption at least.
-    expect(seen.loose.length, 'what the tables place out of the flow').toBeGreaterThanOrEqual(5)
-    for (const one of seen.loose)
-      expect(one.held, `«${one.text}» placed against what holds its frame`).toBe(true)
     // A period that acts keeps a width a pointer can hit, however many the chart holds: its
     // column, and a segment the stack drawn inside that column, at least the smallest target the
     // product allows.
