@@ -17,6 +17,10 @@ checkouts are therefore distinguishable even at the same version.
 
 - **tests:** `python tests/run_record.py check DIR --require NAME` refuses a record with no step named `NAME` and fails one whose required step failed, naming the step; a worker of a parallel worktree records `typos` after each commit, and the integrator's check of that record requires it ([f5141fd](https://github.com/Muratovnik/valkama/commit/f5141fd5374b0738b8f7cff8a42b21a9393c9a21), [adc5475](https://github.com/Muratovnik/valkama/commit/adc54757bdd991df1b839785fd5b0e52d652e7e8))
 
+### Bug Fixes
+
+- **planning:** a close refused for a person's act (`person_spoke`) and the merge guard count what the closing agent was told: its own last write on the item, or the act its Valkama hook already handed it in a notice; another agent's write no longer counts as telling it, and without the hook's marks file the item's window decides as before. The refusal, the skill and the tool descriptions name the form that passes: a comment in a call of its own, then the close ([4b70680](https://github.com/Muratovnik/valkama/commit/4b706802f0e61b24306909af68dca9b353eecadf), [46cc522](https://github.com/Muratovnik/valkama/commit/46cc522281674871486dc8bebd8fa29f0e5dcb3d), [415a292](https://github.com/Muratovnik/valkama/commit/415a2929181f46f5a7ebe7d1c549fff2f6e7efd4))
+
 ### Performance Improvements
 
 - **planning:** the input schema of `apply_work_item_changes` spells out a comment's `list` and the `mentions` field once and points to them from `comments`, `summary.list` and `summary.mentions`, about 14 % shorter for every client that loads it; the arguments it accepts are unchanged ([edc9437](https://github.com/Muratovnik/valkama/commit/edc9437ec12cabd2a5ebfd75370e4c9759dbb368), [2a4af07](https://github.com/Muratovnik/valkama/commit/2a4af0714437eeffe254a9f04041094a35a14156))
