@@ -1,22 +1,27 @@
 /**
  * The graph's field with every title too long for its card and its frame, any other view of the
- * planning space with the titles a spec gives it, and what the specs of the whole words laid over
- * a cut text read off them: which cut text the pointer rests on, and where the whole words stand
- * against it.
+ * planning space with the titles a spec gives it, a card whose outcome a spec writes, and what the
+ * specs of the whole words laid over a cut text read off them: which cut text the pointer rests
+ * on, and where the whole words stand against it.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
+import { installDiscussionBackend } from './discussionBackend.ts'
 import { broadModel } from './graphFieldCamera.ts'
+import { projectScope, workItemRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 /** Run on after every title of the broad space, so the field's cards cut their titles. */
 const LONGER = ': a title that runs on past the two lines a card on the field gives it'
 
 /** The planning space's read as `reshape` leaves it, and the page opened at `url` in this window. */
-export async function openRead(
+async function openRead(
   page: Page,
   width: number,
   url: string,
@@ -118,3 +123,77 @@ export const standing = (page: Page) =>
       ? 'on its text'
       : `off by ${x.toFixed(1)}, ${y.toFixed(1)}, letters ${laid.height.toFixed(1)} over ${own.height.toFixed(1)}`
   }, ROOM)
+
+/** The whole words laid over a cut text. */
+export const whole = (page: Page) => page.locator('.whole-text')
+
+/**
+ * Marks `clamp`, a text its clamp must cut, and returns where its first letter's middle is, or
+ * null where the clamp leaves it whole: the whole words over it would prove nothing.
+ */
+export async function markClamp(clamp: Locator) {
+  await clamp.scrollIntoViewIfNeeded()
+  return clamp.evaluate((element: HTMLElement) => {
+    if (element.scrollHeight <= element.clientHeight + 1) return null
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node as Text
+      const at = text.data.search(/\S/u)
+      if (at < 0) continue
+      const range = document.createRange()
+      range.setStart(text, at)
+      range.setEnd(text, at + 1)
+      const { left, top, width, height } = range.getBoundingClientRect()
+      element.dataset.probeCut = ''
+      return { x: left + width / 2, y: top + height / 2 }
+    }
+    return null
+  })
+}
+
+/** The pointer away from everything, then resting on `point` past the wait of a hint. */
+export async function restAt(page: Page, point: { x: number; y: number }) {
+  const viewport = page.viewportSize() ?? { width: 0, height: 0 }
+  await page.mouse.move(viewport.width - 2, viewport.height - 2)
+  await expect(whole(page)).toHaveCount(0)
+  await page.mouse.move(point.x, point.y)
+  await page.clock.runFor(1000)
+}
+
+/** Longer than three lines of a board column, and than two lines of the card or the finder. */
+export const LONG_TITLE =
+  'Read an attached planning store that an older build wrote without migrating it, name every scope the read had to skip instead of dropping it, and say which of them a newer build can still open'
+
+/** The board, the item `workItemRef` names under `title` and `MAIN-265` under its short one. */
+export const openBoard = (page: Page, width: number, title = LONG_TITLE) =>
+  openRead(
+    page,
+    width,
+    serializePlatformRoute({ module_id: 'planning', scope: projectScope }),
+    (read) => {
+      for (const item of read.work_items as { reference: string; title: string }[])
+        if (item.reference === workItemRef.reference) item.title = title
+    },
+  )
+
+/** What was done, as an agent writes it: markdown, which the preview draws as words. */
+export const DONE =
+  'Shipped **the reader** for an attached store that an older build wrote, kept every scope it could not read in a list of its own instead of dropping it, named each in the card with the build that can still open it, and left the store as it found it'
+export const DONE_WORDS = DONE.replaceAll('**', '')
+
+/** The card of the item whose outcome is `done`, and the preview of that outcome on it. */
+export async function outcomePreview(page: Page, done: string) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const backend = await installDiscussionBackend(page)
+  backend.item.summary = { done, next: 'Review' }
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+    }),
+  )
+  const preview = page.locator('.drawer .outcome-preview-text')
+  await expect(preview).toBeVisible()
+  return preview
+}

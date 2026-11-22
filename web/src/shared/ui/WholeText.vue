@@ -9,7 +9,8 @@
  *   panel that widens the text leaves it whole; one that narrows it lays it again. A transform
  *   that moves or scales the text, as the graph's camera does, lays it again on the text, or takes
  *   it down where the text no longer stands in sight.
- * - Its first letter stands on the cut text's first letter, in that letter's type and ink, and it
+ * - Its first letter stands on the cut text's first letter, in the type and ink of the line that
+ *   letter stands in, never of a run such as code or a link the text starts with (`lineOf`), and it
  *   runs on to the right up to 8px short of the window's edge, wrapping by words only where the
  *   whole text does not fit there (`placeWhole`). On one line it covers its own line alone. Over
  *   a text a clamp cuts to its lines it takes the clamp's whole column and the clamp's alignment
@@ -22,7 +23,7 @@
  *   column's end, stood inside the column, narrower than it, broke words in two and left the
  *   clamp's second line showing beside them. Where the window has no room under it for all its
  *   lines, it stands higher, 8px short of the window's bottom edge.
- * - It is laid on the ground its text stands on, every see-through ground down to the first
+ * - It is laid on the ground its line stands on, every see-through ground down to the first
  *   opaque one laid together as the page lays them (`groundOf`), so over its own element it reads
  *   as the element's words running on, and a rim and a shadow mark where it lies over the rest of
  *   the page. Its ink and ground are read back from the page, never chosen here, which is why
@@ -35,7 +36,8 @@
  * - It fades in where it lies after the pointer's rest, and is there at once passing on from a
  *   neighbour, as every hint is.
  * - A text drawn in runs (`textRuns.ts`), as a work item's title is, is laid in the same runs, so
- *   its code reads as code over the cut code rather than as the backticks it was written in.
+ *   its code reads as code over the cut code rather than as the backticks it was written in, and
+ *   the rest in the line's type.
  * - It is drawn, not read: assistive technology reads the element's own words, which are whole
  *   in the page however the screen cuts them.
  */
@@ -61,7 +63,7 @@ import {
   tooltipOf,
 } from '@/shared/ui/tooltipAnchors.ts'
 
-/** What the whole text takes from the letter it starts on, so it is drawn in the same type. */
+/** What the whole text takes from the line it starts on, so it is drawn in the same type. */
 const TYPE = [
   'font-family',
   'font-feature-settings',
@@ -172,6 +174,30 @@ function groundOf(element: Element): string {
   return laid([canvas, ...grounds])?.color ?? canvas
 }
 
+/**
+ * The elements that set a run of a line's words apart in a look of their own: code, emphasis,
+ * strong words, a deletion and a link, as the runs of a title (`textRuns.ts`) and the inline half
+ * of a rich text (`RichInlines`) draw them.
+ */
+const RUNS = new Set(['A', 'CODE', 'DEL', 'EM', 'STRONG'])
+
+/**
+ * The element whose type, ink and ground are those of the line that `inked` draws a letter of
+ * inside `element`: `inked`, or, where that letter stands in a run laid in the line (`RUNS`), the
+ * element the outermost such run stands in. A box laid out on its own, as an inline block is,
+ * draws a line of its own, and nothing past it is looked at. Read from the run, the whole words of
+ * a title that starts with code were all set in code's type, and those of a preview that starts
+ * with a link all in the link's ink.
+ */
+function lineOf(inked: Element, element: HTMLElement): Element {
+  let line = inked
+  for (let box: Element | null = inked; box && box !== element; box = box.parentElement) {
+    if (getComputedStyle(box).display !== 'inline') break
+    if (RUNS.has(box.tagName)) line = box.parentElement ?? line
+  }
+  return line
+}
+
 /** How far in from its left edge `box`'s lines start, in px of its own type: its padding. */
 function padOf(box: HTMLElement): number {
   const style = getComputedStyle(box)
@@ -193,13 +219,14 @@ async function lay(element: HTMLElement) {
     return
   }
   laidFrom = letter.box
-  const style = getComputedStyle(letter.inked)
+  const line = lineOf(letter.inked, element)
+  const style = getComputedStyle(line)
   const drawn = element.getBoundingClientRect().width
   const scale = element.offsetWidth > 0 ? drawn / element.offsetWidth : 1
   look.value = {
     // The page computes one of the keywords the property takes.
     align: style.textAlign as CSSProperties['textAlign'],
-    ground: groundOf(letter.inked),
+    ground: groundOf(line),
     ink: style.color,
     scale: Math.abs(scale - 1) < 0.01 ? 1 : scale,
     type: Object.fromEntries(TYPE.map((name) => [name, style.getPropertyValue(name)])),

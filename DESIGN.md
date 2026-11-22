@@ -951,7 +951,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   below its element from the element's start, 6px off and at most 20rem wide, and above it only
   where the window has no room below; a name stands below its icon, centred. A cut text's
   hint stands nowhere beside it: its whole words are laid over the cut ones, the first letter
-  on the cut text's first letter in the same type and ink and on the ground under it, running
+  on the cut text's first letter in the type and ink of the line it stands in and on the ground
+  under that line, never in the look of a run the text starts with, as code, a link or emphasis
+  (taken from the run, a title that starts with code was set whole in code's type), running
   on to the right up to 8px short of the window's edge and wrapping by words only where the
   whole text does not fit there, so on one line it covers no other row; over a text a clamp
   cuts to its lines, as a graph card's title, a board tile's, an outcome's preview, a title in
@@ -1578,7 +1580,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   than its line breaks inside and stays in its box. Its lines are the title's own lines, so
   a surface that ends a title in an ellipsis or a clamp still does: drawn as a box of its
   own, one long word of code was one line to the board's clamp and its tile grew to six.
-  A cut title's whole words are laid in the same runs. Everything that is text rather than
+  A cut title's whole words are laid in the same runs, in the title's type, its code as
+  code, even where the title starts with it. Everything that is text rather than
   drawing holds the title as written, backticks included: a name or a hint attribute, a
   description, a download, and a copy — a selection inside a drawn title puts each piece
   of code it holds whole on the clipboard between its backticks. The list's find reads a
