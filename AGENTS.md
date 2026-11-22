@@ -76,15 +76,19 @@ split with it:
 
 - The worker of one worktree runs, right after each commit and each through
   `python tests/run_record.py run`, whose record its report cites: the targeted
-  tests of what the commit changed and `python tests/commit_subjects.py`;
-  when the commit touches `web/`, also `npm run lint`, `npm run typecheck`,
+  tests of what the commit changed, `python tests/commit_subjects.py` and
+  `typos`, the last as `python tests/run_record.py run --out DIR -- typos` so
+  the record holds a step named `typos`; when the commit touches `web/`, also `npm run lint`, `npm run typecheck`,
   `npm run check:ui-system` and `npm run lint:dead` there; an export a commit
   leaves unused fails nothing else short of the whole `npm test`. The worker
   does not run the whole browser
   suite, nor `python .github/relkit.pyz audit --history` after each commit: the
   history audit reads every commit, so it runs before publication, on the
   clean head about to be pushed.
-- The integrator runs the full list above and the whole browser suite once, on
+- The integrator accepts a worker's branch only on the record its report cites,
+  checked in that worktree with `python tests/run_record.py check DIR --tree
+  <the worktree> --require typos`, which refuses a record with no `typos` step.
+  The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
   The runner, `npm test` and the whole `unittest` suite go through one gate for

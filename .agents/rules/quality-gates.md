@@ -109,7 +109,10 @@ venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
 `LOCALAPPDATA`, `APPDATA` and `VALKAMA_DB`, and every step's exit code counts.
 `--only python` is the Python half; `--owner` is the audit with the owner policy.
 A report cites its `DIR/record.json`, which `python tests/run_record.py check`
-refuses for another tree or state. Use it instead of a wrapper of your own, and
+refuses for another tree or state, and, given `--require NAME`, for having no
+step of that name; a step that `run` records takes the name of its command's
+words, so `run --out DIR -- typos` is the step `typos` the integrator requires
+of a worker's record. Use it instead of a wrapper of your own, and
 `serve --out DIR` with `stop --out DIR` for a live check; a test compares its
 steps with `AGENTS.md`.
 It does not move `TEMP`, which is what keeps the suite's renames from failing
