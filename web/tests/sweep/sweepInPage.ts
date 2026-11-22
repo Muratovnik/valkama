@@ -189,6 +189,29 @@ function cut(element: Element): boolean {
 }
 
 /**
+ * The text an element shows, as it is written: each piece of code drawn in runs
+ * (`data-text-runs`, a piece of code a `code` there) between the backticks it was written between,
+ * as a hint's words (`data-tooltip`) and the names the API answers give hold it. Read as drawn, the
+ * name of a task whose title holds code was never the words it is marked with: a ranked row's
+ * name that stood whole read as words of a detail, whose hint must show, and the whole words over
+ * a cut name as no mark's.
+ */
+function written(element: Element): string {
+  if (!element.querySelector('[data-text-runs] code')) return element.textContent ?? ''
+  let text = ''
+  let open: Element | null = null
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const code = node.parentElement?.closest('[data-text-runs] code') ?? null
+    const inside = code && element.contains(code) ? code : null
+    if (inside !== open) text += `${open ? '`' : ''}${inside ? '`' : ''}`
+    open = inside
+    text += node.textContent ?? ''
+  }
+  return open ? `${text}\`` : text
+}
+
+/**
  * Whether a hint the pointer could raise there shows: one of words the element shows is held back
  * until they are cut, a `clipped` one or a detail that says nothing the screen does not, since a
  * detail says only what the screen does not.
@@ -199,7 +222,7 @@ function speaks(element: HTMLElement): boolean {
     return false
   const held =
     element.dataset.tooltipKind === 'clipped' ||
-    help.flat(element.textContent).includes(help.flat(element.dataset.tooltip))
+    help.flat(help.written(element)).includes(help.flat(element.dataset.tooltip))
   return !held || help.cut(element)
 }
 
@@ -409,11 +432,12 @@ function readSurface(aimed: string): Surface | null {
     (one) => help.shown(one) && getComputedStyle(one).opacity !== '0',
   )
   if (!surface) return null
-  const text = help.flat(surface.textContent)
+  // Both sides as written (`written`): a cut name's whole words are drawn in the runs it is.
+  const text = help.flat(help.written(surface))
   const marks = [...document.querySelectorAll<HTMLElement>('[data-sweep]')].map((one) => ({
     id: one.dataset.sweep ?? '',
     words: help.flat(one.dataset.tooltip),
-    own: help.flat(one.textContent),
+    own: help.flat(help.written(one)),
   }))
   const pointed = document.querySelector(`[data-sweep="${aimed}"]`)
   return {
@@ -425,8 +449,11 @@ function readSurface(aimed: string): Surface | null {
   }
 }
 
-/** The helpers of this module, by name, as `window.sweepHelpers` holds them. */
-const hintHelpers = {
+/**
+ * The helpers of this module, by name, as `window.sweepHelpers` holds them; a component spec
+ * installs them as they are, where a page is given them as a script (`helperScript`).
+ */
+export const hintHelpers = {
   alongBand,
   box,
   classes,
@@ -450,6 +477,7 @@ const hintHelpers = {
   shown,
   speaks,
   step,
+  written,
 }
 
 /** The script that installs the helpers above as `window.sweepHelpers` in every page of a context. */
