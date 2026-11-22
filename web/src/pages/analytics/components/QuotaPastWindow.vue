@@ -374,11 +374,13 @@ async function close() {
 /* The line under the window starts where the lines above it do: the margin takes back the inset
    the button's fill keeps under the pointer. A window narrower than the line, as a phone-wide one
    is, gives it a second row from the same start: kept on one row, the longest line stood 97px past
-   such a window and scrolled the panel sideways. */
+   such a window and scrolled the panel sideways. Its rows stand as far apart as the window's own
+   lines of detail above it; a button's own leading set them 1.3px closer. */
 .quota-past-line {
   justify-self: start;
   max-width: calc(100% + var(--space-fill-inset));
   margin-inline-start: calc(-1 * var(--space-fill-inset));
+  line-height: var(--line-height-snug);
   text-align: start;
   white-space: normal;
 }

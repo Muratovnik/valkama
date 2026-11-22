@@ -15,7 +15,7 @@
  * latest window of the kind that reset at or before the moment asked by.
  */
 import { expect } from '@playwright/test'
-import type { Page, TestInfo } from '@playwright/test'
+import type { Locator, Page, TestInfo } from '@playwright/test'
 
 import type { Quota, QuotaEndedWindow, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 
@@ -261,6 +261,11 @@ function workWeekReadings() {
   return week && 'readings' in week ? week.readings.length : 0
 }
 
+/** How far apart the rows of a line of words stand: its computed leading. */
+function leading(line: Locator) {
+  return line.evaluate((node) => getComputedStyle(node).lineHeight)
+}
+
 /** How many share windows of these kinds the fixture gives, and how many say no window before. */
 function counted(kinds: string[]) {
   const windows = withPrevious()
@@ -323,9 +328,12 @@ for (const lang of ['en', 'ru'] as const) {
       }
       // The longest line is among those judged.
       await page.goto(pageAt({ by: 'quota_five_hour' }))
-      await expect(
-        page.locator('[data-account="Work"] [data-window="five_hour"] [data-past="line"]'),
-      ).toHaveText(FIVE_HOUR_LINE[lang])
+      const longest = page.locator(
+        '[data-account="Work"] [data-window="five_hour"] [data-past="line"]',
+      )
+      await expect(longest).toHaveText(FIVE_HOUR_LINE[lang])
+      // Its two rows stand as far apart as the lines of words beside it, the line with no window.
+      expect(await leading(longest)).toBe(await leading(page.locator('[data-past="none"]').first()))
     })
   })
 }
