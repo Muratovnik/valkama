@@ -4,7 +4,8 @@
 work-item ref, binding and relation points at, and the product that owns the
 store. It is written once, read on every route that has to tell two stores
 apart, and changed by exactly one sanctioned migration: a rename of this
-product.
+product. Beside it, `database_file` names the file a connection opened, the one
+answer every module that keeps files beside the store reads.
 """
 
 from __future__ import annotations
@@ -47,6 +48,20 @@ CREATE TABLE IF NOT EXISTS platform_store_metadata(
     created_at TEXT NOT NULL
 );
 """
+
+
+def database_file(conn: sqlite3.Connection) -> str:
+    """The file of the store this connection opened; empty for a store in memory.
+
+    The files a store keeps beside it, the pictures, the hook's call pairs and
+    marks, are found from here rather than from the configuration, so they follow
+    the store a connection really opened. An error of the connection is raised.
+    """
+
+    for row in conn.execute("PRAGMA database_list"):
+        if row[1] == "main":
+            return str(row[2] or "")
+    return ""
 
 
 def _require_connection(conn):

@@ -15,6 +15,7 @@ from __future__ import annotations
 import sqlite3
 
 from ..hooks import marks
+from ..store_identity import metadata as store_metadata
 from . import calls, leases, model, person_events, states
 
 Finding = tuple[str, str]
@@ -184,22 +185,13 @@ def _told_through(
     identity = calls.current()
     if identity is None or identity.state != calls.CONFIRMED or not identity.session_id:
         return None
-    store = _store_file(conn)
+    store = store_metadata.database_file(conn)
     if not store:
         return None
     through = marks.told_through(store, identity.session_id, identity.agent_id, work_item_id)
     if through is None:
         return None
     return (identity.session_id, identity.agent_id), through
-
-
-def _store_file(conn: sqlite3.Connection) -> str:
-    """The file of the store this connection opened; empty for one in memory."""
-
-    for row in conn.execute("PRAGMA database_list"):
-        if row[1] == "main":
-            return str(row[2] or "")
-    return ""
 
 
 def _lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
