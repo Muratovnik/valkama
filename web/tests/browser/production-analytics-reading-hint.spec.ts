@@ -286,6 +286,9 @@ test("a reading's hint takes its side by the mark as it is drawn pointed at, at 
   // Across these widths a reading's room on the right passes zero: the side was once taken by
   // the mark before the pointer drew it larger and by a width measured without the tabular
   // figures the hint is drawn in, and a hint stood 2.4px out of its line's frame on the right.
+  // The walk points at every reading at 36 widths: about 21 s alone, and a full suite on a busy
+  // machine pushed it past the default 30 s.
+  test.setTimeout(90_000)
   await openFiveHours(page, 400)
   const read: (Awaited<ReturnType<typeof sidesOn>>[number] & { width: number })[] = []
   for (let width = 400; width >= 330; width -= 2) {
