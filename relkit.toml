@@ -50,6 +50,10 @@ forbid_machine_observations = false
 # configured state, not a failure. The audit holds every workflow job to that.
 hosted_ci = "public-only"
 betterleaks_config = ".betterleaks.toml"
+# The source archive's tests feed its reader paths built to leave the archive,
+# so the structural path rules cannot judge that file. Owner values, owner
+# workflows, private patterns and the secret scanner still read it.
+exclude = ["tests/test_source_archive.py"]
 
 [exposure.providers.AgentMemory]
 role = "product-data-provider"
