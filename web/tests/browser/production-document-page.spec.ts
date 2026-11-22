@@ -9,9 +9,9 @@ import {
   linkIn,
   openPage,
   SESSION,
-  shot,
   target,
 } from './documentPageSurface.ts'
+import { requestedShot } from './keptShots.ts'
 import { asked } from './questionBackend.ts'
 import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
@@ -289,18 +289,18 @@ for (const [locale, gone, missing] of [
         }
         await expect(target(page)).toBeInViewport()
         await stays()
-        await shot(page, `${name}-anchor`)
+        await requestedShot(page, `${name}-anchor`)
         await body.evaluate((node) => node.scrollTo({ top: 0 }))
-        await shot(page, `${name}-top`)
+        await requestedShot(page, `${name}-top`)
 
         await page.goto(addressOf('docs/plan.md', '#kb:gone'))
         await expect(page.getByRole('status').first()).toContainText(missing)
         await stays()
-        await shot(page, `${name}-anchor-missing`)
+        await requestedShot(page, `${name}-anchor-missing`)
 
         await page.goto(addressOf('docs/gone.md'))
         await expect(page.locator('main')).toContainText(gone)
-        await shot(page, `${name}-refused`)
+        await requestedShot(page, `${name}-refused`)
       })
     }
   })

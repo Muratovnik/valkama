@@ -2,14 +2,8 @@ import { expect } from '@playwright/test'
 import type { BrowserContext, Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import {
-  addressOf,
-  installDocuments,
-  linkIn,
-  openPage,
-  shot,
-  target,
-} from './documentPageSurface.ts'
+import { addressOf, installDocuments, linkIn, openPage, target } from './documentPageSurface.ts'
+import { requestedShot } from './keptShots.ts'
 import { test } from './test.ts'
 
 /**
@@ -144,7 +138,7 @@ test.describe('in a forced palette', () => {
     expect(opened.mark).not.toBe(opened.ground)
     expect(opened.gap).toBe(opened.ground)
     expect(opened.ring).toBe(opened.beyond)
-    await shot(page, 'forced-1280')
+    await requestedShot(page, 'forced-1280')
 
     // Sent there by a key: the ring the reader follows is drawn too.
     await linkIn(page, 'notes.md').focus()
@@ -157,6 +151,6 @@ test.describe('in a forced palette', () => {
     const pressed = await edges(page, context, target(page))
     expect(pressed.mark).not.toBe(pressed.ground)
     expect(pressed.ring).not.toBe(pressed.beyond)
-    await shot(page, 'forced-1280-ring')
+    await requestedShot(page, 'forced-1280-ring')
   })
 })

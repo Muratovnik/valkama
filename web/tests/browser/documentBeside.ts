@@ -2,6 +2,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { aCardAsking, LINK } from './documentBackend.ts'
+import { requestedShot, shotsRequested } from './keptShots.ts'
 
 /** What the journeys of a document beside what it was opened from measure and press. */
 
@@ -23,14 +24,13 @@ export function paneOf(page: Page) {
   }
 }
 
-/** Where a shot goes when a person asks for shots: with whatever was moving at rest. */
+/** A shot a person asked for (`requestedShot`), taken with whatever was moving at rest. */
 export async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (!folder) return
+  if (!shotsRequested()) return
   await page.waitForFunction(() =>
     document.getAnimations().every(({ playState }) => playState !== 'running'),
   )
-  await page.screenshot({ path: `${folder}/${name}.png` })
+  await requestedShot(page, name)
 }
 
 export async function settled(surface: Locator) {

@@ -16,7 +16,13 @@ reuses a server, so a second checkout running it at the same time sets
 `VALKAMA_BROWSER_PORT` to another harness port; the app takes the next one. It
 builds the app into the ignored `web/test-results/<port>/app` and keeps the run's
 traces in `web/test-results/<port>/results`, so a run leaves the committed
-`web/dist` as it was. The `server-` specs, run with `VALKAMA_BROWSER_STORE`, are
+`web/dist` as it was. Playwright empties `results` when the next run starts and
+writes an attachment given as a body nowhere, so the suite's `test` copies what
+each test wrote into its output directory and every body attachment into
+`web/test-results/<port>/shots/<run>/`, named `<spec>__<name>`; the ten newest
+runs of a port keep theirs, and a run's end says where its files are. A shot taken
+only when `VALKAMA_SHOT_DIR` names a folder goes there by `requestedShot`, under
+the same `<spec>__` prefix. The `server-` specs, run with `VALKAMA_BROWSER_STORE`, are
 the exception: the Python server serves `web/dist` alone, so they build there.
 Each command below runs in `web/`:
 

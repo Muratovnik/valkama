@@ -5,7 +5,8 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { answerFilePlans, copiedIn, keepCopies, noticeOf } from './documentEditorPlan.ts'
-import { openPage, shot } from './documentPageSurface.ts'
+import { openPage } from './documentPageSurface.ts'
+import { requestedShot } from './keptShots.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -305,6 +306,6 @@ for (const width of [1280, 390]) {
     await expect(noticeOf(page)).toHaveText('Там ничего нет. Путь скопирован')
     expect(await copiedIn(page)).toEqual(['docs/plan.md'])
     await expectNoSilentClipping(page, `Russian document page at ${width}px`)
-    await shot(page, `doc-${width}-ru`)
+    await requestedShot(page, `doc-${width}-ru`)
   })
 }

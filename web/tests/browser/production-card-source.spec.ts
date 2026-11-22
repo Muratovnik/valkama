@@ -6,6 +6,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { requestedShot } from './keptShots.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { PLAN_PATH } from './planDocumentFixture.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
@@ -84,12 +85,6 @@ async function expectViewerAtAnchor(page: Page) {
   await expect
     .poll(() => viewer.locator('.document-body').evaluate((n) => n.scrollTop))
     .toBeGreaterThan(0)
-}
-
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
 }
 
 for (const place of ['browser', 'app'] as const) {
@@ -210,14 +205,14 @@ for (const width of [1280, 390]) {
       test('a plan reads and opens', async ({ page }) => {
         const drawer = await openCard(page, { locale, width })
         await expect(drawer.locator('.identity-source svg.lucide-file-text')).toBeVisible()
-        await shot(page, `open-head-${width}-${locale}`)
+        await requestedShot(page, `open-head-${width}-${locale}`)
         await fits(page, 'the mark')
         const row = await toRelations(drawer, relations)
-        await shot(page, `open-relations-${width}-${locale}`)
+        await requestedShot(page, `open-relations-${width}-${locale}`)
         await fits(page, 'the row')
         await row.getByRole('link').click()
         await expectViewerAtAnchor(page)
-        await shot(page, `open-viewer-${width}-${locale}`)
+        await requestedShot(page, `open-viewer-${width}-${locale}`)
       })
 
       test('a source that is gone reads and copies', async ({ page }) => {
@@ -226,10 +221,10 @@ for (const width of [1280, 390]) {
         const drawer = await openCard(page, { locale, width, source: gone })
         await drawer.locator('.identity-source').click()
         await expect(page.locator('.notice')).toBeVisible()
-        await shot(page, `gone-head-${width}-${locale}`)
+        await requestedShot(page, `gone-head-${width}-${locale}`)
         await fits(page, 'the mark that copies')
         await toRelations(drawer, relations)
-        await shot(page, `gone-relations-${width}-${locale}`)
+        await requestedShot(page, `gone-relations-${width}-${locale}`)
         await fits(page, 'the row that copies')
       })
 
@@ -240,11 +235,11 @@ for (const width of [1280, 390]) {
           source: 'Notion: the migration plan',
         })
         await expect(drawer.locator('.identity-source')).toHaveCount(0)
-        await shot(page, `words-head-${width}-${locale}`)
+        await requestedShot(page, `words-head-${width}-${locale}`)
         const row = await toRelations(drawer, relations)
         await expect(row.getByRole('button')).toHaveCount(0)
         await expect(row.getByRole('link')).toHaveCount(0)
-        await shot(page, `words-relations-${width}-${locale}`)
+        await requestedShot(page, `words-relations-${width}-${locale}`)
         await fits(page, 'the words')
       })
     })

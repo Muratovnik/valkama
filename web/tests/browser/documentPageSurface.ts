@@ -108,9 +108,3 @@ export const linkIn = (scope: Locator | Page, path: string) =>
   scope.getByRole('link', { name: `Open the document in Valkama: ${path}` })
 
 export const target = (page: Page) => page.locator('.document-block.is-target')
-
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-export async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
-}

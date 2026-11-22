@@ -19,6 +19,12 @@ export const appBuild = `test-results/${harnessPort}/app`
  */
 export const runResults = `test-results/${harnessPort}/results`
 
+/**
+ * What the tests of the newest runs wrote and attached, one directory per run, kept past
+ * the next run as `results` is not (`keptShots.ts`).
+ */
+export const runShots = `test-results/${harnessPort}/shots`
+
 /** The `index.html` this run built, as read from disk, and when it was written. */
 export interface BuiltIndex {
   html: string

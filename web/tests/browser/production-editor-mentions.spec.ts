@@ -4,6 +4,7 @@ import type { Locator, Page } from '@playwright/test'
 import { installDocuments } from './documentBackend.ts'
 import { openCard } from './editorPage.ts'
 import { wholeText, wholeTextOnTop } from './hintFramesPage.ts'
+import { requestedShot } from './keptShots.ts'
 import { planningSpace } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -129,12 +130,6 @@ test('@ offers tasks and files; a task is told, a file is a link that opens, and
 const LONG = 'docs/plans/2026/a-file-name-long-enough-to-crowd-out-everything-beside-it.md'
 const LINE = `A line found in the file, ${'long enough to run past any width the list takes, '.repeat(3)}`
 
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-async function shot(list: Locator, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await list.screenshot({ path: `${folder}/${name}.png` })
-}
-
 /**
  * Each row as measured: how far it stands past the list's inner edges, how far its name
  * runs into its title, how far any part runs past its end, and the name's share of it.
@@ -171,7 +166,7 @@ for (const width of [390, 1280]) {
     await comment.click()
     await page.keyboard.type('@pl')
     await expect(list.getByRole('option')).toHaveCount(3)
-    await shot(list, `mentions-${width}`)
+    await requestedShot(list, `mentions-${width}`)
 
     const rows = await measureRows(list)
     // Inside the list, the name before the title, and nothing past the row's end.

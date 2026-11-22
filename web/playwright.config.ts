@@ -46,6 +46,8 @@ export default store
       testDir: specs,
       testIgnore,
       outputDir,
+      // Before the first spec: this run's directory of kept files (`keptShots.ts`).
+      globalSetup: join(specs, 'keptShots.setup.ts'),
       fullyParallel: false,
       retries: 0,
       reporter: 'line',
@@ -69,8 +71,9 @@ export default store
       testDir: specs,
       testIgnore,
       outputDir,
-      // Before the first spec: the app port serves the bundle this run has just built.
-      globalSetup: join(specs, 'servedApp.setup.ts'),
+      // Before the first spec: this run's directory of kept files (`keptShots.ts`), and the
+      // app port serving the bundle this run has just built.
+      globalSetup: [join(specs, 'keptShots.setup.ts'), join(specs, 'servedApp.setup.ts')],
       fullyParallel: false,
       retries: 0,
       reporter: 'line',

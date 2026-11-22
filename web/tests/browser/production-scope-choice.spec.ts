@@ -13,7 +13,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { shot } from './documentPageSurface.ts'
+import { requestedShot } from './keptShots.ts'
 import {
   blockedWorkItem,
   dataScopeId,
@@ -156,7 +156,7 @@ for (const width of [1280, 760, 390]) {
         await expect(surface).toContainText(workItem.title)
         await expect(surface).toContainText(blockedWorkItem.title)
         await expect(projectChoice(page)).toContainText('Все проекты')
-        await shot(page, `scope-space-${view}-${width}`)
+        await requestedShot(page, `scope-space-${view}-${width}`)
 
         await choose(projectChoice(page), page, /Second project/u)
         await expect(page).toHaveURL(
@@ -207,7 +207,7 @@ for (const width of [1280, 760, 390]) {
       await projectChoice(page).click()
       const side = page.getByRole('option', { name: /Side project/u })
       await expect(side).toContainText('SIDE')
-      await shot(page, `scope-projects-${width}`)
+      await requestedShot(page, `scope-projects-${width}`)
       await page.keyboard.press('Escape')
 
       // A space with one project has nothing to narrow.
@@ -225,7 +225,7 @@ for (const width of [1280, 760, 390]) {
       const recovery = page.locator('.route-recovery')
       await expect(recovery).toContainText('Недоступно')
       await expect(recovery).toContainText('Адрес с проектом больше не открывается')
-      await shot(page, `scope-retired-${width}`)
+      await requestedShot(page, `scope-retired-${width}`)
 
       await recovery.getByRole('button', { name: 'Выбрать пространство' }).click()
       await expect(page.getByRole('listbox')).toBeVisible()
