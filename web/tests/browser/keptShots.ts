@@ -50,9 +50,15 @@ function specName(file: string): string {
   return basename(file).replace(/\.spec\.[cm]?[jt]s$/u, '')
 }
 
-/** The name a kept file goes by: its spec's, then the one its test gave it, folders and all. */
+/**
+ * The name a kept file goes by: its spec's, then the one its test gave it, folders and all.
+ * An attachment's name is free text. On Windows a `:` in it writes the body into a hidden
+ * stream of another file and `?`, `*` and the rest fail the test, so each character a
+ * Windows file name may not hold becomes `_`.
+ */
 export function keptName(specFile: string, name: string): string {
-  return `${specName(specFile)}__${name.replaceAll(/[/\\]/gu, '__')}`
+  const kept = name.replaceAll(/[/\\]/gu, '__').replaceAll(/[\u{0}-\u{1F}"*:<>?|]/gu, '_')
+  return `${specName(specFile)}__${kept}`
 }
 
 const EXTENSIONS: Readonly<Record<string, string>> = {

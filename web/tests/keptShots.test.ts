@@ -35,6 +35,12 @@ describe('the name a kept file goes by', () => {
     expect(keptName('a.spec.ts', 'board/lane-390.png')).toBe('a__board__lane-390.png')
   })
 
+  it('writes a character no Windows file name may hold as _', () => {
+    expect(keptName('a.spec.ts', 'Details: model "a" <1|2>? *\t.json')).toBe(
+      'a__Details_ model _a_ _1_2__ __.json',
+    )
+  })
+
   it("keeps an attachment's own extension, else takes its type's", () => {
     expect(attachmentFile('scrollbar-390.png', 'image/png')).toBe('scrollbar-390.png')
     expect(attachmentFile('measurements-390', 'application/json')).toBe('measurements-390.json')
@@ -113,6 +119,18 @@ describe('keeping one test', () => {
       keepTestOutput({ attachments: [], file, outputDir }, run)
       expect(readFileSync(join(run, 'production-list__list-1280.png'), 'utf8')).toBe('shot')
       expect(readFileSync(join(run, 'production-list__list-1280~2.png'), 'utf8')).toBe('second')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps an attachment whose name no Windows file name may hold', () => {
+    const root = mkdtempSync(join(tmpdir(), 'valkama-kept-'))
+    try {
+      const run = join(root, 'shots', runs)
+      const named = [{ body: Buffer.from('x'), contentType: 'text/plain', name: 'Details: a?' }]
+      keepTestOutput({ attachments: named, file, outputDir: join(root, 'none') }, run)
+      expect(readdirSync(run)).toEqual(['production-list__Details_ a_.txt'])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
