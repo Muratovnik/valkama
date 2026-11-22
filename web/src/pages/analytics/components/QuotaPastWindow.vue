@@ -385,7 +385,13 @@ async function close() {
   white-space: normal;
 }
 
+/* The line with no window stands as tall as the line with one and its words in its middle, as a
+   button's stand in a control's height: a window beside it on the same row shows its line as that
+   button, and the words of the two stood 5.5px apart. */
 .quota-past-none {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-control-inline);
   white-space: nowrap;
 }
 </style>

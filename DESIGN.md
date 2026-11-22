@@ -3144,7 +3144,8 @@ anyone asked.
 Under every window of a share stands one quiet line of how the window before it ended, as the
 answer's `previous` says: «Previous window: until Nov 7, 14:30 — 9%», the moment it reset and its
 last share, with «ran out» where it did; or «Previous window: no readings» where
-the store keeps none, which is words and no control. Where the step line over it holds that window
+the store keeps none, which is words and no control, as tall as the line with a window and its
+words level with that button's in a window beside it. Where the step line over it holds that window
 already, as it does over a period longer than the window, no such line stands: it named a window
 drawn right above it. The line is one row, never wrapped or cut,
 at 1440 and 1024 pixels; a phone-wide window narrower than the line gives it a second row from

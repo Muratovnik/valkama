@@ -266,6 +266,18 @@ function leading(line: Locator) {
   return line.evaluate((node) => getComputedStyle(node).lineHeight)
 }
 
+/** Where a line's box starts and where its words start, from the page's top, in pixels. */
+function wordsTop(line: Locator) {
+  return line.evaluate((node) => {
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    return {
+      box: node.getBoundingClientRect().top,
+      words: range.getBoundingClientRect().top,
+    }
+  })
+}
+
 /** How many share windows of these kinds the fixture gives, and how many say no window before. */
 function counted(kinds: string[]) {
   const windows = withPrevious()
@@ -294,9 +306,16 @@ test('the line under a window names how the window before it ended, or that none
   await expect(panel.getByRole('button', { name: 'Previous window: no readings' })).toHaveCount(0)
 
   await page.goto(pageAt({ by: 'quota_week' }))
-  await expect(
-    panel.locator('[data-account="Work"] [data-window="week"] [data-past="line"]'),
-  ).toHaveText('Previous window: until Nov 7, 14:30 — 9%')
+  const weekLine = panel.locator('[data-account="Work"] [data-window="week"] [data-past="line"]')
+  await expect(weekLine).toHaveText('Previous window: until Nov 7, 14:30 — 9%')
+  // Beside it, on the same row, «Work»'s model week has none: its words stand level with the
+  // button's, whose words stand in the middle of a control's height.
+  const modelNone = panel.locator(
+    '[data-account="Work"] [data-window="week_model"] [data-past="none"]',
+  )
+  const [button, words] = await Promise.all([wordsTop(weekLine), wordsTop(modelNone)])
+  expect(words.box, 'the two lines stand on one row').toBeCloseTo(button.box, 1)
+  expect(words.words).toBeCloseTo(button.words, 1)
 })
 
 for (const lang of ['en', 'ru'] as const) {
