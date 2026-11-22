@@ -13,6 +13,9 @@ sources no longer build. The copy is removed when check ends, without entering a
 link inside it. The checkout's own `node_modules`, a directory or a link, is not
 read or changed.
 The desktop installer is a window for the source service, not a bundled server.
+Build installs and packs it in a copy of `desktop/` and `windows/` inside its
+work directory, never in the snapshot, which Release Kit cleans only of what it
+wrote itself.
 The source archive has no Git history, so build writes into it the commit Release
 Kit names and the digest of every file (`server/source_archive.py`), which is what
 lets `launcher install` pin an unpacked archive; smoke checks that record.
@@ -56,6 +59,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NPM = "npm.cmd" if sys.platform == "win32" else "npm"
 #: The directories holding an npm package the gates run.
 NPM_PACKAGES = ("web", "desktop")
+#: The top-level directories `npm run dist` reads, which build copies as siblings.
+DIST_PACKAGES = ("desktop", "windows")
 SKIP_DIRS = frozenset(
     {".git", ".cache", ".private", ".state", "tmp", "node_modules", "release", "__pycache__"}
 )
@@ -738,7 +743,36 @@ def write_source_archive(
         raise
 
 
+def copy_dist_sources(root: Path, files: list[Path], copy: Path) -> Path:
+    """Copy the files of `root` that `npm run dist` reads into `copy`; return its desktop package.
+
+    Those are `desktop/` and, beside it, `windows/`: electron-builder's config in
+    `desktop/package.json` names the icon `../windows/valkama.ico`, so the two stay
+    siblings. `files` is the source archive's list, which holds no `node_modules`
+    and no `release` output, so the installer is built from what the archive
+    ships. Build runs in a snapshot without Git, where `copy_sources` cannot list.
+    """
+
+    copy.mkdir(parents=True)
+    for path in files:
+        relative = path.relative_to(root)
+        if relative.parts[0] in DIST_PACKAGES:
+            target = copy / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+    return copy / "desktop"
+
+
 def build(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
+    """Write the source archive from `ROOT` and build the installer from a copy in `work_dir`.
+
+    `ROOT` is Release Kit's snapshot, and Release Kit removes from it only what it
+    wrote itself, so an install there left the desktop `node_modules` behind after
+    every preparation. The install and the build run in `work_dir`, which Release
+    Kit discards whole after a run that succeeded and keeps after one that failed,
+    as the diagnostic; build therefore leaves the copy to it.
+    """
+
     require_version(expected)
     if sys.platform != "win32":
         raise RuntimeError("Windows NSIS build requires Windows")
@@ -746,16 +780,18 @@ def build(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
         raise ValueError("release asset directory must be empty")
     assets.mkdir(parents=True, exist_ok=True)
     source = assets / f"valkama-{expected}-source.zip"
-    write_source_archive(source, ROOT, source_files(), commit, expected)
-    sys.stdout.write("release build: npm ci\n")
+    files = source_files()
+    write_source_archive(source, ROOT, files, commit, expected)
+    desktop = copy_dist_sources(ROOT, files, work_dir / "desktop-sources")
+    sys.stdout.write(f"release build: npm ci, in a copy of the desktop sources, {desktop}\n")
     sys.stdout.flush()
-    subprocess.run((NPM, "ci"), cwd=ROOT / "desktop", check=True)
+    subprocess.run((NPM, "ci"), cwd=desktop, check=True)
     sys.stdout.write("release build: npm run dist\n")
     sys.stdout.flush()
     build_output = work_dir / "desktop-build"
     subprocess.run(
         (NPM, "run", "dist", "--", f"--config.directories.output={build_output}"),
-        cwd=ROOT / "desktop",
+        cwd=desktop,
         check=True,
     )
     installer_name = f"Valkama Setup {expected}.exe"
