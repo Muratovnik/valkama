@@ -28,6 +28,7 @@ from hashlib import sha256
 from typing import NamedTuple
 
 from .. import atomic_files
+from ..store_identity import metadata as store_metadata
 from . import calls, model, read_model
 
 #: The largest picture taken, in bytes; the editor refuses a larger one before sending it.
@@ -91,9 +92,9 @@ def directory_beside(database: str) -> str:
 def directory(conn: sqlite3.Connection) -> str:
     """The pictures' directory of the store this connection opened."""
 
-    for row in conn.execute("PRAGMA database_list"):
-        if row[1] == "main" and row[2]:
-            return directory_beside(str(row[2]))
+    database = store_metadata.database_file(conn)
+    if database:
+        return directory_beside(database)
     raise ImageRefusedError(503, "unavailable", "this store has no file to keep pictures beside")
 
 

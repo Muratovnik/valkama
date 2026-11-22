@@ -1861,7 +1861,8 @@ revision bumps and refusals, so a closing transition is judged after the ticks
 and the summary sent with it. The call is still one write: what its earlier
 groups wrote does not count as the agent having read what a person did, so a
 `comment` sent beside a closing `transition` does not lift the
-[`person_spoke` guard](#a-close-over-what-a-person-did).
+[`person_spoke` guard](#a-close-over-what-a-person-did): the comment goes in a call
+of its own, and the close in the next.
 
 `checklist` sets the steps. A step sent
 with the text of a step the item has is that step: it keeps its `item_id`, its
@@ -2526,21 +2527,47 @@ HTTP write answers without it, and no schema of the interface changed.
 
 ### A close over what a person did
 
-An agent's transition into a terminal state, by `is_terminal`, is refused while
-the window is not empty, with the guard `person_spoke`. The refusal names the
-events, newest 20, with their text, so the agent can act on them. Writing
-anything to the item first -- a comment saying what it did about them -- empties
-the window and the close goes through; `force: true` carries it through as it
-does every guard and records `overridden` with `person_spoke`, and the answer
-still carries `from_person`. A `transition` group is judged the same way, with
-the window counted from before the batch.
+An agent's transition into a terminal state, by `is_terminal`, is refused with the
+guard `person_spoke` while a person did something on the item that the closing
+agent has not been told. The refusal names the events, newest 20, with their
+text, and the form that passes: a comment on the item saying what the agent did
+about them, in a call of its own, and the close in the next call. What a call
+itself writes does not count for its own close, so a `comment` group sent beside
+the closing `transition` leaves the refusal standing. `force: true` carries the
+close through as it does every guard and records `overridden` with
+`person_spoke`, and the answer still carries `from_person`.
+
+**What the agent has been told.** When the closing call proves its session and
+the client hook keeps a marks file for that session and agent (see
+[Where each agent's place is kept](hook-contract.md#where-each-agents-place-is-kept)),
+the agent has been told what a person did up to the later of two calls:
+
+- its own last write on the item: the newest confirmed call row of that session
+  and agent on the item, the closing call left out;
+- its hook's place on the item: the last call through which the hook handed it
+  everything a person did there. The place counts only when the hook last read the
+  item while the agent held it, because otherwise the hook tells only what is
+  addressed to the agent.
+
+Another agent's write does not count. A subagent being told does not tell its
+orchestrator, and the orchestrator being told does not tell its subagent.
+
+When the call proves no session, or there is no marks file for that session and
+agent, the item's window decides instead: the close is refused while the window
+is not empty, and any agent's write empties it. That covers a client without the
+hook, notices switched off, and a marks file that does not read.
+
+The place is read when the close is judged. A hook of a parallel call of the same
+agent can record a notice in the seconds between the agent composing the close and
+the close arriving, and that notice counts.
 
 A person closing an item is not guarded, nor is a write made outside any call. An
 item a person closed or cancelled is told to the agent by its next write's
 `from_person`; writing to a closed item behaves as before. `merge_work_items`
 judges each merged item before anything moves, because the merge moves its
-comments to the survivor: a merged item with a non-empty window refuses the
-merge with `person_spoke`, and `force` records it on that item once.
+comments to the survivor. A merged item with something its merging agent has not
+been told refuses the merge with `person_spoke`, judged as a close is, and `force`
+records it on that item once.
 
 ### Mentions
 

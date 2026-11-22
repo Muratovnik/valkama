@@ -27,6 +27,7 @@ from .planning import model as planning_model
 from .planning import tools as planning_tools
 from .platform import tools as platform_tools
 from .store import connect
+from .store_identity import metadata as store_metadata
 
 # --- MCP over stdio ---------------------------------------------------------
 
@@ -337,10 +338,9 @@ def _store_file(conn: sqlite3.Connection) -> str:
     """The file of the store this call writes to; empty for a store in memory."""
 
     try:
-        found = conn.execute("PRAGMA database_list").fetchone()
+        return store_metadata.database_file(conn)
     except sqlite3.Error:
         return ""
-    return str(found[2] or "") if found is not None else ""
 
 
 def _pair(conn: sqlite3.Connection, meta: object) -> object | None:

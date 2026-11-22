@@ -206,7 +206,9 @@ _TRANSITION_FORM = (
     " names the holder as released, and last_claim_ref keeps reading it. Reopening"
     " restores no claim. The item goes last in its new state unless rank places it. An"
     " agent's close is refused with person_spoke while a person acted on the item in"
-    " the interface since an agent last wrote to it; the refusal quotes it."
+    " the interface after both that agent's last write there and what its Valkama"
+    " hook last handed it; the refusal quotes it. Write a comment in a call of its"
+    " own, then close in the next."
 )
 #: A list the owner ticks under a root comment, a report or a summary: a question of
 #: one multi_choice field that nobody waits for.
@@ -622,7 +624,9 @@ TOOLS = [
         " stay on them. Refused before anything is written:"
         " an item in another space, a closed item, a merged item with children,"
         f" more than {model.MAX_CHECKLIST} steps in all, or an item another session"
-        " holds unless force. The answer lists what each item moved.",
+        " holds unless force; refused with person_spoke, as a close is, for a merged"
+        " item a person acted on that you have not been told of, unless force. The"
+        " answer lists what each item moved.",
         WRITES,
         {
             "id": {
@@ -667,7 +671,8 @@ TOOLS = [
         " one group. Answers with the acknowledgement and applied, what each group"
         " changed, and from_person when a person acted on the item since an agent"
         " last wrote. The call is one write: its comment does not lift a closing"
-        " transition's person_spoke refusal.",
+        " transition's person_spoke refusal, so send the comment in a call of its own"
+        " and close in the next.",
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,

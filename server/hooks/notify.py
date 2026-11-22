@@ -48,10 +48,13 @@ and apart from those the last call whose agents' news it read and whether some
 still waits: a `Stop` reads past such news without telling it; the wakes other
 sessions' news made; and per item, the notices that quoted it. Whether it follows
 the item is read from the store each time, never kept here. A file that cannot be read is an empty one, so the worst a damaged
-file does is tell the current news once more, and wake once more.
+file does is tell the current news once more, and wake once more. The file's place
+and layout are `marks`', because the close guard reads the same file: what this
+hook told an agent counts as heard when that agent closes the item.
 
 What it costs. `PostToolUse` runs on every tool call, so this module imports
-nothing at module level beyond the standard library's C parts, reads the input
+nothing at module level beyond the standard library's C parts and `marks`, which
+imports only `os`, reads the input
 with the C scanner `json` itself is built on, opens the store read-only, and
 when nothing changed on the session's items answers after two indexed queries.
 `person_events` and the configuration module load only when something changed
@@ -69,6 +72,8 @@ from __future__ import annotations
 import os
 import sys
 import time
+
+from . import marks as marks_file
 
 # `typing` is a few milliseconds this hook does not spend; the checker reads the name.
 TYPE_CHECKING = False
@@ -97,9 +102,6 @@ WAKE_STATUS = 2
 #: The switch: `notify` in the configuration file, or this variable.
 SWITCH_ENVIRONMENT = "VALKAMA_NOTIFY"
 OFF_VALUES = frozenset({"off", "0", "false", "no"})
-
-#: Beside the spool, under the store's own directory.
-STATE_DIRECTORY = "notify"
 
 #: How often the watcher reads the store: often while the session has just
 #: been at work, less once it has been idle a while, since a watcher may wait
@@ -133,7 +135,6 @@ STALE_SECONDS = 86400.0
 _LOCK_ATTEMPTS = 25
 _LOCK_PAUSE = 0.02
 _PLAIN = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-")
-_FILE_SAFE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
 
 
 # --- input and output ---------------------------------------------------------
@@ -270,8 +271,8 @@ def state_directory(store: str, *, create: bool) -> str | None:
     creates it; see `spool.write`.
     """
 
-    parent = os.path.dirname(os.path.abspath(store))
-    directory = os.path.join(parent, STATE_DIRECTORY)
+    directory = marks_file.directory(store)
+    parent = os.path.dirname(directory)
     if os.path.isdir(directory):
         return directory
     if not create or not os.path.isdir(parent):
@@ -327,19 +328,6 @@ def holder_suffix(session_id: str, agent_id: str | None) -> str:
 
     suffix = f"(session {label_id(session_id)})"
     return f" agent {label_id(agent_id)} {suffix}" if agent_id else suffix
-
-
-def _file_key(value: str) -> str:
-    if 0 < len(value) <= 128 and all(ch in _FILE_SAFE for ch in value):
-        return value
-    import hashlib
-
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
-
-
-def recipient_key(session_id: str, agent_id: str | None) -> str:
-    key = _file_key(session_id)
-    return f"{key}--{_file_key(agent_id)}" if agent_id else key
 
 
 # --- what is new ----------------------------------------------------------------
@@ -489,111 +477,6 @@ def _holds_step(checklist: str, suffix: str) -> bool:
     )
 
 
-#: Per item: the last call read, the signature then (revision, newest event, newest
-#: comment, the blockers' newest event), whether it was held, the last call whose other
-#: sessions' news was read, and whether some of it still waits.
-Mark = tuple[int, tuple[int, int, int, int], bool, int, bool]
-
-
-#: The wakes other sessions' news made, as whole seconds of the clock, the newest
-#: hour's; how many events the limit held back since a notice last said so; the
-#: newest call those were read to, past which nothing held back wakes again; and per
-#: item, the times of the notices that quoted other sessions' news on it within
-#: `FOLD_WINDOW_SECONDS`.
-Budget = tuple[tuple[int, ...], int, int, dict[str, tuple[int, ...]]]
-NO_BUDGET: Budget = ((), 0, 0, {})
-
-
-def read_marks(path: str) -> dict[str, Mark]:
-    """Per item, where this recipient's news stands; or empty. See `read_state`."""
-
-    return read_state(path)[0]
-
-
-def read_state(path: str) -> tuple[dict[str, Mark], Budget]:
-    """Per item, where this recipient's news stands, and its wakes; or both empty.
-
-    A `v1` file, from before an item could be marked without being held, holds only
-    held items. Read as empty, it would tell every running session old news once.
-    A `v1` or `v2` file, from before agents' mentions, has read those as far as
-    everything else and has none waiting, for the same reason. A file from before
-    `v4` kept no blockers' event: an item that has a blocker is read once more,
-    from its place, which tells nothing again.
-
-    A `v4` file may carry the wake budget in `@wakes` and `@held` lines, and an
-    item's quoting notices in an `@told <item>` line. Damaged, the whole file reads
-    as empty: the news since the recipient's own last writes is told once more, and
-    wakes at most once more, and the next write is whole.
-    """
-
-    try:
-        with open(path, "rb") as handle:
-            lines = handle.read(1 << 20).decode("ascii").splitlines()
-    except (OSError, UnicodeDecodeError):
-        return {}, NO_BUDGET
-    fields = {"v1": 5, "v2": 6, "v3": 8, "v4": 9}.get(lines[0]) if lines else None
-    if fields is None:
-        return {}, NO_BUDGET
-    marks = {}
-    wakes: tuple[int, ...] = ()
-    held = through = 0
-    told: dict[str, tuple[int, ...]] = {}
-    for line in lines[1:]:
-        parts = line.split()
-        if fields == 9 and len(parts) > 2 and parts[0] == "@told":
-            parts = parts[1:]
-            if not all(part.isdigit() for part in parts[1:]):
-                return {}, NO_BUDGET
-            told[parts[0]] = tuple(int(part) for part in parts[1:])
-            continue
-        if not all(part.isdigit() for part in parts[1:]):
-            return {}, NO_BUDGET
-        if fields == 9 and parts and parts[0] == "@wakes":
-            wakes = tuple(int(part) for part in parts[1:])
-            continue
-        if fields == 9 and len(parts) == 3 and parts[0] == "@held":
-            held, through = int(parts[1]), int(parts[2])
-            continue
-        if len(parts) != fields:
-            return {}, NO_BUDGET
-        numbers = [int(part) for part in parts[1:]]
-        if fields == 9:
-            signature = (numbers[1], numbers[2], numbers[3], numbers[4])
-            del numbers[4]
-        else:
-            signature = (numbers[1], numbers[2], numbers[3], 0)
-        holds = fields == 5 or numbers[4] == 1
-        heard, waiting = (numbers[5], numbers[6] == 1) if fields >= 8 else (numbers[0], False)
-        marks[parts[0]] = (numbers[0], signature, holds, heard, waiting)
-    return marks, (wakes, held, through, told)
-
-
-def write_marks(path: str, marks: dict[str, Mark], budget: Budget = NO_BUDGET) -> None:
-    wakes, held, through, told = budget
-    lines = ["v4"]
-    if wakes:
-        lines.append(" ".join(["@wakes", *(str(at) for at in wakes)]))
-    if held or through:
-        lines.append(f"@held {held} {through}")
-    lines += [
-        " ".join(["@told", item, *(str(at) for at in times)])
-        for item, times in sorted(told.items())
-        if times and item in marks
-    ]
-    lines += [
-        f"{item} {mark} {signature[0]} {signature[1]} {signature[2]} {signature[3]}"
-        f" {int(held)} {heard} {int(waiting)}"
-        for item, (mark, signature, held, heard, waiting) in sorted(marks.items())
-    ]
-    # Imported here, as the cost note at the top asks: only a call with something to write
-    # loads it. Another hook of this recipient may be reading the file outside the lock, and
-    # the rename waits that reader out. A file lost to a crash reads as empty, so the bytes
-    # are not forced to disk.
-    from .. import atomic_files
-
-    atomic_files.write(path, ("\n".join(lines) + "\n").encode("ascii"), durable=False)
-
-
 class _Lock:
     """An exclusive lock on one file, released when closed or when the process dies."""
 
@@ -680,9 +563,9 @@ def collect(
     counted instead, never to wake later; that call says how many there were.
     """
 
-    key = recipient_key(session_id, agent_id)
-    marks_path = os.path.join(state, key + ".marks")
-    marks, budget = read_state(marks_path)
+    key = marks_file.recipient_key(session_id, agent_id)
+    marks_path = marks_file.path(state, session_id, agent_id)
+    marks, budget = marks_file.read_state(marks_path)
     items = _in_scope(conn, session_id, agent_id)
     if items is None:
         return News()
@@ -694,7 +577,7 @@ def collect(
     try:
         if not lock.take(_LOCK_ATTEMPTS):
             return News()  # another hook of this recipient is telling it now
-        marks, budget = read_state(marks_path)
+        marks, budget = marks_file.read_state(marks_path)
         now = int(time.time())
         wakes, held, through, quoted = budget
         wakes = tuple(at for at in wakes if now - WAKE_WINDOW_SECONDS < at <= now)
@@ -702,7 +585,7 @@ def collect(
             item: tuple(at for at in times if now - FOLD_WINDOW_SECONDS < at <= now)
             for item, times in quoted.items()
         }
-        reads: list[tuple[tuple, Mark | None, _Read | None]] = []
+        reads: list[tuple[tuple, marks_file.Mark | None, _Read | None]] = []
         conn.execute("BEGIN")
         try:
             newest = int(conn.execute("SELECT MAX(id) FROM execution_events").fetchone()[0] or 0)
@@ -746,7 +629,7 @@ def collect(
         news.woke = woke
         if woke and take:
             wakes = (*wakes, now)
-        updated: dict[str, Mark] = {}
+        updated: dict[str, marks_file.Mark] = {}
         for scoped, mark, read in reads:
             item, reference, title, signature, _own, holds, _listens = scoped
             if read is None:
@@ -771,7 +654,7 @@ def collect(
         ):
             news.held, held = held, 0
         if take or not news:
-            write_marks(marks_path, updated, (wakes, held, through, quoted))
+            marks_file.write_marks(marks_path, updated, (wakes, held, through, quoted))
         return news
     finally:
         lock.close()
@@ -785,7 +668,7 @@ _Read = tuple[list[dict], list[dict], int, int]
 def _read(
     conn: sqlite3.Connection,
     scoped: tuple,
-    mark: Mark | None,
+    mark: marks_file.Mark | None,
     newest: int,
     session_id: str,
     agent_id: str | None,
@@ -933,7 +816,7 @@ def _wakes(entry: dict) -> bool:
     return bool(entry.get("answers") or entry.get("asks") or entry["kind"] == "blocker_closed")
 
 
-def _unchanged(mark: Mark | None, signature: tuple, *, agents: bool) -> bool:
+def _unchanged(mark: marks_file.Mark | None, signature: tuple, *, agents: bool) -> bool:
     """Whether the item reads as it did: a hold is not won or lost without a write.
 
     For a reader of agents' news, an item with some waiting has not been read.
@@ -1040,9 +923,9 @@ def _for_recipient(
     return told
 
 
-def _write_quietly(path: str, marks: dict, budget: Budget) -> None:
+def _write_quietly(path: str, marks: dict, budget: marks_file.Budget) -> None:
     try:
-        write_marks(path, marks, budget)
+        marks_file.write_marks(path, marks, budget)
     except OSError:
         pass
 
@@ -1463,7 +1346,7 @@ def deliver(
         return None
     state = state_directory(store, create=enabled)
     idle = (
-        os.path.join(state, recipient_key(session_id, None) + ".idle")
+        os.path.join(state, marks_file.recipient_key(session_id, None) + ".idle")
         if state and client == "claude" and agent_id is None
         else None
     )
@@ -1529,7 +1412,7 @@ def session_ended(payload: dict, environ: Mapping[str, str] | None = None) -> No
     state = state_directory(store, create=False) if store else None
     if state is None:
         return
-    key = recipient_key(session_id, None)
+    key = marks_file.recipient_key(session_id, None)
     _touch(os.path.join(state, key + ".end"))
     now = time.time()
     for name in os.listdir(state):
@@ -1539,7 +1422,7 @@ def session_ended(payload: dict, environ: Mapping[str, str] | None = None) -> No
             continue
         # A place is kept a month: a session that holds work and hears nothing for
         # a day is still one to tell. The rest is a day's worth of leftovers.
-        limit = STALE_SECONDS * 30 if name.endswith(".marks") else STALE_SECONDS
+        limit = STALE_SECONDS * 30 if name.endswith(marks_file.SUFFIX) else STALE_SECONDS
         try:
             stale = now - os.path.getmtime(path) > limit
         except OSError:
@@ -1575,7 +1458,7 @@ def watch(payload: dict, environ: Mapping[str, str] | None = None) -> int:
     state = state_directory(store, create=True) if store and enabled else None
     if state is None:
         return 0
-    key = recipient_key(session_id, None)
+    key = marks_file.recipient_key(session_id, None)
     lock = _Lock(os.path.join(state, key + ".watch"))
     try:
         if not lock.take(1):

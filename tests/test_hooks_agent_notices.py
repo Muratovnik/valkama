@@ -29,7 +29,7 @@ from unittest import mock
 
 from server import housekeeping, mcp_surface, store
 from server.alerts import settings as alert_settings
-from server.hooks import notify
+from server.hooks import marks, notify
 from server.planning import api, calls, service
 
 B = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
@@ -163,7 +163,7 @@ class Harness(unittest.TestCase):
         self.addCleanup(timer.join)
 
     def marks(self) -> bytes:
-        path = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
+        path = os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY, B + ".marks")
         with open(path, "rb") as handle:
             return handle.read()
 
@@ -482,8 +482,8 @@ class FoldTests(Harness):
         told = [line.split() for line in lines if line.startswith("@told ")]
         self.assertEqual([["@told", item]], [line[:2] for line in told], lines)
         self.assertEqual(3, len(told[0]) - 2, "one time per quoting notice")
-        path = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
-        self.assertEqual(3, len(notify.read_state(path)[1][3][item]))
+        path = os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY, B + ".marks")
+        self.assertEqual(3, len(marks.read_state(path)[1][3][item]))
 
 
 class FitTests(Harness):
@@ -553,7 +553,7 @@ class LockTests(Harness):
         self.comment(AS_A, self.held, "Parallel tool calls, marker PT-1")
         before = self.marks()
         lock = notify._Lock(
-            os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".lock")
+            os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY, B + ".lock")
         )
         self.addCleanup(lock.close)
         self.assertTrue(lock.take(1))
@@ -589,7 +589,7 @@ class CostTests(Harness):
         self.addCleanup(conn.close)
         seen: list[str] = []
         conn.set_trace_callback(seen.append)
-        state = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY)
+        state = os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY)
         notify.collect(conn, state, B, None)
         return seen
 

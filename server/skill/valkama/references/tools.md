@@ -203,9 +203,12 @@ priority only breaks a tie.
 
 A move to review without a session or commit ref warns but is not refused.
 An agent's move to a completed or cancelled state is also refused with
-`person_spoke` while a person acted on the item since an agent last wrote to it;
-the refusal names what they did. A `comment` sent in the same
-`apply_work_item_changes` call does not lift it.
+`person_spoke` while a person acted on the item and that agent has not been told:
+neither its own last write on the item nor a notice from its Valkama hook, read
+while it held the item, came after the act. Without the hook, any agent's write
+counts. The refusal names what they did. A `comment` sent in the same
+`apply_work_item_changes` call does not lift it: write the comment in a call of
+its own, then close in the next.
 `force: true` carries a refusal through and records an `overridden` event.
 
 ## Claims
@@ -346,4 +349,6 @@ survivor, summarised, released and closed in its cancelled state. Refused,
 writing nothing: the survivor in `items`, an item named twice, another space,
 a closed item, a merged item with children, more than 100 steps in all, a
 workflow with no reachable cancelled state, or an item another session holds
-without `force`.
+without `force`. A merged item on which a person did something the merging agent
+has not been told refuses the merge with `person_spoke`, judged as a close is;
+`force` carries it.

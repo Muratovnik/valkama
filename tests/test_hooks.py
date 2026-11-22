@@ -980,6 +980,7 @@ class EntryProcessTests(unittest.TestCase):
             {
                 "server.hooks",
                 "server.hooks.entry",
+                "server.hooks.marks",
                 "server.hooks.normalize",
                 "server.hooks.notify",
                 "server.hooks.pairs",
