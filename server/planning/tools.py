@@ -261,6 +261,20 @@ _AWAITS_REPLY = {
     " information: wakes the holders here and of mentions once, and the first reply by"
     " another session or a person wakes you once. get_work_item shows answered.",
 }
+#: A field apply_work_item_changes takes in a second group as well: spelled out once, where
+#: it first appears, and named there from the other group. Every agent reads the schema
+#: whole on each load, so a copy costs its size every time and tells nothing new.
+#: The refusal stays beside the pointer: a summary is most often sent with a closing transition.
+_LIST_AS_COMMENTS = {
+    "type": "object",
+    "description": "The same as comment's list: refused on a reply and beside a closing transition.",
+}
+_MENTIONS_AS_UPDATES = {
+    "type": "array",
+    "maxItems": mention_records.MAX_AGENT_MENTIONS,
+    "items": _STR,
+    "description": "The same as update's mentions.",
+}
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
@@ -779,6 +793,8 @@ TOOLS = [
                 "description": "Comments, each as comment takes it, written in order;"
                 " not together with comment. A parent must exist before the call."
                 " applied.comments lists each comment_id.",
+                # Each entry is described by comment above, so only the names, types and bounds stand
+                # here, and the list, whose shape a type alone does not give, points at comment's.
                 "items": {
                     "type": "object",
                     "properties": {
@@ -786,9 +802,13 @@ TOOLS = [
                         "checklist_item_id": _STR,
                         "reply_to": _INT,
                         "reply_to_request": _STR,
-                        "list": _LIST,
-                        "mentions": _MENTIONS,
-                        "awaits_reply": _AWAITS_REPLY,
+                        "list": _LIST_AS_COMMENTS,
+                        "mentions": {
+                            "type": "array",
+                            "maxItems": mention_records.MAX_AGENT_MENTIONS,
+                            "items": _STR,
+                        },
+                        "awaits_reply": _BOOL,
                     },
                     "required": ["body"],
                 },
@@ -841,8 +861,8 @@ TOOLS = [
                     "next": _STR,
                     "why": _STR,
                     "friction": _FRICTION,
-                    "list": _LIST,
-                    "mentions": _TEXT_MENTIONS,
+                    "list": _LIST_AS_COMMENTS,
+                    "mentions": _MENTIONS_AS_UPDATES,
                 },
                 "required": ["done", "next"],
             },
