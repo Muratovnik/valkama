@@ -26,7 +26,7 @@ import { useI18n } from 'vue-i18n'
  * it asked says why where it was pressed. Its heading names it, and the heading's «ⓘ» says which
  * projects its figures are of (`scope`) and their caveats once (`useSectionCaveats`).
  */
-import { useResizeObserver } from '@vueuse/core'
+import { useMutationObserver, useResizeObserver } from '@vueuse/core'
 
 import OverviewChanges from '@/pages/analytics/components/OverviewChanges.vue'
 import OverviewTop from '@/pages/analytics/components/OverviewTop.vue'
@@ -119,8 +119,17 @@ const pending = useAnewDimmed(usePanelStanding())
  * the marks and notes of where the accounts changed, the cards. Over the floor it takes the room
  * the panel's box leaves under the cards, so a tall window gives that room to the chart; a box
  * that lacks the room for the floor scrolls, and the chart keeps it. `grow` is what the field
- * adds to the floor, worked out from the room the content leaves with that addition in place,
- * so a second look at the same box finds the same answer and changes nothing.
+ * adds to the floor, worked out from the room the content leaves with the field as it stands,
+ * so a second look at the same box finds the same answer and changes nothing. While no field is
+ * drawn — the chart's read not in or failed, or the chart shown as its table — nothing takes the
+ * addition and the room says nothing of it, so it is kept as it was for the field drawn next.
+ *
+ * The field is fitted in the turn the overview's content changes — an answer landing, a notice,
+ * the chart drawn again after its table — before the browser measures the page (`fit` on each
+ * change of what the panel holds), so the panel stands at its height in the frame that first
+ * shows it. Its box measured is then the box already fitted: a fit inside the panel's own
+ * observer that resized the panel would be a ResizeObserver loop, which the browser reports.
+ * The observers fit what changes no content: the window, the box the panel scrolls in, a font.
  *
  * A box short of the floor by no more than the air the panel keeps under its content gives up
  * that much of the air instead (`air`): the content stands whole inside the box, and a scroll
@@ -139,6 +148,9 @@ function scroller(from: HTMLElement) {
   return null
 }
 
+/** The chart's drawing field: what `--overview-field-height` sizes, by the rule under the chart. */
+const FIELD = '.overview-chart .period-field'
+
 function fit() {
   const own = panel.value
   const frame = own && scroller(own)
@@ -147,17 +159,30 @@ function fit() {
     air.value = 0
     return
   }
-  // Where the content's end would stand unscrolled: a scrolled box has moved it up by its scroll.
+  const field = own.querySelector(FIELD)
+  if (!field) {
+    air.value = 0
+    return
+  }
+  // What the field adds to its floor as drawn, and where the content's end would stand
+  // unscrolled: a scrolled box has moved it up by its scroll.
+  const added = field.getBoundingClientRect().height - FLOOR
   const end = own.getBoundingClientRect().bottom + frame.scrollTop
   const padding = Number.parseFloat(getComputedStyle(frame).paddingBlockEnd) || 0
   const room = frame.getBoundingClientRect().bottom - padding - end
-  const next = Math.max(0, Math.floor(grow.value + room))
+  const next = Math.max(0, Math.floor(added + room))
   // How far the content still reaches into the air with the field at `next`: only at the floor.
-  const short = next - grow.value - room
+  const short = next - added - room
   air.value = short > 0 && short <= padding ? Math.ceil(short) : 0
   grow.value = next
 }
 
+useMutationObserver(panel, fit, {
+  attributes: true,
+  characterData: true,
+  childList: true,
+  subtree: true,
+})
 useResizeObserver(panel, fit)
 useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
 </script>

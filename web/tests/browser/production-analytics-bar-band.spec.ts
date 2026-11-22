@@ -24,6 +24,7 @@ import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record } from './analyticsPage.ts'
 import { at, NOW, serveLive } from './liveDouble.ts'
 import { test } from './test.ts'
+import { keepWindowErrors } from './windowErrors.ts'
 
 /** Two days of work this week, and some in the live hour. */
 const DAYS: TimedStretch[] = [
@@ -176,11 +177,7 @@ function expectSaidWhole(name: string, bar: Bar) {
  * and every usage read refused while `fail` says so.
  */
 async function serveBand(page: Page) {
-  await page.addInitScript(() => {
-    const seen: string[] = []
-    Object.assign(window, { seenErrors: seen })
-    window.addEventListener('error', (event) => seen.push(String(event.message)))
-  })
+  const errors = await keepWindowErrors(page)
   await page.clock.install({ time: NOW })
   const double = await serveLive(page, DAYS)
   double.lastEventAt = new Date(NOW.getTime() - 9000)
@@ -195,8 +192,7 @@ async function serveBand(page: Page) {
     fail: (now: boolean) => {
       failing = now
     },
-    errors: () =>
-      page.evaluate(() => (window as unknown as { seenErrors: string[] }).seenErrors.slice()),
+    errors,
   }
 }
 
