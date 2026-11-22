@@ -20,6 +20,7 @@ checkouts are therefore distinguishable even at the same version.
 ### Bug Fixes
 
 - **planning:** a close refused for a person's act (`person_spoke`) and the merge guard count what the closing agent was told: its own last write on the item, or the act its Valkama hook already handed it in a notice; another agent's write no longer counts as telling it, and without the hook's marks file the item's window decides as before. The refusal, the skill and the tool descriptions name the form that passes: a comment in a call of its own, then the close ([4b70680](https://github.com/Muratovnik/valkama/commit/4b706802f0e61b24306909af68dca9b353eecadf), [46cc522](https://github.com/Muratovnik/valkama/commit/46cc522281674871486dc8bebd8fa29f0e5dcb3d), [415a292](https://github.com/Muratovnik/valkama/commit/415a2929181f46f5a7ebe7d1c549fff2f6e7efd4))
+- **release:** the release build installs the desktop dependencies and builds the installer in a copy of `desktop/` and `windows/` inside its work directory, so a release preparation no longer leaves about 80 MB of `desktop/node_modules` in Release Kit's snapshot of the sources ([8ece46b](https://github.com/Muratovnik/valkama/commit/8ece46bd411763b8a90ceb7488a9c83f3ffe9390))
 
 ### Performance Improvements
 
