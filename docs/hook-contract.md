@@ -807,7 +807,13 @@ exists, as `spool/` is:
 | `<session>.end` | written by `SessionEnd`; it stops that session's watcher |
 
 A file that cannot be read counts as empty, so the worst a damaged one does is
-tell the current news once more. A file a build from before threads wrote, headed
+tell the current news once more.
+
+The server reads the `.marks` files too, and only reads them: an agent's close
+counts what its hook has already handed it as told (see
+[A close over what a person did](connection-contract.md#a-close-over-what-a-person-did)).
+To that check a file that cannot be read is no file, and the close is judged as
+for a client without this hook. A file a build from before threads wrote, headed
 `v1`, holds only items its recipient held, and reads as that. `SessionEnd` removes
 its session's places; a session resumed later starts again from its own last
 writes. Files of sessions

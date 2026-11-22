@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from ..hooks import marks
 from . import calls, leases, model, person_events, states
 
 Finding = tuple[str, str]
@@ -132,28 +133,73 @@ def findings(
     return refusals, warnings
 
 
-def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+def person_spoke(
+    conn: sqlite3.Connection, item: sqlite3.Row, reference: str, *, act: str = "close"
+) -> str:
     """What a person did that the agent closing this item has not been told.
 
     Only an agent answers to this: a person closes as they see fit, and the runner
     is not deciding anything. What this call itself wrote is left out, so a batch's
-    comment does not clear the way for its own transition.
+    comment does not clear the way for its own transition. `act` names in the
+    refusal what the call was doing, a close or a merge.
+
+    Told is the agent's own: its last write on the item, or what its client hook
+    has handed it (`hooks.marks`), whichever is later. That needs a confirmed
+    session and a marks file for it; a call without either, a client with no hook
+    or a damaged file, answers to the item's window instead, which any agent's
+    write ends.
     """
 
     if not calls.from_agent():
         return ""
     own = calls.written(conn)
-    events = person_events.since_last_agent_write(
-        conn, str(item["work_item_id"]), own_call=None if own is None else own[0]
-    )
+    own_call = None if own is None else own[0]
+    work_item_id = str(item["work_item_id"])
+    told = _told_through(conn, work_item_id)
+    if told is None:
+        events = person_events.since_last_agent_write(conn, work_item_id, own_call=own_call)
+        since = "since an agent last wrote to it"
+    else:
+        identity, through = told
+        events = person_events.since_told(
+            conn, work_item_id, identity[0], identity[1], through, own_call=own_call
+        )
+        since = "that you have not been told of"
     if not events:
         return ""
     return (
-        f"a person acted on {reference} through the interface since an agent last wrote to it:"
-        f" {person_events.describe(events)}. Read the item with get_work_item and take that"
-        " into account; once you have written what you did about it, close again, or pass"
-        " force to close over it"
+        f"a person acted on {reference} through the interface {since}:"
+        f" {person_events.describe(events)}. Read the item with get_work_item; then write"
+        f" what you did about it as a comment on {reference} in a call of its own, and"
+        f" {act} in the next call: a comment sent in the same call as the {act} does not"
+        f" count. Or pass force to {act} over it"
     )
+
+
+def _told_through(
+    conn: sqlite3.Connection, work_item_id: str
+) -> tuple[tuple[str, str | None], int] | None:
+    """The calling agent and how far its hook told it about the item; None for the old rule."""
+
+    identity = calls.current()
+    if identity is None or identity.state != calls.CONFIRMED or not identity.session_id:
+        return None
+    store = _store_file(conn)
+    if not store:
+        return None
+    through = marks.told_through(store, identity.session_id, identity.agent_id, work_item_id)
+    if through is None:
+        return None
+    return (identity.session_id, identity.agent_id), through
+
+
+def _store_file(conn: sqlite3.Connection) -> str:
+    """The file of the store this connection opened; empty for one in memory."""
+
+    for row in conn.execute("PRAGMA database_list"):
+        if row[1] == "main":
+            return str(row[2] or "")
+    return ""
 
 
 def _lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:

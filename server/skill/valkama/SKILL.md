@@ -441,10 +441,12 @@ held; `applied.transition.released` names the holder, and the item's
 `last_claim_ref` keeps it. Reopening the item restores no claim: claim it again
 to work it. A terminal state is refused while a step is open or without a
 summary. It is also refused with `person_spoke` while the owner did something on
-the item that no agent has been told: the refusal quotes it. Read it, write what
-you did about it (a comment is enough), then close; a comment in the same call
-as the close does not count. `force: true` carries a refusal through and records
-it as `overridden`: use it only when the record would still be true.
+the item that you have not been told: the refusal quotes it. Told is what an
+earlier write of yours was answered with, or what Valkama's hook already handed
+you in a notice while you held the item. Read it, write what you did about it as
+a comment in a call of its own, then close in the next call; a comment in the same
+call as the close does not count. `force: true` carries a refusal through and
+records it as `overridden`: use it only when the record would still be true.
 
 **Closing a release.** Before closing the release's epic, run
 `valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
@@ -492,7 +494,7 @@ The delegating agent writes that report as the root of a thread on the item.
 | `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
 | `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
 | `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
-| `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
+| `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it as a comment in a call of its own, then close in the next call. |
 | `workflow_guard` with `[transition]` | The workflow has no such move; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
 | A refused batch or creation step | The message starts with the group and index; correct that entry. |

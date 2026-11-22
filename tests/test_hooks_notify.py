@@ -27,7 +27,7 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.alerts import settings as alert_settings
-from server.hooks import entry, notify
+from server.hooks import entry, marks, notify
 from server.planning import api, calls, service
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -131,7 +131,7 @@ class Harness(unittest.TestCase):
         return parsed
 
     def state(self) -> str:
-        return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY)
+        return os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY)
 
 
 class WhoIsToldTests(Harness):
@@ -512,14 +512,14 @@ class AddressedTests(Harness):
         self.says("Already told")
         self.assertIsNotNone(self.hook())
         path = os.path.join(self.state(), SESSION + ".marks")
-        marks = notify.read_marks(path)
+        kept = marks.read_marks(path)
         lines = [
             f"{item} {mark[0]} {mark[1][0]} {mark[1][1]} {mark[1][2]}"
-            for item, mark in marks.items()
+            for item, mark in kept.items()
         ]
         with open(path, "wb") as handle:
             handle.write(("\n".join(["v1", *lines]) + "\n").encode("ascii"))
-        self.assertEqual(marks, notify.read_marks(path), "what it held, it reads as held")
+        self.assertEqual(kept, marks.read_marks(path), "what it held, it reads as held")
         self.assertIsNone(self.hook())
         self.person(
             "/api/planning/work-item/transition", id=self.ref, state="cancelled", force=True
@@ -1269,7 +1269,13 @@ class CostTests(unittest.TestCase):
                 timeout=60,
             ).stdout.decode()
         self.assertEqual(
-            {"server", "server.hooks", "server.hooks.entry", "server.hooks.notify"},
+            {
+                "server",
+                "server.hooks",
+                "server.hooks.entry",
+                "server.hooks.marks",
+                "server.hooks.notify",
+            },
             set(loaded.split()),
         )
 
