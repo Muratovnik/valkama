@@ -11,10 +11,13 @@
  *
  * A tile says one account's one window and never a sum. Where it has no window to name it says
  * why in words of its own, so no source, a window that reset since it was read, an account in use
- * that reports no five-hour window (`withoutFiveHours`) and a fresh 0 % never read alike: an organization nobody's source read is «No source», a fresh 0 % is the
- * account with «0%» and «up to date», a silent window says how old its latest reading is, «reading 3 d ago», its share as
- * solid as a fresh one's. Before its first answer the tile waits as the others do (`RailTile`),
- * and a read that failed says so.
+ * that reports no five-hour window (`withoutFiveHours`) and a fresh 0 % never read alike: an
+ * organization nobody's source read is «No source», a fresh 0 % is the account with «0%» and
+ * «up to date», and a silent window says «older reading», its share as solid as a fresh one's.
+ * Its age, «reading 3 d ago», stays in the bar's label (`words.barLabel`): a tile's width must not
+ * follow a reading's age, which grows while the window stays silent, since the rail is as wide as
+ * its entries need. Before its first answer the tile waits as the others do (`RailTile`), and a
+ * read that failed says so.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -87,7 +90,7 @@ export function useQuotaTiles(options: {
     const count =
       out !== null && out > answered && Number.isFinite(out)
         ? t('analytics.quota.tile.runsOut', { at: words.runOutWords(window, out, today, true) })
-        : words.stateWords(window, now, quota.fresh_for_seconds)
+        : words.state(window, now, quota.fresh_for_seconds)
     return {
       ...standing('ready', window.kind === 'week_model' ? `${name}, ${window.model}` : name),
       quiet: false,

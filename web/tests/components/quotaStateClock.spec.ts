@@ -18,7 +18,7 @@ import type { Quota, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import { momentAt, serveUsage } from '../fixtures/analytics.ts'
 import { NIGHT_NAME, quotaAnswer, quotaAt } from '../fixtures/quota.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
-import { accountNamed, says, windowOf } from '../support/quotaPanel.ts'
+import { accountNamed, says, tile, windowOf } from '../support/quotaPanel.ts'
 
 const NOW = new Date(2026, 10, 11, 14, 30)
 const SECOND = 1000
@@ -98,6 +98,21 @@ describe('a quota window’s state by the panel’s clock', () => {
     expect(old.lead).not.toMatch(/no data/u)
   })
 
+  it('says a silent window’s rail tile only its state in one word, and its age in the bar’s words', async () => {
+    // Only «Work» in the answer, so its week is the window the tile names.
+    const answer = answered((accounts) => accounts.slice(0, 1))
+    stubAnalyticsReads(usage, () => answer)
+    const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
+    // The reading was two minutes old when the answer was read: sixteen minutes on, it is eighteen.
+    await wait(16 * MINUTE + 5 * SECOND)
+    // The tile's width must not follow a reading's age, so its count is the state in a word; the age
+    // stays in the bar's label, which a screen reader and the hint read.
+    expect(says(page, 'quota_week')).toMatchObject({ lead: 'Work', count: 'older reading' })
+    expect(tile(page, 'quota_week').get('.window-track').attributes('aria-label')).toMatch(
+      /^Week: 41% used, steady use since the window started would be at \d+% now, reading 18\s+min ago\. /u,
+    )
+  })
+
   it('names on the tile the fresh window of two at the same share, by the clock', async () => {
     // Both five hours at 62 % and lasting to their reset, so neither runs out first nor ends
     // higher: «Work»'s read two minutes before the answer, the other's one.
@@ -137,7 +152,7 @@ describe('a quota window’s state by the panel’s clock', () => {
     expect(says(page, 'quota_five_hour')).toEqual({
       lead: 'Work',
       aside: '62%',
-      count: 'reading 11\u{A0}min ago',
+      count: 'older reading',
     })
   })
 })

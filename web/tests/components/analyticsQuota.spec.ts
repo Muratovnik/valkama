@@ -104,7 +104,7 @@ describe('the quota tiles', () => {
     expect(says(page, 'quota_week')).toEqual({
       lead: NIGHT_NAME,
       aside: '88%',
-      count: 'reading 3\u{A0}h ago',
+      count: 'older reading',
     })
     // Silent or fresh, the share spent is solid; each forecast is one hatched tail past it, the
     // week's range to its high end, and the bar's words name the hatch.
