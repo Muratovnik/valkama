@@ -148,8 +148,8 @@ async function open(page: Page, by: 'quota_five_hour' | 'quota_week', width = 14
 const LINES = '[data-past="line"], [data-past="none"]'
 
 /**
- * Each shown line under a window: its words, how many rows its text runs on, and how far its right
- * edge passes its window's, in pixels.
+ * Each shown line under a window: its words, how many rows its text runs on, how far its right edge
+ * passes its window's, and how far apart the starts of its rows of words stand, in pixels.
  */
 const lineRows = (page: Page) =>
   page.evaluate(
@@ -157,21 +157,18 @@ const lineRows = (page: Page) =>
       [...document.querySelectorAll<HTMLElement>(selector)]
         .filter((line) => line.checkVisibility())
         .map((line) => {
-          const tops = new Set<number>()
-          const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
-          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-            if (!node.textContent?.trim()) continue
-            const range = document.createRange()
-            range.selectNodeContents(node)
-            for (const rect of range.getClientRects()) tops.add(Math.round(rect.top))
-          }
+          const range = document.createRange()
+          range.selectNodeContents(line)
+          const rects = [...range.getClientRects()].filter((rect) => rect.width > 0)
+          const starts = rects.map((rect) => rect.left)
           const card = line.closest('[data-window]')?.getBoundingClientRect()
           return {
             text: line.textContent.trim(),
-            rows: tops.size,
+            rows: new Set(rects.map((rect) => Math.round(rect.top))).size,
             past: card
               ? Math.round((line.getBoundingClientRect().right - card.right) * 100) / 100
               : null,
+            spread: starts.length ? Math.max(...starts) - Math.min(...starts) : null,
           }
         }),
     LINES,
@@ -194,39 +191,13 @@ async function expectWhole(page: Page, info: TestInfo, name: string, count: numb
 }
 
 /**
- * Each shown line under a window: its words, how far its right edge passes its window's, and how
- * far apart the starts of its rows of words stand, in pixels.
- */
-const lineStarts = (page: Page) =>
-  page.evaluate(
-    (selector) =>
-      [...document.querySelectorAll<HTMLElement>(selector)]
-        .filter((line) => line.checkVisibility())
-        .map((line) => {
-          const range = document.createRange()
-          range.selectNodeContents(line)
-          const starts = [...range.getClientRects()].map((rect) => rect.left)
-          const card = line.closest('[data-window]')?.getBoundingClientRect()
-          return {
-            text: line.textContent.trim(),
-            rows: starts.length,
-            past: card
-              ? Math.round((line.getBoundingClientRect().right - card.right) * 100) / 100
-              : null,
-            spread: starts.length ? Math.max(...starts) - Math.min(...starts) : null,
-          }
-        }),
-    LINES,
-  )
-
-/**
  * Every shown line stands inside its window, cut by nothing, its rows starting where it does: a
  * phone-wide window is narrower than the longest line, which then takes a second row rather than
  * standing past the window and scrolling the page sideways.
  */
 async function expectInside(page: Page, info: TestInfo, name: string, count: number) {
   await expect(page.locator(`:is(${LINES}):visible`)).toHaveCount(count)
-  const lines = await lineStarts(page)
+  const lines = await lineRows(page)
   const short = await shortfalls(page, LINES)
   await record(info, name, { lines, short })
   expect(lines).toHaveLength(count)
