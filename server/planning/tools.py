@@ -264,9 +264,14 @@ _AWAITS_REPLY = {
 #: A field apply_work_item_changes takes in a second group as well: spelled out once, where
 #: it first appears, and named there from the other group. Every agent reads the schema
 #: whole on each load, so a copy costs its size every time and tells nothing new.
-_LIST_AS_COMMENTS = {"type": "object", "description": "The same as comment's list."}
+#: The refusal stays beside the pointer: a summary is most often sent with a closing transition.
+_LIST_AS_COMMENTS = {
+    "type": "object",
+    "description": "The same as comment's list: refused on a reply and beside a closing transition.",
+}
 _MENTIONS_AS_UPDATES = {
     "type": "array",
+    "maxItems": mention_records.MAX_AGENT_MENTIONS,
     "items": _STR,
     "description": "The same as update's mentions.",
 }
@@ -788,7 +793,8 @@ TOOLS = [
                 "description": "Comments, each as comment takes it, written in order;"
                 " not together with comment. A parent must exist before the call."
                 " applied.comments lists each comment_id.",
-                # Each entry is described by comment above, so only the names and types stand here.
+                # Each entry is described by comment above, so only the names, types and bounds stand
+                # here, and the list, whose shape a type alone does not give, points at comment's.
                 "items": {
                     "type": "object",
                     "properties": {
@@ -796,8 +802,12 @@ TOOLS = [
                         "checklist_item_id": _STR,
                         "reply_to": _INT,
                         "reply_to_request": _STR,
-                        "list": {"type": "object"},
-                        "mentions": {"type": "array", "items": _STR},
+                        "list": _LIST_AS_COMMENTS,
+                        "mentions": {
+                            "type": "array",
+                            "maxItems": mention_records.MAX_AGENT_MENTIONS,
+                            "items": _STR,
+                        },
                         "awaits_reply": _BOOL,
                     },
                     "required": ["body"],
