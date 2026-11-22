@@ -62,6 +62,8 @@ allowed_surfaces = ["docs/*", "server/*", "tests/*", "web/*"]
 [changelog]
 profile = "conventional-changelog"
 first_version = "1.0.2"
+# One draft line per commit on main's first-parent line: a merge stands for its branch.
+units = "first-parent"
 
 [changelog.generator]
 engine = "git-cliff"

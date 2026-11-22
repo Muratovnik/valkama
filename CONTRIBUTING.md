@@ -215,22 +215,35 @@ changed.
 The release publishes the entry `CHANGELOG.md` holds for its version, as it was
 committed, and refuses a version that has none. The changelog keeps Release Kit's
 `conventional-changelog` profile, which `[changelog]` in `relkit.toml` declares.
-Write and commit the entry before `release prepare`, starting from a draft of the
-commits since the previous release:
+Write and commit the entry before `release prepare`. Release Kit composes it from
+the history since the previous release:
 
 ```powershell
-python .github/relkit.pyz notes v<next> --draft --from-tag v<prev>
+python .github/relkit.pyz notes v<next> --draft --from-tag v<prev> --write
 ```
 
-The draft is printed, not written into the changelog. Under its version heading
-it lists every `feat`, `fix`, `perf` and `revert` commit and every breaking
-change, one line per commit subject, each linked to its commit. A draft downloads
-Release Kit's pinned git-cliff when its cache lacks it, so the first one on a
-machine needs the network. Make the entry from it for the people who use the
-release:
+`--write` inserts the entry into `CHANGELOG.md` above the previous release's and
+refuses when `v<next>` already has one. `relkit.toml` sets
+`units = "first-parent"`, so the entry has one line per commit on `main`'s
+first-parent line: a merge stands for its whole branch and its subject is the
+line, and a commit made straight on `main` is a line of its own. Lines come from
+`feat`, `fix`, `perf` and `revert` subjects and from breaking changes, each linked
+to its commit. That is why a change users see reaches `main` through a merge
+whose subject is written for them, `feat(analytics): one scroll for the whole
+page`, while a merge with nothing for users keeps `chore: merge <branch> into
+main`.
+
+The draft also prints, after `review:`, the releasable commits that reached
+`main` only behind a merge with a `chore` subject, grouped by that merge, and the
+breaking commits behind a merge the entry lists without marking it breaking. For
+each, decide whether a user of `v<prev>` sees it, and if so, say it in the entry.
+When every releasable commit is behind such merges, the draft fails and gives the
+same list. A draft downloads Release Kit's pinned git-cliff when its cache lacks
+it, so the first one on a machine needs the network. Then edit the entry for the
+people who use the release:
 
 - Keep only what a user of `v<prev>` sees changed. Drop a fix of something that
-  first appeared in the same release, and merge the steps of one feature into one
+  first appeared in the same release, and merge the lines of one feature into one
   line that keeps their commit links.
 - Write each line for that user rather than for the reviewer of the commit, and
   keep every removal, migration, breaking change, security or data-safety fix and

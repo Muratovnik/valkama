@@ -319,6 +319,14 @@ force, and the gates hold each:
   `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`,
   `test`, an optional lowercase scope, and `!` for a break. A merge commit's
   subject is held to this too: `tests/commit_subjects.py` refuses Git's default.
+- A change a user of the release sees reaches `main` through a branch and a
+  `--no-ff` merge, and that merge's subject is its changelog line, written for
+  that user: `feat(analytics): one scroll for the whole page`, not
+  `chore: merge <branch> into main`. The release entry is drafted one line per
+  commit on `main`'s first-parent line, so a merge with nothing for users and a
+  merge of a worker's branch into an integration branch keep `chore: merge …`,
+  and a `feat`, `fix` or `perf` committed straight to `main` becomes a line of
+  its own. `CONTRIBUTING.md` says how the entry is composed.
 - After each coherent task-owned green boundary, create an incremental local
   commit by default. Staging is transient and only inside one uninterrupted
   stage → inspect → commit step; never hand off task-owned staged changes, and
