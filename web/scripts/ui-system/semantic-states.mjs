@@ -11,12 +11,9 @@
  * stylesheet are held to the rule as every other component's are.
  */
 
-import { parser as typescriptParser } from 'typescript-eslint'
-import { parse } from 'vue-eslint-parser'
-
 import { cssDynamicPaintViolates, localStyles, semanticStatusMarks } from './semantic-state-css.mjs'
 import { inlineStyleViolates } from './semantic-state-inline-style.mjs'
-import { presentationProvenance } from './semantic-state-provenance.mjs'
+import { presentationIndex } from './semantic-state-provenance.mjs'
 import { dynamicSelectorBindings } from './semantic-state-selectors.mjs'
 
 function candidateMatches(candidate, value) {
@@ -89,12 +86,13 @@ export const COPIED_PAINT = new Map([
 export function scanSemanticStateOwnership(sources, copied = new Map()) {
   const violations = []
   const sourceByFile = new Map(sources.map(({ file, source }) => [file, source]))
+  const index = presentationIndex(sourceByFile)
   for (const file of copied.keys())
     if (!sourceByFile.has(file)) violations.push(`${file}: registered as copying paint, and gone`)
   for (const { file, source } of sources) {
     if (!file.endsWith('.vue')) continue
-    const ast = parse(source, { parser: typescriptParser, sourceType: 'module' })
-    const provenance = presentationProvenance(ast, source)
+    const provenance = index.provenanceOf(file)
+    const { ast } = provenance
     const styles = localStyles(file, source, sourceByFile)
     if (cssDynamicPaintViolates(styles)) {
       violations.push(violation(file, 'a stylesheet v-bind authors a dynamic paint value'))

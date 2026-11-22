@@ -1,4 +1,4 @@
-import { visitNodes } from './semantic-state-provenance.mjs'
+import { visitNodes } from './semantic-state-bindings.mjs'
 
 function addCandidate(candidates, kind, value, canonicalTone = false) {
   candidates.push({ canonicalTone, kind, value })
