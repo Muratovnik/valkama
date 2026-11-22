@@ -57,6 +57,13 @@ async function parts(page: Page, areas: readonly string[] = DIMENSION) {
   }, areas)
 }
 
+/** Serves the fixture and opens `address`, the task section's report unless given, at 1440×900. */
+async function openWide(page: Page, address = TASK_REPORT) {
+  await serve(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(address)
+}
+
 /** Puts the pointer over an element, `down` pixels below its top or at its middle. */
 async function pointAt(page: Page, selector: string, down?: number) {
   const box = await page.locator(selector).boundingBox()
@@ -82,6 +89,9 @@ async function scrolled(page: Page) {
         ? frame.clientHeight - (frame.querySelector('table')?.offsetHeight ?? 0)
         : -1,
       tableLeft: frame?.scrollLeft ?? 0,
+      // The height the frame is held to, and its table's own.
+      cap: frame ? Number.parseFloat(getComputedStyle(frame).maxBlockSize) : -1,
+      table: frame?.querySelector('table')?.getBoundingClientRect().height ?? -1,
     }
   })
 }
@@ -125,10 +135,11 @@ async function fixedParts(page: Page, row: 'first' | 'last') {
 }
 
 // Beside the rail: a wide window, and the narrowest common one where the panel still keeps its
-// 640 pixels beside the rail. At 1024 the section takes the list's place instead, and is not held.
+// 640 pixels beside the rail, at the height the design holds the table of tasks to, 1280×800.
+// At 1024 the section takes the list's place instead, and is not held.
 for (const [width, height] of [
   [1440, 900],
-  [1280, 768],
+  [1280, 800],
 ] as const)
   test(`at ${width}×${height} the table stands at its own height and keeps its heading, names and total in view`, async ({
     page,
@@ -143,6 +154,7 @@ for (const [width, height] of [
     expect(await parts(page), 'parts that spill or overlap').toEqual([])
     const before = await scrolled(page)
     // Fourteen rows are shorter than the window: the frame is as tall as its table, no taller.
+    expect(before.table, 'the table is shorter than its frame may be').toBeLessThan(before.cap)
     expect(before.tableEnd, 'a short table that scrolls up and down on its own').toBe(0)
     expect(before.frameRoom, 'room in the frame past its table').toBe(0)
     expect(before.panelEnd, 'a panel taller than its window').toBeGreaterThan(0)
@@ -176,10 +188,8 @@ for (const [width, height] of [
 test('at 1440 pixels the ranked list and the small charts beside it are titled in one line each', async ({
   page,
 }, info) => {
-  await serve(page)
-  await page.setViewportSize({ width: 1440, height: 900 })
   // A section named by identifiers: the tasks, named by free text, draw no small charts.
-  await page.goto(pageAt({ by: 'model' }))
+  await openWide(page, pageAt({ by: 'model' }))
   await expect(page.locator('.spending-multiples h3')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
 
@@ -242,9 +252,7 @@ const sortMarks = (page: Page) =>
 test('the column the table is sorted by is marked on its heading, and the mark follows a sort', async ({
   page,
 }, info) => {
-  await serve(page)
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(TASK_REPORT)
+  await openWide(page)
   await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
   const first = await sortMarks(page)
   const body = await page
@@ -329,9 +337,7 @@ async function download(page: Page) {
 test('a split chosen in the section heading makes the table pairs, is the address, outlives a reload and downloads', async ({
   page,
 }, info) => {
-  await serve(page)
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(TASK_REPORT)
+  await openWide(page)
   const table = page.locator('.spending-table')
   await expect(table.locator('tbody tr').first()).toBeVisible()
 
@@ -365,9 +371,7 @@ test('a split chosen in the section heading makes the table pairs, is the addres
 test('with the measure tokens the table and its file split the tokens by kind', async ({
   page,
 }) => {
-  await serve(page)
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(pageAt({ by: 'work_item', measure: 'tokens' }))
+  await openWide(page, pageAt({ by: 'work_item', measure: 'tokens' }))
   const table = page.locator('.spending-table')
   await expect(table.locator('tbody tr').first()).toBeVisible()
   const texts = await table.locator('thead th').allInnerTexts()
@@ -418,9 +422,7 @@ const compact = (count: number) =>
 test('the tokens by kind are a panel whose counted kinds add up to the «Tokens» figure', async ({
   page,
 }, info) => {
-  await serve(page)
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(pageAt())
+  await openWide(page, pageAt())
   const figure = page.locator('.tile-figure[data-measure="tokens"]')
   await expect(figure).toBeVisible()
   const tokens = await figure.evaluate((element) => element.textContent.trim())
