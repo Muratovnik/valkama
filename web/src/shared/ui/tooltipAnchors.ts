@@ -495,7 +495,7 @@ export function firstLetterOf(element: HTMLElement): { box: DOMRect; inked: Elem
  * one 12px to each side and 8px over and under — and that is nothing the hint has to say.
  * Counted, it showed the hint of a table's name that stood whole. The letters of a line stand
  * a little past a box no taller than its leading, so down only a line a quarter past counts.
- * Across, the browser lays a line out in 64ths of a pixel and ends one that stands past its box
+ * Across, the browser lays a line out in steps of 1/64px and ends one that stands past its box
  * by any of them in an ellipsis, so only less than one of them, a measure's noise, is forgiven
  * (`ACROSS_NOISE`): forgiven half a pixel, a name of the value panel laid out 0.5px past its box
  * showed «…» and no hint.
