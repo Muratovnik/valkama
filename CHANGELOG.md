@@ -13,6 +13,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Features
+
+- **tests:** `python tests/run_record.py check DIR --require NAME` refuses a record with no step named `NAME` and fails one whose required step failed, naming the step; a worker of a parallel worktree records `typos` after each commit, and the integrator's check of that record requires it ([f5141fd](https://github.com/Muratovnik/valkama/commit/f5141fd5374b0738b8f7cff8a42b21a9393c9a21), [adc5475](https://github.com/Muratovnik/valkama/commit/adc54757bdd991df1b839785fd5b0e52d652e7e8))
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) (2026-11-22)
 
 ### Highlights
