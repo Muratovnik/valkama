@@ -16,8 +16,19 @@ import type { Locator, Page } from '@playwright/test'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { markCut, openCutField, openRead, standing } from './cutFieldPage.ts'
-import { installDiscussionBackend } from './discussionBackend.ts'
+import {
+  DONE,
+  DONE_WORDS,
+  LONG_TITLE,
+  markClamp,
+  markCut,
+  openBoard,
+  openCutField,
+  outcomePreview,
+  restAt,
+  standing,
+  whole,
+} from './cutFieldPage.ts'
 import { openFinder } from './finderPage.ts'
 import { settledZoom, zoomOutButton } from './graphFieldCamera.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
@@ -117,42 +128,6 @@ for (const zoom of [1, 0.75]) {
   })
 }
 
-/** The whole words laid over a cut text. */
-const whole = (page: Page) => page.locator('.whole-text')
-
-/**
- * Marks `clamp`, a text its clamp must cut, and returns where its first letter's middle is, or
- * null where the clamp leaves it whole: the whole words over it would prove nothing.
- */
-async function markClamp(clamp: Locator) {
-  await clamp.scrollIntoViewIfNeeded()
-  return clamp.evaluate((element: HTMLElement) => {
-    if (element.scrollHeight <= element.clientHeight + 1) return null
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node as Text
-      const at = text.data.search(/\S/u)
-      if (at < 0) continue
-      const range = document.createRange()
-      range.setStart(text, at)
-      range.setEnd(text, at + 1)
-      const { left, top, width, height } = range.getBoundingClientRect()
-      element.dataset.probeCut = ''
-      return { x: left + width / 2, y: top + height / 2 }
-    }
-    return null
-  })
-}
-
-/** The pointer away from everything, then resting on `point` past the wait of a hint. */
-async function restAt(page: Page, point: { x: number; y: number }) {
-  const viewport = page.viewportSize() ?? { width: 0, height: 0 }
-  await page.mouse.move(viewport.width - 2, viewport.height - 2)
-  await expect(whole(page)).toHaveCount(0)
-  await page.mouse.move(point.x, point.y)
-  await page.clock.runFor(1000)
-}
-
 /** The whole words `words` are up, on the marked cut text's first letter and over all of it. */
 async function expectLaid(page: Page, words: string) {
   await expect(whole(page)).toBeVisible()
@@ -208,22 +183,6 @@ const targetAt = (page: Page, point: { x: number; y: number }) =>
     point,
   )
 
-/** Longer than three lines of a board column, and than two lines of the card or the finder. */
-const LONG_TITLE =
-  'Read an attached planning store that an older build wrote without migrating it, name every scope the read had to skip instead of dropping it, and say which of them a newer build can still open'
-
-/** The board, the item `workItemRef` names under `LONG_TITLE` and `MAIN-265` under its short one. */
-const openBoard = (page: Page, width: number) =>
-  openRead(
-    page,
-    width,
-    serializePlatformRoute({ module_id: 'planning', scope: projectScope }),
-    (read) => {
-      for (const item of read.work_items as { reference: string; title: string }[])
-        if (item.reference === workItemRef.reference) item.title = LONG_TITLE
-    },
-  )
-
 /**
  * The whole words laid over the marked cut text, against the clamp that cuts it: the content
  * width and height of each and its line's height, how many lines the whole words take, and how
@@ -263,28 +222,6 @@ const wholeAgainstClamp = (page: Page) =>
   })
 
 const SHORT = 'MAIN-265'
-
-/** What was done, as an agent writes it: markdown, which the preview draws as words. */
-const DONE =
-  'Shipped **the reader** for an attached store that an older build wrote, kept every scope it could not read in a list of its own instead of dropping it, named each in the card with the build that can still open it, and left the store as it found it'
-const DONE_WORDS = DONE.replaceAll('**', '')
-
-/** The card of the item whose outcome is `done`, and the preview of that outcome on it. */
-async function outcomePreview(page: Page, done: string) {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  const backend = await installDiscussionBackend(page)
-  backend.item.summary = { done, next: 'Review' }
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: projectScope,
-      entity: planningWorkItemEntity(workItemRef),
-    }),
-  )
-  const preview = page.locator('.drawer .outcome-preview-text')
-  await expect(preview).toBeVisible()
-  return preview
-}
 
 test.describe('a clamp off the graph', () => {
   test.beforeEach(async ({ page }) => {
