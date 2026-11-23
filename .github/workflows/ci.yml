@@ -22,23 +22,29 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # semgrep has an environment of its own on the Python its pinned
+      # dependencies install on (.agents/rules/quality-gates.md); set up first,
+      # so that the gates' Python below stays the default `python`.
+      - name: Set up Python for semgrep
+        id: semgrep-python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-semgrep.txt
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.11"
+          python-version: "3.15"
           cache: pip
-          cache-dependency-path: |
-            requirements-dev.txt
-            requirements-semgrep.txt
+          cache-dependency-path: requirements-dev.txt
       - name: Publication audit
         run: python .github/relkit.pyz audit --history
       - name: Install pinned development tools
         run: python -m pip install -r requirements-dev.txt
-      # semgrep has an environment of its own: its releases pin dependencies the
-      # toolchain's Python may not install (.agents/rules/quality-gates.md).
       - name: Install pinned semgrep in its own environment
         run: |
-          python -m venv .venv-semgrep
+          & "${{ steps.semgrep-python.outputs.python-path }}" -m venv .venv-semgrep
           .venv-semgrep/Scripts/python -m pip install -r requirements-semgrep.txt
       - name: Ruff lint
         run: python -m ruff check .
