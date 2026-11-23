@@ -15,6 +15,7 @@ import type { ParticipationDoubleState, Write } from '../support/participationDo
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, planningReadModel, spaceScope } from './planningFixtures.ts'
+import { missesOf, segmentLines } from './segmentLines.ts'
 import { test } from './test.ts'
 
 const state = { section: 'participation' }
@@ -306,66 +307,15 @@ for (const locale of ['en', 'ru'] as const)
         ).toBeLessThanOrEqual(1)
     })
 
-/** A wide choice as it stands: the room its track gives, and each line's segment edges. */
-interface ChoiceLines {
-  end: number
-  lines: [number, number][][]
-  start: number
-}
-
 /** The scope, the set and the launch place, each as it stands; a choice not drawn has no lines. */
-function choiceLines(page: Page): Promise<ChoiceLines[]> {
-  return page.evaluate(() =>
-    [
-      '.settings-row:has(.settings-scope-segments)',
-      '[data-participation-row="set"]',
-      '[data-participation-row="launch"]',
-    ].map((selector) => {
-      const track = document.querySelector(selector)?.querySelector('[role="radiogroup"]')
-      if (!track) return { end: 0, lines: [], start: 0 }
-      const style = getComputedStyle(track)
-      const box = track.getBoundingClientRect()
-      const lines = new Map<number, [number, number][]>()
-      for (const segment of track.querySelectorAll('[role="radio"]')) {
-        const { left, right, top } = segment.getBoundingClientRect()
-        lines.set(Math.round(top), [...(lines.get(Math.round(top)) ?? []), [left, right]])
-      }
-      return {
-        end: box.right - Number.parseFloat(style.paddingRight),
-        lines: [...lines.values()],
-        start: box.left + Number.parseFloat(style.paddingLeft),
-      }
-    }),
-  )
-}
-
-const near = (one: number | undefined, other: number | undefined) =>
-  one !== undefined && other !== undefined && Math.abs(one - other) <= 1
-
-/**
- * Every way a wrapped choice's lines miss each other: a line that does not reach from the
- * track's start to its end, or that holds another count of segments than the first, or a
- * segment edge more than a pixel from the edge over or under it on the first line. A choice on
- * one line misses nothing.
- */
-function missesOf({ end, lines, start }: ChoiceLines): string[] {
-  const [first = []] = lines
-  if (lines.length < 2) return []
-  return lines.flatMap((line, at) => [
-    ...(near(line[0]?.[0], start) && near(line.at(-1)?.[1], end)
-      ? []
-      : [`line ${at} spans ${JSON.stringify(line)} of ${start}..${end}`]),
-    ...(line.length === first.length ? [] : [`line ${at} holds ${line.length} of ${first.length}`]),
-    ...line
-      .filter(
-        ([left, right], index) =>
-          !(near(left, first[index]?.[0]) && near(right, first[index]?.[1])),
-      )
-      .map((edges) => `line ${at} segment at ${edges.join('..')} misses the first line`),
+const choiceLines = (page: Page) =>
+  segmentLines(page, [
+    '.settings-row:has(.settings-scope-segments) [role="radiogroup"]',
+    '[data-participation-row="set"] [role="radiogroup"]',
+    '[data-participation-row="launch"] [role="radiogroup"]',
   ])
-}
 
-/** The misses of each choice, or the choices themselves while one is not drawn yet. */
+/** The misses of each choice (`missesOf`), or the choices themselves while one is not drawn yet. */
 async function wrappedMisses(page: Page) {
   const choices = await choiceLines(page)
   return choices.every((choice) => choice.lines.length > 0)
@@ -376,7 +326,7 @@ async function wrappedMisses(page: Page) {
 /**
  * Where a wide choice cannot stand on one line its segments wrap, and its lines line up: each
  * reaches from the track's start to its end and breaks where the others do, or the segments
- * stand one to a line. Wrapped with each segment at its own width, the scope's two stood 135 and
+ * stand one to a line; a choice of two or four has no count that leaves a line short. Wrapped with each segment at its own width, the scope's two stood 135 and
  * 110px on lines of 240; each line then grown to the track, the set's four broke a phone's two
  * lines 17px apart in English, and at 430px stood three over one. The widths go up and back down,
  * so the row is laid out again from either side.
