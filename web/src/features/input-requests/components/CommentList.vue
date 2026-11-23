@@ -63,7 +63,7 @@ const emit = defineEmits<{
   'update:draft': [draft: RequestDraft]
   'updated': [entry: InputRequestEntry]
 }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const id = useId()
 const [labelId, outcomeId, errorId] = [`${id}-label`, `${id}-outcome`, `${id}-error`]
 const root = ref<HTMLElement | null>(null)
@@ -142,7 +142,7 @@ const leftOver = computed(() => {
 })
 const unsent = computed(() => (leftOver.value ? unsentWords(request.value, props.draft) : ''))
 const unsentChosen = computed(() =>
-  leftOver.value ? unsentChoices(request.value.fields, props.draft, t) : [],
+  leftOver.value ? unsentChoices(request.value, props.draft, t, te) : [],
 )
 
 const previewing = ref(false)

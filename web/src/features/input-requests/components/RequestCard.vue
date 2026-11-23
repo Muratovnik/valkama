@@ -256,7 +256,7 @@ const errorText = computed(() => {
 /** What the form still held when the question closed some other way: words, and what was chosen. */
 const unsent = computed(() => (inForm.value ? '' : unsentWords(request.value, props.draft)))
 const unsentChosen = computed(() =>
-  inForm.value ? [] : unsentChoices(request.value.fields, props.draft, t),
+  inForm.value ? [] : unsentChoices(request.value, props.draft, t, te),
 )
 const change = useAnswerChange({
   busy,
