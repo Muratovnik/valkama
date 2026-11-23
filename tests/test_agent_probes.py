@@ -1718,8 +1718,8 @@ class ModelChoiceTests(unittest.TestCase):
         with self.assertRaisesRegex(agent_probes.ProbeError, r"missing --claude-effort\."):
             agent_probes.model_choices(options, ["claude"])
 
-        options.claude_effort = "e1"
-        self.assertEqual({"claude": self.CHOICE}, agent_probes.model_choices(options, ["claude"]))
+        named = argparse.Namespace(claude_model="m1", claude_effort="e1", codex_model=None)
+        self.assertEqual({"claude": self.CHOICE}, agent_probes.model_choices(named, ["claude"]))
 
     def test_claude_takes_its_model_and_effort_flags_on_every_turn(self) -> None:
         first = agent_probes.client_argv("claude", ["claude"], "go", Path("W"), None, self.CHOICE)
