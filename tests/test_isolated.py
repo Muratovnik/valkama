@@ -26,7 +26,11 @@ import urllib.parse
 from pathlib import Path
 from unittest import mock
 
+import tests
+from server import store
+from server.store_identity.refs import planning_space_entity
 from tests import isolated, machine_lock, parallel
+from tests import test_planning_work_model_migration as work_model
 from tests.test_machine_lock import (
     DEADLINE_SECONDS,
     HELD_SECONDS,
@@ -34,6 +38,7 @@ from tests.test_machine_lock import (
     held_elsewhere,
 )
 from tests.test_mcp_front import alive, wait_until
+from tests.test_registry_owner import _former_inventory, _former_projection
 from tests.test_release import link_directory
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -114,6 +119,54 @@ def assert_read_only(case: unittest.TestCase, spy: mock.Mock, source: Path) -> N
     case.assertEqual(
         [], [path.name for path in source.parent.iterdir() if path.name.endswith(("-wal", "-shm"))]
     )
+
+
+def contents(*directories: Path) -> dict[Path, dict[str, bytes]]:
+    """Every file directly in each directory, by name, with its bytes."""
+
+    return {
+        directory: {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()}
+        for directory in directories
+    }
+
+
+def a_2_9_store(directory: Path, local_app_data: Path) -> Path:
+    """A store as Valkama 2.9.0 leaves one, at schema 18, and that release's registry.
+
+    The registry, an inventory of format 1 and its projection of format 3, lies where
+    `local_app_data` puts it and binds each space of the store to its project, as the
+    transition finds them before `projects upgrade`.
+    """
+
+    source = directory / "source" / "valkama.sqlite3"
+    source.parent.mkdir(parents=True)
+    work_model.build(str(source), schema=18)
+    entries = [
+        {
+            "project_id": project,
+            "display_name": project.title(),
+            "canonical_root": str(directory / "roots" / project),
+            "planning_binding": planning_space_entity(
+                {"data_scope_id": work_model.DATA_SCOPE, "space_key": key}
+            ),
+        }
+        for key, project in sorted(work_model.SPACE_PROJECTS.items())
+    ]
+    registry = local_app_data / "Valkama"
+    registry.mkdir(parents=True, exist_ok=True)
+    (registry / "project-registry.toml").write_bytes(_former_inventory(entries))
+    (registry / "projects.json").write_bytes(_former_projection(entries))
+    return source
+
+
+def items_of_a_2_9_store(source: Path) -> int:
+    """How many work items the store holds, read as a file nobody has open: no journal is left."""
+
+    uri = f"{source.as_uri()}?mode=ro&immutable=1"
+    with contextlib.closing(sqlite3.connect(uri, uri=True)) as held:
+        if held.execute("PRAGMA user_version").fetchone()[0] != 18:
+            raise AssertionError(f"{source} is not at schema 18")
+        return int(held.execute("SELECT count(*) FROM work_items").fetchone()[0])
 
 
 def quietly(function, *arguments) -> tuple[int, str]:
@@ -1130,6 +1183,24 @@ class SupervisorTests(Workspace):
         assert_read_only(self, spy, source)
         self.assertTrue(isolated.store_path(self.home).is_file())
 
+    def test_a_2_9_copy_the_migration_refuses_fails_the_start_naming_it_and_leaves_nothing(
+        self,
+    ) -> None:
+        # No registry comes along, so none binds the copy's spaces and the migration
+        # refuses it; the server is never started on a copy it would refuse too.
+        source = a_2_9_store(self.root, self.root / "registry-left-behind")
+        before = source.read_bytes()
+
+        isolated.supervise(self.out, source, [sys.executable, str(self.stub)], registry=())
+
+        state = self.state()
+        self.assertEqual("failed", state["state"])
+        self.assertIn("`valkama migrate work-model` on the store copy exited", state["error"])
+        self.assertTrue((self.out / isolated.LOGS / "copy-migrate-work-model.log").is_file())
+        self.assertFalse(self.report.exists(), "the server was started on a refused copy")
+        self.assertFalse(self.home.exists())
+        self.assertEqual(before, source.read_bytes())
+
     def test_a_residue_is_reported_rather_than_called_clean(self) -> None:
         with mock.patch.object(isolated, "remove_tree", side_effect=[True, False]):
             isolated.supervise(self.out, None, ["no-such-program-anywhere"])
@@ -1340,6 +1411,78 @@ class ThroughTheCommandTests(Workspace):
         self.assertFalse(self.home.exists())
         for name, content in files.items():
             self.assertEqual(content, (registry / name).read_bytes(), name)
+
+    def get_json(self, port: int, path: str) -> dict:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        try:
+            connection.request("GET", path)
+            answer = connection.getresponse()
+            self.assertEqual(200, answer.status, path)
+            return json.loads(answer.read())
+        finally:
+            connection.close()
+
+    def assert_a_2_9_copy_is_served_migrated(self, items: int, served: dict[str, int]) -> None:
+        """The copy was carried to this build's schema and is served with all `items`."""
+
+        copy = isolated.store_path(self.home)
+        with contextlib.closing(sqlite3.connect(f"{copy.as_uri()}?mode=ro", uri=True)) as held:
+            schema = held.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(store.STORE_SCHEMA_VERSION, schema)
+        self.assertEqual(200, self.get(served["port"], "/"))
+        spaces = self.get_json(served["port"], "/api/planning/spaces")["planning_spaces"]
+        self.assertEqual(
+            sorted(work_model.SPACE_PROJECTS), sorted(space["key"] for space in spaces)
+        )
+        self.assertEqual(items, sum(space["work_items"] for space in spaces))
+        listed = self.get_json(served["port"], "/api/planning/work-items?space=KEEP")
+        kept = next(space for space in spaces if space["key"] == "KEEP")
+        self.assertEqual(kept["work_items"], len(listed["work_items"]))
+        # The registry the copy was migrated with is the caller's, carried by `projects upgrade`.
+        inventory = self.home / "AppData" / "Local" / "Valkama" / "project-registry.toml"
+        self.assertTrue(inventory.read_bytes().startswith(b"schema_version = 2\n"))
+        self.assertTrue((self.home / isolated.ITEM_PROJECTS).is_file())
+
+    def assert_stopped_leaving_the_caller_as_it_was(self, before: dict[Path, dict]) -> None:
+        code, said = self.stop()
+
+        self.assertEqual(0, code, said)
+        self.assertFalse(self.home.exists())
+        self.assertEqual([], [p for p in files_under(self.out) if "sqlite3" in p.name])
+        self.assertEqual([], [p for p in files_under(self.out) if p.name == isolated.ITEM_PROJECTS])
+        self.assertEqual(before, contents(*before))
+
+    def test_a_copy_of_a_2_9_store_is_migrated_as_the_transition_does_and_served(self) -> None:
+        # The command as a caller runs it, which imports `isolated` and not the package.
+        source = a_2_9_store(self.root, self.real / "local")
+        items = items_of_a_2_9_store(source)
+        before = contents(source.parent, self.real / "local" / "Valkama")
+
+        served = self.served(
+            *self.command("serve", "--out", str(self.out), "--store-copy", str(source))
+        )
+
+        self.assert_a_2_9_copy_is_served_migrated(items, served)
+        self.assert_stopped_leaving_the_caller_as_it_was(before)
+
+    def test_a_caller_that_imported_the_tests_package_still_brings_its_registry(self) -> None:
+        # Importing the package moved `LOCALAPPDATA` into the suite's own directory and
+        # kept the one it replaced. This process imported it, as such a caller has; here
+        # the one it replaced is a directory of this test's.
+        caller = self.real / "local"
+        source = a_2_9_store(self.root, caller)
+        items = items_of_a_2_9_store(source)
+        before = contents(source.parent, caller / "Valkama")
+        moved = {"LOCALAPPDATA": tests.SUITE_LOCAL_APP_DATA}
+
+        with (
+            mock.patch.object(tests, "CALLER_LOCAL_APP_DATA", str(caller)),
+            mock.patch.dict(os.environ, moved),
+        ):
+            served = self.serve("--store-copy", str(source))
+
+        self.assert_a_2_9_copy_is_served_migrated(items, served)
+        self.assert_stopped_leaving_the_caller_as_it_was(before)
 
     def test_serve_reports_a_store_it_cannot_copy(self) -> None:
         self.addCleanup(self.stop)
