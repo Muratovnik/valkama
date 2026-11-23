@@ -38,7 +38,10 @@
  * only the last (`segmentColumns`). Each host used to state the wrap and only some the sharing:
  * on a phone the scope choice of Participation stood its two segments 135 and 110px wide on
  * lines of 240. Each line then shared its own room, and the set's four broke their two lines
- * 17px apart; the periods, wrapped by their bar, stood three over two at 390px.
+ * 17px apart; the periods, wrapped by their bar, stood three over two at 390px. A host that
+ * places something by where the lines fall asks how many columns the row would stand in across
+ * the width it would give it (`columnsAt`, which the component exposes), as the period bar does
+ * for the cell the periods' short last line leaves.
  *
  * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
  * lays its bar out by the row's whole width, as the Analytics periods, reads that width. A row
@@ -104,7 +107,7 @@ function select(option: { value: T; disabled?: boolean }) {
 
 const track = ref<HTMLElement | null>(null)
 /** The columns of a wrapped row, or null while it stands on one line. */
-const columns = useSegmentColumns(
+const { columns, columnsAt } = useSegmentColumns(
   track,
   () => props.wrap,
   () => props.options.map((option) => option.label).join('\n'),
@@ -180,6 +183,9 @@ function move(event: KeyboardEvent) {
   const option = props.options[to]
   if (option && !(props.tabs && props.activation === 'manual')) select(option)
 }
+
+/** How many columns the row would stand in across a track that wide; null on one line. */
+defineExpose({ columnsAt })
 </script>
 
 <template>
