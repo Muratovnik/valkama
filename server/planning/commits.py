@@ -1099,6 +1099,8 @@ def _recorded(conn: sqlite3.Connection, project_id: str, hashes: list[str]) -> s
 #: How many commits one read of those on no card lists at most, and unasked.
 UNATTACHED_MOST = 500
 UNATTACHED_LIMIT = 100
+#: The longest label a commit attached by hand carries.
+LABEL_LIMIT = 200
 UNATTACHED_BOTH = "[commit] the commits on no card are read by a space or by a project, not both"
 
 
@@ -1265,7 +1267,7 @@ def attach(
         (
             identity,
             commit_id,
-            model.text_field(label, "commits.label", limit=200, required=False),
+            model.text_field(label, "commits.label", limit=LABEL_LIMIT, required=False),
             actor,
             call,
         ),

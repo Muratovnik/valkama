@@ -48,6 +48,8 @@ from datetime import UTC, datetime
 
 from . import item_tree, leases, model
 
+#: The longest `until` a caller may write: a day, a time, a count or a reference.
+UNTIL_LIMIT = 64
 #: The tag of a refusal of putting work off.
 TAG = "deferral"
 #: The purpose of the question the owner is asked when the condition of work put off

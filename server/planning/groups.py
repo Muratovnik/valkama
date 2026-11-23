@@ -274,7 +274,7 @@ def _not_waiting(
 def _check_until(conn: sqlite3.Connection, until: str) -> None:
     """Refuse an `until` that names no day, time or work item, as putting off reads it."""
 
-    text = model.text_field(until, "until", limit=64)
+    text = model.text_field(until, "until", limit=deferral.UNTIL_LIMIT)
     if deferral.moment(text, leases.utc_now()) is not None:
         return
     try:

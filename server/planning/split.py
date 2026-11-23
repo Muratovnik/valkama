@@ -513,7 +513,9 @@ def split_off(
             priority=model.priority(row["priority"] if priority is None else priority),
             description=model.multiline_field(description or "", "work_item.description"),
             labels=model.labels(labels),
-            source=model.text_field(source or "", "work_item.source", limit=512, required=False),
+            source=model.text_field(
+                source or "", "work_item.source", limit=model.MAX_SOURCE, required=False
+            ),
             projects=(
                 sorted(item_projects.ids_of_items(conn, [identity])[identity])
                 if named is None
