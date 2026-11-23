@@ -17,6 +17,7 @@ the items in a state of the deferred category are exactly the items with a condi
 
 from __future__ import annotations
 
+import itertools
 import json
 import unittest
 from datetime import UTC, datetime
@@ -959,6 +960,115 @@ class CommentCountTests(Deferral):
         self.assertEqual(400, status)
         self.assertIn("[deferral] 0 comments is no count", error["message"])
         self.assertEqual("pending", self.returns(g)[0]["status"])
+
+
+#: The conditions a comment brings in the cases of `OneCallTests`: the condition, the
+#: comments written since the put-off, and the clock of the call that comments.
+BROUGHT = (("1 comment", 0, LATER), ("3 comments", 2, LATER), (TOMORROW, 0, CAME))
+
+
+class OneCallTests(Deferral):
+    """A comment that brings put-off work's condition, and a move of the work, in one call.
+
+    The call is one write, and its own move decides where the work stands: taken up,
+    closed or put off anew, the condition that move ends or replaces brings nothing
+    back -- no return to triage on the way, and no question to the owner, asked and
+    ended in the same write or left standing to refuse the move. A comment with no
+    move still brings the work back, as the write ends. Each case runs for a count the
+    comment reaches (one comment, the last of three) and for a day already passed that
+    no pass read yet; for one comment and for two (`comments`); for the person and for
+    an agent; and for work under no goal and under the accepted goal G.
+    """
+
+    def write(self, who: str, **payload: object) -> dict:
+        if who == "person":
+            return self.person(APPLY, **payload)
+        return self.agent("apply_work_item_changes", AS_A, **payload)
+
+    def put_off(self, until: str, before: int, who: str, under: bool) -> str:
+        """An item `who` put off until `until`, with `before` comments of theirs since."""
+
+        t = self.made("t", parent=self.goal if under else None)
+        self.defer(t, until=until, meta=None if who == "person" else AS_A)
+        for _ in range(before):
+            self.write(who, id=t, comment={"body": "Not yet"})
+        return t
+
+    def in_one_call(self, change: dict, expected: str, *, agent: bool = True) -> list[str]:
+        """Comment and `change` in one call for every case; each item ends in `expected`
+        with nothing brought back. `agent=False` leaves out the agent's alone; answers
+        the items."""
+
+        made = []
+        for until, before, at in BROUGHT:
+            for form in ("comment", "comments"):
+                for who, under in itertools.product(("person", "agent"), (False, True)):
+                    if who == "agent" and not under and not agent:
+                        continue
+                    with self.subTest(until=until, form=form, who=who, under=under):
+                        t = self.put_off(until, before, who, under)
+                        said = {"body": "It tips"}
+                        sent = said if form == "comment" else [said, {"body": "And more"}]
+                        with mock.patch.object(leases, "utc_now", lambda at=at: at):
+                            self.write(who, id=t, **{form: sent}, **change)
+                        moves = [event[0] for event in self.events(t, "transitioned")]
+                        self.assertEqual(
+                            (expected, [], [], False),
+                            (
+                                self.category(t),
+                                self.events(t, "returned"),
+                                self.returns(t),
+                                any(move.startswith("triage") for move in moves),
+                            ),
+                            "nothing came back, and the owner was asked nothing",
+                        )
+                        self.holds()
+                        made.append(t)
+        return made
+
+    def test_taking_the_work_up_in_the_call_of_the_comment(self) -> None:
+        self.in_one_call({"transition": {"state": "ready", "acceptance": "assignment"}}, "ready")
+        self.in_one_call({"claim": True}, "active")
+
+    def test_cancelling_the_work_in_the_call_of_the_comment(self) -> None:
+        dropped = {"done": "Nothing", "next": "Nothing", "why": "not needed"}
+        self.in_one_call({"summary": dropped, "transition": {"state": "cancelled"}}, "cancelled")
+
+    def test_completing_the_work_in_the_call_of_the_comment(self) -> None:
+        """An agent completes no work that is not accepted, which a comment does not
+        change: alone, the item is completed by the person only."""
+
+        self.in_one_call(
+            {"summary": DONE, "transition": {"state": "done"}}, "completed", agent=False
+        )
+
+    def test_putting_it_off_again_in_the_call_of_the_comment(self) -> None:
+        made = self.in_one_call(
+            {"defer": {"until": "2026-12-01", "reason": "Still waits"}}, "deferred"
+        )
+        found = {
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT until_at, until_comments, until_item_id, reason, reached_at"
+                " FROM work_item_deferrals WHERE work_item_id IN (SELECT value FROM json_each(?))",
+                (json.dumps([self.identity(t) for t in made]),),
+            )
+        }
+        self.assertEqual(24, len(made))
+        self.assertEqual({("2026-12-01T00:00:00Z", None, None, "Still waits", None)}, found)
+
+    def test_a_comment_with_no_move_brings_it_back_as_the_write_ends(self) -> None:
+        t = self.put_off("1 comment", 0, "person", False)
+        self.person(
+            APPLY,
+            id=t,
+            comment={"body": "It tips"},
+            refs=[{"kind": "url", "value": "https://example.com/reply"}],
+        )
+        self.came_back(t, "comments", "comments 1")
+        u = self.put_off("2 comments", 0, "agent", False)
+        self.write("agent", id=u, comments=[{"body": "One"}, {"body": "Two"}, {"body": "Three"}])
+        self.came_back(u, "comments", "comments 2")
 
 
 if __name__ == "__main__":

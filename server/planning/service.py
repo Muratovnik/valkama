@@ -2523,8 +2523,20 @@ def return_due(
 
 def _return_counted(conn: sqlite3.Connection, identity: str) -> None:
     """Bring the item back when a comment just written on it brought its condition: the
-    count it waits for, or a moment that passed before it, which came first."""
+    count it waits for, or a moment that passed before it, which came first.
 
+    Inside `one_write` the item waits for that write's end, as `_settle` does: a later
+    step of the same write may take it out of deferred or put it off anew, and then
+    nothing comes back and nobody is asked."""
+
+    counted = _COUNTED.get()
+    if counted is not None:
+        counted.setdefault(identity, None)
+        return
+    _return_counted_now(conn, identity)
+
+
+def _return_counted_now(conn: sqlite3.Connection, identity: str) -> None:
     for due in deferral.due(conn, deferral.stamp(leases.utc_now()), 1, work_item_id=identity):
         return_deferred(conn, due)
 
@@ -3682,11 +3694,17 @@ def _say_started(
 _UNSETTLED: contextvars.ContextVar[dict[str, tuple[str | None, str]] | None] = (
     contextvars.ContextVar("planning_unsettled", default=None)
 )
+#: The items a write of several steps wrote a comment on, whose put-off condition its
+#: end reads (`_return_counted`); None outside one. A dict, for the order they came in.
+_COUNTED: contextvars.ContextVar[dict[str, None] | None] = contextvars.ContextVar(
+    "planning_counted", default=None
+)
 
 
 @contextlib.contextmanager
 def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
-    """Hold the holder rule and the container marks to the end of several steps that are one write.
+    """Hold the holder rule, put-off work's count and the container marks to the end of
+    several steps that are one write.
 
     A batch is one write: a task at work that lost its last holder in one step and
     went to review in the next went from work to review, not by way of ready. So
@@ -3694,6 +3712,12 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
     settles each item once, as the last step left it. The goals and stages the steps
     changed the work under are settled after that, once (`marking`), and the list
     this yields names, after the block, those that came to await confirmation.
+
+    So too a comment that reaches the count of put-off work, or finds its day passed:
+    the work comes back, or the owner is asked, at the end of the block, after the
+    write's own move. A write that comments and takes the work up, closes it or puts
+    it off anew in one call has decided where it stands, and the condition that move
+    ended or replaced brings nothing back.
 
     A block inside another joins it: the outer block's end settles both, and the
     inner one's list stays empty.
@@ -3704,10 +3728,17 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
             yield entered
             return
         unsettled: dict[str, tuple[str | None, str]] = {}
+        counted: dict[str, None] = {}
         token = _UNSETTLED.set(unsettled)
+        counting = _COUNTED.set(counted)
         try:
             yield entered
+            # A return moves its item through `_transition`, whose holder rule this
+            # block's end still settles.
+            for identity in list(counted):
+                _return_counted_now(conn, identity)
         finally:
+            _COUNTED.reset(counting)
             _UNSETTLED.reset(token)
         for identity, (author, reason) in unsettled.items():
             _hand_back(conn, identity, author, reason)
@@ -5338,7 +5369,7 @@ def comment_work_item(
     that reply's root, and the answer names the root it joined. `awaits_reply`
     says the writer waits for an answer in that thread; a read says whether one came.
     Work put off until a count of new comments that this one reaches comes back in the
-    same write (`deferral`).
+    same write (`deferral`), as it ends: in a batch, after the batch's own move.
     """
 
     if not conn.in_transaction:

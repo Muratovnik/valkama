@@ -75,9 +75,11 @@ checkouts are therefore distinguishable even at the same version.
   (`"2026-12-01 or 3 comments"`). Every comment and reply written on the item after it
   was put off counts, a person's or an agent's; the comment that reaches the count
   brings the work back in its own write, and under accepted goals the owner is asked
-  once. The record's `deferred` carries `until_comments`, and `returned` says
-  `comments`. The card's «Put off» and a question's «Later…» take the count too. The
-  store moves to schema 25.
+  once. A comment sent in one call with a claim, a move or a new put-off of the work
+  brings nothing back: that call's own move decides where the work stands. The
+  record's `deferred` carries `until_comments`, and `returned` says `comments`. The
+  card's «Put off» and a question's «Later…» take the count too. The store moves to
+  schema 25.
 
 ### Changed
 

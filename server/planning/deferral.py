@@ -17,9 +17,9 @@ the row in the same write.
 - **The count.** Every comment and reply written on the item after the condition was
   set counts, a person's or an agent's: `put` keeps the newest comment's id then, and
   the count reads the item's comments after it. A comment goes only with its item, so
-  the count never falls. The write of a comment asks `due` about its item at once, and
-  the sweep's `returns` step reads every count again, so no comment is missed; the
-  condition comes once, as every other does.
+  the count never falls. The write of a comment asks `due` about its item as it ends,
+  after any move of the same write, and the sweep's `returns` step reads every count
+  again, so no comment is missed; the condition comes once, as every other does.
 - **The row.** `put` sets it, `clear` takes it away with the move out of the deferred
   state, `held` and `restore` keep it across a failed launch's put-back, and `repoint`
   sends the waiting of a merged item to the item it merged into.

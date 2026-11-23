@@ -4376,9 +4376,9 @@ The full record and the card of an item put off carry `deferred`:
 
 **Coming back.** The work comes back when its day or time passes, read by the
 sweep's `returns` step and by `claim_ready_work_item` for its space before it reads
-the queue; in the write of the comment that reaches its count, and at the sweep's
-next pass for a comment the store holds by another path; and in the write that
-completes, cancels or deletes the item it waits on. A count and a moment come back
+the queue; in the write of the comment that reaches its count, as that write ends,
+and at the sweep's next pass for a comment the store holds by another path; and in
+the write that completes, cancels or deletes the item it waits on. A count and a moment come back
 on whichever came first: a moment that passed before the comment that reaches the
 count, though no pass read it yet, came first. An item merged away passes the wait
 to the item it merged into. It comes back
@@ -4409,8 +4409,11 @@ and its move anywhere but a cancelled state, is refused with
 `acceptance_question`, which `force` does not carry.
 
 A claim, or any move out of `deferred`, a cancel included, ends the condition and
-withdraws its question; moving the item under another parent keeps them. Merged
-into an item that is not put off, the item's question ends withdrawn in the merge
+withdraws its question; moving the item under another parent keeps them. A comment
+that reaches the count, or finds the day passed, in the same `apply_work_item_changes`
+as a claim, a `transition` or a new `defer` brings nothing back and asks nothing: the
+write ends with the item where its own move put it, and that move ended or replaced
+the condition. Merged into an item that is not put off, the item's question ends withdrawn in the merge
 and moves to the survivor closed, since its answer `do` would move the survivor
 from wherever it stands; a survivor put off takes the question still waiting. A read
 writes nothing: a condition that came stands until a write brings the work back.
