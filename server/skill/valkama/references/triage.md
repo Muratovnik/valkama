@@ -32,7 +32,10 @@ again.
    the evidence the survivor lacks as comments in one `apply_work_item_changes`
    call, then `merge_work_items` with up to 20 items. The merge clears the
    survivor's mark: if the review leaves the survivor as it is, mark it
-   `triage_seen` in a later call.
+   `triage_seen` in a later call. The survivor may be open work accepted
+   already, outside the stack, which `search_work_items` finds: it takes no
+   mark, and [capacity](#capacity-for-accepted-work) says when it starts
+   blocking a goal.
 4. A repeat you are not sure of, such as the same symptom in another place or
    two defects one fix would end, is a `decision` on the newer item, the later
    by `created_at`, then by number. Its choice field, `answer`, offers `merge`
@@ -63,7 +66,35 @@ again.
 8. Close the review item when `triage_stack: "unseen"` lists nothing, even
    while answers wait: the questions of groups and decisions stay on their own
    items. Its summary gives merged, groups and their answers, decisions asked,
-   marked.
+   goals blocked for capacity, marked.
+
+## Capacity for accepted work
+
+Open work with `acceptance` set, whose cause came back after `acceptance.at` in
+two independent tasks, blocks the goal that pays for it. Apply this whenever
+you record such a repeat: when step 3 merges a finding into that work, or when
+you add evidence to it as a comment, as
+[the work model](work-model.md#a-finding-is-a-task-of-its-own) says. The
+accepted work's `comments` and `links` parts hold what to count.
+
+- **A repeat** is a finding that is the same change as the accepted work: one
+  cause, fix or mechanical rule, as step 3 judges it or a step 4 decision
+  answers `merge`. Count only repeats met after `acceptance.at`, each by the
+  task it was met on: a merged finding by the `discovered-from` link it
+  brought, a comment by the task it names.
+- **Independent tasks** are two different tasks, neither of them the accepted
+  work. Repeats met on one task, or on a task and a part split off it, count
+  once.
+- **The goal that pays** is the goal over both tasks. Link the accepted work
+  `blocks` to it, in the `links` group on the accepted work with the goal as
+  `other`. The goal's `waits_for` then names that work, and the queue gives no
+  task under the goal until the work closes (`ancestor_waits` in `withheld`);
+  work already held there goes on. The accepted work is the goal's first work
+  from then: whoever comes for its next task finds it in `waits_for` and takes
+  it with `claim_work_item`.
+- When no one goal stands over both tasks, or the accepted work stands under
+  that goal and would wait for itself, ask the owner what it blocks, as a
+  `decision` on the accepted work.
 
 ## What the owner's answer does
 

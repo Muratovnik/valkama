@@ -19,7 +19,10 @@ or stage when they share one [DORA, Devin].
 A finding — a failing check, a review remark, a defect or a hindrance seen in
 passing — that is not a step of the item at hand is a task of its own, filed
 without a parent in triage with a topic label and `discovered-from` the item it
-was found on. Evidence of a finding already open is a comment on it.
+was found on. Evidence of a finding already open is a comment on it that names
+the task it was met on; on accepted work,
+[capacity](triage.md#capacity-for-accepted-work) says when it starts blocking a
+goal.
 
 Findings that share a cause, a fix or one mechanical rule are one item, kept as
 its steps or its links. When the same change was filed twice, merge the extras
