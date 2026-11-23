@@ -74,8 +74,12 @@ const STRING = /(['"`])((?:\\.|(?!\1).)*)\1/gu
 const CLASS = /(?<![\w-])\.([a-z][\w-]*)/gu
 const SELECTOR_CALL =
   /(?<![\w$])(?:locator|querySelectorAll|querySelector|closest|matches|get|findAll|find|\$\$|\$|waitForSelector)\(\s*$/u
+/**
+ * The extensions a test names as text. A lone `.jpg` reads exactly as a lone `.graph` does, and
+ * both appear outside any selector call, so only a list tells a file type from a class.
+ */
 const FILE_EXTENSIONS = new Set(
-  'css html js json log md mjs png spec svg test ts txt vue woff woff2'.split(' '),
+  'bin css html jpg js json log md mjs png spec svg test ts txt vue woff woff2'.split(' '),
 )
 
 /** A literal is a selector when it is handed to a selector call or reads as one rather than prose. */
@@ -214,6 +218,8 @@ test('what a test writes itself, a composed class, a file name, prose and a comm
       'const pair = page.locator(',
       "  '.ghost-a .ghost-b',",
       ')',
+      "const EXTENSIONS = { 'image/jpeg': '.jpg', 'text/plain': '.txt' }",
+      "const file = `${name}${EXTENSIONS[type] ?? '.bin'}`",
     ].join('\n'),
   }
   assert.deepEqual(
