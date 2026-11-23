@@ -335,25 +335,42 @@ class Pending:
 #: The latest end per session, agent and path that no later archive row
 #: answers. A subagent stop counts only for the subagent's own transcript: a
 #: stop without one stores the parent's path, which other events of the same
-#: session carry too. `MAX(e.id)` with bare columns takes them from that row.
+#: session carry too. `MAX(id)` with bare columns takes them from that row.
+#:
+#: Each part is one pass over the table, grouped, and the parts are joined
+#: afterwards: the paths a session's own events carry, the latest end of each
+#: transcript, and its latest copy. An end is owed when no copy came after it.
+#: Searching the session again for every end, as a correlated subquery does,
+#: cost the length of a session for each of its subagent stops, which on a
+#: store of tens of thousands of events took seconds.
 _PENDING_SQL = """
-SELECT MAX(e.id), e.client, e.session_id,
-       CASE WHEN e.kind = 'subagent_stop' THEN e.agent_id END AS archive_agent,
-       e.transcript_path
-FROM execution_events e
-WHERE e.session_id IS NOT NULL AND e.transcript_path IS NOT NULL
-  AND (e.kind = 'session_end'
-       OR (e.kind = 'subagent_stop' AND e.agent_id IS NOT NULL
-           AND NOT EXISTS (
-               SELECT 1 FROM execution_events o
-               WHERE o.session_id = e.session_id AND o.transcript_path = e.transcript_path
-                 AND o.kind NOT IN ('subagent_stop', 'transcript_archived', 'transcript_purged'))))
-  AND NOT EXISTS (
-      SELECT 1 FROM execution_events a
-      WHERE a.session_id = e.session_id AND a.kind = 'transcript_archived'
-        AND a.agent_id IS (CASE WHEN e.kind = 'subagent_stop' THEN e.agent_id END)
-        AND a.transcript_path = e.transcript_path AND a.id > e.id)
-GROUP BY e.session_id, archive_agent, e.transcript_path
+WITH own AS (
+    SELECT DISTINCT session_id, transcript_path FROM execution_events
+    WHERE session_id IS NOT NULL AND transcript_path IS NOT NULL
+      AND kind NOT IN ('subagent_stop', 'transcript_archived', 'transcript_purged')
+),
+ends AS (
+    SELECT MAX(id) AS id, client, session_id,
+           CASE WHEN kind = 'subagent_stop' THEN agent_id END AS archive_agent,
+           transcript_path
+    FROM execution_events
+    WHERE session_id IS NOT NULL AND transcript_path IS NOT NULL
+      AND (kind = 'session_end'
+           OR (kind = 'subagent_stop' AND agent_id IS NOT NULL
+               AND (session_id, transcript_path) NOT IN (SELECT * FROM own)))
+    GROUP BY session_id, archive_agent, transcript_path
+),
+copies AS (
+    SELECT MAX(id) AS id, session_id, agent_id, transcript_path FROM execution_events
+    WHERE kind = 'transcript_archived' AND session_id IS NOT NULL AND transcript_path IS NOT NULL
+    GROUP BY session_id, agent_id, transcript_path
+)
+SELECT e.id, e.client, e.session_id, e.archive_agent, e.transcript_path
+FROM ends e
+LEFT JOIN copies c
+  ON c.session_id = e.session_id AND c.agent_id IS e.archive_agent
+ AND c.transcript_path = e.transcript_path
+WHERE c.id IS NULL OR c.id < e.id
 ORDER BY 1
 """
 
@@ -379,9 +396,9 @@ LIMIT 1
 def may_owe(conn: sqlite3.Connection) -> bool:
     """Whether any copy could be owed: False only when `pending` would find none.
 
-    `pending` searches the whole execution tree for later copies of each end,
-    which takes seconds on a large store; this reads one row. A start path asks
-    this, and leaves the search to the sweep it starts.
+    `pending` reads the whole execution tree, several times over, to find the
+    later copies of each end; this reads one row. A start path asks this, and
+    leaves the search to the sweep it starts.
     """
 
     return conn.execute(_MAY_OWE_SQL).fetchone() is not None
