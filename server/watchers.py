@@ -7,6 +7,7 @@ of them without making the other two import it.
 
 from __future__ import annotations
 
+import contextlib
 import queue
 import sys
 import threading
@@ -96,43 +97,45 @@ class Watchers:
         store and links are not the ones the owner's toast would lead to.
         """
 
-        conn = connect()
-        version = conn.execute("PRAGMA data_version").fetchone()[0]
-        ticks = 0
-        while cycles is None or ticks < cycles:
-            time.sleep(interval)
-            ticks += 1
-            # A launch that ended has to be noticed even when nobody is looking:
-            # its card owes a session status and a comment.
-            # One failed cycle must not end the thread that owes every later
-            # one — reaping, the alert of a failed launch, and every change notification
-            # a stream is waiting on all live here — so a failure is reported
-            # and the loop goes on. The helper keeps its own rollback-and-raise
-            # contract; the isolation belongs to the thing that must not die.
-            if ticks % 5 == 0:
-                try:
-                    reaped = reap_finished_launches(conn)
-                except Exception as failure:  # noqa: BLE001 -- this loop is the boundary
-                    self._report_reap_failure(failure)
-                else:
-                    self._reported_reap_failure = ""
-                    if reaped:
-                        if alerts:
-                            try:
-                                alert_emit.after_reap(conn, reaped)
-                            except Exception as failure:  # noqa: BLE001 -- an alert must not stop the reaper
-                                self._report_reap_failure(failure)
-                        version = conn.execute("PRAGMA data_version").fetchone()[0]
-                        self.publish("changed")
-                        continue
-            with self._lock:
-                idle = not self._queues
-            if idle:
-                continue
-            current = conn.execute("PRAGMA data_version").fetchone()[0]
-            if current != version:
-                version = current
-                self.publish("changed")
+        # The thread's own connection, for the life of the process when `cycles` is
+        # None; closed when a bounded run returns.
+        with contextlib.closing(connect()) as conn:
+            version = conn.execute("PRAGMA data_version").fetchone()[0]
+            ticks = 0
+            while cycles is None or ticks < cycles:
+                time.sleep(interval)
+                ticks += 1
+                # A launch that ended has to be noticed even when nobody is looking:
+                # its card owes a session status and a comment.
+                # One failed cycle must not end the thread that owes every later
+                # one — reaping, the alert of a failed launch, and every change notification
+                # a stream is waiting on all live here — so a failure is reported
+                # and the loop goes on. The helper keeps its own rollback-and-raise
+                # contract; the isolation belongs to the thing that must not die.
+                if ticks % 5 == 0:
+                    try:
+                        reaped = reap_finished_launches(conn)
+                    except Exception as failure:  # noqa: BLE001 -- this loop is the boundary
+                        self._report_reap_failure(failure)
+                    else:
+                        self._reported_reap_failure = ""
+                        if reaped:
+                            if alerts:
+                                try:
+                                    alert_emit.after_reap(conn, reaped)
+                                except Exception as failure:  # noqa: BLE001 -- an alert must not stop the reaper
+                                    self._report_reap_failure(failure)
+                            version = conn.execute("PRAGMA data_version").fetchone()[0]
+                            self.publish("changed")
+                            continue
+                with self._lock:
+                    idle = not self._queues
+                if idle:
+                    continue
+                current = conn.execute("PRAGMA data_version").fetchone()[0]
+                if current != version:
+                    version = current
+                    self.publish("changed")
 
 
 WATCHERS = Watchers()

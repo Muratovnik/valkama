@@ -1,14 +1,17 @@
 """Name the test modules a change reaches, and run them.
 
-    python tests/affected.py [RANGE | --staged] [--list] [--why]
+    python tests/affected.py [RANGE | --staged] [--list] [--why] [--jobs N]
 
 RANGE is what `git diff` takes, such as `HEAD~1..HEAD` after a commit; `--staged`
 reads the index; with neither, the working tree against `HEAD`, untracked files
-included. Without `--list` the modules run in one `python -m unittest` from the
-repository root and the exit code is its own. A selection of more than a quarter
-of the test modules is a heavy run, as `tests/machine_lock.py` names one: it goes
-through the machine's heavy-test gate declaring what the whole suite declares, and
-waits there while another checkout's runs leave it no room.
+included. Without `--list` the modules run from the repository root and the exit
+code is the run's. A selection of a quarter of the test modules or fewer runs in
+one `python -m unittest` and takes no lock, as any targeted run. A larger one is a
+heavy run, as `tests/machine_lock.py` names one: it runs through
+`tests/parallel.py`, `--jobs` processes at once, which goes through the machine's
+heavy-test gate declaring their CPUs and waits there while another checkout's runs
+leave it no room. `--jobs 1` runs it in one `python -m unittest` instead, through
+the gate with what the whole suite in one process declares.
 
 A test module is reached when:
 
@@ -77,11 +80,13 @@ SURFACES: Mapping[str, str] = {
 #: two such runs at once fail timing-sensitive tests that pass alone, which is
 #: what the machine's heavy-test lock is for.
 HEAVY_SHARE = 0.25
-#: The logical CPUs a heavy selection declares at the gate: one unittest process, as
-#: the whole suite is, so the figure is `tests.WHOLE_SUITE_CPUS`, held equal by a test.
+#: The logical CPUs a heavy selection run in one process declares at the gate, as the
+#: whole suite in one process does: `tests.WHOLE_SUITE_CPUS`, held equal by a test.
 #: Not imported from there: importing the `tests` package moves the environment that
 #: the run started here inherits.
 HEAVY_SELECTION_CPUS = 2
+#: The runner of a heavy selection in several processes, run as a script.
+PARALLEL = ROOT / "tests" / "parallel.py"
 
 WEB = "web/"
 WEB_BUILD = "web/dist/"
@@ -221,13 +226,20 @@ def web_command(changed: Iterable[str]) -> list[str]:
     return ["npx", "vitest", "related", "--run", "--maxWorkers=2", *files] if files else []
 
 
-def run_command(chosen: Sequence[str], test_modules: int) -> list[str]:
-    """The command that runs the selection; a heavy one through the machine's gate."""
+def run_command(chosen: Sequence[str], test_modules: int, jobs: int | None = None) -> list[str]:
+    """The command that runs the selection; a heavy one through the machine's gate.
+
+    `jobs` is how many processes a heavy one runs in at once, the runner's default
+    when None; 1 is one unittest process.
+    """
 
     command = [sys.executable, "-m", "unittest", *chosen]
     if len(chosen) <= test_modules * HEAVY_SHARE:
         return command
     what = f"tests/affected.py: {len(chosen)} of {test_modules} test modules"
+    if jobs != 1:
+        parallel = [sys.executable, str(PARALLEL), "--run", what]
+        return [*parallel, *([] if jobs is None else ["--jobs", str(jobs)]), *chosen]
     lock = str(ROOT / "tests" / "machine_lock.py")
     return [
         *(sys.executable, lock, "run", "--run", what),
@@ -246,7 +258,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     where.add_argument("--staged", action="store_true", help="the index against HEAD")
     parser.add_argument("--list", action="store_true", help="name the modules, run nothing")
     parser.add_argument("--why", action="store_true", help="give each module its reason")
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        help="processes a heavy selection runs in at once; 1 is one unittest process",
+    )
     options = parser.parse_args(argv)
+    if options.jobs is not None and options.jobs < 1:
+        parser.error("--jobs is a whole number from 1")
 
     changed = changed_files(options.range, staged=options.staged)
     graph = build_graph()
@@ -263,7 +282,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if options.list or not chosen:
         return 0
     test_modules = sum(1 for module in graph.modules if is_test_module(module))
-    return subprocess.run(run_command(list(chosen), test_modules), cwd=ROOT, check=False).returncode
+    command = run_command(list(chosen), test_modules, options.jobs)
+    return subprocess.run(command, cwd=ROOT, check=False).returncode
 
 
 if __name__ == "__main__":

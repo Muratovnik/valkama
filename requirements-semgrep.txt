@@ -1,0 +1,10 @@
+# semgrep, pinned for the Valkama gate in an environment of its own.
+#
+# semgrep is a command-line tool that nothing here imports, and its releases pin
+# dependencies tighter than the rest of the toolchain moves: from 1.137.0 on it
+# requires pywin32==311 on Windows, which has no wheel for the newest Python. So
+# it is not in requirements-dev.txt but in `.venv-semgrep` beside `.venv`, built
+# on the newest Python its dependencies install on, and the gate runs it from
+# there and checks this pin there. The day it installs into `.venv` again, this
+# line can move back into requirements-dev.txt.
+semgrep==1.186.0

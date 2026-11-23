@@ -55,13 +55,25 @@ refs of one item label differently. Read the file before migrating, and add a
 project where it is right. It refuses a file that already exists.
 
 Then stop every process that holds the store -- the listener and every agent
-client, since each one runs its own server -- and run:
+client, since each one runs its own server -- wait three minutes, and run:
 
 ```powershell
 valkama migrate work-model --item-projects item-projects.json
 ```
 
-It migrates the configured store (`store` or `VALKAMA_DB`). First it checks, only
+It migrates the configured store (`store` or `VALKAMA_DB`). First it checks that the
+Python running it has SQLite 3.47.1 or newer, since the migration has crashed on an
+older one: an older SQLite refuses the run with "this Python runs SQLite `<version>`,
+and the work-model migration needs SQLite 3.47.1 or newer: run it again with a Python
+whose SQLite is 3.47.1 or newer; nothing was written", a `refused` report and exit
+code 1, and `--dry-run` refuses the same way before it copies the store. Python
+prints its SQLite with `python -c "import sqlite3; print(sqlite3.sqlite_version)"`.
+The service itself still runs on SQLite 3.43 or newer. Then it checks that no
+Valkama server is still running: the listener and each client's server mark the
+liveness file beside the store (`<store>.liveness`) once a minute, so a mark less
+than three minutes old refuses the run with "a Valkama server was running `<n>` s
+ago: stop the listener and every agent client, wait `<m>` s and run this again;
+nothing was written", a `refused` report and exit code 1. Then it checks, only
 reading, that the registry is format 4 and binds each space's project to it, that no
 two spaces share a name, and that the file belongs to this store as it is now and
 names registered projects only, holds a well-formed record of every commit ref, and
@@ -89,9 +101,10 @@ the refs table is rebuilt to refuse the kind `commit`, as a fresh store's does.
 
 `--dry-run` migrates a copy instead and only reads the store: `--into <directory>`
 keeps the copy and its snapshot there, and without it the copy goes when the run
-ends. To go back to Valkama 2.9 after the migration, stop every process that holds
-the store, delete the `-wal` and `-shm` files beside it, put the `pre3.0` snapshot in
-place of the database and its `.images` folder in place of `images`, as
+ends. The copy has no liveness file, so a dry run needs no server stopped. To go
+back to Valkama 2.9 after the migration, stop every process that holds the store,
+delete the `-wal` and `-shm` files beside it, put the `pre3.0` snapshot in place of
+the database and its `.images` folder in place of `images`, as
 [Restoring a snapshot](#restoring-a-snapshot) describes, and only then pin the 2.9
 release with `launcher install --revision <commit>`; everything written since the
 migration is lost. A 2.9 build refuses a store at 23.

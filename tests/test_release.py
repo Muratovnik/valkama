@@ -63,11 +63,13 @@ typos==1.51.1
 vulture==2.16
 mypy==2.4.1
 import-linter==2.15
-semgrep==1.183.0
 
 coverage==7.17.0
 hypothesis==6.170.14
 """
+
+#: The pins of semgrep's environment of its own.
+SEMGREP_PINS = "semgrep==1.186.0\n"
 
 
 def _script(directory: Path, name: str) -> Path:
@@ -194,18 +196,31 @@ class FakeStages:
 class FakeEnvironment:
     """An interpreter's environment on disk: its executable, its scripts, its installs."""
 
-    SCRIPTS = ("typos", "lint-imports", "semgrep")
+    SCRIPTS = ("typos", "lint-imports")
 
-    def __init__(self, root: Path, installed: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        root: Path,
+        installed: dict[str, str] | None = None,
+        *,
+        pinned: str = PINS,
+        scripts: tuple[str, ...] = SCRIPTS,
+    ) -> None:
         self.scripts = root / ("Scripts" if sys.platform == "win32" else "bin")
         self.scripts.mkdir(parents=True)
         self.executable = _script(self.scripts, "python")
-        self.installed = dict(release.pins(PINS) if installed is None else installed)
-        for name in self.SCRIPTS:
+        self.installed = dict(release.pins(pinned) if installed is None else installed)
+        for name in scripts:
             _script(self.scripts, name)
 
     def interpreter(self) -> object:
         return release.Interpreter(self.executable, self.scripts, self.installed.get)
+
+
+def semgrep_environment(root: Path, installed: dict[str, str] | None = None) -> FakeEnvironment:
+    """semgrep's environment of its own, holding its pin and its launcher."""
+
+    return FakeEnvironment(root, installed, pinned=SEMGREP_PINS, scripts=("semgrep", "pysemgrep"))
 
 
 class ReleaseToolchainTests(unittest.TestCase):
@@ -214,52 +229,81 @@ class ReleaseToolchainTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         self.environment = FakeEnvironment(self.root / "venv")
+        self.semgrep = semgrep_environment(self.root / "venv-semgrep")
         # A second environment on PATH holding every script, as a shared
         # install does: nothing may be taken from it.
         self.shared = self.root / "shared"
         self.shared.mkdir()
-        for name in (*FakeEnvironment.SCRIPTS, "pysemgrep", "ruff", "mypy"):
+        for name in (*FakeEnvironment.SCRIPTS, "semgrep", "pysemgrep", "ruff", "mypy"):
             _script(self.shared, name)
         path = mock.patch.dict(os.environ, {"PATH": str(self.shared)})
         path.start()
         self.addCleanup(path.stop)
 
-    def refusal(self, interpreter: object) -> str:
+    def own(self, semgrep: FakeEnvironment | None = None) -> dict[object, object]:
+        """semgrep's environment of its own, as `release.own_environments` reads one."""
+
+        environment = self.semgrep if semgrep is None else semgrep
+        return {
+            release.SEMGREP_ENVIRONMENT: (environment.interpreter(), release.pins(SEMGREP_PINS))
+        }
+
+    def toolchain(
+        self, interpreter: object | None = None, semgrep: FakeEnvironment | None = None
+    ) -> dict[str, tuple[str, ...]]:
+        chosen = self.environment.interpreter() if interpreter is None else interpreter
+        return release.require_toolchain(chosen, release.pins(PINS), self.own(semgrep))
+
+    def refusal(
+        self, interpreter: object | None = None, semgrep: FakeEnvironment | None = None
+    ) -> str:
         with self.assertRaises(release.ToolchainError) as refused:
-            release.require_toolchain(interpreter, release.pins(PINS))
+            self.toolchain(interpreter, semgrep)
         return str(refused.exception)
 
     # -- resolution ---------------------------------------------------------
 
     def test_every_tool_resolves_inside_the_running_interpreters_environment(self) -> None:
-        commands = release.require_toolchain(self.environment.interpreter(), release.pins(PINS))
+        commands = self.toolchain()
         self.assertEqual(set(release.TOOLS), set(commands))
         executable = str(self.environment.executable)
         for name in ("ruff", "vulture", "mypy", "coverage"):
             self.assertEqual((executable, "-m", name), commands[name], name)
-        for name in ("typos", "lint-imports", "semgrep"):
+        for name in ("typos", "lint-imports"):
             [found] = commands[name]
             self.assertEqual(self.environment.scripts, Path(found).parent, name)
 
+    def test_semgrep_resolves_inside_its_own_environment_alone(self) -> None:
+        # A semgrep the running interpreter holds, as an older `.venv` does,
+        # neither stands in for the one of its own environment nor is checked.
+        _script(self.environment.scripts, "semgrep")
+        self.environment.installed["semgrep"] = "1.150.0"
+        [found] = self.toolchain()["semgrep"]
+        self.assertEqual(self.semgrep.scripts, Path(found).parent)
+
     def test_a_script_on_path_does_not_stand_in_for_a_missing_one(self) -> None:
-        semgrep = next(self.environment.scripts.glob("semgrep*"))
-        semgrep.unlink()
-        message = self.refusal(self.environment.interpreter())
-        self.assertIn("semgrep", message)
-        self.assertIn(str(self.environment.scripts), message)
+        next(self.environment.scripts.glob("typos*")).unlink()
+        message = self.refusal()
+        self.assertIn(f"no typos console script in {self.environment.scripts}", message)
+
+    def test_a_script_of_the_running_interpreter_does_not_stand_in_for_semgreps(self) -> None:
+        (self.semgrep.scripts / ("semgrep.exe" if sys.platform == "win32" else "semgrep")).unlink()
+        _script(self.environment.scripts, "semgrep")
+        message = self.refusal()
+        self.assertIn(f"no semgrep console script in {self.semgrep.scripts}", message)
 
     def test_a_script_in_the_current_directory_does_not_stand_in_either(self) -> None:
         # shutil.which searches the current directory first on Windows, even
         # when it is handed a path of its own.
-        next(self.environment.scripts.glob("semgrep*")).unlink()
+        next(self.environment.scripts.glob("typos*")).unlink()
         here = self.root / "checkout"
         here.mkdir()
-        _script(here, "semgrep")
+        _script(here, "typos")
         previous = Path.cwd()
         os.chdir(here)
         self.addCleanup(os.chdir, previous)
-        message = self.refusal(self.environment.interpreter())
-        self.assertIn(f"no semgrep console script in {self.environment.scripts}", message)
+        message = self.refusal()
+        self.assertIn(f"no typos console script in {self.environment.scripts}", message)
 
     def test_the_tool_environment_puts_the_interpreters_scripts_first(self) -> None:
         # semgrep's launcher finds pysemgrep through PATH and only appends its
@@ -281,17 +325,45 @@ class ReleaseToolchainTests(unittest.TestCase):
     def test_a_missing_or_mismatched_pin_is_refused_with_what_to_run(self) -> None:
         installed = release.pins(PINS)
         del installed["ruff"]
-        installed["semgrep"] = "1.150.0"
         environment = FakeEnvironment(self.root / "shared-python", installed)
-        message = self.refusal(environment.interpreter())
+        semgrep = semgrep_environment(self.root / "old-semgrep", {"semgrep": "1.150.0"})
+        message = self.refusal(environment.interpreter(), semgrep)
         self.assertIn(str(environment.executable), message)
         self.assertIn("ruff: not installed; requirements-dev.txt pins 0.17.3", message)
-        self.assertIn("semgrep: 1.150.0 installed; requirements-dev.txt pins 1.183.0", message)
+        self.assertIn("semgrep: 1.150.0 installed; requirements-semgrep.txt pins 1.186.0", message)
         self.assertNotIn("mypy", message)
         # uv's venv holds no pip, so each way of creating one names its own installer.
-        self.assertIn("uv venv .venv --python 3.11, then uv pip install --python", message)
+        self.assertIn(
+            f"uv venv .venv --python {release.VENV_PYTHON}, then uv pip install --python", message
+        )
         self.assertIn("python -m venv .venv, then .venv/Scripts/python -m pip install", message)
         self.assertIn(".github/relkit.pyz release prepare", message)
+        self.assertIn(
+            f"uv venv .venv-semgrep --python {release.SEMGREP_ENVIRONMENT.python}, then uv pip"
+            " install --python .venv-semgrep/Scripts/python.exe -r requirements-semgrep.txt",
+            message,
+        )
+
+    def test_semgreps_environment_missing_is_refused_with_how_to_build_it(self) -> None:
+        absent = release.environment_interpreter(self.root / "no-venv-semgrep")
+        own = {release.SEMGREP_ENVIRONMENT: (absent, release.pins(SEMGREP_PINS))}
+        with self.assertRaises(release.ToolchainError) as refused:
+            release.require_toolchain(self.environment.interpreter(), release.pins(PINS), own)
+        message = str(refused.exception)
+        self.assertIn(
+            f"semgrep: no environment at {release.SEMGREP_ENVIRONMENT.directory};"
+            " build it from requirements-semgrep.txt",
+            message,
+        )
+        self.assertIn("uv venv .venv-semgrep --python", message)
+
+    def test_semgrep_unpinned_in_its_own_requirements_is_refused(self) -> None:
+        own = {release.SEMGREP_ENVIRONMENT: (self.semgrep.interpreter(), {})}
+        with self.assertRaises(release.ToolchainError) as refused:
+            release.require_toolchain(self.environment.interpreter(), release.pins(PINS), own)
+        self.assertIn(
+            "semgrep: semgrep is not pinned in requirements-semgrep.txt", str(refused.exception)
+        )
 
     def test_a_pin_the_suite_imports_counts_although_no_stage_runs_it(self) -> None:
         installed = release.pins(PINS)
@@ -308,9 +380,43 @@ class ReleaseToolchainTests(unittest.TestCase):
             mock.patch.object(release, "require_version") as version,
             self.assertRaises(release.ToolchainError),
         ):
-            release.check(interpreter, PINS)
+            release.check(interpreter, PINS, self.own())
         run.assert_not_called()
         version.assert_not_called()
+
+    # -- an environment read from its files -----------------------------------
+
+    def test_an_environment_is_read_from_its_own_site_packages(self) -> None:
+        directory = self.root / "venv-on-disk"
+        if sys.platform == "win32":
+            site = directory / "Lib" / "site-packages"
+        else:
+            site = directory / "lib" / "python3.14" / "site-packages"
+        info = site / "semgrep-1.186.0.dist-info"
+        info.mkdir(parents=True)
+        (info / "METADATA").write_text(
+            "Metadata-Version: 2.1\nName: semgrep\nVersion: 1.186.0\n", encoding="utf-8"
+        )
+        interpreter = release.environment_interpreter(directory)
+        self.assertEqual("1.186.0", interpreter.version_of("semgrep"))
+        # What the running interpreter has does not answer for it.
+        self.assertIsNone(interpreter.version_of("coverage"))
+        scripts = directory / ("Scripts" if sys.platform == "win32" else "bin")
+        self.assertEqual(scripts, interpreter.scripts)
+        self.assertEqual(scripts, interpreter.executable.parent)
+
+    def test_a_stage_runs_with_its_programs_directory_first_on_path(self) -> None:
+        [semgrep] = self.toolchain()["semgrep"]
+        base = {"PATH": os.pathsep.join([str(self.environment.scripts), str(self.shared)])}
+        found = release.program_environment((semgrep, "scan"), base)
+        self.assertEqual(
+            [str(self.semgrep.scripts), str(self.environment.scripts), str(self.shared)],
+            found["PATH"].split(os.pathsep),
+        )
+        # A program already first, or one PATH resolves, leaves PATH as it was.
+        python = str(self.environment.executable)
+        self.assertEqual(base, release.program_environment((python, "-m", "ruff"), base))
+        self.assertEqual(base, release.program_environment((release.NPM, "test"), base))
 
     def outside(self) -> Path:
         """A directory outside every checkout and copy, which nothing the check removes enters."""
@@ -340,7 +446,7 @@ class ReleaseToolchainTests(unittest.TestCase):
             mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.root / "local")}),
             mock.patch.object(release.tempfile, "tempdir", str(self.root / "local" / "Temp")),
         ):
-            release.check(self.environment.interpreter(), PINS)
+            release.check(self.environment.interpreter(), PINS, self.own())
 
     def checked_commands(self, checkout: Path | None = None) -> list:
         """Every call but Git's that `check` made on a checkout of `SOURCES`, none for real."""
@@ -351,15 +457,21 @@ class ReleaseToolchainTests(unittest.TestCase):
 
     def test_check_runs_each_python_stage_from_the_interpreters_environment(self) -> None:
         calls = self.checked_commands()
-        inside = (str(self.environment.executable), str(self.environment.scripts))
         python_stages = [call for call in calls if call.args[0][0] != release.NPM]
         self.assertEqual(10, len(python_stages))
         for call in calls:
             command = call.args[0]
+            # semgrep alone comes from its environment of its own, and runs with
+            # that environment's scripts first; every other stage with the interpreter's.
+            own = len(command) > 1 and command[1] == "scan"
+            environment = self.semgrep if own else self.environment
             if command[0] != release.NPM:
-                self.assertTrue(command[0].startswith(inside), command)
+                self.assertEqual(environment.scripts, Path(command[0]).parent, command)
             path = call.kwargs["env"]["PATH"].split(os.pathsep)
-            self.assertEqual(str(self.environment.scripts), path[0], command)
+            self.assertEqual(str(environment.scripts), path[0], command)
+            if own:
+                self.assertEqual(str(self.environment.scripts), path[1], command)
+        self.assertEqual(1, sum(call.args[0][1:2] == ("scan",) for call in calls))
 
     # -- the modules the npm stages run on ------------------------------------
 
@@ -539,7 +651,27 @@ class ReleaseToolchainTests(unittest.TestCase):
     def test_every_tool_the_check_runs_is_pinned_in_the_repository(self) -> None:
         pinned = release.pins((ROOT / "requirements-dev.txt").read_text(encoding="utf-8"))
         for name, tool in release.TOOLS.items():
-            self.assertIn(tool.distribution, pinned, name)
+            with self.subTest(tool=name):
+                if tool.environment is None:
+                    self.assertIn(tool.distribution, pinned)
+                    continue
+                # Pinned in its own file and not in the shared one, which the
+                # Python `.venv` is built on could not install.
+                self.assertTrue(tool.environment.requirements.is_relative_to(ROOT))
+                own = release.pins(tool.environment.requirements.read_text(encoding="utf-8"))
+                self.assertIn(tool.distribution, own)
+                self.assertNotIn(tool.distribution, pinned)
+
+    def test_an_environment_of_its_own_is_ignored_beside_the_projects(self) -> None:
+        # Ignored by name, as `.venv` is: ruff and typos read the ignore file,
+        # and would otherwise lint the installed packages.
+        ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn(".venv/", ignored)
+        for tool in release.TOOLS.values():
+            if tool.environment is not None:
+                directory = tool.environment.directory
+                self.assertEqual(ROOT, directory.parent)
+                self.assertIn(f"{directory.name}/", ignored)
 
 
 #: A hand-written document in the shape of LiteLLM's price list: USD per token, a

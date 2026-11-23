@@ -104,7 +104,7 @@ vulture server tests valkama.py vulture_whitelist.py --min-confidence 60
 mypy
 lint-imports --cache-dir .cache/import-linter
 semgrep scan --config p/python --config p/security-audit --metrics off --error server valkama.py
-python -m coverage run -m unittest discover -s . -p "test_*.py"
+python tests/parallel.py --coverage
 python -m coverage report
 cd web
 npm test
@@ -113,6 +113,10 @@ npm run build
 cd ../desktop
 npm test
 ```
+
+`tests/parallel.py` runs every test module in a process of its own, several at
+once, and sums their results into one unittest verdict. The same suite in one
+process is still `python -m coverage run -m unittest discover -s . -p "test_*.py"`.
 
 The history step reads every commit and refuses a tracked tree with uncommitted
 changes, so it is not a step between commits: it runs on the clean head before
@@ -166,8 +170,10 @@ opens a card through its route or `/open/<number>?in=browser`, because `/open/<n
 alone starts the desktop app on the person's screen, and a visible Electron
 window is opened only at a time agreed with the person.
 
-Every tool above is a development dependency pinned in `requirements-dev.txt`,
-configured in `pyproject.toml`. The server itself imports nothing outside the
+Every tool above is a development dependency pinned in `requirements-dev.txt`
+(semgrep in `requirements-semgrep.txt`, for an environment of its own that
+`.agents/rules/quality-gates.md` describes), configured in `pyproject.toml`.
+The server itself imports nothing outside the
 standard library and must keep it that way, because the desktop app launches the
 system Python with no virtualenv.
 

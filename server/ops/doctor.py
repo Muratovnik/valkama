@@ -279,11 +279,8 @@ def _store_checks() -> list[dict]:
             *_spool_checks(path),
         ]
     try:
-        stored = int(
-            sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-            .execute("PRAGMA user_version")
-            .fetchone()[0]
-        )
+        with store.read_only(path) as conn:
+            stored = int(conn.execute("PRAGMA user_version").fetchone()[0])
     except sqlite3.Error as failure:
         return [
             _check(
@@ -418,8 +415,7 @@ def _execution_event_checks(path: str) -> list[dict]:
 
     since = f"-{EVENT_WINDOW_DAYS} days"
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             spooled = conn.execute(
                 "SELECT COUNT(*) FROM execution_events WHERE delivery = 'spooled'"
                 " AND received_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)",
@@ -449,8 +445,6 @@ def _execution_event_checks(path: str) -> list[dict]:
                     f"-{RECENT_FALLBACK_HOURS} hours",
                 ),
             ).fetchall()
-        finally:
-            conn.close()
     except sqlite3.Error as failure:
         return [
             _check(
@@ -564,8 +558,7 @@ def _transcript_check(path: str) -> dict:
 
     root = transcripts.directory(path)
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             found = transcripts.summary(conn, root)
             stale = bool(
                 found["oldest_pending"]
@@ -574,8 +567,6 @@ def _transcript_check(path: str) -> dict:
                     (found["oldest_pending"], TRANSCRIPT_PENDING_WARN_DAYS),
                 ).fetchone()[0]
             )
-        finally:
-            conn.close()
     except sqlite3.Error as failure:
         return _check(
             "transcript-archive",
@@ -627,11 +618,8 @@ def _unpriced_usage_check(path: str) -> dict:
     """
 
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             found = conn.execute(usage_store.UNPRICED_BY_MODEL).fetchall()
-        finally:
-            conn.close()
     except sqlite3.Error as failure:
         return _check(
             "usage-prices",
@@ -677,13 +665,10 @@ def _usage_copies_check(path: str) -> dict:
     """
 
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             requests, runs = conn.execute(
                 "SELECT COUNT(DISTINCT request), COUNT(DISTINCT run_id) FROM usage_yields"
             ).fetchone()
-        finally:
-            conn.close()
     except sqlite3.Error as failure:
         return _check(
             "usage-copies",
@@ -737,11 +722,8 @@ def _usage_organization_check(path: str) -> dict:
     """
 
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             segments, known, seconds, known_seconds = conn.execute(_ORGANIZATION_SHARE).fetchone()
-        finally:
-            conn.close()
     except sqlite3.Error as failure:
         return _check(
             "usage-organization",
@@ -803,11 +785,8 @@ def _usage_reading_check(path: str) -> dict:
     """Where reading the usage runs again stands, from what the runs say. One query."""
 
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             found = conn.execute(_READING_BY_CLASS, {"reading": usage_store.READING}).fetchall()
-        finally:
-            conn.close()
     except sqlite3.Error as failure:
         return _check(
             "usage-reading",
@@ -997,13 +976,10 @@ def _last_reading(path: str, source: str) -> str | None:
     if not os.path.isfile(path):
         return None
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             row = conn.execute(
                 "SELECT MAX(at) FROM quota_samples WHERE source = ?", (source,)
             ).fetchone()
-        finally:
-            conn.close()
     except sqlite3.Error:
         return None
     return row[0] if row and isinstance(row[0], str) else None
@@ -1706,11 +1682,8 @@ def _quota_poll_checks() -> list[dict]:
     path = store.db_path()
     title = "Quota poll"
     try:
-        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-        try:
+        with store.read_only(path) as conn:
             on = quota_settings.read(conn)["poll"]
-        finally:
-            conn.close()
     except sqlite3.Error as failure:
         return [
             _check(

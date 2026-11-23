@@ -381,6 +381,7 @@ files = [
   "tests/agent_probes_judge.py",
   "tests/commit_subjects.py",
   "tests/machine_lock.py",
+  "tests/parallel.py",
   "tests/run_record.py",
 ]
 check_untyped_defs = true
@@ -414,14 +415,15 @@ warn_unused_configs = true
 # measured figure rises; never lower it to make a run green.
 [tool.coverage.run]
 branch = true
-# `tests.isolated`, `tests.commit_subjects`, `tests.machine_lock` and
-# `tests.run_record` are tools that happen to live beside the tests rather than
-# tests, so they are measured like the code they run beside.
+# `tests.isolated`, `tests.commit_subjects`, `tests.machine_lock`,
+# `tests.parallel` and `tests.run_record` are tools that happen to live beside the
+# tests rather than tests, so they are measured like the code they run beside.
 source = [
   "server",
   "tests.isolated",
   "tests.commit_subjects",
   "tests.machine_lock",
+  "tests.parallel",
   "tests.run_record",
 ]
 data_file = ".cache/coverage/data"
