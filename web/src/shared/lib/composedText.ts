@@ -16,6 +16,7 @@ export type StateWords = (key: string) => string
 const Q = 'composed.question'
 const D = 'composed.decision'
 const REMOVED = `${Q}.steps_asked.removed`
+const STEPS_ASK = `${Q}.steps_asked.ask`
 /** The end of a sentence an agent wrote: a stop, a question or exclamation mark or an ellipsis. */
 const SENTENCE_END = /[.!?…]["'»”’)\]]*$/u
 
@@ -58,10 +59,7 @@ function confirmationLines(say: Say, values: Confirmation): string[] {
   if (values.steps.length > 0)
     lines.push('', say(`${Q}.confirm.steps`), ...values.steps.map((step) => `- ${step}`))
   else if (values.hidden === 0) lines.push('', say(`${Q}.confirm.noSteps`))
-  if (values.hidden > 0)
-    lines.push(
-      say(`${Q}.confirm.hidden`, { n: values.hidden, reference: values.reference }, values.hidden),
-    )
+  if (values.hidden > 0) lines.push(say(`${Q}.confirm.hidden`, { n: values.hidden }, values.hidden))
   return lines
 }
 
@@ -77,13 +75,12 @@ function agentConfirms(
   return [first, ...confirmationLines(say, values)].join('\n')
 }
 
+/**
+ * A cancel the owner decides on: what the agent does, the ask, then the agent's reason and what
+ * the sessions at work said, which can run long and fold away without taking the ask with them.
+ */
 function cancelAsked(say: Say, values: Extract<PromptMessage, { key: 'cancel_asked' }>['values']) {
-  const parts = [
-    say(`${Q}.cancel_asked.${values.point}`, {
-      reference: values.reference,
-      title: sentence(values.title),
-    }),
-  ]
+  const parts = [say(`${Q}.cancel_asked.${values.point}`), say(`${Q}.cancel_asked.ask`)]
   if (values.reason)
     parts.push(say(`${Q}.cancel_asked.reason`, { reason: sentence(values.reason) }))
   if (values.sessions_asked) parts.push(say(`${Q}.cancel_asked.sessions`))
@@ -96,50 +93,48 @@ function cancelAsked(say: Say, values: Extract<PromptMessage, { key: 'cancel_ask
     )
   if (values.unanswered.length > 0)
     parts.push(say(`${Q}.cancel_asked.unanswered`, { sessions: values.unanswered.join(', ') }))
-  parts.push(say(`${Q}.cancel_asked.ask`))
   return parts.join(' ')
 }
 
-/** A question's prompt, in markdown, from its key and values. */
+/**
+ * A question's prompt, in markdown, from its key and values. Its own card's number and title stand
+ * in the head over it, so the words call that card «this» and leave both values unsaid.
+ */
 function promptText(message: PromptMessage, say: Say, state: StateWords): string {
   switch (message.key) {
     case 'task_filed':
-    case 'task_moved_in':
+    case 'task_moved_in': {
+      return say(`${Q}.${message.key}`, { goal: message.values.goal })
+    }
     case 'goal_proposed':
     case 'goal_came_back': {
-      const { title, ...values } = message.values
-      return say(`${Q}.${message.key}`, { ...values, title: sentence(title) })
+      return say(`${Q}.${message.key}`)
     }
     case 'task_moved_to': {
-      const { title, state: key, ...values } = message.values
-      return say(`${Q}.task_moved_to`, { ...values, state: state(key), title: sentence(title) })
+      const { goal, state: key } = message.values
+      return say(`${Q}.task_moved_to`, { goal, state: state(key) })
     }
     case 'put_off_asked': {
-      const { kind, title, reason, reference, until, comments } = message.values
+      const { kind, reason, until, comments } = message.values
       return say(`${Q}.put_off_asked.${kind}`, {
-        reference,
         until: putOffUntil(say, until, comments),
-        title: sentence(title),
         reason: sentence(reason),
       })
     }
     case 'put_off_came': {
-      const { reference, until, item, comments } = message.values
+      const { until, item, comments } = message.values
       if (comments !== null)
-        return say(`${Q}.put_off_came.comments`, {
-          reference,
-          comments: putOffUntil(say, null, comments),
-        })
+        return say(`${Q}.put_off_came.comments`, { comments: putOffUntil(say, null, comments) })
       return item === null
-        ? say(`${Q}.put_off_came.until`, { reference, until })
-        : say(`${Q}.put_off_came.item`, { reference, item })
+        ? say(`${Q}.put_off_came.until`, { until })
+        : say(`${Q}.put_off_came.item`, { item })
     }
     case 'cancel_asked': {
       return cancelAsked(say, message.values)
     }
     case 'cancel_consent': {
-      const { reference, title, reason } = message.values
-      const parts = [say(`${Q}.cancel_consent.head`, { reference, title: sentence(title) })]
+      const { reason } = message.values
+      const parts = [say(`${Q}.cancel_consent.head`)]
       if (reason) parts.push(say(`${Q}.cancel_consent.reason`, { reason: sentence(reason) }))
       parts.push(say(`${Q}.cancel_consent.ask`))
       return parts.join(' ')
@@ -157,9 +152,10 @@ function promptText(message: PromptMessage, say: Say, state: StateWords): string
       return agentConfirms(say, 'agent_empty', message.values)
     }
     case 'steps_asked': {
-      const { reference, kind, title, removed, rewritten, reason } = message.values
+      const { kind, removed, rewritten, reason } = message.values
+      const head = say(`${Q}.steps_asked.${kind}`)
       return [
-        say(`${Q}.steps_asked.${kind}`, { reference, title: sentence(title) }),
+        `${head} ${say(STEPS_ASK)}`,
         ...removed.map((text) => `- ${say(REMOVED, { text })}`),
         ...rewritten.map((entry) => `- «${entry.from}» → «${entry.to}»`),
         say(`${Q}.steps_asked.reason`, { reason: sentence(reason) }),

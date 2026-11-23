@@ -1,8 +1,9 @@
 /**
  * The words of the kinds of question in «Needs my answer»: the tabs over the list, each kind's
- * answers by the server's option id, the headings of each kind's content, a task's goal, the put-off until a
- * card closes, the open work an answer would cancel that its question did not ask about, and a
- * closed question's fields as the fold shows them.
+ * answers by the server's option id (`stay` is `out` on a task an agent moves into a goal), the
+ * headings of each kind's content, a task's goal, the put-off until a card closes, the open work
+ * an answer would cancel that its question did not ask about, and a closed question's fields as
+ * the fold shows them.
  */
 export const questionKindMessages = {
   en: {
@@ -26,6 +27,7 @@ export const questionKindMessages = {
         later: 'Later…',
         drop: 'Don’t do',
         out: 'Move out of the goal',
+        stay: 'Leave it where it was',
         allow: 'Allow',
         keep: 'Keep',
         cancel: 'Cancel',
@@ -96,6 +98,7 @@ export const questionKindMessages = {
         later: 'Позже…',
         drop: 'Не делать',
         out: 'Вынести из цели',
+        stay: 'Оставить где была',
         allow: 'Разрешить',
         keep: 'Оставить',
         cancel: 'Отменить',

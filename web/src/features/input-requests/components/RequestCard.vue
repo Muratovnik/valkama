@@ -65,6 +65,7 @@ import { useUncoveredFocus } from '@/features/input-requests/composables/useUnco
 import { ANSWER_VERSION_LIMIT, unsentWords } from '@/features/input-requests/utils/answerChange.ts'
 import { unsentChoices } from '@/features/input-requests/utils/answerDisplay.ts'
 import type { QuestionRecord } from '@/features/input-requests/utils/questionRecord.ts'
+import { answeredFields } from '@/features/input-requests/utils/spokenFields.ts'
 import { hasDraft, stillRefused } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -112,7 +113,7 @@ const emit = defineEmits<{
   'update:draft': [draft: RequestDraft]
   'updated': [entry: InputRequestEntry, right: FocusRight]
 }>()
-const { t, d } = useI18n()
+const { t, te, d } = useI18n()
 const promptId = useId()
 const metaId = useId()
 const titleId = useId()
@@ -183,6 +184,8 @@ const inForm = computed(() => waiting.value || changing.value)
 /** The prompt in the reader's language where the service composed it, else as written. */
 const composed = useComposedText()
 const prompt = computed(() => composed.prompt(request.value))
+/** What the form offers, a purpose's answer named as its buttons name it, which its prompt names. */
+const fields = computed(() => answeredFields(request.value, t, te))
 const kind = useKindAnswers({
   answers: () => props.answers,
   entry: () => props.entry,
@@ -393,7 +396,7 @@ defineExpose({ takeFocus: focus, focusOutcome, holdsFocus, reveal, send })
       <RequestAnswerFields
         v-else
         ref="answerFields"
-        :fields="request.fields"
+        :fields="fields"
         :draft="draft"
         :prompt-id="promptId"
         :refused="refused"
