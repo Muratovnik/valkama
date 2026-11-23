@@ -27,7 +27,10 @@ Python shim and a hash manifest. The command itself contains no checkout path.
 The manifest records the release's `valkama.py`, the commit it was pinned from
 (`revision`), the checkout it came from (`checkout`), the exact Python
 interpreter and the hashes that let every local surface verify the command and
-shim before use.
+shim before use. Run from a virtual environment, `launcher install` records the
+interpreter that environment was made from (`home` in its `pyvenv.cfg`): on
+Windows the environment's `python.exe` only starts that interpreter as a child,
+so a listener never runs as the environment's own.
 
 ## Pinned releases
 
@@ -37,6 +40,13 @@ with `git archive` into the releases directory (`--releases` overrides it):
 - Windows: `%LOCALAPPDATA%\Valkama\releases\<commit>`
 - macOS/Linux: `$XDG_DATA_HOME/valkama/releases/<commit>` or
   `~/.local/share/valkama/releases/<commit>`
+
+A directory a release's source archive was unpacked into has no `.git`. There
+it writes the commit the archive was built from, which the archive's
+`valkama-source.json` records with the SHA-256 of every file it holds. Each file
+is checked against the record as it is copied: a changed or missing one is
+refused by name, one the record does not list is not copied, and `--revision`
+accepts only that commit.
 
 Only committed files reach a release, so an unfinished edit in the checkout
 cannot break or migrate anything a client session opens. Each new client session
@@ -144,7 +154,10 @@ $launcher = (python .\valkama.py launcher status | ConvertFrom-Json).command
 
 Listener ownership requires both the exact normalized interpreter path from the
 launcher manifest, or the `pythonw.exe` beside it, and the exact managed shim path
-as that process's script argument. Comparison is Win32-style ordinal case-insensitive; Unicode folding
+as that process's script argument. A manifest that still records a virtual
+environment's interpreter, written before installs recorded its base, also owns
+a listener running as that base interpreter, so the next `launcher install` can
+stop it and start it again as the base. Comparison is Win32-style ordinal case-insensitive; Unicode folding
 cannot turn a different path into the managed path. A Valkama-shaped HTTP
 response or runtime JSON is never stop authority.
 

@@ -13,22 +13,23 @@
  * output, close the chart as notes with their figures, under the ring's legend or under the bars,
  * and are no part of its whole: the summary leaves them out as well, and no bar's share counts
  * them. A counted kind's bar says its share of the counted kinds after its figure, «1.2M · 40 %»;
- * a note says its figure alone.
+ * a note says its figure alone. The ring is given each figure alone, since its legend says the
+ * share itself: given the bars' figures, its legend said each share twice, «1.2M · 40 % · 40 %».
  *
  * It reads the page's own answer, whatever dimension that was read by: its total and its steps
  * hold the tokens by kind. An answer whose period before could not be read says so at the top.
  * What the tokens count and leave apart is no line of the panel: the «ⓘ» of its heading says it
  * once (`useSectionCaveats`).
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import TokenKindsTable from '@/pages/analytics/components/TokenKindsTable.vue'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { SplitView } from '@/pages/analytics/utils/splitView.ts'
@@ -60,23 +61,28 @@ const lines = computed(() => kindLines(props.usage))
 const counted = computed(() => countedTotal(lines.value))
 const total = computed(() => kindWords.count(counted.value))
 
-const root = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(root)
-
 const barsTitle = computed(() => t('analytics.kinds.bars'))
 /** The kinds are a few, named by identifiers: the split opens on its ring, the first offered. */
 const views: readonly SplitView[] = ['ring', 'bars']
 /** A counted kind's share of the counted kinds; none for a note or a kind with no count. */
 const shareOf = (line: KindLine) =>
   line.counted && line.count !== null && counted.value ? line.count / counted.value : null
+/** A kind as a row of the split, with its figure alone. */
+const rowOf = (line: KindLine): RankedRow => ({
+  key: line.kind,
+  label: kindWords.name(line),
+  value: line.count ?? 0,
+  valueText: kindWords.count(line.count),
+  kind: line.counted ? 'category' : 'other',
+  slot: KIND_SLOTS.get(line.kind) ?? 'other',
+})
+/** The ring's parts, each figure alone: its legend says each share itself. */
+const parts = computed(() => lines.value.map((line) => rowOf(line)))
+/** The bars' and the table's rows, each counted kind's share after its figure. */
 const bars = computed<RankedRow[]>(() =>
   lines.value.map((line) => ({
-    key: line.kind,
-    label: kindWords.name(line),
-    value: line.count ?? 0,
+    ...rowOf(line),
     valueText: words.withShare(kindWords.count(line.count), shareOf(line)),
-    kind: line.counted ? 'category' : 'other',
-    slot: KIND_SLOTS.get(line.kind) ?? 'other',
   })),
 )
 const barWords = computed<RankedWords>(() => ({
@@ -127,16 +133,16 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="kinds-panel"
-  >
+  <div class="kinds-panel">
     <PanelLevel
       level="section"
       as="div"
       :title="t('analytics.kinds.section')"
       :about="about"
     >
+      <template #beside>
+        <SectionScope />
+      </template>
       <SpendingUnread
         v-if="!usage.comparison"
         @retry="emit('retry')"
@@ -149,14 +155,13 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
         <ChartSection
           class="kinds-bars"
           :title="barsTitle"
-          :narrow="narrow"
           :views="views"
         >
           <template #chart="{ view }">
             <DonutChart
               v-if="view === 'ring'"
               :label="barsTitle"
-              :rows="bars"
+              :rows="parts"
               :words="ringWords"
               :format-value="formatValue"
               :format-part="words.share"
@@ -181,7 +186,6 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
         <ChartSection
           class="kinds-multiples"
           :title="multiplesHeading"
-          :narrow="narrow"
         >
           <template #chart>
             <SmallMultiples
@@ -239,11 +243,12 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
 }
 
 /* The ranked kinds first, and their small charts beside them where both read well, a block's
-   air apart. */
+   air apart; one under the other on a narrow panel, as far apart as two parts of the section
+   (`--space-section-part`). */
 .kinds-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-section-part) var(--space-4);
   align-items: start;
 }
 

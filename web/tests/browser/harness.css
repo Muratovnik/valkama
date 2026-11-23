@@ -190,12 +190,14 @@
 }
 
 /* The chart primitives one under another, each section as wide as the window allows. The
-   product's body does not scroll (its panes do), so the page is a pane of its own. */
+   product's body does not scroll (its panes do), so the page is a pane of its own, as tall as the
+   window: given the height of `#app`, which has none, it was 32px of padding, and the window
+   scrolled only while a table's caption, placed out of its frame, made the page taller. */
 .charts-harness {
   display: grid;
   gap: var(--space-6);
   box-sizing: border-box;
-  block-size: 100%;
+  block-size: 100vh;
   padding: var(--space-4);
   background: var(--color-canvas);
   overflow-y: auto;

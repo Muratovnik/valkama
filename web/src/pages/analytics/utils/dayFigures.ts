@@ -1,10 +1,12 @@
 import {
   breakdownOf,
+  drawnLines,
   figureOf,
   lineKeyOf,
   measureOf,
   spendingLines,
   spentOf,
+  unnamedEntries,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
@@ -104,7 +106,8 @@ const NOT_CATEGORIES = ['none', 'unknown'] as const satisfies readonly ValueKind
  * The values a stack names, bottom first, which is also the legend's order: the answer's largest
  * categories in the measure that hold a hue of the page's key (`rankedSlots`), up to `STACKED`,
  * each in that hue, then work with no value there and unknown work, each its own series in the
- * darker neutral and never folded; only values with anything to draw. The rest of the answer is
+ * darker neutral and never folded; only values with anything to draw, and none whose figure says
+ * nothing of how much (`drawnLines`). The rest of the answer is
  * one «other» series in the lighter neutral, on top: under a filter a value the key gives no hue
  * is folded there rather than named in a grey beside it. Split by `across`, the values are the
  * pairs.
@@ -113,8 +116,11 @@ export function stackLines(source: StackSource) {
   const { usage, by: dimension, measure, across = null } = source
   // A value with no figure in the measure stays, so its days can say it has none.
   const breakdown = breakdownOf(dimension, across)
-  const lines = spendingLines(usage.rows, breakdown, measure, Number.POSITIVE_INFINITY).filter(
-    (line) => figureOf(measure, line.spent) !== 0,
+  const lines = drawnLines(
+    measure,
+    spendingLines(usage.rows, breakdown, measure, Number.POSITIVE_INFINITY).filter(
+      (line) => figureOf(measure, line.spent) !== 0,
+    ),
   )
   const slots = rankedSlots(source.places ?? usage.rows, dimension, measure, across)
   const hued = lines.filter(
@@ -149,7 +155,9 @@ export interface StackSource {
 /**
  * Each day of the answer as a column of the measure, by the series of the stack: by its values,
  * or split, by its pairs. A value that spent in a day with no figure in the measure is absent
- * there, not a zero, and a minute with no data yet (`notYet`) is pending, not a zero either.
+ * there, not a zero, and a minute with no data yet (`notYet`) is pending, not a zero either. A
+ * series whose figure in a day says nothing of how much is not named there (`unnamedEntries`),
+ * nor is the figure of a value no series stands for, yet the day's sum counts both.
  */
 export function dayColumns(
   { usage, by: dimension, measure, across = null }: StackSource,
@@ -157,6 +165,7 @@ export function dayColumns(
   readAt: Date,
 ): Omit<PeriodColumn, 'fullLabel' | 'label'>[] {
   const named = new Set(series.filter((one) => one.line).map((one) => one.key))
+  const drawnSeries = new Set(series.map((one) => one.key))
   const breakdown = breakdownOf(dimension, across)
   return usage.series.map((point) => {
     const values: Record<string, number> = {}
@@ -169,21 +178,34 @@ export function dayColumns(
       else values[into] = (values[into] ?? 0) + figure
     }
     const pending = usage.period.step === 'minute' && notYet(point.start, usage.last_event_at)
+    // What no series stands for, a line no chart draws (`drawnLines`), still counts in the sum.
+    const unnamed = [
+      ...new Set([
+        ...unnamedEntries(measure, values, [...absent]),
+        ...Object.keys(values).filter((key) => !drawnSeries.has(key)),
+      ]),
+    ]
     return {
       key: point.start,
       values,
       absent: [...absent],
       incomplete: unfinished(point.start, usage.period.step, readAt),
       ...(pending ? { pending } : {}),
+      ...(unnamed.length ? { unnamed } : {}),
     }
   })
 }
 
-/** A change of the known accounts that worked: on which day, which worked before and which then. */
+/**
+ * A change of the known accounts that worked: on which day, which worked before and which then,
+ * and so which came that had not worked before and which left that worked before.
+ */
 export interface AccountChange {
   after: UsageGroupValue[]
   at: string
   before: UsageGroupValue[]
+  came: UsageGroupValue[]
+  left: UsageGroupValue[]
 }
 
 /**
@@ -209,6 +231,12 @@ const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupVa
   return keys.size === right.length && right.every((value) => keys.has(valueKey(value)))
 }
 
+/** The accounts of `values` that `of` does not hold. */
+const outside = (values: readonly UsageGroupValue[], of: readonly UsageGroupValue[]) => {
+  const keys = new Set(of.map((value) => valueKey(value)))
+  return values.filter((value) => !keys.has(valueKey(value)))
+}
+
 /**
  * Where the set of known accounts that worked differs from that of the last day a known account
  * worked, read from an answer by account in the measure the chart shows (`accountsOf`). A day with no known account changes nothing, whether
@@ -222,7 +250,14 @@ export function accountChanges(byAccount: Usage, measure: Measure): AccountChang
   for (const point of byAccount.series) {
     const now = accountsOf(point, measure)
     if (!now.length) continue
-    if (last && !sameKeys(last, now)) changes.push({ at: point.start, before: last, after: now })
+    if (last && !sameKeys(last, now))
+      changes.push({
+        at: point.start,
+        before: last,
+        after: now,
+        came: outside(now, last),
+        left: outside(last, now),
+      })
     last = now
   }
   return changes

@@ -8,6 +8,12 @@
  * id, so two of one title can be told apart; an account's whole id is never a hint. Work with no
  * value — no task, a session's own run — and a value nobody can place say so in words of their
  * own, per dimension: «unknown» is said only of what nobody can place.
+ *
+ * A task's name holds its title, and code in a title is drawn as code wherever the page draws the
+ * name (`titleRuns`): beside each name that holds one, its runs (`valueRuns`, `pairRuns`,
+ * `lineRuns`), which a chart, its table, its hints, a filter's choice and chip, a tile and the side
+ * panel draw it in. Written, they are the name, backticks included, which is what every place
+ * that holds it as text keeps: an accessible name, a hint's text, a download, a sort, a search.
  */
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +22,7 @@ import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { LineChange, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { isSeveral, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
@@ -29,10 +35,13 @@ import { aliasOf } from '@/shared/lib/accountAliases.ts'
 import { accountLabel } from '@/shared/lib/accountLabel.ts'
 import type { AnsweredNames } from '@/shared/lib/accountLabel.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { referencedTitleRuns } from '@/shared/lib/titleRuns.ts'
 import { tokensAnew } from '@/shared/lib/tokensAnew.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
+import { REMARK_JOINT } from '@/shared/ui/chartGeometry.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
@@ -81,6 +90,18 @@ function valueDetail(name: UsageDimension, value: UsageGroupValue | null): strin
 }
 
 /**
+ * A value's name as the runs it is drawn in, where it holds a task's title: its reference whole
+ * and its title's code as code (`referencedTitleRuns`); undefined for a name that holds no title,
+ * which is drawn as the text it is. Written, the runs are the value's name (`valueLabel`).
+ */
+function valueRuns(name: UsageDimension, value: UsageGroupValue): TextRun[] | undefined {
+  if (name !== 'work_item' || valueKind(value) !== 'category' || !value.reference) return
+  return value.title
+    ? referencedTitleRuns(value.reference, value.title, ' ')
+    : [{ kind: 'reference', text: value.reference }]
+}
+
+/**
  * A figure as a line says it, with what it leaves out apart: the tokens a cost has no price for,
  * «40 тыс. токенов без цены», empty where it leaves none out. A table lays the remark under the
  * figure; everything else says the two as one (`besides`).
@@ -89,9 +110,6 @@ export interface FigureWords {
   remark: string
   text: string
 }
-
-/** What stands between a figure and its remark where they are said as one. */
-export const REMARK_JOINT = ', '
 
 /** A figure and its remark as one: «≈ 1 109,00 $, 40 тыс. токенов без цены». */
 const besides = ({ text, remark }: FigureWords) => [text, remark].filter(Boolean).join(REMARK_JOINT)
@@ -241,9 +259,11 @@ export function useSpendingWords() {
 
   /**
    * How a measure's figure moved, against the period it is compared with; with a figure absent,
-   * which period has none — no price, no token counted — and no change at all.
+   * which period has none — no price, no token counted — and no change at all; for accounts whose
+   * figure before is not known (`LineChange`), the table's own words for it.
    */
-  function change(name: Measure, moved: Change, before: string) {
+  function change(name: Measure, moved: LineChange, before: string) {
+    if (moved.direction === 'unplaced') return t('analytics.table.moved.unplaced')
     if (moved.direction === 'absent')
       return t(`analytics.change.absent.${name}.${moved.missing}`, { period: before })
     if (moved.direction === 'none') return t('analytics.change.none', { period: before })
@@ -256,12 +276,13 @@ export function useSpendingWords() {
 
   /**
    * How a measure moved, as a table says it under a heading that names the period it is
-   * compared with: the arrow and the share, or which period has no figure.
+   * compared with: the arrow and the share, which period has no figure, or, for an account, that
+   * its figure before is not known (`LineChange`).
    */
-  function changeCell(name: Measure, moved: Change) {
+  function changeCell(name: Measure, moved: LineChange) {
     if (moved.direction === 'absent')
       return t(`analytics.table.moved.absent.${name}.${moved.missing}`)
-    if (moved.direction === 'none' || moved.direction === 'same')
+    if (moved.direction === 'none' || moved.direction === 'same' || moved.direction === 'unplaced')
       return t(`analytics.table.moved.${moved.direction}`)
     return t(`analytics.table.moved.${moved.direction}`, { change: percent(moved.ratio) })
   }
@@ -323,11 +344,33 @@ export function useSpendingWords() {
     second?: SpendingLine['second'],
   ) => `${valueLabel(name, value)}${pairEnd(second)}`
 
+  /** A value or a pair as `pairLabel` names it, in runs where either holds a task's title. */
+  function pairRuns(
+    name: UsageDimension,
+    value: UsageGroupValue,
+    second?: SpendingLine['second'],
+  ): TextRun[] | undefined {
+    const first = valueRuns(name, value)
+    const end = second && valueRuns(second.dimension, second.value)
+    if (!first && !end) return
+    const text = (words: string): TextRun[] => (words ? [{ kind: 'text', text: words }] : [])
+    return [
+      ...(first ?? text(valueLabel(name, value))),
+      ...(second
+        ? [...text(' · '), ...(end ?? text(valueLabel(second.dimension, second.value)))]
+        : []),
+    ]
+  }
+
   /** A line of a breakdown by its name: a value or a pair, or the folded tail with how many it holds. */
   const lineLabel = (name: UsageDimension, line: SpendingLine) =>
     line.value
       ? pairLabel(name, line.value, line.second)
       : t('analytics.values.other', { count: line.folded }, line.folded)
+
+  /** A line's name (`lineLabel`) in runs where it holds a task's title; the folded tail has none. */
+  const lineRuns = (name: UsageDimension, line: SpendingLine) =>
+    line.value ? pairRuns(name, line.value, line.second) : undefined
 
   /** The end a line's name keeps whole where it is cut: a pair's (`pairEnd`); none otherwise. */
   const lineEnd = (line: SpendingLine) => (line.value && pairEnd(line.second)) || undefined
@@ -369,15 +412,22 @@ export function useSpendingWords() {
    * `lineFigureWords` says them for one figure, so a change of incomplete costs never reads as
    * whole.
    */
-  function lineChangeWords(name: Measure, moved: Change, now: Spent, before: Spent): FigureWords {
+  function lineChangeWords(
+    name: Measure,
+    moved: LineChange,
+    now: Spent,
+    before: Spent,
+  ): FigureWords {
     const said = changeCell(name, moved)
-    return moved.direction === 'absent' || moved.direction === 'none'
+    return moved.direction === 'absent' ||
+      moved.direction === 'none' ||
+      moved.direction === 'unplaced'
       ? { text: said, remark: '' }
       : leavingOut(name, said, now.unpriced + before.unpriced)
   }
 
   /** How a line's measure moved with its remark beside it (`lineChangeWords`), as one line. */
-  const lineChange = (name: Measure, moved: Change, now: Spent, before: Spent) =>
+  const lineChange = (name: Measure, moved: LineChange, now: Spent, before: Spent) =>
     besides(lineChangeWords(name, moved, now, before))
 
   /**
@@ -467,11 +517,16 @@ export function useSpendingWords() {
   const axis = (name: Measure) =>
     name === 'time' ? durationAxis(spanWordsOf(t), HOUR_SECONDS) : undefined
 
-  /** What changed in the accounts that worked: «Account change: a → a, b». */
-  const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
+  /**
+   * What changed in the accounts that worked (`AccountChange`), each that came «+» and each that
+   * left «−»: «Account change: +b» where b joined a, «Account change: +b, −a» where b took a's place.
+   */
+  const accounts = (came: readonly UsageGroupValue[], left: readonly UsageGroupValue[]) =>
     t('analytics.days.accounts', {
-      before: before.map((value) => valueLabel('seat', value)).join(', '),
-      after: after.map((value) => valueLabel('seat', value)).join(', '),
+      change: [
+        ...came.map((value) => `+${valueLabel('seat', value)}`),
+        ...left.map((value) => `−${valueLabel('seat', value)}`),
+      ].join(', '),
     })
 
   /**
@@ -586,15 +641,18 @@ export function useSpendingWords() {
     lineFigureWords,
     lineEnd,
     lineLabel,
+    lineRuns,
     lineShare,
     measure,
     noneLabel,
     pairEnd,
     pairLabel,
+    pairRuns,
     tokenKinds,
     unpriced,
     valueDetail,
     valueLabel,
+    valueRuns,
     withShare,
   }
 }

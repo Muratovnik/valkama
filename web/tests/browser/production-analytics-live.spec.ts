@@ -64,7 +64,7 @@ test('«Now» is the last hour by the minute, held in the address and read whole
   // Sixty minutes, named on the time axis by their clock times, the running one last.
   const days = analytics.locator('.spending-days')
   await expect(days.locator('.period-column')).toHaveCount(60)
-  await expect(days.locator('h3')).toHaveText('Agent time per minute, by task')
+  await expect(days.locator('h3')).toHaveText('Agent time per minute, by project')
   const tickTexts = await days
     .locator('.period-axis .chart-tick > span:first-child')
     .allTextContents()

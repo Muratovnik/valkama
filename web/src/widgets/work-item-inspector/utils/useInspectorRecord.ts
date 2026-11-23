@@ -2,7 +2,10 @@ import { computed, inject, provide, ref, watch } from 'vue'
 import type { ComputedRef, InjectionKey } from 'vue'
 
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
-import { useWorkItemUsage } from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
+import {
+  usageTarget,
+  useWorkItemUsage,
+} from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
 
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
@@ -68,7 +71,11 @@ export function useInspectorRecord(
 
   const read = useWorkItemUsage(
     () =>
-      props.writable ? { id: props.reference, scope: isContainer.value ? 'tree' : 'item' } : null,
+      usageTarget({
+        reference: props.reference,
+        container: isContainer.value,
+        readable: props.writable,
+      }),
     news,
   )
   const runs = useWorkItemUsage(

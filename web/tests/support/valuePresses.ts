@@ -16,6 +16,8 @@ import { afterEach, beforeEach, expect, vi } from 'vitest'
 import AnalyticsView from '@/pages/analytics/AnalyticsView.vue'
 import ValueDetail from '@/pages/analytics/components/ValueDetail.vue'
 
+import { provideUsageReach } from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
+
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 
@@ -56,13 +58,18 @@ export const WORLD: TimedStretch[] = [
 /** What the app does with a task's reference: its short address, and opening it in place. */
 export const opened: string[] = []
 
-/** The page inside a layer that resolves task references, as the app shell provides one. */
+/**
+ * The page inside a layer that resolves task references, as the app shell provides one, and that
+ * says whether a card's read reaches the tasks it names, as the shell does: by default it does.
+ */
 const Host = defineComponent({
   props: {
     routeState: { type: Object as PropType<Record<string, string>>, default: undefined },
     projectId: { type: String, default: undefined },
+    reaches: { type: Boolean, default: true },
   },
   setup(props) {
+    provideUsageReach(() => props.reaches)
     provideReferenceLinks((reference, parent) =>
       reference.kind === 'work-item'
         ? {
@@ -80,9 +87,10 @@ export async function mountPage(
   routeState: Record<string, string>,
   locale: 'en' | 'ru' = 'en',
   projectId?: string,
+  reaches = true,
 ) {
   const host = mount(Host, {
-    props: { routeState, projectId },
+    props: { routeState, projectId, reaches },
     attachTo: document.body,
     global: { plugins: [analyticsI18n(locale)] },
   })

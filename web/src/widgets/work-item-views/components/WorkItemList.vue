@@ -66,6 +66,7 @@ import { ROW_FACETS } from '@/widgets/work-item-views/utils/listRowWords.ts'
 import { orderedWork, QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
 import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
@@ -73,7 +74,6 @@ import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { treeGridAttrs, treeRowAttrs } from '@/shared/lib/treeRows.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { useListKeys } from '@/shared/ui/useListKeys.ts'
 import { useWindowRows } from '@/shared/ui/useWindowRows.ts'
@@ -301,7 +301,7 @@ const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, wo
               >
                 <span
                   :id="nameId(entry.row)"
-                  v-slash-breaks="entry.row.title"
+                  v-work-item-title="entry.row.title"
                   class="list-name"
                   :class="{ 'list-name-path': isPath(entry.row) }"
                 />

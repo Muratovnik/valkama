@@ -12,8 +12,10 @@ import { LEAST_COST } from '@/widgets/work-item-inspector/utils/useUsageWords.ts
  * dwarf the rest, and reasoning is already part of output. A cost the read has no price for is
  * no data and never a zero; its tokens are counted apart, as `unpriced`.
  */
+import { readAccountId, unplacedId } from '@/shared/api/accountIds.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type {
+  Usage,
   UsageDimension,
   UsageGroupValue,
   UsageMeasures,
@@ -50,6 +52,13 @@ export const addSpent = (left: Spent, right: Spent): Spent => ({
   unpriced: left.unpriced + right.unpriced,
 })
 
+/** What lines spent together (`addSpent`); nothing spent for no line. */
+export function spentTogether(spent: readonly Spent[]): Spent {
+  let sum = NOTHING
+  for (const one of spent) sum = addSpent(sum, one)
+  return sum
+}
+
 const HOUR = 3600
 
 /**
@@ -63,7 +72,8 @@ export function measureOf(measure: Measure, spent: Spent): number | null {
 
 /**
  * Whether a line's figure in a measure is less than the least its words count, so that it reads as
- * a span «under a minute», a cost «< $0.01» or no token at all: a row that says nothing of how much.
+ * a span «under a minute», a cost «< $0.01» or no token at all: a row that says nothing of how much,
+ * which no chart draws (`drawnLines`).
  * It is judged from the amount and the unit the words use, never from the words: time taken to the
  * millisecond as its words take it, against a minute; a cost against a cent; tokens against one. A
  * line the measure has no amount for says why in words and is never below; nor is a cost that
@@ -72,14 +82,84 @@ export function measureOf(measure: Measure, spent: Spent): number | null {
 export function belowUnit(measure: Measure, spent: Spent): boolean {
   if (measure === 'time') return Math.round(spent.seconds * 1000) < MINUTE
   const amount = measureOf(measure, spent)
-  if (amount === null) return false
-  if (measure === 'tokens') return amount < 1
-  return spent.unpriced === 0 && amount < LEAST_COST
+  return (
+    amount !== null &&
+    (measure === 'tokens' || spent.unpriced === 0) &&
+    amountBelowUnit(measure, amount)
+  )
+}
+
+/** The least amount the words of a count write: a token, a cent. */
+const LEAST: Record<Exclude<Measure, 'time'>, number> = { tokens: 1, cost: LEAST_COST }
+
+/** Whether an amount on a chart's scale (`measureOf`) is less than the least its words count. */
+function amountBelowUnit(measure: Measure, amount: number): boolean {
+  return measure === 'time' ? Math.round(amount * HOUR * 1000) < MINUTE : amount < LEAST[measure]
+}
+
+/**
+ * The lines a chart draws of a breakdown: every line whose figure counts something in the measure,
+ * or every line where none does (`belowUnit`), so a chart of nothing else still draws them rather
+ * than reading as empty. A line left out says nothing of how much, under any name, so no view of a
+ * chart names it: not the ranked bars, the ring's sectors and legend, the small charts, the day
+ * chart's series, nor the table twin of any of them. Every total and share a chart says stays of
+ * all the lines, which its caller sums before it leaves any out; the section's own table, which
+ * holds every value in every measure, lists them all, each figure as an entry says it
+ * (`entrySpent`). A line kept says nothing either in a period where its figure is below the unit
+ * (`unnamedEntries`).
+ */
+export function drawnLines<T extends { spent: Spent }>(measure: Measure, lines: readonly T[]): T[] {
+  const counted = lines.filter((line) => !belowUnit(measure, line.spent))
+  return counted.length ? counted : [...lines]
+}
+
+/**
+ * The entries of a breakdown in one period that say nothing of how much: of each series' amount in
+ * a day, an hour or a minute, by key, on the chart's scale (`measureOf`), every one above zero and
+ * below the unit of its words (`belowUnit`), «under a minute». Every view of the period leaves
+ * them out as it leaves out a series that did not spend there: the day's hint does not list one,
+ * its table cell and a small chart's say what a day with nothing says, and neither is drawn. The
+ * period's total and each series' figure over the span still count them. An amount that leaves
+ * something out (`absent`: no price, no token counted) is never one, since its words say so.
+ */
+export function unnamedEntries(
+  measure: Measure,
+  amounts: Readonly<Partial<Record<string, number>>>,
+  absent: readonly string[] = [],
+): string[] {
+  return Object.entries(amounts)
+    .filter(
+      ([key, amount]) =>
+        amount !== undefined &&
+        amount > 0 &&
+        !absent.includes(key) &&
+        amountBelowUnit(measure, amount),
+    )
+    .map(([key]) => key)
+}
+
+/**
+ * What a line's entry of the section's table says it spent in a measure: what it spent, with a
+ * figure below the unit of its words (`belowUnit`) read as none, «0 min», as a line that did not
+ * spend in that measure reads (`unnamedEntries`). A total says what it holds, however small.
+ */
+export function entrySpent(measure: Measure, spent: Spent): Spent {
+  if (!belowUnit(measure, spent)) return spent
+  if (measure === 'time') return { ...spent, seconds: 0 }
+  return measure === 'tokens' ? { ...spent, tokens: 0 } : { ...spent, cost: 0 }
 }
 
 /** Whether a line spent anything at all: some time, a token, a price or tokens without one. */
 export const spentAnything = (spent: Spent) =>
   spent.seconds > 0 || Boolean(spent.tokens) || spent.cost !== null || spent.unpriced > 0
+
+/**
+ * Whether a line is a value of the period in a measure: a real value, not work with no value there
+ * nor work nobody can place, with a figure above zero in the measure. The rail's tile, the table's
+ * heading row and «All N» under the ranked bars each count these, so the three say one number.
+ */
+export const workedValue = (measure: Measure, line: Pick<SpendingLine, 'kind' | 'spent'>) =>
+  line.kind === 'category' && (measureOf(measure, line.spent) ?? 0) > 0
 
 /**
  * A measure's figure as the page reads it: its amount; zero for a line that spent nothing; and
@@ -94,7 +174,7 @@ export function figureOf(measure: Measure, spent: Spent): number | null {
  * How a figure moved from the period before: by how much; that the period before spent nothing,
  * so a rise has no percentage; or which side has no figure to compare (`absent`).
  */
-export type Change =
+type Change =
   | { direction: 'down' | 'same' | 'up'; ratio: number }
   | { direction: 'none' }
   | { direction: 'absent'; missing: 'before' | 'both' | 'now' }
@@ -106,7 +186,7 @@ const STILL = 0.005
  * The change of a measure from `before` to `now`. A figure absent on either side gives no
  * change at all, and says which side it is; a period before that spent nothing is no base.
  */
-export function changeOf(measure: Measure, now: Spent, before: Spent): Change {
+function changeOf(measure: Measure, now: Spent, before: Spent): Change {
   const at = figureOf(measure, now)
   const was = figureOf(measure, before)
   if (at === null) return { direction: 'absent', missing: was === null ? 'both' : 'now' }
@@ -115,6 +195,44 @@ export function changeOf(measure: Measure, now: Spent, before: Spent): Change {
   const ratio = (at - was) / was
   if (Math.abs(ratio) < STILL) return { direction: 'same', ratio: 0 }
   return { direction: ratio > 0 ? 'up' : 'down', ratio }
+}
+
+/**
+ * How a figure of accounts moved (`Change`), or, for accounts that spent now, that their figure
+ * before is mostly unknown (`unplaced`): their organizations' work no reading placed on an
+ * account came to more in the period before than their own did. Which account that work ran
+ * under is not known, so a share against their own figure would read where the readings placed
+ * the work as growth. Accounts that spent nothing now fell by their whole figure, whatever placed
+ * it. The figure is an account's line of a breakdown, or, with the page narrowed to accounts,
+ * its total and each line of it, beside that work as the read gives it (`Usage['unplaced']`).
+ */
+export type LineChange = Change | { direction: 'unplaced' }
+
+/**
+ * The change of a figure (`LineChange`), given the unplaced work of its accounts' organizations
+ * before, if any: the one rule every change of the page against the period before is said by.
+ */
+export function lineChangeOf(
+  measure: Measure,
+  now: Spent,
+  before: Spent,
+  unplaced?: Spent,
+): LineChange {
+  const loose = unplaced ? figureOf(measure, unplaced) : null
+  const at = figureOf(measure, now) ?? 0
+  const was = figureOf(measure, before)
+  const unknown = loose !== null && was !== null && at > 0 && loose > was
+  return unknown ? { direction: 'unplaced' } : changeOf(measure, now, before)
+}
+
+/**
+ * What a read narrowed to accounts left out of the period before because no reading placed it on
+ * an account, of those accounts' organizations, in total (`Usage['unplaced']`); undefined for a
+ * read not narrowed to an account, or one whose period before was not read.
+ */
+export function unplacedBefore(usage: Usage): Spent | undefined {
+  const left = usage.comparison?.unplaced
+  return left ? spentOf(left.total) : undefined
 }
 
 /** How many categories a breakdown names before it folds the rest into «other». */
@@ -252,25 +370,54 @@ export function rankedLines(
   return [...lines.slice(0, keep), ...other]
 }
 
+/**
+ * The key of the line of an account's organization's work no reading placed on an account, in
+ * the breakdown the account's line is of: the same line with that work in the account's place.
+ * Null for a line that holds no account.
+ */
+function unplacedKeyOf(
+  breakdown: Breakdown,
+  line: { value: UsageGroupValue; second?: SpendingLine['second'] },
+): string | null {
+  const [by, across] = typeof breakdown === 'string' ? [breakdown, null] : breakdown
+  let seat: UsageGroupValue | undefined
+  if (by === 'seat') seat = line.value
+  else if (across === 'seat') seat = line.second?.value
+  const read = seat?.id ? readAccountId(seat.id) : null
+  if (!read || read.kind === 'unplaced') return null
+  const loose: UsageGroupValue = { id: unplacedId(read.organization), unknown: false }
+  if (typeof breakdown === 'string') return valueKey(loose)
+  return by === 'seat' ? pairKey(loose, line.second?.value ?? UNPLACED) : pairKey(line.value, loose)
+}
+
 /** A value of a breakdown, or a pair, in this period beside the period it is compared with. */
 export interface ComparedLine {
   /** What the value spent in the period before; null when that period was not read. */
   before: Spent | null
   /** How the chosen measure moved; null when the period before was not read. */
-  change: Change | null
+  change: LineChange | null
   key: string
   kind: ValueKind
   now: Spent
   value: UsageGroupValue
   /** A pair's second value, as its line holds it (`SpendingLine`). */
   second?: SpendingLine['second']
+  /**
+   * The line of the work no reading placed on an account that its change was held to, by its key,
+   * and what it spent in the period before (`LineChange`); none where there is no such work.
+   */
+  unplaced?: { key: string; spent: Spent }
 }
 
 /**
  * Every value of `dimension`, or every pair with `across`, that this period or the period before
  * holds, none folded, with what it spent in each and how `measure` moved, by the tiles' own rule
- * (`changeOf`). A value that worked in one period alone spent nothing in the other. `before` is
- * null for a period before that was not read, and then no line has a figure or a change there.
+ * (`changeOf`), save a line of accounts whose figure before their organizations' unplaced work
+ * outweighed (`LineChange`): an account's own line beside its organization's, and, where the read
+ * was narrowed to accounts, any line beside the same line of the work it left out on no account
+ * (`unplaced`, the period before's). A value that worked in one period alone spent nothing in the
+ * other. `before` is null for a period before that was not read, and then no line has a figure or
+ * a change there.
  *
  * Largest first in `measure` this period, a value with no figure there after every figure, and
  * a tie in the order of the names `name` gives, then of the keys.
@@ -281,6 +428,7 @@ export function comparedLines(options: {
   measure: Measure
   rows: readonly UsageRow[]
   across?: UsageDimension | null
+  unplaced?: readonly UsageRow[] | null
   name: (value: UsageGroupValue) => string
 }): ComparedLine[] {
   const { before, dimension, measure, name, across } = options
@@ -294,11 +442,16 @@ export function comparedLines(options: {
     )
   const now = all(options.rows)
   const was = before ? all(before) : new Map<string, SpendingLine>()
+  const left = all(options.unplaced ?? [])
   const lines = [...new Set([...now.keys(), ...was.keys()])].map((key): ComparedLine => {
     const line = now.get(key) ?? was.get(key)
     const value = line?.value ?? UNPLACED
     const spent = now.get(key)?.spent ?? NOTHING
     const spentBefore = before ? (was.get(key)?.spent ?? NOTHING) : null
+    // An account's own line beside its organization's; any line beside what the filter left out.
+    const unplaced = unplacedKeyOf(breakdown, { value, second: line?.second }) ?? key
+    const loose = (unplaced === key ? left.get(key) : (was.get(unplaced) ?? left.get(unplaced)))
+      ?.spent
     return {
       key,
       kind: line && line.kind !== 'other' ? line.kind : valueKind(value),
@@ -306,7 +459,8 @@ export function comparedLines(options: {
       ...(line?.second ? { second: line.second } : {}),
       now: spent,
       before: spentBefore,
-      change: spentBefore ? changeOf(measure, spent, spentBefore) : null,
+      change: spentBefore ? lineChangeOf(measure, spent, spentBefore, loose) : null,
+      ...(loose ? { unplaced: { key: unplaced, spent: loose } } : {}),
     }
   })
   const rank = (line: ComparedLine) => figureOf(measure, line.now) ?? -1

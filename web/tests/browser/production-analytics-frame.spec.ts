@@ -321,7 +321,9 @@ test('an address the page wrote before it had sections opens the same view', asy
   await expect(
     page.locator('.analytics-rail [aria-current="page"] .analytics-rail-name'),
   ).toHaveText('Model')
-  await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveText(['Model: model-a'])
+  await expect(page.locator('.analytics-bar-chips [data-filter-chip]')).toHaveText([
+    'Model: model-a',
+  ])
   await expect(page.locator('.spending-bars h3')).toHaveText('Tokens by model')
   expect(path(page)).toBe(released)
 })

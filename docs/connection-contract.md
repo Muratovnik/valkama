@@ -2089,10 +2089,12 @@ that name it in every space.
              "unpriced_models": ["claude-unknown-9"]},
    "rows": [{"group": {"work_item": {"id": "6f1c2a8e-0000-4000-8000-000000000010",
                                      "unknown": false, "reference": "MAIN-12",
-                                     "title": "Answer a review in one form"}},
+                                     "title": "Answer a review in one form",
+                                     "kind": "task"}},
              "agent_seconds": 3600.0, "…": "the measures"},
             {"group": {"work_item": {"id": null, "unknown": false,
-                                     "reference": null, "title": null}},
+                                     "reference": null, "title": null,
+                                     "kind": null}},
              "agent_seconds": 1800.0, "…": "the measures"}],
    "series": [{"start": "2030-03-04T00:00:00+03:00", "end": "2030-03-05T00:00:00+03:00",
                "agent_seconds": 0.0, "…": "the measures", "groups": []},
@@ -2100,6 +2102,7 @@ that name it in every space.
                "agent_seconds": 5400.0, "…": "the measures",
                "groups": [{"group": {"work_item": {"…": "as in rows"}},
                            "agent_seconds": 3600.0, "…": "the measures"}]}],
+   "unplaced": null,
    "comparison": null}}
 ```
 
@@ -2112,7 +2115,8 @@ that name it in every space.
 | `total` | the measures of the whole period, and `unpriced_models` as the reads above give it |
 | `rows` | one line per group of values that spent anything, the most time first: `group`, one value per dimension of `group_by`, and the measures. With no `group_by` it is one line with an empty `group` |
 | `series` | one point per step, oldest first, every step present: `start`, `end`, the measures, and `groups`, the step broken down by the groups of `rows`: by the one dimension of `group_by`, or by the pair of both with two, each `group` naming every dimension as a row's does; empty with none |
-| `comparison` | with `compare=true`, `period` (`from`, `to`), `total` and `rows` of the preceding period of the same length; otherwise `null` |
+| `unplaced` | with a `seat` filter that admits an account, the work of that account's organization no sample places on an account, `<organization>/`, which the filter leaves out: `total` and `rows`, grouped as `rows` are and held to every other filter, for each organization of an admitted account whose own `<organization>/` the filter does not admit. It is in no other figure. `null` with no `seat` filter, or one that admits no account |
+| `comparison` | with `compare=true`, `period` (`from`, `to`), `total`, `rows` and `unplaced` of the preceding period of the same length; otherwise `null` |
 
 The measures are the reads' above: `agent_seconds`, `estimated_seconds`, `quality`
 (`observed`, `estimated`, `mixed`, or `null` when no time was counted), `tokens` by
@@ -2153,7 +2157,7 @@ no project or several, are groups of their own too, with an `id` of `null` and `
 | --- | --- | --- |
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
 | `project` | the project the item names (see [The projects an item changes](#the-projects-an-item-changes)), in whichever space the item lies; a goal or stage names the projects of the tasks under it. An item that names several is one group of its own, `id` `null` and `unknown` `false`, rather than a share in each, so the groups still add up to the total; an item that names none is its own group too, with `combinations` `null`. A filter admits an item by any project it names, so a project's row in a breakdown is smaller than the filter on it by the work on items naming several, and `none=project` admits the items that name none. For work on no item, the project whose registered root holds the session's folder, the folder that places it in the live-work frame (see [The live-work frame](#the-live-work-frame)). Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null`; `combinations`, on the group of several, every set of projects the work in that group names, each a list of `{"id", "name"}` by id, the sets ordered by their ids; `null` on every other value |
-| `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
+| `work_item` | the item the work is counted to | `reference`, `title` and `kind`, the kind a reader sees (`goal` or `stage` for a container), `null` for an item since deleted |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them, and `title`, the name its client gave the session, as the live work beside the board names it, or `null` when there is none to read. Not its live `state`, which changes while the period's figures do not |
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
 | `launch_class` | how a subagent's run was launched, as the usage rows hold it. A session's own run is launched by no one, so it has none (`unknown` `false`); a subagent's run that does not say is unknown | — |
@@ -2778,9 +2782,13 @@ where every account's quota windows stand now, from the samples above. It is ans
 the usage read is, to the page and to a local tool alike, and writes nothing. A later
 build only adds fields, kinds and sources to this answer. No MCP tool reads it.
 
-Its one parameter is `utc_offset`, the caller's offset from UTC in minutes, from `-840`
-to `840`, `0` by default, at which every time in the answer is written. Any other
-parameter, a repeated one or an offset out of its range is refused with `400` and
+Its parameters are `utc_offset`, the caller's offset from UTC in minutes, from `-840`
+to `840`, `0` by default, at which every time in the answer is written, and `from`, a time
+with its offset: the start of the period a page shows, given so that each window of a share
+holds the windows before it in that period (`earlier`, below). Without `from` the answer is
+as it was before `from` existed, with no `earlier`. Any other parameter, a repeated one, an
+offset out of its range or a `from` that is not a time with its offset (a date alone is
+refused) is refused with `400` and
 `{"error": {"code": "invalid_request", "message": …}}`, as the usage read refuses it. An
 empty store answers with no account. A sample or a stretch of work dated after `now`, as a
 source whose clock runs ahead could write, is left out until `now` reaches it.
@@ -2828,6 +2836,7 @@ source whose clock runs ahead could write, is left out until `now` reaches it.
 | --- | --- |
 | `now` | the moment the answer was worked out; every pace and state is as of it |
 | `fresh_for_seconds` | how old a window's latest sample may be and still be fresh: 900, the span the quota alerts read too |
+| `retained_from` | the oldest moment the store keeps a sample at `now`: 365 days before it. No window before it is ever `previous` or answered by the past read |
 | `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. An account known by its weekly reset is one entry however many weeks it was read in, and one read only in a week that has ended stands with that week silent. Ordered by `account` |
 | `account` | the account's key, as the `seat` dimension gives it: `<organization>/<UUID>`, `<organization>/weekly:<reset>` for an account no sample names a UUID for, or `<organization>/` for an organization with no sample |
 | `organization` | the organization's id |
@@ -2852,6 +2861,8 @@ A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
 | `even_percent` | how much of the window steady use from its start would have spent by `now`: the pace tick. `null` without a reset or once the reset has passed |
 | `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it, and a source's own reading falls where the window's count restarted |
 | `restarts` | the moments, oldest first, at which the window's count restarted inside it, its reset unchanged: one feed's reading fell ten points or more below that feed's previous reading of the window, and as far below the count. A feed is one session's samples, or the organization's poll and imports. The forecast reads only the readings from the latest restart on. Another feed's lower reading is no restart but a stale one, and is left out of the forecast. Empty where the count never restarted. What zeroed the counter is not said: the samples cannot tell |
+| `previous` | how the window before this one ended: the latest window of the same account, `kind` and `model` whose reset is at or before this one's `started_at`, or, where this one names no start, its latest reading. Five-hour windows are not contiguous, since one starts at the first use after the last reset, so after a gap this is the latest kept window, however far back, never the one a fixed length before. It holds `started_at`, `resets_at`, `latest` as above and `ran_out`, `true` where a reading of that window reached 100. `null` where the store keeps no reading of an earlier window since `retained_from` |
+| `earlier` | only where `from` was given: every window of the same account, `kind` and `model` before this one whose reset is after `from`, or after `retained_from` where that is later, oldest first, so a window that started before `from` and reset after it is in. Each is whole, from its start to its reset: `started_at`, `resets_at`, and `readings` and `restarts` as above, of its own samples. The window itself is never among them, and none of them has a pace or a forecast. Empty where the period starts inside this window, and where the store keeps none. It is what the store holds over the period, whatever the period's distance from now; what a line draws of it is the reader's: the page's line holds these windows only where the period starts further back from now than this window lasts, so after a mid-week reset «This week» gets the week before here and still draws the current week alone |
 | `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts` with `at_reset_percent`, the share of the window its pace will have spent by the reset, at most 100 and rounded to the hundredth as a week's range is; `runs_out` with `runs_out_at`; or `spent`. `runs_out_at` and `at_reset_percent` are `null` for the other outcomes. `basis` is the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
 
 A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,
@@ -2863,6 +2874,51 @@ account: the windows of an account are not added, and neither are two accounts'
 percentages, of one organization or of two. A reading whose organization is not known
 yet, because the session's transcript has not been read that far, or that names neither
 an account's UUID nor a seat, belongs to no account and is not in the answer.
+
+### One past quota window
+
+`GET /api/analytics/quota/window` answers, under the same `interface_version`, one past
+window of one account, so a reader steps back through the windows the store keeps:
+
+```text
+GET /api/analytics/quota/window?account=org-a/acct-a&kind=week&before=2030-03-01T12:00:00%2B03:00&utc_offset=180
+```
+
+`account` is an account's key as the quota answer gives it, and an organization's key with
+nothing after its slash is refused. `kind` is `five_hour`, `week` or `week_model`, and
+`model` is given for `week_model` and for no other kind. `before` is a time with its
+offset: the answer is the latest window that reset at or before it, or at `now` where that
+is earlier, so a window that has not reset yet is never answered. A current window's
+`started_at` gives its `previous`, and that window's `started_at` the one before it.
+`utc_offset` is as above. A missing, repeated or unknown parameter, or any other value, is
+refused with `400` and `invalid_request`.
+
+```json
+{"interface_version": "valkama-analytics-api",
+ "quota_window": {
+   "now": "2030-03-06T13:00:00.000+03:00", "utc_offset": 180, "fresh_for_seconds": 900,
+   "retained_from": "2029-03-06T13:00:00.000+03:00",
+   "account": "org-a/acct-a", "kind": "week", "model": null,
+   "before": "2030-03-01T12:00:00.000+03:00",
+   "window": {"kind": "week", "model": null, "state": "silent",
+              "resets_at": "2030-03-01T12:00:00.000+03:00",
+              "latest": {"at": "2030-02-28T22:00:00.000+03:00", "source": "poll",
+                         "used_percent": 62.0},
+              "started_at": "2030-02-22T12:00:00.000+03:00", "even_percent": null,
+              "readings": ["…"], "restarts": [], "forecast": null,
+              "previous": {"started_at": "2030-02-15T12:00:00.000+03:00",
+                           "resets_at": "2030-02-22T12:00:00.000+03:00",
+                           "latest": {"…": "as above", "used_percent": 35.0},
+                           "ran_out": false}}}}
+```
+
+`account`, `kind`, `model` and `before` say what was asked, `before` as the moment the
+answer read to. `window` is the window as a current window of a share is given above, with
+its `readings`, `restarts` and `previous`; past its reset it has no `even_percent` and no
+`forecast`. It is `null` where the store keeps no such window since `retained_from`. An
+account's past windows are looked for by the seats that may be its: those its UUID names,
+and those whose week resets at its time of week, which for an account known by its UUID
+no UUID names.
 
 ### The owner's names for accounts
 
@@ -3303,7 +3359,8 @@ revision bumps and refusals, so a closing transition is judged after the ticks
 and the summary sent with it. The call is still one write: what its earlier
 groups wrote does not count as the agent having read what a person did, so a
 `comment` sent beside a closing `transition` does not lift the
-[`person_spoke` guard](#a-close-over-what-a-person-did).
+[`person_spoke` guard](#a-close-over-what-a-person-did): the comment goes in a call
+of its own, and the close in the next.
 
 `checklist` sets the steps. A step sent
 with the text of a step the item has is that step: it keeps its `item_id`, its
@@ -4619,23 +4676,50 @@ claim never has it: the interface takes no work for an agent.
 
 ### A close over what a person did
 
-An agent's transition into a terminal state, by `is_terminal`, is refused while
-the window is not empty, with the guard `person_spoke`. The refusal names the
-events, newest 20, with their text, so the agent can act on them. Writing
-anything to the item first -- a comment saying what it did about them -- empties
-the window and the close goes through; `force: true` carries it through as it
-does every guard and records `overridden` with `person_spoke`, and the answer
-still carries `from_person`. A `transition` group is judged the same way, with
-the window counted from before the batch. A cancel whose `transition.following`
-names an answered question leaves out that question's `question_answered` event:
-the guard reads the rest of the window, so any other act of a person still refuses.
+An agent's transition into a terminal state, by `is_terminal`, is refused with the
+guard `person_spoke` while a person did something on the item that the closing
+agent has not been told. The refusal names the events, newest 20, with their
+text, and the form that passes: a comment on the item saying what the agent did
+about them, in a call of its own, and the close in the next call. What a call
+itself writes does not count for its own close, so a `comment` group sent beside
+the closing `transition` leaves the refusal standing. `force: true` carries the
+close through as it does every guard and records `overridden` with
+`person_spoke`, and the answer still carries `from_person`. A cancel whose
+`transition.following` names an answered question leaves out that question's
+`question_answered` event: the guard reads the rest, so any other act of a person
+still refuses.
+
+**What the agent has been told.** When the closing call proves its session and
+the client hook keeps a marks file for that session and agent (see
+[Where each agent's place is kept](hook-contract.md#where-each-agents-place-is-kept)),
+the agent has been told what a person did up to the later of two calls:
+
+- its own last write on the item: the newest confirmed call row of that session
+  and agent on the item, the closing call left out;
+- its hook's place on the item: the last call through which the hook handed it
+  everything a person did there. The place counts only when the hook last read the
+  item while the agent held it, because otherwise the hook tells only what is
+  addressed to the agent.
+
+Another agent's write does not count. A subagent being told does not tell its
+orchestrator, and the orchestrator being told does not tell its subagent.
+
+When the call proves no session, or there is no marks file for that session and
+agent, the item's window decides instead: the close is refused while the window
+is not empty, and any agent's write empties it. That covers a client without the
+hook, notices switched off, and a marks file that does not read.
+
+The place is read when the close is judged. A hook of a parallel call of the same
+agent can record a notice in the seconds between the agent composing the close and
+the close arriving, and that notice counts.
 
 A person closing an item is not guarded, nor is a write made outside any call. An
 item a person closed or cancelled is told to the agent by its next write's
 `from_person`; writing to a closed item behaves as before. `merge_work_items`
 judges each merged item before anything moves, because the merge moves its
-comments to the survivor: a merged item with a non-empty window refuses the
-merge with `person_spoke`, and `force` records it on that item once.
+comments to the survivor. A merged item with something its merging agent has not
+been told refuses the merge with `person_spoke`, judged as a close is, and `force`
+records it on that item once.
 
 ### Mentions
 

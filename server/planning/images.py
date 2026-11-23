@@ -24,10 +24,11 @@ import contextlib
 import os
 import re
 import sqlite3
-import tempfile
 from hashlib import sha256
 from typing import NamedTuple
 
+from .. import atomic_files
+from ..store_identity import metadata as store_metadata
 from . import calls, model, read_model
 
 #: The largest picture taken, in bytes; the editor refuses a larger one before sending it.
@@ -43,7 +44,7 @@ PATH_PREFIX = "/api/images/"
 #: `store_backups` copies it with the pictures under the same name.
 MARKER = ".store"
 _HASH = re.compile(r"[0-9a-f]{64}")
-#: What `_write` leaves behind when the process dies before its `os.replace`.
+#: What `_write` leaves behind when the process dies before its file takes its name.
 _TORN = re.compile(r"\.[0-9a-f]{64}\..+\.tmp")
 #: The pictures a write freed, by the connection that made it, until it commits: the
 #: directory they stand in and their hashes. Kept by `id` because a connection takes no
@@ -91,9 +92,9 @@ def directory_beside(database: str) -> str:
 def directory(conn: sqlite3.Connection) -> str:
     """The pictures' directory of the store this connection opened."""
 
-    for row in conn.execute("PRAGMA database_list"):
-        if row[1] == "main" and row[2]:
-            return directory_beside(str(row[2]))
+    database = store_metadata.database_file(conn)
+    if database:
+        return directory_beside(database)
     raise ImageRefusedError(503, "unavailable", "this store has no file to keep pictures beside")
 
 
@@ -168,16 +169,7 @@ def _write(folder: str, sha: str, data: bytes) -> bool:
         if sha256(handle.read(MAX_BYTES + 1)).hexdigest() == sha:
             return False
     os.makedirs(folder, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(prefix=f".{sha}.", suffix=".tmp", dir=folder)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(name, target)
-    finally:
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(name)
+    atomic_files.write(target, data)
     return True
 
 

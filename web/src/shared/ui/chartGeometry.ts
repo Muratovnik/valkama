@@ -7,6 +7,13 @@
  * number it is and the text it reads as, and every word as a prop.
  */
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
+
+/**
+ * What stands between a table's figure and the remark under it, where they are said as one: for
+ * a screen reader in the cell, unseen, and in the words of a line or a hint.
+ */
+export const REMARK_JOINT = ', '
 
 function byCodePoint(left: string, right: string) {
   if (left === right) return 0
@@ -76,12 +83,6 @@ export interface RankedRow extends MarkAction {
   /** The value as the reader reads it: formatted by the caller, units and all. */
   valueText: string
   /**
-   * Whether the row's figure is less than the least its words count, «under a minute» or
-   * «< $0.01»: the chart leaves it out while it has another row to draw, under any name, and its
-   * table twin lists it as every other row.
-   */
-  belowUnit?: boolean
-  /**
    * What the label leaves out, said in its hint: the client and the start of the id of a session
    * the label names by its title.
    */
@@ -89,6 +90,12 @@ export interface RankedRow extends MarkAction {
   kind?: RankedRowKind
   /** The end of a label of two parts that stays whole while the rest is cut (`PairName`). */
   labelEnd?: string
+  /**
+   * The label as the runs it is drawn in, where it holds a work item's title (`titleRuns`): its
+   * code is drawn as code, in the row, its table and its hint. `writtenText` of them is `label`;
+   * without them the label is drawn as the text it is.
+   */
+  labelRuns?: readonly TextRun[]
   /**
    * Whether a row ranked among the categories names no value, such as work on no task in a list
    * that ranks it by its figure: its name is then in the quiet ink, slanted, as a note is.
@@ -173,6 +180,8 @@ export interface PeriodSeries extends MarkAction {
   slot: SeriesSlot
   /** The end of a pair's `label` that stays whole while the rest gives way (`PairName`). */
   labelEnd?: string
+  /** The label as the runs it is drawn in, where it holds a work item's title (`RankedRow`). */
+  labelRuns?: readonly TextRun[]
 }
 
 export interface PeriodColumn {
@@ -214,6 +223,13 @@ export interface PeriodColumn {
    * which is not zero. It is drawn as a hatched ground with no sum, and says so in words.
    */
   pending?: boolean
+  /**
+   * The keys of `values` this period does not name: a series whose amount here says nothing of
+   * how much, as its caller judges it, or an amount no series stands for. Such an amount is not
+   * drawn, and the period's hint and its table row say of a series what they say of one with
+   * nothing there, while the period's sum, and the series' figure over the span, count it.
+   */
+  unnamed?: readonly string[]
 }
 
 /** Something that changed at the start of a period, such as the account the work ran under. */
@@ -222,6 +238,9 @@ export interface PeriodMark {
   at: string
   label: string
 }
+
+/** A layer a period chart draws beside its data, keyed in its legend (`usePeriodLayers`). */
+export type PeriodLayer = 'change' | 'outline'
 
 export interface PeriodWords {
   empty: string
@@ -245,6 +264,11 @@ export interface PeriodWords {
   absent?: string
   /** The words before the figure of the period compared with, and the heading over them. */
   before?: string
+  /**
+   * What the legend calls the line a change at a period's start is drawn as (`PeriodMark`),
+   * beside a short upright line while the plot marks one: "account change".
+   */
+  change?: string
   emptyDescription?: string
   /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
   pending?: string
@@ -263,6 +287,12 @@ export interface PeriodChartProps {
   series: readonly PeriodSeries[]
   words: PeriodWords
   marks?: readonly PeriodMark[]
+  /**
+   * The layers beside the data whose read failed: the period compared with (`outline`), the
+   * changes at a period's start (`change`). While the chart has no such layer, the legend keeps
+   * the room of its key unseen, so nothing under the legend moves when a later read brings it.
+   */
+  unread?: readonly PeriodLayer[]
   /**
    * The value axis, where its steps are other than round steps said as `formatValue` says a
    * value: a span of time in one unit (`durationAxis`).
@@ -302,10 +332,18 @@ export interface StackedColumn {
   /** The series with no figure in the period (`PeriodColumn.absent`), in the series' order. */
   absent: PeriodSeries[]
   column: PeriodColumn
+  /** How high the stack is drawn: its segments together. */
+  drawn: number
   marks: string[]
-  /** Bottom first, in the series' order; a series with nothing in the period has no segment. */
+  /**
+   * Bottom first, in the series' order; a series with nothing in the period, or with an amount
+   * there it does not name (`PeriodColumn.unnamed`), has no segment.
+   */
   segments: StackSegment[]
-  /** The sum drawn; a period with nothing drawn and a series absent has no sum (`hasSum`). */
+  /**
+   * The period's sum: what is drawn and what is not named; a period with nothing drawn and a
+   * series absent has no sum (`hasSum`).
+   */
   total: number
 }
 
@@ -348,13 +386,17 @@ export function stackColumns(
     let reached = 0
     for (const one of series) {
       const value = drawable(column.values[one.key])
-      if (!value) continue
+      if (!value || column.unnamed?.includes(one.key)) continue
       segments.push({ series: one, value, start: reached, end: reached + value })
       reached += value
     }
+    const unnamed = (column.unnamed ?? []).reduce(
+      (sum, key) => sum + drawable(column.values[key]),
+      0,
+    )
     const notes = marks.filter((mark) => mark.at === column.key).map((mark) => mark.label)
     const absent = series.filter((one) => column.absent?.includes(one.key))
-    return { column, total: reached, segments, marks: notes, absent }
+    return { column, drawn: reached, total: reached + unnamed, segments, marks: notes, absent }
   })
   // The period compared with stands on the same scale, so its mark is never cut off.
   const before = columns.map((column) => drawable(column.before ?? 0))
@@ -369,9 +411,9 @@ export function stackColumns(
  */
 export function segmentPlace(one: StackedColumn, at: number) {
   const segment = one.segments[at]
-  if (!segment || one.total <= 0) return { insetBlockEnd: '0%', blockSize: '0%' }
-  const start = `${(segment.start / one.total) * 100}%`
-  const size = `${(segment.value / one.total) * 100}%`
+  if (!segment || one.drawn <= 0) return { insetBlockEnd: '0%', blockSize: '0%' }
+  const start = `${(segment.start / one.drawn) * 100}%`
+  const size = `${(segment.value / one.drawn) * 100}%`
   if (at === 0) return { insetBlockEnd: start, blockSize: size }
   return {
     insetBlockEnd: `calc(${start} + var(--space-half))`,

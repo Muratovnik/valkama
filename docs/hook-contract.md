@@ -1006,6 +1006,16 @@ hook at all. `valkama hook claude watch`, registered with `asyncRewake` on
   other ways and the `timeout` end it), when `CLAUDE_CODE_SESSION_ID` names another
   session than its input, when it was started inside a subagent, and when
   notices are switched off.
+- **Never under a one-turn client.** `claude -p` with its prompt as text waits
+  for an `asyncRewake` hook before the turn starts and again before it ends,
+  though Claude Code describes such a hook as one it does not wait for; a
+  watcher there held each turn until its `timeout`. So the watcher reads the
+  arguments of the process `CLAUDE_PID` names and exits 0 at once when they hold
+  `-p` or `--print` with an input format other than `stream-json`. With
+  `--input-format stream-json`, as the Agent SDK and the editor extensions start
+  Claude Code, the turn does not wait and the session outlives it, so the
+  watcher stays. Neither the hook's environment nor its input tells the two
+  apart. Where the arguments cannot be read, it stays as well.
 - **Lives for its `timeout`.** Claude Code ends it then, with no wake. Each
   prompt and each turn end starts it again, so a session at work is always
   watched; one idle for longer than the `timeout` is not, until its next prompt.
@@ -1034,7 +1044,13 @@ exists, as `spool/` is:
 | `<session>.end` | written by `SessionEnd`; it stops that session's watcher |
 
 A file that cannot be read counts as empty, so the worst a damaged one does is
-tell the current news once more. A file a build from before threads wrote, headed
+tell the current news once more.
+
+The server reads the `.marks` files too, and only reads them: an agent's close
+counts what its hook has already handed it as told (see
+[A close over what a person did](connection-contract.md#a-close-over-what-a-person-did)).
+To that check a file that cannot be read is no file, and the close is judged as
+for a client without this hook. A file a build from before threads wrote, headed
 `v1`, holds only items its recipient held, and reads as that. `SessionEnd` removes
 its session's places; a session resumed later starts again from its own last
 writes. Files of sessions
@@ -1829,7 +1845,10 @@ reading is recorded under, and which windows it keeps.
 | `seat` | the seven-day window's reset, as for the status line |
 
 A gateway's `spend_limit` reaches the mod without its dollars and is not kept
-from it. Everything else is the status line command's: a reading the store cannot
+from it. The engine's windows hold no model's own week and no extra usage, so
+neither the mod nor the status line ever records one: those come only from
+[the poll of the usage endpoint](connection-contract.md#the-poll-of-the-usage-endpoint),
+which is off until its owner switches it on. Everything else is the status line command's: a reading the store cannot
 take now goes to the spool, input that carries no reading writes nothing and
 prints nothing, and a reading the store would refuse is reported on stderr and
 written nowhere. A `--source` that names neither `statusline` nor `mod`, or is
@@ -1900,8 +1919,10 @@ empty conversation.
 | The executable names above the hook: `Code.exe` and its forks, a JetBrains `…64.exe`, `WindowsTerminal.exe`, `OpenConsole.exe`, `ChatGPT.exe` | a session start on Windows | the IDE is taken for VS Code, and a Codex app session is not placed |
 | The last `entrypoint` in a Claude Code transcript, and `payload.originator` on the first line of a Codex rollout | the open plan, for a session recorded before places were | the session is not placed |
 | The mod API, which Claude Code calls early access: the events `session.start`, `session.measure` and `turn.complete`, `$.session.usage().rateLimits`, `$.fs.read` and `$.process.run` | [the mod](#the-mod) | the mod hands nothing over, and `doctor` calls the `mod` source silent; `claude plugin test server/mod/valkama-quota` shows which call moved |
+| The window kinds in `rateLimits` and in the status line's `rate_limits`: `five_hour`, `seven_day` and a gateway's `spend_limit`, with no model week and no extra usage | [the mod](#the-mod) and the status line | a window the engine stops sending is no longer collected; one it starts sending is not kept until the receiver's parser names it |
 | `<config>/sessions/<pid>.json` of Claude Code, its `sessionId` and `pid` only | the desktop app, at a click, to see whether the process runs | the session's row decides whether it runs |
 | `CLAUDE_PID` and `CLAUDE_CODE_SESSION_ID` | [the watcher](#the-watcher) | a watcher whose client is gone, or that runs for another session, is ended by the session's end or its `timeout` alone |
+| That `claude -p` with a text prompt waits for an `asyncRewake` hook, and `--input-format stream-json` does not, read from the client's arguments | [the watcher](#the-watcher) | where a one-turn client stops waiting, nothing is lost; where another client starts to wait, its turns wait for the watcher's `timeout` again |
 | `claude://code/continue?session=<id>`, `claude-cli://open?cwd=<folder>&q=/resume <id>`, `vscode://openai.chatgpt/local/<id>` and the extension's "still open somewhere else" notice holding its input | the open plan, only once each has been watched working and named in `url_schemes.SEEN_LIVE`, which no build names yet | nothing: until then the plan takes the way round described in [What a click opens](connection-contract.md#what-a-click-opens) |
 
 As far as reading the clients' documentation could settle, the four variables,

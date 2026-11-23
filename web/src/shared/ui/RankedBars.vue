@@ -15,10 +15,6 @@
  * figure says how much of the whole each one is. No strip of the whole stands over the rows: as
  * thin as their bars and with no words of its own, it read as one more row.
  *
- * A row whose figure is less than its unit shows (`belowUnit`), «Unknown · under a minute», says
- * nothing of how much and is not drawn, under any name, unless every row is such a row; the
- * caller's shares and totals still count it, and `RankedBarsTable` lists it.
- *
  * Presentational: rows and words come in, a press on a row that opens something goes out as
  * `select` with the row's key, and a press on a row that leads somewhere (`href`) as `follow`
  * with the press, for the host to open it in place or leave it to the browser. A row that acts
@@ -73,14 +69,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
-/** The rows drawn: every one whose figure counts something, or every row where none does. */
-const drawn = computed(() => {
-  const counted = props.rows.filter((row) => !row.belowUnit)
-  return counted.length ? counted : props.rows
-})
-const placed = computed(() => rankRows(drawn.value, props.rankAll, props.freeText))
+const placed = computed(() => rankRows(props.rows, props.rankAll, props.freeText))
 /** Whether the rows are pairs, whose names take a line of their own; a dense chart keeps its. */
-const pairs = computed(() => !props.dense && drawn.value.some((row) => row.labelEnd))
+const pairs = computed(() => !props.dense && props.rows.some((row) => row.labelEnd))
 /** Names of free text on lines of their own, two at most; a dense chart keeps its one line. */
 const freeText = computed(() => !props.dense && props.freeText)
 /** The ranked categories as an ordered list, and the rows that are not ranked after them. */
@@ -184,12 +175,13 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
               class="ranked-label"
               :class="{
                 'one-line': !freeText,
-                'ranked-clamp': freeText && !row.labelEnd,
+                'two-lines': freeText && !row.labelEnd,
                 'ranked-quiet': row.quiet,
               }"
               ><PairName
                 :name="row.label"
                 :end="row.labelEnd"
+                :runs="row.labelRuns"
                 :stacked="freeText"
             /></span>
             <span
@@ -252,14 +244,18 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 
 /* A line of the chart, not a control standing in it: a row that opens something takes the
    same box as one that does not, and the whole of it is what a pointer presses. Its states are
-   the model the page's rows share (`rowStates.css`). */
+   the model the page's rows share (`rowStates.css`). It draws no ground at rest, so it keeps
+   its fill's inset outside the column (`--space-fill-inset`): its name and its bar start on the
+   edge the heading over it stands on, and the ground under the pointer reaches past it. Inset
+   inside the column, every name stood 8px in from its section's heading. */
 .ranked-line {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: center;
   min-block-size: var(--size-control-inline);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-fill-inset);
+  margin-inline: calc(-1 * var(--space-fill-inset));
   border: 0;
   color: var(--color-text);
   font: var(--font-detail);
@@ -369,14 +365,6 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
     margin-block-start: 0;
     border-block-start: 1px solid var(--color-rule);
   }
-}
-
-.ranked-clamp {
-  display: -webkit-box;
-  overflow-wrap: break-word;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 /* Dense, at any width: the name and the value on one line, the bar a thin line under both. Each

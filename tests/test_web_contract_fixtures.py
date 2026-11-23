@@ -649,24 +649,57 @@ class _Scenario:
                     }
                 )
             ),
+            # That day narrowed to the account, by model, beside the day before, when the
+            # session's work for its organization was on no account yet: `unplaced`.
+            "analytics-usage-account": self.http(
+                "/api/analytics/usage?"
+                + urlencode(
+                    {
+                        "from": "2026-11-12",
+                        "to": "2026-11-13",
+                        "utc_offset": "180",
+                        "group_by": "model",
+                        "seat": "org-fixture/acct-fixture",
+                        "compare": "true",
+                    }
+                )
+            ),
         }
 
     @staticmethod
     def seats(conn: sqlite3.Connection, item: str) -> None:
         """A session's work on 2026-11-12, after the days the reads above cover: on the seat
         an account's poll names, then on one no account names, then for no organization,
-        then for an organization no sample reads. Its run's last record is the card's, so
-        the reads above say the same. Its stretch on the account's seat is the card's, so
-        the card's read has a week of quota; the stretch before the day has no reading
-        before it and takes the seat of the session's next, so the card's is half that
-        seat's cost."""
+        then for an organization no sample reads. The day before, another session's work for
+        the same organization, ahead of every sample, is on no account of it. Their runs'
+        last record is the card's, so the reads above say the same. Its stretch on the
+        account's seat is the card's, so the card's read has a week of quota; the stretch
+        before the day has no reading before it and takes the seat of the session's next, so
+        the card's is half that seat's cost."""
 
         session, organization = "sess-seat", "org-fixture"
-        run = conn.execute(
-            "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
-            " read_at) VALUES (?, '', 'claude', 'seat.jsonl', ?, ?, ?)",
-            (session, *("2026-11-10T10:00:00.000Z",) * 2, "2026-11-10T11:00:00.000Z"),
-        ).lastrowid
+
+        def run_of(session: str) -> int | None:
+            return conn.execute(
+                "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+                " read_at) VALUES (?, '', 'claude', ?, ?, ?, ?)",
+                (
+                    session,
+                    f"{session}.jsonl",
+                    *("2026-11-10T10:00:00.000Z",) * 2,
+                    "2026-11-10T11:00:00.000Z",
+                ),
+            ).lastrowid
+
+        run, loose = run_of(session), run_of("sess-loose")
+        conn.execute(
+            "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+            " ended_at, seconds, input_tokens, output_tokens, estimated_api_cost_usd,"
+            " price_book, quality, organization)"
+            " VALUES (?, 'sess-loose', '', 'claude-opus-5-5', '2026-11-11T12:00:00.000Z',"
+            " '2026-11-11T12:20:00.000Z', 1200, 20, 2, 0.02, '2026-11-10', 'observed', ?)",
+            (loose, organization),
+        )
         for start, end, held, work_item in (
             # What the session worked for, before the day read.
             ("2026-11-11T20:00:00.000Z", "2026-11-11T20:00:00.000Z", organization, None),
@@ -694,13 +727,15 @@ class _Scenario:
                 (at, source, owner, None if owner else session, account, seat),
             )
 
-    def quota(self) -> dict:
-        """The quota read as of a fixed moment: every kind of window, no source, a seat.
+    def quota(self) -> dict[str, dict]:
+        """The quota read as of a fixed moment: every kind of window, no source, a seat; and
+        the past read of the five hours before the account's current ones.
 
-        One account read by the poll: its five hours twice and fresh, its week and a
-        model's week silent, and its usage credits. An organization that worked with no
-        source, and a session's account known by its seat alone. The read is held at
-        `moment`, which every reading is placed before, so its paces stay the same.
+        One account read by the poll: its five hours twice and fresh, after a window of five
+        hours that reset four hours before, its week and a model's week silent, and its usage
+        credits. An organization that worked with no source, and a session's account known
+        by its seat alone. The reads are held at `moment`, which every reading is placed
+        before, so its paces stay the same.
         """
 
         moment = datetime(2026, 11, 10, 10, 0, tzinfo=UTC)
@@ -732,6 +767,15 @@ class _Scenario:
                     (run, session, ago(hours=3), ago(hours=1), worked_for),
                 )
             readings = (
+                samples.Reading(
+                    "poll",
+                    ago(hours=6),
+                    (samples.Window("five_hour", 30.0, ago(hours=4)),),
+                    week_seat,
+                    organization=organization,
+                    account_uuid=account,
+                    plan="Max",
+                ),
                 samples.Reading(
                     "poll",
                     ago(hours=1),
@@ -768,8 +812,22 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
-        with mock.patch.object(analytics_quota, "read", partial(analytics_quota.read, now=moment)):
-            return self.http("/api/analytics/quota?utc_offset=180")
+        asked = urlencode(
+            {
+                "account": f"{organization}/{account}",
+                "kind": "five_hour",
+                "before": (moment - timedelta(hours=3)).isoformat(),
+                "utc_offset": "180",
+            }
+        )
+        with (
+            mock.patch.object(analytics_quota, "read", partial(analytics_quota.read, now=moment)),
+            mock.patch.object(analytics_quota, "past", partial(analytics_quota.past, now=moment)),
+        ):
+            return {
+                "analytics-quota": self.http("/api/analytics/quota?utc_offset=180"),
+                "analytics-quota-window": self.http(f"/api/analytics/quota/window?{asked}"),
+            }
 
     def live_frame(self) -> dict:
         """The frame a pin answers with: the pinned card, a waiting row, a quiet one under a goal."""
@@ -1259,7 +1317,7 @@ class _Scenario:
             "live-frame": self.live_frame(),
             **self.usage(),
             "doctor-vocabulary": {"quota": _doctor_quota_codes(), "commit": _doctor_commit_codes()},
-            "analytics-quota": self.quota(),
+            **self.quota(),
             # Last, so the references the answers above name stay theirs.
             **self.tree(),
             "request-session-gone": self.session_gone(),
@@ -1468,6 +1526,7 @@ class ServerFixtureTests(unittest.TestCase):
                 "last_event_at",
                 "total",
                 "rows",
+                "unplaced",
                 "series",
                 "comparison",
             },
@@ -1480,7 +1539,7 @@ class ServerFixtureTests(unittest.TestCase):
         for row in usage["rows"]:
             self.assertEqual(measures | {"group"}, set(row))
             self.assertEqual(
-                {"id", "unknown", "reference", "title"}, set(row["group"]["work_item"])
+                {"id", "unknown", "reference", "title", "kind"}, set(row["group"]["work_item"])
             )
             self.assertEqual({"id", "unknown"}, set(row["group"]["model"]))
         self.assertEqual(2, len(usage["series"]))
@@ -1488,8 +1547,23 @@ class ServerFixtureTests(unittest.TestCase):
             self.assertEqual(measures | {"start", "end", "groups"}, set(point))
             for group in point["groups"]:
                 self.assertEqual({"work_item", "model"}, set(group["group"]))
-        self.assertEqual({"period", "total", "rows"}, set(usage["comparison"]))
+        self.assertEqual({"period", "total", "rows", "unplaced"}, set(usage["comparison"]))
+        # Not narrowed to an account, the read leaves out no account's unplaced work.
+        self.assertIsNone(usage["unplaced"])
+        self.assertIsNone(usage["comparison"]["unplaced"])
         self.assertNotIn("quota", json.dumps(answer))
+
+    def test_an_answer_narrowed_to_an_account_has_its_unplaced_work_beside(self) -> None:
+        answer = json.loads((FIXTURES / "analytics-usage-account.json").read_text(encoding="utf-8"))
+        usage = answer["usage"]
+        total_keys = set(usage["total"])
+        for unplaced in (usage["unplaced"], usage["comparison"]["unplaced"]):
+            self.assertEqual({"total", "rows"}, set(unplaced))
+            self.assertEqual(total_keys, set(unplaced["total"]))
+        before = usage["comparison"]["unplaced"]
+        self.assertEqual(1, len(before["rows"]))
+        self.assertEqual(set(usage["rows"][0]), set(before["rows"][0]))
+        self.assertEqual({"model"}, set(before["rows"][0]["group"]))
 
 
 if __name__ == "__main__":

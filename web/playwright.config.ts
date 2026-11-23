@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import type { ReporterDescription } from '@playwright/test'
 import { defineConfig, devices } from '@playwright/test'
 
 import { appBuild, appPort, harnessPort, runResults } from './tests/browser/browserRun.ts'
@@ -47,6 +48,10 @@ const testIgnore = clipboardIgnore(process.env)
 const production = /(?:^|[\\/])production-(?!locale\.)[a-z0-9-]+\.spec\.ts$/
 const inEnglish = { ...devices['Desktop Chrome'], baseURL: app, locale: 'en-US' }
 
+// A failed run names who holds the heavy-test lock as it ends; a `--reporter` given on the
+// command line replaces both, as the suite runner's does.
+const reporter: ReporterDescription[] = [['line'], [join(specs, 'lockHolderReporter.ts')]]
+
 export default store
   ? defineConfig({
       testDir: specs,
@@ -56,7 +61,7 @@ export default store
       globalSetup: join(specs, 'keptShots.setup.ts'),
       fullyParallel: false,
       retries: 0,
-      reporter: 'line',
+      reporter,
       use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
       projects: [
         {
@@ -82,7 +87,7 @@ export default store
       globalSetup: [join(specs, 'keptShots.setup.ts'), join(specs, 'servedApp.setup.ts')],
       fullyParallel: false,
       retries: 0,
-      reporter: 'line',
+      reporter,
       use: {
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',

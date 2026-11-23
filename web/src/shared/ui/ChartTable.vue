@@ -4,14 +4,18 @@
  * `PeriodColumnsTable`): the empty state in the chart's own words when there is nothing, else
  * the table under a caption only a screen reader reads. A table wider than its column, as a
  * phone makes one of a period table, scrolls in its own frame instead of widening the page,
- * and Tab reaches that frame, named as the table, only while it scrolls (`keyScroll`). The frame
- * is `data-region="table-frame"`, for a reader of the page to measure it by. A table whose rows
- * are a tree's, drawn whole, says so with the tree's role (`tree`, `treeGridAttrs`).
+ * and Tab reaches that frame, named as the table, only while it scrolls (`keyScroll`); one that
+ * would scroll by less than the least target gives that sliver from its headings' floors
+ * instead (`useChartTableGive`). The frame
+ * is `data-region="table-frame"` and the empty state `data-region="table-empty"`, for a reader of
+ * the page to measure either by. A table whose rows are a tree's, drawn whole, says so with the
+ * tree's role (`tree`, `treeGridAttrs`).
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { keyScroll } from '@/shared/lib/keyScroll.ts'
 import { treeGridAttrs } from '@/shared/lib/treeRows.ts'
+import { useChartTableGive } from '@/shared/ui/chartTableGive.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 
 const props = defineProps<{
@@ -30,17 +34,22 @@ const tableAttrs = computed(() =>
 )
 
 const vKeyScroll = keyScroll
+
+const frame = ref<HTMLElement | null>(null)
+useChartTableGive(frame)
 </script>
 
 <template>
   <DataEmptyState
     v-if="empty"
+    data-region="table-empty"
     :title="words.empty"
     :description="words.emptyDescription"
     compact
   />
   <div
     v-else
+    ref="frame"
     v-key-scroll="label"
     class="chart-table-frame"
     data-region="table-frame"

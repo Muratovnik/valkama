@@ -244,11 +244,24 @@ class GroupTests(UsageStore):
         read = self.read(**{"from": day(0), "to": day(1), "group_by": "work_item"})
         self.assertEqual(
             [
-                {"id": item, "unknown": False, "reference": reference, "title": "Build the read"},
-                {"id": None, "unknown": False, "reference": None, "title": None},
+                {
+                    "id": item,
+                    "unknown": False,
+                    "reference": reference,
+                    "title": "Build the read",
+                    "kind": "task",
+                },
+                {"id": None, "unknown": False, "reference": None, "title": None, "kind": None},
             ],
             [row["group"]["work_item"] for row in read["rows"]],
         )
+
+    def test_an_item_value_says_its_kind_so_a_goal_is_read_as_its_card_reads_it(self) -> None:
+        _, goal = self.item("Plan the release", kind="goal")
+        self.session("s-1")
+        self.segment("s-1", 0, 60, item=goal)
+        read = self.read(**{"from": day(0), "to": day(1), "group_by": "work_item"})
+        self.assertEqual(["goal"], [row["group"]["work_item"]["kind"] for row in read["rows"]])
 
     def test_with_no_readable_registry_a_folder_reads_as_no_known_project(self) -> None:
         _, item = self.item(projects=["alpha"])
@@ -760,6 +773,74 @@ class SeatTests(UsageStore):
             [("org-a/acct-2", 200.0)],
             [(group["id"], seconds) for group, seconds in self.seat_rows(read, "comparison")],
         )
+
+
+class UnplacedTests(UsageStore):
+    """What a seat filter leaves out of its accounts' organizations: work on no account."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        for session, organization in (("s-1", "org-a"), ("s-2", "org-a"), ("s-4", "org-b")):
+            # What each session worked for, outside every period read here.
+            self.segment(session, -3 * DAY, -3 * DAY, seconds=0.0, organization=organization)
+        self.quota_sample(0, SEAT_1, organization="org-a", account="acct-1")
+        # The account's own work: a hundred seconds late the day before, six hundred now.
+        self.quota_sample(-DAY + 3000, SEAT_1, session="s-1")
+        self.quota_sample(10, SEAT_1, session="s-1")
+        self.segment("s-1", -DAY + 3060, -DAY + 3160, organization="org-a", model="m-1")
+        self.segment("s-1", 60, 660, organization="org-a", model="m-1")
+        # Earlier that day, ahead of every sample of its organization, s-2's work is on no
+        # account of org-a, and org-b's work is on none of org-b.
+        self.segment("s-2", -DAY + 60, -DAY + 1060, organization="org-a", model="m-1")
+        self.segment("s-2", -DAY + 2000, -DAY + 2300, organization="org-a", model="m-2")
+        self.segment("s-4", -DAY + 60, -DAY + 560, organization="org-b", model="m-1")
+
+    def compared(self, **parameters: str) -> dict:
+        return self.read(**{"from": day(0), "to": day(1), "compare": "true", **parameters})
+
+    @staticmethod
+    def lines(part: dict, dimension: str) -> list[tuple[str | None, float]]:
+        return [(row["group"][dimension]["id"], row["agent_seconds"]) for row in part["rows"]]
+
+    def test_an_accounts_organizations_unplaced_work_stands_beside_its_figures(self) -> None:
+        read = self.compared(seat="org-a/acct-1", group_by="model")
+        self.assertEqual(600.0, read["total"]["agent_seconds"])
+        self.assertEqual(100.0, read["comparison"]["total"]["agent_seconds"])
+        self.assertEqual([("m-1", 100.0)], self.lines(read["comparison"], "model"))
+        before = read["comparison"]["unplaced"]
+        # org-a's work on no account; org-b is no organization of the account.
+        self.assertEqual(1300.0, before["total"]["agent_seconds"])
+        self.assertEqual([("m-1", 1000.0), ("m-2", 300.0)], self.lines(before, "model"))
+        self.assertEqual({"total", "rows"}, set(before))
+        self.assertEqual(0.0, read["unplaced"]["total"]["agent_seconds"])
+        self.assertEqual([], read["unplaced"]["rows"])
+        # Nothing of it is in the figures: the steps add up to the account's own.
+        self.assertEqual(600.0, sum(point["agent_seconds"] for point in read["series"]))
+
+    def test_it_is_grouped_as_the_rows_and_held_to_every_other_filter(self) -> None:
+        by_seat = self.compared(seat="org-a/acct-1", group_by="seat")
+        self.assertEqual(
+            [("org-a/", 1300.0)], self.lines(by_seat["comparison"]["unplaced"], "seat")
+        )
+        self.assertEqual([("org-a/acct-1", 100.0)], self.lines(by_seat["comparison"], "seat"))
+        one_model = self.compared(seat="org-a/acct-1", model="m-1")
+        self.assertEqual(1000.0, one_model["comparison"]["unplaced"]["total"]["agent_seconds"])
+
+    def test_an_organization_the_filter_admits_itself_is_in_the_figures_instead(self) -> None:
+        both = self.compared(seat="org-a/acct-1,org-b/")
+        self.assertEqual(600.0, both["comparison"]["total"]["agent_seconds"])
+        self.assertEqual(1300.0, both["comparison"]["unplaced"]["total"]["agent_seconds"])
+        self.assertIsNone(self.compared(seat="org-a/acct-1,org-a/")["comparison"]["unplaced"])
+
+    def test_none_without_a_filter_that_admits_an_account(self) -> None:
+        for filters in ({}, {"seat": "org-a/"}, {"none": "seat"}, {"account": "org-a"}):
+            read = self.compared(**filters)
+            self.assertIsNone(read["unplaced"], filters)
+            self.assertIsNone(read["comparison"]["unplaced"], filters)
+        # Without a comparison the period's own stands alone.
+        alone = self.read(**{"from": day(-1), "to": day(0), "seat": "org-a/acct-1"})
+        self.assertEqual(1300.0, alone["unplaced"]["total"]["agent_seconds"])
+        self.assertIsNone(alone["comparison"])
 
 
 class WindowSpanTests(UsageStore):

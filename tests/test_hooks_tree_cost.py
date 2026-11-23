@@ -29,7 +29,7 @@ from typing import Any
 from unittest import mock
 
 from server import mcp_surface, store
-from server.hooks import notify
+from server.hooks import marks, notify
 from server.planning import calls, service
 
 A = "0a000000-0000-4000-8000-00000000000a"
@@ -67,7 +67,7 @@ class TreeCostTests(unittest.TestCase):
         count = conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]
         assert count == 274, count
         cls.call("claim_work_item", {"sessionId": A}, id=cls.tasks[0])
-        cls.state = os.path.join(os.path.dirname(cls.path), notify.STATE_DIRECTORY)
+        cls.state = os.path.join(os.path.dirname(cls.path), marks.STATE_DIRECTORY)
         os.makedirs(cls.state, exist_ok=True)
 
     @classmethod

@@ -7,13 +7,16 @@ import PlanningCardOverlay from '@/pages/planning/PlanningCardOverlay.vue'
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
 import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
+import { provideUsageReach } from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
 
 import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import { inPrimaryStore } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { projectName, spaceName, useSpaceNames } from '@/shared/lib/spaceNames.ts'
 
 const props = defineProps<{
   activeModule: ModuleId
@@ -42,6 +45,13 @@ const emit = defineEmits<{
   'requests': [scope: QuestionScope | null]
   'state': [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
 }>()
+/**
+ * Analytics reads the primary store, so each task it names is that store's: its usage is read
+ * where its card's would be, by the card's own test of a store.
+ */
+provideUsageReach(() =>
+  inPrimaryStore(props.primaryWriteScopeId, props.context?.primary.data_scope_id),
+)
 const SettingsView = settingsView.component
 const AnalyticsView = analyticsView.component
 const DecisionsView = decisionsView.component
@@ -62,6 +72,17 @@ const scopeProject = computed(() =>
 const scopeSpace = computed(() => (props.scope.kind === 'space' ? props.scope.space_ref : null))
 /** The key of that space, which Agent decisions and Analytics read by; null at the top. */
 const scopeSpaceKey = computed(() => scopeSpace.value?.space_key ?? null)
+const spaceNames = useSpaceNames()
+/** That project's name as the context bar names it, or its id where the space does not offer it. */
+const scopeProjectTitle = computed(() =>
+  scopeSpace.value && scopeProject.value
+    ? projectName(spaceNames.value, scopeSpace.value, scopeProject.value)
+    : null,
+)
+/** That space's name as the app lists it, or its key where the list does not hold it. */
+const scopeSpaceTitle = computed(() =>
+  scopeSpace.value ? spaceName(spaceNames.value, scopeSpace.value) : null,
+)
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(
   () => planningSurface.value?.selectedId ?? cardOverlay.value?.selectedId ?? null,
@@ -100,6 +121,8 @@ defineExpose({ openCardId, refresh })
       :route-state="route.state"
       :space="scopeSpaceKey"
       :project-id="scopeProject"
+      :project-title="scopeProjectTitle"
+      :space-title="scopeSpaceTitle"
       :covered="cardOver"
       @state="(state, mode) => emit('state', state, mode)"
     />

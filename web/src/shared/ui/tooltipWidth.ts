@@ -4,6 +4,7 @@
  * the same tokens the hint is laid out by, so a change of a token moves both.
  */
 import { drawnWidth } from '@/shared/lib/textWidth.ts'
+import type { Figures } from '@/shared/lib/textWidth.ts'
 import type { TooltipBody } from '@/shared/ui/tooltipAnchors.ts'
 
 /** The root's tokens, as the hint is drawn by them: a length in px, and a font. */
@@ -34,8 +35,8 @@ export function hintWidth(lines: readonly string[]): number {
 export function bodyWidth(body: TooltipBody): number {
   const { px, font } = tokens()
   const [note, label] = [font('--font-note'), font('--font-label')]
-  const widest = (texts: readonly (string | undefined)[], drawn = note) =>
-    Math.max(0, ...texts.map((text = '') => drawnWidth(text, drawn)))
+  const widest = (texts: readonly (string | undefined)[], drawn = note, figures?: Figures) =>
+    Math.max(0, ...texts.map((text = '') => drawnWidth(text, drawn, figures)))
   // `.tooltip-body`: the room between columns, and the swatch's size.
   const gap = px('--space-2')
   const series = body.head.slot !== undefined
@@ -49,13 +50,19 @@ export function bodyWidth(body: TooltipBody): number {
     widest(quiet.map((line) => line.name)) - swatch,
     ...body.rows.map((row) => drawnWidth(row.name, row.key ? label : note)),
   )
-  const figures = widest([
-    body.head.figure,
-    ...quiet.map((line) => line.figure),
-    ...body.rows.map((row) => row.figure),
-  ])
+  // Figures and shares are drawn in figures of one width (`.tooltip-body-figure`).
+  const figures = widest(
+    [body.head.figure, ...quiet.map((line) => line.figure), ...body.rows.map((row) => row.figure)],
+    note,
+    'tabular',
+  )
   const shares = body.rows.some((row) => row.share)
-    ? gap + widest(body.rows.map((row) => row.share))
+    ? gap +
+      widest(
+        body.rows.map((row) => row.share),
+        note,
+        'tabular',
+      )
     : 0
   const rows = swatch + Math.max(0, name) + gap + figures + shares
   // A row's inset, then the hint's own padding and border (`.tooltip-hint-body`).

@@ -5023,7 +5023,9 @@ def held_elsewhere(
 
 
 def _merge_spoke(conn: sqlite3.Connection, merged: list[sqlite3.Row], force: bool) -> set[str]:
-    """The merged items a person acted on that no agent has been told of, by item id.
+    """The merged items a person acted on that the merging agent has not been told of, by id.
+
+    Told is judged as the close guard judges it (`transitions.person_spoke`).
 
     Judged before anything moves. Each merged item closes, and the close guard
     would judge it too, but only after its comments have moved to the survivor,
@@ -5034,7 +5036,7 @@ def _merge_spoke(conn: sqlite3.Connection, merged: list[sqlite3.Row], force: boo
 
     spoke: set[str] = set()
     for row in merged:
-        message = transitions.person_spoke(conn, row, read_model.reference(conn, row))
+        message = transitions.person_spoke(conn, row, read_model.reference(conn, row), act="merge")
         if not message:
             continue
         if not force:

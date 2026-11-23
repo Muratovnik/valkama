@@ -2,11 +2,15 @@
 /**
  * The bar over every section of the Analytics page, a period bar (`PeriodBar`) filled with the
  * page's own: its periods, with the ends of the reader's own beside them, its two days or the name
- * of a span between two moments; the filters set, each a chip that takes it out, and the way to
- * add one (`AnalyticsChips`); how fresh the figures are; and a read of them again. The bar's line,
- * its two rows and a phone's rows are the period bar's, which keeps the panel under it from
- * moving with what the bar holds; the filters take the room the rest leaves, counting those they
- * have none for, and the list of filters they open lies over the panel.
+ * of a span between two moments; the filter's field, the way to add a filter
+ * (`AnalyticsFilterField`, `useAnalyticsFilter`); how fresh the figures are; and a read of them
+ * again. Each value a filter is set to is a chip that takes it out, in a row of its own under the
+ * line, with «Clear filters» at its end (`AnalyticsChipRow`), as the Work bar places its chips.
+ * The bar's line, its two rows and a phone's rows are the period bar's, which keeps the panel
+ * under it from moving with what the bar holds: the filter's field takes the room the rest
+ * leaves, never less than its words need, and its menu lies over the panel. The chips' row comes
+ * with the first filter set and goes with the last, so the panel moves down by that row then, and
+ * by nothing else the filters do.
  *
  * How fresh the figures are is one element of one width: a live period's mark and the age of the
  * newest record the store holds, of any session, counted on each second (`useFreshness`), «● 15 s
@@ -24,19 +28,22 @@
  * The age's span is never given up, nor a failure's words, nor a day of the period: its fields are
  * as wide as a date needs. The one line needs 50rem in Russian once it has given up all it can
  * beside a failure and an age of hours: at 48rem it ran 13px past its end; the reader's own days
- * need the one line given up up to a window of about 1360px. The line is fitted as if a failure
- * were said, so one said takes only the room the chips had and moves nothing: neither the bar's
- * height nor its controls.
+ * need the one line given up up to a window of about 1390px. The line is fitted as if a failure
+ * were said, so one said takes only room of the field's past its words and moves the start of
+ * nothing: neither the bar's height nor its controls.
  *
  * On a phone the periods take the first row whole; under it the filter, a failure, the freshness
- * and the read again, by its icon; and, once chosen, the reader's own days. On the narrowest
+ * and the read again, by its icon; with a filter set, the chips' row right under them; and, once
+ * chosen, the reader's own days. On the narrowest
  * phone the freshness stands at the end of the periods' row, leaving a failure its room.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import AnalyticsChips from '@/pages/analytics/components/AnalyticsChips.vue'
+import AnalyticsChipRow from '@/pages/analytics/components/AnalyticsChipRow.vue'
+import AnalyticsFilterField from '@/pages/analytics/components/AnalyticsFilterField.vue'
 import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
+import { useAnalyticsFilter } from '@/pages/analytics/composables/useAnalyticsFilter.ts'
 import { useFreshness } from '@/pages/analytics/composables/useFreshness.ts'
 import { LIVE_INTERVAL } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.ts'
@@ -70,14 +77,16 @@ const props = defineProps<{
   values: Partial<Record<UsageDimension, FilterValues>>
   view: AnalyticsView
 }>()
-/** A change of the view, a filter set anew, or the figures read again. */
+/**
+ * A change of the view, a filter set anew, the dimensions whose values the filter's menu shows,
+ * or the figures read again.
+ */
 const emit = defineEmits<{
   amend: [next: Partial<AnalyticsView>]
   filter: [dimension: UsageDimension, values: (string | null)[]]
+  need: [dimensions: UsageDimension[]]
   refresh: []
 }>()
-/** Whether the list of filters is open over the panel. */
-const adding = defineModel<boolean>('adding', { required: true })
 
 const { t } = useI18n()
 const spending = useSpendingWords()
@@ -91,6 +100,18 @@ const barWords = computed(() => ({
   reversed: t('analytics.period.reversed'),
   to: t('analytics.period.to'),
 }))
+
+/** The filter on the shared field and chips (`useAnalyticsFilter`), which the bar places. */
+const filter = useAnalyticsFilter({
+  clear: () => emit('amend', { filters: {} }),
+  dimensions: () => props.dimensions,
+  filter: (dimension, chosen) => emit('filter', dimension, chosen),
+  filters: () => props.view.filters,
+  need: (needed) => emit('need', needed),
+  values: () => props.values,
+})
+/** Whether a filter is set, its chips then taking a row of their own. */
+const filtered = computed(() => filter.chips.value.length > 0)
 
 function choosePeriod(period: PeriodPreset) {
   emit('amend', period === 'custom' ? { period, ...customDays(new Date()) } : { period })
@@ -106,8 +127,11 @@ const spanName = computed(() =>
  * between its parts, the word around the age, a failure's retry's own word, and a span's name.
  */
 const ORDER = ['words', 'gaps', 'ago', 'retry', 'span'] as const
-/** What else the line is fitted again for: whether the period is live, and the filters. */
-const holds = computed(() => [props.live, props.view.filters])
+/**
+ * What else the line is fitted again for: whether the period is live. The filters set stand in a
+ * row of their own, so they change nothing on the line.
+ */
+const holds = computed(() => [props.live])
 
 /** The period bar, which says what its line gave up. */
 const bar = useTemplateRef<{ gave: (part: string) => boolean }>('bar')
@@ -162,6 +186,7 @@ const freshHint = computed(() =>
     :span-name="spanName"
     :to="view.to"
     :today="today"
+    :under="filtered"
     :words="barWords"
     :wrapped="wrapped"
     beside
@@ -169,14 +194,10 @@ const freshHint = computed(() =>
     @period="choosePeriod"
   >
     <template #default="{ short }">
-      <AnalyticsChips
-        v-model:adding="adding"
-        :dimensions="dimensions"
-        :filters="view.filters"
+      <AnalyticsFilterField
+        ref="filterField"
+        :filter="filter"
         :short="short"
-        :values="values"
-        @filter="(dimension, chosen) => emit('filter', dimension, chosen)"
-        @clear="emit('amend', { filters: {} })"
       />
     </template>
     <template #end="{ held, short }">
@@ -224,6 +245,13 @@ const freshHint = computed(() =>
         />
         <span class="analytics-refresh-words">{{ t('analytics.frame.refresh') }}</span>
       </VButton>
+    </template>
+    <template #under>
+      <AnalyticsChipRow
+        ref="filterChips"
+        class="analytics-bar-chips"
+        :filter="filter"
+      />
     </template>
   </PeriodBar>
 </template>
@@ -288,6 +316,11 @@ const freshHint = computed(() =>
   .analytics-refresh {
     grid-area: 2 / 4 / 3 / 5;
   }
+
+  /* With a filter set its chips take the row right under the field's (`PeriodBar`'s `under`). */
+  .analytics-bar-chips {
+    grid-area: 3 / 1 / 4 / -1;
+  }
 }
 
 /* The narrowest phone (`PeriodBar`'s `beside`): the freshness at the end of the periods' row, on
@@ -302,7 +335,9 @@ const freshHint = computed(() =>
 }
 
 /* A short bar (`short`) says the read again by its icon. Its words stay in the button for
-   assistive technology, hidden from sight, and its hint names it. */
+   assistive technology, hidden from sight, and its hint names it. They are hidden by this rule
+   rather than the shared `.visually-hidden`, which a hint never counts as cut (`textIsClipped`):
+   under that class the short bar's button lost its hint. */
 .analytics-refresh-short .analytics-refresh-words {
   position: absolute;
   inline-size: 1px;

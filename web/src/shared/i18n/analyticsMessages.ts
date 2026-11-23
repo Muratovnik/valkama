@@ -4,6 +4,7 @@
  */
 import { analyticsDetailMessages } from '@/shared/i18n/analyticsDetailMessages.ts'
 import { analyticsFigureMessages } from '@/shared/i18n/analyticsFigureMessages.ts'
+import { analyticsFilterMessages } from '@/shared/i18n/analyticsFilterMessages.ts'
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsQuotaMessages } from '@/shared/i18n/analyticsQuotaMessages.ts'
@@ -38,6 +39,14 @@ export const analyticsMessages = {
         incomplete: 'Choose the first and the last day of the period.',
         choose: 'Choose the days of the period',
       },
+      scope: {
+        project: 'project {name}',
+        space: 'space {name}',
+        all: 'all projects',
+        aboutProject: 'The figures are of the project {name} alone.',
+        aboutSpace: 'The figures are of the space {name} alone.',
+        aboutAll: 'The figures are of all projects.',
+      },
       dimensions: {
         seat: 'Account',
         account: 'Organization',
@@ -49,6 +58,10 @@ export const analyticsMessages = {
         model: 'Model',
         effort: 'Effort',
         environment: 'Environment',
+      },
+      /** What a dimension's own name means, where the name alone does not say it. */
+      dimensionNotes: {
+        executor: 'An executor is the agent session that did the work.',
       },
       roles: {
         main: 'Main agent',
@@ -80,8 +93,8 @@ export const analyticsMessages = {
         total: 'total',
         empty: 'Nothing was spent on any day of this period.',
         other: 'Other',
-        accounts: 'Account change: {before} → {after}',
-        accountsFailed: 'The account data could not be loaded, so account changes are not marked.',
+        accounts: 'Account change: {change}',
+        change: 'account change',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
       },
       marks: { share: '{share} of the total' },
@@ -127,22 +140,12 @@ export const analyticsMessages = {
         dayName: '{weekdayLong}, {date}',
         full: 'The link to this view cannot hold one more filter, so the tasks of {value} are not shown. Clear a filter to make room.',
       },
-      filters: {
-        any: 'Any',
-        clear: 'Clear filters',
-        remove: 'Remove {label}',
-        failed: 'The values could not be loaded.',
-        noMatches: 'No matches',
-        full: 'The link to this view cannot hold more values of the {dimension} filter, so this one was not added.',
-        add: 'Add to filter',
-        held: 'Already in filter',
-      },
+      filters: analyticsFilterMessages.en,
       frame: {
         sections: 'Sections of the usage',
         overview: 'Overview',
         back: 'All sections',
         addFilter: 'Add a filter',
-        filtersFolded: 'Filters: {count}',
         filter: '{dimension}: {value}',
         fresh: 'Newest record {at} · {ago}',
         freshNone: 'No records',
@@ -199,6 +202,14 @@ export const analyticsMessages = {
         incomplete: 'Выберите первый и последний день периода.',
         choose: 'Выберите дни периода',
       },
+      scope: {
+        project: 'проект {name}',
+        space: 'пространство {name}',
+        all: 'все проекты',
+        aboutProject: 'Цифры — только по проекту {name}.',
+        aboutSpace: 'Цифры — только по пространству {name}.',
+        aboutAll: 'Цифры — по всем проектам.',
+      },
       dimensions: {
         seat: 'Аккаунт',
         account: 'Организация',
@@ -210,6 +221,9 @@ export const analyticsMessages = {
         model: 'Модель',
         effort: 'Усилие',
         environment: 'Среда',
+      },
+      dimensionNotes: {
+        executor: 'Исполнитель — сессия агента, которая делала работу.',
       },
       roles: {
         main: 'Основной агент',
@@ -241,9 +255,8 @@ export const analyticsMessages = {
         total: 'всего',
         empty: 'Ни в один день периода ничего не потрачено.',
         other: 'Остальное',
-        accounts: 'Смена аккаунта: {before} → {after}',
-        accountsFailed:
-          'Не удалось загрузить данные аккаунтов, поэтому смены аккаунтов не отмечены.',
+        accounts: 'Смена аккаунта: {change}',
+        change: 'смена аккаунта',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
       },
       marks: { share: '{share} от всего' },
@@ -289,22 +302,12 @@ export const analyticsMessages = {
         dayName: '{date}, {weekday}',
         full: 'Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «{value}» не показаны. Снимите фильтр, чтобы освободить место.',
       },
-      filters: {
-        any: 'Любое',
-        clear: 'Снять фильтры',
-        remove: 'Убрать {label}',
-        failed: 'Не удалось загрузить значения.',
-        noMatches: 'Ничего не найдено',
-        full: 'Ссылка на этот вид не вмещает больше значений фильтра «{dimension}», поэтому это значение не добавлено.',
-        add: 'Добавить в фильтр',
-        held: 'Уже в фильтре',
-      },
+      filters: analyticsFilterMessages.ru,
       frame: {
         sections: 'Разделы расхода',
         overview: 'Обзор',
         back: 'Все разделы',
         addFilter: 'Добавить фильтр',
-        filtersFolded: 'Фильтры: {count}',
         filter: '{dimension}: {value}',
         fresh: 'Последняя запись {at} · {ago}',
         freshNone: 'Записей нет',

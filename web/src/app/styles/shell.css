@@ -53,6 +53,19 @@
   text-overflow: ellipsis;
 }
 
+/* A name that keeps to two lines: it breaks between its words, a word wider than the line where
+   it must, and what does not fit ends the second line in an ellipsis. Its element, or the press
+   around it, carries a `clipped` hint with the whole name, which shows only while it is cut. A
+   ranked list of free text and the side panel's narrow names wrote this each; the tables a chart
+   is read as wrote none, and stood a task's long name on as many lines as it took. */
+.two-lines {
+  display: -webkit-box;
+  overflow-wrap: break-word;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 /* A word whose box is trimmed to its capitals, so that what stands beside it centres on their
    middle (`--size-text-middle`) rather than on the em box. The box is then one cap height
    tall, and accents above the capitals and descenders stand outside it, so whatever clips at

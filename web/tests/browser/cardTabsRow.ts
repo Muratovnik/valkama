@@ -47,10 +47,18 @@ function outerArguments(inner: string): string[] {
 /** A stop that shows nothing of what it masks. */
 const clear = (stop: string) => /^(?:transparent|rgba\(0, 0, 0, 0\))/u.test(stop)
 
-/** Which ends of the row a computed `mask-image` fades: the start and the end of the line. */
+/**
+ * Which ends of the row a computed `mask-image` fades: the start and the end of the line. The
+ * fade is its first layer; any layer after it, the scrollbar's strip, shows everything it covers.
+ */
 function endsOf(mask: string) {
   if (mask === 'none') return { mask, start: false, end: false }
-  const inner = /^linear-gradient\((.*)\)$/su.exec(mask)?.[1]
+  const [fade = '', ...under] = outerArguments(mask)
+  for (const layer of under) {
+    const stops = outerArguments(/^linear-gradient\((.*)\)$/su.exec(layer)?.[1] ?? 'transparent')
+    if (stops.some((stop) => clear(stop))) throw new Error(`a layer under the fade hides: ${mask}`)
+  }
+  const inner = /^linear-gradient\((.*)\)$/su.exec(fade)?.[1]
   if (!inner) throw new Error(`not a linear mask: ${mask}`)
   const parts = outerArguments(inner)
   const direction = /^to |deg$/u.test(parts[0]) ? parts[0] : 'to bottom'
@@ -114,7 +122,7 @@ export async function wordsUnderFade(strip: Locator, tab: Locator) {
   const { start, end } = await fadedEnds(strip)
   const [fade, row, words] = await Promise.all([
     strip.evaluate((node) =>
-      Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade')),
+      Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-strip-fade')),
     ),
     strip.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect),
     tab.evaluate((node) => {

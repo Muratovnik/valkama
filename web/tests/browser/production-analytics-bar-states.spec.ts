@@ -9,13 +9,15 @@
  * answering, the retry takes the failure away. A failed read leaves no live mark in the bar, neither
  * when the page has nothing to show nor beside the figures a failed refresh kept, and the mark is
  * back once a read answers. A failure said moves nothing: the bar keeps its height, the panel its
- * top, and every control of the bar its place. A span of days chosen keeps the bar's height and the
- * panel's top wherever the bar is of one height for every period: in the two rows of a narrow bar,
- * and on a line wide enough for the span; between 50rem and about 1360px the line beside a span is
- * two rows where a preset's is one, which `DESIGN.md` chose over one height, and on a phone the
- * reader's own days take a row of their own only once chosen, rather than a row held empty under
- * every other period. On a phone every period stands whole in its row, opened, chosen or beside a
- * failure.
+ * top, and every control of the bar its place, the filter's field its start, as it takes the room
+ * the line leaves. A span of days chosen keeps the bar's height and the panel's top wherever the
+ * bar is of one height for every period: in the two rows of a narrow bar, and on a line wide
+ * enough for the span; between 50rem and about 1360px the line beside a span is two rows where a
+ * preset's is one, which `DESIGN.md` chose over one height, and on a phone the reader's own days
+ * take a row of their own only once chosen, rather than a row held empty under every other
+ * period. The span's two days stand in one row inside the line, each with a date's whole room,
+ * from a phone of 360px up. On a phone every period stands whole in its row, opened, chosen or
+ * beside a failure.
  *
  * The bar and the panel end on one right edge whether the panel scrolls or not.
  */
@@ -138,17 +140,25 @@ function expectSaid(name: string, state: BarState) {
 
 /**
  * Every control of the bar stands where it stood, to the half pixel the bar counts as rounding
- * when it fits its line (`useBarRoom`).
+ * when it fits its line (`useBarRoom`). The filter's field takes the room the line leaves, so what
+ * takes that room ends it sooner: its start stays, and its end comes back, never past where it
+ * was (`DESIGN.md`).
  */
 function expectInPlace(name: string, after: BarState['controls'], before: BarState['controls']) {
   for (const [control, was] of Object.entries(before)) {
     const now = after[control as keyof BarState['controls']]
     expect.soft(now === null, `${name}: ${control} shown`).toBe(was === null)
     if (!was || !now) continue
-    for (const edge of ['left', 'top', 'right'] as const)
+    const edges =
+      control === 'add' ? (['left', 'top'] as const) : (['left', 'top', 'right'] as const)
+    for (const edge of edges)
       expect
         .soft(Math.abs(now[edge] - was[edge]), `${name}: ${control}'s ${edge} moved`)
         .toBeLessThanOrEqual(0.5)
+    if (control === 'add')
+      expect
+        .soft(now.right, `${name}: the field's end past where it was`)
+        .toBeLessThanOrEqual(was.right + 0.5)
   }
 }
 
@@ -192,6 +202,48 @@ for (const width of WIDTHS)
 /** Widths the bar is of one height for every period at: two rows, one line. */
 const ONE_HEIGHT = [760, 1024, 1440, 1920] as const
 
+/**
+ * The room a date has inside its field as the bar first gave it: 8.25rem at the root's 16px, less
+ * the field's air of 12px at each end and its edge of 1px (`PeriodOwnDays`).
+ */
+const DATE_ROOM = 8.25 * 16 - 2 * 12 - 2
+
+/** Each day's field: where it stands, and the room inside its air and edge. */
+const dayFields = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLInputElement>('.analytics-bar input[type="date"]')].map(
+      (field) => {
+        const { left, right, top } = field.getBoundingClientRect()
+        const style = getComputedStyle(field)
+        const room =
+          field.clientWidth -
+          Number.parseFloat(style.paddingLeft) -
+          Number.parseFloat(style.paddingRight)
+        return { left, right, top, room }
+      },
+    ),
+  )
+
+/**
+ * The two days stand in one row inside the bar's line, each with a date's whole room: at 360px
+ * they once needed 288px of a line of 264 and stood under each other.
+ */
+function expectDaysInOneRow(
+  fields: Awaited<ReturnType<typeof dayFields>>,
+  line: { left: number; right: number } | null,
+) {
+  const ends = line ?? { left: Number.NaN, right: Number.NaN }
+  expect(fields, "the days' fields").toHaveLength(2)
+  const [from, to] = fields
+  expect(to?.top, 'the last day beside the first').toBe(from?.top)
+  expect(to?.left, 'the last day after the first').toBeGreaterThan(from?.right ?? Number.NaN)
+  for (const field of fields) {
+    expect(field.left, 'a day before the line').toBeGreaterThanOrEqual(ends.left - 0.5)
+    expect(field.right, 'a day past the line').toBeLessThanOrEqual(ends.right + 0.5)
+    expect(field.room, "a day's room for its date").toBeGreaterThanOrEqual(DATE_ROOM - 0.5)
+  }
+}
+
 for (const width of ONE_HEIGHT)
   test(`a span of days moves neither the bar nor the panel at ${width}px`, async ({
     page,
@@ -203,9 +255,26 @@ for (const width of ONE_HEIGHT)
     await expect(page.locator('.analytics-bar input[type="date"]')).toHaveCount(2)
     await frames(page)
     const days = await barState(page)
-    await record(info, `bar-states days ${width}`, { week, days })
+    const fields = await dayFields(page)
+    await record(info, `bar-states days ${width}`, { week, days, fields })
     expect(days.bar, "the bar's height").toBe(week.bar)
     expect(days.body, 'the top under the bar').toBe(week.body)
+    expectDaysInOneRow(fields, days.line)
+  })
+
+// On a phone the days take a row of their own once chosen, so the bar grows by that row; the
+// two days still stand in it side by side, each with a date's whole room.
+for (const width of [360, 390] as const)
+  test(`a span's two days stand in one row of the bar at ${width}px`, async ({ page }, info) => {
+    await serveFailing(page, width)
+    await open(page, PERIODS.week)
+    await page.getByRole('radio', { name: 'Свой' }).click()
+    await expect(page.locator('.analytics-bar input[type="date"]')).toHaveCount(2)
+    await frames(page)
+    const days = await barState(page)
+    const fields = await dayFields(page)
+    await record(info, `bar-states days ${width}`, { days, fields })
+    expectDaysInOneRow(fields, days.line)
   })
 
 /**

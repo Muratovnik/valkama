@@ -1,19 +1,22 @@
 /**
  * The Analytics page in the real app at the widths it is used at: the tiles, the bars and the
- * days stand whole, nothing clips its own words, the page never scrolls sideways, a narrow page
- * reads each chart as a table whose row names stay in view while its figures scroll, and Tab
- * reaches every control. The double answers on the route the page really reads,
+ * days stand whole, nothing clips its own words, the page never scrolls sideways, each chart
+ * opens on its drawing at every width, a phone's too, its table a press away with its row names
+ * in view while its figures scroll, and Tab reaches every control. The double answers on the route the page really reads,
  * `/api/analytics/usage`, by the period, the filters and the grouping each read asks for.
  *
  * Each state the page has is opened and measured, and the run prints what it measured: the page
  * in Russian, waiting, failed and empty, fallen to zeros, beside a period before not read, with a
- * change of accounts past unrecorded work, a custom period with its two date fields, the filters
- * open with chips, a chart of one value and one with a large «other», each chart beside its table.
+ * change of accounts past unrecorded work, a custom period with its two date fields, the filters'
+ * chips in their row under the bar, a chart of one value and one with a large «other», each chart
+ * beside its table.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { task } from '../fixtures/analytics.ts'
+import { nightName, workName } from '../fixtures/quota.ts'
+import { filterParts } from './analyticsFilter.ts'
 import {
   bars,
   boxes,
@@ -68,15 +71,14 @@ for (const width of [1440, 1024, 390]) {
       /^5\sd\s17\sh$/u,
     )
 
-    // A report narrower than a chart reads well opens each chart as its table: on a phone. At
-    // 1024px the panel beside the rail would have left the report under 560px, so the section
-    // has the page to itself instead, and its charts their room.
-    const narrow = width < 1024
+    // Each chart opens drawn at every width, as wide as a phone too: its bars give a name its own
+    // line over its bar and its days scroll inside their frame. A phone once opened each chart as
+    // its table, though every one of them reads drawn there.
     // The tasks' bars and their days: the tasks, named by free text, draw no small charts.
     const sections = analytics.locator('[data-shown]')
     await expect(sections).toHaveCount(2)
     for (const section of await sections.all())
-      await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : LINED_SHOWN)
+      await expect(section).toHaveAttribute('data-shown', LINED_SHOWN)
 
     // The day not over yet and the change of accounts are each said where their day is read, in
     // its row of the table or in its day's hint on the chart; no word stands under a name.
@@ -84,14 +86,12 @@ for (const width of [1440, 1024, 390]) {
     // The axis the chart draws, where it is drawn rather than its table, names its days, and none
     // of them with a word under it.
     const axis = analytics.locator('.spending-days [data-chart="periods"] [data-region="axis"]')
-    await expect(axis).toHaveCount(narrow ? 0 : 1)
+    await expect(axis).toHaveCount(1)
     for (const drawn of await axis.all()) {
       await expect(drawn).toContainText(/\d/u)
       await expect(drawn).not.toContainText('running')
     }
-    await expect
-      .poll(() => daysSaying(analytics, 'Account change: 0b7d4e19 → 0b7d4e19, 7e6d5c4b'))
-      .toBe(1)
+    await expect.poll(() => daysSaying(analytics, `Account change: +${nightName()}`)).toBe(1)
 
     const measured = await measure(page)
     await record(info, `analytics layout ${width}`, measured)
@@ -101,16 +101,17 @@ for (const width of [1440, 1024, 390]) {
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-bars-${width}.png`))
     await analytics.locator('.spending-days').screenshot(shot(info, `analytics-days-${width}.png`))
 
-    // Every control, the filters' own once «add a filter» has opened them.
+    // Every control; the filter's menu opens from its field by the keys, its first row taken.
     const closed = await tabWalk(page)
     expect(closed.missed).toEqual([])
-    await analytics.locator('.analytics-filter-add').focus()
-    await page.keyboard.press('Enter')
-    await expect(analytics.locator('[data-dimension]').first()).toBeVisible()
-    const open = await tabWalk(page)
-    expect(open.controls).toBeGreaterThan(closed.controls)
-    expect(open.missed).toEqual([])
-    console.log(`analytics keyboard ${width}: ${JSON.stringify({ closed, open })}`)
+    const filter = filterParts(page)
+    await filter.field.focus()
+    await page.keyboard.press('ArrowDown')
+    await expect(filter.menu).toBeVisible()
+    await expect(filter.menu.locator('[role="option"][data-highlighted]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(filter.menu).toBeHidden()
+    console.log(`analytics keyboard ${width}: ${JSON.stringify({ closed })}`)
 
     // The arrows move inside a group of radios: the tiles choose the measure from the keys.
     await analytics.locator('.spending-tiles .segmented-option.active').focus()
@@ -128,7 +129,10 @@ test('a phone scrolls the days table under its days, which stay in view', async 
   page,
 }, info) => {
   await serve(page)
-  await openReport(page, 390)
+  const analytics = await openReport(page, 390)
+  const days = analytics.locator('.spending-days')
+  await days.getByRole('radio', { name: 'Table', exact: true }).click()
+  await expect(days).toHaveAttribute('data-shown', 'table')
   const names = await scrolledNames(page)
   await record(info, 'analytics row names scrolled 390', names)
   // The days table is wider than a phone: it scrolls in its frame, and its days stand still.
@@ -156,12 +160,15 @@ test.describe('in Russian', () => {
       await page.screenshot(shot(info, `analytics-ru-${width}.png`))
     })
 
-  // Named by its weekday, a day would read «Показать задачи за среда»: it is named by its date.
+  // Named by its weekday, a day would read «Показать задачи за среда»: it is named by its date,
+  // and then by the change of accounts at its start.
   test('a day of the chart is named by its date, so «за» takes no weekday', async ({ page }) => {
     await serve(page)
     const analytics = await openReport(page, 1440)
     const days = analytics.locator('.spending-days button.period-column')
-    await expect(days.last()).toHaveAccessibleName('Показать задачи за 11 ноября, ср')
+    await expect(days.last()).toHaveAccessibleName(
+      `Показать задачи за 11 ноября, ср. Смена аккаунта: −${workName('ru')}`,
+    )
   })
 })
 
@@ -207,7 +214,8 @@ const READ_STATES: {
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
       // Said where the day is read, once: its day's hint on the chart, or its row of the table.
-      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 0b7d4e19 → 7e6d5c4b`
+      const lang = ru ? 'ru' : 'en'
+      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: +${nightName(lang)}, −${workName(lang)}`
       await expect.poll(() => daysSaying(analytics, said), 'days that say it').toBe(1)
     },
   },
@@ -321,7 +329,8 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
     controls: await boxes(page, '.period-bar-line > *'),
     dateInputs: await boxes(page, '.analytics-bar input[type="date"]'),
     pageScroll: await pageScroll(page),
-    days: await page.locator('.spending-days tbody tr').count(),
+    // The days drawn, as every chart opens at every width: a column per day of the period.
+    days: await page.locator('.spending-days .period-slot').count(),
   }
   await record(info, 'analytics custom period 390', measured)
   expect(measured.pageScroll).toBe(0)
@@ -339,37 +348,64 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
 })
 
 for (const width of [1440, 390])
-  test(`the filters open with chips stand whole at ${width}px`, async ({ page }, info) => {
+  test(`the filters' chips stand whole in their row under the bar at ${width}px`, async ({
+    page,
+  }, info) => {
     await serve(page)
     const filters = { model: ['model-a'], work_item: [task(1, '').id, task(2, '').id] }
     const analytics = await openReport(page, width, pageAt({ filters: JSON.stringify(filters) }))
-    // Three long chips have no room on the bar at either width: the first that fit stand there,
-    // and all three are counted on the button that opens the list.
-    const folded = analytics.locator('.analytics-filter-folded')
-    await expect(folded).toHaveText('Filters: 3')
-    await folded.click()
-    // Each value chosen is a chip in its field, and on the bar with its dimension where it fits.
-    const named = analytics.locator('.analytics-bar-filters .combo-chip')
-    const onBar = await named.allTextContents()
-    expect(onBar.length).toBeLessThan(3)
-    const all = [/^Task: MAIN-1 Rework /u, /^Task: MAIN-2 Rework /u, /^Model: model-a$/u]
-    for (const [index, words] of onBar.entries()) expect(words).toMatch(all[index] ?? /^$/u)
-    const chips = analytics.locator('.analytics-filter-body .combo-chip')
-    await expect(chips).toHaveCount(3)
-    await expect(chips.filter({ hasText: 'MAIN-1' })).toHaveCount(1)
+    // Each value chosen is a chip, with its dimension, in the row under the bar's line, all three
+    // at either width, with «Clear filters» at their end: no filter is counted rather than shown.
+    const { chips, field } = filterParts(page)
+    await expect(chips).toHaveText([
+      /^Task: MAIN-1 Rework /u,
+      /^Task: MAIN-2 Rework /u,
+      /^Model: model-a$/u,
+    ])
+    const clear = analytics.locator('.analytics-bar-chips').getByRole('button', {
+      name: 'Clear filters',
+    })
+    await expect(clear).toBeVisible()
+    // Tab reaches every chip and «Clear filters».
+    const walked = await tabWalk(page)
+    expect(walked.missed).toEqual([])
     const measured = {
-      fields: await boxes(page, '[data-dimension]'),
-      chips: await boxes(page, '.combo-chip'),
-      named: await named.allTextContents(),
-      chipWords: await chips.allTextContents(),
-      clear: await boxes(page, '.analytics-filter-clear'),
+      line: await boxes(page, '.period-bar-line'),
+      field: await boxes(page, '.analytics-filter-add'),
+      chips: await boxes(page, '.analytics-bar-chips [data-filter-chip]'),
+      clear: await boxes(page, '.analytics-bar-chips > button'),
       pageScroll: await pageScroll(page),
     }
     await record(info, `analytics filters open ${width}`, measured)
     expect(measured.pageScroll).toBe(0)
-    for (const chip of measured.chips) expect(chip.x + chip.width).toBeLessThanOrEqual(width)
+    for (const chip of [...measured.chips, ...measured.clear]) {
+      expect(chip.x + chip.width).toBeLessThanOrEqual(width)
+      // Under the field, not beside it on the line.
+      expect(chip.y).toBeGreaterThanOrEqual((measured.field[0]?.y ?? 0) + 36)
+    }
+    // «Clear filters» after the last chip, as the Work bar's way out of its filter ends its line.
+    const last = measured.chips.at(-1)
+    const [after] = measured.clear
+    expect(
+      (after?.y ?? 0) > (last?.y ?? 0) + 0.5 ||
+        (after?.x ?? 0) >= (last?.x ?? 0) + (last?.width ?? 0),
+    ).toBe(true)
     await expectNoSilentClipping(page, `analytics filters at ${width}px`, '.analytics-page')
     await page.screenshot(shot(info, `analytics-filters-${width}.png`))
+    // Pressed, it takes every filter out, the row goes, and the caret is in the field.
+    await clear.click()
+    await expect(chips).toHaveCount(0)
+    await expect(analytics.locator('.analytics-bar-chips')).toBeHidden()
+    await expect(field).toBeFocused()
+    // The address keeps no filter either.
+    await expect
+      .poll(() => {
+        const state = new URL(page.url()).searchParams.get('state')
+        return state
+          ? Object.keys(JSON.parse(Buffer.from(state, 'base64url').toString('utf8')))
+          : []
+      })
+      .not.toContain('filters')
   })
 
 for (const width of [1440, 390]) {

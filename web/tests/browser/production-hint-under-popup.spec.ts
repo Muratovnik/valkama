@@ -12,6 +12,7 @@ import type { Locator, Page } from '@playwright/test'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
+import { openDimension } from './analyticsFilter.ts'
 import { openReport, serve as serveAnalytics } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
@@ -119,13 +120,11 @@ for (const width of [1440, 360]) {
       ).toEqual(SILENCED)
     })
 
-    test('an open combobox’s list silences the hints outside it', async ({ page }) => {
+    test('an open filter’s menu silences the hints outside it', async ({ page }) => {
       await serveAnalytics(page)
       await openReport(page, width)
-      await page.locator('.analytics-filter-add').locator('visible=true').click()
-      await page.locator('.analytics-filter-body [data-dimension] input').first().click()
-      const list = page.getByRole('listbox')
-      expect(await hintsAround(page, list, () => page.keyboard.press('Escape'))).toEqual(SILENCED)
+      const menu = await openDimension(page, 'Model')
+      expect(await hintsAround(page, menu, () => page.keyboard.press('Escape'))).toEqual(SILENCED)
     })
 
     test('a help pinned open by a press silences the hints outside it', async ({ page }) => {

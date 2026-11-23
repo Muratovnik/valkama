@@ -294,3 +294,39 @@ test('puts the ring’s legend under the ring in a narrow column', async ({ page
   await record(info, 'ring at 390', placed)
   await chart.screenshot(shot(info, 'ring-390.png'))
 })
+
+/** Each row of the section's own table: whether its name carries a detail, and its height. */
+const tableRows = (page: Page) =>
+  page.locator('.section-table-frame tbody tr').evaluateAll((all) =>
+    all.map((row) => ({
+      detail: Boolean(row.querySelector('.chart-detail')),
+      height: row.getBoundingClientRect().height,
+    })),
+  )
+
+// A row of the section's own table is one line (DESIGN.md, Charts), a session's with its detail
+// after its name as well. In the detail's own line height, its rows stood 1.3px taller than the
+// rows of a table whose names carry none, the accounts' here.
+for (const width of [1440, 390])
+  test(`the sessions' table keeps every row one line high at ${width} px`, async ({
+    page,
+  }, info) => {
+    await serve(page, LONG_NAMES)
+    await openReport(page, width, pageAt({ by: 'executor' }))
+    await expect(page.locator('.section-table-frame tbody tr').first()).toBeVisible()
+    const sessions = await tableRows(page)
+    await openReport(page, width, pageAt({ by: 'account' }))
+    await expect(page.locator('.section-table-frame tbody tr').first()).toBeVisible()
+    const accounts = await tableRows(page)
+    await record(info, `table rows ${String(width)}`, { sessions, accounts })
+    expect(
+      sessions.filter(({ detail }) => detail).length,
+      'sessions with a detail',
+    ).toBeGreaterThan(0)
+    expect(
+      accounts.filter(({ detail }) => detail),
+      'accounts with a detail',
+    ).toEqual([])
+    const all = [...sessions, ...accounts].map(({ height }) => height)
+    expect(Math.max(...all) - Math.min(...all), 'one height for every row').toBeLessThan(0.5)
+  })

@@ -6,10 +6,8 @@
 export const analyticsOverviewMessages = {
   en: {
     risenFrom: '↑ from {before} in {period}',
-    before: {
-      word: 'period before',
-      failed: 'The period before could not be loaded, so it is not outlined.',
-    },
+    chartFailed: 'The period by project could not be loaded, so its chart is not drawn.',
+    before: { word: 'period before' },
     changes: {
       title: 'What changed',
       label: 'What changed from {period}',
@@ -33,10 +31,8 @@ export const analyticsOverviewMessages = {
   },
   ru: {
     risenFrom: '↑ с {before} за период {period}',
-    before: {
-      word: 'прошлый период',
-      failed: 'Не удалось загрузить прошлый период, поэтому он не обведён.',
-    },
+    chartFailed: 'Не удалось загрузить период по проектам, поэтому график не нарисован.',
+    before: { word: 'прошлый период' },
     changes: {
       title: 'Что изменилось',
       label: 'Что изменилось по сравнению с периодом {period}',

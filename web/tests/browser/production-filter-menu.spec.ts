@@ -350,10 +350,12 @@ test('opening the menu changes nothing on the board', async ({ page }) => {
   await board(page)
   const boxes = () =>
     page.evaluate(() =>
-      ['.workspace-head', '.workspace-stage', '.work-item-tile', '.work-filter'].map((selector) => {
-        const box = document.querySelector(selector)?.getBoundingClientRect()
-        return box ? [box.x, box.y, box.width, box.height] : null
-      }),
+      ['.workspace-head', '.workspace-stage', '.work-item-tile', '.workspace-filter'].map(
+        (selector) => {
+          const box = document.querySelector(selector)?.getBoundingClientRect()
+          return box ? [box.x, box.y, box.width, box.height] : null
+        },
+      ),
     )
   const before = await boxes()
   await page.locator('.workspace-stage').evaluate((stage) => {
@@ -446,7 +448,7 @@ test('the open menu passes the accessibility checks at either step', async ({ pa
   await board(page)
   const axe = async () => {
     const results = await new AxeBuilder({ page })
-      .include('.work-filter')
+      .include('.workspace-filter')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze()
     return results.violations.map((violation) => violation.id)

@@ -37,6 +37,8 @@ from collections.abc import Callable, Iterator
 from hashlib import sha256
 from typing import NamedTuple
 
+from .store_identity import metadata as store_metadata
+
 
 class BackupLocation(NamedTuple):
     """The backups directory, the prefix every generated name carries, and the pictures.
@@ -123,9 +125,7 @@ def _writes_held(conn: sqlite3.Connection, backups: BackupLocation) -> Iterator[
     no file, needs none of this.
     """
 
-    database = next(
-        (str(row[2]) for row in conn.execute("PRAGMA database_list") if row[1] == "main"), ""
-    )
+    database = store_metadata.database_file(conn)
     if not backups.images or not database:
         yield
         return

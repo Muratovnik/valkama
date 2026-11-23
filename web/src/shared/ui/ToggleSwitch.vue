@@ -61,6 +61,12 @@ function toggle(current: boolean) {
      target rather than the drawing. */
   min-height: var(--size-control-target);
   padding: var(--space-1);
+
+  /* The track is the mark and the button its larger target, drawn by nothing at rest: the
+     track stands on the edge of the column it is in and the target reaches outward, past its
+     ends, as far as it is inset. Inset inside the column, a switch's track stood 4px in from the
+     words over it and from its neighbours' edges, in Settings at every width. */
+  margin-inline: calc(-1 * var(--space-1));
   border: 0;
   color: var(--color-text);
   background: transparent;

@@ -22,6 +22,8 @@ import { useI18n } from 'vue-i18n'
 
 import { useContentsTree } from '@/widgets/work-item-inspector/utils/useContentsTree.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import type { ChainMember, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { CONTAINER_STATES, STATE_CATEGORIES } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -30,7 +32,6 @@ import { treeGridAttrs, treeRowAttrs } from '@/shared/lib/treeRows.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import TreeRowLead from '@/shared/ui/TreeRowLead.vue'
 import { useListKeys } from '@/shared/ui/useListKeys.ts'
@@ -218,7 +219,7 @@ defineExpose({ reveal })
                 <span
                   :id="nameOf(row.id, 'title')"
                   v-tooltip.clipped="row.item.title"
-                  v-slash-breaks="row.item.title"
+                  v-work-item-title="row.item.title"
                   class="contents-title one-line"
                 />
               </span>

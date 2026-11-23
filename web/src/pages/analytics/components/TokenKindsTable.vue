@@ -3,7 +3,9 @@
  * The period's tokens by kind as a table: each kind the tokens figure counts, largest first,
  * beside its tokens in the period it is compared with and how it moved; then the row of their sum,
  * which is the «Tokens» figure of the summary; then the kinds that figure leaves out, as notes in
- * the quiet ink. An answer whose period before was not read has no column for it.
+ * the quiet ink. An answer whose period before was not read has no column for it. Narrowed to
+ * accounts, a kind moves by the page's one rule beside what the read left out on no account
+ * (`lineChangeOf`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,7 +14,7 @@ import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { KindLine } from '@/pages/analytics/utils/tokenKinds.ts'
-import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { lineChangeOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import ChartTable from '@/shared/ui/ChartTable.vue'
@@ -59,7 +61,12 @@ const rows = computed(() =>
       before: kindWords.count(before),
       change: words.lineChange(
         'tokens',
-        changeOf('tokens', now, spent(before)),
+        lineChangeOf(
+          'tokens',
+          now,
+          spent(before),
+          line.unplaced === undefined ? undefined : spent(line.unplaced),
+        ),
         now,
         spent(before),
       ),

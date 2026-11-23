@@ -38,9 +38,14 @@ test('Settings sections share one measure and one compact control lane', async (
   expect(await words(sectionControl)).not.toBe('')
   expect(await words(head)).toBe(await words(sectionControl))
 
+  // Where each control is drawn from: a switch's track, whose target reaches past it.
   const controlLefts = await page
     .locator('.settings-general-control, .settings-alerts-control')
-    .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))
+    .evaluateAll((nodes) =>
+      nodes.map(
+        (node) => (node.querySelector('.toggle-track') ?? node).getBoundingClientRect().left,
+      ),
+    )
   expect(controlLefts.length).toBeGreaterThan(1)
   expect(Math.max(...controlLefts) - Math.min(...controlLefts)).toBeLessThan(2)
   expect(controlLefts[0] - (pageBox?.x ?? 0)).toBeGreaterThan((pageBox?.width ?? 0) * 0.48)
@@ -256,3 +261,30 @@ test('a setting is named at the top of a stack and beside a single control', asy
   const single = rows.filter(({ stack }) => !stack)
   expect(single.filter(({ fromMiddle }) => Math.abs(fromMiddle) > 2)).toEqual([])
 })
+
+// A switch's track is the mark of a target larger than itself (`DESIGN.md`, System rules): it
+// stands on the edge of the column its row's control takes, and the target reaches outward.
+// Inset in its target, every track in Settings stood 4px in from that edge at every width.
+for (const width of [1440, 1024, 390])
+  test(`each switch's track stands on its control column's edge at ${width} px`, async ({
+    page,
+  }) => {
+    await installBackend(page)
+    await installAlerts(page)
+    await page.setViewportSize({ width, height: 1800 })
+    await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
+    const switches = page.locator('.settings-page').getByRole('switch')
+    await expect(switches.first()).toBeVisible()
+    const edges = await switches.evaluateAll((all) =>
+      all.map((control) => ({
+        name: control.getAttribute('aria-label') ?? '',
+        track: control.querySelector('.toggle-track')?.getBoundingClientRect().left ?? Number.NaN,
+        column:
+          control.closest('.settings-row-control')?.getBoundingClientRect().left ?? Number.NaN,
+      })),
+    )
+    console.log(`switch-edges-${width}: ${JSON.stringify(edges)}`)
+    expect(edges.length, 'the switches of Settings').toBeGreaterThan(1)
+    for (const { name, track, column } of edges)
+      expect(Math.abs(track - column), `${name}: the track on the column's edge`).toBeLessThan(0.5)
+  })

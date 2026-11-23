@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 
 import { cancelSummary } from '@/features/work-item-closing/cancelSummary.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { writeFailure } from '@/entities/work-item/utils/writeFailure.ts'
 
 import type { CancelList } from '@/shared/api/inputRequestAction.ts'
@@ -34,7 +35,6 @@ import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -221,7 +221,7 @@ function submit() {
           >
             <span class="cancel-reference">{{ row.reference }}</span>
             <span
-              v-slash-breaks="row.title"
+              v-work-item-title="row.title"
               class="cancel-title"
             />
             <span class="cancel-facts">
@@ -254,7 +254,7 @@ function submit() {
           >
             <span class="cancel-reference">{{ row.reference }}</span>
             <span
-              v-slash-breaks="row.title"
+              v-work-item-title="row.title"
               class="cancel-title"
             />
             <span class="cancel-facts">{{ waits(row) }}</span>

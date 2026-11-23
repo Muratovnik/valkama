@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
- * One window of one account in the quota panel, in three parts 12px apart: what stands now, the
- * step line of its readings (`StepLine`) and «Breakdown», which opens what used the
- * window in the side panel over the page (`WindowDetail`).
+ * One window of one account in the quota panel: its name and «Breakdown» on one line, a compact
+ * button at the line's end that opens what used the window in the side panel over the page
+ * (`WindowDetail`), the name cut short before the button wraps under it; then, 12px apart, what
+ * stands now and the step line of its readings (`StepLine`). Under the line the button once
+ * stood alone, far from the name of what it breaks down.
  *
  * What stands now leads with one line, the share spent as the window's figure and its state in
- * words beside it, «75% used · no data for 3 d», over the bar with its pace tick (`WindowBar`), then
+ * words beside it, «75% used · reading 3 d ago», over the bar with its pace tick (`WindowBar`), then
  * the forecast in the text's ink and when the window resets, in absolute and relative time,
  * quieter. The bar draws the forecast as a hatched tail past the share spent, and the forecast's
  * line, right under it, leads with «Forecast ·», as the step line's legend names its corridor: the
@@ -24,13 +26,27 @@
  * forecasts a range, said never past 100 % (`useQuotaWords`); both are drawn from one mapping
  * (`forecastCourses`). A window too new for a forecast says so in the quiet ink and draws no
  * tail. A silent window's share is as solid as a fresh one's, since a reading is final however
- * old: it says «no data» and for how long, and its hint when its reading last changed; a fresh 0 %
- * is a bar with no fill that says «0% used» and «up to date». While the window stands, its step line
- * points at where it stands now and runs its forecast's corridor to the reset (`StepLine`); a
- * silent window's line stops at its last reading, since nothing was measured after it, while a
- * fresh one's holds to now, a source writing a reading only when a value changes. A window past
- * its reset by the panel's moment has neither and shows its whole window alone, even
- * where its answer was read before the reset. Where the window's count restarted inside it, the
+ * old: it says how old its latest reading is, «reading 3 d ago», and its hint when that reading last changed; a fresh 0 %
+ * is a bar with no fill that says «0% used» and «up to date». The bar and the figures over it are
+ * the current window's; the step line under them is decided for the whole section (`line`,
+ * `sectionLines`): where the page's period starts no further back from now than the window lasts,
+ * the window alone across the plot; where it starts further back, every window of its kind and
+ * account the period overlaps, each whole from its start to its reset, its count falling to
+ * nothing at each reset (`lineRestarts`), the earlier ones in the neutral ink of a window past its
+ * reset and the current one at the right end; on the one time scale the section's lines share, as
+ * long as the longest of them, an account's lines ending together at its latest reset. A window
+ * reset with nothing read since, beside a live window of its account, shows at a short period the
+ * account's current window, empty (`empty`): no readings, no pace, now marked, its words the
+ * card's lead, and the line under it naming its last window (`namedAfter`). Its axis names the start of the first window it holds and the current window's
+ * reset, each under the moment it stands at (`StepLine`'s `holds`). While the window stands, the
+ * line marks now, points at where it stands now and runs its forecast's line to its end. A window past its reset by the panel's moment (`ended`) has neither, even where its
+ * answer was read before the reset; it leads with that it reset with no reading since, its share
+ * before the reset a quieter line under that, over its bar drawn in the neutral ink with no tick
+ * (`WindowBar`'s `muted`), and its line in the same ink: led by its share in the series' hue, the
+ * last window's figure read as the share spent now. Running or past its reset, a window silent by then
+ * (`silent`) has its line stop at its last reading, since nothing was measured after it, while a
+ * fresh one's holds to the answer's moment or the reset, a source writing a reading only when a
+ * value changes. Where the window's count restarted inside it, the
  * line marks each restart at its fall and the table lists it among the readings
  * (`restarts`): the line would otherwise fall to nothing with no word of why.
  *
@@ -41,35 +57,55 @@
  * A window is fresh or silent by the panel's moment, as its reset is: a reading that was fresh
  * when the answer came turns silent once it is older than the answer's `fresh_for_seconds`.
  *
+ * Under the window stands how its previous window ended, a line that opens that window in the
+ * card's place and steps back from there (`QuotaPastWindow`), where the step line does not hold
+ * that window already (`holdsPrevious`); while one is open, nothing of this window stands beside
+ * it — its lead, bar, facts, readings and «Breakdown» are hidden.
+ *
+ * A window nothing reads now (`uncollected`) — a model's week where only the quota poll reads it
+ * and the poll is off, with no reading of the poll in its current span — reads as an account gone
+ * quiet if it shows its readings, which are an import's history: it says instead that only the
+ * poll reads it and that the poll is off, with the way to the switch in Settings (`ScreenLink`),
+ * and draws no bar, no facts, no readings and no «Breakdown», forecasting nothing. With the poll
+ * on it is a window as any other.
+ *
  * What a reader of the page selects it by: the window is `data-window`, its kind, with its state
- * at the panel's moment in `data-state`; each line of its facts is `data-fact` (`forecast`, `reset`, `even`,
- * `latest`).
+ * at the panel's moment in `data-state` (`fresh`, `silent`, or `uncollected`); each line of its
+ * facts is `data-fact` (`forecast`, `reset`, `even`, `latest`); the lines over its bar are
+ * `data-lead`, `share` for a standing window's, `ended` and `before` for one past its reset, and
+ * `uncollected` for one nothing reads, whose way to the switch is `data-settings`.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import QuotaPastWindow from '@/pages/analytics/components/QuotaPastWindow.vue'
 import { useWindowDetail } from '@/pages/analytics/composables/useDetail.ts'
+import { useQuotaStepWords } from '@/pages/analytics/composables/useQuotaStepWords.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import {
   accountKey,
   forecastCourses,
   forecastEnds,
+  pollSettingsHref,
   stands,
   stateAt,
+  uncollected,
   windowKey,
 } from '@/pages/analytics/utils/quotaFigures.ts'
+import { holdsPrevious, namedAfter, ownLine } from '@/pages/analytics/utils/quotaLine.ts'
+import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
 import { momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
-import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
+import type { Quota, QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
+import ScreenLink from '@/shared/ui/ScreenLink.vue'
 import StepLine from '@/shared/ui/StepLine.vue'
 import StepLineTable from '@/shared/ui/StepLineTable.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import WindowBar from '@/shared/ui/WindowBar.vue'
-import { stepTop } from '@/shared/ui/windowGeometry.ts'
-import type { StepAhead, StepWords } from '@/shared/ui/windowGeometry.ts'
+import type { StepAhead } from '@/shared/ui/windowGeometry.ts'
 
 const props = defineProps<{
   account: QuotaAccount
@@ -77,10 +113,17 @@ const props = defineProps<{
   freshFor: number
   /** The moment the panel stands at, in ms. */
   now: number
+  /** Whether the quota poll is on, and the kinds it alone reads: the answer's `poll`. */
+  poll: Quota['poll']
   shown: 'chart' | 'table'
   /** The answer's moment at its offset: each time is said at it, and undated on its day. */
   today: string
   window: QuotaShareWindow
+  /**
+   * What its step line draws, decided for the whole section (`sectionLines`): the windows it holds
+   * and the span it runs over; unset, its own window alone.
+   */
+  line?: QuotaLine
 }>()
 
 const { t } = useI18n()
@@ -89,8 +132,30 @@ const words = useQuotaWords()
 const name = computed(() => words.windowName(props.window))
 /** Whether the window has reset by the panel's moment, though its answer was read before that. */
 const ended = computed(() => !stands(props.window, props.now))
-/** The window's state at the panel's moment, though its answer may have called it fresh. */
-const state = computed(() => stateAt(props.window, props.now, props.freshFor))
+/**
+ * Whether nothing reads the window now (`uncollected`): only the poll reads its kind, the poll is
+ * off, and its current span holds no reading of the poll. It then says so in place of its share,
+ * with the way to the switch, and draws and forecasts nothing from readings that are history.
+ */
+const unread = computed(() => uncollected(props.window, props.poll, props.now))
+const unreadWords = computed(() => words.uncollectedWords(props.window))
+const settingsHref = pollSettingsHref()
+/**
+ * The window's state at the panel's moment, though its answer may have called it fresh; one
+ * nothing reads now is `uncollected`.
+ */
+const state = computed(() =>
+  unread.value ? 'uncollected' : stateAt(props.window, props.now, props.freshFor),
+)
+/**
+ * Whether the window was silent by the moment it stands to: the panel's, or its reset where it has
+ * passed. Nothing was measured after its last reading, so its line ends there.
+ */
+const silent = computed(() => {
+  const { window, now, freshFor } = props
+  const reset = window.resets_at === null ? now : Date.parse(window.resets_at)
+  return stateAt(window, Math.min(now, reset), freshFor) === 'silent'
+})
 /**
  * The window's forecast as its drawings take it, from the answer's moment to the reset, while the
  * window stands at the panel's moment: a window past its reset forecasts nothing more.
@@ -101,7 +166,8 @@ const courses = computed(() =>
 /**
  * The window's lead and its bar: the share and the state the line says, the forecast's share at
  * the reset its tail draws, and what the bar's hint adds. A silent window says how long it has
- * been silent, so it never reads as fresh.
+ * been silent, so it never reads as fresh. Past its reset it leads with that (`ended`), and its
+ * hint says its latest reading alone, since it draws no pace.
  */
 const bar = computed(() => {
   const { window, now, today, freshFor } = props
@@ -110,17 +176,31 @@ const bar = computed(() => {
   return {
     share: words.share(used),
     state: words.stateWords(window, now, freshFor),
+    ended: words.ended(window, now, today),
+    // Past the reset no pace stands, so no tick is drawn.
+    even: ended.value ? null : window.even_percent,
     label: words.barRead(window, now, today, freshFor),
-    hint: words.meterHint(window, now, today, freshFor),
+    hint: ended.value
+      ? words.latest(window, now, today, freshFor)
+      : words.meterHint(window, now, today, freshFor),
     forecast,
   }
 })
 /** Whether the window has a pace: it named its start and its reset. */
 const paced = computed(() => props.window.even_percent !== null)
-const points = computed(() => words.points(props.window, props.today))
-const restarts = computed(() => words.restarts(props.window, props.today))
+/** What the step line draws: the section's decision, or the window alone. */
+const drawn = computed(() => props.line ?? ownLine(props.window, props.today))
+/** The readings and restarts it draws: none where it is the account's current window, empty. */
+const points = computed(() =>
+  drawn.value.empty ? [] : words.linePoints(props.window, props.today, drawn.value.earlier),
+)
+const restarts = computed(() =>
+  drawn.value.empty ? [] : words.lineRestarts(props.window, props.today, drawn.value.earlier),
+)
 /** Whether what used the window can be read: the account has a seat and the window a start. */
-const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
+const spends = computed(
+  () => !unread.value && seatOf(props.account) !== null && props.window.started_at !== null,
+)
 /** What opens the side panel on what used the window; none outside the page. */
 const openSpend = useWindowDetail()
 function spend() {
@@ -129,9 +209,10 @@ function spend() {
 
 /**
  * The facts said in words: the forecast, in the text's ink where there is one, and the reset; past
- * the reset the reset alone, which says so. A table leaves the forecast to its account's table and
+ * the reset none, since the lead says when it reset. A table leaves the forecast to its account's table and
  * adds what the bar's hint holds and that table does not: the latest reading, and that there is
- * no pace, where that table has only a dash for it.
+ * no pace, where that table has only a dash for it. Past the reset it says no reset either: the
+ * account's table says it where the share stood.
  */
 const facts = computed(() => {
   const { window, now, today, shown, freshFor } = props
@@ -142,29 +223,21 @@ const facts = computed(() => {
       text: words.forecastLine(window, today),
       quiet: window.forecast === null,
     }
-    return ended.value ? [reset] : [forecast, reset]
+    return ended.value ? [] : [forecast, reset]
   }
   const latest = { key: 'latest', text: words.latest(window, now, today, freshFor), quiet: true }
   return [
-    reset,
+    ...(ended.value ? [] : [reset]),
     ...(paced.value ? [] : [{ key: 'even', text: words.even(window), quiet: true }]),
     latest,
   ]
 })
 
-/**
- * The span the line runs over: the window's start to its reset. A window that has named neither
- * runs from its first reading to the answer's moment. The line opens on the window's start to now
- * and the forecast past it, and has a switch to the whole of this span (`StepLine`).
- */
-const span = computed(() => {
-  const { window, today } = props
-  const start = window.started_at ?? window.readings[0]?.at ?? today
-  const reset = window.resets_at ?? today
-  const from = Date.parse(start)
-  const to = Math.max(Date.parse(reset), from + 1)
-  return { from, to, end: Math.min(Date.parse(today), to) }
-})
+/** The span the line runs over, and where its readings end: the answer's moment, or the reset. */
+const span = computed(() => ({
+  ...drawn.value.span,
+  end: Math.min(Date.parse(props.today), drawn.value.current.to),
+}))
 
 /**
  * A moment of the line's axis, said as the answer's own times are: at the answer's offset, the
@@ -173,22 +246,36 @@ const span = computed(() => {
 const stepMoment = (at: number) =>
   words.moment(momentAtOffset(at, offsetOf(props.today)), props.today)
 
-const stepWords = computed<StepWords>(() => ({
-  ahead: t('analytics.quota.readings.ahead'),
-  whole: t('analytics.quota.readings.whole'),
-  views: t('analytics.quota.readings.views', { window: name.value }),
-  top: t('analytics.quota.readings.top', { share: words.share(stepTop(points.value)) }),
-  time: t('analytics.quota.readings.time'),
-  value: t('analytics.quota.readings.value'),
-  note: t('analytics.quota.readings.note'),
-  empty: t('analytics.quota.readings.empty'),
-  past: t('analytics.quota.readings.past'),
-}))
+const stepWordsOf = useQuotaStepWords()
+/**
+ * The rows of the account's grid a window lays itself on, so two side by side line up row by row
+ * (`PanelLevel`'s `rows`): its heading; what stands now; its line's head; its plot and axis; and
+ * the line of the window before it. A past window open in its place lays itself on the same.
+ */
+const WINDOW_ROWS = 5
+
+/** The line's words: its axis names the start of the first window it holds and the reset. */
+const stepWords = computed(() =>
+  stepWordsOf(props.window, points.value, {
+    today: props.today,
+    ended: ended.value,
+    line: drawn.value,
+  }),
+)
+/** Whether a past window stands in this one's place (`QuotaPastWindow`). */
+const past = ref(false)
 const legend = computed(() => ({
   line: t('analytics.quota.readings.line'),
   ahead: t('analytics.quota.forecastKey'),
+  earlier: t('analytics.quota.readings.earlier'),
   ...(props.window.even_percent === null ? {} : { even: t('analytics.quota.readings.even') }),
 }))
+/**
+ * The window whose predecessor the line under the card names (`namedAfter`), and whether the step
+ * line holds that predecessor, which then needs no line of its own.
+ */
+const named = computed(() => namedAfter(props.window, drawn.value))
+const held = computed(() => holdsPrevious(named.value, drawn.value))
 
 /**
  * What the line draws past its readings while the window stands: where it stands now, and the
@@ -202,13 +289,18 @@ const ahead = computed<StepAhead | null>(() => {
   return {
     value: window.latest.used_percent,
     now: words.nowTarget(window, now, today, freshFor),
-    silent: state.value === 'silent',
     forecast:
       found && ends ? { ...words.forecastTarget(window, ends, now, today), ...found } : null,
   }
 })
 const readingsLabel = computed(() =>
-  words.readingsLabel(props.account, props.window, props.now, props.today),
+  drawn.value.empty
+    ? words.emptyLabel(props.account, props.window, { line: drawn.value, today: props.today })
+    : words.readingsLabel(props.account, props.window, {
+        now: props.now,
+        today: props.today,
+        earlier: drawn.value.earlier,
+      }),
 )
 const readingsCaption = computed(() =>
   t('analytics.quota.readings.caption', {
@@ -225,14 +317,61 @@ const readingsCaption = computed(() =>
     :title="name"
     :data-window="window.kind"
     :data-state="state"
+    :rows="WINDOW_ROWS"
+    one-line
   >
-    <div class="quota-window-parts">
+    <template
+      v-if="spends && openSpend && !past"
+      #actions="{ size }"
+    >
+      <VButton
+        :size="size"
+        data-spend
+        @click="spend"
+      >
+        {{ t('analytics.detail.window.open') }}
+      </VButton>
+    </template>
+    <div
+      v-show="!past"
+      class="quota-window-parts"
+    >
       <div class="quota-window-summary">
-        <template v-if="shown === 'chart'">
+        <template v-if="unread">
+          <p
+            class="quota-window-lead quota-window-ended"
+            data-lead="uncollected"
+          >
+            {{ unreadWords.lead }}
+          </p>
+          <ScreenLink
+            class="quota-window-settings"
+            :href="settingsHref"
+            data-settings
+            >{{ unreadWords.settings }}</ScreenLink
+          >
+        </template>
+        <template v-else-if="shown === 'chart'">
+          <template v-if="bar.ended">
+            <p
+              class="quota-window-lead quota-window-ended"
+              data-lead="ended"
+            >
+              {{ bar.ended.lead }}
+            </p>
+            <p
+              class="quota-window-lead"
+              data-lead="before"
+            >
+              {{ bar.ended.before }}
+            </p>
+          </template>
           <Translation
+            v-else
             class="quota-window-lead"
             keypath="analytics.quota.lead"
             tag="p"
+            data-lead="share"
           >
             <template #share>
               <span class="quota-window-share">{{ bar.share }}</span>
@@ -244,11 +383,15 @@ const readingsCaption = computed(() =>
             class="quota-window-bar"
             :label="bar.label"
             :used="window.latest.used_percent"
-            :even="window.even_percent"
+            :even="bar.even"
             :forecast="bar.forecast"
+            :muted="ended"
           />
         </template>
-        <ul class="quota-window-facts">
+        <ul
+          v-if="facts.length && !unread"
+          class="quota-window-facts"
+        >
           <li
             v-for="fact in facts"
             :key="fact.key"
@@ -260,23 +403,26 @@ const readingsCaption = computed(() =>
         </ul>
       </div>
       <StepLine
-        v-if="shown === 'chart'"
-        class="quota-window-readings"
+        v-if="!unread && shown === 'chart'"
+        class="quota-window-readings quota-window-line"
         :label="readingsLabel"
         :from="span.from"
         :to="span.to"
         :end="span.end"
+        :current="drawn.current"
+        :holds="drawn.holds"
         :points="points"
         :words="stepWords"
         :moment="stepMoment"
-        :even="paced"
+        :even="paced && !drawn.empty"
         :legend="legend"
         :ahead="ahead"
-        :ended="ended"
+        :ended="ended && !drawn.empty"
+        :silent="silent"
         :restarts="restarts"
       />
       <StepLineTable
-        v-else
+        v-else-if="!unread"
         class="quota-window-readings"
         :label="readingsCaption"
         :points="points"
@@ -284,30 +430,43 @@ const readingsCaption = computed(() =>
         :forecast="ahead?.forecast ?? null"
         :restarts="restarts"
       />
-      <VButton
-        v-if="spends && openSpend"
-        class="quota-window-uses"
-        size="compact"
-        data-spend
-        @click="spend"
-      >
-        {{ t('analytics.detail.window.open') }}
-      </VButton>
     </div>
+    <QuotaPastWindow
+      v-model:open="past"
+      :held="held"
+      :account="account"
+      :fresh-for="freshFor"
+      :now="now"
+      :shown="shown"
+      :today="today"
+      :window="named"
+    />
   </PanelLevel>
 </template>
 
 <style scoped>
-/* The window's three parts — what stands now, its readings and what used it — stand as far apart
-   as a heading from what it heads, each with its own lines closer inside it, and closer than two
-   windows stand (16px), so one stacked under another never reads as a part of it. At the block's
-   8px for all, the facts ran into the readings' switch and the axis's moments into the heading
-   of what used the window. */
+/* The window's two parts — what stands now and its readings — stand as far apart as a heading
+   from what it heads, each with its own lines closer inside it, and closer than two windows stand
+   (16px), so one stacked under another never reads as a part of it. At the block's 8px, the facts
+   ran into the readings' head. They take the rows the window lays them on (`WINDOW_ROWS`): what
+   stands now one, the readings two, the line's head and its plot each on a row of its own; each
+   part at its row's top, which a neighbour's taller part may make taller than it. */
 .quota-window-parts {
   display: grid;
+  grid-template-rows: subgrid;
   grid-template-columns: minmax(0, 1fr);
+  grid-row: span 3;
   gap: var(--space-heading-content);
+  align-items: start;
   min-width: 0;
+}
+
+.quota-window-readings {
+  grid-row: span 2;
+}
+
+.quota-window-line {
+  grid-template-rows: subgrid;
 }
 
 /* The lead, the bar and the facts, a line apart each; the bar keeps its own room over and under
@@ -324,6 +483,16 @@ const readingsCaption = computed(() =>
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* Past its reset the window leads with that, in the text's ink, and no figure leads it. */
+.quota-window-ended {
+  color: var(--color-text);
+}
+
+/* The way to the poll's switch starts on the column's edge, as wide as its words. */
+.quota-window-settings {
+  justify-self: start;
 }
 
 .quota-window-share {
@@ -343,10 +512,5 @@ const readingsCaption = computed(() =>
 
 .quota-window-quiet {
   color: var(--color-text-muted);
-}
-
-/* «Breakdown» is a control of the window, at its start rather than across it. */
-.quota-window-uses {
-  justify-self: start;
 }
 </style>

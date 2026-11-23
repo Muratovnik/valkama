@@ -15,6 +15,8 @@ import { useI18n } from 'vue-i18n'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import { PATH_STEP } from '@/widgets/work-item-views/utils/laneTitle.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -89,14 +91,13 @@ const toggleLabel = computed(() =>
             >{{ PATH_STEP }}</span
           >
           <button
+            v-work-item-title="part.title"
             v-tooltip.clipped="part.title"
             class="lane-part one-line"
             type="button"
             :aria-label="partLabel(part)"
             @click="emit('open', part.reference)"
-          >
-            {{ part.title }}
-          </button>
+          />
         </template>
       </span>
     </span>
@@ -123,10 +124,10 @@ const toggleLabel = computed(() =>
         >{{ props.lane.goal.reference }}</span
       >
       <span
+        v-work-item-title="props.title"
         v-tooltip.clipped="props.title"
         class="lane-title one-line"
-        >{{ props.title }}</span
-      >
+      />
     </span>
   </button>
 </template>

@@ -3,9 +3,9 @@
 export const workItemUsageMessages = {
   en: {
     usage: {
-      work: 'Work',
-      workTree: 'Work with its contents',
-      allAgents: 'All agents',
+      work: 'Work on the clock',
+      workTree: 'Work with its contents, on the clock',
+      allAgents: 'Agent time',
       cost: 'Cost',
       tokensLabel: 'Tokens',
       tokens: '{count} token | {count} tokens',
@@ -13,12 +13,11 @@ export const workItemUsageMessages = {
       noPrice: 'no price',
       onTheSide: 'on the side',
       lineMeaning:
-        'Work is the time on the clock: waiting for a script counts, waiting for a person or a computer that was off does not.',
-      lineAgents: 'All agents together: {time}.',
+        'Work on the clock is the time that passed: waiting for a script counts, waiting for a person or a computer that was off does not.',
       lineChildren: 'With the work of its items.',
       lineDetails: 'Details are on the Agents tab.',
       parallel:
-        'Agents worked in parallel: Work is the time on the clock, All agents adds up what each of them spent.',
+        'Agents worked in parallel: Work on the clock is the time that passed, Agent time adds up what each of them spent.',
       costNote:
         'The cost is an estimate at API prices and not a bill: a subscription is priced differently.',
       estimated:
@@ -61,9 +60,9 @@ export const workItemUsageMessages = {
   },
   ru: {
     usage: {
-      work: 'Работа',
-      workTree: 'Работа вместе с составом',
-      allAgents: 'Агенты вместе',
+      work: 'Работа по часам',
+      workTree: 'Работа вместе с составом, по часам',
+      allAgents: 'Время агентов',
       cost: 'Стоимость',
       tokensLabel: 'Токены',
       tokens: '{count}\u{A0}токен | {count}\u{A0}токена | {count}\u{A0}токенов',
@@ -71,12 +70,11 @@ export const workItemUsageMessages = {
       noPrice: 'нет цены',
       onTheSide: 'попутно',
       lineMeaning:
-        'Работа — время по часам: ожидание скриптов входит, ожидание человека и выключенный компьютер не входят.',
-      lineAgents: 'Агенты вместе: {time}.',
+        'Работа по часам — прошедшее время: ожидание скриптов входит, ожидание человека и выключенный компьютер не входят.',
       lineChildren: 'Вместе с работой над составом.',
       lineDetails: 'Подробности на вкладке «Агенты».',
       parallel:
-        'Агенты работали параллельно: «Работа» — время по часам, «Агенты вместе» — сумма времени каждого.',
+        'Агенты работали параллельно: «Работа по часам» — прошедшее время, «Время агентов» — сумма времени каждого.',
       costNote: 'Стоимость — оценка по ценам API, а не счёт: подписка оплачивается иначе.',
       estimated:
         'Время — оценка: история восстановлена из транскриптов, живых отметок времени за ней нет.',

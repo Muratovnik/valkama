@@ -1,12 +1,12 @@
 /**
- * The Analytics bar's buttons that a short bar leaves their icons name themselves, in the built
- * app. Where the bar has no room for words, «Refresh» and «Add a filter» say themselves by their
- * icons and keep their words for a reader, hidden from sight; each one's hint then names it under
- * it, and none of its words are laid over the icon. At a wide window the words stand beside the
- * icons and the buttons show no hint.
+ * The Analytics bar's button that a short bar leaves its icon names itself, in the built app.
+ * Where the bar has no room for words, «Refresh» says itself by its icon and keeps its words for
+ * a reader, hidden from sight; its hint then names it under it, and none of its words are laid
+ * over the icon. At a wide window the words stand beside the icon and the button shows no hint.
+ * The filter's field gives up no words to an icon: a short bar gives it its short placeholder.
  *
- * Before, neither button had a hint at all: a person who did not know the icons had nothing to
- * read them by. The headings of a section's table, which sort it, say their whole name while
+ * Before, the button had no hint at all: a person who did not know the icon had nothing to read
+ * it by. The headings of a section's table, which sort it, say their whole name while
  * they cut it; their template wrote that hint without the directive that draws it, and the built
  * app drew none.
  */
@@ -24,10 +24,7 @@ interface Box {
 }
 
 /** The bar's buttons that give their words up, with the words each holds. */
-const BUTTONS = [
-  { control: '.analytics-refresh', words: '.analytics-refresh-words' },
-  { control: '.analytics-filter-add', words: '.analytics-filter-add-words' },
-] as const
+const BUTTONS = [{ control: '.analytics-refresh', words: '.analytics-refresh-words' }] as const
 
 const boxOf = (locator: Locator): Promise<Box> =>
   locator.evaluate((node) => {

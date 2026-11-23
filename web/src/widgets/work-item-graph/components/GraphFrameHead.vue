@@ -31,7 +31,8 @@ import { FOLDED_WIDTH, FRAME_PADDING } from '@/widgets/work-item-graph/utils/gra
 import type { FrameHead } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { foldIsTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const {
@@ -201,7 +202,7 @@ function onOpenBlur() {
       />
       <span
         v-if="!overview && goal"
-        v-slash-breaks="title"
+        v-work-item-title="title"
         v-tooltip.clipped="title"
         class="graph-frame-title"
         :style="lineWidth"

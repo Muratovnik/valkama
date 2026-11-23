@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { filterGroups, stepGroups, tokenName } from '@/features/work-filter/filterOptions.ts'
+import { tokenName, workFilterSource } from '@/features/work-filter/filterOptions.ts'
 
 import {
   addToken,
@@ -17,6 +17,8 @@ import {
   writeWorkFilter,
 } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+
+import { facetMenu } from '@/shared/ui/facetMenu.ts'
 
 import { boardGoal, boardItem, references } from './fixtures/board.ts'
 import { i18n } from './support/workItemBoardHarness.ts'
@@ -110,9 +112,20 @@ describe('the new facets', () => {
 })
 
 describe('the menu', () => {
-  const groups = filterGroups({ categories: [], filter: { text: '' }, held: 0, items: space, t })
+  const source = workFilterSource({
+    categories: () => [],
+    filter: () => ({ text: '' }),
+    held: () => 0,
+    items: () => space,
+    t,
+  })
+  const menu = (step: string | null) =>
+    facetMenu({ source, step, text: '', words: { facets: 'Filter by', back: (one) => one } })
   const values = (id: string) =>
-    groups.find((group) => group.id === id)?.options.map((option) => [option.text, option.detail])
+    (id === 'conditions'
+      ? source.conditions?.()?.rows
+      : menu(id).groups.find((group) => group.id === id)?.options
+    )?.map((option) => [option.text, option.detail])
 
   it('offers the five conditions first', () => {
     expect(values('conditions')?.map(([text]) => text)).toEqual([
@@ -137,7 +150,7 @@ describe('the menu', () => {
   })
 
   it('steps into «Project» and «Goal or stage» from the facets, as into any facet with values', () => {
-    const facets = stepGroups(groups, 'facets', '', t).find((group) => group.id === 'facets')
+    const facets = menu(null).groups.find((group) => group.id === 'facets')
     // No state, holder or label is there to offer, so those facets are not.
     expect(facets?.options.map((option) => option.text)).toEqual([
       'Kind',

@@ -32,7 +32,7 @@ import unittest
 from unittest import mock
 
 from server import mcp_surface, store
-from server.hooks import notify
+from server.hooks import marks, notify
 from server.planning import (
     api,
     calls,
@@ -158,7 +158,7 @@ class Harness(unittest.TestCase):
         return dict(answer["applied"]["comment"])
 
     def marks_path(self) -> str:
-        return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, SESSION + ".marks")
+        return os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY, SESSION + ".marks")
 
     def window(self, reference: str) -> list[dict]:
         identity = str(service.get_work_item(self.conn, reference)["work_item_id"])
@@ -881,7 +881,7 @@ class AgentWatcherTests(Harness):
 
         identity = str(service.get_work_item(self.conn, self.target)["work_item_id"])
         self.assertTrue(
-            notify.read_marks(self.marks_path())[identity][4],
+            marks.read_marks(self.marks_path())[identity][4],
             "the watcher read the item and left the mention waiting",
         )
         told = self.hook()
@@ -960,16 +960,16 @@ class AgentMarksTests(Harness):
         path = self.marks_path()
         with open(path, "rb") as handle:
             self.assertEqual(b"v5\n", handle.read(3))
-        marks = notify.read_marks(path)
+        kept = marks.read_marks(path)
         lines = [
             f"{item} {mark[0]} {mark[1][0]} {mark[1][1]} {mark[1][2]} {int(mark[2])}"
-            for item, mark in marks.items()
+            for item, mark in kept.items()
         ]
         with open(path, "wb") as handle:
             handle.write(("\n".join(["v2", *lines]) + "\n").encode("ascii"))
         self.assertEqual(
-            {item: (mark[0], mark[1], mark[2], mark[0], False) for item, mark in marks.items()},
-            notify.read_marks(path),
+            {item: (mark[0], mark[1], mark[2], mark[0], False) for item, mark in kept.items()},
+            marks.read_marks(path),
             "the agents' place is where everything else was read to, and nothing waits",
         )
         self.assertIsNone(self.hook(), "the person's mention is not told again")

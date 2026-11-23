@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { filterGroups, stepGroups, tokenName } from '@/features/work-filter/filterOptions.ts'
+import { tokenName, tokenOfKey, workFilterSource } from '@/features/work-filter/filterOptions.ts'
 
 import type { ClosedPeriod } from '@/entities/work-item/utils/closedPeriod.ts'
 import {
@@ -27,6 +27,7 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import { validateManifestRouteState } from '@/shared/api/platformRoute.ts'
 import { validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
+import { facetMenu } from '@/shared/ui/facetMenu.ts'
 
 import { boardItem, references } from './fixtures/board.ts'
 import { readServerFixture } from './support/serverFixtures.ts'
@@ -165,30 +166,37 @@ describe('its words and its menu', () => {
 
   it('stands among the conditions, its row stepping into the periods, one chosen at a time', () => {
     const { t } = i18n().global
-    const groups = filterGroups({
-      categories: [],
-      filter: { text: '' },
-      held: null,
-      items: [],
+    const source = workFilterSource({
+      categories: () => [],
+      filter: () => ({ text: '' }),
+      held: () => null,
+      items: () => [],
       t,
-      now: NOW,
+      now: () => NOW,
     })
-    const top = stepGroups(groups, 'facets', '', t)
-    expect(top[0].options.at(-1)).toMatchObject({
-      text: 'Closed in a period',
-      action: { do: 'open', facet: 'closed' },
+    const menu = (step: string | null) =>
+      facetMenu({ source, step, text: '', words: { facets: 'Filter by', back: (one) => one } })
+    const top = menu(null)
+    expect(top.groups[0]?.id).toBe('conditions')
+    expect(top.groups[0]?.options.at(-1)).toMatchObject({ text: 'Closed in a period', next: true })
+    const row = top.groups[0]?.options.at(-1)
+    expect(top.entries.find((entry) => entry.key === row?.key)).toMatchObject({
+      do: 'open',
+      facet: 'closed',
     })
-    expect(top[1].options.map((option) => option.text)).not.toContain('Closed in a period')
-    const periods = stepGroups(groups, 'closed', '', t)[0]
-    expect(periods.options.map((option) => option.text)).toEqual([
+    expect(top.groups[1]?.options.map((option) => option.text)).not.toContain('Closed in a period')
+    const periods = menu('closed')
+    expect(periods.groups[0]?.options.map((option) => option.text)).toEqual([
       'Today',
       'This week',
       'Past 4 weeks',
       'Days of my own',
     ])
     // Days of the reader's own first stand at the week up to today.
-    const own = periods.options[3].action
-    expect(own).toMatchObject({ token: { closed: custom('2026-11-13', '2026-11-19') } })
+    const own = periods.groups[0]?.options[3]
+    expect(own && tokenOfKey(own.key, 'closed', { text: '' }, NOW)).toMatchObject({
+      closed: custom('2026-11-13', '2026-11-19'),
+    })
     // A second period takes the first one's place, and the same one again takes it out.
     let filter: WorkFilter = { text: '' }
     filter = toggleToken(filter, { facet: 'closed', closed: preset('week') })

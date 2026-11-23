@@ -11,6 +11,12 @@ an agent's write moves the boundary by being written, and a refused one, rolled
 back, moves nothing. It belongs to the item and not to one agent: whichever agent
 writes next is the one told, once.
 
+The close guard asks a narrower question where it can (`since_told`): what the agent
+closing has not been told. Its place is its own last write or what its client hook
+has told it, whichever is later, and another agent's write does not move it. Only a
+recipient whose hook keeps a marks file is asked that way; for any other the guard
+uses the item's window.
+
 Order is the call rows' ids, because they are one sequence across every table,
 where `created_at` is whole seconds in two of them and a tie decides who was told.
 A row that points at no call, the runner's or one from before calls were recorded,
@@ -271,6 +277,47 @@ def since_call(
         else []
     )
     return _window(conn, work_item_id, after, edits)
+
+
+#: One agent's last write on one item, through the session index: a confirmed call of
+#: that session and agent, the call in progress left out.
+_LAST_OWN_CALL = (
+    "SELECT MAX(id) FROM execution_events WHERE session_id = ? AND agent_id IS ?"
+    " AND work_item_id = ? AND kind = ? AND identity_state = 'confirmed' AND id <> ?"
+)
+
+
+def since_told(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    session_id: str,
+    agent_id: str | None,
+    told: int,
+    *,
+    own_call: int | None = None,
+) -> list[dict]:
+    """The person's events on one item that one agent has not been told, oldest first.
+
+    The agent's place is the later of its own last write on the item, which was
+    answered with what came before it, and `told`, the last call through which its
+    client hook handed it everything a person did there (`hooks.marks.told_through`).
+    Another agent's write moves nothing: being told is the agent's, not the item's.
+    `own_call` is left out as in `since_last_agent_write`.
+    """
+
+    excluded = -1 if own_call is None else own_call
+    own = conn.execute(
+        _LAST_OWN_CALL, (session_id, agent_id, work_item_id, KIND, excluded)
+    ).fetchone()[0]
+    after = max(int(own or 0), told)
+    if not after:
+        # Read from the item's first event, as `_boundary_and_edits` does, rather than
+        # through every call row the store has.
+        first = conn.execute(
+            "SELECT MIN(call_id) FROM work_item_events WHERE work_item_id = ?", (work_item_id,)
+        ).fetchone()[0]
+        after = (first or 1) - 1
+    return [entry for _call, entry in since_call(conn, work_item_id, after)]
 
 
 #: How long a comment that waits for a reply goes on asking for the holders, as

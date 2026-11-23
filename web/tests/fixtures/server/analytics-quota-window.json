@@ -1,0 +1,36 @@
+{
+  "interface_version": "valkama-analytics-api",
+  "quota_window": {
+    "now": "2026-01-02T03:04:05.000+03:00",
+    "utc_offset": 180,
+    "fresh_for_seconds": 900,
+    "retained_from": "2026-01-02T03:04:05.000+03:00",
+    "account": "00000000-0000-4000-8000-000000000023/00000000-0000-4000-8000-000000000024",
+    "kind": "five_hour",
+    "model": null,
+    "before": "2026-01-02T03:04:05.000+03:00",
+    "window": {
+      "kind": "five_hour",
+      "model": null,
+      "state": "silent",
+      "resets_at": "2026-01-02T03:04:05.000+03:00",
+      "latest": {
+        "at": "2026-01-02T03:04:05.000+03:00",
+        "source": "poll",
+        "used_percent": 30.0
+      },
+      "started_at": "2026-01-02T03:04:05.000+03:00",
+      "even_percent": null,
+      "readings": [
+        {
+          "at": "2026-01-02T03:04:05.000+03:00",
+          "used_percent": 30.0,
+          "source": "poll"
+        }
+      ],
+      "restarts": [],
+      "forecast": null,
+      "previous": null
+    }
+  }
+}

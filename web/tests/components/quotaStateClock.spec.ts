@@ -16,9 +16,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Quota, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 
 import { momentAt, serveUsage } from '../fixtures/analytics.ts'
-import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
+import { NIGHT_NAME, quotaAnswer, quotaAt } from '../fixtures/quota.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
-import { accountNamed, says, windowOf } from '../support/quotaPanel.ts'
+import { accountNamed, says, tile, windowOf } from '../support/quotaPanel.ts'
 
 const NOW = new Date(2026, 10, 11, 14, 30)
 const SECOND = 1000
@@ -77,21 +77,58 @@ describe('a quota window’s state by the panel’s clock', () => {
     // At the next tick of the clock it is older, and every word of the window says it is silent.
     await wait(5 * SECOND)
     const silent = workWeek(page)
-    expect(silent).toMatchObject({ state: 'silent', lead: '41% used · no data for 10 min' })
+    expect(silent).toMatchObject({ state: 'silent', lead: '41% used · reading 10 min ago' })
     expect(silent.latest).toMatch(/^No change since \d{2}:\d{2}, 10 min ago, from the poll$/u)
-    expect(silent.label).toMatch(/^Week: 41% used, steady use \d+%, no data for 10 min\. /u)
+    expect(silent.label).toMatch(
+      /^Week: 41% used, steady use since the window started would be at \d+% now, reading 10 min ago\. /u,
+    )
+  })
+
+  it('says the age of a reading past the threshold, never that there is no data', async () => {
+    const answer = answered()
+    stubAnalyticsReads(usage, () => answer)
+    const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
+    // The reading was two minutes old when the answer was read: sixteen minutes on, it is eighteen.
+    await wait(16 * MINUTE + 5 * SECOND)
+    const old = workWeek(page)
+    expect(old).toMatchObject({ state: 'silent', lead: '41% used · reading 18 min ago' })
+    expect(old.label).toMatch(
+      /^Week: 41% used, steady use since the window started would be at \d+% now, reading 18 min ago\. /u,
+    )
+    expect(old.lead).not.toMatch(/no data/u)
+  })
+
+  it('says a silent window’s rail tile only its state in one word, and its age in the bar’s words', async () => {
+    // Only «Work» in the answer, so its week is the window the tile names.
+    const answer = answered((accounts) => accounts.slice(0, 1))
+    stubAnalyticsReads(usage, () => answer)
+    const page = await mountAnalytics({ routeState: { by: 'quota_week' } })
+    // The reading was two minutes old when the answer was read: sixteen minutes on, it is eighteen.
+    await wait(16 * MINUTE + 5 * SECOND)
+    // The tile's width must not follow a reading's age, so its count is the state in a word; the age
+    // stays in the bar's label, which a screen reader and the hint read.
+    expect(says(page, 'quota_week')).toMatchObject({ lead: 'Work', count: 'older reading' })
+    expect(tile(page, 'quota_week').get('.window-track').attributes('aria-label')).toMatch(
+      /^Week: 41% used, steady use since the window started would be at \d+% now, reading 18\s+min ago\. /u,
+    )
   })
 
   it('names on the tile the fresh window of two at the same share, by the clock', async () => {
-    // Both five hours at 62 %: «Work»'s read two minutes before the answer, the other's one.
+    // Both five hours at 62 % and lasting to their reset, so neither runs out first nor ends
+    // higher: «Work»'s read two minutes before the answer, the other's one.
     const offset = -NOW.getTimezoneOffset()
     stubAnalyticsReads(usage, () =>
       answered(([work, night]) => {
         if (!work || !night) throw new Error('the four accounts start with «Work»')
         const [five, ...windows] = night.windows as [QuotaShareWindow, ...QuotaShareWindow[]]
+        const [workFive, ...workWindows] = work.windows as [QuotaShareWindow, ...QuotaShareWindow[]]
         const at = momentAt(NOW.getTime() - MINUTE, offset)
         const latest = { ...five.latest, at, used_percent: 62 }
-        return [work, { ...night, windows: [{ ...five, latest, readings: [latest] }, ...windows] }]
+        const lasting = { ...workFive, forecast: five.forecast }
+        return [
+          { ...work, windows: [lasting, ...workWindows] },
+          { ...night, windows: [{ ...five, latest, readings: [latest] }, ...windows] },
+        ]
       }),
     )
     const page = await mountAnalytics()
@@ -105,7 +142,7 @@ describe('a quota window’s state by the panel’s clock', () => {
     // «Work»'s reading is past ten minutes and the other's is not: the fresh one is the tightest.
     await wait(8 * MINUTE + 5 * SECOND)
     expect(says(page, 'quota_five_hour')).toEqual({
-      lead: '7e6d5c4b',
+      lead: NIGHT_NAME,
       aside: '62%',
       count: 'up to date',
     })
@@ -115,7 +152,7 @@ describe('a quota window’s state by the panel’s clock', () => {
     expect(says(page, 'quota_five_hour')).toEqual({
       lead: 'Work',
       aside: '62%',
-      count: 'no data for 11\u{A0}min',
+      count: 'older reading',
     })
   })
 })

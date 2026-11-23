@@ -17,8 +17,9 @@
  * as its first value does.
  *
  * The bars list the first twelve values, and so does the table; past them one line, «All 30»,
- * counts every value of the period and, pressed, opens the dimension's full table in the side
- * panel, sent out as `all` (`SpendingTableLink`); the line is found by `data-all`.
+ * counts every value of the period in the measure, as the rail's tile and the full table's heading
+ * row do, and, pressed, opens the dimension's full table in the side panel, sent out as `all`
+ * (`SpendingTableLink`); the line is found by `data-all`.
  *
  * The values split one whole, so a person can draw them as a ring instead (`DonutChart`): each
  * value a sector in its hue, named while its hue stays apart from the others' and the smaller
@@ -47,9 +48,11 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
 import {
   breakdownOf,
+  drawnLines,
   measureOf,
   rankedLines,
   spendingLines,
+  workedValue,
 } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
@@ -64,7 +67,6 @@ import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 const props = defineProps<{
   by: UsageDimension
   measure: Measure
-  narrow: boolean
   rows: readonly UsageRow[]
   /** The hue of each value, or each pair, on the page, by its key. */
   slots: ReadonlyMap<string, SeriesSlot>
@@ -117,16 +119,32 @@ const unlisted = computed(() =>
     ? (all.value.find((line) => line.kind === 'other')?.folded ?? 0)
     : Math.max(0, all.value.length - LISTED),
 )
-/** Every value of the period, the folded ones counted one by one. */
-const counted = computed(() =>
-  all.value.reduce((sum, line) => sum + (line.kind === 'other' ? line.folded : 1), 0),
+/**
+ * Every value of the period in the measure, as the rail's tile and the full table's heading row
+ * count them (`workedValue`): work with no value there, work nobody can place and a value that
+ * spent only in another measure are rows of that table, not values of the count. Counted with
+ * them, «All 31» stood beside the tile's «30 values» for one period.
+ */
+const counted = computed(
+  () =>
+    spendingLines(
+      props.rows,
+      breakdownOf(props.by, props.across),
+      props.measure,
+      Number.POSITIVE_INFINITY,
+    ).filter((line) => workedValue(props.measure, line)).length,
 )
 const allWords = computed(() =>
   t('analytics.panel.bars.all', { count: counted.value }, counted.value),
 )
+/**
+ * The lines every view of the chart draws — the ring and its legend, the bars and the table twin:
+ * every one whose figure counts something (`drawnLines`), while its shares stay of every value.
+ */
+const drawn = computed(() => drawnLines(props.measure, all.value))
 const ranked = useRankedLines({
   by: () => props.by,
-  lines: () => all.value,
+  lines: () => drawn.value,
   measure: () => props.measure,
   whole: () => whole.value,
   inspect: (value, label) => emit('inspect', value, label),
@@ -163,7 +181,6 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
     class="spending-bars"
     :title="title"
     :titles="titles"
-    :narrow="narrow"
     :notice="notice"
     :views="views"
   >
@@ -172,6 +189,7 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
         v-if="view === 'ring'"
         :label="title"
         :rows="parts"
+        :whole="whole"
         :words="ringWords"
         :format-value="formatValue"
         :format-part="words.share"

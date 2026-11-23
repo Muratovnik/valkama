@@ -4,7 +4,7 @@
  * without a refresh that failed. The oracle is the requirement: the bar is one line wherever that
  * line fits once it has given up all it can, a failure said included, and two rows, its last
  * give-up, wherever it does not. The line is fitted holding a failure's room, so it is one line or
- * two rows alike whether a refresh failed or not: about 1320px in English, 1360px in Russian.
+ * two rows alike whether a refresh failed or not: about 1350px in English, 1390px in Russian.
  *
  * At every width the read again stands inside the bar, no text the bar draws is cut by a box or
  * drawn past the bar's end, and pressing the read again scrolls nothing sideways. A failure is said
@@ -23,6 +23,8 @@ import { pageAt, record } from './analyticsPage.ts'
 import { NOW, serveLive } from './liveDouble.ts'
 import { DAYS } from './served/analyticsBarBand.ts'
 import { test } from './test.ts'
+import { keepWindowErrors } from './windowErrors.ts'
+
 /** The reader's own span of days. */
 const OWN_DAYS = { period: 'custom', from: '2026-11-09', to: '2026-11-11' }
 
@@ -109,12 +111,13 @@ async function barOf(page: Page) {
         ? { hidden: words.classList.contains('visually-hidden'), ...box('.refresh-failed-words') }
         : null,
       rows,
-      // The room the line leaves goes to the filters' chips, none of which are set here.
-      spare:
-        Math.round(
-          (document.querySelector('.analytics-bar-chips')?.getBoundingClientRect().width ??
-            Number.NaN) * 10,
-        ) / 10,
+      // The room the line leaves goes to the filter's field, past the least its words need.
+      spare: (() => {
+        const field = document.querySelector('.analytics-filter-add')
+        if (!field) return Number.NaN
+        const least = Number.parseFloat(getComputedStyle(field).minInlineSize)
+        return Math.round((field.getBoundingClientRect().width - least) * 10) / 10
+      })(),
     }
   })
   return { ...parts, cut: await cutsOf(page) }
@@ -162,11 +165,7 @@ function expectSaidWhole(name: string, bar: Bar) {
  * and every usage read refused while `fail` says so.
  */
 async function serveBand(page: Page) {
-  await page.addInitScript(() => {
-    const seen: string[] = []
-    Object.assign(window, { seenErrors: seen })
-    window.addEventListener('error', (event) => seen.push(String(event.message)))
-  })
+  const errors = await keepWindowErrors(page)
   await page.clock.install({ time: NOW })
   const double = await serveLive(page, DAYS)
   double.lastEventAt = new Date(NOW.getTime() - 9000)
@@ -181,8 +180,7 @@ async function serveBand(page: Page) {
     fail: (now: boolean) => {
       failing = now
     },
-    errors: () =>
-      page.evaluate(() => (window as unknown as { seenErrors: string[] }).seenErrors.slice()),
+    errors,
   }
 }
 

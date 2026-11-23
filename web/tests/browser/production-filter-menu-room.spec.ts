@@ -81,7 +81,7 @@ async function labelsCombine(page: Page, height: number) {
   // The menu stands inside the window and starts at the bar, whatever its height.
   const box = await boxOf(list)
   expect(box.y + box.height).toBeLessThanOrEqual(height)
-  const bar = await boxOf(page.locator('.work-filter'))
+  const bar = await boxOf(page.locator('.workspace-filter'))
   expect(box.y).toBeGreaterThanOrEqual(bar.y)
 }
 

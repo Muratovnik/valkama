@@ -6,7 +6,8 @@
  * figures are and a read of them again over the whole of it; under that a rail of the page's
  * sections — the overview, the tokens by kind, the subscription quota's five hours and week, then
  * a dimension each — and the panel of the section on show. The quota's two sections read where
- * each account's quota stands now (`QuotaPanel`), which no period or filter changes. The rail
+ * each account's quota stands now (`QuotaPanel`), which no filter changes; the period reaches only
+ * each window's step line, which draws every window of its kind the period overlaps. The rail
  * and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
@@ -63,10 +64,12 @@ import { useQuota } from '@/pages/analytics/composables/useQuota.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { provideReadWaits } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useRefusal } from '@/pages/analytics/composables/useRefusal.ts'
+import { provideScopeWords } from '@/pages/analytics/composables/useScopeWords.ts'
 import { useSectionFocus } from '@/pages/analytics/composables/useSectionFocus.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
+import { periodStart } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import {
@@ -95,10 +98,14 @@ const props = withDefaults(
     covered?: boolean
     /** The project the page is scoped to; every figure is that project's. */
     projectId?: string | null
+    /** That project's name, as the shell names it; its id where it has none. */
+    projectTitle?: string | null
     /** The module's part of the address: what `writeAddress` wrote, or nothing. */
     routeState?: Readonly<Record<string, string | number | boolean>>
     /** The space the page is scoped to, by its key; every figure is of the work its board holds. */
     space?: string | null
+    /** That space's name, as the app names it; its key where it has none. */
+    spaceTitle?: string | null
   }>(),
   { routeState: undefined, projectId: null, space: null, covered: false },
 )
@@ -163,6 +170,13 @@ const read = useUsageRead({
 })
 
 const today = computed(() => localDay(read.askedAt.value))
+
+/** Which projects the figures are of, beside each section's heading and in the overview's «ⓘ». */
+const scopeWords = provideScopeWords({
+  id: () => props.projectId,
+  space: () => (props.space ? (props.spaceTitle ?? props.space) : null),
+  title: () => props.projectTitle ?? null,
+})
 /** Whether the view's read failed with nothing to show, which the panel says. */
 const readFailed = computed(() => read.state.value.status === 'error')
 
@@ -223,12 +237,15 @@ const { openFromCard } = useSectionFocus({
   panel: panelBox,
 })
 
-/** Whether the field of each dimension is open under the bar, which asks what each offers. */
-const adding = ref(false)
+/**
+ * The dimensions whose values the filter's menu shows, which are read for it as it shows them and
+ * again for a new period: none while the menu is closed.
+ */
+const offered = ref<readonly UsageDimension[]>([])
 watch(
-  [adding, () => read.bounds.value],
-  ([open]) => {
-    if (open) void read.offer(filterDimensions.value)
+  [offered, () => read.bounds.value],
+  ([dimensions]) => {
+    if (dimensions.length) void read.offer(dimensions)
   },
   { immediate: true },
 )
@@ -254,8 +271,11 @@ const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
   view: () => view.value,
 })
 
-/** The quota of each account now, read whatever the view, on its own interval (`useQuota`). */
-const quota = useQuota()
+/**
+ * The quota of each account now, read whatever the view, on its own interval (`useQuota`), with
+ * each window's earlier windows since the start of the period on show, which its line draws.
+ */
+const quota = useQuota({ from: () => periodStart(view.value, new Date()) })
 
 /** The side panel over the page: what opens and closes it, and what it asks of the page. */
 const detail = useDetail({
@@ -309,7 +329,6 @@ const emptyDescription = computed(() => {
       :shown="readWaitShown"
     />
     <AnalyticsBar
-      v-model:adding="adding"
       class="analytics-page-bar"
       :dimensions="filterDimensions"
       :filters-refused="filtersRefused"
@@ -321,6 +340,7 @@ const emptyDescription = computed(() => {
       :view="view"
       @amend="(next) => change(next, 'replace')"
       @filter="pageFilter.set"
+      @need="(dimensions) => (offered = dimensions)"
       @refresh="refresh"
     />
 
@@ -386,6 +406,7 @@ const emptyDescription = computed(() => {
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
+              :scope="scopeWords.about"
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
               @inspect="detail.inspect"

@@ -7,6 +7,11 @@
  * its title, has its client and the start of its id after its name on the same line, and the line
  * holds the hint, which that detail may be cut from while the press is not.
  *
+ * On two lines (`lines`), as a narrow table of free text asks, the name breaks between its words
+ * and ends in an ellipsis past its second line, so a task's reference and the start of its title
+ * stand together; a pair takes a line a part, each cut at its own end (`PairName`'s `stacked`),
+ * and a detail a line of its own under the name, since a press is one box the line cannot break.
+ *
  * It acts as its value does in the bars (`useLineActions`): a press opens the value's side panel,
  * sent out as `inspect`, and a task's name is a link to its card as well, which a press with a
  * modifier or the middle button opens elsewhere. Either is named by the value, since it heads its
@@ -24,6 +29,8 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 const props = defineProps<{
   by: UsageDimension
   line: TableLine
+  /** The lines the name may take: one, or two for a name of free text in a narrow column. */
+  lines?: 1 | 2
 }>()
 /** The value pressed to open its side panel: its filter value, and its name. */
 const emit = defineEmits<{ inspect: [value: string | null, label: string] }>()
@@ -43,6 +50,14 @@ const whole = computed(() =>
 const pressHints = computed(() => (Boolean(link.value) || inspects.value) && !props.line.detail)
 const lineHint = computed(() => (pressHints.value ? '' : whole.value))
 const pressHint = computed(() => (pressHints.value ? whole.value : ''))
+/** On two lines a name breaks between its words, and a pair stacks its parts instead. */
+const wraps = computed(() => props.lines === 2)
+const stacked = computed(() => wraps.value && Boolean(props.line.nameEnd))
+/** How the name's words keep to their lines: one, cut; two, clamped; stacked, a part a line. */
+const wordsRule = computed(() => {
+  if (!wraps.value) return 'one-line'
+  return stacked.value ? '' : 'two-lines'
+})
 
 function follow(event: MouseEvent) {
   if (link.value) actions.follow(link.value, event, inspect)
@@ -66,7 +81,8 @@ function inspect() {
   >
     <span
       v-tooltip.clipped="lineHint"
-      class="table-name one-line"
+      class="table-name"
+      :class="{ 'one-line': !wraps, 'table-wraps': wraps }"
     >
       <!-- The link's words are the name `PairName` writes as text, which the rule cannot see. -->
       <!-- eslint-disable-next-line vuejs-accessibility/anchor-has-content -->
@@ -79,10 +95,14 @@ function inspect() {
         @click="follow"
         @auxclick="followAside"
       >
-        <span class="press-words one-line"
+        <span
+          class="press-words"
+          :class="wordsRule"
           ><PairName
             :name="line.name"
             :end="line.nameEnd"
+            :runs="line.nameRuns"
+            :stacked="stacked"
         /></span>
       </a>
       <button
@@ -93,20 +113,30 @@ function inspect() {
         :aria-description="pressDescription"
         @click="inspect"
       >
-        <span class="press-words one-line"
+        <span
+          class="press-words"
+          :class="wordsRule"
           ><PairName
             :name="line.name"
             :end="line.nameEnd"
+            :runs="line.nameRuns"
+            :stacked="stacked"
         /></span>
       </button>
-      <PairName
+      <span
         v-else
-        :name="line.name"
-        :end="line.nameEnd"
-      />
+        class="plain-words"
+        :class="wraps && wordsRule"
+        ><PairName
+          :name="line.name"
+          :end="line.nameEnd"
+          :runs="line.nameRuns"
+          :stacked="stacked"
+      /></span>
       <span
         v-if="line.detail"
         class="chart-detail"
+        :class="{ 'one-line': wraps }"
         >{{ line.detail }}</span
       >
     </span>
@@ -140,13 +170,33 @@ function inspect() {
     max-inline-size: 100%;
   }
 
-  & .press-words {
+  /* A block, unless it keeps to two lines (`.two-lines`), whose own box that is. */
+  & .press-words:not(.two-lines) {
+    display: block;
+  }
+
+  /* On the name's line, in the table's line height (`--font-line`): in the detail's own, taller
+     one, a session's row stood 1.3px taller than the rows of a name with no detail. */
+  & .chart-detail {
+    display: inline;
+    margin-inline-start: var(--space-2);
+    line-height: var(--line-height-tight);
+  }
+}
+
+/* On two lines the name's words take the press's whole width and break between words, an
+   ellipsis ending the second line (`.two-lines`), as a ranked list of free text draws them. Each
+   part of a pair and a detail is a line of its own, cut at its end; the line under the pointer
+   still says the whole name. The press stands on the line's top, so the row's figures stand on its
+   first line. */
+.table-wraps {
+  & .plain-words:not(.two-lines) {
     display: block;
   }
 
   & .chart-detail {
-    display: inline;
-    margin-inline-start: var(--space-2);
+    display: block;
+    margin-inline-start: 0;
   }
 }
 </style>

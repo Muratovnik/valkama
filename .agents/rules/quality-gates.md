@@ -4,12 +4,11 @@ Routed from `AGENTS.md`. Read this before touching the toolchain, the test
 suite, or any number a gate compares against. The gate command list itself
 stays in `AGENTS.md`; this file is why each gate exists and how it bites.
 
-`npm test` runs oxlint, ESLint, Prettier, Stylelint, the UI-system guard, knip
-and jscpd before the suites; `npm run format` applies the two formatters.
-`npm run test:browser` adds the axe pass over the harness surfaces, and
-`desktop`'s own `npm test` asserts the renderer options and the packaged fuse
-set as text, because configuration is what silently reverts and no test of
-behavior can see it.
+`npm test` runs oxlint, ESLint, Prettier, Stylelint, vue-tsc, the UI-system
+guard, knip and jscpd before the suites; `npm run format` applies the two
+formatters. `npm run test:browser` adds the axe pass over the harness surfaces,
+and `desktop`'s own `npm test` asserts the renderer options and the packaged
+fuse set as text, because configuration is what silently reverts.
 
 The browser suite serves the harness on 4174 and the built app on 4175 and never
 reuses a server, so a second checkout running it at the same time sets
@@ -57,7 +56,7 @@ Each command below runs in `web/`:
 
 The specs that write the system clipboard or are granted it are named in
 `web/tests/browser/clipboardSpecs.ts`, and they run only when asked for: with
-`VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<file>`.
+`VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<spec name>`.
 `web/playwright.config.ts` reads that list and selects none of them without the
 variable — not in a bare run, not when one is named, not under `--list` — and
 the runner sets it when `--with-clipboard` names one and removes it otherwise.
@@ -68,6 +67,41 @@ with no count to compare, so the whole suite goes through the runner.
 clipboard and is not on that list, so a spec that starts to goes onto it in the
 same change, and on a configuration that selects a listed spec without the
 variable.
+
+The Analytics sweep (`web/tests/sweep/analyticsSweep.ts`) is not a gate but a
+measurement of a running Valkama: every rail section, period, chart view and the
+value panel opened from a mark of each section, at each width, for three
+classes. Hover reach points the real pointer at each sampled mark's centre and
+3px off it on each axis and expects what `DESIGN.md` and `hintReach.ts` say:
+the mark's own hint, the nearest of several, either of two within a pixel.
+Overflow reports a sideways scroll that is none of the design's: the page's,
+one widened by content out of flow, one whose content is neither a table nor a
+row of like items, and one shorter than the least target (`--period-reach`).
+`--forbid <text>`, repeatable, counts every visible place a text stands, in the
+page and in a hint, as the product's own words: a place inside a name of the
+data shown, such as a task's title that quotes the text, is the data's, judged
+by the titles and names the page's API answers gave (`occurrences`). Run it on a store copy, from `web/`, with its output in the
+ignored `tmp/` (it refuses any other place, since it records what the store
+shows):
+
+```powershell
+python tests/isolated.py serve --out tmp/<name>/stand --store-copy
+node tests/sweep/analyticsSweep.ts --url <the stand's address> --out ../tmp/<name>/sweep --forbid "меньше минуты"
+python tests/isolated.py stop --out tmp/<name>/stand
+```
+
+`--widths`, `--sections` and `--periods` narrow it; `--marks` sets how many
+marks of each sort it samples. It walks the measure the page opens on unless
+`--measures time,tokens,cost` names the ones to open each view with: a column
+a measure adds and the words it gives a figure change what a table holds, so a
+table that fits under the time may scroll a few pixels under the cost, and a
+sweep of the default measure never sees it. Its summary counts each group by
+measure too. It writes `sweep.json`, every miss with its
+state, selector path, owner, offset and what was found instead, prints a
+summary by class and owner, and exits 1 when anything missed. A hover or
+overflow remark is closed by its group's number falling on a store copy, not
+by a test on the spot the remark named: such a test passes while the same
+defect stands at the next mark, period or width.
 
 semgrep is the only dataflow analysis here: ruff matches patterns, semgrep
 follows a tainted value through a function. It reads the Python server alone,
@@ -108,7 +142,10 @@ venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
 `LOCALAPPDATA`, `APPDATA` and `VALKAMA_DB`, and every step's exit code counts.
 `--only python` is the Python half; `--owner` is the audit with the owner policy.
 A report cites its `DIR/record.json`, which `python tests/run_record.py check`
-refuses for another tree or state. Use it instead of a wrapper of your own, and
+refuses for another tree or state, and, given `--require NAME`, for having no
+step of that name; a step that `run` records takes the name of its command's
+words, so `run --out DIR -- typos` is the step `typos` the integrator requires
+of a worker's record. Use it instead of a wrapper of your own, and
 `serve --out DIR` with `stop --out DIR` for a live check; a test compares its
 steps with `AGENTS.md`.
 It does not move `TEMP`, which is what keeps the suite's renames from failing
@@ -175,7 +212,10 @@ temporary directory, runs `npm ci` and every npm stage there, puts the web build
 back in `web/dist`, and removes the copy without entering a link in it. A gate's
 refusal says to remove a link before running `npm ci` in a worktree. `gates`
 still reads through a link, so a worktree may share modules as long as they match
-its own lockfile.
+its own lockfile. `tests/worktree.py` makes those links where a worktree's
+lockfile is the main checkout's byte for byte, and takes them out before
+`git worktree remove`, which deletes the rest of the worktree but leaves a
+junction behind, and the directory that holds it.
 
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.

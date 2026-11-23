@@ -16,8 +16,19 @@ import type { Locator, Page } from '@playwright/test'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { markCut, openCutField, openRead, standing } from './cutFieldPage.ts'
-import { installDiscussionBackend } from './discussionBackend.ts'
+import {
+  DONE,
+  DONE_WORDS,
+  LONG_TITLE,
+  markClamp,
+  markCut,
+  openBoard,
+  openCutField,
+  outcomePreview,
+  restAt,
+  standing,
+  whole,
+} from './cutFieldPage.ts'
 import { openFinder } from './finderPage.ts'
 import { settledZoom, zoomOutButton } from './graphFieldCamera.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
@@ -117,42 +128,6 @@ for (const zoom of [1, 0.75]) {
   })
 }
 
-/** The whole words laid over a cut text. */
-const whole = (page: Page) => page.locator('.whole-text')
-
-/**
- * Marks `clamp`, a text its clamp must cut, and returns where its first letter's middle is, or
- * null where the clamp leaves it whole: the whole words over it would prove nothing.
- */
-async function markClamp(clamp: Locator) {
-  await clamp.scrollIntoViewIfNeeded()
-  return clamp.evaluate((element: HTMLElement) => {
-    if (element.scrollHeight <= element.clientHeight + 1) return null
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node as Text
-      const at = text.data.search(/\S/u)
-      if (at < 0) continue
-      const range = document.createRange()
-      range.setStart(text, at)
-      range.setEnd(text, at + 1)
-      const { left, top, width, height } = range.getBoundingClientRect()
-      element.dataset.probeCut = ''
-      return { x: left + width / 2, y: top + height / 2 }
-    }
-    return null
-  })
-}
-
-/** The pointer away from everything, then resting on `point` past the wait of a hint. */
-async function restAt(page: Page, point: { x: number; y: number }) {
-  const viewport = page.viewportSize() ?? { width: 0, height: 0 }
-  await page.mouse.move(viewport.width - 2, viewport.height - 2)
-  await expect(whole(page)).toHaveCount(0)
-  await page.mouse.move(point.x, point.y)
-  await page.clock.runFor(1000)
-}
-
 /** The whole words `words` are up, on the marked cut text's first letter and over all of it. */
 async function expectLaid(page: Page, words: string) {
   await expect(whole(page)).toBeVisible()
@@ -208,45 +183,45 @@ const targetAt = (page: Page, point: { x: number; y: number }) =>
     point,
   )
 
-/** Longer than three lines of a board column, and than two lines of the card or the finder. */
-const LONG_TITLE =
-  'Read an attached planning store that an older build wrote without migrating it, name every scope the read had to skip instead of dropping it, and say which of them a newer build can still open'
-
-/** The board, the item `workItemRef` names under `LONG_TITLE` and `MAIN-265` under its short one. */
-const openBoard = (page: Page, width: number) =>
-  openRead(
-    page,
-    width,
-    serializePlatformRoute({ module_id: 'planning', scope: spaceScope }),
-    (read) => {
-      for (const item of read.work_items as { reference: string; title: string }[])
-        if (item.reference === workItemRef.reference) item.title = LONG_TITLE
-    },
-  )
+/**
+ * The whole words laid over the marked cut text, against the clamp that cuts it: the content
+ * width and height of each and its line's height, how many lines the whole words take, and how
+ * far past the window's edges their box stands. Either missing fails the reading.
+ */
+const wholeAgainstClamp = (page: Page) =>
+  page.evaluate(() => {
+    const clamp = document.querySelector<HTMLElement>('[data-probe-cut]')
+    const laid = document.querySelector<HTMLElement>('.whole-text')
+    if (!clamp || !laid) throw new Error('no whole words over the marked clamp')
+    const inner = (element: HTMLElement) => {
+      const style = getComputedStyle(element)
+      const box = element.getBoundingClientRect()
+      const inset = (side: 'Left' | 'Right' | 'Top' | 'Bottom') =>
+        Number.parseFloat(style[`padding${side}`]) + Number.parseFloat(style[`border${side}Width`])
+      return {
+        width: box.width - inset('Left') - inset('Right'),
+        height: box.height - inset('Top') - inset('Bottom'),
+        line: Number.parseFloat(style.lineHeight),
+      }
+    }
+    const range = document.createRange()
+    range.selectNodeContents(laid)
+    const tops = new Set(
+      [...range.getClientRects()]
+        .filter((line) => line.width > 0)
+        .map((line) => Math.round(line.top)),
+    )
+    const box = laid.getBoundingClientRect()
+    const { clientHeight, clientWidth } = document.documentElement
+    return {
+      clamp: inner(clamp),
+      whole: inner(laid),
+      wholeLines: tops.size,
+      past: Math.max(0, -box.left, -box.top, box.right - clientWidth, box.bottom - clientHeight),
+    }
+  })
 
 const SHORT = 'MAIN-265'
-
-/** What was done, as an agent writes it: markdown, which the preview draws as words. */
-const DONE =
-  'Shipped **the reader** for an attached store that an older build wrote, kept every scope it could not read in a list of its own instead of dropping it, named each in the card with the build that can still open it, and left the store as it found it'
-const DONE_WORDS = DONE.replaceAll('**', '')
-
-/** The card of the item whose outcome is `done`, and the preview of that outcome on it. */
-async function outcomePreview(page: Page, done: string) {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  const backend = await installDiscussionBackend(page)
-  backend.item.summary = { done, next: 'Review' }
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: spaceScope,
-      entity: planningWorkItemEntity(workItemRef),
-    }),
-  )
-  const preview = page.locator('.drawer .outcome-preview-text')
-  await expect(preview).toBeVisible()
-  return preview
-}
 
 test.describe('a clamp off the graph', () => {
   test.beforeEach(async ({ page }) => {
@@ -267,6 +242,35 @@ test.describe('a clamp off the graph', () => {
       await page.mouse.down()
       await page.mouse.up()
       await expect(page.locator('.drawer')).toBeVisible()
+    })
+
+  // `LONG_TITLE` takes five lines at the width of a board column's tile title in a 1440px
+  // window, 319px, and six at a phone's, 254px; the clamp shows three.
+  for (const [width, lines] of [
+    [1440, 5],
+    [390, 6],
+  ] as const)
+    test(`at ${width}px the whole words of a tile's title cut at its third line keep its column and take its ${lines} lines`, async ({
+      page,
+    }) => {
+      await openBoard(page, width)
+      const tile = page.locator(`[data-reference="${workItemRef.reference}"] .work-item-tile`)
+      await expectWholeOver(page, tile.locator('.tile-title'), LONG_TITLE)
+      const { clamp, whole, wholeLines, past } = await wholeAgainstClamp(page)
+      expect(Math.round(clamp.height / clamp.line), 'the lines the clamp shows').toBe(3)
+      expect(wholeLines, 'the lines the whole words take at the width the clamp cut them').toBe(
+        lines,
+      )
+      // As wide as the clamp's column, and as high as its own lines: no empty room under them.
+      expect(
+        Math.abs(whole.width - clamp.width),
+        `${whole.width}px over ${clamp.width}px`,
+      ).toBeLessThanOrEqual(1)
+      expect(
+        Math.abs(whole.height - lines * whole.line),
+        `${whole.height}px for ${lines} lines`,
+      ).toBeLessThanOrEqual(1)
+      expect(past, 'how far past the window').toBe(0)
     })
 
   for (const width of [1440, 390])
@@ -329,10 +333,25 @@ test.describe('a clamp off the graph', () => {
       await expect(whole(page)).toHaveCount(0)
     })
 
-  test("an outcome's preview cut at its two lines shows its whole words", async ({ page }) => {
+  test("an outcome's preview cut at its two lines shows its whole words, raised to stay in the window", async ({
+    page,
+  }) => {
     const preview = await outcomePreview(page, DONE)
     await expect(preview).toContainText('Shipped the reader for')
-    await expectWholeOver(page, preview, DONE_WORDS)
+    const point = await markClamp(preview)
+    expect(point, 'a text its clamp cuts, in sight').not.toBeNull()
+    await restAt(page, point ?? { x: 0, y: 0 })
+    await expect(whole(page)).toHaveText(DONE_WORDS)
+    expect(await uncovered(page)).toEqual([])
+    // At the width the clamp cut them the words take more lines than the 900px window leaves
+    // under the preview: they stand higher, their bottom 8px short of the window's, their first
+    // letter still level with the cut text's start.
+    const laid = await whole(page).evaluate((element) => {
+      const { bottom } = element.getBoundingClientRect()
+      return { bottom, window: document.documentElement.clientHeight }
+    })
+    expect(laid.bottom).toBeCloseTo(laid.window - 8, 0)
+    await expect.poll(() => standing(page)).toMatch(/^off by -?0\.0, -\d/u)
   })
 
   test("an outcome's preview left whole shows none", async ({ page }) => {

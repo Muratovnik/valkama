@@ -34,6 +34,7 @@ import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import type { SharePart } from '@/shared/ui/MiniShareBar.vue'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import type { WindowAhead } from '@/shared/ui/windowGeometry.ts'
 
 export interface RailTileModel {
@@ -53,6 +54,8 @@ export interface RailTileModel {
   trend: { label: string; points: TrendPoint[] } | null
   /** What the lead leaves out, for its hint: a titled session's client and the start of its id. */
   leadDetail?: string
+  /** The lead in runs, where it names a task by its title (`lineRuns`): its code is code. */
+  leadRuns?: readonly TextRun[]
   /** A window of the quota as a thin bar: its share spent, its pace and its forecast's tail. */
   meter?: {
     even: number | null
@@ -102,10 +105,14 @@ export function useRailTiles(options: {
   const failed = () => standing('failed', t('analytics.rail.failed'))
   const noData = () => standing('empty', t('analytics.rail.noData'))
 
-  /** How the total moved, as words beside it. */
+  /**
+   * How the total moved, as words beside it: the rail's own short words where the figure before
+   * is not known, which the whole phrase of the table left the total no room beside.
+   */
   function moved(measure: Measure, figures: OverviewFigures, usage: Usage) {
     const { change } = figures
     if (!change || !usage.comparison) return t('analytics.rail.unread')
+    if (change.direction === 'unplaced') return t('analytics.rail.unplaced')
     if (change.direction === 'from')
       return t('analytics.rail.from', { before: words.figure(measure, change.before) })
     return words.lineChange(measure, change, figures.total, spentOf(usage.comparison.total))
@@ -148,6 +155,7 @@ export function useRailTiles(options: {
     return {
       ...standing('ready', words.lineLabel(dimension, first.line)),
       leadDetail: first.line.value ? words.valueDetail(dimension, first.line.value) : undefined,
+      leadRuns: words.lineRuns(dimension, first.line),
       quiet: first.line.kind !== 'category',
       aside: first.share === null ? words.figure(measure, first.line.spent) : share(first.share),
       // A count of none beside work with no value, the session itself in «Now», says nothing.

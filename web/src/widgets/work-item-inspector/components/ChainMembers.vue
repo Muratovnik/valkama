@@ -24,6 +24,7 @@ import { rowStateName } from '@/widgets/work-item-inspector/utils/chainSummary.t
 import type { ChainGroups, GroupLabels } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { MembersView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { readinessMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
@@ -240,10 +241,10 @@ defineExpose({ restoreView, reveal, view })
             >
               <span class="chain-row-reference">{{ member.reference }}</span>
               <span
+                v-work-item-title="member.title"
                 v-tooltip.clipped="member.title"
                 class="chain-row-title one-line"
-                >{{ member.title }}</span
-              >
+              />
               <span
                 v-for="mark in readinessFor(member)"
                 :key="mark.facet"

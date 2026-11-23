@@ -19,14 +19,27 @@
  * that names a control by its content, or reads it into a hint while it is cut, gets the whole
  * pair. `innerText` alone breaks a line between the two parts, which are boxes of their own. The
  * host keeps the line itself: its box, its ink and the hint that says the name whole.
+ *
+ * A name that holds a work item's title comes with its runs (`runs`, `titleRuns`), and is drawn in
+ * them (`textRuns.ts`): the title's code as code, without its backticks, its reference whole. Each
+ * part is drawn in its own share of the runs, cut where the end starts (`cutRuns`). A name with no
+ * runs is drawn as the text it is, so a chart, its table and its hint draw any name through this.
  */
 import { computed } from 'vue'
+
+import { cutRuns, vTextRuns } from '@/shared/ui/textRuns.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 const props = defineProps<{
   /** The whole name. */
   name: string
   /** The end of `name` that stays whole while the rest gives way, « · high». */
   end?: string
+  /**
+   * The name as the runs it is drawn in, where it holds a work item's title; `writtenText` of them
+   * is `name`.
+   */
+  runs?: readonly TextRun[]
   /** A part a line, each cut at its own end. */
   stacked?: boolean
 }>()
@@ -37,6 +50,11 @@ const start = computed(() =>
     ? props.name.slice(0, -props.end.length)
     : null,
 )
+
+/** The runs of the part that gives way and of the end, where the name has runs and an end. */
+const parts = computed(() =>
+  props.runs && start.value !== null ? cutRuns(props.runs, start.value.length) : null,
+)
 </script>
 
 <template>
@@ -44,9 +62,21 @@ const start = computed(() =>
     v-if="start !== null"
     class="pair-name"
     :class="{ 'pair-stacked': stacked }"
-    ><span class="pair-start one-line">{{ start }}</span
-    ><span class="pair-end one-line">{{ end }}</span></span
+    ><template v-if="parts"
+      ><span
+        v-text-runs="parts[0]"
+        class="pair-start one-line" /><span
+        v-text-runs="parts[1]"
+        class="pair-end one-line" /></template
+    ><template v-else
+      ><span class="pair-start one-line">{{ start }}</span
+      ><span class="pair-end one-line">{{ end }}</span></template
+    ></span
   >
+  <span
+    v-else-if="runs"
+    v-text-runs="runs"
+  />
   <template v-else>{{ name }}</template>
 </template>
 

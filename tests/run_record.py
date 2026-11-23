@@ -1,7 +1,7 @@
 """The record a run of checks leaves, and the check of one against a tree.
 
     python tests/run_record.py run --out DIR [--name NAME] [--cwd DIR] -- COMMAND ...
-    python tests/run_record.py check RECORD [--tree DIR]
+    python tests/run_record.py check RECORD [--tree DIR] [--require NAME ...]
 
 A report that says which checks passed is a claim; a record is what the runner
 wrote while it ran them. Each `gates` run writes `record.json` into its result
@@ -13,7 +13,8 @@ waited at the heavy-test gate, at what load and beside which runs, and the
 versions of the tools. A report cites the record instead of retelling it. `check` accepts a
 record made in DIR, by default this checkout, at the state DIR is in now, and
 refuses one made in another working tree, at another commit or on other
-uncommitted changes, naming each difference. Its exit code tells an accepted
+uncommitted changes, naming each difference, and with `--require NAME` one with no
+step of that name, naming it. Its exit code tells an accepted
 record of a run that passed from one of a run that failed and from a refusal;
 `check --help` lists the codes.
 
@@ -307,7 +308,8 @@ run one after another, make one record. A report cites DIR/record.json:
 CHECK_CODES = f"""exit codes:
   {PASSED}  accepted, and the run it records passed
   {FAILED}  accepted, and the run it records failed; the failed steps are named
-  {REFUSED}  refused: not a readable record of this format, or not of this tree as it is now"""
+  {REFUSED}  refused: not a readable record of this format, not of this tree as it is now,
+      or with no step of a name --require gives"""
 
 
 def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
@@ -333,9 +335,17 @@ def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
     return record, ""
 
 
-def check(path: Path, tree: Path) -> tuple[int, str]:
-    """Whether the record at `path` was made in `tree` as it is now and passed, and what to say."""
+def check(path: Path, tree: Path, required: Collection[str] = ()) -> tuple[int, str]:
+    """Whether the record at `path` was made in `tree` as it is now and passed, and what to say.
 
+    `path` is the record or the directory `run --out` wrote it in: given the directory, opening
+    it as the record answered Windows' «Permission denied» instead of reading the record there.
+    A record with no step of a name in `required` is refused: it attests nothing about that
+    check. A step is matched by its exact name, which the first run of a command takes.
+    """
+
+    if path.is_dir():
+        path = path / NAME
     record, why = _describing(path, tree)
     if record is None:
         return REFUSED, f"refused: {why}"
@@ -345,10 +355,21 @@ def check(path: Path, tree: Path) -> tuple[int, str]:
         + (f" tests={entry['tests']}" if "tests" in entry else "")
         for entry in steps
     )
+    names = {entry["name"] for entry in steps}
+    missing = [name for name in dict.fromkeys(required) if name not in names]
+    if missing:
+        return REFUSED, (
+            f"refused: {path} has no step {', '.join(missing)}, which this check requires;"
+            f" ran: {ran}"
+        )
     said = f"accepted: {path} was made in {recorded['worktree']} at {recorded['head']}"
     if record["result"] == 0:
         return PASSED, f"{said}; passed: {ran}"
-    failed = [entry["name"] for entry in steps if entry["exit"] != 0] or ["no step ran"]
+    failed = [
+        entry["name"] + (" (required)" if entry["name"] in required else "")
+        for entry in steps
+        if entry["exit"] != 0
+    ] or ["no step ran"]
     return FAILED, f"{said}; failed: {', '.join(failed)}; ran: {ran}"
 
 
@@ -456,9 +477,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         epilog=CHECK_CODES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    checking.add_argument("record", type=Path)
+    checking.add_argument(
+        "record", type=Path, help=f"the {NAME}, or the directory `run --out` wrote it in"
+    )
     checking.add_argument(
         "--tree", type=Path, default=ROOT, help="the tree; by default this checkout"
+    )
+    checking.add_argument(
+        "--require",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="refuse a record with no step of this name; repeat it for each step required",
     )
     options = parser.parse_args(argv)
     if options.command == "run":
@@ -472,7 +502,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             name=options.name,
             environment=environment,
         )
-    code, said = check(options.record, options.tree)
+    code, said = check(options.record, options.tree, options.require)
     _say(said)
     return code
 

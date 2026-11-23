@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url'
 
 import { scanScopeEscapes } from './ui-system/boundaries.mjs'
 import { DETAIL_TOOLTIPS } from './ui-system/detail-tooltips.mjs'
+import { scanFloatingPartScopes } from './ui-system/floating-parts.mjs'
 import { scanFocusRingWidths } from './ui-system/focus-rings.mjs'
 import { scanImportCycles, scanImportDirection } from './ui-system/imports.mjs'
 import {
@@ -38,7 +39,7 @@ import {
   scanTypeStyles,
   scanUiSources,
 } from './ui-system/styles.mjs'
-import { scanTitleBreaks, UNBROKEN_TITLES } from './ui-system/title-breaks.mjs'
+import { OTHER_TITLES, scanTitleBreaks } from './ui-system/title-breaks.mjs'
 import { scanTooltipImports } from './ui-system/tooltip-imports.mjs'
 import { scanTreeRoles } from './ui-system/tree-roles.mjs'
 import { scanTrimmedWords } from './ui-system/trimmed-word.mjs'
@@ -53,7 +54,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const budget = product ? LINE_BUDGET : new Map()
   const sizes = product ? CONTROL_SIZE_BUDGET : new Map()
   const fills = product ? FILL_BUDGET : new Map()
-  const titles = product ? UNBROKEN_TITLES : new Map()
+  const titles = product ? OTHER_TITLES : new Map()
   const hints = product ? NATIVE_TITLES : new Map()
   const details = product ? DETAIL_TOOLTIPS : new Map()
   const sided = product ? SIDED_TOOLTIPS : new Map()
@@ -80,6 +81,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanControlSizes(sources, sizes),
     ...scanFocusRingWidths(sources),
     ...scanScopeEscapes(sources),
+    ...scanFloatingPartScopes(sources),
     ...scanImportDirection(sources),
     ...scanImportCycles(sources),
   ]

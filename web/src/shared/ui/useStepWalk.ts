@@ -7,11 +7,13 @@
  *
  * A restart is a place on the line at its moment, where the line falls with the window's reset
  * unchanged, with its hint, as the forecast at the reset is a place past the readings. Its mark is
- * a ring around the fall the line draws there (`restartFall`), the forecast's ring in shape, so it
- * never reads as a reading's dot. The pointer finds it at its ring, and at the moment itself before
+ * a round ring, as no other place's is, centred on the middle of the fall the line draws there
+ * (`restartFall`), so it never reads as a reading's dot. The pointer finds it at its ring, and at the moment itself before
  * the reading it restarted at, which keeps its step past the ring; its box, which the keyboard's
  * ring is drawn on, is the least width of a box (`--step-reach`) centred on its moment; it covers
- * its moment alone. A restart outside the span shown stands nowhere.
+ * its moment alone. A restart outside the span shown stands nowhere. The reset between two
+ * windows of a line of several is a restart of the same kind (`zero`): the count falls to nothing
+ * at the reset, with no reading there, and its ring stands on the middle of that fall.
  */
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
@@ -19,9 +21,9 @@ import type { ComputedRef } from 'vue'
 import { targetHint } from '@/shared/ui/markHints.ts'
 import type { StepTargetPlace } from '@/shared/ui/useStepAhead.ts'
 import {
+  reachAround,
   restartFall,
   STEP_HEIGHT,
-  stepAcross,
   stepStops,
   stepY,
 } from '@/shared/ui/windowGeometry.ts'
@@ -58,23 +60,21 @@ export function useStepWalk(
     return all
       .filter((restart) => restart.at >= from && restart.at <= to)
       .map((restart) => {
-        const fall = restartFall(points, restart.at)
+        const fall = restartFall(points, restart.at, restart.zero)
         const moment = { from: restart.at, to: restart.at }
         return {
           kind: 'restart',
+          zero: restart.zero,
           key: restart.key,
           at: restart.at,
           hint: targetHint(restart, 1),
-          reach: {
-            start: `calc(${stepAcross(frame.value, restart.at)} - var(--step-reach) / 2)`,
-            size: 'var(--step-reach)',
-          },
+          reach: reachAround(frame.value, restart.at),
           mark: {
             high: stepY(frame.value, fall.high) / STEP_HEIGHT,
             low: stepY(frame.value, fall.low) / STEP_HEIGHT,
             side: '50%',
           },
-          aim: { at: restart.at, ...moment },
+          aim: { at: restart.at, ...moment, place: true },
           covers: moment,
         }
       })
@@ -85,11 +85,15 @@ export function useStepWalk(
     stepStops(shown.inside(), restarts.value).map((stop) => {
       if (stop.kind === 'reading') {
         const step = shown.step(stop.index)
-        return { ...stop, aim: { at: step.from, ...step }, covers: step }
+        return { ...stop, aim: { at: step.from, ...step, place: false }, covers: step }
       }
       const place = restarts.value[stop.index]
       const at = place?.at ?? 0
-      return { ...stop, aim: { at, from: at, to: at }, covers: { from: at, to: at } }
+      return {
+        ...stop,
+        aim: { at, from: at, to: at, place: true },
+        covers: { from: at, to: at },
+      }
     }),
   )
 

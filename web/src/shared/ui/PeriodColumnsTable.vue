@@ -26,6 +26,8 @@ import {
   stackColumns,
 } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
+import PairName from '@/shared/ui/PairName.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(defineProps<PeriodChartProps>(), {
   formatShare: undefined,
@@ -110,7 +112,13 @@ const empty = computed(() => !props.columns.length || !props.series.length)
           class="chart-cell chart-heading"
           data-numeric="true"
         >
-          {{ one.label }}
+          <span
+            v-tooltip.clipped="one.label"
+            class="two-lines"
+            ><PairName
+              :name="one.label"
+              :runs="one.labelRuns"
+          /></span>
         </th>
         <th
           scope="col"
@@ -146,16 +154,25 @@ const empty = computed(() => !props.columns.length || !props.series.length)
           scope="row"
           class="chart-cell chart-name"
         >
-          <button
-            v-if="row.one.column.action"
-            type="button"
-            class="chart-press"
-            :aria-description="row.one.column.action"
-            @click="emit('period', row.one.column.key)"
+          <span
+            v-tooltip.clipped="row.name"
+            class="chart-name-line"
           >
-            {{ row.name }}
-          </button>
-          <template v-else>{{ row.name }}</template>
+            <button
+              v-if="row.one.column.action"
+              type="button"
+              class="chart-press"
+              :aria-description="row.one.column.action"
+              @click="emit('period', row.one.column.key)"
+            >
+              <span class="two-lines">{{ row.name }}</span>
+            </button>
+            <span
+              v-else
+              class="two-lines"
+              >{{ row.name }}</span
+            >
+          </span>
         </th>
         <td
           v-for="one in series"

@@ -7,6 +7,11 @@
  * look at the same box changes nothing. Each of the three figures draws a small trend of its own
  * measure, said in words, and nothing moves as the pointer passes them. Each run prints what it
  * measured.
+ *
+ * The field is fitted in the turn its content changes, before the browser measures the page, so
+ * a chart drawn late — its read landing after the rest of the overview, landing on a retry after
+ * a failure, or drawn again after its table — stands at the room at once, with no ResizeObserver
+ * loop reported to the window.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -15,6 +20,7 @@ import { LEGEND_SERIES, pageAt, record, serve } from './analyticsPage.ts'
 import { openOverview, WORLD } from './overviewPage.ts'
 import { CHANGES } from './served/analyticsOverviewField.ts'
 import { test } from './test.ts'
+import { keepWindowErrors } from './windowErrors.ts'
 
 /** The chart's plot and the room the panel leaves under the cards, inside its padding. */
 async function plotAndRoom(page: Page) {
@@ -119,7 +125,8 @@ for (const { changes, world } of CHANGES)
     const cards = panel.locator('[data-card]')
     await expect(cards).toHaveCount(3)
     for (const card of await cards.all()) await expect(card.locator('.ranked-row')).toHaveCount(5)
-    await expect(panel.locator('[data-mark="change"]')).toHaveCount(changes)
+    // The lines up the plot; the legend keys the line once, apart from them.
+    await expect(panel.locator('[data-region="field"] [data-mark="change"]')).toHaveCount(changes)
     // Across the panel the legend takes one line.
     const legendLines = await panel
       .locator(`.overview-chart ${LEGEND_SERIES}`)
@@ -151,14 +158,13 @@ for (const { changes, world } of CHANGES)
     expect(documentBox[0]).toBe(documentBox[1])
   })
 
-/** Opens the overview of the full week at a window and draws its chart, where it opens as a table. */
+/** Opens the overview of the full week at a window, its days drawn as their chart. */
 async function fieldAt(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height })
   await page.goto(pageAt({ open: 'section' }))
   const days = page.locator('.analytics-panel .spending-days')
   await expect(days).toBeVisible()
-  if ((await days.getAttribute('data-shown')) === 'table')
-    await days.getByRole('radio', { name: 'Chart' }).click()
+  await expect(days).toHaveAttribute('data-shown', 'chart')
   await expect(days.locator('.period-field')).toBeVisible()
   await expect.poll(async () => fieldHeight(page)).toBeGreaterThanOrEqual(200)
   const measured = await plotAndRoom(page)
@@ -229,4 +235,106 @@ test('each of the three figures draws its own trend, and nothing moves under the
     await cell.locator('.mini-trend').hover()
     expect(await figuresLayout(page)).toEqual(resting)
   }
+})
+
+/**
+ * The page over the double, the read the chart draws — the period by project, which the
+ * projects' card shares — held until `answer`, or refused until then.
+ */
+async function serveChartRead(page: Page, opening: 'fail' | 'hold') {
+  let chart: 'answer' | 'fail' | 'hold' = opening
+  let land: (() => void) | undefined
+  const landed = new Promise<void>((resolve) => {
+    land = resolve
+  })
+  await serve(page, WORLD)
+  // Registered last, so it is asked first.
+  await page.route('**/api/analytics/usage?*', async (route) => {
+    const byProject = new URL(route.request().url()).searchParams.get('group_by') === 'project'
+    if (byProject && chart === 'hold') await landed
+    return byProject && chart === 'fail'
+      ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+      : route.fallback()
+  })
+  return {
+    answer: () => {
+      chart = 'answer'
+      land?.()
+    },
+  }
+}
+
+/** Two of the page's frames, each laid out, measured and drawn. */
+const twoFrames = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      }),
+  )
+
+/** A window tall enough that the field stands over its floor, in the room under the cards. */
+const TALL = { width: 1440, height: 1400 }
+
+/** The field stands at the room the panel leaves it, over its floor, and nothing was reported. */
+async function expectFieldAtRoom(page: Page, errors: () => Promise<string[]>) {
+  await expect(page.locator('.overview-chart .period-field')).toHaveCount(1)
+  await twoFrames(page)
+  const measured = await plotAndRoom(page)
+  expect(await errors(), 'errors reported to the window').toEqual([])
+  expect(measured.scrolls).toBe(false)
+  expect(measured.room).toBeGreaterThanOrEqual(0)
+  expect(measured.room).toBeLessThan(2)
+  expect(Math.round(measured.plot.height)).toBeGreaterThan(200)
+  return measured
+}
+
+test('a chart whose read lands after the rest of the overview stands at the room at once', async ({
+  page,
+}, info) => {
+  const errors = await keepWindowErrors(page)
+  const chart = await serveChartRead(page, 'hold')
+  await page.setViewportSize(TALL)
+  await page.goto(pageAt())
+  const panel = page.locator('.analytics-panel .overview-panel')
+  await expect(panel.getByRole('radiogroup', { name: 'What the charts show' })).toBeVisible()
+  await expect(panel.locator('.overview-top .ranked-row').first()).toBeVisible()
+  // The panel has been measured with no chart in it, and more than once.
+  await twoFrames(page)
+  await expect(page.locator('.overview-chart .period-field')).toHaveCount(0)
+  chart.answer()
+  await record(info, 'landed late', await expectFieldAtRoom(page, errors))
+})
+
+test('a chart whose read failed stands at the room once a read again lands', async ({
+  page,
+}, info) => {
+  const errors = await keepWindowErrors(page)
+  const chart = await serveChartRead(page, 'fail')
+  await page.setViewportSize(TALL)
+  await page.goto(pageAt())
+  const failed = page.locator('.overview-chart').getByRole('alert')
+  await expect(failed).toHaveText(
+    'The period by project could not be loaded, so its chart is not drawn.',
+  )
+  await twoFrames(page)
+  chart.answer()
+  await page.locator('.analytics-refresh').click()
+  await expect(failed).toHaveCount(0)
+  await record(info, 'after a failure', await expectFieldAtRoom(page, errors))
+})
+
+test('a chart drawn again after its table, in a window grown meanwhile, stands at the room at once', async ({
+  page,
+}, info) => {
+  const errors = await keepWindowErrors(page)
+  await serve(page, WORLD)
+  await openOverview(page, 1440, 900)
+  const days = page.locator('.overview-chart')
+  await days.getByRole('radio', { name: 'Table' }).click()
+  await expect(page.locator('.overview-chart .period-field')).toHaveCount(0)
+  await page.setViewportSize(TALL)
+  await twoFrames(page)
+  await days.getByRole('radio', { name: 'Chart' }).click()
+  await record(info, 'drawn again', await expectFieldAtRoom(page, errors))
 })

@@ -30,7 +30,7 @@ from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from server import mcp_surface, store
-from server.hooks import notify
+from server.hooks import marks, notify
 from server.planning import (
     api,
     calls,
@@ -324,7 +324,7 @@ class PersonOnTheTreeTests(Harness):
         conn = notify._connect(self.path)
         assert conn is not None
         try:
-            state = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY)
+            state = os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY)
             return bool(
                 notify.collect(conn, state, session, None, take=False, agents=False, wake=True)
             )
@@ -533,7 +533,7 @@ class MutedGoalTests(Harness):
 
 class PlacesTests(Harness):
     def marks_path(self, session: str) -> str:
-        return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, session + ".marks")
+        return os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY, session + ".marks")
 
     def test_a_version_4_file_starts_the_tree_at_the_end(self) -> None:
         self.agent("claim_work_item", AS_A, id=self.t3)
@@ -546,8 +546,8 @@ class PlacesTests(Harness):
         with open(path, "wb") as handle:
             kept = [line for line in lines[1:] if not line.startswith("@tree ")]
             handle.write(("\n".join(["v4", *kept]) + "\n").encode("ascii"))
-        self.assertEqual(notify.read_marks(path), notify.read_state(path)[0], "it reads")
-        self.assertIsNone(notify.read_state(path)[1][4], "with no place in the tree yet")
+        self.assertEqual(marks.read_marks(path), marks.read_state(path)[0], "it reads")
+        self.assertIsNone(marks.read_state(path)[1][4], "with no place in the tree yet")
         self.comment(AS_B, self.s1, "Before the upgrade, marker P-1")
         self.assertIsNone(self.hook(A), "the tree's past is not told")
         with open(path, "rb") as handle:

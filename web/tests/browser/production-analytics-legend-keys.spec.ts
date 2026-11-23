@@ -6,7 +6,8 @@
  *
  * Three legends hold every kind of key there is: the task section's, whose tasks are links and
  * whose «No task» is a button; the model section's, whose models are buttons; and the overview's,
- * with the folded «Other» and the period before, which only show. «Unknown» only shows too. A
+ * with the folded «Other», which only shows, and the period before, a layer's key and so a toggle
+ * (`production-analytics-layer-keys`). «Unknown» only shows too. A
  * button took a control's 40 pixels, so the line holding «No task» stood 40 pixels among lines
  * of 17, while a link was a 17-pixel target 4 pixels from the next line's. In each legend:
  * - every key that acts can be pressed across at least 24 pixels, up and down and across;
@@ -107,7 +108,7 @@ for (const legend of LEGENDS)
         await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
         await serve(page, legend.world)
         await openReport(page, width, legend.address)
-        // A panel too narrow for the charts opens each as its table; it is chosen back.
+        // Every section drawn as its one chart, whichever drawing it opens on.
         const tables = page.getByRole('radio', { name: CHART[locale], checked: false })
         while ((await tables.count()) > 0) await tables.first().click()
         const chartLegend = page.locator('.spending-days [data-hint-list="legend"]')

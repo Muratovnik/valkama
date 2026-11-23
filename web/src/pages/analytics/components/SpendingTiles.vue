@@ -7,7 +7,8 @@
  * they count — what was processed anew, by kind — and the cache reads they leave apart. The
  * change and each note keep one line, so the three tiles stand one height at every width; a line
  * cut short says itself whole over its own place (`clipped`), as every cut text does. Each tile's
- * figure names its measure (`data-measure`), and so tells the tiles apart from any other radio.
+ * figure names its measure (`data-measure`), and so tells the tiles apart from any other radio;
+ * its change names which way it went (`data-direction`).
  *
  * Beside each figure its measure stands step by step over the period the main chart draws — its
  * days, the hours of a single day, the minutes of the live hour — as a small trend
@@ -21,7 +22,9 @@
  * A change is an arrow and words, never a colour alone. A period before with nothing in it says
  * so rather than inventing a percentage, a rise from a base too little for a share
  * (`risenFromLittle`) says what it rose from, and a figure absent on either side — no price, no
- * token counted — gives no change, with words that say which side has none.
+ * token counted — gives no change, with words that say which side has none. Narrowed to accounts
+ * whose organizations' work on no account outweighed their own before, it says the account was
+ * not known before (`LineChange`), as the section's table does.
  *
  * Under the change the tokens and the cost say what an hour of agent time took of them, beside
  * the period before's (`perHour`): «$17.9/h, was 8.1». The line's hint says what it is of, the
@@ -37,7 +40,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { risenFromLittle } from '@/pages/analytics/utils/overviewFigures.ts'
 import { perHour, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
 import { overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
-import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { lineChangeOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -65,7 +68,7 @@ const figures = computed(() => tileFigures(props.usage))
 function moved(value: Measure) {
   const { before, total } = figures.value
   if (!before) return { direction: 'unread', words: t('analytics.change.unread') }
-  const change = changeOf(value, total, before.spent)
+  const change = lineChangeOf(value, total, before.spent, before.unplaced)
   const period = words.period(before.from, before.to)
   const steep = change.direction === 'up' && risenFromLittle(value, total, before.spent)
   return {

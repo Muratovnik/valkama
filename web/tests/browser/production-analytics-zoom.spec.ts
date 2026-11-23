@@ -6,10 +6,9 @@
  * An hour of «Today» pressed without a drag narrows the view to that hour, broken down by task,
  * and Back returns «Today».
  *
- * A window of the quota has a span of its own instead. A running window opens on its start to now
- * and the forecast past it, so its readings take at least 60 % of the plot's width, and a frame
- * dragged along its step line narrows that line alone: the page's address, its other lines and
- * its period stay as they were, and the switch takes the line back to its whole window.
+ * A window of the quota has a span of its own instead. Its step line shows the whole window, and a
+ * frame dragged along it narrows that line alone: the page's address, its other lines and its
+ * period stay as they were, and «Whole span» takes the line back.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -153,27 +152,6 @@ test.describe('an hour pressed, in Russian', () => {
   })
 })
 
-/**
- * For every running window of the quota, what share of its plot's width its readings take: from
- * the plot's start to where the line ends, now, and from its first reading to now.
- */
-const readingShares = (page: Page) =>
-  page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('.quota-window')].flatMap((window) => {
-      const field = window.querySelector('.step-field')?.getBoundingClientRect()
-      const line = window.querySelector('.step-path')?.getBoundingClientRect()
-      const running = window.querySelector('.step-views [role="radio"]') !== null
-      if (!field || !line || !running) return []
-      return [
-        {
-          window: `${window.closest('.quota-account')?.querySelector('.quota-account-name')?.textContent?.trim()} ${window.dataset.window}`,
-          toNow: (line.right - field.left) / field.width,
-          fromFirst: line.width / field.width,
-        },
-      ]
-    }),
-  )
-
 async function openQuota(page: Page, width: number, height: number) {
   await page.clock.install({ time: NOW })
   await serveLive(page, TODAY)
@@ -183,32 +161,13 @@ async function openQuota(page: Page, width: number, height: number) {
   await page.evaluate(() => document.fonts.ready)
 }
 
-for (const [width, height] of [
-  [1440, 900],
-  [1280, 800],
-] as const)
-  test(`a running window's readings take at least 60 % of its plot at ${width}×${height}`, async ({
-    page,
-  }, info) => {
-    await openQuota(page, width, height)
-    const shares = await readingShares(page)
-    await record(info, `zoom quota ${width}`, shares)
-    // Each account's week and the seat's week: every running week of the answer.
-    expect(shares.length).toBeGreaterThanOrEqual(3)
-    for (const share of shares) {
-      expect(share.toNow, share.window).toBeGreaterThanOrEqual(0.6)
-    }
-    await page
-      .locator('.quota-window')
-      .first()
-      .screenshot(shot(info, `analytics-zoom-quota-${width}.png`))
-  })
-
 /** What the axis of each window's step line names, its two ends, in the panel's order. */
 const axes = (page: Page) =>
   page.evaluate(() =>
     [...document.querySelectorAll('.quota-window')].map((window) =>
-      [...window.querySelectorAll('.step-axis span')].map((end) => end.textContent),
+      [...window.querySelectorAll('[data-region="axis"] [data-moment]')].map(
+        (end) => end.textContent,
+      ),
     ),
   )
 
@@ -235,7 +194,7 @@ async function alongFirstLine(page: Page) {
   ] as const
 }
 
-test('a frame along a step line narrows that line alone, and the switch takes it back', async ({
+test('a frame along a step line narrows that line alone, and «Whole span» takes it back', async ({
   page,
 }) => {
   await openQuota(page, 1440, 900)
@@ -247,9 +206,11 @@ test('a frame along a step line narrows that line alone, and the switch takes it
   await expect.poll(() => firstAxis(page)).not.toEqual(first)
   expect(path(page)).toBe(address)
   expect(await otherAxes(page)).toEqual(others)
-  const radios = page.locator('.quota-window').first().locator('.step-views [role="radio"]')
-  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'false')
-  await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'false')
-  await radios.nth(0).click()
+  const back = page.locator('.quota-window').first().getByRole('button', { name: 'Whole span' })
+  await expect(back).toHaveCount(1)
+  // Only the framed line offers it; once whole, none does.
+  await expect(page.getByRole('button', { name: 'Whole span' })).toHaveCount(1)
+  await back.click()
   await expect.poll(() => firstAxis(page)).toEqual(first)
+  await expect(page.getByRole('button', { name: 'Whole span' })).toHaveCount(0)
 })

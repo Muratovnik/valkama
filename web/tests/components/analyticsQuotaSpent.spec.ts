@@ -7,7 +7,8 @@
  * the panel's own switch, read as its table; the first
  * five items and one line for the rest, or by project or model a ring of every item, which it
  * opens on, while the tasks, named by free text, are a list only, the rest and work on no task
- * apart after the five; a heading that names the period it covers, and the
+ * apart after the five; a heading that names the period it covers and what its lines add up to,
+ * and none where it has no lines; and the
  * section's «ⓘ» that says once it is the API price estimate and not quota points, and that
  * claude.ai and the desktop app are not in it. Another
  * account's work is never in it, and its organization's work with no account known is said apart
@@ -28,7 +29,7 @@ import WindowDetail from '@/pages/analytics/components/WindowDetail.vue'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { momentAt, serveUsage } from '../fixtures/analytics.ts'
-import { quotaAnswer, quotaAt, SEATED_NAME, UNREAD_NAME } from '../fixtures/quota.ts'
+import { NIGHT_NAME, quotaAnswer, quotaAt, SEATED_NAME, UNREAD_NAME } from '../fixtures/quota.ts'
 import {
   isSpendRead as isSpend,
   NIGHT,
@@ -48,6 +49,16 @@ const usage = (query: URLSearchParams) => serveUsage(WORLD, query)
 
 /** Words as a reader reads them: the app keeps a figure and its unit together with a no-break space. */
 const plain = (text: string) => text.replaceAll('\u{A0}', ' ')
+/** Figures are of one width each, so a heading's room is kept by its shape, whichever minute. */
+const shape = (text: string) => text.replaceAll(/\d/gu, '0')
+/** What a part says to a reader: its words without the room it keeps unseen (`aria-hidden`). */
+function said(part: Omit<DOMWrapper<Element>, 'exists'>) {
+  const copy = part.element.cloneNode(true) as Element
+  for (const unseen of copy.querySelectorAll('[aria-hidden="true"]')) unseen.remove()
+  return plain(copy.textContent ?? '')
+    .replaceAll(/\s+/gu, ' ')
+    .trim()
+}
 
 function accountNamed(page: VueWrapper, name: string) {
   const found = page
@@ -162,9 +173,18 @@ describe('where a window went', () => {
     // Under the panel's name, one rank under it: the section's «ⓘ» is under the panel, so the
     // panel's own «ⓘ» says what the figures are and are not, and neither the panel nor the block
     // says it as a line.
-    expect(block.get('h3').text()).toBe('Window breakdown: 11:30 – 14:30')
+    // Its lines add up to the account's 13 dollars: 6, 3, 0.5, 0.5, 2 for the rest and 1 on no task.
+    expect(plain(block.get('h3').text())).toBe('Window breakdown: 11:30 – 14:30 · ≈ $13.00')
+    expect(lines(block).map(([, value]) => value)).toEqual([
+      '≈ $6.00 · 46%',
+      '≈ $3.00 · 23%',
+      '≈ $0.50 · 4%',
+      '≈ $0.50 · 4%',
+      '≈ $2.00 · 15%',
+      '≈ $1.00 · 8%',
+    ])
     const frame = document.querySelector('[data-detail="window"]')?.closest('.drawer-frame')
-    expect(frame?.textContent).toContain('Window breakdown: 11:30 – 14:30')
+    expect(plain(frame?.textContent ?? '')).toContain('Window breakdown: 11:30 – 14:30 · ≈ $13.00')
     expect(frame?.textContent).not.toContain('quota points')
     const about = [...(frame?.querySelectorAll('button') ?? [])].filter(
       (button) => button.getAttribute('aria-label') === 'About these figures',
@@ -228,7 +248,7 @@ describe('where a window went', () => {
       ['m-b', '≈ $3.00 · 23%'],
     ])
     // Another account's block still breaks down by task.
-    expect(radio(await openSpend(page, '7e6d5c4b'), 'Tasks').attributes('aria-checked')).toBe(
+    expect(radio(await openSpend(page, NIGHT_NAME), 'Tasks').attributes('aria-checked')).toBe(
       'true',
     )
     // Opened again, the window keeps its breakdown and its drawing.
@@ -298,6 +318,8 @@ describe('where a window went', () => {
     const week = await openSpend(page, 'Work', 'week')
     expect(week.get('h3').text()).toContain(': Nov 7, 14:30 – 14:30')
     expect(lines(week)[0]).toEqual(['MAIN-9 Earlier', '≈ $50.00 · 79%'])
+    // The week's lines: the five hours' 13 dollars and the 50 before them.
+    expect(plain(week.get('h3').text())).toMatch(/ · ≈ \$63\.00$/u)
   })
 })
 
@@ -306,17 +328,21 @@ describe('the states of what used a window', () => {
     stubAnalyticsReads(usage, quota)
     const page = await openFiveHours()
     // The other account's work on MAIN-1 was before its five hours began.
-    const none = await openSpend(page, '7e6d5c4b')
+    const none = await openSpend(page, NIGHT_NAME)
     expect(none.attributes('data-state')).toBe('none')
-    expect(none.get('.window-spend-body').text()).toBe(
+    expect(said(none.get('.window-spend-body'))).toBe(
       'No work was recorded on this account in this window.',
     )
+    // With no lines its heading names the stretch alone, no sum.
+    expect(none.get('h3').text()).toMatch(/^Window breakdown: \d{2}:\d{2} – \d{2}:\d{2}$/u)
     const unplaced = await openSpend(page, SEATED_NAME)
     expect(unplaced.attributes('data-state')).toBe('unplaced')
-    expect(plain(unplaced.get('.window-spend-body').text())).toBe(
+    expect(said(unplaced.get('.window-spend-body'))).toBe(
       'No work was recorded on this account in this window. Not counted here: ≈ $4.00 of work in its organization with the account unknown.',
     )
     expect(unplaced.find('.ranked-bars').exists()).toBe(false)
+    // The organization's work apart is no line of it, so it is no sum in its heading either.
+    expect(unplaced.get('h3').text()).not.toContain('$')
     // An organization no source read has no window, and so nothing to open; Work has.
     expect(accountNamed(page, UNREAD_NAME).find('[data-spend]').exists()).toBe(false)
     expect(accountNamed(page, 'Work').find('[data-spend]').exists()).toBe(true)
@@ -369,5 +395,100 @@ describe('the states of what used a window', () => {
     await flushPromises()
     expect(blockIn(page).attributes('data-state')).toBe('spent')
     expect(lines(blockIn(page))[0]).toEqual(['MAIN-1 Answer a review', '≈ $6.00 · 46%'])
+  })
+
+  it('keeps the room of the headings a newer answer can give it, with no sum and with five figures of one', async () => {
+    stubAnalyticsReads(usage, quota)
+    const page = await openFiveHours()
+    const block = await openSpend(page, 'Work')
+    const stretch = 'Window breakdown: 11:30 – 14:30'
+    expect(plain(block.get('.window-spend-title').text())).toBe(`${stretch} · ≈ $13.00`)
+    // Unseen in the heading's place (DESIGN.md § Analytics: the breakdowns beside it and the
+    // lines under it stay where they stand when a newer answer changes it).
+    const room = block
+      .findAll('.window-spend-heading [aria-hidden="true"]')
+      .map((one) => plain(one.text()))
+    // And as a later day says it, a moment of another day dated: past midnight a time takes its
+    // date (`datedStretches`).
+    const dated = 'Window breakdown: Nov 11, 11:30 – 14:30'
+    const allDated = 'Window breakdown: Nov 11, 11:30 – Nov 11, 14:30'
+    expect(room).toEqual([
+      stretch,
+      `${stretch} · ≈ $99,999.99`,
+      dated,
+      `${dated} · ≈ $99,999.99`,
+      allDated,
+      `${allDated} · ≈ $99,999.99`,
+    ])
+    expect(said(block.get('.window-spend-head'))).not.toContain('99,999')
+  })
+
+  it('keeps before midnight the room of the heading it takes after, a time taking its date', async () => {
+    // The quota is read at ten to midnight, its five hours begun at 20:50, and again at ten past,
+    // the same window: the heading's start is then a moment of another day.
+    const evening = new Date(2026, 10, 11, 23, 50)
+    const night = new Date(2026, 10, 12, 0, 10)
+    vi.setSystemTime(evening)
+    let at = evening
+    const answered = () => {
+      const window = quotaAt(evening)
+      return quotaAnswer({ ...window, now: momentAt(at.getTime(), -at.getTimezoneOffset()) })
+    }
+    stubAnalyticsReads(usage, answered)
+    const page = await openFiveHours()
+    await openSpend(page, 'Work')
+    const heading = () => plain(blockIn(page).get('.window-spend-title').text())
+    const room = () =>
+      blockIn(page)
+        .findAll('.window-spend-heading [aria-hidden="true"]')
+        .map((one) => plain(one.text()))
+    expect(heading()).toBe('Window breakdown: 20:50 – 23:50')
+    const kept = [heading(), ...room()].map((one) => shape(one))
+
+    at = night
+    vi.setSystemTime(night)
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    const after = heading()
+    expect(after, 'the start dated past midnight').toMatch(/^Window breakdown: Nov 11, 20:50 – /u)
+    expect(kept, 'its room kept before midnight').toContain(shape(after))
+  })
+
+  it('keeps its lines when a read again fails, and says so in the room it kept for those words', async () => {
+    let at = NOW
+    let fails = false
+    const reads = stubAnalyticsReads(
+      (query) => (isSpend(query) && fails ? { status: 503 } : usage(query)),
+      () => quotaAnswer(quotaAt(at)),
+    )
+    const page = await openFiveHours()
+    await openSpend(page, 'Work')
+    const first = lines(blockIn(page))[0]
+    expect(first).toEqual(['MAIN-1 Answer a review', '≈ $6.00 · 46%'])
+    // The words a read again that fails would say stand in the block unseen while an answer
+    // stands, under the status that says them (DESIGN.md § Analytics: nothing moves when it is
+    // said or when the next answer replaces it).
+    const room = () => blockIn(page).get('.window-spend-again [aria-hidden="true"]')
+    const status = () => blockIn(page).get('.window-spend-again [role="status"]')
+    expect(plain(room().text())).toMatch(/^Could not refresh; .+ Retry$/u)
+    expect(status().text()).toBe('')
+
+    // The quota answers ten minutes on, a new step of what used the window, and its read fails.
+    fails = true
+    at = new Date(NOW.getTime() + 10 * 60_000)
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(reads.quotaAsked).toHaveLength(2)
+    expect(lines(blockIn(page))[0], 'the lines it showed stay').toEqual(first)
+    expect(plain(status().text()), 'said in the words whose room it kept').toBe(
+      plain(room().text()),
+    )
+    expect(blockIn(page).findAll('.window-spend-again')).toHaveLength(1)
+
+    fails = false
+    await status().get('button').trigger('click')
+    await flushPromises()
+    expect(status().text()).toBe('')
+    expect(plain(room().text())).toMatch(/^Could not refresh; .+ Retry$/u)
   })
 })

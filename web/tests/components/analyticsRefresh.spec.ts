@@ -103,6 +103,37 @@ describe('a read again that fails', () => {
     expect(mark(page).text()).toBe('Не удалось обновить · Повторить')
   })
 
+  it('whose period before cannot be read keeps the answer on show with its comparison', async () => {
+    // Only the same days of the week before, the read asked from a moment, are refused.
+    const control = { failing: false, world: WORLD }
+    stubAnalyticsReads((query) =>
+      control.failing && query.get('from')?.includes('T')
+        ? { status: 500 }
+        : serveUsage(control.world, query),
+    )
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } })
+    const change = () => page.get('.spending-tiles .tile-change').text().replaceAll(/\s/gu, ' ')
+    const compared = change()
+    expect(compared).toContain('Nov 2 – 4')
+    expect(page.find('.spending-unread').exists()).toBe(false)
+
+    // A newer answer whose week before failed would take every change away and push the words
+    // that say so in over the figures; the answer on show stays, and the bar says the read failed.
+    control.failing = true
+    control.world = MORE
+    await refresh(page)
+    expect(time(page)).toBe('3 h')
+    expect(change()).toBe(compared)
+    expect(page.find('.spending-unread').exists()).toBe(false)
+    expect(mark(page).text()).toBe('Could not refresh · Retry')
+
+    control.failing = false
+    await mark(page).get('button').trigger('click')
+    await flushPromises()
+    expect(time(page)).toBe('4 h')
+    expect(mark(page).exists()).toBe(false)
+  })
+
   it('keeps an empty period on show', async () => {
     const { control } = readsThatFail()
     const page = await mountAnalytics({ projectId: 'empty' })

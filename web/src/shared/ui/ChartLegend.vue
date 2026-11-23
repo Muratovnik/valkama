@@ -6,15 +6,34 @@
  * legend names no lone series whatever keys it still carries (`named`). A chart
  * that hatches a period still running names the hatch after the series (`hatch`), beside a
  * hatched swatch, so the texture never has to be guessed; and a chart that marks a period it is
- * compared with names that mark last (`outline`), beside a short line in the ink the plot draws
- * it in at the height that period reached. Neither key acts, and neither is a series: each is a
- * key of a mark (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever
- * reads the series reads them alone and no series' key can meet a mark's. The hatch's key, with
- * nothing to add, says its name whole while it is cut, as an entry with no hint of its own does.
+ * compared with names that mark after them (`outline`), beside a short line in the ink the plot
+ * draws it in at the height that period reached; a chart that marks a change at a period's start
+ * names that line last (`change`), beside a short upright line in the ink the plot draws it in,
+ * so the line up the plot is read without a hint. None is a series: each is a key of a mark
+ * (`chart-mark`, `data-mark`), never a `chart-key` with a series' key, so whatever reads the series
+ * reads them alone and no series' key can meet a mark's. The hatch's key and the change's, with
+ * nothing to add, say their name whole while it is cut, as an entry with no hint of its own does.
+ *
+ * The outline and the change are layers a chart draws beside its data, and their keys are
+ * toggles: a press, by the pointer or by Enter or Space, turns that layer off on every chart that
+ * draws it, and the next turns it on again, a choice kept on this computer (`LayerKey`,
+ * `chartLayersStore`). The key stays in the legend either way, pressed while its layer shows
+ * (`aria-pressed`), and off, its swatch faint and its name in the tertiary ink struck through, so
+ * it says its state by more than a tone and is there to turn the layer back on; the chart says
+ * nothing else of it. A layer the chart lacks because its read failed keeps its key's room,
+ * unseen and out of reach (`unseen`), so nothing under the legend moves when a later read brings
+ * it: dropped, the legend could stand a line shorter and the retry moved the page under it. The
+ * hatch's key does not act: the hatch is no layer but how a period still running is drawn, and
+ * the series are the data itself, which always shows, so a column's sum never disagrees with the
+ * figures beside it.
  *
  * A legend given a figure for its entries (`figures`), as a ring's is, lists down, an entry a
  * line, each figure at the end of its line in the quiet ink, ending where the others end: a
- * column of numbers to read down beside the names.
+ * column of numbers to read down beside the names. A name too long to stand beside its figure
+ * takes its line alone and the figure the line under it, still at the end, as a ranked row's name
+ * takes a line of its own over its bar in a narrow chart (`RankedBars`): beside its figure in a
+ * ring's column at 1440 pixels, «Запись в кэш, 5 мин» and «Запись в кэш, 1 ч» were cut to «Зап…»
+ * and «Запи…», which no reader could tell apart.
  *
  * A name takes one line, as wide as the legend at most, and ends in an ellipsis where it is cut; it
  * is cut from its end, so the start that tells it apart, a task's reference, stays. A pair's first
@@ -30,27 +49,31 @@
  * under the whole legend at the entry's start, clear of every entry a reader reads it against,
  * letting the pointer through to the plot (`hintPlacement.ts`). A series that acts (`MarkAction`) is
  * pressed here as on its segments: a link sent out as `follow` with the press, a button as
- * `select` with its key. The rest only show. An entry named by what it does is described by its
- * whole name where that names a part of it, as a pair's names its first value. The pointer
+ * `select` with its key. The other series only show. An entry named by what it does is described
+ * by its whole name where that names a part of it, as a pair's names its first value. The pointer
  * or the keyboard standing on an entry is sent out as `point` with its key, and leaving it as
  * `point` with none, so the chart can lift the entry's marks.
  *
  * What a reader of the page selects it by: the list declares itself (`data-hint-list="legend"`),
  * and each line is an item of it. A series' key carries the series' key (`data-series`), its
- * swatch the slot of its hue (`data-slot`); a mark's key carries its mark (`data-mark`, `hatch` or
- * `outline`). In either, the name is `data-part="name"`, and the figure at a line's end
- * `data-part="figure"`.
+ * swatch the slot of its hue (`data-slot`); a mark's key carries its mark (`data-mark`, `hatch`,
+ * `outline` or `change`), and a layer's key, a button, whether its layer shows (`aria-pressed`);
+ * the line of a key whose room is held unseen is `data-unseen`.
+ * In either, the name is `data-part="name"`, and the figure at a line's end `data-part="figure"`.
  */
 import { computed, useId } from 'vue'
 
-import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
+import type { PeriodLayer, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 import { markPartId, markTag, markType } from '@/shared/ui/chartGeometry.ts'
+import LayerKey from '@/shared/ui/LayerKey.vue'
 import PairName from '@/shared/ui/PairName.vue'
 import type { TooltipValue } from '@/shared/ui/tooltipAnchors.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   series: readonly PeriodSeries[]
+  /** The name of the line of a change at a period's start, when the chart draws one. */
+  change?: string
   /** The figure each entry gives at the end of its line, by series key; none for a legend of names. */
   figures?: ReadonlyMap<string, string>
   /** The name of the hatch, while the chart draws a period still running. */
@@ -59,6 +82,8 @@ const props = defineProps<{
   hints?: ReadonlyMap<string, TooltipValue>
   /** The name of the mark of the period compared with, when the chart draws one. */
   outline?: string
+  /** The layers whose keys, named above, keep their room unseen: their read failed. */
+  unseen?: readonly PeriodLayer[]
 }>()
 
 const emit = defineEmits<{
@@ -113,6 +138,11 @@ function hintOf(key: string): TooltipValue {
     key === 'outline' ? props.outline : props.series.find((one) => one.key === key)?.label
   return { text: null, words }
 }
+/**
+ * Whether a layer's key keeps its room unseen, as the hook a reader selects it by: absent rather
+ * than false on a key that shows, so the hook marks the held keys alone.
+ */
+const unseenOf = (layer: PeriodLayer) => props.unseen?.includes(layer) || undefined
 /** The figure an entry gives at the end of its line; none in a legend of names. */
 const figureOf = (key: string) => props.figures?.get(key)
 </script>
@@ -153,6 +183,7 @@ const figureOf = (key: string) => props.figures?.get(key)
           ><PairName
             :name="one.label"
             :end="one.labelEnd"
+            :runs="one.labelRuns"
         /></span>
       </component>
       <span
@@ -185,10 +216,12 @@ const figureOf = (key: string) => props.figures?.get(key)
     <li
       v-if="outline"
       class="chart-entry chart-entry-mark"
+      :data-unseen="unseenOf('outline')"
     >
-      <span
+      <LayerKey
         v-tooltip.detail="hintOf('outline')"
         class="chart-mark"
+        layer="outline"
         data-mark="outline"
       >
         <span
@@ -200,7 +233,29 @@ const figureOf = (key: string) => props.figures?.get(key)
           data-part="name"
           >{{ outline }}</span
         >
-      </span>
+      </LayerKey>
+    </li>
+    <li
+      v-if="change"
+      class="chart-entry chart-entry-mark"
+      :data-unseen="unseenOf('change')"
+    >
+      <LayerKey
+        v-tooltip.clipped="change"
+        class="chart-mark"
+        layer="change"
+        data-mark="change"
+      >
+        <span
+          class="chart-change"
+          aria-hidden="true"
+        />
+        <span
+          class="chart-mark-name one-line"
+          data-part="name"
+          >{{ change }}</span
+        >
+      </LayerKey>
     </li>
   </ul>
 </template>
@@ -233,19 +288,33 @@ const figureOf = (key: string) => props.figures?.get(key)
   min-block-size: var(--space-6);
 }
 
-/* Given figures, the legend reads down, an entry a line, its figure at the line's end. */
+/* A layer's key whose read failed keeps its room: unseen, so no pointer, Tab or screen reader
+   reaches it. */
+.chart-entry[data-unseen] {
+  visibility: hidden;
+}
+
+/* Given figures, the legend reads down, an entry a line, its figure at the line's end; a name
+   that does not fit beside its figure has its line alone, the 24 pixels its key fills, and the
+   figure goes under it, at the end where the others end. */
 .chart-legend-figures {
   flex-flow: column nowrap;
 
   & .chart-entry {
-    gap: var(--space-3);
+    flex-wrap: wrap;
+    column-gap: var(--space-3);
     justify-content: space-between;
+  }
+
+  & .chart-key {
+    min-block-size: var(--space-6);
   }
 }
 
 .chart-figure {
   flex: none;
   align-self: center;
+  margin-inline-start: auto;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -289,6 +358,22 @@ const figureOf = (key: string) => props.figures?.get(key)
   inline-size: var(--space-3);
   border-block-start: var(--space-half) solid currentcolor;
   color: var(--color-text);
+  opacity: var(--layer-key-swatch-opacity, 1);
+}
+
+/* The line of a change at a period's start, as the plot draws it (`periodPlot.css`): a hair
+   upright in the tertiary ink, a forced palette's ink there. */
+.chart-change {
+  flex: none;
+  inline-size: var(--space-hair);
+  block-size: var(--space-3);
+  background: var(--color-text-tertiary);
+  opacity: var(--layer-key-swatch-opacity, 1);
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 
 .chart-swatch,

@@ -9,12 +9,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const props = defineProps<{
   group: ChainGroup
@@ -49,7 +50,7 @@ const meta = computed(() => {
       />
     </span>
     <span
-      v-slash-breaks="member.title"
+      v-work-item-title="member.title"
       class="branch-tip-title"
     />
     <span class="branch-tip-meta">{{ meta }}</span>

@@ -10,8 +10,12 @@ import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
+
+import { useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
+import { writtenText } from '@/shared/ui/textRuns.ts'
 
 import { analyticsI18n } from '../support/analyticsReads.ts'
 
@@ -20,20 +24,25 @@ const blank = () => h('span')
 
 const NBSP = '\u{A0}'
 
-function wordsIn(locale: 'en' | 'ru') {
+/** The page's words, and the words a task's card says a span of work in (`useUsageWords`). */
+function probeIn(locale: 'en' | 'ru') {
   let words: ReturnType<typeof useSpendingWords> | undefined
+  let card: ReturnType<typeof useUsageWords> | undefined
   mount(
     defineComponent({
       setup() {
         words = useSpendingWords()
+        card = useUsageWords()
         return blank
       },
     }),
     { global: { plugins: [analyticsI18n(locale)] } },
   )
-  if (!words) throw new Error('no words')
-  return words
+  if (!words || !card) throw new Error('no words')
+  return { words, card }
 }
+
+const wordsIn = (locale: 'en' | 'ru') => probeIn(locale).words
 
 const spent = (seconds: number) => ({ seconds, tokens: null, cost: null, unpriced: 0 })
 
@@ -54,6 +63,21 @@ describe('a span of agent time', () => {
         expect(words.scale('time', seconds / 3600), `${seconds} s`).toBe(said)
       }
     })
+})
+
+describe('a span of agent time beside a task’s card', () => {
+  // One rule (`spanWords`): the two largest units, each counted whole, never rounded up, so a
+  // span under a day never reads «1 дн.». The expectations are counted by hand from that rule.
+  it.each([
+    [25 * 60, `25${NBSP}мин`],
+    [23 * 3600 + 55 * 60, `23${NBSP}ч${NBSP}55${NBSP}мин`],
+    [24 * 3600, `1${NBSP}дн.`],
+    [27 * 3600, `1${NBSP}дн.${NBSP}3${NBSP}ч`],
+  ])('%i s reads %s on the page and on the card alike', (seconds, said) => {
+    const { words, card } = probeIn('ru')
+    expect(words.figure('time', spent(seconds))).toBe(said)
+    expect(card.time(seconds)).toBe(said)
+  })
 })
 
 describe('a period', () => {
@@ -209,22 +233,44 @@ describe('the name of an executor and an account', () => {
 
   it('names an account by its own name, else its weekly reset’s, else its organization and its UUID’s start', () => {
     const words = wordsIn('en')
-    const known = seat(UUID, '4T09:00Z')
+    const known = seat(UUID, null)
     expect(words.valueLabel('seat', known)).toBe('a1a1a1a1')
     useAccountNamesStore().names = { [account.id]: 'Lab' }
     expect(words.valueLabel('seat', known)).toBe('Lab · a1a1a1a1')
     // The name its weekly reset was given before its UUID was known carries over to it.
+    const reset = seat(UUID, '4T09:00Z')
     useAccountNamesStore().names = {
       [account.id]: 'Lab',
       [`${account.id}/weekly:4T09:00Z`]: 'Desk',
     }
-    expect(words.valueLabel('seat', known)).toBe('Desk')
+    expect(words.valueLabel('seat', reset)).toBe('Desk')
     useAccountNamesStore().names = {
       [`${account.id}/weekly:4T09:00Z`]: 'Desk',
       [known.id]: 'Own',
     }
-    expect(words.valueLabel('seat', known)).toBe('Own')
-    expect(words.valueDetail('seat', known)).toBeUndefined()
+    expect(words.valueLabel('seat', reset)).toBe('Own')
+    expect(words.valueDetail('seat', reset)).toBeUndefined()
+  })
+
+  it('tells an account with no name of its own apart by when its week resets, after its UUID’s start', () => {
+    vi.stubEnv('TZ', 'Europe/Berlin')
+    try {
+      // Thursday 09:00 UTC is 10:00 in Berlin in winter.
+      const known = seat(UUID, '4T09:00Z')
+      expect(wordsIn('en').valueLabel('seat', known)).toBe('a1a1a1a1 · resets Thu 10:00')
+      expect(wordsIn('ru').valueLabel('seat', known)).toBe('a1a1a1a1 · сброс чт 10:00')
+      useAccountNamesStore().names = { [account.id]: 'Lab' }
+      expect(wordsIn('en').valueLabel('seat', known)).toBe('Lab · a1a1a1a1 · resets Thu 10:00')
+      // A name of its own is the whole label: the reset tells apart only what has none.
+      useAccountNamesStore().names = { [known.id]: 'Own' }
+      expect(wordsIn('en').valueLabel('seat', known)).toBe('Own')
+      useAccountNamesStore().names = {}
+      expect(
+        wordsIn('en').seatLabel(known.id, '4T09:00Z', { name: 'Answered', organization: null }),
+      ).toBe('Answered')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('names an account known by its weekly reset by its organization and when its week resets, in local time', () => {
@@ -255,14 +301,20 @@ describe('the name of an executor and an account', () => {
     )
   })
 
-  it('says a change of accounts by their names', () => {
+  it('says a change of accounts by the accounts that came and those that left, by their names', () => {
     const words = wordsIn('ru')
-    useAccountNamesStore().names = { [`${account.id}/${UUID}`]: 'Основной' }
-    const known = seat(UUID, '4T09:00Z')
-    const other = seat('b7b7b7b7-0000-4000-8000-000000000000', '1T09:00Z')
-    expect(words.accounts([known], [known, other])).toBe(
-      'Смена аккаунта: Основной → Основной, b7b7b7b7',
-    )
+    const a = seat(UUID, null)
+    const b = seat('b7b7b7b7-0000-4000-8000-000000000000', null)
+    const c = seat('c3c3c3c3-0000-4000-8000-000000000000', null)
+    useAccountNamesStore().names = { [a.id]: 'A', [b.id]: 'B', [c.id]: 'C' }
+    // The accounts that came and those that left, as the day figures give them.
+    expect(words.accounts([b], [])).toBe('Смена аккаунта: +B')
+    expect(words.accounts([], [c])).toBe('Смена аккаунта: −C')
+    expect(words.accounts([b], [c])).toBe('Смена аккаунта: +B, −C')
+    expect(wordsIn('en').accounts([b], [a])).toBe('Account change: +B, −A')
+    // An account with no name of its own is said as everywhere else on the page.
+    useAccountNamesStore().names = {}
+    expect(wordsIn('en').accounts([b], [])).toBe('Account change: +b7b7b7b7')
   })
 
   it('names an account the owner left unnamed by the start of its id', () => {
@@ -270,5 +322,65 @@ describe('the name of an executor and an account', () => {
     const words = wordsIn('en')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
     expect(words.valueDetail('account', account)).toBeUndefined()
+  })
+})
+
+describe('the name of a task whose title holds code', () => {
+  const coded = {
+    id: '00000000-0000-4000-8000-000000000007',
+    unknown: false,
+    reference: 'MAIN-7',
+    title: 'Raise `STORE_SCHEMA_VERSION` to 18',
+  }
+  const model = { id: 'model-a', unknown: false }
+  const line = (second?: SpendingLine['second']): SpendingLine => ({
+    folded: 0,
+    key: 'one',
+    kind: 'category',
+    spent: spent(60),
+    value: coded,
+    ...(second ? { second } : {}),
+  })
+
+  it('is written with its backticks, and drawn in runs that set its code as code', () => {
+    const words = wordsIn('en')
+    expect(words.valueLabel('work_item', coded)).toBe('MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18')
+    expect(words.valueRuns('work_item', coded)).toEqual([
+      { kind: 'reference', text: 'MAIN-7' },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: 'Raise ' },
+      { kind: 'code', text: 'STORE_SCHEMA_VERSION' },
+      { kind: 'text', text: ' to 18' },
+    ])
+  })
+
+  it('keeps a pair whole as written, its end drawn as text, and either side may be the task', () => {
+    const words = wordsIn('en')
+    const byModel = line({ dimension: 'model', value: model })
+    expect(words.lineLabel('work_item', byModel)).toBe(
+      'MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18 · model-a',
+    )
+    expect(writtenText(words.lineRuns('work_item', byModel) ?? [])).toBe(
+      'MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18 · model-a',
+    )
+    const taskSecond = {
+      ...byModel,
+      value: model,
+      second: { dimension: 'work_item', value: coded },
+    }
+    expect(writtenText(words.lineRuns('model', taskSecond as SpendingLine) ?? [])).toBe(
+      'model-a · MAIN-7 Raise `STORE_SCHEMA_VERSION` to 18',
+    )
+  })
+
+  it('has no runs where its name holds no title: no task, a deleted one, a model, the tail', () => {
+    const words = wordsIn('en')
+    expect(words.valueRuns('work_item', { id: null, unknown: false })).toBeUndefined()
+    expect(words.valueRuns('work_item', { ...coded, reference: null, title: null })).toBeUndefined()
+    expect(words.valueRuns('model', model)).toBeUndefined()
+    expect(words.lineRuns('work_item', { ...line(), value: null, kind: 'other' })).toBeUndefined()
+    expect(words.valueRuns('work_item', { ...coded, title: null })).toEqual([
+      { kind: 'reference', text: 'MAIN-7' },
+    ])
   })
 })

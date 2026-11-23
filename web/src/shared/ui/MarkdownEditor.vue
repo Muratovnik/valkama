@@ -42,6 +42,7 @@ import MarkdownToolbar from '@/shared/ui/MarkdownToolbar.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import { useTabIds } from '@/shared/ui/tabIds.ts'
 import TabPanel from '@/shared/ui/TabPanel.vue'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import { useEditorImages } from '@/shared/ui/useEditorImages.ts'
 import { useEditorSuggestions } from '@/shared/ui/useEditorSuggestions.ts'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -58,6 +59,8 @@ export interface EditorSuggestion {
   /** What is written into the text when the row is chosen. */
   reference: string
   title: string
+  /** A task's title as the runs it is drawn in (`titleRuns`); a row without them shows `title` as text. */
+  runs?: readonly TextRun[]
 }
 
 const props = withDefaults(

@@ -11,7 +11,8 @@
  *   hours at 74 % and fresh, the tightest five hours, and its week at 20 %.
  *
  * The tightest window of each kind is therefore never the first account, so a tile that named the
- * first account rather than the tightest would say the wrong one.
+ * first account rather than the tightest would say the wrong one. No window says how a window
+ * before it ended unless a spec gives it one (`previous`), and the store keeps a year.
  */
 import type { Quota, QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 
@@ -32,6 +33,12 @@ export const NIGHT = {
   account_uuid: '7e6d5c4b-3a29-4180-9f8e-7d6c5b4a3928',
 }
 export const UNREAD = { organization: '9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a' }
+
+/**
+ * The poll as an answer says it when the owner turned it on: a model's week and the usage
+ * credits, which it alone reads, are then read as every other window.
+ */
+export const POLL_ON: Quota['poll'] = { on: true, only: ['extra_usage', 'week_model'] }
 const SEATED = { organization: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' }
 
 type Reading = [ago: number, percent: number]
@@ -40,7 +47,7 @@ type Reading = [ago: number, percent: number]
  * A window that is a share of a limit: its readings so many ms before `now`, the last of them
  * the latest, its reset `left` ms after `now`, and its state by the age of the latest.
  */
-function share(
+export function share(
   now: number,
   offset: number,
   window: {
@@ -50,6 +57,8 @@ function share(
     readings: Reading[]
     source: QuotaShareWindow['latest']['source']
     model?: string
+    /** How the window before it ended; none by default. */
+    previous?: QuotaShareWindow['previous']
     /** Where its count restarted, as many ms before `now` as one of its readings. */
     restarts?: number[]
   },
@@ -77,6 +86,7 @@ function share(
     readings,
     restarts: (window.restarts ?? []).map((ago) => at(now - ago)),
     forecast: window.forecast,
+    previous: window.previous ?? null,
   }
 }
 
@@ -219,7 +229,14 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
       ],
     },
   ]
-  return { now: at(moment), utc_offset: offset, fresh_for_seconds: 900, accounts }
+  return {
+    now: at(moment),
+    utc_offset: offset,
+    fresh_for_seconds: 900,
+    retained_from: at(moment - 365 * DAY),
+    poll: POLL_ON,
+    accounts,
+  }
 }
 
 /** The answer as the server sends it. */
@@ -232,19 +249,42 @@ const WEEKDAYS = {
 }
 
 /**
- * What the page calls the account known by its weekly reset alone, which falls on Sunday at 09:00
- * UTC, in the reader's own time and language: «a1b2c3d4 · resets Sun 12:00» at +03:00 in English.
+ * An account by what names it and when its week resets, `isoDay` at `hours`:`minutes` UTC, in the
+ * reader's own time and language: «a1b2c3d4 · resets Sun 12:00» at +03:00 in English.
  */
-export function seatedName(locale: 'en' | 'ru' = 'en') {
-  // 7 January 2024 was a Sunday.
-  const reset = new Date(Date.UTC(2024, 0, 7, 9))
+export function withReset(
+  name: string,
+  [isoDay, hours, minutes]: [number, number, number],
+  locale: 'en' | 'ru',
+) {
+  // 1 January 2024 was a Monday, so 1–7 January are the ISO weekdays in order.
+  const reset = new Date(Date.UTC(2024, 0, isoDay, hours, minutes))
   const time = [reset.getHours(), reset.getMinutes()]
     .map((part) => String(part).padStart(2, '0'))
     .join(':')
   const resets = locale === 'ru' ? 'сброс' : 'resets'
-  return `a1b2c3d4 · ${resets} ${WEEKDAYS[locale][reset.getDay()] ?? ''} ${time}`
+  return `${name} · ${resets} ${WEEKDAYS[locale][reset.getDay()] ?? ''} ${time}`
 }
+
+/**
+ * What the page calls the account known by its weekly reset alone, which falls on Sunday at 09:00
+ * UTC (`7T09:00Z`), in the reader's own time and language.
+ */
+export const seatedName = (locale: 'en' | 'ru' = 'en') => withReset('a1b2c3d4', [7, 9, 0], locale)
 export const SEATED_NAME = seatedName()
+
+/**
+ * What the page calls «Night», the account known by its UUID that nobody named: the start of its
+ * UUID and when its week resets, Wednesday at 23:00 UTC (`3T23:00Z`), in the reader's own time.
+ */
+export const nightName = (locale: 'en' | 'ru' = 'en') => withReset('7e6d5c4b', [3, 23, 0], locale)
+export const NIGHT_NAME = nightName()
+
+/**
+ * What a page that does not have the quota's answer to name it by calls «Work»: the start of its
+ * UUID and when its week resets, Monday at 09:00 UTC (`1T09:00Z`), in the reader's own time.
+ */
+export const workName = (locale: 'en' | 'ru' = 'en') => withReset('0b7d4e19', [1, 9, 0], locale)
 /** What the page calls the organization that worked and that no source read. */
 export const UNREAD_NAME = '9f8e7d6c · account not known'
 

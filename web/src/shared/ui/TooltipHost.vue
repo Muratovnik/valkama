@@ -38,7 +38,7 @@
  *   its widest cells before it opens, and the main row of the part of its area that the pointer or
  *   the keyboard stands on (`data-tooltip-row`) is marked, without opening the hint again.
  */
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
 import { HoverCardContent, HoverCardPortal, HoverCardRoot, VisuallyHidden } from 'reka-ui'
 
@@ -158,18 +158,42 @@ const widestStyle = computed(() =>
   place.value?.widest ? { '--tooltip-widest': `${place.value.widest}px` } : undefined,
 )
 
+/** What the shown hint's mark is watched by, while it shows: its change asks for its place again. */
+let markWatch: MutationObserver | null = null
+/** What a mark's change that asks for its place again is: its point, its look, its size. */
+const MARK_CHANGES = ['data-hint-point', 'class', 'style']
+
 // As a hint opens on an element, measured then: whether its words are cut, and where it stands.
+// Where it stands is asked again while it shows, on the mark as drawn then, whenever the mark
+// changes — a ring's point following the pointer round a sector, a reading's dot drawn larger
+// under the pointer after the hint was placed — and once the page's faces have loaded, since
+// a width measured in a face not yet loaded is another face's.
 watch(shown, (element) => {
+  markWatch?.disconnect()
+  markWatch = null
   const tooltip = element ? tooltipOf(element) : undefined
   if (!element || !tooltip) return
   whole.value = Boolean(tooltip.words) && textIsClipped(element)
   const words = whole.value ? [tooltip.words] : []
   const lines = [...words, ...tooltip.text.split('\n'), tooltip.note]
-  const width = tooltip.body ? bodyWidth(tooltip.body) : hintWidth(lines)
   // Words hidden whole name an icon that stands alone, as a name does.
   const kind = tooltip.clipped ? 'name' : tooltip.kind
-  place.value = hintPlaceOf(element, { asked: tooltip.asked, kind }, width)
+  const placeNow = () => {
+    if (shown.value !== element) return
+    const width = tooltip.body ? bodyWidth(tooltip.body) : hintWidth(lines)
+    place.value = hintPlaceOf(element, { asked: tooltip.asked, kind }, width)
+  }
+  placeNow()
+  const mark = place.value?.markElement
+  if (mark) {
+    markWatch = new MutationObserver(placeNow)
+    markWatch.observe(mark, { attributes: true, attributeFilter: MARK_CHANGES })
+  }
+  // A page laid out by no engine, as a test's, has no faces to wait for.
+  const faces = document.fonts as FontFaceSet | undefined
+  if (faces && faces.status !== 'loaded') void faces.ready.then(placeNow)
 })
+onScopeDispose(() => markWatch?.disconnect())
 </script>
 
 <template>

@@ -18,7 +18,7 @@ import { timedList } from './timedChecks.ts'
  * fit a Windows command line. So the list never goes on one: it is written to a file
  * Playwright reads with `--test-list`, and the runner refuses, before Playwright starts, a
  * list that is empty, a list file that is missing, a name that is no spec, a clipboard
- * spec that `--with-clipboard=<file>` does not name, and a listed spec no project of
+ * spec that `--with-clipboard=<spec name>` does not name, and a listed spec no project of
  * `playwright.config.ts` runs, which Playwright would leave out without a word: a list runs
  * whole or not at all. Playwright runs with `clipboardOptIn` set when `--with-clipboard` names
  * a spec, and without it otherwise.
@@ -142,7 +142,7 @@ function selectSpecs(request: Request, io: RunnerIo): string[] {
   const clipboard = names.filter((name) => !allowed(name))
   if (clipboard.length > 0)
     throw new Refusal(
-      `${clipboard.join(', ')} write the clipboard; name each with --with-clipboard=<file>`,
+      `${clipboard.join(', ')} write the clipboard; name each with --with-clipboard=<spec name>`,
     )
   return names
 }

@@ -4,6 +4,14 @@
     "now": "2026-01-02T03:04:05.000+03:00",
     "utc_offset": 180,
     "fresh_for_seconds": 900,
+    "retained_from": "2026-01-02T03:04:05.000+03:00",
+    "poll": {
+      "on": false,
+      "only": [
+        "extra_usage",
+        "week_model"
+      ]
+    },
     "accounts": [
       {
         "account": "00000000-0000-4000-8000-000000000023/00000000-0000-4000-8000-000000000024",
@@ -46,6 +54,16 @@
               "runs_out_at": "2026-01-02T03:04:05.000+03:00",
               "at_reset_percent": null,
               "basis": "blend"
+            },
+            "previous": {
+              "started_at": "2026-01-02T03:04:05.000+03:00",
+              "resets_at": "2026-01-02T03:04:05.000+03:00",
+              "latest": {
+                "at": "2026-01-02T03:04:05.000+03:00",
+                "source": "poll",
+                "used_percent": 30.0
+              },
+              "ran_out": false
             }
           },
           {
@@ -71,7 +89,8 @@
             "forecast": {
               "low_percent": 71.75,
               "high_percent": 71.75
-            }
+            },
+            "previous": null
           },
           {
             "kind": "week_model",
@@ -96,7 +115,8 @@
             "forecast": {
               "low_percent": 21.88,
               "high_percent": 21.88
-            }
+            },
+            "previous": null
           },
           {
             "kind": "extra_usage",
@@ -156,7 +176,8 @@
             "forecast": {
               "low_percent": 224.0,
               "high_percent": 224.0
-            }
+            },
+            "previous": null
           }
         ]
       }

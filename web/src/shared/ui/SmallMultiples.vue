@@ -15,7 +15,9 @@
  * share of the whole where the caller says how a share reads (`formatShare`), whole however it is
  * cut; a period of a chart, where the caller names the periods (`periods`), says its figure and
  * its name. A hint stands at its mark (`data-hint-mark`): a name's at the name, a period's at its
- * column, or at its floor where it has none, and may stand over a neighbouring chart.
+ * column, or at its floor where it has none, and may stand over a neighbouring chart. A period
+ * takes the pointer over its whole height and its half of the gap to each neighbour, and a little
+ * past the plot's ends and under its floor, so a column a pixel wide answers a pointer aimed at it.
  * Presentational: a name whose value acts (`MarkAction`) is pressed as its value's row is, a link
  * sent out as `follow` with the press, a button as `select` with the key; the rest only show. A
  * name named by what it does is described by its whole words where that names a part of them.
@@ -26,7 +28,7 @@ import { markPartId, markTag, roundAxis } from '@/shared/ui/chartGeometry.ts'
 import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { multiplePeriodHint, namedHint } from '@/shared/ui/markHints.ts'
-import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
+import { placeMultiples, shownValue } from '@/shared/ui/multiplesGeometry.ts'
 import type {
   MultiplePeriod,
   MultiplesWords,
@@ -45,6 +47,11 @@ const props = defineProps<{
   periods?: readonly MultiplePeriod[]
   /** The scale, where its top is other than a round step said as `formatValue` says it. */
   valueAxis?: ValueAxis
+  /**
+   * What each name's share is of, where the caller left out values that say nothing of how much
+   * (`drawnLines`); what every chart adds up to by default.
+   */
+  whole?: number
   /** A share of the whole as the reader reads it, «42 % of the total», for each name's hint. */
   formatShare?: (ratio: number) => string
   /** A value as the reader reads it, for the scale's top and each period's hint. */
@@ -58,15 +65,17 @@ const placed = computed(() =>
 )
 const top = computed(() => placed.value.topText)
 
-/** A chart's figure over the span: what its periods add up to. */
+/** A chart's figure over the span: what its periods add up to, the ones it does not name too. */
 const figureOf = (one: SmallMultiple) =>
   one.values.reduce<number>(
     (sum, value) => sum + (value !== null && Number.isFinite(value) && value > 0 ? value : 0),
     0,
   )
 
-/** What every chart adds up to, of which each name's hint says its share. */
-const whole = computed(() => props.multiples.reduce((sum, one) => sum + figureOf(one), 0))
+/** What each name's hint says its share of: the caller's whole, or what every chart adds up to. */
+const whole = computed(
+  () => props.whole ?? props.multiples.reduce((sum, one) => sum + figureOf(one), 0),
+)
 
 /** The hue a chart's swatch draws in: its columns', where it draws a chart; none apart. */
 const slotOf = (one: PlacedMultiple) =>
@@ -74,7 +83,7 @@ const slotOf = (one: PlacedMultiple) =>
 
 const nameHint = (one: PlacedMultiple) =>
   namedHint(
-    { label: one.label, value: figureOf(one), slot: slotOf(one) },
+    { label: one.label, labelRuns: one.labelRuns, value: figureOf(one), slot: slotOf(one) },
     whole.value,
     props.formatShare,
   )
@@ -82,11 +91,15 @@ const nameHint = (one: PlacedMultiple) =>
 /** A period of a chart in its hint: its name and its figure, where the periods are named. */
 function periodHint(one: PlacedMultiple, index: number) {
   const period = props.periods?.[index]
-  const value = one.values[index]
+  const value = shownValue(one, index)
   const figure =
     value === null || value === undefined ? (props.words.absent ?? '—') : props.formatValue(value)
   return period
-    ? multiplePeriodHint({ label: one.label, slot: slotOf(one) }, period.label, figure)
+    ? multiplePeriodHint(
+        { label: one.label, labelRuns: one.labelRuns, slot: slotOf(one) },
+        period.label,
+        figure,
+      )
     : undefined
 }
 
@@ -153,7 +166,8 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             ><span :id="wordsId(one)"
               ><PairName
                 :name="one.label"
-                :end="one.labelEnd" /></span
+                :end="one.labelEnd"
+                :runs="one.labelRuns" /></span
           ></component>
           <span class="multiple-value">{{ one.valueText }}</span>
           <span
@@ -205,7 +219,8 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             ><span :id="wordsId(one)"
               ><PairName
                 :name="one.label"
-                :end="one.labelEnd" /></span
+                :end="one.labelEnd"
+                :runs="one.labelRuns" /></span
           ></component>
           <span class="multiple-value">{{ one.valueText }}</span>
         </li>
@@ -295,11 +310,31 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
 }
 
 .multiple-period {
+  position: relative;
   display: flex;
   flex: 1 1 0;
   align-items: flex-end;
   min-width: 0;
   block-size: 100%;
+
+  /* Where the pointer finds a period: its whole height and its half of the gap to each
+     neighbour, and past the plot's ends and under its floor as far as a pointer aimed at the
+     column may stand off it (`hintReach.ts`). A span of sixty minutes draws columns a pixel
+     wide, and 3px past the last one the pointer stood on nothing. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset-block: 0 calc(-1 * var(--space-1));
+    inset-inline: calc(-0.5 * var(--space-half));
+  }
+
+  &:first-child::after {
+    inset-inline-start: calc(-1 * var(--space-1));
+  }
+
+  &:last-child::after {
+    inset-inline-end: calc(-1 * var(--space-1));
+  }
 }
 
 /* A period's column lifts under the pointer (`seriesFill.css`): the period's whole height is

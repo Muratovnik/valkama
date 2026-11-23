@@ -5,12 +5,17 @@
  * that opens something in the chart opens it from its name here, as `select` with its key, and
  * a row that leads somewhere is a link from its name, pressed as `follow`. A name that acts heads
  * its row, so it is named by the row's name, and what pressing it does is its description.
+ *
+ * A name takes two lines at most, then an ellipsis, and its detail a line of its own under it,
+ * cut at its end; the hint of the name's line says both whole while either is cut.
  */
 import { computed } from 'vue'
 
 import type { RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
 import { rankRows } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
+import PairName from '@/shared/ui/PairName.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   /** What the table shows, as its caption: "Time by project". */
@@ -32,6 +37,9 @@ const ordered = computed(() => {
   const { ranked, rest } = rankRows(props.rows, props.rankAll)
   return [...ranked, ...rest].map((row) => ({ ...row, rest: row.kind !== 'category' }))
 })
+
+/** A row's name and what it leaves out, as the hint says them while they are cut. */
+const whole = (row: RankedRow) => (row.detail ? `${row.label} ${row.detail}` : row.label)
 
 /** Nothing to table: the chart's empty words stand instead. */
 const empty = computed(() => !props.rows.length)
@@ -72,33 +80,54 @@ const empty = computed(() => !props.rows.length)
           scope="row"
           class="chart-cell chart-name"
         >
-          <a
-            v-if="row.href"
-            class="chart-press"
-            :href="row.href"
-            :aria-description="row.action"
-            :data-key="row.key"
-            @click="(event: MouseEvent) => emit('follow', row.key, event)"
-            @auxclick="(event: MouseEvent) => pressAside(row.key, event)"
-          >
-            {{ row.label }}
-          </a>
-          <button
-            v-else-if="row.actionable"
-            type="button"
-            class="chart-press"
-            :aria-description="row.action"
-            :data-key="row.key"
-            @click="emit('select', row.key)"
-          >
-            {{ row.label }}
-          </button>
-          <template v-else>{{ row.label }}</template>
           <span
-            v-if="row.detail"
-            class="chart-detail"
-            >{{ row.detail }}</span
+            v-tooltip.clipped="whole(row)"
+            class="chart-name-line"
           >
+            <!-- The link's words are the name `PairName` writes as text, which the rule cannot see. -->
+            <!-- eslint-disable-next-line vuejs-accessibility/anchor-has-content -->
+            <a
+              v-if="row.href"
+              class="chart-press"
+              :href="row.href"
+              :aria-description="row.action"
+              :data-key="row.key"
+              @click="(event: MouseEvent) => emit('follow', row.key, event)"
+              @auxclick="(event: MouseEvent) => pressAside(row.key, event)"
+            >
+              <span class="two-lines"
+                ><PairName
+                  :name="row.label"
+                  :runs="row.labelRuns"
+              /></span>
+            </a>
+            <button
+              v-else-if="row.actionable"
+              type="button"
+              class="chart-press"
+              :aria-description="row.action"
+              :data-key="row.key"
+              @click="emit('select', row.key)"
+            >
+              <span class="two-lines"
+                ><PairName
+                  :name="row.label"
+                  :runs="row.labelRuns"
+              /></span>
+            </button>
+            <span
+              v-else
+              class="two-lines"
+              ><PairName
+                :name="row.label"
+                :runs="row.labelRuns"
+            /></span>
+            <span
+              v-if="row.detail"
+              class="chart-detail one-line"
+              >{{ row.detail }}</span
+            >
+          </span>
         </th>
         <td
           class="chart-cell"

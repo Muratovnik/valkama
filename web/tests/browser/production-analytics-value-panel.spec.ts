@@ -78,6 +78,8 @@ const WORLD: TimedStretch[] = [
   },
 ]
 const VALUES = 16
+/** The values «All N» counts, as the rail's tile does: the fourteen tasks, no row apart. */
+const TASKS = 14
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
 
@@ -261,7 +263,9 @@ for (const locale of ['en', 'ru'] as const)
 
       // Every value of the section, from «All N» under the list.
       const all = bars.locator('[data-all]')
-      await expect(all).toHaveText(fill(said.panel.bars.all.split(' | ')[0] ?? '', { count: '16' }))
+      await expect(all).toHaveText(
+        fill(said.panel.bars.all.split(' | ')[0] ?? '', { count: String(TASKS) }),
+      )
       await all.click()
       const every = await panelNamed(
         page,
@@ -455,7 +459,7 @@ test('in Russian, work with no task opens a panel with no card, and «Добав
     .poll(() => path(page))
     .toBe(pageAt({ by: 'work_item', filters: '{"work_item":[null]}' }))
   await expect(panel).toBeHidden()
-  await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveText([
+  await expect(page.locator('.analytics-bar-chips [data-filter-chip]')).toHaveText([
     'Задача: Без задачи',
   ])
 })

@@ -123,10 +123,10 @@ write, so the item stops reading as held; `applied.transition.released` names th
 holder, and the item's `last_claim_ref` keeps it. Reopening the item restores no
 claim: claim it again to work it. A terminal state is refused while a step is open
 or without a summary. It is also refused with `person_spoke` while the owner did
-something on the item that no agent has been told: the refusal quotes it. Read it,
-write what you did about it (a comment is enough), then close; a comment in the
-same call as the close does not count. `force: true` carries a refusal through and
-records it as `overridden`: use it only when the record would still be true.
+something on the item you were not told of (by an answer to a write of yours, or a
+notice of Valkama's hook while you held it): read what it quotes, write what you did
+about it as a comment in a call of its own, then close in the next. `force: true`
+carries a refusal through as `overridden`: use it only when the record stays true.
 
 **A goal or stage** completes only with nothing open under it (`children`). When
 the last item under one closes, it awaits confirmation and you hear it (the

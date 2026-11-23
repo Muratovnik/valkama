@@ -5,15 +5,21 @@
  * names as many periods as it has room for, counted back from the last. A period still running
  * is hatched (`hatch.css`), so a short last column does not read as a drop, and while one is on
  * the plot the legend names the hatch (`words.hatch`); a change at the start of a period
- * (the account switched) is a line up the plot in the gap before it, and the period's hint, name
- * and table row say what changed: no row of the chart is kept for it, above the plot or under it.
+ * (the account switched) is a line up the plot in the gap before it, which the legend names while
+ * the plot marks one (`words.change`), and the period's hint, name and table row say what changed —
+ * a period that acts has it in its name after the action — and no row of the chart is kept for
+ * it, above the plot or under it.
  * A period compared with this one (`before`) stands on the same scale as a tick at its height
  * across each column, an edge in the text's main ink and not a hue, named in the legend, and the
  * period's hint says its figure. The tick reaches 4px past each side of its column, where no
  * border between two segments ever reaches, so it is never read as a gap in a grey stack; where a
  * period's room leaves less, it reaches what it can and stays a hair inside that room
- * (`periodPlot.css`). A series with no figure in a period (`absent`, such as work with no price)
- * draws nothing there, and the hint and the period's name say so rather than a zero. A period whose
+ * (`periodPlot.css`). The tick and the line of a change are layers beside the data, which their
+ * keys in the legend turn off and on for every chart at once (`chartLayersStore`): a layer turned
+ * off is not drawn, and no hint, name or step of the scale counts it, so a period before that was
+ * taller no longer holds the scale up; its key stays, and nothing else says it is off. The
+ * columns are the data and always show. A series with no figure in a period (`absent`, such as
+ * work with no price) draws nothing there, and the hint and the period's name say so rather than a zero. A period whose
  * figures are not in yet (`pending`) stands as a hatched ground the plot's height, never a column
  * of zero, and its hint and name say it has no data yet. `PeriodColumnsTable` is the same periods
  * as a table.
@@ -94,6 +100,7 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { FRAME_KEYS } from '@/shared/ui/useAxisFrame.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
 import { usePeriodFrame } from '@/shared/ui/usePeriodFrame.ts'
+import { usePeriodLayers } from '@/shared/ui/usePeriodLayers.ts'
 import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
 const props = withDefaults(
@@ -120,10 +127,10 @@ const emit = defineEmits<{
 }>()
 
 const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
-const chart = computed(() => stackColumns(props.columns, props.series, props.marks, axis.value))
-/** The name of the mark of a period compared with, where the chart draws one. */
-const outline = computed(() =>
-  props.columns.some((column) => column.before) ? props.words.before : undefined,
+/** The layers beside the data, as the plot draws them and as the legend names them. */
+const { columns: drawnColumns, keys, marks: drawnMarks, outline } = usePeriodLayers(() => props)
+const chart = computed(() =>
+  stackColumns(drawnColumns.value, props.series, drawnMarks.value, axis.value),
 )
 /** The name of the hatch while a period still running is on the plot, which is hatched. */
 const hatch = computed(() =>
@@ -177,11 +184,14 @@ useEventListener(
   () => (fontsArrived.value += 1),
 )
 
-/** The names of the time axis, each measured in the axis's font (`ChartTicks`, `--font-count`). */
+/**
+ * The names of the time axis, each measured in the axis's font and its figures of one width
+ * (`ChartTicks`, `--font-count`, `tabular-nums`).
+ */
 const days = computed(() => {
   void fontsArrived.value
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-count').trim()
-  const measure = (text: string) => drawnWidth(text, font)
+  const measure = (text: string) => drawnWidth(text, font, 'tabular')
   return dayTicks(props.columns, width.value, measure)
 })
 
@@ -231,7 +241,9 @@ function columnAttrs(one: StackedColumn, index: number) {
   return {
     'type': acts ? 'button' : undefined,
     'role': acts ? undefined : 'img',
-    'aria-label': one.column.action ?? columnSummary(one, props.words, props.formatValue),
+    'aria-label': one.column.action
+      ? [one.column.action, ...one.marks].join('. ')
+      : columnSummary(one, props.words, props.formatValue),
     'tabindex': tabStop(index, null),
     'data-cell': cellId(index, null),
     'aria-keyshortcuts': props.frames ? FRAME_KEYS : undefined,
@@ -302,10 +314,12 @@ function focus(event: FocusEvent, index: number, at: number | null) {
     />
     <template v-else>
       <ChartLegend
-        v-if="series.length > 1 || outline || hatch"
+        v-if="series.length > 1 || keys.outline || hatch || keys.change"
         :series="series"
         :hatch="hatch"
-        :outline="outline"
+        :outline="keys.outline"
+        :change="keys.change"
+        :unseen="keys.unseen"
         :hints="legendHints"
         @follow="(key, event) => emit('follow', key, event)"
         @select="(key) => emit('series', key)"
@@ -380,7 +394,7 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                 <span
                   class="period-stack"
                   :class="{ 'period-incomplete': one.column.incomplete }"
-                  :style="heightOf(one.total)"
+                  :style="heightOf(one.drawn)"
                   data-hint-mark
                 >
                   <component

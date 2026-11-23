@@ -9,8 +9,17 @@
  */
 
 /* A table wider than its column, as a phone makes one of a period table, scrolls in its own
-   frame instead of widening the page; Tab reaches the frame while it scrolls (`keyScroll`). */
+   frame instead of widening the page; Tab reaches the frame while it scrolls (`keyScroll`).
+   The frame is the containing block of what its table places out of the flow, the words only a
+   screen reader reads (`visually-hidden`) among them, so that scrolls and is clipped with the
+   table: placed against the panel instead, the comma before a quota share's remark, in a table
+   scrolled past its frame, stood 150px past the panel at 390px and scrolled the panel sideways. */
 .chart-table-frame {
+  /* What the headings over figures give from their floor; the frame sets it as it measures
+     (`chartTableGive.ts`), and a frame inside another starts from none. */
+  --chart-table-give: 0px;
+
+  position: relative;
   max-width: 100%;
   overflow-x: auto;
 }
@@ -40,9 +49,10 @@
 }
 
 /* A series named at length, a task by its title, wraps over its figures instead of widening
-   the table by its whole name; its figures still keep to one line. */
+   the table by its whole name; its figures still keep to one line. Where the floors would leave
+   the table a sliver past its frame, the headings at theirs give it (`chartTableGive.ts`). */
 .chart-heading[data-numeric='true'] {
-  min-inline-size: 8em;
+  min-inline-size: calc(8em - var(--chart-table-give, 0px));
   white-space: normal;
 }
 
@@ -55,6 +65,21 @@
   color: var(--color-text);
   font: inherit;
   overflow-wrap: break-word;
+}
+
+/* The name heading a row takes two lines at most, then an ellipsis (`.two-lines`), and a detail a
+   line of its own under it, cut at its end; the line around them holds the hint that says them
+   whole, which the focus on a press inside it shows too. Unbounded, a task's long name took as
+   many lines as its words did in a phone's narrow column, and its row as tall. A press holding
+   the clamp stands on the line's top, since a box that cuts gives the line no baseline, and is no
+   wider than it. */
+.chart-name-line {
+  display: block;
+
+  & .chart-press {
+    vertical-align: top;
+    max-inline-size: 100%;
+  }
 }
 
 /* In a table wider than its frame the name heading each row, and the heading over the names,

@@ -14,6 +14,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { NIGHT_NAME } from '../fixtures/quota.ts'
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { routeState, shot } from './boardPage.ts'
 import { drawLined } from './drawnViews.ts'
@@ -101,7 +102,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       await serve(page)
       await page.setViewportSize({ width, height: 1000 })
       await page.goto(pageAt())
-      await expect(entry(page, 'quota_week').locator('.rail-tile-lead')).toHaveText('7e6d5c4b')
+      await expect(entry(page, 'quota_week').locator('.rail-tile-lead')).toHaveText(NIGHT_NAME)
 
       // The quota's tiles after the token kinds, before the dimensions.
       const sections = await page
@@ -116,9 +117,11 @@ for (const colorScheme of ['light', 'dark'] as const)
       ])
       await expect(entry(page, 'quota_five_hour')).toContainText('a1b2c3d4')
       await expect(entry(page, 'quota_five_hour')).toContainText('74%')
-      await expect(entry(page, 'quota_five_hour')).toContainText('up to date')
+      // The five hours run out before their reset, so the tile says when in place of its state.
+      await expect(entry(page, 'quota_five_hour')).toContainText('runs out at 15:10')
       await expect(entry(page, 'quota_week')).toContainText('88%')
-      await expect(entry(page, 'quota_week')).toContainText('no data for')
+      await expect(entry(page, 'quota_week')).toContainText('older reading')
+      await expect(entry(page, 'quota_week')).not.toContainText('no data')
       await expectNoSilentClipping(page, `rail at ${width}px`, '.analytics-rail')
       // The pointer over the quota's tiles moves no tile.
       const rail = await boxes(page)
@@ -193,10 +196,10 @@ for (const colorScheme of ['light', 'dark'] as const)
     })
 
 for (const width of [390, 1440])
-  test(`at ${width}px every switch of a drawn window stands inside the window`, async ({
+  test(`at ${width}px every control of a drawn window stands inside the window`, async ({
     page,
   }, info) => {
-    // A narrow page opens on the table; drawn, a window's switches once ran past its edge.
+    // Drawn, a window's switch of its line's span once ran past its edge. The switch is gone; «Breakdown» and the line of the window before stand there.
     await serve(page)
     await page.setViewportSize({ width, height: 1000 })
     await page.goto(pageAt())
@@ -204,17 +207,17 @@ for (const width of [390, 1440])
       await choose(page, section)
       await settled(page)
       await drawLined(page.locator('.chart-section').first())
-      // Each window by its hook (`QuotaWindow`), and each switch in it by its role.
-      const { past, switches, windows } = await page
+      // Each window by its hook (`QuotaWindow`), and each control in it by its role.
+      const { controls, past, windows } = await page
         .locator('[data-window]')
         .evaluateAll((found) => {
           const groups = found.map((window) => [
             window,
-            [...window.querySelectorAll('[role="radiogroup"]')],
+            [...window.querySelectorAll('button, [role="radiogroup"]')],
           ])
           return {
             windows: found.length,
-            switches: groups.reduce((all, [, one]) => all + (one as Element[]).length, 0),
+            controls: groups.reduce((all, [, one]) => all + (one as Element[]).length, 0),
             past: groups.flatMap(([window, one]) => {
               const edge = (window as Element).getBoundingClientRect().right
               return (one as Element[])
@@ -227,8 +230,8 @@ for (const width of [390, 1440])
           }
         })
       expect(windows, `${section}: the windows drawn`).toBeGreaterThan(0)
-      expect(switches, `${section}: the switches drawn`).toBeGreaterThan(0)
-      expect(past, `${section}: switches past their window`).toEqual([])
+      expect(controls, `${section}: the controls drawn`).toBeGreaterThan(0)
+      expect(past, `${section}: controls past their window`).toEqual([])
       await page
         .locator('.analytics-panel')
         .screenshot(shot(info, `quota-drawn-${section}-${width}.png`))

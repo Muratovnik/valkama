@@ -19,8 +19,12 @@ const RING_SECTORS = 5
 export const RING_BOX = 100
 const OUTER = 50
 const INNER = 31
-/** The ground between two sectors, in the box's units: two pixels across a ring of 11rem. */
-const GAP = 1.2
+/**
+ * The ground between two sectors, in the box's units: two pixels across a ring of 11rem. Each
+ * sector takes the pointer over its half of it (`DonutChart`), so the ground answers for the
+ * nearer sector.
+ */
+export const RING_GAP = 1.2
 
 /** The key of the sector the smaller parts fold into; no value's key is written so. */
 const REST_KEY = ' rest'
@@ -65,11 +69,18 @@ const drawable = (value: number) => (Number.isFinite(value) && value > 0 ? value
  * never folded while a smaller one is named. On a page whose ranking is the ring's the first four
  * hues are named; filtered, a value of the fifth or sixth hue can stand among them, and the ring
  * then names fewer rather than two parts a reader could take for one.
+ *
+ * `whole` is what the shares are of where the caller leaves parts out that say nothing of how
+ * much (`drawnLines`): each sector is then its share of that whole, as the bars of the same rows
+ * say it, and the ring stays open by what was left out rather than stretching the rest over it.
+ * The rows' own sum, and a closed ring, by default and wherever the given whole is no larger.
  */
-export function ringOf(rows: readonly RankedRow[], limit = RING_SECTORS): Ring {
+export function ringOf(rows: readonly RankedRow[], limit = RING_SECTORS, whole?: number): Ring {
   const { ranked, rest } = rankRows(rows, true)
   const drawn = ranked.filter((row) => drawable(row.value) > 0)
-  const whole = drawn.reduce((sum, row) => sum + drawable(row.value), 0)
+  const sum = drawn.reduce((total, row) => total + drawable(row.value), 0)
+  const open = whole !== undefined && Number.isFinite(whole) && whole > sum
+  const of = open ? whole : sum
   const room = drawn.length > limit ? Math.max(0, limit - 1) : drawn.length
   const hueOf = (row: RankedRow, index: number) => row.slot ?? ((index + 1) as SeriesSlot)
   const named: RankedRow[] = []
@@ -97,15 +108,15 @@ export function ringOf(rows: readonly RankedRow[], limit = RING_SECTORS): Ring {
     })
   let at = 0
   const sectors = parts.map((part) => {
-    const share = whole ? part.value / whole : 0
+    const share = of ? part.value / of : 0
     const sector = { ...part, share, start: at, end: at + share }
     at += share
     return sector
   })
-  // The last sector closes the ring whatever the sum's rounding left.
+  // The last sector closes the ring whatever the sum's rounding left, unless parts were left out.
   const last = sectors.at(-1)
-  if (last) last.end = 1
-  return { sectors, whole, notes: rest }
+  if (last && !open) last.end = 1
+  return { sectors, whole: of, notes: rest }
 }
 
 /** The point at `radius` from the centre, `turn` of the way round from 12 o'clock. */
@@ -126,7 +137,7 @@ function circle(radius: number, sweep: 0 | 1) {
 }
 
 /** How far in from a sector's edge, in turns, its outline starts at `radius`: half the gap. */
-const inset = (radius: number) => Math.asin(GAP / 2 / radius) / (2 * Math.PI)
+const inset = (radius: number) => Math.asin(RING_GAP / 2 / radius) / (2 * Math.PI)
 /** An arc's large-arc flag: whether it runs past half the ring. */
 const largeArc = (from: number, to: number) => (to - from > 0.5 ? 1 : 0)
 
@@ -156,7 +167,40 @@ export function sectorPath(start: number, end: number): string {
   ].join(' ')
 }
 
-/** The middle of a sector's band, in the ring's box: the point its hint stands at (`data-hint-point`). */
+/** The radius of the middle of the band, where a sector's hint stands. */
+const MIDDLE = (OUTER + INNER) / 2
+
+/**
+ * The middle of a sector's band, in the ring's box: the point its hint stands at
+ * (`data-hint-point`) where no pointer stands on it, as under the keyboard.
+ */
 export function bandMiddle(sector: Pick<RingSector, 'start' | 'end'>) {
-  return pointAt((sector.start + sector.end) / 2, (OUTER + INNER) / 2)
+  return pointAt((sector.start + sector.end) / 2, MIDDLE)
+}
+
+/** How far round the ring the point `x`, `y` of its box stands, in turns from 12 o'clock clockwise. */
+export function turnAt(x: number, y: number): number {
+  const turn = Math.atan2(x - RING_BOX / 2, RING_BOX / 2 - y) / (2 * Math.PI)
+  return turn < 0 ? turn + 1 : turn
+}
+
+/**
+ * The point of a sector's band where the pointer stands on it at `turn`: on the band's middle, at
+ * that turn, held a gap inside the sector's ends, so a sector that runs round most of the ring has
+ * its hint by the pointer wherever it stands on it rather than at the middle of the sector, half
+ * the ring away. A turn read across 12 o'clock counts from whichever side is nearer the sector.
+ * A sector with no room between its ends keeps the middle of its band.
+ */
+export function bandAt(sector: Pick<RingSector, 'start' | 'end'>, turn: number) {
+  if (sector.end - sector.start >= 1) return pointAt(turn, MIDDLE)
+  const from = sector.start + 2 * inset(MIDDLE)
+  const to = sector.end - 2 * inset(MIDDLE)
+  if (to <= from) return bandMiddle(sector)
+  const held = (one: number) => Math.min(Math.max(one, from), to)
+  let nearest = { at: held(turn), off: Math.abs(held(turn) - turn) }
+  for (const one of [turn - 1, turn + 1]) {
+    const off = Math.abs(held(one) - one)
+    if (off < nearest.off) nearest = { at: held(one), off }
+  }
+  return pointAt(nearest.at, MIDDLE)
 }

@@ -35,9 +35,8 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
-from . import listener_owners, processes
+from . import atomic_files, listener_owners, processes, source_archive
 from .ops import configuration, desktop_app
-from .store_adoption import rename_when_free
 
 SCHEMA_VERSION = 1
 MANIFEST_NAME = "valkama-launcher.json"
@@ -214,6 +213,40 @@ def checkout_revision(checkout: str | os.PathLike[str], revision: str = "HEAD") 
     return _git(root, "rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}")
 
 
+def _pinned_source(
+    origin: Path, revision: str = "HEAD"
+) -> tuple[str, source_archive.SourceArchive | None]:
+    """The commit an install pins from `origin`, and the archive to copy it from.
+
+    A Git clone answers through Git, as it always has. A directory with no `.git`
+    that holds the record a release build writes is an unpacked source archive:
+    it holds one commit, the recorded one, and every file it lists is checked
+    before anything is pinned.
+    """
+
+    if not (origin / ".git").exists() and (origin / source_archive.RECORD).is_file():
+        try:
+            archive = source_archive.verify(origin)
+        except source_archive.SourceArchiveError as error:
+            raise LauncherError(str(error)) from error
+        if revision not in {"HEAD", archive.commit}:
+            raise LauncherError(
+                f"{origin} is the source archive of commit {archive.commit} and holds no"
+                f" other: install it without --revision, or pin {revision} from a Git clone"
+            )
+        return archive.commit, archive
+    try:
+        return checkout_revision(origin, revision), None
+    except LauncherError as error:
+        if (origin / ".git").exists():
+            raise
+        raise LauncherError(
+            f"{error}. launcher install pins from the root of a Git clone of Valkama, or from"
+            " a directory a release's valkama-<version>-source.zip was unpacked into whole,"
+            f" which holds {source_archive.RECORD}; {origin} is neither"
+        ) from error
+
+
 def _read_release_record(root: Path) -> dict | None:
     try:
         document = json.loads((root / RELEASE_RECORD).read_text(encoding="utf-8"))
@@ -244,12 +277,56 @@ def _release_problem(root: Path, revision: str) -> str | None:
     return None
 
 
-def pin_release(checkout: Path, revision: str, releases: Path) -> Path:
+def _git_tree(checkout: Path, revision: str) -> Callable[[Path], None]:
+    """Archive the commit now, and return what unpacks it into a staging directory."""
+
+    try:
+        archive = subprocess.run(
+            ["git", "-C", str(checkout), "archive", "--format=tar", revision],
+            capture_output=True,
+            check=False,
+            timeout=120,
+            creationflags=processes.NO_WINDOW,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise LauncherError(f"git could not archive {revision}: {error}") from error
+    if archive.returncode != 0:
+        detail = archive.stderr.decode("utf-8", "replace").strip()
+        raise LauncherError(f"git could not archive {revision}: {detail}")
+
+    def unpack(staging: Path) -> None:
+        try:
+            with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as bundle:
+                bundle.extractall(staging, filter="data")
+        except tarfile.TarError as error:
+            raise LauncherError(f"commit {revision} could not be unpacked: {error}") from error
+
+    return unpack
+
+
+def _archive_tree(archive: source_archive.SourceArchive) -> Callable[[Path], None]:
+    def copy(staging: Path) -> None:
+        try:
+            archive.copy(staging)
+        except source_archive.SourceArchiveError as error:
+            raise LauncherError(str(error)) from error
+
+    return copy
+
+
+def pin_release(
+    checkout: Path,
+    revision: str,
+    releases: Path,
+    archive: source_archive.SourceArchive | None = None,
+) -> Path:
     """Write one commit of the checkout as an immutable release, or reuse it.
 
     The copy comes from `git archive`, so it holds exactly what the commit
-    holds: uncommitted edits cannot reach it, and neither can ignored files. It
-    is staged beside its final name and renamed into place whole, so a release
+    holds: uncommitted edits cannot reach it, and neither can ignored files. From
+    an unpacked source archive it holds the files the archive's record lists,
+    each checked against its digest as it is copied, and nothing else. It is
+    staged beside its final name and renamed into place whole, so a release
     directory either exists complete or not at all. An existing one is reused
     only after every file is checked against the hashes it was written with;
     one that has been edited is refused rather than repaired, because a process
@@ -266,26 +343,10 @@ def pin_release(checkout: Path, revision: str, releases: Path) -> Path:
             )
         return target
     releases.mkdir(parents=True, exist_ok=True)
-    try:
-        archive = subprocess.run(
-            ["git", "-C", str(checkout), "archive", "--format=tar", revision],
-            capture_output=True,
-            check=False,
-            timeout=120,
-            creationflags=processes.NO_WINDOW,
-        )
-    except (OSError, subprocess.TimeoutExpired) as error:
-        raise LauncherError(f"git could not archive {revision}: {error}") from error
-    if archive.returncode != 0:
-        detail = archive.stderr.decode("utf-8", "replace").strip()
-        raise LauncherError(f"git could not archive {revision}: {detail}")
+    unpack = _git_tree(checkout, revision) if archive is None else _archive_tree(archive)
     staging = Path(tempfile.mkdtemp(prefix=f".{revision[:12]}.", dir=releases))
     try:
-        try:
-            with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as bundle:
-                bundle.extractall(staging, filter="data")
-        except tarfile.TarError as error:
-            raise LauncherError(f"commit {revision} could not be unpacked: {error}") from error
+        unpack(staging)
         if not (staging / "valkama.py").is_file():
             raise LauncherError(f"commit {revision} has no valkama.py at its root")
         record = {
@@ -299,7 +360,7 @@ def pin_release(checkout: Path, revision: str, releases: Path) -> Path:
                 "utf-8"
             )
         )
-        rename_when_free(str(staging), str(target))
+        atomic_files.rename_when_free(str(staging), str(target))
     finally:
         if staging.exists():
             shutil.rmtree(staging)
@@ -343,22 +404,6 @@ def _command_bytes(platform_name: str, python: Path) -> tuple[bytes, int]:
         f'exec {interpreter} "$SCRIPT_DIR/{SHIM_NAME}" "$@"\n'
     )
     return text.encode("utf-8"), 0o755
-
-
-def _atomic_write(path: Path, data: bytes, mode: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(handle, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temporary, mode)
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
 
 
 def _read_manifest(path: Path) -> tuple[dict[str, object] | None, str | None]:
@@ -556,6 +601,36 @@ def _names_on_demand(command_line: str) -> bool:
         return False
 
 
+def _environment_base(python: Path) -> tuple[bool, Path | None]:
+    """Whether `python` belongs to a virtual environment, and the interpreter it starts.
+
+    A virtual environment's python.exe on Windows is a redirector: it starts the
+    interpreter its `pyvenv.cfg` names as `home` as a child, and that child is the
+    process that holds a port. The server runs on the system Python with no
+    third-party imports, so that interpreter is the one to record, and the one a
+    listener of this launcher is known by. The base is None when the environment
+    names none that exists.
+    """
+
+    if not python.is_absolute():
+        return False, None
+    for folder in (python.parent, python.parent.parent):
+        config = folder / "pyvenv.cfg"
+        if not config.is_file():
+            continue
+        try:
+            lines = config.read_text(encoding="utf-8").splitlines()
+        except (OSError, ValueError):
+            return True, None
+        for line in lines:
+            key, separator, value = line.partition("=")
+            if separator and key.strip().lower() == "home":
+                base = Path(value.strip()) / python.name
+                return True, base.resolve() if base.is_absolute() and base.is_file() else None
+        return True, None
+    return False, None
+
+
 def _classify_listener_processes(
     port: int,
     python: str | os.PathLike[str],
@@ -613,7 +688,15 @@ def _classify_listener_processes(
         }
     # Autostart runs the windowed interpreter that sits beside the recorded one, so
     # a listener started at login has no console window. That is the same Python.
-    interpreters = (python, ntpath.join(ntpath.dirname(os.fspath(python)), WINDOWED_PYTHON))
+    # An install from before `_environment_base` may have recorded a virtual
+    # environment's redirector, whose listener runs as the base interpreter: known
+    # by that, it is the one the next install stops and starts again as the base.
+    recorded = (
+        os.fspath(python),
+        ntpath.join(ntpath.dirname(os.fspath(python)), WINDOWED_PYTHON),
+    )
+    bases = (_environment_base(Path(path))[1] for path in recorded)
+    interpreters = (*recorded, *(str(base) for base in bases if base is not None))
     managed = [
         pid
         for pid, owner in unique.items()
@@ -632,13 +715,18 @@ def _classify_listener_processes(
             "detail": f"port {port} is owned by managed launcher process {pid}",
             **({"on_demand": True} if _names_on_demand(str(owner["command_line"])) else {}),
         }
-    listed = ", ".join(str(pid) for pid in sorted(unique))
+    # Named by program and process, so the person deciding what to stop can tell
+    # which application holds the port without looking the number up.
+    listed = ", ".join(
+        f"{ntpath.basename(str(unique[pid]['executable_path']))} (process {pid})"
+        for pid in sorted(unique)
+    )
     return {
         "state": "foreign",
         "port": port,
         "pid": next(iter(unique)) if len(unique) == 1 else None,
         "detail": (
-            f"port {port} is held by process {listed} that was not started by the managed "
+            f"port {port} is held by {listed} that was not started by the managed "
             "Valkama launcher; Valkama left it untouched. Stop that process or choose "
             "another port, then try again."
         ),
@@ -1042,6 +1130,9 @@ def install(
 ) -> dict[str, object]:
     """Pin one commit of a checkout and point the stable command at it.
 
+    The checkout is a Git clone, or a directory a release's source archive was
+    unpacked into, which holds the one commit its record names.
+
     A listener holding the port on demand has code of the release it started from,
     and would load it on the next connection. So it stops before the pin moves and
     starts again after, proved by `stop_listener` as any stop is. A plain `serve` and
@@ -1065,12 +1156,20 @@ def install(
         )
 
     origin = Path(checkout).expanduser().resolve() if checkout else default_checkout()
-    commit = checkout_revision(origin, revision)
-    interpreter = Path(python).expanduser().resolve() if python else Path(sys.executable).resolve()
+    commit, archive = _pinned_source(origin, revision)
+    chosen = Path(python).expanduser().resolve() if python else Path(sys.executable).resolve()
+    in_environment, base = _environment_base(chosen)
+    if in_environment and base is None:
+        # Recording the redirector would make every listener it starts unprovable.
+        raise LauncherError(
+            f"{chosen} belongs to a virtual environment whose pyvenv.cfg names no base "
+            "interpreter that exists; run launcher install with the Python it was made from"
+        )
+    interpreter = base or chosen
     if not interpreter.is_file():
         raise LauncherError(f"Python interpreter is missing: {interpreter}")
     release_root = Path(releases).expanduser().resolve() if releases else default_releases(platform)
-    source = pin_release(origin, commit, release_root) / "valkama.py"
+    source = pin_release(origin, commit, release_root, archive) / "valkama.py"
 
     shim = _shim_bytes(source)
     command, command_mode = _command_bytes(platform, interpreter)
@@ -1095,9 +1194,10 @@ def install(
     stopped = _stop_on_demand(root, platform, port, used) if holding else None
 
     try:
-        _atomic_write(paths["shim"], shim, stat.S_IREAD | stat.S_IWRITE)
-        _atomic_write(paths["command"], command, command_mode)
-        _atomic_write(paths["manifest"], manifest_bytes, stat.S_IREAD | stat.S_IWRITE)
+        paths["shim"].parent.mkdir(parents=True, exist_ok=True)
+        atomic_files.write(paths["shim"], shim, mode=stat.S_IREAD | stat.S_IWRITE)
+        atomic_files.write(paths["command"], command, mode=command_mode)
+        atomic_files.write(paths["manifest"], manifest_bytes, mode=stat.S_IREAD | stat.S_IWRITE)
     except OSError:
         # The install failed, and that is what the caller hears, but the address of a
         # work item has to go on working from whatever the pin still says.

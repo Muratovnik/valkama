@@ -12,6 +12,7 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
 import type { StandingItem } from '@/shared/lib/standing.ts'
+import { referencedTitleRuns } from '@/shared/lib/titleRuns.ts'
 import { treeRows } from '@/shared/lib/treeRows.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
@@ -89,6 +90,7 @@ export function parentChoices(
       return {
         value: item.reference,
         label: `${item.reference} · ${item.title}`,
+        runs: referencedTitleRuns(item.reference, item.title),
         description: [above.join(' › '), stateName(item)].filter(Boolean).join(' · '),
       }
     }),

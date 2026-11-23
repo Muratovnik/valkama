@@ -10,6 +10,8 @@ its schema and probed here through the tool layer — one character over the
 published limit refused with that limit, a value at it not refused for its length
 — or named below with why the server holds it to no length of its own. A new
 string field is in neither until someone decides which, and the test says so.
+A field the schema spells out once and points to from elsewhere publishes, where
+it is pointed to, the limits written where it is spelled out.
 """
 
 from __future__ import annotations
@@ -58,6 +60,14 @@ NO_LENGTH_OF_THEIR_OWN = {
 #: project's Git repository has resolved the hash.
 NOT_PROBED = {("apply_work_item_changes", "commits[].label"): 200}
 
+#: Fields the schema spells out once and only points to here, by the tool, the
+#: path pointed from and the path spelled out: every agent reads the schema whole,
+#: so a copy cost its size on every load.
+SPELLED_OUT_ONCE = {
+    ("apply_work_item_changes", "comments[].list"): "comment.list",
+    ("apply_work_item_changes", "summary.list"): "comment.list",
+}
+
 
 def string_fields(schema: dict, path: str = "") -> Iterator[tuple[str, dict]]:
     """Each string field of `schema` with its path: `a.b` inside an object, `a[]` in a list."""
@@ -73,11 +83,21 @@ def string_fields(schema: dict, path: str = "") -> Iterator[tuple[str, dict]]:
 
 
 def published() -> dict[tuple[str, str], dict]:
-    return {
+    fields = {
         (tool["name"], path): field
         for tool in tools.TOOLS
         for path, field in string_fields(tool["inputSchema"])
     }
+    for (name, pointer), source in SPELLED_OUT_ONCE.items():
+        under = [(path, field) for (tool, path), field in fields.items() if tool == name]
+        spelled = [(path, field) for path, field in under if path.startswith(f"{source}.")]
+        assert spelled, f"{name}: nothing spelled out at {source}"
+        assert not any(path.startswith(f"{pointer}.") for path, _ in under), (
+            f"{name}: {pointer} is spelled out again"
+        )
+        for path, field in spelled:
+            fields[(name, pointer + path.removeprefix(source))] = field
+    return fields
 
 
 class SchemaLimitTests(unittest.TestCase):

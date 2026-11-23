@@ -10,6 +10,7 @@ import { defineComponent, h, nextTick, withDirectives } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { titleRuns } from '@/shared/lib/titleRuns.ts'
 import type { TooltipBody } from '@/shared/ui/tooltipAnchors.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import TooltipHost from '@/shared/ui/TooltipHost.vue'
@@ -120,5 +121,40 @@ describe('a hint drawn as a grid', () => {
     expect(grid).not.toContain('tooltip-body-shares')
     expect(hint?.querySelectorAll('.tooltip-body-swatch, .tooltip-body-share')).toHaveLength(0)
     expect(cells(hint, '.tooltip-body-head span')).toEqual(['Monday'])
+  })
+
+  it('draws a name its mark draws in runs in the same runs, its code as code', async () => {
+    const head = 'MAIN-7 Raise `STORE_SCHEMA_VERSION`'
+    const row = 'MAIN-8 Move `web/src/a-b.ts`'
+    const coded: TooltipBody = {
+      head: { name: head, runs: titleRuns(head) },
+      rows: [{ key: 'b', slot: 1, name: row, runs: titleRuns(row), figure: '2 h' }],
+    }
+    mounted = mount(surface, { props: { body: coded }, attachTo: document.body })
+    const hint = await focusByKey('.period')
+    expect(cells(hint, '.tooltip-body-name')).toEqual([
+      'MAIN-7 Raise STORE_SCHEMA_VERSION',
+      'MAIN-8 Move web/src/a-b.ts',
+    ])
+    expect(cells(hint, '.tooltip-body-name code')).toEqual([
+      'STORE_SCHEMA_VERSION',
+      'web/src/a-b.ts',
+    ])
+    // The row that can be marked holds its room by an unseen copy of its name in the same runs;
+    // the head, which is never marked, holds none.
+    expect(cells(hint, '.tooltip-body-main .tooltip-body-held')).toEqual([
+      'MAIN-8 Move web/src/a-b.ts',
+    ])
+    expect(cells(hint, '.tooltip-body-main .tooltip-body-held code')).toEqual(['web/src/a-b.ts'])
+    expect(hint?.querySelectorAll('.tooltip-body-head .tooltip-body-held')).toHaveLength(0)
+    // A name with no runs is the text it is, backticks and all: only a title is cut into runs.
+    mounted.unmount()
+    mounted = mount(surface, {
+      props: { body: { head: { name: 'Run `npm test`' }, rows: [] } },
+      attachTo: document.body,
+    })
+    const plain = await focusByKey('.period')
+    expect(cells(plain, '.tooltip-body-name')).toEqual(['Run `npm test`'])
+    expect(plain?.querySelector('code')).toBeNull()
   })
 })

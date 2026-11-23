@@ -1,8 +1,9 @@
 /**
- * No sentence of the Analytics page doubles its full stop after a period or a day named in it.
- * A period named by its days ends in a month cut short in Russian, «2–5 нояб.», so a message that
- * ends in the name and is closed by a stop — its own, or the one a hint adds between sentences —
- * read «нояб..». The oracle is the reader's: one stop where a sentence ends, in both languages,
+ * No sentence of the Analytics page doubles its full stop after a period, a day or a moment named
+ * in it. A period named by its days ends in a month cut short in Russian, «2–5 нояб.», and so does
+ * a week's run-out, «к ночи на 21 нояб.», so a message that ends in the name, or in a phrase that
+ * ends in one, and is closed by a stop — its own, or the one a hint adds between sentences — read
+ * «нояб..». The oracle is the reader's: one stop where a sentence ends, in both languages,
  * whatever label the message is given.
  */
 import { describe, expect, it } from 'vitest'
@@ -12,8 +13,15 @@ import { sentences } from '@/shared/lib/sentences.ts'
 
 import { flatten } from './fixtures/analyticsWords.ts'
 
-/** The placeholders a period, a day or a date is put into. */
-const LABELS = new Set(['period', 'day', 'date', 'from', 'to'])
+/**
+ * The placeholders whose words can end in a stop of their own: those a period, a day or a date is
+ * put into, and those that carry a moment or a phrase that ends in one, as the quota's words fill
+ * them (`useQuotaWords`): `at`, a moment and a week's run-out «к ночи на 21 нояб.»
+ * (`runOutWords`, put into `forecast.runs_out` and `forecast.shortBy`); `forecast`, the forecast
+ * that ends in that run-out (`forecast`, `forecastLine`, `forecastAt`); `bar`, the bar's words that
+ * end in the forecast (`barLabel`); and `readings`, the readings each said «57% at {at}».
+ */
+const LABELS = new Set(['period', 'day', 'date', 'from', 'to', 'at', 'forecast', 'bar', 'readings'])
 /** A label that ends in a stop of its own, as the shortest Russian months do. */
 const CUT_SHORT = '2–5 нояб.'
 
@@ -55,5 +63,12 @@ describe('sentences', () => {
     expect(sentences(['Tokens', '', null, '↓ 55% к периоду 2–5 нояб.', 'Read anew', 'last'])).toBe(
       'Tokens. ↓ 55% к периоду 2–5 нояб. Read anew. last',
     )
+  })
+
+  it('closes the last sentence too where the words are said whole, with one stop', () => {
+    expect(sentences(['Read', 'примерно к ночи на 21 нояб.', null], { closed: true })).toBe(
+      'Read. примерно к ночи на 21 нояб.',
+    )
+    expect(sentences(['Read', 'Before it: x'], { closed: true })).toBe('Read. Before it: x.')
   })
 })

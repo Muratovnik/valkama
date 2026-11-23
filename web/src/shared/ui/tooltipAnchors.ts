@@ -71,6 +71,7 @@ import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import { hintAnchorGone, hintAnchorResized } from '@/shared/ui/hintManager.ts'
 import type { Box, HintAlign, HintSide } from '@/shared/ui/hintPlacement.ts'
 import type { Point } from '@/shared/ui/hintWay.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 /** A registered exception's argument: a side, and `-start` to stand level with the element's start. */
 type TooltipPlace = HintSide | `${HintSide}-start`
@@ -82,6 +83,11 @@ export type TooltipKind = 'name' | 'clipped' | 'detail'
 interface TooltipLine {
   name: string
   figure?: string
+  /**
+   * The name as the runs its mark draws it in, where it holds a work item's title (`titleRuns`):
+   * its code is code in the hint too. `writtenText` of them is `name`.
+   */
+  runs?: readonly TextRun[]
   share?: string
 }
 
@@ -352,13 +358,18 @@ export function pointerAnchorOf(
 }
 
 /**
- * The element whose hint focus on `target` shows: its own, or its area's. A control inside a
- * hinted element outside any area shows none: it is not that element.
+ * The element whose hint focus on `target` shows: its own, its area's, or, for a control with no
+ * hint of its own inside an element whose hint is its words whole (`clipped`), that element's,
+ * since the control's words are a part of the words it cuts: a table's row name with an id after
+ * it holds that hint on the line, and focus on the name's press showed nothing of what the
+ * pointer saw there. A control inside an element with any other hint shows none: it is not that
+ * element, and what the element's hint says is not its own.
  */
 export function focusAnchorOf(target: EventTarget | null): HTMLElement | null {
   const anchor = tooltipAnchorOf(target)
   if (!anchor || !(target instanceof Element)) return null
-  return anchor === target || areaOf(target)?.contains(anchor) ? anchor : null
+  if (anchor === target || areaOf(target)?.contains(anchor)) return anchor
+  return tooltipOf(anchor)?.kind === 'clipped' ? anchor : null
 }
 
 /** The element whose hover holds `anchor`'s hint up: its area, or itself. */
@@ -412,6 +423,8 @@ export const namesHidden = (element: HTMLElement) =>
 const CUTS = new Set(['hidden', 'clip', 'auto', 'scroll'])
 /** How many elements inside a hint's element are looked at: a hint sits on a control. */
 const LOOK_AT = 40
+/** Half the unit the browser lays a line out in, 1/64px: less than any line past its box. */
+const ACROSS_NOISE = 1 / 128
 
 /** The text a box shows or cuts, less the shared copy kept for assistive technology. */
 function shownText(box: HTMLElement): Text[] {
@@ -482,6 +495,10 @@ export function firstLetterOf(element: HTMLElement): { box: DOMRect; inked: Elem
  * one 12px to each side and 8px over and under — and that is nothing the hint has to say.
  * Counted, it showed the hint of a table's name that stood whole. The letters of a line stand
  * a little past a box no taller than its leading, so down only a line a quarter past counts.
+ * Across, the browser lays a line out in steps of 1/64px and ends one that stands past its box
+ * by any of them in an ellipsis, so only less than one of them, a measure's noise, is forgiven
+ * (`ACROSS_NOISE`): forgiven half a pixel, a name of the value panel laid out 0.5px past its box
+ * showed «…» and no hint.
  */
 function hidesText(box: HTMLElement, across: boolean): boolean {
   const style = getComputedStyle(box)
@@ -498,7 +515,7 @@ function hidesText(box: HTMLElement, across: boolean): boolean {
       const [from, to, size] = across
         ? [line.left, line.right, line.width]
         : [line.top, line.bottom, line.height]
-      const slack = across ? 0.5 : Math.max(1, size / 4)
+      const slack = across ? ACROSS_NOISE : Math.max(1, size / 4)
       return size > 0 && (to > end + slack || from < start - slack)
     })
   })

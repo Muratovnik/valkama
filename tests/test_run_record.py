@@ -88,10 +88,11 @@ class TreeCase(unittest.TestCase):
         step = run_record.step("only", [sys.executable, "-c", "print('one')"], tree, log, 0)
         return run_record.write(out, started, [step], 0)
 
-    def checked(self, record: Path, tree: Path) -> tuple[int, str]:
+    def checked(self, record: Path, tree: Path, *required: str) -> tuple[int, str]:
+        demands = [word for name in required for word in ("--require", name)]
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            code = run_record.main(["check", str(record), "--tree", str(tree)])
+            code = run_record.main(["check", *demands, str(record), "--tree", str(tree)])
         return code, output.getvalue()
 
 
@@ -283,6 +284,74 @@ class CheckTests(TreeCase):
         self.assertIsNone(run_record.placement_warning(self.repo, self.root / "outside"))
 
 
+class RequireTests(TreeCase):
+    """`check --require NAME`: a record that does not show the step ran attests nothing about it."""
+
+    def record_with(self, exits: dict[str, int | None]) -> Path:
+        """A record made in this tree as it is now, of one step a name, each with its exit code."""
+
+        out = self.repo / "tmp" / "steps"
+        out.mkdir(parents=True, exist_ok=True)
+        log = out / "step.log"
+        log.write_bytes(b"x\n")
+        steps = [
+            run_record.step(name, [name], self.repo, log, code) for name, code in exits.items()
+        ]
+        result = 0 if all(code == 0 for code in exits.values()) else 1
+        return run_record.write(out, run_record.begin(self.repo, {}), steps, result)
+
+    def test_a_record_without_a_required_step_is_refused_naming_the_step(self) -> None:
+        record = self.record_with({"unit": 0, "subjects": 0})
+
+        code, said = self.checked(record, self.repo, "typos")
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn(f"refused: {record} has no step typos, which this check requires", said)
+        self.assertIn("ran: unit exit=0, subjects exit=0", said)
+        self.assertNotIn("accepted", said)
+        # The control: the same record without the requirement passes as it always has.
+        code, said = self.checked(record, self.repo)
+        self.assertEqual(run_record.PASSED, code, said)
+        self.assertIn("; passed: unit exit=0, subjects exit=0", said)
+
+    def test_only_the_required_steps_the_record_lacks_are_named(self) -> None:
+        record = self.record_with({"typos": 0, "unit": 0})
+
+        code, said = self.checked(record, self.repo, "typos", "subjects", "ruff")
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("has no step subjects, ruff, which this check requires", said)
+        self.assertNotIn("no step typos", said)
+
+    def test_a_required_step_that_ran_and_passed_is_accepted(self) -> None:
+        record = self.record_with({"unit": 0, "typos": 0})
+
+        code, said = self.checked(record, self.repo, "typos")
+
+        self.assertEqual(run_record.PASSED, code, said)
+        self.assertIn("; passed: unit exit=0, typos exit=0", said)
+
+    def test_a_required_step_that_failed_or_was_refused_fails_the_check_naming_it(self) -> None:
+        for exit_code in (2, None):
+            with self.subTest(exit=exit_code):
+                record = self.record_with({"unit": 0, "typos": exit_code})
+
+                code, said = self.checked(record, self.repo, "typos")
+
+                self.assertEqual(run_record.FAILED, code, said)
+                self.assertIn("; failed: typos (required); ran: ", said)
+
+    def test_a_required_step_does_not_turn_a_refusal_of_another_tree_into_an_acceptance(
+        self,
+    ) -> None:
+        record = self.record_with({"typos": 0})
+
+        code, said = self.checked(record, self.other, "typos")
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("does not describe", said)
+
+
 class RunTests(TreeCase):
     """`run`: the checks no gate step is, a command at a time, into one record of one tree state."""
 
@@ -336,6 +405,15 @@ class RunTests(TreeCase):
         code, said = self.checked(self.out / run_record.NAME, self.repo)
         self.assertEqual(run_record.FAILED, code, said)
         self.assertIn("; failed: unit, unit-2; ran: ", said)
+
+    def test_check_takes_the_directory_run_wrote_the_record_in(self) -> None:
+        self.ran("python", "-c", "pass", name="reads")
+
+        by_file = self.checked(self.out / run_record.NAME, self.repo)
+        by_directory = self.checked(self.out, self.repo)
+
+        self.assertEqual(run_record.PASSED, by_directory[0], by_directory[1])
+        self.assertEqual(by_file, by_directory)
 
     def test_a_tree_that_changed_since_the_record_gets_a_new_one_and_is_told_why(self) -> None:
         self.ran("python", "-c", "pass", name="first")

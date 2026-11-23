@@ -8,19 +8,21 @@
  *
  * The share spent is a final figure and always a solid fill, one hue on a darker step of the same
  * hue, whether its latest reading is fresh or not: a reading no longer fresh says its age in the
- * words beside the bar, never by the drawing. Past it the forecast continues the fill as a hatched
- * tail (`hatch.css`, over the fill's own hue) to where the window is forecast to stand at its reset, a surface gap
- * of the track after the fill. A forecast of a range runs to its high end, its faster pace's, and
- * the same gap splits it where its low end stands, its slower pace's: the hatch before the gap is
- * what both paces spend, the whole tail what the faster does. One hatch and one gap, the device
- * that already parts touching marks, so the bar adds no second meaning of a hatch; its host's words
- * say both ends and name the hatch. A forecast of one value, a window already at its end and one
- * with no forecast draw one tail, none and none. The tick is the text's ink and stands over and
- * under the bar, so it is told from the fill and the tail by its shape and its lightness, not by
- * a hue, and reads in grayscale. A fresh 0 % draws the empty track with its tick and any tail from
- * the track's start, and a window with no figure at all (`used` null) the track alone. A forced
- * palette draws the track's edge, the fill, the tail's stripes and the tick in its own inks, the
- * tick ringed in the ground's.
+ * words beside the bar, never by the drawing. Past it the forecast continues the fill as one
+ * hatched tail (`hatch.css`, over the fill's own hue) to where the window is forecast to stand at
+ * its reset, a surface gap of the track after the fill and none inside the tail: a forecast of a
+ * range runs to its high end, its faster pace's, and its low end is not drawn on the bar, since a
+ * second gap inside the tail read as a break in it. Its host's words say both ends and name the
+ * hatch. A window already at its end and one with no forecast draw no tail. The tick, where steady
+ * use from the window's start would stand now, which its host's hint and words say, is the text's
+ * ink and stands over and under the bar, so it is told from the fill and the tail by its shape and
+ * its lightness, not by a hue, and reads in grayscale. A fresh 0 % draws the empty track with its
+ * tick and any tail from the track's start, and a window with no figure at all (`used` null) the
+ * track alone. A forced palette draws the track's edge, the fill, the tail's stripes and the tick
+ * in its own inks, the tick ringed in the ground's. A figure that no longer stands (`muted`), as a
+ * window's past its reset, is drawn in the neutral ink of marks at rest, its track a quieter step
+ * of it, so it is not read as the share spent now; a forced palette draws its fill in the inactive
+ * ink, still apart from the ground.
  *
  * It reads as one image whose words (`label`) say all of it: the value, the pace, the state and
  * the forecast. Over 100 % the fill stops at the track's end, no tail follows, and the words say
@@ -29,9 +31,8 @@
  * it.
  *
  * What a reader of the page selects it by: its marks are `data-mark` — the `track`, which is its
- * picture (`role="img"`, named by `label`, `data-used` the share spent), the `fill`, each part
- * of the tail `ahead` (`data-part`, `near` and `far`) and the `tick`; its words beside it are
- * `data-words`, `value` and `note`.
+ * picture (`role="img"`, named by `label`, `data-used` the share spent), the `fill`, the tail
+ * `ahead` and the `tick`; its words beside it are `data-words`, `value` and `note`.
  */
 import { computed } from 'vue'
 
@@ -48,6 +49,8 @@ const props = defineProps<{
   even?: number | null
   /** Where the forecast says the window stands at its reset: the hatched tail; none draws none. */
   forecast?: WindowAhead | null
+  /** Drawn in the neutral ink: a figure that no longer stands, as a window's past its reset. */
+  muted?: boolean
   /** The state in words after the value, «fresh», «silent 3 h». */
   note?: string
   /** The value in words beside the bar, «62% used»; none draws the bar alone. */
@@ -68,42 +71,30 @@ const tick = computed(() =>
 )
 
 /**
- * The tail's parts, from the share spent to the low end and from there to the high end, or one
- * part where the two ends stand together or the low end at the share spent. A part after a mark
- * starts a surface gap (`--space-half`) past it, so where the fill ends and the low end stands
- * reads at a glance.
+ * The tail, from the share spent to the forecast's high end, where it reaches past the share; it
+ * starts a surface gap (`--space-half`) past the fill, so where the fill ends reads at a glance,
+ * and at the track's start where nothing is spent.
  */
 const ahead = computed(() => {
   const { used, forecast } = props
-  if (used === null || !forecast || used >= 100) return []
-  const start = clamp(used)
-  const high = clamp(forecast.high)
-  const low = Math.min(high, Math.max(start, clamp(forecast.low)))
-  if (high <= start) return []
-  const ends = low > start && low < high ? [start, low, high] : [start, high]
-  return ends.slice(1).map((to, index) => {
-    const from = ends[index] ?? start
-    return {
-      key: index === 0 ? 'near' : 'far',
-      start: from <= 0,
-      end: index === ends.length - 2,
-      from,
-      to,
-    }
-  })
-})
-
-/** Where a part of the tail stands along the track, a surface gap past a mark before it. */
-const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
-  insetInlineStart: from > 0 ? `calc(${from}% + var(--space-half))` : '0%',
-  inlineSize: from > 0 ? `calc(${to - from}% - var(--space-half))` : `${to}%`,
+  if (used === null || !forecast || used >= 100) return null
+  const from = clamp(used)
+  const to = clamp(forecast.high)
+  if (to <= from) return null
+  return from > 0
+    ? {
+        start: false,
+        insetInlineStart: `calc(${from}% + var(--space-half))`,
+        inlineSize: `calc(${to - from}% - var(--space-half))`,
+      }
+    : { start: true, insetInlineStart: '0%', inlineSize: `${to}%` }
 })
 </script>
 
 <template>
   <span
     class="window-bar"
-    :class="{ 'window-compact': compact }"
+    :class="{ 'window-compact': compact, 'window-muted': muted }"
   >
     <span
       class="window-track"
@@ -119,13 +110,11 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
         :style="fill"
       />
       <span
-        v-for="part in ahead"
-        :key="part.key"
+        v-if="ahead"
         class="window-ahead hatched"
         data-mark="ahead"
-        :class="{ 'window-ahead-start': part.start, 'window-ahead-end': part.end }"
-        :data-part="part.key"
-        :style="aheadStyle(part)"
+        :class="{ 'window-ahead-start': ahead.start }"
+        :style="{ insetInlineStart: ahead.insetInlineStart, inlineSize: ahead.inlineSize }"
       />
       <span
         v-if="tick"
@@ -197,12 +186,14 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
 }
 
 /* The forecast past the fill: the fill's own hue under the hatch (`hatch.css`), square where it
-   follows the fill or the part before it and at the gap it leaves, rounded at the end it reaches,
-   as the fill's own end is; a forced palette's ink, as the fill's. */
+   follows the fill, rounded at the end it reaches, as the fill's own end is; a forced palette's
+   ink, as the fill's. */
 .window-ahead {
   position: absolute;
   inset-block: 0;
   background: var(--color-series-1);
+  border-start-end-radius: 999px;
+  border-end-end-radius: 999px;
 
   @media (forced-colors: active) {
     background: CanvasText;
@@ -214,11 +205,6 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
 .window-ahead-start {
   border-start-start-radius: 999px;
   border-end-start-radius: 999px;
-}
-
-.window-ahead-end {
-  border-start-end-radius: 999px;
-  border-end-end-radius: 999px;
 }
 
 /* Where steady use would stand: the text's ink, taller than the bar it crosses. */
@@ -253,6 +239,25 @@ const aheadStyle = ({ from, to }: { from: number; to: number }) => ({
 
 .window-note {
   color: var(--color-text-muted);
+}
+
+/* A figure that no longer stands: the neutral ink of marks at rest, on a quieter step of it. */
+.window-muted {
+  & .window-track {
+    background: color-mix(in srgb, var(--color-text-tertiary) 30%, var(--color-canvas));
+
+    @media (forced-colors: active) {
+      background: Canvas;
+    }
+  }
+
+  & .window-fill {
+    background: var(--color-text-tertiary);
+
+    @media (forced-colors: active) {
+      background: GrayText;
+    }
+  }
 }
 
 /* In a tile: a thinner bar on the tile's own line, its words said by the tile. */

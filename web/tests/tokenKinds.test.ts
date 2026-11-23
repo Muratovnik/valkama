@@ -40,11 +40,13 @@ function answer(now: Partial<UsageTokens>, before: Partial<UsageTokens> | null):
     total: { ...measures(now), unpriced_models: [] },
     rows: [],
     series: [{ start: period.from, end: period.to, ...measures(now), groups: [] }],
+    unplaced: null,
     comparison: before
       ? {
           period: { from: '2026-11-10T00:00:00Z', to: period.from },
           total: { ...measures(before), unpriced_models: [] },
           rows: [],
+          unplaced: null,
         }
       : null,
   }

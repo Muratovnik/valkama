@@ -204,7 +204,7 @@ describe('who did the work', () => {
     for (const kind of Object.keys(usage.tokens) as (keyof Role['tokens'])[])
       expect(sum((line) => line.tokens[kind] ?? 0)).toBe(usage.tokens[kind] ?? 0)
     // The head says those totals: the rows' time is all agents', their cost the tab's cost.
-    expect(headFigure(wrapper, 'All agents')).toBe('≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min')
+    expect(headFigure(wrapper, 'Agent time')).toBe('≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min')
     expect(headFigure(wrapper, 'Cost')).toBe('≈\u{A0}$240.67')
     expect(rolesOf(wrapper).map((row) => row[0])).toEqual([
       'Subagent · bero',

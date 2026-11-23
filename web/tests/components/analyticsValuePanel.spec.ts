@@ -6,13 +6,15 @@
  * the page on its section and closes the panel, as a new place in the history, and a value the
  * filter holds already offers it disabled, «Already in filter». An opening or an adding the
  * address cannot hold
- * says why instead of happening. What qualifies the figures — the cost an estimate, what the tokens
- * count, a minute's figures shared out where the read is by the minute — the panel says once, in
+ * says why instead of happening. What qualifies the figures — the agent time of agents at once
+ * added up, the cost an estimate, what the tokens count, a minute's figures shared out where the read is by the minute — the panel says once, in
  * an «ⓘ» of its own named for the figures, never as a line: the section's «ⓘ» stands under it.
  */
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+
+import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 
 import { noTask, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
@@ -40,6 +42,7 @@ pressEachTest()
 const CAVEAT_WORDS = {
   en: {
     spending: [
+      'Agent time adds up agents working at once: two agents for an hour each make 2\u{A0}h.',
       'The cost is an estimate at API list prices, not a bill.',
       'Tokens count input, output and cache writes; cache reads stand apart, and reasoning is part of output.',
     ],
@@ -48,6 +51,7 @@ const CAVEAT_WORDS = {
   },
   ru: {
     spending: [
+      'Время агентов, работающих одновременно, складывается: два агента по часу — 2\u{A0}ч.',
       'Стоимость — оценка по прейскуранту API, а не счёт.',
       'Токены — это вход, выход и запись в кэш; чтение кэша стоит отдельно, а рассуждения входят в выход.',
     ],
@@ -86,7 +90,7 @@ describe('what a value’s panel shows', () => {
     const panel = panelOf(host)
     const figures = Object.fromEntries(
       panel
-        .findAll('[data-figure]')
+        .findAll('[data-part="figures"] [data-figure]')
         .map((one) => [
           one.attributes('data-figure'),
           one.get('dd').text().replaceAll(/\s/gu, ' '),
@@ -94,11 +98,13 @@ describe('what a value’s panel shows', () => {
     )
     // Task 1 spent eleven hours on Monday and one on Tuesday, of the week's 67 hours and 40 minutes
     // the ten tasks, no task and unknown work spent: 12 / 67.67 is 17.7 %, said as 18 %.
+    // A task has its figures of all time under them, a part of their own
+    // (`analyticsValueFigures.spec.ts` reads them).
     expect(Object.keys(figures)).toEqual(['time', 'tokens', 'cost', 'share'])
     expect(figures.time).toBe('12 h')
     expect(figures.share).toBe('18% · Agent time')
     // The panel's parts, in the order they stand; a chart's legend names its own parts inside.
-    const named = ['actions', 'figures', 'days', 'model', 'seat']
+    const named = ['actions', 'figures', 'all-time', 'days', 'model', 'seat']
     const parts = panel
       .findAll(named.map((part) => `[data-part="${part}"]`).join(', '))
       .map((one) => one.attributes('data-part'))
@@ -133,6 +139,50 @@ describe('what a value’s panel shows', () => {
     const seen = await caveatsOf(host, 'Об этих цифрах')
     expect(seen.inTip).toEqual([...CAVEAT_WORDS.ru.spending, CAVEAT_WORDS.ru.minutes].sort())
     expect(seen.asLines).toEqual([])
+  })
+
+  it('says beside its actions that its period before could not be read, and keeps it on a refresh', async () => {
+    // The value's period before, step by step: its own filter and no breakdown.
+    let failing = true
+    stubAnalyticsReads((query) =>
+      failing && query.has('work_item') && !query.has('group_by')
+        ? { status: 500 }
+        : serveUsage(WORLD, query),
+    )
+    const host = await mountPage({ by: 'work_item', detail: detailOf('work_item', task(1, '').id) })
+    const panel = panelOf(host)
+    const said = () =>
+      panel.find('[data-part="actions"] .refresh-failed:not(.refresh-failed-held)').exists()
+    const marked = () =>
+      panel
+        .getComponent(PeriodColumns)
+        .props('columns')
+        .filter((column) => column.before !== undefined).length
+    /** The key of the period before in the days' legend, in lines matching `line`. */
+    const beforeKey = (line = 'li') =>
+      panel.findAll(`[data-part="days"] [data-hint-list="legend"] ${line} [data-mark="outline"]`)
+    expect(said()).toBe(true)
+    expect(marked()).toBe(0)
+    expect(panel.get('[data-part="days"]').text()).not.toContain('could not')
+    // The legend keeps the room of the key of the mark it lacks, unseen.
+    expect(beforeKey('[data-unseen]')).toHaveLength(1)
+
+    failing = false
+    await panel.get('[data-part="actions"] .refresh-failed-retry').trigger('click')
+    await flushPromises()
+    expect(said()).toBe(false)
+    const steps = marked()
+    expect(steps).toBeGreaterThan(0)
+    // Read, the key is held no longer: the period before keys its mark where it spent anything.
+    expect(beforeKey('[data-unseen]')).toHaveLength(0)
+
+    // A refresh of the page that cannot read it again keeps the marks the panel shows.
+    failing = true
+    await host.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(said()).toBe(true)
+    expect(marked()).toBe(steps)
+    expect(beforeKey('[data-unseen]')).toHaveLength(0)
   })
 
   it('says a value with nothing in the period spent nothing', async () => {

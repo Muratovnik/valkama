@@ -34,12 +34,13 @@ function piece(text: string) {
   return span
 }
 
-function draw(element: HTMLElement, text: string) {
+/** The text as the nodes the directive draws: a span for each piece that ends in a `/`. */
+export function slashNodes(text: string): (HTMLSpanElement | string)[] {
   const pieces = slashPieces(text)
-  element.replaceChildren(
-    ...pieces.map((part, index) => (index < pieces.length - 1 ? piece(part) : part)),
-  )
+  return pieces.map((part, index) => (index < pieces.length - 1 ? piece(part) : part))
 }
+
+const draw = (element: HTMLElement, text: string) => element.replaceChildren(...slashNodes(text))
 
 export const vSlashBreaks: Directive<HTMLElement, string> = {
   beforeMount: (element, { value }) => draw(element, value),

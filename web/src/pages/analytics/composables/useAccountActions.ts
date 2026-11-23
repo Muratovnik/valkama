@@ -1,8 +1,8 @@
 /**
- * What the menu at an account's name in the quota panel does (`QuotaAccount`), exactly three
+ * What the menu at an account's name in the quota panel does (`QuotaAccount`), at most three
  * things, in this order:
  *
- * - «Rename» opens a field for its name in the account's heading, which saves through the names
+ * - «Rename», on an account with a name of its own, opens a field for its name in the account's heading, which saves through the names
  *   Valkama keeps and as Settings saves one (`accountNamesStore`, `cleanAlias`): Enter or leaving
  *   the field saves, Escape leaves the name as it was, and either gives the focus back to the menu's
  *   button. A save that fails keeps the field open and says why under it. A name is kept by the
@@ -14,6 +14,10 @@
  * - «Copy ID» puts the account's whole id on the clipboard — its UUID, or its organization's id
  *   where no UUID is known — and says it was copied, or refused, for a few seconds (`useCopyNote`).
  *   That is where the whole id is reached: no hint says it.
+ *
+ * An account with no name of its own (`unnamed`) is offered that field by «Name» at its heading
+ * (`rename`) and by nothing in the menu: one naming action for each state, so the menu never
+ * repeats the button beside it.
  */
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, ref } from 'vue'
@@ -127,17 +131,24 @@ export function useAccountActions(options: {
       t('analytics.quota.actions.copyFailed'),
     )
 
+  /** Whether the account has no name of its own yet, which «Name» at its heading offers to give it. */
+  const unnamed = computed(() => kept() === '')
+
   const entries = computed<MenuEntry[]>(() => {
     const held = pageFilter?.has('seat', options.account().account) ?? false
     return [
-      {
-        kind: 'action',
-        key: 'rename',
-        label: t('analytics.quota.actions.rename'),
-        icon: 'edit',
-        opens: true,
-        select: () => void rename(),
-      },
+      ...(unnamed.value
+        ? []
+        : [
+            {
+              kind: 'action' as const,
+              key: 'rename',
+              label: t('analytics.quota.actions.rename'),
+              icon: 'edit' as const,
+              opens: true,
+              select: () => void rename(),
+            },
+          ]),
       ...(pageFilter
         ? [
             {
@@ -167,7 +178,9 @@ export function useAccountActions(options: {
     note: copyNote.note,
     noteFailed: copyNote.failed,
     press,
+    rename,
     save,
     type,
+    unnamed,
   }
 }

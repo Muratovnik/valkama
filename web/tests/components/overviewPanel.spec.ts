@@ -28,6 +28,7 @@ import {
 } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { showView } from '../support/chartViews.ts'
 import { saidBy } from '../support/liveRegion.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
@@ -153,7 +154,8 @@ describe('the overview on the page', () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ projectId: 'alpha' })
     expect(cards(page)).toEqual(['work_item', 'model'])
-    expect(reads.grouped('project')).toHaveLength(0)
+    // The one read by project is the chart's, of the one project (`overviewChart.spec.ts`).
+    expect(reads.grouped('project')).toHaveLength(1)
   })
 
   it('names what moved most from the week before, in the measure’s own units', async () => {
@@ -235,13 +237,13 @@ describe('the overview on the page', () => {
     expect(page.findAll('.overview-changes-line')).toHaveLength(2)
   })
 
-  it('says the outline could not be read under the chart, and draws the period alone', async () => {
+  it('says in the bar that the outline could not be read, and draws the period alone', async () => {
     stubAnalyticsReads((query) => (outline(query) ? { status: 500 } : serveUsage(WORLD, query)))
     const page = await mountAnalytics()
-    const days = page.get('.spending-days')
-    expect(words(days.text())).toContain(
-      'The period before could not be loaded, so it is not outlined.',
+    expect(page.find('.analytics-bar .refresh-failed:not(.refresh-failed-held)').exists()).toBe(
+      true,
     )
+    expect(words(page.get('.spending-days').text())).not.toContain('could not')
     // The chart is handed its three periods with no figure of a period before to outline; the
     // test of the period before below shows the same figures handed over where it was read.
     const drawn = page.getComponent(PeriodColumns).props('columns')
@@ -309,7 +311,7 @@ describe('the period before on the overview', () => {
 })
 
 describe('the overview’s chart', () => {
-  it('holds the period before in a column of the table, step by step', () => {
+  it('holds the period before in a column of the table, step by step', async () => {
     const usage = usageAnswer({
       first: MONDAY,
       days: 3,
@@ -332,12 +334,12 @@ describe('the overview’s chart', () => {
         before,
         by: 'work_item',
         measure: 'time',
-        narrow: true,
         readAt: NOW,
         accounts: 'loading',
       },
       global: { plugins: [analyticsI18n()] },
     })
+    await showView(days, '.spending-days', 'Table')
     const headings = days.findAll('thead th').map((one) => one.text())
     const at = headings.indexOf('period before')
     expect(at).toBeGreaterThan(headings.indexOf('Total'))
@@ -362,7 +364,6 @@ describe('the overview’s chart', () => {
         usage,
         by: 'work_item',
         measure: 'time',
-        narrow: false,
         readAt: NOW,
         accounts: 'loading',
       },

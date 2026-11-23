@@ -1,8 +1,7 @@
 /**
  * The values of a breakdown as the rows of a ranked chart, wherever one stands — a section's bars
  * or a card of first values: each row its value's name, what the name leaves out (`valueDetail`),
- * its figure in the measure, whether that figure is less than its unit shows (`belowUnit`), which
- * leaves the row out of a chart, and what pressing it does (`useLineMarks`): a value the read can
+ * its figure in the measure, and what pressing it does (`useLineMarks`): a value the read can
  * filter by opens its side panel, sent to `inspect` with its name, and a task's row is a link to
  * its card as well, which a press with a modifier or the middle button opens elsewhere.
  *
@@ -14,7 +13,7 @@ import { computed } from 'vue'
 
 import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { belowUnit, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -42,10 +41,10 @@ export function useRankedLines(options: {
         key: line.key,
         label,
         labelEnd: words.lineEnd(line),
+        labelRuns: words.lineRuns(options.by(), line),
         detail: words.valueDetail(options.by(), line.value),
         value: measureOf(options.measure(), line.spent) ?? 0,
         valueText: words.lineFigure(options.measure(), line.spent),
-        belowUnit: belowUnit(options.measure(), line.spent),
         ...options.more?.(line),
         ...marks.markOf(line, label),
       }

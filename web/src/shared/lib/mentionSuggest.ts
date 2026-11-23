@@ -6,6 +6,7 @@ import type { FoundDocument } from '@/shared/api/documentApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { activePlanningWorkItems, searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import { splitIdentifiers } from '@/shared/lib/textReferences.ts'
+import { titleRuns } from '@/shared/lib/titleRuns.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 import { SUGGEST_LIMIT } from '@/shared/ui/useEditorSuggestions.ts'
@@ -40,6 +41,7 @@ function workItems(
         name: entry.reference,
         reference: entry.reference,
         title: entry.title,
+        runs: titleRuns(entry.title),
         detail: stateName(entry.state),
       }))
   }

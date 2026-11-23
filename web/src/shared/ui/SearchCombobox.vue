@@ -24,7 +24,8 @@
  * The popup is ChoiceSelect's surface at the field's own width, so it never reaches past
  * the dialog the field stands in. A long option wraps inside it at a space, a hyphen or
  * after a `/` (`slashBreaks.ts`): a goal's option is its title, and a label is as often
- * a path of words such as `area/web`, so every option breaks the way a title does.
+ * a path of words such as `area/web`, so every option breaks the way a title does. An option
+ * the host gave runs (`ChoiceOption.runs`) is drawn in them, a goal's code as code.
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
 
@@ -42,6 +43,7 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { choiceToken, freshToken, searchChoices, tokenValue } from '@/shared/ui/searchChoices.ts'
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import VField from '@/shared/ui/VField.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -112,6 +114,7 @@ const chosen = computed<string[]>(() =>
 )
 const known = computed(() => new Map(props.options.map((option) => [option.value, option])))
 const labelOf = (value: string) => known.value.get(value)?.label ?? value
+const runsOf = (value: string) => known.value.get(value)?.runs
 const full = computed(() => several.value && chosen.value.length >= props.max)
 const searched = computed(() =>
   searchChoices({
@@ -132,7 +135,9 @@ const internal = computed(() => {
 const display = (entry: unknown) => (typeof entry === 'string' ? labelOf(tokenValue(entry)) : '')
 const shownLabel = computed(() => (several.value ? '' : display(internal.value)))
 const chips = computed(() =>
-  several.value ? chosen.value.map((value) => ({ value, label: labelOf(value) })) : [],
+  several.value
+    ? chosen.value.map((value) => ({ value, label: labelOf(value), runs: runsOf(value) }))
+    : [],
 )
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
 const invalidMark = computed(() => (props.error ? 'true' : undefined))
@@ -312,6 +317,12 @@ defineExpose({ show })
               <div class="combo-option">
                 <span class="combo-value">
                   <strong
+                    v-if="option.runs"
+                    v-text-runs="option.runs"
+                    class="combo-title"
+                  />
+                  <strong
+                    v-else
                     v-slash-breaks="option.label"
                     class="combo-title"
                   />

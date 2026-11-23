@@ -11,14 +11,18 @@
  * - A `clipped` text is no hint beside its element: its whole words are laid over the cut ones,
  *   its first letter on theirs, and run on to `EDGE` short of the window's right edge, wrapping
  *   by words only where they do not fit there (`placeWhole`, drawn by `WholeText`). On one line
- *   it covers its own line and nothing over or under it, in a list as anywhere.
+ *   it covers its own line and nothing over or under it, in a list as anywhere; over a clamp of
+ *   several lines its words take the clamp's column and alignment and run on down past it.
  * - A hint of a chart's mark stands at that mark, whatever the chart: a day's stack, a column of a
  *   small chart and the small chart's name, a ranked row's bar, a reading of a step line, a sector
  *   of a ring. The mark declares itself, and the place of its hint follows from the mark alone:
  *   `data-hint-mark` on the element whose box is the mark, the hinted element itself or one in
  *   the area it speaks for (`data-tooltip-area`), as a period's stack beside the period that takes
  *   the pointer; `data-hint-point` on a point's mark, or, on a drawn shape that holds none, the
- *   point in its own units, `x y`, as a ring's sector names the middle of its band. The hint's
+ *   point in its own units, `x y`, as a ring's sector names the point of its band's middle where
+ *   the pointer stands on it. A mark that changes while its hint shows, as that point does when
+ *   the pointer moves round the ring or a reading's dot drawn larger under the pointer, asks for
+ *   the hint's place again (`TooltipHost`), on the mark as it is drawn then. The hint's
  *   start stands `OFFSET` past the mark's right edge, level with the mark's top; at a point, and at
  *   a mark drawn with no height, as a period of nothing on its floor, at the top right of it, its
  *   bottom left corner `OFFSET` past it and over it. Where the chart's frame (`data-hint-frame`,
@@ -203,7 +207,10 @@ function inRow({ aside, frame, rem, width, window }: HintSetting): HintPlace {
 
 /** What decides where the whole of a cut text is laid, measured as it opens. */
 export interface WholeSetting {
-  /** Where the whole text's first letter stands inside its own box as drawn, in px. */
+  /**
+   * Where the whole text's first letter stands inside its own box as drawn, in px; over a clamp
+   * (`lines`) only how far down, since across its box is laid by the clamp's column.
+   */
   inset: { left: number; top: number }
   /** Where the cut text's first letter stands, in the window's coordinates. */
   letter: { left: number; top: number }
@@ -213,6 +220,13 @@ export interface WholeSetting {
   window: number
   /** The box the cut text's lines show in where they are cut down, as a clamp's (`cutLinesOf`). */
   lines?: Box | null
+  /**
+   * How far in from its box's left edge the whole text's lines start as drawn, its padding: what
+   * its box is laid by over a clamp's column (`lines`). 0 before it is drawn.
+   */
+  pad?: number
+  /** How tall the whole text came out as drawn and how tall the window is, in px, once drawn. */
+  tall?: { drawn: number; window: number } | null
 }
 
 export interface WholePlace {
@@ -228,26 +242,39 @@ export interface WholePlace {
 /**
  * Where the whole of a cut text is laid: its box placed so that its first letter stands on the
  * cut text's, and as wide as the room from there to `EDGE` short of the window's right edge.
- * Over a text cut down to its lines it is at least as large as they are, standing as far past
- * their end as it stands before their start, so none of them and no ellipsis shows beside or
- * under it, however few lines its own words take.
+ * Over a text cut down to its lines its lines take the clamp's whole column, its box standing
+ * `pad` out of it on each side, and it is at least as high as the clamp's lines: drawn in the
+ * clamp's type and alignment (`WholeText`), its words wrap where the clamp wrapped them and take
+ * the lines they need under the clamp's, so no line and no ellipsis shows beside or under it, no
+ * empty room stands under its last line, and its first letter stands on the cut one because its
+ * first line is the clamp's. Laid from that letter instead, over a clamp whose lines end at its
+ * column's end, as a table's column heading, the box started at the letter, inside the column,
+ * narrower than it, and broke words the clamp kept whole. Run on to the window's edge, a board
+ * tile's title cut at its third line lay on one line 560 to 660px wide, past the next columns,
+ * with 38px of empty frame under it. Drawn taller than the room under where it is laid (`tall`),
+ * it stands higher, its bottom `EDGE` short of the window's and its top no higher than `EDGE`
+ * under the window's top.
  */
-export function placeWhole({ inset, letter, lines, scale, window }: WholeSetting): WholePlace {
-  const left = letter.left - inset.left
-  const top = letter.top - inset.top
-  const widest = Math.max(0, (window - EDGE - left) / scale)
-  if (!lines) return { left, top, widest }
-  const past = (start: number, end: number, from: number) =>
-    Math.max(0, end - from + Math.max(0, start - from)) / scale
-  return {
-    left,
-    top,
-    widest,
-    least: {
-      block: past(lines.top, lines.bottom, top),
-      inline: Math.min(widest, past(lines.left, lines.right, left)),
-    },
+export function placeWhole({
+  inset,
+  letter,
+  lines,
+  pad = 0,
+  scale,
+  tall,
+  window,
+}: WholeSetting): WholePlace {
+  const laidTop = letter.top - inset.top
+  const top = tall ? Math.min(laidTop, Math.max(EDGE, tall.window - EDGE - tall.drawn)) : laidTop
+  const roomFrom = (left: number) => Math.max(0, (window - EDGE - left) / scale)
+  if (!lines) {
+    const left = letter.left - inset.left
+    return { left, top, widest: roomFrom(left) }
   }
+  const left = lines.left - pad
+  const widest = Math.min(roomFrom(left), (lines.right - lines.left + 2 * pad) / scale)
+  const block = Math.max(0, lines.bottom - laidTop + Math.max(0, lines.top - laidTop)) / scale
+  return { left, top, widest, least: { block, inline: widest } }
 }
 
 /**
@@ -360,28 +387,41 @@ function cornerEdge(mark: DOMRect, corner: 'left' | 'right'): DOMRect {
   return new DOMRect(at, mark.top, 0, mark.height)
 }
 
-/** A mark of the chart as drawn now, read again as the page moves, and how it is drawn. */
+/**
+ * A mark of the chart as drawn now, read again as the page moves, how it is drawn, and the element
+ * that declares it, whose change while the hint shows asks for the hint's place again.
+ */
 interface DrawnMark {
   drawn: MarkDrawn
+  of: Element
   box: () => DOMRect
+}
+
+/** The point a drawn shape names in its own units, `x y`, as it names it now; null for none. */
+function pointNamed(shape: SVGGraphicsElement): [number, number] | null {
+  const named = shape.dataset.hintPoint?.split(' ').map(Number)
+  if (named?.length !== 2 || !named.every((part) => Number.isFinite(part))) return null
+  const [x = 0, y = 0] = named
+  return [x, y]
 }
 
 /**
  * The point `element`'s hint speaks for (`data-hint-point`), as drawn now: the mark it holds, or,
  * where a drawn shape holds none, as a sector of a ring, the point the shape names in its own
- * units, `x y`, a box of no size. None where it declares neither.
+ * units, `x y`, a box of no size, read again each time, since a ring names the point where the
+ * pointer stands on it. None where it declares neither.
  */
-function hintPointOf(element: Element): (() => DOMRect) | null {
+function hintPointOf(element: Element): Omit<DrawnMark, 'drawn'> | null {
   const mark = element.querySelector('[data-hint-point]')
-  if (mark) return () => mark.getBoundingClientRect()
-  if (!(element instanceof SVGGraphicsElement)) return null
-  const named = element.dataset.hintPoint?.split(' ').map(Number)
-  if (named?.length !== 2) return null
-  if (!named.every((part) => Number.isFinite(part))) return null
-  const [x = 0, y = 0] = named
-  return () => {
-    const drawn = new DOMPoint(x, y).matrixTransform(element.getScreenCTM() ?? undefined)
-    return new DOMRect(drawn.x, drawn.y, 0, 0)
+  if (mark) return { of: mark, box: () => mark.getBoundingClientRect() }
+  if (!(element instanceof SVGGraphicsElement) || !pointNamed(element)) return null
+  return {
+    of: element,
+    box: () => {
+      const [x, y] = pointNamed(element) ?? [0, 0]
+      const drawn = new DOMPoint(x, y).matrixTransform(element.getScreenCTM() ?? undefined)
+      return new DOMRect(drawn.x, drawn.y, 0, 0)
+    },
   }
 }
 
@@ -392,21 +432,24 @@ function hintPointOf(element: Element): (() => DOMRect) | null {
  */
 function hintMarkOf(element: HTMLElement): DrawnMark | null {
   const point = hintPointOf(element)
-  if (point) return { box: point, drawn: 'point' }
+  if (point) return { ...point, drawn: 'point' }
   const mark = element.matches('[data-hint-mark]')
     ? element
     : tooltipReachOf(element).querySelector('[data-hint-mark]')
   if (!mark) return null
   const box = () => mark.getBoundingClientRect()
-  return { box, drawn: box().height < 1 ? 'floor' : 'box' }
+  return { box, drawn: box().height < 1 ? 'floor' : 'box', of: mark }
 }
 
-/** Where the hint of `element` stands that speaks for its chart's mark (`hintMarkOf`). */
+/**
+ * Where the hint of `element` stands that speaks for its chart's mark (`hintMarkOf`), and the
+ * element that declares that mark (`markElement`).
+ */
 function markPlaceOf(
   element: HTMLElement,
   mark: DrawnMark,
   setting: Pick<HintSetting, 'kind' | 'rem' | 'width' | 'window'>,
-): HintPlace & { reference: HintReference } {
+): HintPlace & { markElement: Element; reference: HintReference } {
   const place = placeHint({
     ...setting,
     aside: element.getBoundingClientRect(),
@@ -417,6 +460,7 @@ function markPlaceOf(
   const { corner } = place
   return {
     ...place,
+    markElement: mark.of,
     reference: {
       contextElement: element,
       getBoundingClientRect: () => (corner ? cornerEdge(mark.box(), corner) : mark.box()),
@@ -439,7 +483,7 @@ export function hintPlaceOf(
   element: HTMLElement,
   { asked = null, kind }: Pick<HintSetting, 'asked' | 'kind'>,
   width: number,
-): HintPlace & { reference: HTMLElement | HintReference } {
+): HintPlace & { reference: HTMLElement | HintReference; markElement?: Element } {
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
   const inner = document.documentElement.clientWidth
   const mark = asked ? null : hintMarkOf(element)

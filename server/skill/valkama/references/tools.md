@@ -492,10 +492,13 @@ and an edited paragraph get new keys, so a stale key never reads other text.
 A move to review warns, and is not refused, when the item has no `session` ref,
 no attached commit and no write a confirmed session made.
 An agent's move to a completed or cancelled state is also refused with
-`person_spoke` while a person acted on the item since an agent last wrote to it;
-the refusal names what they did. The answer a cancel's `transition.following` names
-is left out; any other act still refuses it. A `comment` sent in the same
-`apply_work_item_changes` call does not lift it. An agent's move that completes an
+`person_spoke` while a person acted on the item and that agent has not been told:
+neither its own last write on the item nor a notice from its Valkama hook, read
+while it held the item, came after the act. Without the hook, any agent's write
+counts. The refusal names what they did. The answer a cancel's
+`transition.following` names is left out; any other act still refuses it. A
+`comment` sent in the same `apply_work_item_changes` call does not lift it: write
+the comment in a call of its own, then close in the next. An agent's move that completes an
 item or takes it out of review is refused with `question` while a question to the
 owner is open on it, `force` or not; cancelling is not.
 `force: true` carries a refusal through and records an `overridden` event.
@@ -542,7 +545,7 @@ match is weak, and an item with no attached commit cannot show.
 | `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
 | `[convert]` | Send the word the refusal names: `stage` for a task under a parent, `goal` for one without, a task kind for a goal or stage; move out what stands under a goal or stage first, and reopen a closed item. |
 | `[split]` | Send `split_from` with `steps` alone, without `parent`, `state` or `acceptance`; split a part off an open task, not one in review, and name only its own step ids. |
-| `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
+| `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it as a comment in a call of its own, then close in the next call. |
 | `workflow_guard` with `[transition]` | The workflow has no such move, or no state to start or requeue the task in; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
 | A refused batch or creation step | The message starts with the group and index; correct that entry. |
@@ -810,4 +813,6 @@ to the survivor, gets a summary naming it, is released and closes in its
 cancelled state. Refused, writing nothing: the survivor in `items`, an item
 named twice, another space, a closed item, a goal or stage with a task, a merged
 item with children, more than 100 steps in all, a workflow with no reachable
-cancelled state, or an item another session holds without `force`.
+cancelled state, or an item another session holds without `force`. A merged item
+on which a person did something the merging agent has not been told refuses the
+merge with `person_spoke`, judged as a close is; `force` carries it.

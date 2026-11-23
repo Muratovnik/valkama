@@ -57,6 +57,7 @@ import { computed, h, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { drawHead, drawMarks } from '@/entities/work-item/components/drawMarks.ts'
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { useLabelFit } from '@/entities/work-item/composables/useLabelRoom.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { surfaceMarks } from '@/entities/work-item/utils/facets.ts'
@@ -67,7 +68,6 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
@@ -221,7 +221,7 @@ const describedBy = computed(() => {
     >
       <span class="visually-hidden">{{ `${props.item.reference} ` }}</span>
       <strong
-        v-slash-breaks="props.item.title"
+        v-work-item-title="props.item.title"
         class="tile-title"
         data-tooltip-words
       />

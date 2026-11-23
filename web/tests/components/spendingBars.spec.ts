@@ -62,7 +62,6 @@ const answer = (groupBy: UsageDimension[], stretches: readonly Stretch[] = STRET
 interface MountOptions {
   locale: 'en' | 'ru'
   measure: Measure
-  narrow: boolean
   slots: ReadonlyMap<string, SeriesSlot>
 }
 
@@ -71,15 +70,21 @@ function mountBars(
   by: UsageDimension,
   {
     measure = 'time',
-    narrow = false,
     locale = 'en',
     slots = new Map<string, SeriesSlot>(),
   }: Partial<MountOptions> = {},
 ) {
   return mount(SpendingBars, {
-    props: { rows, by, measure, narrow, slots },
+    props: { rows, by, measure, slots },
     global: { plugins: [analyticsI18n(locale)] },
   })
+}
+
+/** The section shown as its table by its switch, as a reader shows it. */
+async function mountTable(...given: Parameters<typeof mountBars>) {
+  const wrapper = mountBars(...given)
+  await showView(wrapper, '.spending-bars', 'Table')
+  return wrapper
 }
 
 /** The section by a dimension that opens on its ring, turned to its bars as a reader turns it. */
@@ -277,9 +282,9 @@ describe('the bars', () => {
     },
   )
 
-  it('read as a table on a narrow page, with the same rows', () => {
+  it('read as their table, pressed, with the same rows', async () => {
     const rows = answer(['work_item']).usage.rows
-    const table = mountBars(rows, 'work_item', { narrow: true })
+    const table = await mountTable(rows, 'work_item')
     expect(table.findComponent(RankedBars).exists()).toBe(false)
     expect(table.getComponent(RankedBarsTable).props('rows')).toEqual(
       barsOf(mountBars(rows, 'work_item')),
@@ -287,14 +292,13 @@ describe('the bars', () => {
   })
 
   // With no row, nothing was spent: neither a figure («0 min») nor an absent one («No price»).
-  it('say a period that spent nothing spent nothing, in every measure and as a table', () => {
+  it('say a period that spent nothing spent nothing, in every measure and as a table', async () => {
     for (const measure of ['time', 'tokens', 'cost'] as const) {
       expect(mountBars([], 'work_item', { measure }).text()).toContain(
         'Nothing to break down: nothing was spent in this period.',
       )
-      expect(mountBars([], 'work_item', { measure, narrow: true }).text()).toContain(
-        'Nothing to break down: nothing was spent in this period.',
-      )
+      const table = await mountTable([], 'work_item', { measure })
+      expect(table.text()).toContain('Nothing to break down: nothing was spent in this period.')
     }
     expect(mountBars([], 'work_item', { locale: 'ru' }).text()).toContain(
       'Нет данных для разбивки: за этот период ничего не потрачено.',
@@ -343,8 +347,8 @@ describe('the bars by account', () => {
     expect(bars.text()).not.toContain(FIRST)
   })
 
-  it('say no whole id under the name in the table', () => {
-    const table = mountBars(accounts.usage.rows, 'account', { narrow: true })
+  it('say no whole id under the name in the table', async () => {
+    const table = await mountTable(accounts.usage.rows, 'account')
 
     expect(
       table
@@ -358,8 +362,8 @@ describe('the bars by account', () => {
 /**
  * The two drawings of the split and the table, switched in the section's heading. The oracle is
  * the rule of `firstSplitView` as the owner set it: a ring, except where the parts are as many as
- * the tasks, which open on their bars; a section split by a second dimension draws bars alone; a
- * narrow page starts on the table; and every view reads the same figures.
+ * the tasks, which open on their bars; a section split by a second dimension draws bars alone;
+ * and every view reads the same figures.
  */
 /** Text as it reads, the narrow spaces in a figure as plain ones. */
 const spaced = (text: string) => text.replaceAll(/\s+/gu, ' ')
@@ -416,7 +420,7 @@ describe('the drawings of the split', () => {
     expect(viewsOf(section, '.spending-bars').shown).toBe('Ring')
   })
 
-  it('draws a section split by a second dimension as bars alone, and starts a narrow page on the table', async () => {
+  it('draws a section split by a second dimension as bars alone', () => {
     const split = mount(SpendingBars, {
       props: {
         rows: answer(
@@ -432,17 +436,12 @@ describe('the drawings of the split', () => {
         by: 'model',
         across: 'effort',
         measure: 'time',
-        narrow: false,
         slots: new Map<string, SeriesSlot>(),
       },
       global: { plugins: [analyticsI18n('en')] },
     })
     expect(viewsOf(split, '.spending-bars')).toEqual({ offered: ['Bars', 'Table'], shown: 'Bars' })
     expect(split.findComponent(DonutChart).exists()).toBe(false)
-
-    const narrow = mountBars(MODELS, 'model', { narrow: true })
-    expect(viewsOf(narrow, '.spending-bars').shown).toBe('Table')
-    expect(narrow.findComponent(DonutChart).exists()).toBe(false)
   })
 
   it('leaves no value out under the ring, and the first twelve to the bars with a line to all', async () => {

@@ -18,6 +18,7 @@ import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 
 import { momentAt, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { menuRows, openDimension, openFilter } from '../support/analyticsFilter.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
@@ -255,7 +256,7 @@ describe('the bar', () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const filters = JSON.stringify({ model: ['model-a', 'model-b'], work_item: [null] })
     const page = await mountAnalytics({ routeState: { filters } })
-    const chips = page.findAll('.analytics-bar-filters .combo-chip')
+    const chips = page.findAll('.analytics-bar-chips [data-filter-chip]')
     expect(chips.map((chip) => chip.text())).toEqual([
       'Task: No task',
       'Model: model-a',
@@ -269,21 +270,25 @@ describe('the bar', () => {
     expect(chips[1]?.get('button').attributes('aria-label')).toBe('Remove Model: model-a')
   })
 
-  it('opens a field of every value per dimension from «add a filter»', async () => {
+  it('opens a menu of every dimension from «add a filter», and steps into its values', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     // A section whose reads are by task alone, so a read by model is the filter's.
     const page = await mountAnalytics({ routeState: { by: 'work_item' } })
-    const add = page.get('.analytics-filter-add')
-    const fields = page.get(`#${add.attributes('aria-controls') ?? 'none'}`)
+    const add = page.get('.analytics-filter-add input')
     expect(add.attributes('aria-expanded')).toBe('false')
-    expect((fields.element as HTMLElement).style.display).toBe('none')
-    await add.trigger('click')
-    await flushPromises()
+    const asked = reads.asked.length
+    await openFilter(page)
     expect(add.attributes('aria-expanded')).toBe('true')
-    expect((fields.element as HTMLElement).style.display).toBe('')
-    expect(fields.findAll('[data-dimension]')).toHaveLength(USAGE_DIMENSIONS.length)
-    // The rail's tile of models, which is what the model's field offers, read once for both.
+    // Every dimension the page offers, and no value of any.
+    expect(menuRows(page)).toHaveLength(USAGE_DIMENSIONS.length)
+    expect(menuRows(page)).toContain('Model')
+    // The dimensions alone read nothing. The rail's tile of models is what the model's values
+    // are, read once for both; the page's own reads of a dimension's values are
+    // `analyticsModule.spec.ts`'s, where the rail reads nothing.
+    expect(reads.asked).toHaveLength(asked)
+    await openDimension(page, 'Model')
     expect(reads.grouped('model')).toHaveLength(1)
+    expect(menuRows(page)).toEqual(['Unknown', 'model-a', 'model-b'])
   })
 
   it('says how old the newest record is, and reads the figures again', async () => {
@@ -311,7 +316,9 @@ describe('the bar', () => {
     const page = await mountAnalytics({}, 'ru')
     expect(page.get('.analytics-bar-fresh').text()).toBe('Записей нет')
     expect(page.get('.analytics-refresh').text()).toBe('Обновить')
-    expect(page.get('.analytics-filter-add').text()).toBe('Добавить фильтр')
+    expect(page.get('.analytics-filter-add input').attributes('placeholder')).toBe(
+      'Добавить фильтр',
+    )
     expect(names(page)[0]).toBe('Обзор')
   })
 

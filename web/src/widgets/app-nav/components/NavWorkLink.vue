@@ -17,6 +17,8 @@
  */
 import { computed } from 'vue'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -66,11 +68,11 @@ const goalStyle = computed(() => ({ '--nav-row-goal-letters': `${props.goal?.len
     <span class="nav-row-words">
       <template v-if="goal">
         <span
+          v-work-item-title="goal"
           v-tooltip.clipped="goal"
           class="nav-row-goal trimmed-word one-line"
           :style="goalStyle"
-          >{{ goal }}</span
-        >
+        />
         <span
           class="nav-row-goal-mark trimmed-word"
           aria-hidden="true"
@@ -78,10 +80,17 @@ const goalStyle = computed(() => ({ '--nav-row-goal-letters': `${props.goal?.len
         >
       </template>
       <span
+        v-if="glyph"
         v-tooltip.clipped="title"
         class="nav-row-title trimmed-word one-line"
         >{{ title }}</span
       >
+      <span
+        v-else
+        v-work-item-title="title"
+        v-tooltip.clipped="title"
+        class="nav-row-title trimmed-word one-line"
+      />
       <span
         v-if="meta"
         class="nav-row-meta"

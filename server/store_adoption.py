@@ -15,36 +15,15 @@ for.
 from __future__ import annotations
 
 import os
-import time
 from collections.abc import Callable
+
+from .atomic_files import rename_when_free
 
 # Every store layout this product has written, newest first. Two renames have
 # now happened, and a workstation that sat out the middle one still has a real
 # board under the oldest name, so adoption walks the chain rather than assuming
 # whatever it finds is exactly one rename behind.
 LEGACY_LAYOUTS = ((".agent-hub", "hub"), (".agent-kanban", "kanban"))
-
-# Access denied and sharing violation: what Windows answers while something has
-# a file in the directory open. A scanner or an indexer reading what was just
-# written lets go by itself, so these two are worth waiting out.
-_PASSING_WINERRORS = frozenset({5, 32})
-# Seconds before each further attempt, about one in all: long enough for a
-# scanner, short enough that a holder that does not let go is refused promptly.
-_RENAME_WAITS = (0.05, 0.1, 0.2, 0.25, 0.4)
-
-
-def rename_when_free(source: str, target: str) -> None:
-    """Rename, waiting out a holder that lets go by itself; any other failure is at once."""
-    for wait in _RENAME_WAITS:
-        try:
-            os.rename(source, target)
-        except OSError as error:
-            if getattr(error, "winerror", None) not in _PASSING_WINERRORS:
-                raise
-            time.sleep(wait)
-        else:
-            return
-    os.rename(source, target)
 
 
 def _rename_legacy_names(root: str, legacy_prefix: str, current_prefix: str) -> None:

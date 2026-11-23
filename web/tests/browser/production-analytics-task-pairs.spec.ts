@@ -44,8 +44,8 @@ const WIDTHS = [390, 760, 1024, 1107, 1108, 1200, 1280, 1300, 1440, 1600, 1920]
 
 /**
  * The section by `by`, the task section unless named, in `locale` at `width`, split by model or
- * not, with its names read. A panel too narrow for the charts opens each as its table, so they are
- * chosen back, as a reader would.
+ * not, with its names read, every section drawn as its bars or its one chart, as a reader
+ * chooses them.
  */
 async function openTasks(
   page: Page,

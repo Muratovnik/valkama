@@ -21,17 +21,24 @@ import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { lastingEnd, runsOutAt, stands, stateAt } from '@/pages/analytics/utils/quotaFigures.ts'
-import { dayOf, momentAtOffset, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
+import type { QuotaLine } from '@/pages/analytics/utils/quotaLine.ts'
+import { dayOf, momentAtOffset, named, offsetOf } from '@/pages/analytics/utils/readMoments.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
 import type {
   QuotaAccount,
+  QuotaEarlierWindow,
   QuotaRange,
   QuotaShareWindow,
   QuotaWindow,
 } from '@/shared/api/analyticsApi.ts'
+import { sentences } from '@/shared/lib/sentences.ts'
 import { agoWords, spanWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { useChartLayersStore } from '@/shared/stores/chartLayersStore.ts'
 import type { StepPoint, StepRestart, StepTarget, WindowAhead } from '@/shared/ui/windowGeometry.ts'
+
+/** The parts of a day a week's run-out is said by, six hours each from midnight. */
+const PARTS = ['night', 'morning', 'day', 'evening'] as const
 
 /** Whether a window is silent at `now` (ms), by the answer's threshold `freshFor` (s). */
 const silent = (window: QuotaWindow, now: number, freshFor: number) =>
@@ -40,6 +47,7 @@ const silent = (window: QuotaWindow, now: number, freshFor: number) =>
 export function useQuotaWords() {
   const { t } = useI18n()
   const words = useSpendingWords()
+  const layers = useChartLayersStore()
   const span = spanWordsOf(t)
 
   const sectionName = (section: QuotaSection) => t(`analytics.quota.sections.${section}`)
@@ -63,7 +71,7 @@ export function useQuotaWords() {
   /** A share of a window in the page's whole percents, never claiming more or less than it is. */
   const share = (percent: number) => words.share(percent / 100)
 
-  /** A window's state at `now` (ms) in a word, «up to date» or «no data» (`stateAt`). */
+  /** A window's state at `now` (ms) in a word, «up to date» or «older reading» (`stateAt`). */
   const state = (window: QuotaWindow, now: number, freshFor: number) =>
     t(`analytics.quota.states.${stateAt(window, now, freshFor)}`)
   const source = (window: QuotaWindow) => t(`analytics.quota.sources.${window.latest.source}`)
@@ -72,7 +80,7 @@ export function useQuotaWords() {
   const silence = (window: QuotaWindow, now: number) =>
     spanWords(Math.max(0, now - Date.parse(window.latest.at)), span)
 
-  /** A window's state at `now` as its bar's words say it: «up to date», or «no data for 3 h» with how long. */
+  /** A window's state at `now` as its bar's words say it: «up to date», or «reading 3 h ago» with its age. */
   const stateWords = (window: QuotaWindow, now: number, freshFor: number) =>
     silent(window, now, freshFor)
       ? t('analytics.quota.silentFor', { for: silence(window, now) })
@@ -91,11 +99,52 @@ export function useQuotaWords() {
   const ago = (at: string, now: number) => agoWords(Date.parse(at), now, span)
 
   /**
+   * When a window runs out, `at` (ms), said at the answer's offset after the verb: five hours by
+   * the clock time, as every moment of the answer, «at 14:05»; a week by its day and the part of
+   * the day it falls in (`PARTS`), «by the evening of Nov 24», never to the minute: a week's
+   * forecast moves by hours from one reading to the next, and a minute claimed what it cannot know.
+   * `short`, where a tile has no room for the part of the day, a week says its day alone, «~Nov
+   * 24», and its hint the rest. Every run-out the quota says — the window's forecast, its bar's and
+   * its line's words, the tile's state — is said here.
+   */
+  function runOutWords(window: QuotaShareWindow, at: number, today: string, short = false) {
+    const local = momentAtOffset(at, offsetOf(today))
+    if (window.kind === 'five_hour')
+      return t('analytics.quota.runOut.at', { at: moment(local, today) })
+    // A day's step always names its date with its month; a time's never does.
+    const day = words.stepName(local, 'day').dated?.label ?? ''
+    if (short) return t('analytics.quota.runOut.about', { day })
+    const part = PARTS[Math.floor(named(local).getUTCHours() / 6)] ?? 'evening'
+    return t(`analytics.quota.runOut.by.${part}`, { day })
+  }
+
+  /**
+   * The share an ended window ended at, as every ended window says it: «90% by the reset», and
+   * with that the limit ran out before it where any reading reached 100 % (`past.lead`). Said of a
+   * window whose reset has passed, which spends nothing more: never «before the reset: 90%», which
+   * read as what is left until a reset still to come.
+   */
+  function endedShare(window: Pick<QuotaShareWindow, 'latest' | 'readings'>) {
+    const at = share(window.latest.used_percent)
+    const ranOut =
+      window.latest.used_percent >= 100 || window.readings.some((one) => one.used_percent >= 100)
+    return ranOut
+      ? t('analytics.quota.past.leadRanOut', { share: at })
+      : t('analytics.quota.past.lead', { share: at })
+  }
+
+  /**
    * The bar's words for a reader who cannot see it: the share, the pace, the state with how long
-   * the window has been silent at `now` (ms), and the forecast its tail draws, after its key, or
-   * that the window has reset (`forecastAt`).
+   * the window has been silent at `now` (ms), and the forecast its tail draws, after its key; past
+   * its reset, that it reset with no reading since, and the share it ended at (`endedShare`).
    */
   function barLabel(window: QuotaShareWindow, now: number, today: string, freshFor: number) {
+    if (window.resets_at !== null && !stands(window, now))
+      return t('analytics.quota.barEnded', {
+        window: windowName(window),
+        at: moment(window.resets_at, today),
+        ended: endedShare(window),
+      })
     const values = {
       window: windowName(window),
       share: share(window.latest.used_percent),
@@ -122,6 +171,31 @@ export function useQuotaWords() {
   }
 
   /**
+   * What a window past its reset at `now` (ms) leads with, though its answer was read before the
+   * reset: that it reset with no reading since, «Reset at 21:20, no new readings», and then, as
+   * a quieter line, the share it ended at, «90% by the reset» (`endedShare`), since its share is
+   * the last window's and leading with it read as the share spent now. Null while it stands.
+   */
+  function ended(window: QuotaShareWindow, now: number, today: string) {
+    if (window.resets_at === null || stands(window, now)) return null
+    return {
+      lead: t('analytics.quota.ended', { at: moment(window.resets_at, today) }),
+      before: endedShare(window),
+    }
+  }
+
+  /**
+   * What a window nothing reads now says in place of its share (`uncollected`): that only the
+   * quota poll reads it and the poll is off, and the name of the way to the switch; a window of
+   * money says it after its name, on its line.
+   */
+  const uncollectedWords = (window: QuotaWindow) => ({
+    lead: t('analytics.quota.uncollected.lead'),
+    line: t('analytics.quota.uncollected.line', { window: windowName(window) }),
+    settings: t('analytics.quota.uncollected.settings'),
+  })
+
+  /**
    * A week's range, never past 100 %, which a quota cannot pass: a low end there runs the window
    * out before the reset, about when its slower pace says; a high end there only may; ends said
    * alike are one value.
@@ -132,9 +206,9 @@ export function useQuotaWords() {
     if (window.latest.used_percent >= 100) return t('analytics.quota.forecast.spent')
     if (found.low_percent >= 100) {
       const at = runsOutAt(window, found.low_percent, Date.parse(today))
-      if (at === null) return t('analytics.quota.forecast.short')
-      const said = moment(momentAtOffset(at, offsetOf(today)), today)
-      return t('analytics.quota.forecast.shortBy', { at: said })
+      return at === null
+        ? t('analytics.quota.forecast.short')
+        : t('analytics.quota.forecast.shortBy', { at: runOutWords(window, at, today) })
     }
     if (found.high_percent >= 100) return t('analytics.quota.forecast.mayRunOut', { low })
     if (low === high) return t('analytics.quota.forecast.one', { share: low })
@@ -151,7 +225,9 @@ export function useQuotaWords() {
     if ('low_percent' in found) return range(window, found, today)
     if (found.outcome === 'spent') return t('analytics.quota.forecast.spent')
     if (found.outcome === 'runs_out' && found.runs_out_at)
-      return t('analytics.quota.forecast.runs_out', { at: moment(found.runs_out_at, today) })
+      return t('analytics.quota.forecast.runs_out', {
+        at: runOutWords(window, Date.parse(found.runs_out_at), today),
+      })
     return t('analytics.quota.forecast.lasts', { share: share(lastingEnd(window)) })
   }
 
@@ -191,12 +267,12 @@ export function useQuotaWords() {
   const meterHint = (window: QuotaShareWindow, now: number, today: string, freshFor: number) =>
     `${even(window)}\n${latest(window, now, today, freshFor)}`
 
-  /** The bar's words and how old its latest reading is and who read it, for a screen reader. */
+  /**
+   * The bar's words and how old its latest reading is and who read it, for a screen reader: two
+   * sentences, the first ending in the forecast's moment, which may end in a stop of its own.
+   */
   const barRead = (window: QuotaShareWindow, now: number, today: string, freshFor: number) =>
-    t('analytics.quota.barRead', {
-      bar: barLabel(window, now, today, freshFor),
-      read: latest(window, now, today, freshFor),
-    })
+    sentences([barLabel(window, now, today, freshFor), latest(window, now, today, freshFor)])
 
   /**
    * Where a window stands now, as its step line's «now» says it: its share, and when its latest
@@ -261,14 +337,21 @@ export function useQuotaWords() {
       state: state(window, now, freshFor),
     })
 
-  /** A window's readings as a step line takes them, each said with its moment and source. */
-  const points = (window: QuotaShareWindow, today: string): StepPoint[] =>
+  /**
+   * A window's readings as a step line takes them, each said with its moment and source; `prefix`
+   * keeps the keys of one window of a line of several apart from another's.
+   */
+  const points = (
+    window: Pick<QuotaShareWindow, 'readings'>,
+    today: string,
+    prefix = '',
+  ): StepPoint[] =>
     window.readings.map((reading, index) => {
       const at = moment(reading.at, today)
       const valueText = share(reading.used_percent)
       const noteText = t(`analytics.quota.sources.${reading.source}`)
       return {
-        key: `${index}`,
+        key: `${prefix}${index}`,
         at: Date.parse(reading.at),
         value: reading.used_percent,
         text: t('analytics.quota.readings.text', { at, share: valueText, source: noteText }),
@@ -283,11 +366,15 @@ export function useQuotaWords() {
    * it: «Counter zeroed» with its moment, and that the window's reset did not move. The words
    * name the fact alone, since the samples cannot tell what zeroed it.
    */
-  const restarts = (window: QuotaShareWindow, today: string): StepRestart[] =>
+  const restarts = (
+    window: Pick<QuotaShareWindow, 'resets_at' | 'restarts'>,
+    today: string,
+    prefix = '',
+  ): StepRestart[] =>
     window.restarts.map((restart, index) => {
       const at = moment(restart, today)
       return {
-        key: `restart-${index}`,
+        key: `${prefix}restart-${index}`,
         at: Date.parse(restart),
         timeText: at,
         name: t('analytics.quota.readings.restart'),
@@ -299,18 +386,93 @@ export function useQuotaWords() {
     })
 
   /**
+   * The readings of a window's line: those of each window before it the line holds (`earlier`,
+   * `quotaLine`), then its own.
+   */
+  const linePoints = (
+    window: QuotaShareWindow,
+    today: string,
+    earlier: readonly QuotaEarlierWindow[],
+  ): StepPoint[] => [
+    ...earlier.flatMap((earlier, index) => points(earlier, today, `w${index}-`)),
+    ...points(window, today),
+  ]
+
+  /**
+   * The restarts of a window's line: those of each window before it, the reset that ends each of
+   * those as a fall of the count to nothing (`zero`), «Window reset» with its moment and the share
+   * the window ended at, and the window's own.
+   */
+  const lineRestarts = (
+    window: QuotaShareWindow,
+    today: string,
+    earlier: readonly QuotaEarlierWindow[],
+  ): StepRestart[] => [
+    ...earlier.flatMap((earlier, index): StepRestart[] => {
+      const at = moment(earlier.resets_at, today)
+      const last = earlier.readings.at(-1)?.used_percent ?? 0
+      return [
+        ...restarts(earlier, today, `w${index}-`),
+        {
+          key: `w${index}-reset`,
+          at: Date.parse(earlier.resets_at),
+          timeText: at,
+          name: t('analytics.quota.readings.reset'),
+          figure: at,
+          notes: [t('analytics.quota.readings.resetEnded', { share: share(last) })],
+          zero: true,
+        },
+      ]
+    }),
+    ...restarts(window, today),
+  ]
+
+  /** The windows before the current one in words, each its span and the share it ended at. */
+  function beforeWords(earlier: readonly QuotaEarlierWindow[], today: string) {
+    const windows = earlier.map((earlier) => {
+      const last = earlier.readings.at(-1)?.used_percent ?? 0
+      const ranOut = earlier.readings.some((one) => one.used_percent >= 100)
+      return t(
+        ranOut
+          ? 'analytics.quota.readings.beforeWindowRanOut'
+          : 'analytics.quota.readings.beforeWindow',
+        {
+          from: moment(earlier.started_at, today),
+          to: moment(earlier.resets_at, today),
+          share: share(last),
+        },
+      )
+    })
+    return windows.length
+      ? t('analytics.quota.readings.before', { windows: windows.join('; ') })
+      : ''
+  }
+
+  /**
    * The step line's words for a reader who cannot see it: every reading with its moment, the
    * forecast its corridor draws, or that the window has reset by `now` (ms) (`forecastAt`), and
-   * the moments its count restarted, where it did.
+   * the moments its count restarted, where it did; then, where its line holds windows before it,
+   * each of those by its span and the share it ended at. With the forecast's layer turned off, a
+   * window that still stands is named without its forecast, as the line draws it; its table keeps
+   * it. Each is a sentence of its own, closed by one stop (`sentences`): the readings end in a
+   * moment and the forecast in a week's run-out, «к ночи на 21 нояб.», either of which may end in
+   * a stop of its own.
    */
   function readingsLabel(
     account: QuotaAccount,
     window: QuotaShareWindow,
-    now: number,
-    today: string,
+    {
+      now,
+      today,
+      earlier = [],
+    }: {
+      now: number
+      today: string
+      /** The windows before it the line holds (`quotaLine`); none by default. */
+      earlier?: readonly QuotaEarlierWindow[]
+    },
   ) {
-    const label = t('analytics.quota.readings.label', {
-      forecast: forecastAt(window, now, today),
+    const values = {
       window: windowName(window),
       account: accountName(account),
       from: window.started_at ? moment(window.started_at, today) : '',
@@ -320,23 +482,56 @@ export function useQuotaWords() {
           t('analytics.quota.readings.reading', { share: point.valueText, at: point.timeText }),
         )
         .join(', '),
-    })
+    }
     const restarted = restarts(window, today).map((restart) => restart.timeText)
-    return restarted.length
-      ? `${label} ${t('analytics.quota.readings.restarts', { at: restarted.join(', ') })}`
-      : label
+    return sentences(
+      [
+        t('analytics.quota.readings.label', values),
+        stands(window, now) && !layers.shown('ahead') ? null : forecastAt(window, now, today),
+        restarted.length
+          ? t('analytics.quota.readings.restarts', { at: restarted.join(', ') })
+          : null,
+        beforeWords(earlier, today),
+      ],
+      { closed: true },
+    )
+  }
+
+  /**
+   * The words for a reader who cannot see it of a line that is the account's current window with
+   * none of the card's readings (`QuotaLine`'s `empty`): its span and what the card's lead says,
+   * that the card's window reset with no reading since.
+   */
+  function emptyLabel(
+    account: QuotaAccount,
+    window: QuotaShareWindow,
+    { line, today }: { line: QuotaLine; today: string },
+  ) {
+    const at = (ms: number) => moment(momentAtOffset(ms, offsetOf(today)), today)
+    return t('analytics.quota.readings.labelEmpty', {
+      window: windowName(window),
+      account: accountName(account),
+      from: at(line.current.from),
+      to: at(line.current.to),
+      empty: t('analytics.quota.ended', { at: moment(line.quietSince ?? '', today) }),
+    })
   }
 
   return {
     accountName,
+    emptyLabel,
     ago,
     barLabel,
     barRead,
+    ended,
+    endedShare,
     even,
     forecast,
     forecastLine,
     forecastTarget,
     latest,
+    linePoints,
+    lineRestarts,
     meterHint,
     moment,
     nowTarget,
@@ -346,9 +541,12 @@ export function useQuotaWords() {
     readingsLabel,
     restarts,
     reset,
+    runOutWords,
     sectionName,
     share,
+    state,
     stateWords,
+    uncollectedWords,
     windowName,
   }
 }

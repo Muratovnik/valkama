@@ -25,7 +25,7 @@ import subprocess
 import sys
 
 from server.alerts import settings as alert_settings
-from server.hooks import notify
+from server.hooks import marks, notify
 from server.planning import calls, requests, service
 from tests.test_hooks_tree_notices import (
     A1,
@@ -166,7 +166,7 @@ class CodexHarness(Harness):
     def places(self) -> dict[str, bytes]:
         """Every file of the hook's places, by name."""
 
-        state = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY)
+        state = os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY)
         found = {}
         for name in sorted(os.listdir(state)) if os.path.isdir(state) else ():
             with open(os.path.join(state, name), "rb") as file:

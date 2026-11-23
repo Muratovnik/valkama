@@ -59,7 +59,7 @@ test('work with no task on the card of tasks is added to the filter from its pan
   await page.screenshot(shot(info, 'analytics-no-task-breakdown-1440x900.png'))
 
   // The bar names the filter in words, and it can be taken out.
-  const chip = page.locator('.analytics-bar-filters .combo-chip')
+  const chip = page.locator('.analytics-bar-chips [data-filter-chip]')
   await expect(chip).toHaveText(['Task: No task'])
   await page.getByRole('button', { name: 'Remove Task: No task' }).click()
   await expect(chip).toHaveCount(0)

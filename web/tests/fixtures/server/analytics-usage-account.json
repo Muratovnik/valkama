@@ -1,0 +1,202 @@
+{
+  "interface_version": "valkama-analytics-api",
+  "usage": {
+    "period": {
+      "from": "2026-01-02T03:04:05+03:00",
+      "to": "2026-01-02T03:04:05+03:00",
+      "step": "day",
+      "utc_offset": 180
+    },
+    "group_by": [
+      "model"
+    ],
+    "cost_basis": "An estimate at public API list prices for each request. A subscription pays differently, so this is not a bill.",
+    "last_event_at": "2026-01-02T03:04:05.000Z",
+    "total": {
+      "agent_seconds": 600.0,
+      "estimated_seconds": 0.0,
+      "quality": "observed",
+      "tokens": {
+        "input": 10,
+        "cached_read": null,
+        "cache_write_5m": null,
+        "cache_write_1h": null,
+        "output": 1,
+        "reasoning": null
+      },
+      "estimated_api_cost_usd": 0.01,
+      "unpriced_tokens": 0,
+      "unpriced_models": []
+    },
+    "rows": [
+      {
+        "group": {
+          "model": {
+            "id": "claude-opus-5-5",
+            "unknown": false
+          }
+        },
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0
+      }
+    ],
+    "series": [
+      {
+        "start": "2026-01-02T03:04:05+03:00",
+        "end": "2026-01-02T03:04:05+03:00",
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0,
+        "groups": [
+          {
+            "group": {
+              "model": {
+                "id": "claude-opus-5-5",
+                "unknown": false
+              }
+            },
+            "agent_seconds": 600.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 10,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": 1,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": 0.01,
+            "unpriced_tokens": 0
+          }
+        ]
+      }
+    ],
+    "unplaced": {
+      "total": {
+        "agent_seconds": 0.0,
+        "estimated_seconds": 0.0,
+        "quality": null,
+        "tokens": {
+          "input": null,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": null,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 0,
+        "unpriced_models": []
+      },
+      "rows": []
+    },
+    "comparison": {
+      "period": {
+        "from": "2026-01-02T03:04:05+03:00",
+        "to": "2026-01-02T03:04:05+03:00"
+      },
+      "total": {
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0,
+        "unpriced_models": []
+      },
+      "rows": [
+        {
+          "group": {
+            "model": {
+              "id": "claude-opus-5-5",
+              "unknown": false
+            }
+          },
+          "agent_seconds": 600.0,
+          "estimated_seconds": 0.0,
+          "quality": "observed",
+          "tokens": {
+            "input": 10,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 1,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": 0.01,
+          "unpriced_tokens": 0
+        }
+      ],
+      "unplaced": {
+        "total": {
+          "agent_seconds": 1200.0,
+          "estimated_seconds": 0.0,
+          "quality": "observed",
+          "tokens": {
+            "input": 20,
+            "cached_read": null,
+            "cache_write_5m": null,
+            "cache_write_1h": null,
+            "output": 2,
+            "reasoning": null
+          },
+          "estimated_api_cost_usd": 0.02,
+          "unpriced_tokens": 0,
+          "unpriced_models": []
+        },
+        "rows": [
+          {
+            "group": {
+              "model": {
+                "id": "claude-opus-5-5",
+                "unknown": false
+              }
+            },
+            "agent_seconds": 1200.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 20,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": 2,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": 0.02,
+            "unpriced_tokens": 0
+          }
+        ]
+      }
+    }
+  }
+}

@@ -31,6 +31,10 @@
  * part of it at the end of the periods' row there instead (`beside`), on the third and fourth
  * columns the periods leave it.
  *
+ * What the page stands under the line (`under`), such as the chips of the filters set, is a row of
+ * its own under it; on a phone it stands right under the filters' row, and the reader's own days
+ * under it, so what was set stands next to where it was set.
+ *
  * A filter the page could not set says why under the bar (`refused`).
  */
 import { computed, useTemplateRef } from 'vue'
@@ -72,10 +76,19 @@ const props = withDefaults(
     refused?: string
     /** The name of the reader's own span between two moments; null for a span of days. */
     spanName?: string | null
+    /** Whether what the page stands under the line (`under`) holds anything now. */
+    under?: boolean
     /** Whether words on the line that may wrap short of room took a second line to stand in. */
     wrapped?: (line: HTMLElement) => boolean
   }>(),
-  { beside: false, holds: () => [], refused: '', spanName: null, wrapped: undefined },
+  {
+    beside: false,
+    holds: () => [],
+    refused: '',
+    spanName: null,
+    under: false,
+    wrapped: undefined,
+  },
 )
 /** A period chosen, or a day of the reader's own set anew. */
 const emit = defineEmits<{
@@ -90,6 +103,8 @@ defineSlots<{
   default?: (state: BarState) => unknown
   /** What stands at the line's end; its last element is what the line must not run past. */
   end?: (state: BarState) => unknown
+  /** What stands under the line: a row of its own, on a phone right under the filters. */
+  under?: (state: BarState) => unknown
 }>()
 
 const { locale } = useI18n()
@@ -122,10 +137,12 @@ const room = useBarRoom({
  */
 const bar = useTemplateRef<HTMLElement>('bar')
 const { width: barWidth } = useElementSize(bar)
-const short = computed(() => {
+/** Whether the bar has a phone's rows, as its container query says (`width <= 30rem`). */
+const phone = computed(() => {
   const wide = ems(barWidth.value)
-  return (wide > 0 && wide <= 30) || room.gave('words')
+  return wide > 0 && wide <= 30
 })
+const short = computed(() => phone.value || room.gave('words'))
 /** Whether the room between the parts narrowed, and a span's name is cut. */
 const tight = computed(() => room.gave('gaps'))
 const spanCut = computed(() => room.gave('span'))
@@ -148,6 +165,7 @@ defineExpose({ gave: room.gave })
       'period-bar-tight': tight,
       'period-bar-rows': twoRows,
       'period-bar-beside': beside,
+      'period-bar-under': under,
     }"
   >
     <div
@@ -184,7 +202,17 @@ defineExpose({ gave: room.gave })
           v-bind="state"
         />
       </div>
+      <slot
+        v-if="phone"
+        name="under"
+        v-bind="state"
+      />
     </div>
+    <slot
+      v-if="!phone"
+      name="under"
+      v-bind="state"
+    />
     <FieldError
       v-if="refused"
       role="alert"
@@ -203,6 +231,13 @@ defineExpose({ gave: room.gave })
   gap: var(--space-3);
   min-width: 0;
   container-type: inline-size;
+}
+
+/* What stands under the line, and a refusal under that, stand as far apart from it as the Work
+   bar's row from its line: a row away, the chips of a filter set read as the page's, not the
+   bar's. */
+.period-bar-under {
+  gap: var(--space-2);
 }
 
 /* The periods, their days, the filters and the line's end on one line: the filters take the room
@@ -293,6 +328,13 @@ defineExpose({ gave: room.gave })
 
   .period-bar-own {
     grid-area: 3 / 1 / 4 / -1;
+  }
+
+  /* What stands under the line takes the row right under the filters' (the page places it on the
+     third), and the reader's own days move under it: under their room the chips of a filter set
+     stood a row away from the field whatever period was chosen. */
+  .period-bar-under .period-bar-own {
+    grid-area: 4 / 1 / 5 / -1;
   }
 }
 

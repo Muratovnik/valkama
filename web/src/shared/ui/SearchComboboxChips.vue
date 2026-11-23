@@ -6,13 +6,16 @@
  *
  * A chip is the board filter's, one step above the field's fill, with a transparent edge
  * for a forced palette to draw where it clears every fill. Its name stays on one line and
- * ends in an ellipsis; the whole of it is in the list and in its button's name.
+ * ends in an ellipsis; the whole of it is in the list and in its button's name. A name the host
+ * gave runs, as an option's (`ChoiceOption.runs`), is drawn in them: a task's code as code.
  */
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{
-  chips: readonly { label: string; value: string }[]
+  chips: readonly { label: string; value: string; runs?: readonly TextRun[] }[]
   disabled: boolean
   /** The name of a chip's remove button. */
   removeLabel: (label: string) => string
@@ -28,6 +31,13 @@ const emit = defineEmits<{ remove: [index: number] }>()
       class="combo-chip"
     >
       <span
+        v-if="chip.runs"
+        v-text-runs="chip.runs"
+        v-tooltip.clipped="chip.label"
+        class="combo-chip-name one-line"
+      />
+      <span
+        v-else
         v-tooltip.clipped="chip.label"
         class="combo-chip-name one-line"
         >{{ chip.label }}</span

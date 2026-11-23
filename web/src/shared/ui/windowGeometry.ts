@@ -10,10 +10,13 @@
  * Past that moment a forecast runs to the window's reset as two edges, its slower and its faster
  * pace, each straight between the moments it turns: a pace is a share a minute, so the share it
  * spends grows in a straight line, and an edge that reaches the top of the window runs on flat.
+ * The line drawn of it follows the faster edge and stops where that edge reaches the whole
+ * window, the run-out, or at the reset where it never does (`forecastEnd`).
  *
  * Where a window's count restarted inside it, the line falls at a reading with the reset
  * unchanged; the restart stands at that reading's moment, before it in the order the readings
- * stand (`stepStops`), and marks the fall (`restartFall`).
+ * stand (`stepStops`), and marks the fall (`restartFall`). A line of several windows falls the
+ * same way at each reset between them, to nothing and with no reading there (`zero`).
  */
 
 /** One window as a row of `WindowBarTable`: its name and its figures, each in words. */
@@ -26,8 +29,13 @@ export interface WindowRow {
   label: string
   /** Its state in words, «fresh», «silent 3 h». */
   noteText: string
-  /** The share spent, «62%». */
+  /** The share spent, «62%», or what a window past its reset leads with instead. */
   valueText: string
+  /**
+   * What the share's cell says under it in the quiet ink, where it has more to say: past the
+   * reset, the share it ended at, «62% by the reset».
+   */
+  valueDetail?: string
 }
 
 /** The headings and the empty words of `WindowBarTable`. */
@@ -42,8 +50,8 @@ export interface WindowWords {
 
 /**
  * The share a window's forecast says it stands at by its reset, in percent: its slower pace's
- * (`low`) and its faster's (`high`), alike for a forecast of one value. `WindowBar` draws it as a
- * hatched tail past the share spent.
+ * (`low`) and its faster's (`high`), alike for a forecast of one value. `WindowBar` draws it as one
+ * hatched tail past the share spent, to the high end; its words say both.
  */
 export interface WindowAhead {
   high: number
@@ -89,6 +97,11 @@ export interface StepRestart extends StepTarget {
   key: string
   /** Its moment in words, the table's first column: «12:05». */
   timeText: string
+  /**
+   * Whether the count fell to nothing at this moment with no reading there: a window of a line
+   * of several reset, and the next one starts from nothing (`stepPath`).
+   */
+  zero?: boolean
 }
 
 /** A reading or a restart of a step line, by its kind and its order among its kind. */
@@ -117,16 +130,17 @@ export function stepStops(
 /**
  * The fall a restart marks: from the share the line held before its moment (`high`) to the least
  * it reads at it (`low`), as the line draws them, which is where its ring stands. Where no
- * reading stood before it, both ends are at its own reading.
+ * reading stood before it, both ends are at its own reading. A fall to nothing (`zero`), a
+ * reset of a line of several windows, ends at 0 whatever reading follows it.
  */
-export function restartFall(points: readonly StepPoint[], at: number) {
+export function restartFall(points: readonly StepPoint[], at: number, zero = false) {
   let held: number | undefined
   const there: number[] = []
   for (const point of points) {
     if (point.at < at) held = point.value
-    else if (point.at === at) there.push(point.value)
+    else if (point.at === at && !zero) there.push(point.value)
   }
-  const values = [...(held === undefined ? [] : [held]), ...there]
+  const values = [...(held === undefined ? [] : [held]), ...there, ...(zero ? [0] : [])]
   return values.length
     ? { high: Math.max(...values), low: Math.min(...values) }
     : { high: 0, low: 0 }
@@ -150,35 +164,37 @@ export type StepCourse = readonly StepTurn[]
 export interface StepAhead {
   forecast: (StepTarget & { high: StepCourse; low: StepCourse }) | null
   now: StepTarget
-  /**
-   * Whether the window is silent: nothing was measured past its last reading, so the readings'
-   * line ends there rather than holding to now. A fresh window's source writes a reading only
-   * when a value changes, so its line holds to now.
-   */
-  silent: boolean
   /** The share the window stands at now, the line's end. */
   value: number
 }
 
 /**
- * The words around a step line: its top, the switch of the span it shows, its table's headings
- * and empty state.
+ * The words around a step line: its top, the ends of its axis, «now», what takes a frame back,
+ * its table's headings and empty state.
  */
 export interface StepWords {
-  /** The span from the window's start to now and the forecast past it: «To now and the forecast». */
-  ahead: string
   empty: string
   note: string
-  /** That the reset a corridor runs to stands past the plot's end. */
+  /** What marks now on the line of a running window: «Now». */
+  now: string
+  /** That the reset a forecast runs to stands past the end of a frame. */
   past: string
   time: string
   /** The value the top of the plot stands for, «100%». */
   top: string
   value: string
-  /** The switch between the two spans, as its name: «Span of the readings». */
-  views: string
-  /** The span of the whole window, up to its reset: «Whole window». */
+  /** What takes a line a frame narrowed back to the whole span it runs over: «Whole span». */
   whole: string
+  /**
+   * The right end of the whole window's axis where the window named its reset, «resets 16:30», or
+   * past it «reset at 16:30»; where unset, the moment alone.
+   */
+  reset?: string
+  /**
+   * The left end of the whole window's axis where the window named its start, «start 11:30»;
+   * where unset, the moment alone.
+   */
+  start?: string
 }
 
 /** The plot's box in its own units, which the drawing stretches to its host's width. */
@@ -197,23 +213,6 @@ export interface StepSpan {
   from: number
   to: number
 }
-
-/**
- * How much of the span a running window opens on lies past now, as a share of the time from its
- * start to now: a third, so now stands at three quarters of the plot and the readings before it
- * take that much of its width, the rest the forecast's.
- */
-const AHEAD = 1 / 3
-
-/**
- * The span a running window's step line opens on: from its start to now and as far past now as
- * a third of the time since its start, never past its reset. Drawn to the reset, a week begun
- * two days ago left its readings the first third of the plot.
- */
-export const aheadSpan = (from: number, to: number, now: number): StepSpan => ({
-  from,
-  to: Math.min(to, Math.max(now, from) + (Math.max(now, from) - from) * AHEAD),
-})
 
 /**
  * The readings a span shows: those inside it, and the one before it that holds at its start,
@@ -255,57 +254,133 @@ const fixed = (value: number) => value.toFixed(2)
 
 /**
  * The path of the steps: from the first reading, flat to each next one and up or down there,
- * then flat to `end`, the moment the last reading holds to. Readings outside the frame are held
- * at its edges. No readings draw no path.
+ * then flat to `end`, the moment the last reading holds to. At each of `zeros` after the first
+ * reading the count falls to nothing with no reading there, before a reading at that moment: the
+ * reset between two windows of one line. What stands at the frame's start is carried in from its
+ * edge, and nothing past its end is drawn. No readings draw no path.
  */
-export function stepPath(frame: StepFrame, points: readonly StepPoint[], end: number): string {
-  const [first, ...rest] = points
+function stepPath(
+  frame: StepFrame,
+  points: readonly Pick<StepPoint, 'at' | 'value'>[],
+  end: number,
+  zeros: readonly number[] = [],
+): string {
+  const first = points[0]
   if (!first) return ''
-  const parts = [`M${fixed(stepX(frame, first.at))},${fixed(stepY(frame, first.value))}`]
-  for (const point of rest)
-    parts.push(`H${fixed(stepX(frame, point.at))}`, `V${fixed(stepY(frame, point.value))}`)
-  parts.push(`H${fixed(stepX(frame, Math.max(end, points.at(-1)?.at ?? end)))}`)
+  // A stable sort keeps a fall to nothing, listed first, before the reading at its moment.
+  const turns = [
+    ...zeros.filter((at) => at > first.at).map((at) => ({ at, value: 0 })),
+    ...points.map(({ at, value }) => ({ at, value })),
+  ].sort((left, right) => left.at - right.at)
+  let start = 0
+  for (const [index, turn] of turns.entries()) if (turn.at <= frame.from) start = index
+  const from = turns[start] ?? first
+  const parts = [`M${fixed(stepX(frame, from.at))},${fixed(stepY(frame, from.value))}`]
+  for (const turn of turns.slice(start + 1)) {
+    if (turn.at > frame.to) break
+    parts.push(`H${fixed(stepX(frame, turn.at))}`, `V${fixed(stepY(frame, turn.value))}`)
+  }
+  parts.push(`H${fixed(stepX(frame, Math.max(end, turns.at(-1)?.at ?? end)))}`)
   return parts.join(' ')
 }
 
 /**
- * A place of a step line as the pointer finds it: the moment its mark stands at, and the moments
- * of the stretch it takes the pointer along where no mark is near.
+ * The two parts of a line of several windows: the windows before `live`, the moment the current
+ * window starts, which a host draws in the neutral ink of a window past its reset, and the
+ * current one from there to `end`, carrying in what stood at `live` where earlier windows went
+ * before it. A part outside the frame is empty, so neither leaves a dot at an edge.
+ */
+export function stepParts(
+  frame: StepFrame,
+  line: {
+    end: number
+    live: number
+    points: readonly Pick<StepPoint, 'at' | 'value'>[]
+    zeros: readonly number[]
+  },
+) {
+  const { end, live, points, zeros } = line
+  const before = points.filter((point) => point.at < live)
+  const after = points.filter((point) => point.at >= live)
+  const last = before.at(-1)
+  const earlier = last && live > frame.from ? stepPath(frame, before, live, zeros) : ''
+  const fell = last !== undefined && zeros.some((at) => at > last.at && at <= live)
+  const carried = last ? [{ at: live, value: fell ? 0 : last.value }] : []
+  const later = zeros.filter((at) => at > live)
+  const current =
+    after.length && live < frame.to ? stepPath(frame, [...carried, ...after], end, later) : ''
+  return { current, earlier }
+}
+
+/**
+ * A place of a step line as the pointer finds it: the moment its mark stands at, the moments of
+ * the stretch it takes the pointer along where no mark is near, and whether it is a place of its
+ * own — a restart, «now», the forecast — rather than a reading (`place`).
  */
 export interface StepAim {
   at: number
   from: number
+  place: boolean
   to: number
 }
 
+/** How the pointer reaches a step line's marks: the field's width and a mark's reach, in pixels. */
+export interface StepReach {
+  radius: number
+  width: number
+}
+
+/** Where a moment's mark stands across a field `width` pixels wide. */
+const markAcross = (frame: StepFrame, at: number, width: number) =>
+  (stepX(frame, at) / STEP_WIDTH) * width
+
+/** Whether the marks of two moments stand within a mark's reach of each other. */
+export const marksNear = (frame: StepFrame, one: number, other: number, reach: StepReach) =>
+  Math.abs(markAcross(frame, one, reach.width) - markAcross(frame, other, reach.width)) <=
+  reach.radius
+
 /**
  * The place the pointer `x` pixels into a field `width` wide points at, of `aims` drawn over
- * `frame`: the place whose mark stands nearest `x` within `radius` of it, the earlier of two as
- * near; else the first whose stretch holds `x`, held inside the field; null where none does.
- * A mark wins over a stretch, so a reading a few pixels from the next is found at its own mark
- * and never under its neighbour's step.
+ * `frame`: of the marks within `radius` of `x`, a place's before any reading's, the nearest of
+ * those, the earlier of two as near; else the first whose stretch holds `x`, held inside the
+ * field; null where none does. A mark wins over a stretch, so a reading a few pixels from the next
+ * is found at its own mark and never under its neighbour's step; and a place wins over a reading,
+ * so a restart, «now» or the forecast on the pixel of a reading, which a dense period's readings
+ * stand on at every pixel, is found at its mark, its own hint saying the share at that moment.
  */
 export function aimAt(
   frame: StepFrame,
   aims: readonly StepAim[],
   x: number,
-  { width, radius }: { radius: number; width: number },
+  { width, radius }: StepReach,
 ): number | null {
-  const across = (at: number) => (stepX(frame, at) / STEP_WIDTH) * width
-  let nearest: number | null = null
-  let distance = radius
+  let nearest: { index: number; off: number; place: boolean } | null = null
   for (const [index, aim] of aims.entries()) {
-    const off = Math.abs(across(aim.at) - x)
-    if (off < distance || (nearest === null && off === distance)) {
-      nearest = index
-      distance = off
-    }
+    const off = Math.abs(markAcross(frame, aim.at, width) - x)
+    if (off > radius) continue
+    const outranks =
+      nearest === null ||
+      (aim.place && !nearest.place) ||
+      (aim.place === nearest.place && off < nearest.off)
+    if (outranks) nearest = { index, off, place: aim.place }
   }
-  if (nearest !== null) return nearest
+  if (nearest !== null) return nearest.index
   const inside = Math.min(Math.max(x, 0), width)
-  const found = aims.findIndex((aim) => inside >= across(aim.from) && inside <= across(aim.to))
+  const found = aims.findIndex(
+    (aim) =>
+      inside >= markAcross(frame, aim.from, width) && inside <= markAcross(frame, aim.to, width),
+  )
   return found === -1 ? null : found
 }
+
+/**
+ * The box of a place, which the keyboard's ring is drawn on: the least width of a box
+ * (`--step-reach`) with its middle on the moment its mark stands at, where the pointer finds it.
+ */
+export const reachAround = (frame: StepFrame, at: number) => ({
+  start: `calc(${stepAcross(frame, at)} - var(--step-reach) / 2)`,
+  size: 'var(--step-reach)',
+})
 
 /** An edge's share at a moment: straight between its turns, held at its ends. */
 function courseAt(course: StepCourse, at: number): number {
@@ -334,13 +409,26 @@ export interface StepPlace {
 }
 
 /**
- * The part of a forecast's corridor a frame shows: each edge as points of the plot, from where
- * the corridor starts, or the frame's start, to the reset, or the frame's end where the reset
- * stands past it (`cut`). Null where the frame holds none of it.
+ * Where the line of a forecast ends: at the run-out, the first turn past its start where its
+ * faster edge reaches the whole window, or at the reset where it never does. Null where it stands
+ * at the whole window from its start, a window spent already, which has no line to draw.
+ */
+function forecastEnd(high: StepCourse): number | null {
+  const [start, ...rest] = high
+  return !start || start.value >= 100
+    ? null
+    : (rest.find((turn) => turn.value >= 100) ?? rest.at(-1) ?? start).at
+}
+
+/**
+ * The part of a forecast a frame shows: each edge as points of the plot, from where it starts, or
+ * the frame's start, to where its line ends (`forecastEnd`) or the frame's end before that, and
+ * whether the reset stands past the frame's end (`cut`). Null where the frame holds none of it, or
+ * there is no line.
  */
 export function corridorIn(frame: StepFrame, high: StepCourse, low: StepCourse) {
   const begins = Math.max(frame.from, high[0]?.at ?? Number.POSITIVE_INFINITY)
-  const reset = high.at(-1)?.at ?? Number.NEGATIVE_INFINITY
+  const reset = forecastEnd(high) ?? Number.NEGATIVE_INFINITY
   const ends = Math.min(frame.to, reset)
   if (ends <= begins) return null
   const place = (turn: StepTurn): StepPlace => ({
@@ -350,6 +438,9 @@ export function corridorIn(frame: StepFrame, high: StepCourse, low: StepCourse) 
   return {
     high: courseIn(high, begins, ends).map((turn) => place(turn)),
     low: courseIn(low, begins, ends).map((turn) => place(turn)),
-    cut: reset > frame.to,
+    // The reset itself, which the forecast's words name, past the frame's end.
+    cut: (high.at(-1)?.at ?? Number.NEGATIVE_INFINITY) > frame.to,
+    /** The moment the part shown ends. */
+    ends,
   }
 }

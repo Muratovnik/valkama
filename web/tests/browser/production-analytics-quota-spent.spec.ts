@@ -13,7 +13,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { SEATED_NAME } from '../fixtures/quota.ts'
+import { NIGHT_NAME, SEATED_NAME } from '../fixtures/quota.ts'
 import { isSpendRead, SPENT_WORLD } from '../fixtures/quotaSpent.ts'
 import { openPanel, pageAt, record, serve, shortfalls } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
@@ -118,7 +118,8 @@ for (const colorScheme of ['light', 'dark'] as const)
         .textContent()
 
       // The spend's heading names its period; what it is and leaves out is the panel's «ⓘ».
-      await expect(work.locator('h3')).toHaveText('Window breakdown: 11:30 – 14:30')
+      // The stretch it covers and what its lines add up to (DESIGN.md § Analytics).
+      await expect(work.locator('h3')).toHaveText('Window breakdown: 11:30 – 14:30 · ≈ $13.00')
       await expect(work).not.toContainText('quota points')
       await expect(work).toHaveAttribute('data-state', 'spent')
       // The first line of its chart, or of its table where the panel shows tables.
@@ -166,7 +167,7 @@ for (const colorScheme of ['light', 'dark'] as const)
 
       // No work, and work only its organization recorded with no account known, said apart, each
       // still by task; one with nothing to draw offers no drawing to draw it in.
-      const none = await openSpend(page, '7e6d5c4b')
+      const none = await openSpend(page, NIGHT_NAME)
       await expect(none).toHaveAttribute('data-state', 'none')
       await expect(none).toContainText('No work was recorded on this account in this window.')
       await expect(none.getByRole('radio', { name: 'Tasks' })).toHaveAttribute(
@@ -174,7 +175,7 @@ for (const colorScheme of ['light', 'dark'] as const)
         'true',
       )
       await expect(none.getByRole('radio', { name: 'Ring' })).toHaveCount(0)
-      await closeSpend(page, '7e6d5c4b')
+      await closeSpend(page, NIGHT_NAME)
       const unplaced = await openSpend(page, SEATED_NAME)
       await expect(unplaced).toHaveAttribute('data-state', 'unplaced')
       await expect(unplaced).toContainText('with the account unknown')

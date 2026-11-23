@@ -22,6 +22,7 @@ import { useI18n } from 'vue-i18n'
 import { autoUpdate, flip, hide, offset, size, useFloating } from '@floating-ui/vue'
 
 import type { EditorSuggestion, SuggestionKind } from '@/shared/ui/MarkdownEditor.vue'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -133,6 +134,13 @@ defineExpose({
           >{{ row.name }}</span
         >
         <span
+          v-if="row.runs"
+          v-text-runs="row.runs"
+          v-tooltip.clipped="row.title"
+          class="markdown-suggestion-title one-line"
+        />
+        <span
+          v-else
           v-tooltip.clipped="row.title"
           class="markdown-suggestion-title one-line"
           >{{ row.title }}</span

@@ -1,0 +1,218 @@
+/*
+ * The plot of a step line (`StepLine`), read as its own scoped style: the top's figure beside the
+ * field, the field a frame is dragged along, the axis under it, and the drawing over the field —
+ * the SVG, inset in it so a mark at 0 % and one at the top stand whole inside the plot, and its
+ * lines: the floor, the top's level its figure names, now while the window runs, the pace, the
+ * readings and the forecast's dashed line over the quiet fill of its range, each in its ink, and
+ * every one in a forced palette's. A window past its reset (`step-muted`), and the windows before
+ * the current one on a line of several (`step-path-earlier`, `step-earlier`), draw their readings
+ * and their marks in the neutral ink a bar past its reset is drawn in.
+ */
+
+/* The plot: the top's figure in a column of its own before the field, and the axis under the
+   field as wide as it, so a word under the field stands where its moment does. The drawing stands
+   inset in the field by half a mark as it is drawn when pointed at, ring and all, so a mark at
+   0 % and one at the top stand whole inside the plot, and in the step that takes the pointer for
+   it: drawn to the plot's edge, the mark of a reading at 0 % hung half under the floor, and there
+   the pointer found no reading. How near a
+   mark the pointer finds it, half a mark as drawn when pointed at; the least width of a place's
+   box, which the keyboard's ring is drawn on; and half the width of the forecast's ribbon, are
+   the plot's own. */
+.step-plot {
+  --step-inset: calc(var(--space-2) * 0.75 + var(--space-hair));
+  --step-hit: calc(var(--space-2) * 0.75);
+  --step-reach: 24px;
+  --step-ribbon: calc(var(--space-1) * 0.75);
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+
+/* The top's figure centred on the hairline at its level, which the drawing's inset puts that far
+   under the field's top. */
+.step-top {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: start;
+  color: var(--color-text-tertiary);
+  translate: 0 calc(var(--step-inset) - 50%);
+}
+
+/* The field a frame is dragged along: nothing in it is text a press would select. */
+.step-field {
+  position: relative;
+  grid-row: 1;
+  grid-column: 2;
+  block-size: var(--space-24);
+  user-select: none;
+}
+
+/* With no reading, the field says so where the line would run, over its floor. */
+.step-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+/* A frame over the moments it covers (`axisFrame.css`), as tall as the plot. */
+.step-span {
+  position: absolute;
+  inset-block: 0;
+}
+
+/* The two ends' words, each under the moment it names: the room before the first and after the
+   second (`--axis-start`, `--axis-end`) holds what a shared scale runs past the line's windows.
+   That room grows from nothing up to its share and only into what the words leave, so it gives way
+   before either word does: where the two would not fit beside each other the first moves out
+   toward the empty scale, whole, and only where they would not fit at all does each wrap, as both
+   do at the plot's ends; they never cover each other or run past the plot. A grid whose first
+   column was that room shared the width with the words' columns alike, so a start word under the
+   first window wrapped while the empty part beside it stayed, and its plot stood taller than its
+   neighbour's. */
+.step-axis {
+  --axis-start: 0%;
+  --axis-end: 0%;
+
+  display: flex;
+  grid-row: 2;
+  grid-column: 2;
+  margin-block-start: var(--space-2);
+  color: var(--color-text-tertiary);
+
+  /* The room grows ahead of anything else in the axis, so it takes what the words leave, to its
+     share at most; the rest stands between the words. */
+  &::before,
+  &::after {
+    content: '';
+    flex: 1000 1 0;
+    max-inline-size: var(--axis-start);
+  }
+
+  &::after {
+    max-inline-size: var(--axis-end);
+  }
+
+  > [data-moment='from'] {
+    margin-inline-end: var(--space-3);
+  }
+
+  > [data-moment='to'] {
+    margin-inline-start: auto;
+    text-align: end;
+  }
+}
+
+.step-svg {
+  position: absolute;
+  inset: var(--step-inset) auto auto 0;
+  display: block;
+  inline-size: 100%;
+  block-size: calc(100% - 2 * var(--step-inset));
+  overflow: visible;
+  pointer-events: none;
+}
+
+.step-floor {
+  stroke: var(--color-rule-strong);
+  stroke-width: 1;
+
+  @media (forced-colors: active) {
+    stroke: GrayText;
+  }
+}
+
+/* The top's level, which its figure names: quieter than the floor. */
+.step-ceiling {
+  stroke: var(--color-rule);
+  stroke-width: 1;
+
+  @media (forced-colors: active) {
+    stroke: GrayText;
+  }
+}
+
+/* Now, up the drawing: a hairline in the quiet ink, under the readings' line, upright where the
+   pace runs across, so it reads as a moment and not as a course. */
+.step-now {
+  stroke: var(--color-text-tertiary);
+  stroke-width: 1;
+
+  @media (forced-colors: active) {
+    stroke: GrayText;
+  }
+}
+
+.step-even {
+  stroke: var(--color-text-tertiary);
+  stroke-width: 1;
+
+  @media (forced-colors: active) {
+    stroke: GrayText;
+  }
+}
+
+.step-path {
+  fill: none;
+  stroke: var(--color-series-1);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+
+  @media (forced-colors: active) {
+    stroke: CanvasText;
+  }
+}
+
+/* The forecast: a dashed line of the readings' width in their hue, the conventional cue of a
+   projection, from the readings' end at now; its dashes are pixels, as its width is. */
+.step-forecast {
+  fill: none;
+  stroke: var(--color-series-1);
+  stroke-dasharray: 5 4;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  stroke-width: 2;
+
+  @media (forced-colors: active) {
+    stroke: CanvasText;
+  }
+}
+
+/* A week's range under the forecast's line, down to its slower pace: a quiet solid fill of the
+   hue, no hatch and no outline. */
+.step-range {
+  fill: var(--color-series-1);
+  fill-opacity: 0.16;
+  stroke: none;
+
+  @media (forced-colors: active) {
+    fill: CanvasText;
+    fill-opacity: 0.25;
+  }
+}
+
+/* A window past its reset, and the windows before the current one on a line of several: their
+   readings and their marks in the neutral ink of marks at rest, as a bar past its reset is drawn,
+   which a forced palette draws in its inactive ink. */
+.step-muted .step-path,
+.step-path-earlier {
+  stroke: var(--color-text-tertiary);
+
+  @media (forced-colors: active) {
+    stroke: GrayText;
+  }
+}
+
+.step-muted .step-mark,
+.step-mark.step-earlier {
+  background: var(--color-text-tertiary);
+
+  @media (forced-colors: active) {
+    background: GrayText;
+  }
+}

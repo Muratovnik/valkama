@@ -14,6 +14,7 @@ import { openCard } from './editorPage.ts'
 import { frames } from './frames.ts'
 import { test } from './test.ts'
 import { reply, root } from './threadFixtures.ts'
+import { keepWindowErrors } from './windowErrors.ts'
 
 const WORDS = {
   en: { reply: 'Reply', send: 'Send' },
@@ -68,11 +69,7 @@ async function openAsked(page: Page, locale: Locale, width: number) {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   // A ResizeObserver loop is reported to the window, not thrown: collect it as well.
-  await page.addInitScript(() => {
-    const seen: string[] = []
-    Object.assign(window, { seenErrors: seen })
-    window.addEventListener('error', (event) => seen.push(String(event.message)))
-  })
+  const windowErrors = await keepWindowErrors(page)
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width, height: 900 })
@@ -86,10 +83,7 @@ async function openAsked(page: Page, locale: Locale, width: number) {
   await page.mouse.move(0, 0)
   await settle(page)
   await settle(page)
-  const pageErrors = async () => [
-    ...errors,
-    ...(await page.evaluate(() => (window as unknown as { seenErrors: string[] }).seenErrors)),
-  ]
+  const pageErrors = async () => [...errors, ...(await windowErrors())]
   return { ...opened, thread, pageErrors }
 }
 

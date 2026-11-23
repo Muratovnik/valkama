@@ -26,8 +26,10 @@ refused rather than passed.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
+import json
 import os
 import shutil
 import stat
@@ -35,9 +37,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
+
+from tests.worktree import link_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -79,17 +84,6 @@ def _script(directory: Path, name: str) -> Path:
     path.write_bytes(b"")
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
     return path
-
-
-def link_directory(link: Path, target: Path) -> None:
-    """A junction on Windows, which takes no privilege, and a symbolic link elsewhere."""
-
-    if sys.platform == "win32":
-        import _winapi
-
-        _winapi.CreateJunction(str(target), str(link))
-    else:
-        link.symlink_to(target, target_is_directory=True)
 
 
 #: The real `subprocess.run`, for the Git calls a fake stage runner lets through, and Git
@@ -505,7 +499,6 @@ class ReleaseToolchainTests(unittest.TestCase):
                 (("ci",), copy / "web"),
                 (("ci",), copy / "desktop"),
                 (("test",), copy / "web"),
-                (("run", "typecheck"), copy / "web"),
                 (("run", "build"), copy / "web"),
                 (("test",), copy / "desktop"),
             ],
@@ -575,7 +568,7 @@ class ReleaseToolchainTests(unittest.TestCase):
                     for call in stages.calls
                     if call.args[0][0] == release.NPM
                 ]
-                self.assertEqual(6, len(npm))
+                self.assertEqual(5, len(npm))
                 for cwd in npm:
                     self.assertTrue(cwd.is_relative_to(self.temporary), cwd)
                     self.assertFalse(cwd.is_relative_to(checkout.resolve()), cwd)
@@ -604,7 +597,7 @@ class ReleaseToolchainTests(unittest.TestCase):
     def test_a_failed_npm_stage_still_removes_the_copy(self) -> None:
         checkout = make_checkout(self.root / "checkout")
         with self.assertRaises(subprocess.CalledProcessError):
-            self.checked(checkout, FakeStages(self.outside(), fail=("run", "typecheck")))
+            self.checked(checkout, FakeStages(self.outside(), fail=("test",)))
         self.assertEqual([], list(self.temporary.iterdir()))
         self.assertEqual({"kept": b"kept"}, files(self.outside()))
         self.assertEqual(
@@ -889,6 +882,222 @@ class ReleasePriceTests(unittest.TestCase):
     def test_the_servers_own_table_loads_from_its_file(self) -> None:
         table = release.price_table()
         self.assertEqual("anthropic", table.listings()["claude-fable-5-2"].vendor)
+
+
+#: A made-up commit id of the full length Git writes.
+COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+
+class SourceArchiveTests(unittest.TestCase):
+    """The source archive carries the record `launcher install` pins it by.
+
+    The archive has no Git history, so a directory it was unpacked into could not
+    be installed. Build now writes the commit it was built from, the version and
+    the digest of each file; the record has to list exactly the files the archive
+    holds, or the install would check something other than what it copies.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name).resolve()
+        self.tree = self.root / "tree"
+        self.contents = {
+            "valkama.py": b"print('entry')\n",
+            "VERSION": b"9.9.9\n",
+            "server/cli.py": b"# a module\n",
+            "web/dist/assets/app.js": bytes(range(256)),
+            "docs/guides/установка.md": "текст\n".encode(),
+        }
+        for name, data in self.contents.items():
+            path = self.tree / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        self.target = self.root / "valkama-9.9.9-source.zip"
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def write(self, commit: str = COMMIT) -> None:
+        files = sorted(path for path in self.tree.rglob("*") if path.is_file())
+        release.write_source_archive(self.target, self.tree, files, commit, "9.9.9")
+
+    def test_the_record_lists_every_file_the_archive_holds_and_nothing_else(self) -> None:
+        self.write()
+        with zipfile.ZipFile(self.target) as archive:
+            held = {name: archive.read(name) for name in archive.namelist()}
+        record = json.loads(held.pop("valkama-source.json"))
+        self.assertEqual(self.contents, held)
+        self.assertEqual(
+            {name: hashlib.sha256(data).hexdigest() for name, data in held.items()},
+            record["files"],
+        )
+        # Only what any public archive may hold: no checkout path, no host, no account.
+        self.assertEqual({"schema_version", "commit", "version", "files"}, set(record))
+        self.assertEqual(
+            (1, COMMIT, "9.9.9"), (record["schema_version"], record["commit"], record["version"])
+        )
+
+    def test_an_archive_whose_commit_is_not_a_full_id_is_not_left_behind(self) -> None:
+        for commit in ("HEAD", COMMIT[:12], COMMIT.upper()):
+            with self.subTest(commit=commit):
+                with self.assertRaisesRegex(ValueError, "not a full commit id"):
+                    self.write(commit)
+                self.assertFalse(self.target.exists())
+
+    def test_build_and_smoke_require_the_commit(self) -> None:
+        for action in ("build", "smoke"):
+            argv = ["release.py", action, "--assets", "a", "--version", "9.9.9", "--work-dir", "w"]
+            with self.subTest(action=action):
+                with (
+                    mock.patch.object(release.sys, "argv", argv),
+                    mock.patch.object(release, action) as called,
+                    mock.patch("sys.stderr", io.StringIO()) as said,
+                    self.assertRaises(SystemExit),
+                ):
+                    release.main()
+                called.assert_not_called()
+                self.assertIn("--commit", said.getvalue())
+
+
+#: A Release Kit snapshot as build reads it: committed files and no Git. The desktop
+#: build reads its package, the NSIS include inside it and the icon beside it.
+SNAPSHOT = {
+    "VERSION": b"9.9.9\n",
+    "valkama.py": b"print('entry')\n",
+    "desktop/package.json": b'{"name": "valkama-desktop", "version": "9.9.9"}\n',
+    "desktop/package-lock.json": b'{"version": "9.9.9"}\n',
+    "desktop/main.js": b"main\n",
+    "desktop/build/installer.nsh": b"; include\n",
+    "windows/valkama.ico": b"icon",
+    "windows/tray.ps1": b"# tray\n",
+}
+
+
+class FakeDist:
+    """`subprocess.run` for `build`: npm played as it touches a disk, every call recorded.
+
+    `ci` installs a `node_modules` beside the package it runs in, with a read-only
+    file as some packages carry. `run dist` records the tree it found around its
+    package, then writes the installer into the output directory it was given.
+    """
+
+    INSTALLER = b"an installer"
+
+    def __init__(self) -> None:
+        self.calls: list = []
+        self.found: dict[str, bytes] | None = None
+
+    def __call__(self, command: tuple[str, ...], **kwargs: object) -> object:
+        self.calls.append(mock.call(command, **kwargs))
+        cwd = Path(str(kwargs["cwd"]))
+        if command[1:] == ("ci",):
+            (cwd / "node_modules").mkdir(exist_ok=True)
+            held = cwd / "node_modules" / "read-only.js"
+            held.write_bytes(b"module")
+            held.chmod(stat.S_IREAD)
+        elif command[1:3] == ("run", "dist"):
+            self.found = files(cwd.parent)
+            output = Path(command[-1].removeprefix("--config.directories.output="))
+            output.mkdir(parents=True)
+            (output / "Valkama Setup 9.9.9.exe").write_bytes(self.INSTALLER)
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+
+class ReleaseBuildTests(unittest.TestCase):
+    """Build leaves Release Kit's snapshot as it found it.
+
+    Release Kit removes from the snapshot only the files it wrote, so a `npm ci`
+    run there left the desktop `node_modules` behind after every release
+    preparation, reported as retained temporary files. Build now installs and
+    packs in a copy inside its work directory, which Release Kit discards whole.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name).resolve()
+        self.snapshot = self.root / "source"
+        for name, data in SNAPSHOT.items():
+            path = self.snapshot / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        # The record format, loaded from the snapshot as build loads it.
+        record = self.snapshot / "server" / "source_archive.py"
+        record.parent.mkdir()
+        shutil.copyfile(ROOT / "server" / "source_archive.py", record)
+        self.assets = self.root / "assets"
+        self.work = self.root / "temp"
+        self.work.mkdir()
+
+    def built(self) -> FakeDist:
+        npm = FakeDist()
+        with (
+            mock.patch.object(release, "ROOT", self.snapshot),
+            mock.patch.object(release.subprocess, "run", side_effect=npm),
+            mock.patch.object(release.sys, "platform", "win32"),
+            mock.patch.object(release, "require_version"),
+            mock.patch.object(release.sys, "stdout", io.StringIO()),
+            # Release Kit runs build with PYTHONDONTWRITEBYTECODE, so loading the
+            # record from the snapshot writes no bytecode beside it.
+            mock.patch.object(release.sys, "dont_write_bytecode", True),
+        ):
+            release.build(self.assets, "9.9.9", self.work, COMMIT)
+        return npm
+
+    def test_the_snapshot_comes_through_the_build_unchanged(self) -> None:
+        before = files(self.snapshot)
+
+        npm = self.built()
+
+        self.assertFalse((self.snapshot / "desktop" / "node_modules").exists())
+        self.assertEqual(before, files(self.snapshot))
+        output = self.work / "desktop-build"
+        commands = [call.args[0][1:] for call in npm.calls]
+        self.assertEqual(
+            [("ci",), ("run", "dist", "--", f"--config.directories.output={output}")], commands
+        )
+        for call in npm.calls:
+            cwd = Path(str(call.kwargs["cwd"])).resolve()
+            self.assertTrue(cwd.is_relative_to(self.work), cwd)
+            self.assertEqual("desktop", cwd.name)
+
+    def test_the_build_reads_the_desktop_package_with_its_icon_beside_it(self) -> None:
+        stale = self.snapshot / "desktop" / "release" / "Valkama Setup 9.9.8.exe"
+        stale.parent.mkdir()
+        stale.write_bytes(b"an earlier build")
+        (self.snapshot / "desktop" / "node_modules").mkdir()
+        (self.snapshot / "desktop" / "node_modules" / "left.js").write_bytes(b"a local install")
+
+        npm = self.built()
+
+        # What dist found around its package: the desktop sources and `windows/` as
+        # siblings, the install `ci` made, and nothing else of the snapshot.
+        expected = {
+            name: data
+            for name, data in SNAPSHOT.items()
+            if name.startswith(("desktop/", "windows/"))
+        }
+        expected["desktop/node_modules/read-only.js"] = b"module"
+        self.assertEqual(expected, npm.found)
+
+    def test_the_installer_and_the_checksums_are_published_as_before(self) -> None:
+        self.built()
+
+        source = "valkama-9.9.9-source.zip"
+        installer = "Valkama-Setup-9.9.9.exe"
+        self.assertEqual(
+            {source, installer, "SHA256SUMS"}, {path.name for path in self.assets.iterdir()}
+        )
+        self.assertEqual(FakeDist.INSTALLER, (self.assets / installer).read_bytes())
+        zipped = (self.assets / source).read_bytes()
+        self.assertEqual(
+            f"{hashlib.sha256(zipped).hexdigest()}  {source}\n"
+            f"{hashlib.sha256(FakeDist.INSTALLER).hexdigest()}  {installer}\n",
+            (self.assets / "SHA256SUMS").read_text(encoding="utf-8"),
+        )
+        with zipfile.ZipFile(self.assets / source) as archive:
+            held = set(archive.namelist()) - {"valkama-source.json"}
+        self.assertEqual({*SNAPSHOT, "server/source_archive.py"}, held)
 
 
 if __name__ == "__main__":

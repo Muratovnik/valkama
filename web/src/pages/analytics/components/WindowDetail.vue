@@ -7,8 +7,8 @@
  * section's «ⓘ» says under the panel, is said by the panel's own «ⓘ» under the names, never as a
  * line of it, as the page says each caveat (`PanelLevel`). It is drawn or read as its table, as
  * every chart of the page is, by a switch of its own beside that «ⓘ»: the section's switch stays
- * under the panel. The panel's own width chooses first, as a page's does (`useNarrowCharts`), and a
- * person's choice stands while the panel is open.
+ * under the panel. It opens drawn at every width, as every chart of the page does (`ChartSection`),
+ * and a person's choice stands while the panel is open.
  *
  * The account and the window are found by the keys the quota's answer gives them (`accountKey`,
  * `windowKey`), in the quota read on show, to whose moment the side panel reads what used the
@@ -20,7 +20,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { accountKey, answerMoment, windowKey } from '@/pages/analytics/utils/quotaFigures.ts'
@@ -67,10 +66,8 @@ const title = computed(() =>
 watch(title, (named) => emit('named', named), { immediate: true })
 
 type Shown = 'chart' | 'table'
-const body = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(body)
 const chosen = ref<Shown | null>(null)
-const shown = computed<Shown>(() => chosen.value ?? (narrow.value ? 'table' : 'chart'))
+const shown = computed<Shown>(() => chosen.value ?? 'chart')
 const options = computed(() =>
   (['chart', 'table'] as const).map((value) => ({ value, label: t(`analytics.shown.${value}`) })),
 )
@@ -120,7 +117,6 @@ function choose(value: Shown) {
       </div>
     </template>
     <div
-      ref="body"
       class="window-detail"
       data-detail="window"
     >

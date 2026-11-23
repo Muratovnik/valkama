@@ -37,7 +37,7 @@ function mountSection(by: UsageDimension, across: UsageDimension | null, locale:
     })),
   }).usage.rows
   return mount(SpendingBars, {
-    props: { rows, by, across, measure: 'time', narrow: false, slots: new Map() },
+    props: { rows, by, across, measure: 'time', slots: new Map() },
     global: { plugins: [analyticsI18n(locale)] },
   })
 }

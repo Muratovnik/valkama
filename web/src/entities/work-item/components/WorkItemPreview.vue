@@ -6,8 +6,8 @@
  * Its head as every surface reads an item: a kind that is not the ordinary one,
  * the reference, a priority that is not the ordinary one, and its state, with
  * what it waits on if anything does (`MarkHead`);
- * the whole title, wrapped wherever it has to be but never inside a reference it names
- * (`WorkItemTitle`); who holds it and how far its steps are; and when it last changed
+ * the whole title, wrapped wherever it has to be but never inside a reference it names,
+ * its code drawn as code (`vWorkItemTitle`); who holds it and how far its steps are; and when it last changed
  * or closed, after the space it comes from when that is not the open one. Each fact
  * is the facet registry's (`surface: 'preview'`), drawn as a tile draws its own, so a
  * stale claim reads the same here as on the board. A line of facts breaks between words
@@ -34,7 +34,7 @@ import { useI18n } from 'vue-i18n'
 import { drawMarks, MarkHead } from '@/entities/work-item/components/drawMarks.ts'
 import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
 import WorkItemCopyButtons from '@/entities/work-item/components/WorkItemCopyButtons.vue'
-import WorkItemTitle from '@/entities/work-item/components/WorkItemTitle.vue'
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { useWorkItemCopy } from '@/entities/work-item/composables/useWorkItemCopy.ts'
 import { useWorkItemPreviewWords } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 import type { WorkItemPreviewSubject } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
@@ -106,12 +106,11 @@ const copied = useWorkItemCopy(() => props.reference)
     </p>
     <template v-if="drawn">
       <p
+        v-work-item-title="drawn.title"
         class="preview-title"
         data-preview-part="title"
         aria-hidden="true"
-      >
-        <WorkItemTitle :title="drawn.title" />
-      </p>
+      />
       <p
         v-if="facts.length || stale"
         class="preview-facts"

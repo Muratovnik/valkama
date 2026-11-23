@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
   pageDimensionOf,
   validateQuotaAnswer,
+  validateQuotaWindowAnswer,
   validateUsageAnswer,
 } from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
@@ -81,8 +82,10 @@ const unread = (value: unknown): never => {
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
   'analytics-quota.json': validateQuotaAnswer,
+  'analytics-quota-window.json': validateQuotaWindowAnswer,
   'analytics-usage.json': validateUsageAnswer,
   'analytics-usage-seat.json': validateUsageAnswer,
+  'analytics-usage-account.json': validateUsageAnswer,
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   // A space's board and its Volumes read over one period (`workFilterClosed.test.ts`).
   'closed-in-period.json': (value) => {
@@ -419,6 +422,18 @@ describe('the server fixtures', () => {
       open: true,
       container_state: 'in_progress',
     })
+  })
+
+  it('set beside a read narrowed to an account its organization’s work on no account', () => {
+    const usage = validateUsageAnswer(read('analytics-usage-account.json'))
+    // The day before, another session's twenty minutes for the organization were on no account.
+    expect(usage.comparison?.unplaced?.total.agent_seconds).toBe(1200)
+    expect(usage.comparison?.unplaced?.rows.map(({ group }) => group.model?.id)).toEqual([
+      'claude-opus-5-5',
+    ])
+    expect(usage.unplaced?.rows).toEqual([])
+    const whole = validateUsageAnswer(read('analytics-usage.json'))
+    expect([whole.unplaced, whole.comparison?.unplaced]).toEqual([null, null])
   })
 
   it('carry every 2.5 form the card and the question view draw', () => {

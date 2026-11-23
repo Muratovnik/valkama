@@ -9,8 +9,11 @@ import { useI18n } from 'vue-i18n'
  *
  * - The period's three figures, which also choose the page's measure (`SpendingTiles`).
  * - The period's chart by day, or by hour for a single day, across the panel's whole width,
- *   stacked by task, with the period the figures are compared with outlined behind it on the
- *   same scale (`usePeriodBefore`) and the marks of where the accounts changed.
+ *   stacked by project, with the period the figures are compared with outlined behind it on the
+ *   same scale (`usePeriodBefore`) and the marks of where the accounts changed. Stacked by task it
+ *   named a few per cent of the time, the rest «Other» and «No task»; the tasks have their own
+ *   section. At a project's scope there is the one project, so it is one plain series with no
+ *   legend. It is the period read by project (`useTopValues`), drawn once that read is in hand.
  * - Under it one row of cards: what changed most from the period before, task by task, then the
  *   first five values of each dimension a person asks about most — tasks, models and projects;
  *   no project at a project's scope, where every figure is that project's — each asked of the
@@ -18,18 +21,19 @@ import { useI18n } from 'vue-i18n'
  *   side panel, as a bar of that section does. The roles have no card: there are two of them, and the rail's
  *   tile says both.
  *
- * Its own answer is the read by task, beside the period before; a press that could not do what
- * it asked says why where it was pressed. Its heading names it, and the heading's «ⓘ» says the
- * caveats of its figures once (`useSectionCaveats`).
+ * Its own answer is the read by task, beside the period before, which its tiles and «What
+ * changed» read; a press that could not do what
+ * it asked says why where it was pressed. Its heading names it, and the heading's «ⓘ» says which
+ * projects its figures are of (`scope`) and their caveats once (`useSectionCaveats`).
  */
-import { useResizeObserver } from '@vueuse/core'
+import { useMutationObserver, useResizeObserver } from '@vueuse/core'
 
 import OverviewChanges from '@/pages/analytics/components/OverviewChanges.vue'
 import OverviewTop from '@/pages/analytics/components/OverviewTop.vue'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { OVERVIEW_CARDS } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
@@ -42,7 +46,6 @@ import { refusedIn } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
 
@@ -61,6 +64,8 @@ const props = defineProps<{
   readAt: Date
   /** Why the last press in a part of the overview did not do what it asked; null otherwise. */
   refused: Refusal | null
+  /** Which projects the figures are of, as a sentence: one project's, or every project's. */
+  scope: string
   usage: Usage
   /** Whether the period is live, «Now» or «Today»: its chart opens on the step running. */
   live?: boolean
@@ -79,11 +84,8 @@ const emit = defineEmits<{
 const measure = defineModel<Measure>('measure', { required: true })
 const { t } = useI18n()
 const caveats = useSectionCaveats()
-/** The caveats of the overview's figures, which its heading's «ⓘ» says. */
-const about = computed(() => caveats.spending(props.usage))
-
-/** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
-const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_item')
+/** Which projects the figures are of, then the caveats of them, as its heading's «ⓘ» says. */
+const about = computed(() => [props.scope, ...caveats.spending(props.usage)])
 
 const cards = computed<OverviewCard[]>(() =>
   OVERVIEW_CARDS.filter((card) => !(props.projectScoped && card === 'project')),
@@ -94,16 +96,17 @@ const beforeSteps = usePeriodBefore({
   filters: () => props.filters,
   compared: () => props.compared,
 })
+/** What the chart stacks the period by: its projects, one at a project's scope. */
+const CHART_BY: UsageDimension = 'project'
 const top = useTopValues({
   usage: () => props.usage,
   filters: () => props.filters,
   period: () => props.period,
-  dimensions: () => cards.value,
+  dimensions: () => [...new Set([...cards.value, CHART_BY])],
 })
-
-/** The chart's own column decides whether it opens as its table. */
-const chartColumn = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(chartColumn)
+/** The period by project, for the chart; null until it is first read. */
+const chart = computed(() => top.answers.value[CHART_BY] ?? null)
+const chartFailed = computed(() => !chart.value && top.reads.value[CHART_BY] === 'failed')
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
@@ -116,8 +119,17 @@ const pending = useAnewDimmed(usePanelStanding())
  * the marks and notes of where the accounts changed, the cards. Over the floor it takes the room
  * the panel's box leaves under the cards, so a tall window gives that room to the chart; a box
  * that lacks the room for the floor scrolls, and the chart keeps it. `grow` is what the field
- * adds to the floor, worked out from the room the content leaves with that addition in place,
- * so a second look at the same box finds the same answer and changes nothing.
+ * adds to the floor, worked out from the room the content leaves with the field as it stands,
+ * so a second look at the same box finds the same answer and changes nothing. While no field is
+ * drawn — the chart's read not in or failed, or the chart shown as its table — nothing takes the
+ * addition and the room says nothing of it, so it is kept as it was for the field drawn next.
+ *
+ * The field is fitted in the turn the overview's content changes — an answer landing, a notice,
+ * the chart drawn again after its table — before the browser measures the page (`fit` on each
+ * change of what the panel holds), so the panel stands at its height in the frame that first
+ * shows it. Its box measured is then the box already fitted: a fit inside the panel's own
+ * observer that resized the panel would be a ResizeObserver loop, which the browser reports.
+ * The observers fit what changes no content: the window, the box the panel scrolls in, a font.
  *
  * A box short of the floor by no more than the air the panel keeps under its content gives up
  * that much of the air instead (`air`): the content stands whole inside the box, and a scroll
@@ -136,6 +148,9 @@ function scroller(from: HTMLElement) {
   return null
 }
 
+/** The chart's drawing field: what `--overview-field-height` sizes, by the rule under the chart. */
+const FIELD = '.overview-chart .period-field'
+
 function fit() {
   const own = panel.value
   const frame = own && scroller(own)
@@ -144,17 +159,30 @@ function fit() {
     air.value = 0
     return
   }
-  // Where the content's end would stand unscrolled: a scrolled box has moved it up by its scroll.
+  const field = own.querySelector(FIELD)
+  if (!field) {
+    air.value = 0
+    return
+  }
+  // What the field adds to its floor as drawn, and where the content's end would stand
+  // unscrolled: a scrolled box has moved it up by its scroll.
+  const added = field.getBoundingClientRect().height - FLOOR
   const end = own.getBoundingClientRect().bottom + frame.scrollTop
   const padding = Number.parseFloat(getComputedStyle(frame).paddingBlockEnd) || 0
   const room = frame.getBoundingClientRect().bottom - padding - end
-  const next = Math.max(0, Math.floor(grow.value + room))
+  const next = Math.max(0, Math.floor(added + room))
   // How far the content still reaches into the air with the field at `next`: only at the floor.
-  const short = next - grow.value - room
+  const short = next - added - room
   air.value = short > 0 && short <= padding ? Math.ceil(short) : 0
   grow.value = next
 }
 
+useMutationObserver(panel, fit, {
+  attributes: true,
+  characterData: true,
+  childList: true,
+  subtree: true,
+})
 useResizeObserver(panel, fit)
 useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
 </script>
@@ -172,30 +200,35 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
       :title="t('analytics.frame.overview')"
       :about="about"
     >
+      <template #beside>
+        <SectionScope />
+      </template>
       <SpendingTiles
         v-model:measure="measure"
         :usage="usage"
         :read-at="readAt"
       />
-      <div
-        ref="chartColumn"
-        class="overview-chart"
-      >
+      <div class="overview-chart">
         <SpendingDays
+          v-if="chart"
           :accounts="accounts"
           :before="beforeSteps"
-          :by="by"
+          :by="CHART_BY"
           :measure="measure"
-          :narrow="narrow"
           :live="live"
           :notice="noticeIn('days')"
           :read-at="readAt"
-          :usage="usage"
-          brief
+          :usage="chart"
           @frame="(span, label) => emit('frame', span, label)"
           @step="(span, label) => emit('step', span, label)"
-          @inspect="(value, label) => emit('inspect', by, value, label, 'days')"
+          @inspect="(value, label) => emit('inspect', CHART_BY, value, label, 'days')"
         />
+        <FieldError
+          v-else-if="chartFailed"
+          role="alert"
+        >
+          {{ t('analytics.overview.chartFailed') }}
+        </FieldError>
       </div>
       <FieldError
         v-if="noticeIn('bars')"

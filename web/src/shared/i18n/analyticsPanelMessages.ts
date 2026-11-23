@@ -27,6 +27,8 @@ export const analyticsPanelMessages = {
     table: {
       toTable: 'To the table',
       total: 'Total',
+      totalFound: 'Total of those found',
+      totalPeriod: 'Total for the period',
       heads: {
         time: 'Agent time',
         tokens: 'Tokens',
@@ -99,6 +101,8 @@ export const analyticsPanelMessages = {
     table: {
       toTable: 'К таблице',
       total: 'Итого',
+      totalFound: 'Итого найденного',
+      totalPeriod: 'Итого за период',
       heads: {
         time: 'Время агентов',
         tokens: 'Токены',

@@ -12,9 +12,8 @@
  * The hint stands beside the day's stack, the column drawn, 6 pixels from its edge — to its
  * right, or to its left where the chart's frame has no room there — with its top level with the
  * stack's, so it moves with the stack from one day to the next and covers nothing of it: at 1440
- * and 1280 pixels and at the narrowest window that opens the days as a plot. At 360 pixels, where
- * the plot is chosen over the table, it stands beside the stack where the window holds it, else
- * over the stack, 6 pixels over its top. It never runs out of the window. Beside the day's slot, the
+ * and 1280 pixels and at 664, the window under which the days once opened as their table. At 360
+ * pixels it stands beside the stack where the window holds it, else over the stack, 6 pixels over its top. It never runs out of the window. Beside the day's slot, the
  * whole place the pointer takes for it, a day of a two-day chart had its hint at the plot's top
  * some 300 pixels from its stack. Along four weeks of days it stays inside the chart's frame
  * and on the right up to the days past which the right has no room, then on the left: its side
@@ -42,8 +41,8 @@ import {
 import { test } from './test.ts'
 
 /**
- * The narrowest window, in pixels, whose task section opens its days as a plot rather than as
- * their table (`useNarrowCharts`); one pixel less opens the table.
+ * A window, in pixels, whose task section leaves its days a frame of 560: one pixel less once
+ * opened them as their table, which no width does now.
  */
 const NARROWEST = 664
 
@@ -262,6 +261,46 @@ test('in a window 360px wide a day’s hint stands beside its stack or over it, 
   }
 })
 
+/**
+ * Points at day `index` over its stack, then walks the pointer through its segments and the
+ * ground between them, and reads the hint's height at each step and every step where the hint
+ * said other words or stood elsewhere.
+ */
+async function walkDay(page: Page, parts: Parts) {
+  await page.mouse.move(0, 0)
+  await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+  await page.mouse.move(middleOf(parts.column).x, parts.field.top + 2, { steps: 4 })
+  const first = await settledHint(page)
+  const heights = [first.box.bottom - first.box.top]
+  const moved: string[] = []
+  for (const point of crossing(parts, parts.slot.right - 0.5)) {
+    await page.mouse.move(point.x, point.y, { steps: 4 })
+    await frames(page)
+    const [shown] = await hintsNow(page)
+    heights.push((shown?.box.bottom ?? 0) - (shown?.box.top ?? 0))
+    if (shown?.text !== first.text || JSON.stringify(shown.box) !== JSON.stringify(first.box))
+      moved.push(`${point.name}: ${JSON.stringify(shown?.box)} from ${JSON.stringify(first.box)}`)
+  }
+  return { heights, moved }
+}
+
+test('in a window 360px wide a day’s hint stands still as the pointer walks its segments', async ({
+  page,
+}, info) => {
+  // A segment pointed at marks its row of the grid in semibold: on a hint this narrow a long name
+  // drawn wider took one more line, the hint grew and stood elsewhere while the pointer stayed
+  // on its day.
+  const days = await openDays(page, 360)
+  const count = await days.locator('.period-slot').count()
+  const all = await Promise.all(Array.from({ length: count }, (_, index) => dayParts(page, index)))
+  const walked: { day: number; heights: number[]; moved: string[] }[] = []
+  const twoOrMore = [...all.entries()].filter(([, parts]) => parts.segments.length > 1)
+  for (const [day, parts] of twoOrMore) walked.push({ day, ...(await walkDay(page, parts)) })
+  await record(info, 'day-hint-360-walk', walked)
+  expect(walked.length, 'days of two segments or more').toBeGreaterThan(0)
+  expect(walked.flatMap(({ day, moved }) => moved.map((one) => `day ${day}, ${one}`))).toEqual([])
+})
+
 /** Four weeks of the task section: twenty-eight days. */
 const WEEKS = pageAt({ period: 'weeks4', by: 'work_item' })
 
@@ -326,10 +365,15 @@ for (const [width, scrolls] of [
     }
   })
 
-test(`the narrowest window that draws the days as a plot is ${NARROWEST}px`, async ({ page }) => {
+// Under 664 pixels the days once opened as their table; they open as a plot at every width.
+test('the days open as a plot narrower than that window too, as wide as a phone', async ({
+  page,
+}) => {
   await openDays(page, NARROWEST)
-  const analytics = await openReport(page, NARROWEST - 1)
-  await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'table')
+  for (const width of [NARROWEST - 1, 390]) {
+    const analytics = await openReport(page, width)
+    await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'chart')
+  }
 })
 
 // The host opens a hint once per element until the pointer leaves it, and a day is one element

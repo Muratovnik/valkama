@@ -27,7 +27,12 @@ import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { TopRead } from '@/pages/analytics/composables/useTopValues.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
-import { figureOf, measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
+import {
+  drawnLines,
+  figureOf,
+  measureOf,
+  spendingLines,
+} from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -75,10 +80,12 @@ const all = computed(() =>
     : [],
 )
 const lines = computed(() =>
-  all.value
-    .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
-    .sort((left, right) => weight(right) - weight(left))
-    .slice(0, FIRST),
+  drawnLines(
+    props.measure,
+    all.value
+      .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
+      .sort((left, right) => weight(right) - weight(left)),
+  ).slice(0, FIRST),
 )
 /** What every value of the dimension adds up to: what each row's figure says its share of. */
 const whole = computed(() => all.value.reduce((sum, line) => sum + weight(line), 0))

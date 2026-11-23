@@ -3,17 +3,17 @@
  * the sentence and how often the period reads itself again in its hint, and the age counting up
  * from 5 s to 59 min moves and resizes nothing in the bar; a live period keeps the bar one row at
  * 1440px. An old record says its whole age there.
- * At 1440 and 1920 the bar keeps one height with none to four filters and with a span of days,
- * the filters it has no room for counted in «Filters: N»; the list of filters opens over the
- * panel, moving nothing, and a chip taken out leaves the focus in the bar. On a phone the bar is
- * two rows, every period whole on the lines of the first and nothing scrolled sideways, with the
- * rail right under it; a span of days adds its own row under them, moving nothing above. «Today»,
- * chosen in the bar, is the day's hours 0 to 23 with the one running hatched, compared with the
- * same hours of yesterday, and its address gives the view back.
+ * The filter's menu opens over the panel, moving nothing, and a chip taken out leaves the focus in
+ * the bar; where the field and the chips stand is `production-analytics-filter-row.spec.ts`'s. On
+ * a phone the bar is two rows, every period whole on the lines of the first and nothing scrolled
+ * sideways, with the rail right under it; a span of days adds its own row under them, moving
+ * nothing above. «Today», chosen in the bar, is the day's hours 0 to 23 with the one running
+ * hatched, compared with the same hours of yesterday, and its address gives the view back.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { filterParts, openDimension } from './analyticsFilter.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { NOW, serveLive, settled, watchPage } from './liveDouble.ts'
@@ -32,7 +32,7 @@ const barParts = (page: Page) =>
     Object.fromEntries(
       [
         '.period-bar-periods',
-        '.analytics-bar-filters',
+        '.analytics-filter-add',
         '.analytics-bar-fresh',
         '.analytics-refresh',
         '.analytics-bar',
@@ -101,7 +101,7 @@ test('the age of the newest record counting up moves nothing in the bar, one row
   // One row: the periods, the filters, the freshness and the read again stand on one line.
   const [period, ...rest] = [
     '.period-bar-periods',
-    '.analytics-bar-filters',
+    '.analytics-filter-add',
     '.analytics-bar-fresh',
     '.analytics-refresh',
   ].map((selector) => start[selector])
@@ -271,28 +271,17 @@ test('«Today» is its hours 0 to 23, the running one hatched, against the same 
 /** A newest record hours old: 6 h 44 min before now. */
 const OLD = new Date(NOW.getTime() - (6 * 60 + 44) * 60_000)
 
-/** Filters of none to four values, each a chip. */
+/** Filters of none, one and three values, each a chip. */
 const CHIPS: Record<string, string[]>[] = [
   {},
   { model: ['model-a'] },
-  { model: ['model-a', 'model-b'] },
   { project: ['alpha'], model: ['model-a', 'model-b'] },
-  { project: ['alpha', 'beta'], model: ['model-a', 'model-b'] },
 ]
-const CUSTOM = { period: 'custom', from: '2026-11-09', to: '2026-11-11' }
 
-/** How many filters a set holds, and its address beside a period's. */
+/** How many filters a set holds, and its address. */
 const countOf = (filters: Record<string, string[]>) => Object.values(filters).flat().length
-const addressOf = (filters: Record<string, string[]>, period: Record<string, string> = {}) =>
-  countOf(filters) ? { ...period, filters: JSON.stringify(filters) } : period
-
-/** What the bar says of its filters: none when each is a chip, else all of them counted. */
-const FOLDED = { en: 'Filters', ru: 'Фильтры' }
-const foldedWords = (lang: 'en' | 'ru', chips: number, count: number) =>
-  chips < count ? `${FOLDED[lang]}: ${count}` : null
-
-/** How many of three short filters stand as chips at least: all three at 1920px. */
-const LEAST_OF_THREE: Record<number, number> = { 1440: 0, 1920: 3 }
+const addressOf = (filters: Record<string, string[]>): Record<string, string> =>
+  countOf(filters) ? { filters: JSON.stringify(filters) } : {}
 
 /** Takes a chip out by its button: a press, or Enter on the button focused. */
 async function takeOut(page: Page, key: 'click' | 'Enter', name: string) {
@@ -310,30 +299,11 @@ async function openBar(page: Page, state: Record<string, string>) {
   await page.goto(pageAt(state))
   await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
-  // The chips the bar has room for are counted once their names and the bar's room are known.
+  // The line is fitted once the bar's words and room are known.
   await page.evaluate(
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   )
 }
-
-/** The bar's height, where the panel under it starts, and what the bar shows of its filters. */
-const barState = (page: Page) =>
-  page.evaluate(() => {
-    const bar = document.querySelector('.analytics-bar')?.getBoundingClientRect()
-    const panel = document.querySelector('.analytics-panel')?.getBoundingClientRect()
-    const room = document.querySelector('.analytics-bar-filters')?.getBoundingClientRect()
-    const chips = [...document.querySelectorAll('.analytics-bar-filters .combo-chip')].map((chip) =>
-      chip.getBoundingClientRect(),
-    )
-    return {
-      bar: Math.round(bar?.height ?? 0),
-      panel: Math.round(panel?.y ?? 0),
-      chips: chips.length,
-      // Every chip shown stands whole inside the filters' room, none cut at its edge.
-      whole: chips.every((chip) => chip.right <= (room?.right ?? 0) + 0.5),
-      folded: document.querySelector('.analytics-filter-folded')?.textContent?.trim(),
-    }
-  })
 
 for (const lang of ['en', 'ru'] as const)
   test.describe(`the bar, ${lang}`, () => {
@@ -345,7 +315,7 @@ for (const lang of ['en', 'ru'] as const)
       const double = await serveLive(page, DAYS)
       double.lastEventAt = OLD
       await page.setViewportSize({ width: 1440, height: 900 })
-      for (const filters of [CHIPS[0] ?? {}, CHIPS[1] ?? {}, CHIPS[3] ?? {}]) {
+      for (const filters of CHIPS) {
         const count = countOf(filters)
         await openBar(page, addressOf(filters))
         const time = page.locator('.analytics-bar-fresh time')
@@ -362,76 +332,44 @@ for (const lang of ['en', 'ru'] as const)
         expect(shown.cut, `the age is cut with ${count} filters`).toBe(false)
       }
     })
-
-    for (const width of [1440, 1920])
-      test(`the bar keeps its height with any filters and a span of days at ${width}px`, async ({
-        page,
-      }, info) => {
-        const double = await serveLive(page, DAYS)
-        double.lastEventAt = OLD
-        await page.setViewportSize({ width, height: 900 })
-        const seen: Record<string, Awaited<ReturnType<typeof barState>>> = {}
-        for (const period of [{} as Record<string, string>, CUSTOM])
-          for (const filters of CHIPS) {
-            const count = countOf(filters)
-            await openBar(page, addressOf(filters, period))
-            const now = await barState(page)
-            const name = `${period.period ?? 'week'} ${count}`
-            seen[name] = now
-            expect(now.whole, `a chip cut, ${name}`).toBe(true)
-            // Each filter is a chip, or counted with the rest in «Filters: N».
-            expect(now.folded ?? null, name).toBe(foldedWords(lang, now.chips, count))
-          }
-        await record(info, `bar-height ${lang} ${width}`, seen)
-        const first = seen['week 0']
-        for (const [name, state] of Object.entries(seen)) {
-          expect(state.bar, `the bar's height, ${name}`).toBe(first?.bar)
-          expect(state.panel, `the panel's top, ${name}`).toBe(first?.panel)
-        }
-        // At 1920 three filters stand as chips beside the period.
-        expect(seen['week 3']?.chips).toBeGreaterThanOrEqual(LEAST_OF_THREE[width] ?? 0)
-      })
   })
 
-test('the list of filters opens over the panel and moves nothing', async ({ page }, info) => {
+test('the filter’s menu opens over the panel and moves nothing', async ({ page }, info) => {
   await serveLive(page, DAYS)
   await page.setViewportSize({ width: 1440, height: 900 })
   await openBar(page, { filters: JSON.stringify({ model: ['model-a'] }) })
   const panel = page.locator('.analytics-panel')
   const before = await panel.boundingBox()
-  const add = page.locator('.analytics-filter-add')
-  await add.click()
-  const list = page.locator('.analytics-filter-body')
-  await expect(list).toBeVisible()
-  await expect(list.locator('[data-dimension]')).toHaveCount(10)
+  const { chips, field, menu } = filterParts(page)
+  await field.click()
+  await expect(menu).toBeVisible()
+  // Every dimension the page offers, each a row that steps into its values.
+  await expect(menu.getByRole('option')).toHaveCount(10)
   const after = await panel.boundingBox()
-  const over = await list.boundingBox()
-  await record(info, 'bar-filter-list', { before, after, over })
+  const over = await menu.boundingBox()
+  await record(info, 'bar-filter-menu', { before, after, over })
   expect(after).toEqual(before)
-  // Over the panel, and what is drawn there is the list, not the panel through it.
+  // Over the panel, and what is drawn there is the menu, not the panel through it.
   const bottom = (over?.y ?? 0) + (over?.height ?? 0)
   expect(bottom).toBeGreaterThan((before?.y ?? 0) + 40)
   const onTop = await page.evaluate(
-    ({ x, y }) => document.elementFromPoint(x, y)?.closest('.analytics-filter-body') != null,
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest('.filter-menu') != null,
     { x: (over?.x ?? 0) + 24, y: bottom - 8 },
   )
-  expect(onTop, 'the list is under the panel').toBe(true)
-  // A value chosen in a field leaves the list open; Escape closes it and gives the focus back.
-  await list.locator('[data-dimension="project"] input').click()
-  await page.getByRole('option', { name: 'alpha' }).click()
-  await expect(
-    page.locator('.analytics-bar-filters .combo-chip', { hasText: 'alpha' }),
-  ).toHaveCount(1)
-  await expect(list).toBeVisible()
+  expect(onTop, 'the menu is under the panel').toBe(true)
+  // A value chosen leaves the menu open on its dimension; Escape closes it and keeps the focus.
+  await openDimension(page, 'Project')
+  await menu.getByRole('option', { name: 'alpha', exact: true }).click()
+  await expect(chips.filter({ hasText: 'alpha' })).toHaveCount(1)
+  await expect(menu).toBeVisible()
   await page.keyboard.press('Escape')
-  await page.keyboard.press('Escape')
-  await expect(list).toBeHidden()
-  await expect(add).toBeFocused()
-  // A press outside closes it too, and leaves the focus where it was pressed.
-  await add.click()
-  await expect(list).toBeVisible()
+  await expect(menu).toBeHidden()
+  await expect(field).toBeFocused()
+  // A press outside closes it too.
+  await field.click()
+  await expect(menu).toBeVisible()
   await page.locator('.analytics-bar-fresh').click()
-  await expect(list).toBeHidden()
+  await expect(menu).toBeHidden()
 })
 
 for (const key of ['click', 'Enter'] as const)
@@ -449,13 +387,14 @@ for (const key of ['click', 'Enter'] as const)
       }))
     // The first chip out: the focus moves to the chip that took its place.
     await takeOut(page, key, 'Remove Model: model-a')
-    await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveCount(1)
+    const { chips } = filterParts(page)
+    await expect(chips).toHaveCount(1)
     const neighbour = await focused()
-    // The last chip out: the focus moves to «Add a filter».
+    // The last chip out: the focus moves to the filter's field, «Add a filter».
     await takeOut(page, key, 'Remove Model: model-b')
-    await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveCount(0)
+    await expect(chips).toHaveCount(0)
     const last = await focused()
     await record(info, `bar-chip-focus ${key}`, { neighbour, last })
     expect(neighbour).toEqual({ inBar: true, tag: 'BUTTON', name: 'Remove Model: model-b' })
-    expect(last).toEqual({ inBar: true, tag: 'BUTTON', name: 'Add a filter' })
+    expect(last).toEqual({ inBar: true, tag: 'INPUT', name: 'Filter the usage' })
   })

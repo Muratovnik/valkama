@@ -17,6 +17,7 @@ import os
 import re
 import sqlite3
 
+from .. import atomic_files
 from ..store_identity import metadata as store_metadata
 from ..store_identity.primitives import ContractError
 
@@ -114,11 +115,8 @@ def save(primary_db: str, scopes: list[dict]) -> str:
     }
     path = registry_path(primary_db)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    temporary = path + ".tmp"
-    with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
-    os.replace(temporary, path)
+    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    atomic_files.write(path, text.encode("utf-8"))
     return path
 
 

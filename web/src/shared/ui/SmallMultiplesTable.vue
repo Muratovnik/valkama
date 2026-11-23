@@ -12,12 +12,14 @@ import { computed } from 'vue'
 
 import { markActs, markTag, markType } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
-import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
+import { placeMultiples, shownValue } from '@/shared/ui/multiplesGeometry.ts'
 import type {
   MultiplePeriod,
   MultiplesWords,
   SmallMultiple,
 } from '@/shared/ui/multiplesGeometry.ts'
+import PairName from '@/shared/ui/PairName.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   /** What the table shows, as its caption. */
@@ -50,7 +52,7 @@ const rows = computed(() => {
     ...one,
     rest: one.kind === 'none' || one.kind === 'unknown',
     cells: props.periods.map((period, index) => {
-      const value = one.values[index]
+      const value = shownValue(one, index)
       return { key: period.key, text: value === null ? null : props.formatValue(value ?? 0) }
     }),
   }))
@@ -101,19 +103,34 @@ const rows = computed(() => {
           scope="row"
           class="chart-cell chart-name"
         >
-          <component
-            :is="markTag(row, 'span')"
-            v-if="markActs(row)"
-            class="chart-press"
-            :type="markType(row)"
-            :href="row.href"
-            :aria-description="row.action"
-            @click="(event: MouseEvent) => press(row, event)"
-            @auxclick="(event: MouseEvent) => pressAside(row, event)"
+          <span
+            v-tooltip.clipped="row.label"
+            class="chart-name-line"
           >
-            {{ row.label }}
-          </component>
-          <template v-else>{{ row.label }}</template>
+            <component
+              :is="markTag(row, 'span')"
+              v-if="markActs(row)"
+              class="chart-press"
+              :type="markType(row)"
+              :href="row.href"
+              :aria-description="row.action"
+              @click="(event: MouseEvent) => press(row, event)"
+              @auxclick="(event: MouseEvent) => pressAside(row, event)"
+            >
+              <span class="two-lines"
+                ><PairName
+                  :name="row.label"
+                  :runs="row.labelRuns"
+              /></span>
+            </component>
+            <span
+              v-else
+              class="two-lines"
+              ><PairName
+                :name="row.label"
+                :runs="row.labelRuns"
+            /></span>
+          </span>
         </th>
         <td
           v-for="cell in row.cells"

@@ -12,11 +12,16 @@
  * step before it and its lower half, which a reading at 0 % sets on the floor. The plot keeps the
  * marks at 0 % and at its top inside its box, and the line at 0 % on its floor and no lower. The
  * marks once stood half out of the plot at 0 %, where the pointer found no reading.
+ *
+ * A reading whose mark stands within a mark's reach of a place's — the latest, two minutes before
+ * «now» — is found as that place, whose hint says the share at its moment (`DESIGN.md`, the step
+ * line: a place before any reading); the keyboard and the table still reach it.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { openPanel, pageAt, record, serve } from './analyticsPage.ts'
+import { HIT, shareOf } from './stepAhead.ts'
 import { test } from './test.ts'
 
 /** The room between a hint and what it stands against (`OFFSET` in `hintPlacement.ts`). */
@@ -43,19 +48,32 @@ async function openFiveHours(page: Page, width: number) {
 
 /** Each reading of a line, by its place: its mark, its reach's words and the line's boxes. */
 const readingAt = (line: Locator, index: number) =>
-  line.evaluate((figure, at) => {
-    // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
-    const box = (element: Element | null | undefined): Box => {
-      const { left, top, right, bottom } = element?.getBoundingClientRect() ?? new DOMRect()
-      return { left, top, right, bottom }
-    }
-    return {
-      words: figure.querySelectorAll('.step-reach')[at]?.getAttribute('aria-label') ?? '',
-      mark: box(figure.querySelectorAll('.step-mark')[at]),
-      field: box(figure.querySelector('.step-field')),
-      frame: box(figure),
-    }
-  }, index)
+  line.evaluate(
+    (figure, [at = 0, reach = HIT]) => {
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page
+      const box = (element: Element | null | undefined): Box => {
+        const { left, top, right, bottom } = element?.getBoundingClientRect() ?? new DOMRect()
+        return { left, top, right, bottom }
+      }
+      const mark = box(figure.querySelectorAll('.step-mark')[at])
+      const middle = (mark.left + mark.right) / 2
+      // Whether a place's mark stands within a mark's reach of this one, which the pointer finds.
+      const nearPlace = [...figure.querySelectorAll('[data-target] [data-mark="place"]')].some(
+        (place) => {
+          const { left, right } = place.getBoundingClientRect()
+          return Math.abs((left + right) / 2 - middle) <= reach
+        },
+      )
+      return {
+        words: figure.querySelectorAll('.step-reach')[at]?.getAttribute('aria-label') ?? '',
+        mark,
+        nearPlace,
+        field: box(figure.querySelector('.step-field')),
+        frame: box(figure),
+      }
+    },
+    [index, HIT],
+  )
 
 /**
  * The one hint shown, once it stands still for two frames, with what it says: a grid's copy for
@@ -111,15 +129,6 @@ function cornerOf(hint: Box, mark: Box) {
   }
 }
 
-/** How far, in px, a hint's width worked out before it is drawn may be off its drawn width. */
-const ESTIMATE = 2
-
-/** The sides a hint may take with `room` px to spare on the right: either, within `ESTIMATE`. */
-function sidesFor(room: number) {
-  if (Math.abs(room) <= ESTIMATE) return ['right', 'left']
-  return [room >= 0 ? 'right' : 'left']
-}
-
 const middleOf = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 })
 
 /**
@@ -128,7 +137,7 @@ const middleOf = (box: Box) => ({ x: (box.left + box.right) / 2, y: (box.top + b
  * of it, in its lower half and its left half.
  */
 async function reachOf(page: Page, line: Locator, index: number) {
-  const { mark, field, words } = await readingAt(line, index)
+  const { mark, field, words, nearPlace } = await readingAt(line, index)
   const inside =
     mark.top >= field.top - 0.5 &&
     mark.bottom <= field.bottom + 0.5 &&
@@ -142,7 +151,9 @@ async function reachOf(page: Page, line: Locator, index: number) {
     ['its left half', middle.x - reach, middle.y],
   ] as const) {
     const hint = await pointAt(page, x, y).catch(() => null)
-    if (hint?.text !== words) missed.push(`${words}: ${part} showed ${hint?.text ?? 'none'}`)
+    // Beside a place, the place's hint, which says the reading's share.
+    const found = nearPlace ? hint?.text.includes(shareOf(words)) : hint?.text === words
+    if (!found) missed.push(`${words}: ${part} showed ${hint?.text ?? 'none'}`)
   }
   return { outside: inside ? [] : [`${words}: ${JSON.stringify({ mark, field })}`], missed }
 }
@@ -154,11 +165,25 @@ for (const width of [1440, 1280, 360])
     await openFiveHours(page, width)
     const viewport = { width, height: 1000 }
     const placed: unknown[] = []
+    const beside: unknown[] = []
     const sides = new Set<string>()
     for (const line of await page.locator('.quota-window .step-line').all()) {
       await line.evaluate((figure) => figure.scrollIntoView({ block: 'center' }))
       const count = await line.locator('.step-reach').count()
-      for (let index = 0; index < count; index += 1) {
+      const readings = await Promise.all(
+        Array.from({ length: count }, async (_, index) => ({
+          index,
+          ...(await readingAt(line, index)),
+        })),
+      )
+      // A reading within a mark's reach of a place is found as the place, which says its share.
+      for (const { mark, words } of readings.filter(({ nearPlace }) => nearPlace)) {
+        const at = middleOf(mark)
+        const hint = await pointAt(page, at.x, at.y)
+        beside.push({ words, hint: hint?.text })
+        expect(hint?.text, `${words}: the place beside it says its share`).toContain(shareOf(words))
+      }
+      for (const { index } of readings.filter(({ nearPlace }) => !nearPlace)) {
         const before = await readingAt(line, index)
         const at = middleOf(before.mark)
         const hint = await pointAt(page, at.x, at.y)
@@ -170,13 +195,12 @@ for (const width of [1440, 1280, 360])
         placed.push({ words, mark, frame, hint, corner })
         sides.add(corner.side)
         expect(hint?.text, `${words}: its own hint`).toBe(words)
-        // On the right where the line's frame holds it, else on the left: decided as the hint
-        // opens, on the mark as it stood before the pointer came, since the host decides on the
-        // pointer's way in, before the line draws the reading under it larger, and on the
-        // hint's width as worked out before it is drawn, a pixel or two off; either side where
-        // the room is within that of the width.
-        const room = frame.right - before.mark.right - OFFSET - width
-        expect(sidesFor(room), `${words}: the side`).toContain(corner.side)
+        // On the right where the line's frame holds it, else on the left: by the mark as it is
+        // drawn under the pointer, larger, and the hint as wide as it is drawn.
+        const room = frame.right - mark.right - OFFSET - width
+        expect(corner.side, `${words}: the side, ${room}px to spare`).toBe(
+          room >= 0 ? 'right' : 'left',
+        )
         // Over the mark where the window holds it, else under it.
         expect(corner.level, `${words}: over or under`).toBe(
           mark.top - OFFSET - height >= 8 ? 'over' : 'under',
@@ -187,8 +211,9 @@ for (const width of [1440, 1280, 360])
         expect(hint?.box.right, `${words}: inside the window`).toBeLessThanOrEqual(viewport.width)
       }
     }
-    await record(info, `reading-hint-${width}`, placed)
-    expect(placed.length, 'readings pointed at').toBeGreaterThanOrEqual(6)
+    await record(info, `reading-hint-${width}`, { placed, beside })
+    // Every reading counts, whether its own hint or the place beside it answered.
+    expect(placed.length + beside.length, 'readings pointed at').toBeGreaterThanOrEqual(6)
     expect(sides.has('right'), 'a reading with room on its right').toBe(true)
   })
 
@@ -232,4 +257,52 @@ test('every part of a mark takes the pointer for its reading, and the marks stan
   expect(outside, 'a mark out of the plot').toEqual([])
   for (const { floor, lowest } of floors)
     expect(lowest, 'the line on its floor or over it').toBeLessThanOrEqual(floor + 0.5)
+})
+
+/**
+ * Points at each reading of `line` that is no place's, and reads the side its hint took against
+ * the side its room asks for: the line's frame past the mark as it is drawn pointed at, larger,
+ * less the hint as wide as it is drawn. The room is how far it was from either side.
+ */
+async function sidesOn(page: Page, line: Locator) {
+  const count = await line.locator('.step-reach').count()
+  const read: { asked: string; room: number; side: string; words: string }[] = []
+  for (let index = 0; index < count; index += 1) {
+    const before = await readingAt(line, index)
+    const at = middleOf(before.mark)
+    const hint = before.nearPlace ? null : await pointAt(page, at.x, at.y)
+    if (!hint) continue
+    const { mark, frame, words } = await readingAt(line, index)
+    const room = frame.right - mark.right - OFFSET - (hint.box.right - hint.box.left)
+    const side = cornerOf(hint.box, mark).side
+    read.push({ words, room, side, asked: room >= 0 ? 'right' : 'left' })
+  }
+  return read
+}
+
+test("a reading's hint takes its side by the mark as it is drawn pointed at, at every phone's width", async ({
+  page,
+}, info) => {
+  // Across these widths a reading's room on the right passes zero: the side was once taken by
+  // the mark before the pointer drew it larger and by a width measured without the tabular
+  // figures the hint is drawn in, and a hint stood 2.4px out of its line's frame on the right.
+  // The walk points at every reading at 36 widths: about 21 s alone, and a full suite on a busy
+  // machine pushed it past the default 30 s.
+  test.setTimeout(90_000)
+  await openFiveHours(page, 400)
+  const read: (Awaited<ReturnType<typeof sidesOn>>[number] & { width: number })[] = []
+  for (let width = 400; width >= 330; width -= 2) {
+    await page.setViewportSize({ width, height: 1000 })
+    for (const line of await page.locator('.quota-window .step-line').all()) {
+      await line.evaluate((figure) => figure.scrollIntoView({ block: 'center' }))
+      const sides = await sidesOn(page, line)
+      read.push(...sides.map((one) => ({ ...one, width })))
+    }
+  }
+  const wrong = read.filter(({ side, asked }) => side !== asked)
+  const near = Math.min(...read.map(({ room }) => Math.abs(room)))
+  await record(info, 'reading-hint-phones', { wrong, near })
+  // The widths hold a reading whose room is within the few pixels the side once missed by.
+  expect(near, 'the least room to spare').toBeLessThan(3)
+  expect(wrong, 'readings on the wrong side').toEqual([])
 })

@@ -195,3 +195,14 @@ export function resolvePlanningRouteSelection(
     return { status: 'unavailable', reason: 'invalid-planning-entity' }
   }
 }
+
+/**
+ * Whether a store is the primary one writes go to: a card writes there alone, and reads there
+ * alone the chain, the attempts and the usage of its item, so an attached store's card asks none.
+ */
+export function inPrimaryStore(
+  primaryWriteScopeId: string | null,
+  dataScopeId: string | undefined,
+) {
+  return primaryWriteScopeId !== null && primaryWriteScopeId === dataScopeId
+}

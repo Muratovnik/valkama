@@ -33,7 +33,7 @@ import time
 import unittest
 from unittest import mock
 
-from server.hooks import notify
+from server.hooks import marks, notify
 from tests.test_hooks_agent_notices import (
     AS_A,
     AS_B,
@@ -636,23 +636,23 @@ class BlockerTests(Wakes):
         self.close_as(AS_A)
         self.assertIsNotNone(self.hook(session=B))
         path = self.marks_path()
-        marks = notify.read_marks(path)
+        kept = marks.read_marks(path)
         lines = [
             f"{item} {mark[0]} {mark[1][0]} {mark[1][1]} {mark[1][2]} {int(mark[2])}"
             f" {mark[3]} {int(mark[4])}"
-            for item, mark in marks.items()
+            for item, mark in kept.items()
         ]
         with open(path, "wb") as handle:
             handle.write(("\n".join(["v3", *lines]) + "\n").encode("ascii"))
         self.assertEqual(
-            {item: (m[0], (*m[1][:3], 0), m[2], m[3], m[4]) for item, m in marks.items()},
-            notify.read_marks(path),
+            {item: (m[0], (*m[1][:3], 0), m[2], m[3], m[4]) for item, m in kept.items()},
+            marks.read_marks(path),
         )
         self.assertIsNone(self.hook(session=B), "read once more from its place: nothing new")
-        self.assertTrue(notify.read_marks(path), "and counted now")
+        self.assertTrue(marks.read_marks(path), "and counted now")
 
     def marks_path(self) -> str:
-        return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
+        return os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY, B + ".marks")
 
 
 class BudgetTests(Wakes):
@@ -740,7 +740,7 @@ class BudgetTests(Wakes):
         self.assertIsNone(repeated[-1])
 
     def marks_path(self) -> str:
-        return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
+        return os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY, B + ".marks")
 
 
 class CostTests(Wakes):
@@ -750,7 +750,7 @@ class CostTests(Wakes):
         self.addCleanup(conn.close)
         seen: list[str] = []
         conn.set_trace_callback(seen.append)
-        state = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY)
+        state = os.path.join(os.path.dirname(self.path), marks.STATE_DIRECTORY)
         notify.collect(conn, state, B, None, **reading)
         return seen
 

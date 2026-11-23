@@ -123,7 +123,7 @@ export const DETAIL_TOOLTIPS = new Map([
     'a legend entry prints its series’ name; its figure over the span and its share are on no mark',
   ],
   [
-    `shared/ui/ChartLegend.vue <span> v-tooltip.detail="hintOf('outline')"`,
+    `shared/ui/ChartLegend.vue <LayerKey> v-tooltip.detail="hintOf('outline')"`,
     'the entry names the mark of the period compared with; that period’s sum is on no mark',
   ],
   [
@@ -155,8 +155,8 @@ export const DETAIL_TOOLTIPS = new Map([
     'a reading is a dot on a line: its moment, its share and its source are its hint, beside its line’s hue',
   ],
   [
-    'shared/ui/StepLine.vue <span> v-tooltip.detail="target.hint"',
-    'a place past a line’s readings has no words on the screen: where the window stands now and how old its latest reading is, or its forecast’s share at the reset and when that is, are its hint',
+    'shared/ui/StepLine.vue <span> v-tooltip.detail="placeHints[index]"',
+    'a place past a line’s readings has no words on the screen: where the window stands now and how old its latest reading is, or its forecast’s share at the reset and when that is, are its hint, with the words of a place within a mark’s reach of it',
   ],
   [
     'shared/ui/RichInlines.vue <a> v-tooltip.detail="hoverTitle(node.reference)"',

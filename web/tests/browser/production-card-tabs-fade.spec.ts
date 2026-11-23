@@ -159,7 +159,7 @@ async function pickJustClear(strip: Locator, reach: (index: number) => Promise<v
     await choose(tabs.nth(index + 1))
     await tabs.nth(index + 1).focus()
     const reachable = await strip.evaluate((node, at) => {
-      const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade'))
+      const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-strip-fade'))
       const range = document.createRange()
       range.selectNodeContents(node.querySelectorAll('button')[at])
       const words = range.getBoundingClientRect()
@@ -174,7 +174,7 @@ async function pickJustClear(strip: Locator, reach: (index: number) => Promise<v
     const tab = tabs.nth(index)
     expect(await wordsUnderFade(strip, tab), 'placed with its words clear').toEqual([])
     const boxUnder = await strip.evaluate((node, at) => {
-      const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade'))
+      const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-strip-fade'))
       const box = node.querySelectorAll('button')[at].getBoundingClientRect()
       return box.left < node.getBoundingClientRect().left + fade - 4
     }, index)

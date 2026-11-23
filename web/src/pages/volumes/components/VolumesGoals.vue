@@ -28,6 +28,7 @@ import { useVolumesWords } from '@/pages/volumes/composables/useVolumesWords.ts'
 import SectionTable from '@/widgets/section-table/components/SectionTable.vue'
 import { useColumnSort } from '@/widgets/section-table/composables/useColumnSort.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { PARTS } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 import type { Figure } from '@/entities/work-item/composables/useGoalSpendWords.ts'
 
@@ -37,7 +38,6 @@ import { standingOf } from '@/shared/lib/standing.ts'
 import { treeRowAttrs } from '@/shared/lib/treeRows.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import TreeRowLead from '@/shared/ui/TreeRowLead.vue'
 import { useListKeys } from '@/shared/ui/useListKeys.ts'
@@ -241,7 +241,7 @@ const { tabStop, toggle } = keys
                 <span
                   :id="nameOf(line.row.id, 'title')"
                   v-tooltip.clipped="line.goal.title"
-                  v-slash-breaks="line.goal.title"
+                  v-work-item-title="line.goal.title"
                   class="volumes-goal-title"
                   data-part="title"
                 />

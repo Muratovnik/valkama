@@ -17,13 +17,13 @@ import { useResizeObserver } from '@vueuse/core'
 
 import GraphFrameWorking from '@/widgets/work-item-graph/components/GraphFrameWorking.vue'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
 import { kindGlyph as kindGlyphOf, printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { standingOf } from '@/shared/lib/standing.ts'
 import { useStandingName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -110,7 +110,7 @@ useResizeObserver(
       <span
         v-else
         ref="name"
-        v-slash-breaks="title"
+        v-work-item-title="title"
         v-tooltip.clipped="title"
         class="graph-frame-title"
         :class="{ 'one-line': overview }"

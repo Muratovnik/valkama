@@ -1,6 +1,7 @@
 /**
  * The breakdown as a CSV file. The oracle is a file written out by hand from the requirement:
- * a row per value in the table's order with its id, reference and name; seconds, tokens, dollars
+ * a row per value in the table's order with its id, reference and the name the page shows, a
+ * model's id where that is its name; seconds, tokens, dollars
  * and unpriced tokens now and before as plain numbers; an absent figure an empty cell and never
  * 0; text quoted as RFC 4180 has it; a single quote before a formula wherever a spreadsheet's
  * separator could start a field; the bounds of both periods and the filters on every row; a byte
@@ -12,7 +13,7 @@ import { csvFileName, spendingCsv } from '@/pages/analytics/utils/spendingCsv.ts
 
 import type { UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 
-import { noTask, task, usageAnswer } from './fixtures/analytics.ts'
+import { noTask, task, usageAnswer, value } from './fixtures/analytics.ts'
 import type { Stretch } from './fixtures/analytics.ts'
 
 const QUOTED = task(1, 'Fix, the "quote"\nand the line')
@@ -81,6 +82,25 @@ const titledRow = (title: string) => {
 const rowNamed = (cell: string) =>
   `work_item,00000000-0000-4000-8000-000000000007,MAIN-7,${cell},category,60,,,0,,,,,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,,,,,,,,,`
 
+/** The cells that say which value a lone value of `by` is: its id, reference, name and kind. */
+const valueCellsOf = (by: 'model' | 'project' | 'role', group: UsageGroupValue) => {
+  const usage = usageAnswer({
+    first: new Date(Date.UTC(2026, 10, 8, 21)),
+    offset: 180,
+    days: 1,
+    groupBy: [by],
+    stretches: [{ day: 0, group: { [by]: group }, spend: { seconds: 60 } }],
+    before: null,
+  }).usage
+  // The page's names: a project by its name, a role by its words, any other value by its id.
+  const pageName = (one: UsageGroupValue) =>
+    one.id === 'main' ? 'Main session' : (one.name ?? one.id ?? 'Unknown')
+  const row = spendingCsv({ by, filters: {}, measure: 'time', usage, name: pageName }).split(
+    '\r\n',
+  )[1]
+  return row?.split(',').slice(1, 5)
+}
+
 describe('the breakdown as a CSV file', () => {
   it('holds every value of both periods, its text safe for a spreadsheet', () => {
     const expected =
@@ -120,9 +140,18 @@ describe('the breakdown as a CSV file', () => {
       }).usage,
       name: (value) => value.id ?? 'Unknown',
     })
+    // The model is named by its id, as the page names it, in the name's column too.
     expect(text.split('\r\n')[1]).toBe(
-      `model,"'-model",,,category,60,,,0,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,2026-11-08T00:00:00+03:00,2026-11-09T00:00:00+03:00,,,,,,,`,
+      `model,"'-model",,"'-model",category,60,,,0,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,2026-11-08T00:00:00+03:00,2026-11-09T00:00:00+03:00,,,,,,,`,
     )
+  })
+
+  it.each([
+    ['a model by its id, as the page shows it', 'model', value('model-alpha'), 'model-alpha'],
+    ['a project by its name', 'project', { ...value('p-1'), name: 'Alpha' }, 'Alpha'],
+    ["a role by the page's words for it", 'role', value('main'), 'Main session'],
+  ] as const)('names %s', (_what, by, group, named) => {
+    expect(valueCellsOf(by, group)).toEqual([group.id, '', named, 'category'])
   })
 
   // Under a `;` or a tab separator each stretch between them is a field a formula can start.

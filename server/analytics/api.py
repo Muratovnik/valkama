@@ -11,16 +11,20 @@ parameter is refused everywhere (`query_params`).
 
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 from collections.abc import Callable, Mapping
 
 from .. import query_params
+from ..quota import accounts
 from . import quota, usage, uses
 
 ANALYTICS_API_INTERFACE = "valkama-analytics-api"
 USAGE_PATH = "/api/analytics/usage"
 #: Each account's subscription quota windows as they stand now.
 QUOTA_PATH = "/api/analytics/quota"
+#: One past window of one account: the latest of a kind that reset at or before a moment.
+QUOTA_WINDOW_PATH = "/api/analytics/quota/window"
 #: How often each analytics surface was opened: read by `GET`, counted by `POST`.
 USES_PATH = "/api/analytics/uses"
 
@@ -124,17 +128,73 @@ def _uses(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict
 
 
 def _quota(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """Each account's quota windows now, its times at `utc_offset`."""
+    """Each account's quota windows now, its times at `utc_offset`; given `from`, the start
+    of a page's period, each window of a share with the windows before it since then."""
 
-    _refuse_unknown(parameters, frozenset({"utc_offset"}))
+    _refuse_unknown(parameters, frozenset({"utc_offset", "from"}))
+    period_from = None if _first(parameters, "from") is None else _time(parameters, "from")
     return {
         "interface_version": ANALYTICS_API_INTERFACE,
-        "quota": quota.read(conn, _offset(parameters)),
+        "quota": quota.read(conn, _offset(parameters), period_from=period_from),
+    }
+
+
+#: The longest model name a window of one model's week is asked for by.
+_MODEL_LENGTH = 64
+
+
+def _time(parameters: Mapping[str, list[str]], name: str) -> dt.datetime:
+    """The parameter `name`, required, as a time with its offset."""
+
+    text = query_params.required(parameters, name, error=AnalyticsHttpError)
+    refusal = f"{name} must be a time with its offset"
+    try:
+        moment = dt.datetime.fromisoformat(text)
+    except ValueError as error:
+        raise AnalyticsHttpError(400, "invalid_request", refusal) from error
+    if moment.tzinfo is None:
+        raise AnalyticsHttpError(400, "invalid_request", refusal)
+    return moment
+
+
+def _quota_window(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """One past window of `account`, of `kind` and, for a model's week, `model`: the latest
+    that reset at or before `before`, its times at `utc_offset`."""
+
+    _refuse_unknown(parameters, frozenset({"utc_offset", "account", "kind", "model", "before"}))
+    account = query_params.required(parameters, "account", error=AnalyticsHttpError)
+    if not accounts.is_account_key(account):
+        raise AnalyticsHttpError(400, "invalid_request", "account must be an account's key")
+    kind = query_params.required(parameters, "kind", error=AnalyticsHttpError)
+    if kind not in quota.SHARE_KINDS:
+        raise AnalyticsHttpError(
+            400, "invalid_request", f"kind must be one of {', '.join(quota.SHARE_KINDS)}"
+        )
+    model = _first(parameters, "model")
+    if (kind == "week_model") != (model is not None):
+        raise AnalyticsHttpError(
+            400, "invalid_request", "model is given for a model's week and for no other kind"
+        )
+    if model is not None and len(model) > _MODEL_LENGTH:
+        raise AnalyticsHttpError(
+            400, "invalid_request", f"model must be at most {_MODEL_LENGTH} characters"
+        )
+    return {
+        "interface_version": ANALYTICS_API_INTERFACE,
+        "quota_window": quota.past(
+            conn,
+            _offset(parameters),
+            account=account,
+            kind=kind,
+            model=model,
+            before=_time(parameters, "before"),
+        ),
     }
 
 
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     QUOTA_PATH: _quota,
+    QUOTA_WINDOW_PATH: _quota_window,
     USAGE_PATH: _usage,
     USES_PATH: _uses,
 }
@@ -190,6 +250,7 @@ def handle_post(
 __all__ = [
     "ANALYTICS_API_INTERFACE",
     "QUOTA_PATH",
+    "QUOTA_WINDOW_PATH",
     "READ_PATHS",
     "USAGE_PATH",
     "USES_PATH",

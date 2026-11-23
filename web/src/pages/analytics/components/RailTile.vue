@@ -22,6 +22,7 @@ import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import MiniShareBar from '@/shared/ui/MiniShareBar.vue'
 import MiniTrend from '@/shared/ui/MiniTrend.vue'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import WindowBar from '@/shared/ui/WindowBar.vue'
 
@@ -47,6 +48,7 @@ const { shown } = useLoadingPresence(() => props.tile.state === 'loading')
 useReadWaitReport(shown)
 const lead = computed(() => (shown.value ? t('platform.states.loading') : props.tile.lead))
 const leadDetail = computed(() => (shown.value ? undefined : props.tile.leadDetail))
+const leadRuns = computed(() => (shown.value ? undefined : props.tile.leadRuns))
 
 /** Dimmed while its figures are the last view's and a new view is read. */
 const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
@@ -61,6 +63,14 @@ const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
   >
     <span class="rail-tile-line">
       <span
+        v-if="leadRuns"
+        v-text-runs="leadRuns"
+        v-tooltip.detail="{ text: leadDetail, words: lead }"
+        class="rail-tile-lead one-line"
+        :class="{ quiet: tile.quiet }"
+      />
+      <span
+        v-else
         v-tooltip.detail="{ text: leadDetail, words: lead }"
         class="rail-tile-lead one-line"
         :class="{ quiet: tile.quiet || shown }"

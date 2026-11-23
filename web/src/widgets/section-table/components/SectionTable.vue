@@ -198,12 +198,13 @@ defineExpose({ reveal })
    both ways. A shorter table stands at its own height. Its heading row and a total stay at its
    edges and its names at its start, held by the browser as it scrolls: moved by the panel's scroll
    through a view timeline instead, they lagged a frame behind the rows and shook. The room kept at
-   its edges (`scroll-padding`) is the heading row's two lines and a total's, so a row the focus
-   brings into view stands clear of both. */
+   its edges (`scroll-padding`) is the heading row's two lines and a total's, or the room of the
+   page's foot where it holds more (`--size-section-table-foot`), so a row the focus brings into
+   view stands clear of both. */
 .section-table-frame {
   max-block-size: calc(100dvh - var(--size-section-table-over, 13rem));
   overflow: auto;
-  scroll-padding-block: 4rem 3rem;
+  scroll-padding-block: 4rem var(--size-section-table-foot, 3rem);
 }
 
 /* The heading row over the rows, the names' corner over both. */
@@ -264,9 +265,10 @@ defineExpose({ reveal })
 
 /* The headings over figures on two lines, each column at its least: the frame of a narrower table,
    or headings longer than its frame has room for on one line. A figure then stands inside the
-   frame's edge rather than past it. */
+   frame's edge rather than past it. Where the least would leave the table a sliver past its
+   frame, the headings give it (`ChartTable`). */
 .section-table[data-fit='two'] .chart-heading[data-numeric='true'] {
-  min-inline-size: 7em;
+  min-inline-size: calc(7em - var(--chart-table-give, 0px));
   white-space: normal;
 }
 

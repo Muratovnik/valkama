@@ -3,10 +3,9 @@
 This is an independent Git repository holding one product, Valkama, and it ships
 on its own.
 
-What must hold in every session lives in this file. The deep halves — why each
-gate exists, the subprocess boundary, the store's names and migrations, the web
-grammar — live one topic per file under `.agents/rules/`, and the pointers below
-say when a topic stops being optional.
+What must hold in every session lives in this file. The deep halves live one
+topic per file under `.agents/rules/`, and the pointers below say when a topic
+stops being optional.
 
 A machine may carry a local overlay as `AGENTS.local.md`. It is not tracked
 here, it never contradicts this file, and its absence changes nothing: this file
@@ -109,7 +108,6 @@ python tests/parallel.py --coverage
 python -m coverage report
 cd web
 npm test
-npm run typecheck
 npm run build
 cd ../desktop
 npm test
@@ -134,18 +132,31 @@ explicitly authorizes that hook mutation and its rollback:
 When the work is split across parallel worktrees of this repository, the checks
 split with it:
 
-- The worker of one worktree runs, right after each commit, the targeted tests
-  of what the commit changed and `python tests/commit_subjects.py`;
-  when the commit touches `web/`, also `npm run lint` and
-  `npm run check:ui-system` there. The worker does not run the whole browser
-  suite or the history audit.
-- The integrator runs the full list above and the whole browser suite once, on
+- The worker of one worktree runs, right after each commit and each through
+  `python tests/run_record.py run`, whose record its report cites: the targeted
+  tests of what the commit changed, `python tests/commit_subjects.py` and
+  `typos`, the last as `python tests/run_record.py run --out DIR -- typos` so
+  the record holds a step named `typos`; when the commit touches `web/`, also `npm run lint`, `npm run typecheck`,
+  `npm run check:ui-system` and `npm run lint:dead` there; an export a commit
+  leaves unused fails nothing else short of the whole `npm test`. The worker
+  does not run the whole browser suite or the history audit.
+- The integrator accepts a worker's branch only on the record its report cites,
+  checked in that worktree with `python tests/run_record.py check DIR --tree
+  <the worktree> --require typos`, which refuses a record with no `typos` step.
+  The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
   The runner, `npm test` and the whole `unittest` suite go through one gate for
   every checkout on the machine, each declaring its CPUs, the runner all: a run
   waits until it fits, saying why when it starts and every minute.
   A defect that depends on a neighbouring worktree shows up only at this run.
+- Each worktree is made with `python tests/worktree.py add` and removed with
+  `python tests/worktree.py remove`. The first links its `web` and `desktop`
+  `node_modules` to the main checkout's where its lockfile is the main
+  checkout's, so it gets no copy of its own; the second takes those links out
+  before Git removes the worktree, which would leave them standing. `npm ci`
+  runs only in a package with no link: through one it empties the main
+  checkout's modules and those of every worktree sharing them.
 
 How to run one browser spec, a probe spec kept outside the suite, or the whole
 suite, and which specs that runner leaves out, is in
@@ -162,8 +173,7 @@ green screenshot means nothing. Rebuild, then prove that the listener on port
 8642 is the Valkama-managed process in scope before restarting it for live
 verification and handoff. If ownership cannot be proved, do not stop it and
 report live acceptance blocked. Leaving it stale is not a cosmetic loss: the tray
-compares runtime identities, so a stale listener makes it refuse every click,
-and the refusal used to be silent. When anything under `desktop/` changed, run
+compares runtime identities, so a stale listener makes it refuse every click. When anything under `desktop/` changed, run
 `npm run dist` there as well; the installed app is a separate artifact that no
 web build touches, and reporting a desktop change as delivered without it hands
 the owner their previous binary. A browser an agent drives against a real listener
@@ -245,8 +255,7 @@ One attempt at a work item is `executions/`: its own tables, its lifecycle, the
 Git baseline it started from, and one driver per agent client. A driver owns that
 client end to end — the command line, whether the identity is assigned or
 observed, which effort values it takes, where its structured result arrives — so
-nothing else branches on a client name. Two callers used to, and their copies had
-drifted. `runner` keeps process shape only: it spawns, polls and stops, and knows
+nothing else branches on a client name. `runner` keeps process shape only: it spawns, polls and stops, and knows
 nothing about what any of that means for the work.
 
 Imports run one way and this is the invariant to protect: a surface may import
@@ -379,6 +388,14 @@ force, and the gates hold each:
   `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`,
   `test`, an optional lowercase scope, and `!` for a break. A merge commit's
   subject is held to this too: `tests/commit_subjects.py` refuses Git's default.
+- A change a user of the release sees reaches `main` through a branch and a
+  `--no-ff` merge, and that merge's subject is its changelog line, written for
+  that user: `feat(analytics): one scroll for the whole page`, not
+  `chore: merge <branch> into main`. The release entry is drafted one line per
+  commit on `main`'s first-parent line, so a merge with nothing for users and a
+  merge of a worker's branch into an integration branch keep `chore: merge …`,
+  and a `feat`, `fix` or `perf` committed straight to `main` becomes a line of
+  its own. `CONTRIBUTING.md` says how the entry is composed.
 - After each coherent task-owned green boundary, create an incremental local
   commit by default. Staging is transient and only inside one uninterrupted
   stage → `python .github/relkit.pyz audit --staged` → inspect → commit step.
@@ -416,8 +433,6 @@ replies.
   `CHANGELOG.md`, `DESIGN.md`, the contracts in `docs/` — must stand alone. A
   reader of a fresh clone has no planning trail and no local overlay, so those
   files may not reference one.
-- Databases, WAL files, release bundles, logs, and `node_modules`: outside Git,
-  as above; `web/dist` is the one committed exception.
 
 ## Response style
 

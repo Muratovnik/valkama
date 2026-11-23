@@ -428,8 +428,10 @@ _TRANSITION_FORM = (
     " ends the item's pending questions and lists, expired as item_completed or"
     " item_cancelled. Reopening restores no claim and no question. An"
     " agent's close is refused with person_spoke while a person acted on the item in"
-    " the interface since an agent last wrote to it; the refusal quotes it. The answer a"
-    " cancel's transition.following names does not count there."
+    " the interface after both that agent's last write there and what its Valkama"
+    " hook last handed it; the refusal quotes it. The answer a cancel's"
+    " transition.following names does not count there. Write a comment in a call of"
+    " its own, then close in the next."
 )
 #: A list the owner ticks under a root comment, a report or a summary: a question of
 #: one multi_choice field that nobody waits for.
@@ -483,6 +485,20 @@ _AWAITS_REPLY = {
     "description": "Set only before ending your turn to wait for another agent, never for"
     " information: wakes the holders here and of mentions once, and the first reply by"
     " another session or a person wakes you once. get_work_item shows answered.",
+}
+#: A field apply_work_item_changes takes in a second group as well: spelled out once, where
+#: it first appears, and named there from the other group. Every agent reads the schema
+#: whole on each load, so a copy costs its size every time and tells nothing new.
+#: The refusal stays beside the pointer: a summary is most often sent with a closing transition.
+_LIST_AS_COMMENTS = {
+    "type": "object",
+    "description": "The same as comment's list: refused on a reply and beside a closing transition.",
+}
+_MENTIONS_AS_UPDATES = {
+    "type": "array",
+    "maxItems": mention_records.MAX_AGENT_MENTIONS,
+    "items": _text(read_model.REFERENCE_LIMIT),
+    "description": "The same as update's mentions.",
 }
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
@@ -1007,8 +1023,10 @@ TOOLS = [
         " an item in another space, a closed item, a merged item with children, a goal"
         " or stage with a task (goals and stages merge only with each other),"
         f" more than {model.MAX_CHECKLIST} steps in all, or an item another session"
-        " holds unless force. The answer lists what each item moved. An item put off"
-        " until a merged item waits for the survivor instead.",
+        " holds unless force; refused with person_spoke, as a close is, for a merged"
+        " item a person acted on that you have not been told of, unless force. The"
+        " answer lists what each item moved. An item put off until a merged item waits"
+        " for the survivor instead.",
         WRITES,
         {
             "id": {
@@ -1058,7 +1076,8 @@ TOOLS = [
         " changed, and from_person when a person acted on the item since an agent"
         " last wrote, each text whole up to 1500 characters and marked cut past them."
         " The call is one write: its comment does not lift a closing"
-        " transition's person_spoke refusal. Some writes are the owner's to make, by a"
+        " transition's person_spoke refusal, so send the comment in a call of its own"
+        " and close in the next. Some writes are the owner's to make, by a"
         " setting only the server reads: such a write is not made, the answer names it in"
         " waits_for_owner with the question the owner answers, and the server makes it"
         " then if it still applies. A cancel of work other sessions hold may wait for them"
@@ -1265,6 +1284,8 @@ TOOLS = [
                 "description": "Comments, each as comment takes it, written in order;"
                 " not together with comment. A parent must exist before the call."
                 " applied.comments lists each comment_id.",
+                # Each entry is described by comment above, so only the names, types and bounds stand
+                # here, and the list, whose shape a type alone does not give, points at comment's.
                 "items": {
                     "type": "object",
                     "properties": {
@@ -1272,9 +1293,13 @@ TOOLS = [
                         "checklist_item_id": _text(model.UUID_LENGTH),
                         "reply_to": _INT,
                         "reply_to_request": _text(service.REPLY_TO_REQUEST_LIMIT),
-                        "list": _LIST,
-                        "mentions": _MENTIONS,
-                        "awaits_reply": _AWAITS_REPLY,
+                        "list": _LIST_AS_COMMENTS,
+                        "mentions": {
+                            "type": "array",
+                            "maxItems": mention_records.MAX_AGENT_MENTIONS,
+                            "items": _text(read_model.REFERENCE_LIMIT),
+                        },
+                        "awaits_reply": _BOOL,
                     },
                     "required": ["body"],
                 },
@@ -1338,8 +1363,8 @@ TOOLS = [
                     "next": _text(model.SUMMARY_LIMIT),
                     "why": _text(model.SUMMARY_LIMIT),
                     "friction": _FRICTION,
-                    "list": _LIST,
-                    "mentions": _TEXT_MENTIONS,
+                    "list": _LIST_AS_COMMENTS,
+                    "mentions": _MENTIONS_AS_UPDATES,
                 },
                 "required": ["done", "next"],
             },

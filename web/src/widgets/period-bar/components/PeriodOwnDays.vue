@@ -96,6 +96,22 @@ const rangeError = computed(() =>
   color: var(--color-text-muted);
 }
 
+/* A bar narrower than the two days, their dash and the room between, 18rem, as a phone of 360px
+   makes Analytics' (264px): each field gives up the air inside its edge and the room beside it
+   narrows, so the date keeps the room it had and the days stay one row. At 8.25rem each they
+   needed 288px of 264 and stood under each other. */
+@container (width < 18rem) {
+  .period-bar-days {
+    gap: var(--space-1);
+  }
+
+  .period-bar-day {
+    --space-text-input-inline: var(--space-2);
+
+    inline-size: calc(8.25rem - 2 * (var(--space-3) - var(--space-2)));
+  }
+}
+
 /* The span's name stands where the days would, in the periods' own words. */
 .period-bar-span {
   flex: none;

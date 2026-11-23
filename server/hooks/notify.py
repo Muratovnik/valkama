@@ -76,10 +76,13 @@ sessions' news made; per item, the notices that quoted it; and an orchestrator's
 places in its tree's news, an event, a comment, a call and the last claim whose words
 left waiting it read. Whether it follows the item is read from the store each time,
 never kept here. A file that cannot be read is an empty one, so the worst a damaged
-file does is tell the current news once more, and wake once more.
+file does is tell the current news once more, and wake once more. The file's place
+and layout are `marks`', because the close guard reads the same file: what this
+hook told an agent counts as heard when that agent closes the item.
 
 What it costs. `PostToolUse` runs on every tool call, so this module imports
-nothing at module level beyond the standard library's C parts, reads the input
+nothing at module level beyond the standard library's C parts and `marks`, which
+imports only `os`, reads the input
 with the C scanner `json` itself is built on, opens the store read-only, and
 when nothing changed on the session's items answers after two indexed queries.
 `person_events` and the configuration module load only when something changed
@@ -100,6 +103,8 @@ from __future__ import annotations
 import os
 import sys
 import time
+
+from . import marks as marks_file
 
 # `typing` is a few milliseconds this hook does not spend; the checker reads the name.
 TYPE_CHECKING = False
@@ -132,9 +137,6 @@ WAKE_STATUS = 2
 #: The switch: `notify` in the configuration file, or this variable.
 SWITCH_ENVIRONMENT = "VALKAMA_NOTIFY"
 OFF_VALUES = frozenset({"off", "0", "false", "no"})
-
-#: Beside the spool, under the store's own directory.
-STATE_DIRECTORY = "notify"
 
 #: How often the watcher reads the store: often while the session has just
 #: been at work, less once it has been idle a while, since a watcher may wait
@@ -316,8 +318,8 @@ def state_directory(store: str, *, create: bool) -> str | None:
     creates it; see `spool.write`.
     """
 
-    parent = os.path.dirname(os.path.abspath(store))
-    directory = os.path.join(parent, STATE_DIRECTORY)
+    directory = marks_file.directory(store)
+    parent = os.path.dirname(directory)
     if os.path.isdir(directory):
         return directory
     if not create or not os.path.isdir(parent):
@@ -373,18 +375,6 @@ def holder_suffix(session_id: str, agent_id: str | None) -> str:
 
     suffix = f"(session {label_id(session_id)})"
     return f" agent {label_id(agent_id)} {suffix}" if agent_id else suffix
-
-
-def recipient_key(session_id: str, agent_id: str | None) -> str:
-    """The name of a recipient's place files; a session's commit records start with its key.
-
-    Imported here: the call pair loads this module and needs no record.
-    """
-
-    from .commit_records import file_key
-
-    key = file_key(session_id)
-    return f"{key}--{file_key(agent_id)}" if agent_id else key
 
 
 # --- what is new ----------------------------------------------------------------
@@ -807,7 +797,7 @@ def _feed(
     tree: _Tree,
     places: tuple[int, int, int, int],
     scoped: dict[str, tuple],
-    marks: dict[str, Mark],
+    marks: dict[str, marks_file.Mark],
 ) -> _Feed:
     """What the orchestrator hears of its tree that no other path tells it: one path a pair.
 
@@ -990,129 +980,10 @@ def _untaken(read: _Read | None, taken: set[tuple] | None) -> _Read | None:
     )
 
 
-def _was_held(mark: Mark | None) -> bool:
+def _was_held(mark: marks_file.Mark | None) -> bool:
     """Whether the recipient held the item at its last read: then its own path tells it once more."""
 
     return mark is not None and mark[2]
-
-
-#: Per item: the last call read, the signature then (revision, newest event, newest
-#: comment, the blockers' newest event), whether it was held, the last call whose other
-#: sessions' news was read, and whether some of it still waits.
-Mark = tuple[int, tuple[int, int, int, int], bool, int, bool]
-
-
-#: The wakes other sessions' news made, as whole seconds of the clock, the newest
-#: hour's; how many events the limit held back since a notice last said so; the
-#: newest call those were read to, past which nothing held back wakes again; and per
-#: item, the times of the notices that quoted other sessions' news on it within
-#: `FOLD_WINDOW_SECONDS`; and an orchestrator's places in the tree's news, the last event,
-#: comment and call it read there and the call of the last claim whose words left waiting
-#: it read, or None before any.
-Budget = tuple[
-    tuple[int, ...], int, int, dict[str, tuple[int, ...]], tuple[int, int, int, int] | None
-]
-NO_BUDGET: Budget = ((), 0, 0, {}, None)
-
-
-def read_marks(path: str) -> dict[str, Mark]:
-    """Per item, where this recipient's news stands; or empty. See `read_state`."""
-
-    return read_state(path)[0]
-
-
-def read_state(path: str) -> tuple[dict[str, Mark], Budget]:
-    """Per item, where this recipient's news stands, and its wakes; or both empty.
-
-    A `v1` file, from before an item could be marked without being held, holds only
-    held items. Read as empty, it would tell every running session old news once.
-    A `v1` or `v2` file, from before agents' mentions, has read those as far as
-    everything else and has none waiting, for the same reason. A file from before
-    `v4` kept no blockers' event: an item that has a blocker is read once more,
-    from its place, which tells nothing again.
-
-    A `v4` file may carry the wake budget in `@wakes` and `@held` lines, and an
-    item's quoting notices in an `@told <item>` line. A `v5` file adds an orchestrator's
-    places in the tree's news, `@tree <event> <comment> <call> <waiting>`; read from a
-    file without them, the tree's news starts at the end of the tables, and nothing
-    written there before is told. Damaged, the whole file reads as empty: the news
-    since the recipient's own last writes is told once more, and wakes at most once
-    more, and the next write is whole.
-    """
-
-    try:
-        with open(path, "rb") as handle:
-            # A read of a bound allocates the whole bound, 0.2 ms on every tool call;
-            # the file's own size is the read, a damaged giant cut at the bound as before.
-            size = os.fstat(handle.fileno()).st_size
-            lines = handle.read(min(size, 1 << 20)).decode("ascii").splitlines()
-    except (OSError, UnicodeDecodeError):
-        return {}, NO_BUDGET
-    fields = {"v1": 5, "v2": 6, "v3": 8, "v4": 9, "v5": 9}.get(lines[0]) if lines else None
-    if fields is None:
-        return {}, NO_BUDGET
-    marks = {}
-    wakes: tuple[int, ...] = ()
-    held = through = 0
-    told: dict[str, tuple[int, ...]] = {}
-    tree: tuple[int, int, int, int] | None = None
-    for line in lines[1:]:
-        parts = line.split()
-        if fields == 9 and len(parts) > 2 and parts[0] == "@told":
-            parts = parts[1:]
-            if not all(part.isdigit() for part in parts[1:]):
-                return {}, NO_BUDGET
-            told[parts[0]] = tuple(int(part) for part in parts[1:])
-            continue
-        if not all(part.isdigit() for part in parts[1:]):
-            return {}, NO_BUDGET
-        if fields == 9 and parts and parts[0] == "@wakes":
-            wakes = tuple(int(part) for part in parts[1:])
-            continue
-        if fields == 9 and len(parts) == 3 and parts[0] == "@held":
-            held, through = int(parts[1]), int(parts[2])
-            continue
-        if lines[0] == "v5" and len(parts) == 5 and parts[0] == "@tree":
-            tree = (int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4]))
-            continue
-        if len(parts) != fields:
-            return {}, NO_BUDGET
-        numbers = [int(part) for part in parts[1:]]
-        if fields == 9:
-            signature = (numbers[1], numbers[2], numbers[3], numbers[4])
-            del numbers[4]
-        else:
-            signature = (numbers[1], numbers[2], numbers[3], 0)
-        holds = fields == 5 or numbers[4] == 1
-        heard, waiting = (numbers[5], numbers[6] == 1) if fields >= 8 else (numbers[0], False)
-        marks[parts[0]] = (numbers[0], signature, holds, heard, waiting)
-    return marks, (wakes, held, through, told, tree)
-
-
-def write_marks(path: str, marks: dict[str, Mark], budget: Budget = NO_BUDGET) -> None:
-    wakes, held, through, told, tree = budget
-    lines = ["v5"]
-    if wakes:
-        lines.append(" ".join(["@wakes", *(str(at) for at in wakes)]))
-    if held or through:
-        lines.append(f"@held {held} {through}")
-    if tree is not None:
-        lines.append(" ".join(["@tree", *(str(place) for place in tree)]))
-    # An item of the tree's news has no mark of its own, and its notices count as well.
-    lines += [
-        " ".join(["@told", item, *(str(at) for at in times)])
-        for item, times in sorted(told.items())
-        if times
-    ]
-    lines += [
-        f"{item} {mark} {signature[0]} {signature[1]} {signature[2]} {signature[3]}"
-        f" {int(held)} {heard} {int(waiting)}"
-        for item, (mark, signature, held, heard, waiting) in sorted(marks.items())
-    ]
-    temporary = f"{path}.{os.getpid()}.tmp"
-    with open(temporary, "wb") as handle:
-        handle.write(("\n".join(lines) + "\n").encode("ascii"))
-    os.replace(temporary, path)
 
 
 class _Lock:
@@ -1201,9 +1072,9 @@ def collect(
     counted instead, never to wake later; that call says how many there were.
     """
 
-    key = recipient_key(session_id, agent_id)
-    marks_path = os.path.join(state, key + ".marks")
-    marks, budget = read_state(marks_path)
+    key = marks_file.recipient_key(session_id, agent_id)
+    marks_path = marks_file.path(state, session_id, agent_id)
+    marks, budget = marks_file.read_state(marks_path)
     scope = _in_scope(conn, session_id, agent_id)
     if scope is None:
         return News()
@@ -1220,7 +1091,7 @@ def collect(
     try:
         if not lock.take(_LOCK_ATTEMPTS):
             return News()  # another hook of this recipient is telling it now
-        marks, budget = read_state(marks_path)
+        marks, budget = marks_file.read_state(marks_path)
         now = int(time.time())
         wakes, held, through, quoted, places = budget
         wakes = tuple(at for at in wakes if now - WAKE_WINDOW_SECONDS < at <= now)
@@ -1228,7 +1099,7 @@ def collect(
             item: tuple(at for at in times if now - FOLD_WINDOW_SECONDS < at <= now)
             for item, times in quoted.items()
         }
-        reads: list[tuple[tuple, Mark | None, _Read | None]] = []
+        reads: list[tuple[tuple, marks_file.Mark | None, _Read | None]] = []
         feed: _Feed | None = None
         conn.execute("BEGIN")
         try:
@@ -1314,7 +1185,7 @@ def collect(
         names: dict[str, tuple] = {}
         if feed is not None and (tell or feed[0]):
             said, rest, names, places, _taken = feed
-        updated: dict[str, Mark] = {}
+        updated: dict[str, marks_file.Mark] = {}
         for scoped, mark, read in reads:
             item, reference, title, signature, _own, holds = scoped[:6]
             if read is None:
@@ -1342,7 +1213,7 @@ def collect(
         ):
             news.held, held = held, 0
         if take or not news:
-            write_marks(marks_path, updated, (wakes, held, through, quoted, places))
+            marks_file.write_marks(marks_path, updated, (wakes, held, through, quoted, places))
         return news
     finally:
         lock.close()
@@ -1387,7 +1258,7 @@ _Read = tuple[list[dict], list[dict], int, int]
 def _read(
     conn: sqlite3.Connection,
     scoped: tuple,
-    mark: Mark | None,
+    mark: marks_file.Mark | None,
     newest: int,
     session_id: str,
     agent_id: str | None,
@@ -1545,7 +1416,7 @@ def _wakes(entry: dict) -> bool:
     return bool(entry.get("answers") or entry.get("asks") or entry["kind"] == "blocker_closed")
 
 
-def _unchanged(mark: Mark | None, signature: tuple, *, agents: bool) -> bool:
+def _unchanged(mark: marks_file.Mark | None, signature: tuple, *, agents: bool) -> bool:
     """Whether the item reads as it did: a hold is not won or lost without a write.
 
     For a reader of agents' news, an item with some waiting has not been read.
@@ -1701,9 +1572,9 @@ def _for_recipient(
     return told
 
 
-def _write_quietly(path: str, marks: dict, budget: Budget) -> None:
+def _write_quietly(path: str, marks: dict, budget: marks_file.Budget) -> None:
     try:
-        write_marks(path, marks, budget)
+        marks_file.write_marks(path, marks, budget)
     except OSError:
         pass
 
@@ -2233,7 +2104,7 @@ def deliver(
         return _lead(hook_event, lead)
     state = state_directory(store, create=enabled)
     idle = (
-        os.path.join(state, recipient_key(session_id, None) + ".idle")
+        os.path.join(state, marks_file.recipient_key(session_id, None) + ".idle")
         if state and client == "claude" and agent_id is None
         else None
     )
@@ -2314,7 +2185,7 @@ def session_ended(payload: dict, environ: Mapping[str, str] | None = None) -> No
     state = state_directory(store, create=False) if store else None
     if state is None:
         return
-    key = recipient_key(session_id, None)
+    key = marks_file.recipient_key(session_id, None)
     _touch(os.path.join(state, key + ".end"))
     now = time.time()
     for name in os.listdir(state):
@@ -2324,7 +2195,7 @@ def session_ended(payload: dict, environ: Mapping[str, str] | None = None) -> No
             continue
         # A place is kept a month: a session that holds work and hears nothing for
         # a day is still one to tell. The rest is a day's worth of leftovers.
-        limit = STALE_SECONDS * 30 if name.endswith(".marks") else STALE_SECONDS
+        limit = STALE_SECONDS * 30 if name.endswith(marks_file.SUFFIX) else STALE_SECONDS
         try:
             stale = now - os.path.getmtime(path) > limit
         except OSError:
@@ -2342,8 +2213,9 @@ def watch(payload: dict, environ: Mapping[str, str] | None = None) -> int:
     One per session: a second start finds the lock held and leaves at once. It
     leaves without waking when the session ends or is cleared, when the client
     process is gone, when it was started for another session than the client's
-    own, and when notices are switched off; and the client ends it at its
-    `timeout`, which `UserPromptSubmit` and `Stop` re-arm.
+    own, when that client prints one turn and exits, and when notices are
+    switched off; and the client ends it at its `timeout`, which
+    `UserPromptSubmit` and `Stop` re-arm.
     """
 
     source = os.environ if environ is None else environ
@@ -2353,11 +2225,13 @@ def watch(payload: dict, environ: Mapping[str, str] | None = None) -> int:
     named = source.get("CLAUDE_CODE_SESSION_ID")
     if named and named != session_id:
         return 0
+    if _prints_one_turn(source.get("CLAUDE_PID")):
+        return 0
     store, enabled = settings(source)
     state = state_directory(store, create=True) if store and enabled else None
     if state is None:
         return 0
-    key = recipient_key(session_id, None)
+    key = marks_file.recipient_key(session_id, None)
     lock = _Lock(os.path.join(state, key + ".watch"))
     try:
         if not lock.take(1):
@@ -2365,6 +2239,50 @@ def watch(payload: dict, environ: Mapping[str, str] | None = None) -> int:
         return _watch(source, state, str(store), session_id, key)
     finally:
         lock.close()
+
+
+def _prints_one_turn(pid: str | None) -> bool:
+    """Whether the client process `pid` names was started to print one turn and exit.
+
+    Such a client, `claude -p` with its prompt as text, waits for this hook before
+    the turn starts and again before it ends, against its own description of
+    `asyncRewake`: a watcher there held each turn until its `timeout`. With its
+    input a stream of messages, as the Agent SDK and the editor extensions run it,
+    the client does not wait, and the session outlives the turn, so the watcher
+    stays. Read only from the client's own arguments: neither its environment nor
+    the hook's input tells the two apart. Unread arguments keep the watcher.
+    """
+
+    if not pid or not pid.isdigit():
+        return False
+    from .. import process_reads
+
+    words = process_reads.arguments(int(pid))
+    return words is not None and one_turn(words[1:])
+
+
+def one_turn(options: list[str]) -> bool:
+    """Whether Claude Code's command-line `options` print one turn from a text prompt.
+
+    `-p` or `--print`, alone or among other one-letter flags (`-cp`), with an input
+    format other than `stream-json`. Words after `--` are the prompt's, not options.
+    """
+
+    prints = False
+    stream = False
+    for index, word in enumerate(options):
+        if word == "--":
+            break
+        if word == "--print" or word.startswith("--print="):
+            prints = True
+        elif word.startswith("-") and not word.startswith("--") and "p" in word[1:]:
+            prints = prints or word[1:].isalpha()
+        elif word == "--input-format":
+            following = options[index + 1] if index + 1 < len(options) else ""
+            stream = following == "stream-json"
+        elif word.startswith("--input-format="):
+            stream = word.partition("=")[2] == "stream-json"
+    return prints and not stream
 
 
 def _watch(environ: Mapping[str, str], state: str, store: str, session_id: str, key: str) -> int:

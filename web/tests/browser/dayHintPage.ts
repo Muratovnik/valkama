@@ -180,15 +180,11 @@ export const pastTheDelay = (page: Page) =>
 
 /**
  * The days of the task section, drawn as a plot at `width`: of this week, unless `address` says.
- * A page too narrow to open them as a plot (`NARROWEST` in the day-hint spec) opens their table,
- * and the plot is chosen there, as a reader chooses it.
  */
 export async function openDays(page: Page, width: number, answer?: Answer, address = TASK_REPORT) {
   await serve(page, answer)
   const analytics = await openReport(page, width, address)
   const days = analytics.locator('.spending-days')
-  if ((await days.getAttribute('data-shown')) === 'table')
-    await days.getByRole('radio', { name: 'Chart' }).check()
   await expect(days).toHaveAttribute('data-shown', 'chart')
   // The plot in the middle of the window, so a hint has room over and under it.
   await days

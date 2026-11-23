@@ -39,6 +39,7 @@ import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import {
+  inPrimaryStore,
   planningSpaceEntity,
   planningWorkItemEntity,
   resolvePlanningRouteSelection,
@@ -103,9 +104,8 @@ const identity = computed(() =>
     : '',
 )
 /** Writes reach the primary store alone, as they do from the board. */
-const writable = computed(
-  () =>
-    props.primaryWriteScopeId !== null && props.primaryWriteScopeId === space.value?.data_scope_id,
+const writable = computed(() =>
+  inPrimaryStore(props.primaryWriteScopeId, space.value?.data_scope_id),
 )
 
 /** The card's space, read once per space it opens in and again after the card changed it. */

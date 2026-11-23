@@ -1,7 +1,7 @@
 /**
  * Every place of a step line is reached by the pointer at its own mark, in the browser: each
- * reading, the first and the last, «now» and the forecast at the reset, whose rings stand centred
- * on the plot's right edge. The pointer at a mark's centre opens that place's own hint and paints
+ * reading, the first and the last, «now» and the forecast's end, whose dot stands centred on the
+ * line's end: the forecast's last corner, or the plot's right edge for a line read at its reset. The pointer at a mark's centre opens that place's own hint and paints
  * that mark alone, and what it stands on there is the line's one layer over its field, never the
  * drawing or the page around the plot. Two readings five minutes apart, closer than a pointer is
  * wide, are each found by the pointer nearer to its mark. The rings on the edge once stood half
@@ -11,6 +11,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { aheadOfLines } from './stepAhead.ts'
 import { test } from './test.ts'
 
 const HARNESS = '/tests/browser/harness.html?lang=en&surface=charts'
@@ -68,33 +69,37 @@ async function pointAt(page: Page, line: Locator, { x, y }: { x: number; y: numb
   return { hint, ...seen }
 }
 
-/** The harness's two step lines: five hours with a forecast in either span, and the close one. */
+/**
+ * The harness's two step lines, each over its whole window: five hours with a forecast, which ends
+ * at its forecast's end, and the close one, read at its reset, which ends on the right edge.
+ */
 const LINES = [
   {
-    name: 'opened on now',
+    name: 'with a forecast',
     line: '[data-harness="step"]',
-    view: 'To now and the forecast',
     past: ['now', 'reset'],
+    ends: 'forecast',
   },
-  {
-    name: 'over the whole window',
-    line: '[data-harness="step"]',
-    view: 'Whole window',
-    past: ['now', 'reset'],
-  },
-  { name: 'read at its reset', line: '[data-harness="step-close"]', view: null, past: ['now'] },
+  { name: 'read at its reset', line: '[data-harness="step-close"]', past: ['now'], ends: 'edge' },
 ] as const
+
+/** A line's forecast as drawn, and where the line ends on the screen by `ends`. */
+async function endOf(page: Page, section: string, ends: 'edge' | 'forecast') {
+  const [drawn] = await page.evaluate(aheadOfLines, `${section} [data-chart="steps"]`)
+  const forecast = drawn?.forecast ?? null
+  const x = ends === 'edge' ? drawn?.field?.right : forecast?.corners.at(-1)?.left
+  return { forecast, x: x ?? Number.NaN }
+}
 
 /** Every line has four readings (`windowCases`). */
 const READINGS = 4
 
-/** Opens the harness at `width` and the line in `section` on the span `view` names, if any. */
-async function openLine(page: Page, width: number, section: string, view: string | null) {
+/** Opens the harness at `width` and the line in `section`. */
+async function openLine(page: Page, width: number, section: string) {
   await page.setViewportSize({ width, height: 1400 })
   await page.goto(HARNESS)
   const line = page.locator(`${section} [data-chart="steps"]`)
   await line.scrollIntoViewIfNeeded()
-  if (view) await line.getByRole('radio', { name: view }).click()
   return line
 }
 
@@ -106,11 +111,11 @@ async function closeReadings(line: Locator) {
 }
 
 for (const width of [1024, 1440])
-  for (const { name, line: section, view, past } of LINES)
+  for (const { name, line: section, past, ends } of LINES)
     test(`at ${width}px, ${name}, the pointer at each mark of a step line opens that place's hint`, async ({
       page,
     }, info) => {
-      const line = await openLine(page, width, section, view)
+      const line = await openLine(page, width, section)
       const places: Place[] = await placesOf(line)
       const kinds = await line
         .locator('[data-stop]')
@@ -138,8 +143,14 @@ for (const width of [1024, 1440])
         body: JSON.stringify({ field, seen }, null, 2),
         contentType: 'application/json',
       })
-      // The last place's ring stands on the field's right edge, its right half past it.
-      expect(Math.abs((places.at(-1)?.x ?? 0) - field.right), 'a ring on the edge').toBeLessThan(1)
+      // The last place's ring stands on the line's end: the forecast's, which runs out before the
+      // right edge, or the right edge itself, its right half past it.
+      const end = await endOf(page, section, ends)
+      expect(end.forecast === null, 'a forecast where the line has one').toBe(ends === 'edge')
+      expect(Math.abs((places.at(-1)?.x ?? 0) - end.x), "a ring on the line's end").toBeLessThan(1)
+      expect(places.at(-1)?.x ?? 0, 'a ring within the field').toBeLessThanOrEqual(
+        field.right + 0.5,
+      )
     })
 
 /** How far from a mark the pointer stands, inside the half mark it is found within. */
@@ -149,7 +160,7 @@ for (const width of [1024, 1440])
   test(`at ${width}px, of two readings closer than a pointer is wide, the pointer finds the one nearer to it`, async ({
     page,
   }, info) => {
-    const line = await openLine(page, width, '[data-harness="step-close"]', null)
+    const line = await openLine(page, width, '[data-harness="step-close"]')
     const { earlier, later } = await closeReadings(line)
     const apart = later.x - earlier.x
     // Closer than the 24 px a reading's reach once took at least, and far enough apart that a

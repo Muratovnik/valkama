@@ -5,14 +5,14 @@
  * end, its tick stands where steady use would be and crosses the bar, and the fill, the track and
  * the tick stand apart from each other and the fill from the ground by a contrast a reader can see
  * — a contrast of lightness, so the bar reads in grayscale too; the share spent is solid, silent
- * or fresh, and the forecast alone is hatched, a tail inside the track from a surface gap past
- * the fill, parted where its slower pace ends; no word is cut. The step line draws only flat and
+ * or fresh, and the forecast alone is hatched, one tail inside the track from a surface gap past
+ * the fill to the forecast's high end, with no gap inside it; no word is cut. The step line draws only flat and
  * upright strokes, a mark at each reading where its moment and value put it, painted only for the
  * reading under the pointer or the keyboard's focus, and that reading says itself in a hint over
  * the plot without moving anything. Past its readings «now» and the
- * forecast at the reset each say themselves in a hint at their mark, off the line's head, the
- * corridor between them inside the plot, and nothing moves. A forced palette draws them in its
- * inks, the focused reading and the tail too.
+ * forecast's end each say themselves in a hint at their mark, off the line's head, and nothing
+ * moves. A forced palette draws them in its inks, the forecast's line, its range and its dot, the
+ * focused reading and the tail too.
  * Each theme attaches what it measured. Every part is read by the hook its component documents
  * (`WindowBar`, `StepLine`, their tables) or the harness gives it (`data-case`).
  */
@@ -155,29 +155,21 @@ for (const colorScheme of ['light', 'dark'] as const)
     // The share spent is solid, silent or fresh: only the forecast is hatched.
     for (const bar of bars.filter((one) => one.used !== null))
       expect(bar.mask, `${bar.case}: the fill`).toBe('none')
-    // The tail, hatched inside the track: from 2px past the fill to the slower pace's end, and
-    // 2px on to the faster's; from the track's start at 0 %; to its end where the window runs
-    // out; none past 100 % or with no figure. Each end at its share, to the whole percent.
+    // The tail, hatched inside the track: one, from 2px past the fill to the faster pace's end,
+    // nothing drawn where the slower ends; from the track's start at 0 %; to its end where the
+    // window runs out; none past 100 % or with no figure. Each end at its share, to the whole
+    // percent.
     const tails = Object.fromEntries(
       bars.map((bar) => [bar.case, bar.tail.map(({ from, to, gap }) => [from, to, gap])]),
     )
     expect(tails).toEqual({
-      spent: [
-        [62, 70, 2],
-        [70, 84, 2],
-      ],
+      spent: [[62, 84, 2]],
       over: [],
       zero: [[0, 12, null]],
-      stale: [
-        [88, 97, 2],
-        [97, 100, 2],
-      ],
+      stale: [[88, 100, 2]],
       runs: [[74, 100, 2]],
       none: [],
-      compact: [
-        [74, 86, 2],
-        [86, 95, 2],
-      ],
+      compact: [[74, 95, 2]],
     })
     for (const bar of bars)
       for (const part of bar.tail) {
@@ -250,12 +242,11 @@ for (const colorScheme of ['light', 'dark'] as const)
     await page.goto(HARNESS)
     const figure = page.locator(LINE)
     await figure.scrollIntoViewIfNeeded()
-    // The window is running, so it opens on its start to now and the forecast; the readings are
-    // placed here against the whole five hours.
-    await figure.getByRole('radio', { name: 'Whole window' }).click()
+    // Every line shows its whole window, which its axis names by its start and its reset; the
+    // readings are placed against the whole five hours.
     await expect(figure.locator('[data-region="axis"] [data-moment]')).toHaveText([
-      '11:00',
-      '16:00',
+      'start 11:00',
+      'resets 16:00',
     ])
     const before = await stepLine(page)
     await testInfo.attach(`step-line-${colorScheme}`, {
@@ -320,8 +311,6 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
   await page.goto(HARNESS)
   const figure = page.locator(LINE)
   await figure.scrollIntoViewIfNeeded()
-  const whole = figure.getByRole('radio', { name: 'Whole window' })
-  await whole.click()
   await page.mouse.move(1, 1)
   const reach = figure.locator('[data-reading]')
   await expect(figure.locator('[data-mark="reading"]')).toHaveCount(4)
@@ -332,10 +321,12 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
   expect(await paintedDots(page), 'the second pointed at').toEqual([1])
   await page.mouse.move(1, 1)
   expect(await paintedDots(page), 'the pointer gone').toEqual([])
-  // Tab from the switch lands on the latest reading and paints its dot; the pointer passing over
-  // another reading and away leaves it painted while it holds the focus.
-  await whole.focus()
-  await page.keyboard.press('Tab')
+  // The line's one Tab stop is the latest reading, which focused paints its dot; the pointer
+  // passing over another reading and away leaves it painted while it holds the focus.
+  const stop = figure.locator('[tabindex="0"]')
+  await expect(stop).toHaveCount(1)
+  await expect(stop).toHaveAttribute('data-reading', '3')
+  await stop.focus()
   await expect(reach.nth(3)).toBeFocused()
   expect(await paintedDots(page), 'the latest focused').toEqual([3])
   await pointOnStep(page, reach.nth(0))
@@ -351,18 +342,22 @@ test('a step line paints no reading’s dot at rest, only the one pointed at or 
 
 /**
  * Where the first reading's hint stands against its mark, pointed at in its middle with the
- * page scrolled until the mark's top stands `top` pixels under the window's: the room from the
- * mark's right edge to the hint's left, and from the mark's top to the hint's bottom, or from
- * its bottom to the hint's top where the hint stands under it.
+ * harness's pane scrolled until the mark's top stands `top` pixels under the window's: the room
+ * from the mark's right edge to the hint's left, and from the mark's top to the hint's bottom, or
+ * from its bottom to the hint's top where the hint stands under it.
  */
 async function firstReadingHint(page: Page, top: number) {
   const figure = page.locator(LINE)
   const mark = figure.locator('[data-mark="reading"]').first()
-  const box = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
-  await page.evaluate((by) => window.scrollBy(0, by), box.top - top)
+  // At rest: a reading pointed at draws its mark larger, so its box is measured with none pointed.
   await page.mouse.move(1, 1)
   await expect(page.getByRole('tooltip')).toHaveCount(0)
+  const box = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  await mark.evaluate((node, by) => node.closest('.charts-harness')?.scrollBy(0, by), box.top - top)
   const at = await mark.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect)
+  // A pane that ends before the mark reaches `top` leaves room over it, and the hint then stands
+  // where that room is, not where this asks.
+  expect(Math.abs(at.top - top), 'the mark where the pane was scrolled to').toBeLessThan(1)
   await page.mouse.move(at.left + at.width / 2, at.top + at.height / 2)
   await expect(page.getByRole('tooltip')).toHaveText('11:30, 10%, the poll')
   return page.evaluate(() => {
@@ -386,7 +381,6 @@ test('a reading’s hint stands at the top right of its mark, and at its bottom 
   await page.goto(HARNESS)
   const figure = page.locator(LINE)
   await figure.scrollIntoViewIfNeeded()
-  await figure.getByRole('radio', { name: 'Whole window' }).click()
   const roomy = await firstReadingHint(page, 300)
   const cramped = await firstReadingHint(page, 12)
   await testInfo.attach('reading-hint-corners', {
@@ -428,8 +422,16 @@ test('in a forced palette a window bar and a step line keep their marks in the p
       path: found('[data-harness="step"] [data-mark="line"]').stroke,
       mark: found('[data-harness="step"] [data-mark="reading"]').backgroundColor,
       tail: found('[data-case="spent"] [data-mark="ahead"]').backgroundColor,
-      ring: found('[data-harness="step"] [data-target="now"] [data-mark="place"]').boxShadow,
-      corridor: found('[data-harness="step"] [data-mark="corridor"]').backgroundColor,
+      nowDot: found('[data-harness="step"] [data-target="now"] [data-mark="place"]')
+        .backgroundColor,
+      forecast: found('[data-harness="step"] [data-mark="forecast"]').stroke,
+      range: found('[data-harness="step"] [data-mark="range"]').fill,
+      dot: found('[data-harness="step"] [data-target="reset"] [data-mark="place"]').backgroundColor,
+      grayText: system('GrayText'),
+      now: found('[data-harness="step"] [data-mark="now"]').stroke,
+      nowKey: found('[data-harness="step"] [data-key="now"] > :first-child').backgroundColor,
+      even: found('[data-harness="step"] [data-mark="even"]').stroke,
+      evenKey: found('[data-harness="step"] [data-key="even"] > :first-child').backgroundColor,
     }
     probe.remove()
     return result
@@ -441,14 +443,24 @@ test('in a forced palette a window bar and a step line keep their marks in the p
   expect(paints.path).toBe(paints.canvasText)
   expect(paints.mark).toBe(paints.canvasText)
   expect(paints.tail).toBe(paints.canvasText)
-  expect(paints.corridor).toBe(paints.canvasText)
-  expect(paints.ring).toContain(paints.canvasText)
+  // The forecast's line, the fill of its range and the dot at its end, all in the palette's ink.
+  expect([paints.forecast, paints.range, paints.dot]).toEqual([
+    paints.canvasText,
+    paints.canvasText,
+    paints.canvasText,
+  ])
+  // «Now» is a dot as the forecast's end is, in the palette's ink.
+  expect(paints.nowDot).toBe(paints.canvasText)
+  // The pace and now are drawn in the palette's inactive ink, and their keys say that ink: kept
+  // in their own colours, the keys showed a grey the palette does not have.
+  expect([paints.now, paints.even]).toEqual([paints.grayText, paints.grayText])
+  expect([paints.nowKey, paints.evenKey]).toEqual([paints.grayText, paints.grayText])
   // The reading a key stands on still shows: its dot painted in the palette's ink, and its step
   // ringed in the palette's own colour for the focus.
   const figure = page.locator(LINE)
-  await figure.getByRole('radio', { name: 'Whole window' }).focus()
-  await page.keyboard.press('Tab')
   const focused = figure.locator('[data-reading="3"]')
+  await expect(focused).toHaveAttribute('tabindex', '0')
+  await focused.focus()
   await expect(focused).toBeFocused()
   expect(await paintedDots(page), 'the focused reading').toEqual([3])
   const shown = await focused.evaluate((reach) => {

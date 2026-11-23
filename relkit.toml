@@ -50,6 +50,10 @@ forbid_machine_observations = false
 # configured state, not a failure. The audit holds every workflow job to that.
 hosted_ci = "public-only"
 betterleaks_config = ".betterleaks.toml"
+# The source archive's tests feed its reader paths built to leave the archive,
+# so the structural path rules cannot judge that file. Owner values, owner
+# workflows, private patterns and the secret scanner still read it.
+exclude = ["tests/test_source_archive.py"]
 
 [exposure.providers.AgentMemory]
 role = "product-data-provider"
@@ -58,6 +62,8 @@ allowed_surfaces = ["docs/*", "server/*", "tests/*", "web/*"]
 [changelog]
 profile = "conventional-changelog"
 first_version = "1.0.2"
+# One draft line per commit on main's first-parent line: a merge stands for its branch.
+units = "first-parent"
 
 [changelog.generator]
 engine = "git-cliff"
@@ -71,8 +77,8 @@ version_pattern = '^([0-9]+\.[0-9]+\.[0-9]+)$'
 assets = ["valkama-{version}-source.zip", "Valkama-Setup-{version}.exe", "SHA256SUMS"]
 checksum_file = "SHA256SUMS"
 checks = [["{python}", "windows/release.py", "check"]]
-build = [["{python}", "windows/release.py", "build", "--assets", "{assets}", "--version", "{version}", "--work-dir", "{temp}"]]
-smoke = [["{python}", "windows/release.py", "smoke", "--assets", "{assets}", "--version", "{version}", "--work-dir", "{temp}"]]
+build = [["{python}", "windows/release.py", "build", "--assets", "{assets}", "--version", "{version}", "--work-dir", "{temp}", "--commit", "{commit}"]]
+smoke = [["{python}", "windows/release.py", "smoke", "--assets", "{assets}", "--version", "{version}", "--work-dir", "{temp}", "--commit", "{commit}"]]
 smoke_platforms = ["win32"]
 command_timeout = 7200
 require_provenance = false

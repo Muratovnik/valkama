@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forecastCourses, sectionWindows } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import { serveUsage } from '../fixtures/analytics.ts'
-import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
+import { NIGHT_NAME, nightName, quotaAnswer, quotaAt } from '../fixtures/quota.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 import { accountNamed, plain, showTable, tile } from '../support/quotaPanel.ts'
 
@@ -61,9 +61,9 @@ describe('five hours that last to the reset', () => {
     expect(tileTail).toHaveLength(1)
     expect(tileTail[0]?.attributes('style')).toContain('inline-size: 35%')
     expect(tile(page, 'quota_five_hour').get('.window-track').attributes('aria-label')).toBe(
-      'Five hours: 0% used, steady use 20%, up to date. Forecast · By the reset: 35%',
+      'Five hours: 0% used, steady use since the window started would be at 20% now, up to date. Forecast · By the reset: 35%',
     )
-    const window = accountNamed(page, '7e6d5c4b').get('.quota-window[data-window="five_hour"]')
+    const window = accountNamed(page, NIGHT_NAME).get('.quota-window[data-window="five_hour"]')
     const tail = window.findAll('[data-mark="ahead"]')
     expect(tail).toHaveLength(1)
     expect(tail[0]?.attributes('style')).toContain('inline-size: 35%')
@@ -72,7 +72,7 @@ describe('five hours that last to the reset', () => {
     expect(plain(window.get('[data-fact="forecast"]').text())).toBe('Forecast · By the reset: 35%')
     // As a table the readings end with the forecast at the reset: the figure says it all.
     await showTable(page)
-    const rows = accountNamed(page, '7e6d5c4b')
+    const rows = accountNamed(page, NIGHT_NAME)
       .findAll('.quota-window-readings tbody tr')
       .map((row) => plain(row.text()))
     expect(rows).toHaveLength(2)
@@ -81,7 +81,7 @@ describe('five hours that last to the reset', () => {
 
     serveNight()
     const ru = await mountAnalytics({ routeState: { by: 'quota_five_hour' } }, 'ru')
-    const said = accountNamed(ru, '7e6d5c4b').get(
+    const said = accountNamed(ru, nightName('ru')).get(
       '.quota-window[data-window="five_hour"] [data-fact="forecast"]',
     )
     expect(plain(said.text())).toBe('Прогноз · К сбросу: 35 %')

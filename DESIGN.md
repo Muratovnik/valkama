@@ -128,11 +128,18 @@ and only fades the end of a strip that scrolls on past it.
 - Spacing stays on the four-pixel grid: label/value gaps are 8px, heading/content
   gaps are 12px and panel spacing is 16px. What a module lays out stands at four
   levels, each with its own gap: sections 36px apart, the groups of a section
-  24px, the blocks of a group 16px and the lines of a block 4–8px. A heading says
+  24px, the blocks of a group 16px and the lines of a block 4–8px. The air between the
+  parts of a section is declared once, on the section, and two blocks a section lays out side
+  by side stand that far apart one under the other, so the air after every part of a section
+  is the same whichever view each block shows: the day chart stood 16px under a ring, whose
+  drawing reaches its block's foot, and its heading read as stuck to it. A heading says
   its level before it is read: the type scale gives each level one size in every
   module — the module's name `module` 18px, a section `section` 16px, a group
   `emphasis` 15px, a block `interface` 14px and a label over a block's lines
-  `dense` 13px — so no heading is the size of the level over it. With no group level, an account of the quota stood
+  `dense` 13px — so no heading is the size of the level over it. Everything on a line of a
+  heading's row shares one centre line — the heading, an icon-only control, a text button, a
+  switch: aligned by baselines, the menu at a quota account's name, which has no baseline of
+  its own, stood 3px above «Name» beside it. With no group level, an account of the quota stood
   16px from the next like any block, under a heading as large as its section's,
   and six accounts ran together into one 4279px list. A module keeps
   `--size-page-gutter` from the panel edge. Density comes from alignment and
@@ -773,11 +780,15 @@ and only fades the end of a strip that scrolls on past it.
   checklist's heading, three edges in one column; a list without marks is no indent either,
   where a question's conditions stood 20px in from their label, and a refusal's list of the
   work it would cancel 20px in from its first line. `production-card-list-edges.spec.ts` and
-  `production-question-cancel-edges.spec.ts` measure them. A row whose box is laid out in every state, as Analytics' rail entries,
-  ranked rows and table rows are, draws that box first: the box stands on the edge and its
-  words take the inset inside it, since a box that reached past the column in one state read
-  as an entry pushed out of it (Analytics). A question's options and findings are such rows,
-  on a ground in every state: the ground stands on the edge and the box is 12px inside it.
+  `production-question-cancel-edges.spec.ts` measure them. A row whose box is drawn in every
+  state, as Analytics' rail entries are, and a table row, whose cells are the table's columns,
+  draw that box first: the box stands on the edge and its words take the inset inside it, since
+  a box that reached past the column in one state read as an entry pushed out of it
+  (Analytics). A question's options and findings are such rows, on a ground in every state: the
+  ground stands on the edge and the box is 12px inside it. A ranked row draws no ground at rest,
+  so it takes the inset outside the column as other rows do: its name and its bar start on the
+  heading's edge. Inset inside, every ranked name stood 8px in from its section's heading, in
+  the page and in the value panel.
 - A disclosure's chevron is the icon layer's `disclosure-closed` and `disclosure-open`: the
   set's chevron drawn from its square's start edge, so the square stands on the column's
   edge, the stroke starts there in both states, and the words after the square keep their
@@ -1029,12 +1040,24 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   below its element from the element's start, 6px off and at most 20rem wide, and above it only
   where the window has no room below; a name stands below its icon, centred. A cut text's
   hint stands nowhere beside it: its whole words are laid over the cut ones, the first letter
-  on the cut text's first letter in the same type and ink and on the ground under it, running
+  on the cut text's first letter in the type and ink of the line it stands in and on the ground
+  under that line, never in the look of a run the text starts with, as code, a link or emphasis
+  (taken from the run, a title that starts with code was set whole in code's type), running
   on to the right up to 8px short of the window's edge and wrapping by words only where the
   whole text does not fit there, so on one line it covers no other row; over a text a clamp
-  cuts to its lines, as a graph card's title, a board tile's, an outcome's preview and a title in
-  the task finder, it is at least as high and wide as the lines the
-  clamp shows, so neither a line nor its ellipsis reads again beside it. A label a narrow place
+  cuts to its lines, as a graph card's title, a board tile's, an outcome's preview, a title in
+  the task finder and a name a chart's table keeps to two lines, it takes the clamp's whole column
+  and the clamp's alignment and grows down past the clamp, reading as the clamp opened in place:
+  its words wrap where the clamp's did, so its first line is the clamp's and its first letter the
+  cut one, it breaks a word only where the clamp does, and it covers every line the clamp shows,
+  so neither a line nor its ellipsis reads again beside it, and since its words were cut at that
+  width they take more lines there, so no empty room stands under them. Run on to the window's
+  edge instead, a board tile's title cut at its third line lay on one line across the next
+  columns over 38px of empty frame; laid from the first letter, the whole words over a table's
+  column heading, whose lines end at the column's end, stood inside the column, narrower than
+  it, broke words in two and left the clamp's second line showing beside them. Where the window
+  has no room under it for all its lines
+  it stands higher, 8px short of the window's bottom edge. A label a narrow place
   hides whole, as the icon rail's and the board's sign-only action's, is hidden rather than cut:
   no letter of it is on screen to lay its words from, and a glyph beside it hidden from assistive
   technology, as a «+», is none of its words, so its hint names the control where a name stands.
@@ -1116,10 +1139,20 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   it read as one more row. Parts are compared by ranked bars on one base; a thin segmented strip
   belongs only over rows that print a name and a number and draw nothing, as a rail tile's
   `MiniShareBar` does. A row whose figure is less than the least its unit shows — «меньше
-  минуты», a cost under a cent, no token — says nothing of how much and is not drawn, under any
-  name, judged from its amount against that unit and never from its words; «unknown» of a unit or
-  more stays, since it shows a gap in what is placed. The section's total, every share and the
-  table twin still count and list such a row, and a list whose every row is one draws them all.
+  минуты», a cost under a cent, no token — says nothing of how much and is in no view of a chart,
+  under any name, judged from its amount against that unit and never from its words: not the
+  ranked bars, the ring's sectors and legend, the small charts, the day chart's series, nor the
+  table twin of any of them, which all take their lines from one rule (`drawnLines`). «Unknown» of
+  a unit or more stays, since it shows a gap in what is placed. The section's total and every
+  share still count such a row — a ring that leaves one out stays open by its share rather than
+  stretching the rest over it — the section's own table, which holds every value in every
+  measure, lists it, and a chart whose every row is one draws them all. The same holds for an
+  entry of a breakdown, one value in one day, hour or minute or one figure of the section's
+  table (`unnamedEntries`, `entrySpent`): it is absent there as a value that did not spend there
+  is — the period's hint does not list it, it draws nothing, and its table cell, a small chart's
+  hint and the section table's cell read «0 мин» — while the period's total, the value's figure
+  over the span and the section's total count it. A total under the unit, the running minute or
+  a whole day under a minute, keeps its words.
   `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
   draws one small chart of the span per leading value, all on one scale whose top is written
   once over them, each with its name on one line and its figure; the folded tail shares the
@@ -1127,7 +1160,21 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls sideways in its own frame
-  (`ChartTable`, `keyScroll`) rather than widening the page. They are boxes of HTML on the tokens, not a chart library, which the
+  (`ChartTable`, `keyScroll`) rather than widening the page. A twin only a few pixels wider
+  than its frame, less than the least target, takes them from its headings over figures that
+  stand at their floor and fits instead: the days' twin of a section at 1024px scrolled by 5 to
+  18px, which brought nothing into reach and left its note's last letters under the edge. A
+  twin's name, a row's or a series'
+  over its figures, takes two lines at most, then an ellipsis, whole in its hint, as the side
+  panel's narrow names do (`.two-lines`), and a detail a line of its own under it: unbounded, a
+  task's name in the ranked twin at 390 stood on fourteen lines and its row 234 px tall, and the
+  days' twin by task stood its heading row 336 px tall over seventeen lines of a name. A chart
+  opens on the drawing it opens on at 1440 at every width, a phone's too, and its table is a
+  press away: in a panel of 294 px at 390 the ring, the ranked bars (each name on its own line
+  over its bar), the days
+  (scrolling in their frame, a day 24 px at least) and the quota's windows each stand whole, with
+  no word cut but by a designed ellipsis. A panel under 560 px once opened every chart as its
+  table, though none needed it. They are boxes of HTML on the tokens, not a chart library, which the
   product removed for its weight. A value axis starts at zero and names a few round steps; a
   time axis names what it has room for, counted back from the last period. A series takes
   its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
@@ -1160,14 +1207,40 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   A hue
   never speaks alone: a chart of two series or more carries a legend, and every hint and every
   accessible name say each series by name. The legend's lines step 24px with no gap between
-  them, every line one height, and every key fills its line: one that acts, a link or a button
-  alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next line, and one that
-  only shows takes no focus, no pointer's hand and no press. A legend's name takes one line, as
+  them, every line one height, and every key fills its line: one that acts, a link, a button
+  or a layer's toggle alike, is the 24px target WCAG 2.5.8 asks and reaches no key of the next
+  line, and one that only shows takes no focus, no pointer's hand and no press. A series' key
+  acts where its series does; a mark's key acts only where the mark is a layer. The marks a chart
+  draws beside its data are its layers — the tick of the period compared with, the line of an
+  account change, and on a step line the pace and the forecast — and a layer's key is a toggle:
+  a press, by the pointer or by Enter or Space, turns that layer off on every chart that draws
+  it, and the next turns it on again, one choice per layer kept on this computer, which a
+  reload keeps until it is turned on again (`chartLayersStore`). A layer turned off is not
+  drawn, and no hint, name, place or step of the scale counts it, so a period before that was
+  taller no longer holds the scale up. Its key stays, pressed while its layer shows
+  (`aria-pressed`) and, while it is off, its swatch faint and its name in the tertiary ink struck
+  through, a state said by more than a tone, and there to turn it back on; nothing else on the
+  chart says a layer is off, no banner and no note. A layer a chart lacks because its read failed,
+  the period before's steps or the accounts of a new view, keeps its key's room in the legend,
+  unseen and out of reach, until a read brings it: dropped, the legend stood a line shorter and
+  the retry that read them moved what stands under the chart 24px down. A chart's table keeps
+  every figure. A layer
+  obeys its toggle only where the chart carries its key, so a layer turned off can always be
+  found and turned on again: a window's bar has no legend, on its rail tile too, and keeps its
+  pace tick and its forecast tail. The owner asked for «previous period» and the other added marks to be switches that turn their
+  display off and on, and drew the line: the data itself — the stacked series, a step line's
+  readings — always shows, so a column's sum never disagrees with the figures beside it; the
+  hatch of a period still running is how unfinished data is drawn, and a step line's now and
+  the level of its top orient the plot, so none of them is a layer and their keys do not act.
+  A legend's name takes one line, as
   wide as the legend at most, and ends in an ellipsis from its end, so a task's reference stays,
   and a pair's first part gives way before its end, the model, does; the entry's hint says it
   whole. Broken wherever a letter fell, a task's name took two lines an
   entry and 164 of the day chart's 435 pixels, and a session's four, «Valkama: проектирова / ние
-  системы агентов».
+  системы агентов». In a ring's legend, whose lines end in a figure, a name too long to stand
+  beside its figure takes its line alone and the figure the line under it, at the end where the
+  others end, as a ranked row's name takes a line over its bar in a narrow chart: beside their
+  figures at 1440px the two cache writes of the tokens by kind were cut to «Зап…» and «Запи…».
   Every mark of a chart — a period, a segment of one, a small chart's name, a legend entry, a
   ranked row — keeps one contract. Pointing at it, or focusing it from the keyboard, shows its
   hint at the mark through the one hint host, a segment's being its period's: the mark's series, its value, its share and the
@@ -1210,9 +1283,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   Russian as «пока», which reads as «bye». While such a period is on the plot the legend names
   the hatch, «in progress» beside a hatched swatch, and drops the key once none is. A change
   at a period's start, such as the account the work ran under, is a line up the plot in the gap
-  before its column, a shape and not a hue, and the period's hint, name and table row say it,
-  «Account change: a → a, b», naming each account as the page does, an account and not its
-  organization, and leaving out work no reading places on an account: the chart keeps no row for
+  before its column, a shape and not a hue. While the plot marks one the legend names the line,
+  «account change» beside a short upright line, and drops the key once none is, so the line is
+  read without a hint. The period's hint, its table row and its name say what changed — a period
+  that acts names its action and then the change — by the accounts that came, «+», and those that
+  left, «−»: «Account change: +b» where b joined a, «Account change: −c» where c left a, never
+  «a → a, b», which made the reader find the difference. Each account is named as the page names
+  one, an account and not its organization, and work no reading places on an account is left
+  out: the chart keeps no row for
   changes, over the plot or under it, so they cost the plot none of its height. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own but a live span's frame keeping up with its running
   period, as below, which never meant that nothing may stand over it: a hint lies in the hint
@@ -1275,44 +1353,103 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   use as a thin diagonal in the text ink. The share spent is a reading, final however old, so
   its fill is solid whether the window is fresh or silent, and a silent one says how long in
   words. What the window's forecast says it reaches by the reset is not final, so both draw it
-  hatched, in the series hue of the share it continues. On the bar it is a tail inside the
-  track from the share spent to the forecast's share at the reset, 2px of ground past the fill: a
-  week's range as two parts parted by the same 2px where its slower pace ends, since both paces
-  spend at least that much and only the faster spends the rest; five hours that last to the
+  apart from the share spent, in the series hue of the share it continues: the bar as a hatched
+  tail, the line as a dashed line. On the bar it is one tail inside the
+  track from the share spent to the forecast's share at the reset, 2px of ground past the fill
+  and none inside the tail: a week's range to its high end, the faster pace's, its low end said
+  in the words under the bar and not drawn on it, since a second gap inside the tail read as a
+  break in the forecast; five hours that last to the
   share their answer says they spend by the reset, and five hours that run out to the track's
   end; from the track's start at 0 %; and no tail where the forecast names no share past the
   share spent — a pace that spends nothing more, a window too new for a forecast, one spent or
   read past 100 %, whose fill stops at the track's end. A reading draws no dot at rest, the line alone, and no
-  end marker either: the line holds to now past its last reading, so a dot there stood hours
-  before now on a silent window. The reading pointed at or focused draws its dot and says its
-  moment, its share and its source in its hint, as every mark does; the one a key stands on
-  keeps its dot whatever the pointer does, and Tab lands on the latest. Past the readings the
-  line has two places of its own, each with its hint and painted only while pointed at or
-  focused, a ring rather than a reading's dot: «now» where the line ends, its share, when the
-  latest reading was and how long the window has been silent, which takes the pointer from the
-  line's end on and leaves the latest reading its own dot; and, while the window stands and its
-  forecast has a share to draw to, the end of the forecast's corridor at the reset, its share
-  there, what that leaves out and when the reset is. The corridor runs from now to the reset in
-  the readings' hue under the same hatch, a band between the slower and the faster pace for a
-  week and a ribbon to 100 % at the run-out and flat on for five hours, and the legend names it
-  «Forecast». Where the window's count restarted inside it, its reset unchanged, the line falls
+  end marker either: a fresh window's line holds to now past its last reading, a source writing
+  one only when a value changes, so a dot there stood hours before the line's end. A window silent
+  by now, or by its reset where that has passed, measured nothing after its last reading, and its
+  line ends there, so the line's visible end is a reading, which the pointer finds at its end.
+  The reading pointed at or focused draws its dot and says its moment, its share and its source
+  in its hint, as every mark does; the one a key stands on keeps its dot whatever the pointer
+  does, and Tab lands on the latest. Past the readings the line has two places of its own, each
+  with its hint and painted only while pointed at or focused: «now» where the line ends, a round
+  dot drawn as the forecast's end is, its share, when the latest reading was and how long the
+  window has been silent, which takes the pointer from the line's end on and leaves the latest
+  reading its own dot farther than a mark's reach from it, the latest found as «now» within it; a
+  ring there, which a restart keeps, read as a second kind of point on the one line; and,
+  while the window stands and its forecast has a share to draw to, the end of the forecast's line,
+  its share at the reset, what that leaves out and when the reset is. The forecast is a line,
+  not a band: 2px like the readings' line, in their hue, dashed, the conventional cue for a
+  projection, from where the readings' line ends at now. For a week's
+  range it follows the high end, the faster pace, the one that decides a run-out, as the bar's
+  tail does; the range down to the low end is a quiet solid fill of the hue at low opacity under
+  that line, with no hatch and no outline, and none where the range is under about three pixels,
+  where it would read as a second edge of the line. Where the forecast runs out before the reset
+  the line ends at the run-out, on the 100 % level, and nothing is drawn after it: the run-out is
+  the fact the card's words say, «runs out … before the reset», and a stretch flat along 100 % to
+  the reset only thickened the level. Where it does not run out it ends at the reset at its share;
+  a window spent already ran out at now, so no line runs on from there. Its end is a round dot, a
+  reading's dot across and as tall as it is wide, in the line's hue ringed in the ground, the place
+  the pointer and the keyboard find, with its hint; never a dash. A forced palette draws the line,
+  the fill and the dot in its ink and the ring in its ground. The forecast was a hatched corridor
+  to the reset, a band between the two paces for a week and for five hours a ribbon to 100 % at
+  the run-out that lay along the level to the reset as a thick hatched bar, its end's mark at
+  100 % a flat dash; the owner found the band thick and the dot on hover flat. The legend names
+  the line «Forecast» beside a short dashed line, a key that turns the layer off and on as the
+  pace's does. Where the window's count restarted inside it, its reset unchanged, the line falls
   at a reading, and the restart is a place on the line at that moment with its hint, painted only
-  while pointed at or focused as the others are: the forecast's ring around the fall, «Counter
+  while pointed at or focused as the others are: a round ring on the middle of the fall, «Counter
   zeroed» with its moment and that the window's reset time did not change, the fact alone, since
-  the readings cannot tell what zeroed it. The arrows walk the readings, each restart before the
-  reading at its moment, then «now», then the forecast. A step line opens on
-  «To now and the forecast», from the window's start to now and the forecast past it, with a
-  switch to the whole window up to its reset: drawn to the reset, a running week left its
-  readings the first third of the plot. Where the span ends before the reset the corridor runs
-  to the plot's edge, and the forecast's hint says the reset stands past it. A window past its
-  reset by the page's clock, even one read before it, draws neither the corridor nor the places
-  past its readings and shows its whole window alone, its line held to the moment it was read,
-  its restarts still marked on it. A 0 % has no fill,
+  the readings cannot tell what zeroed it. Every place's mark, a restart's ring or the dot of «now» and of the forecast, is a
+  true circle at every width, at rest and pointed at, the line's own fall saying how far it fell:
+  a restart's ring once stretched over the fall, a capsule up to 89px tall, and an oval 12×8 at a
+  fall from 0 % to 0 %. On a window past its reset and on the windows before the current one the
+  marks take the neutral ink their readings are drawn in; they once stood blue on a grey line.
+  Within a mark's reach of the pointer a place — a restart, a reset between two windows, «now»,
+  the forecast's end — is found before any reading: on a period of weeks the readings stand on
+  every pixel, a continuum the pointer cannot single out, and a reset on the pixel of the reading
+  before it was never found; the place's own hint says the share at its moment. Of two places
+  within that reach of each other the pointer finds the nearer, and its hint says the other's
+  words after its own, so no place's facts are out of the pointer's reach; each keeps its own name
+  for the keyboard. A place's box, which the keyboard's ring is drawn on, has its middle where the
+  pointer finds it: the least width of a box around a restart's ring or «now»'s dot, and the
+  forecast's from past «now»'s along its line to half that width past its dot; a box that started
+  at «now» put its middle 12px past its mark, where the forecast's line took the pointer.
+  The arrows walk the readings, each restart before the
+  reading at its moment, then «now», then the forecast. A step line shows its whole window, from
+  its start to its reset, running or past its reset alike, and its axis names its two ends for
+  what they are: «start 11:30» and «resets 16:30», or «reset at 16:30» once that has passed, each
+  dated where it is not the page's day, and the moment alone where the window named none.
+  Opened on its start to now and a third past it, a running line ended on a bare time, and a
+  finished one on its reset said as bare, and either read as now. A line may hold the windows
+  before its current one, each whole from its start to its reset, one after another, the count
+  falling to nothing at each reset, a place on the line with its hint, «Window reset» and the
+  share the window ended at; those windows' line and dots are drawn in the neutral ink of marks at
+  rest, which the legend names «Earlier windows», and the pace runs over the current window alone.
+  The axis then names the first window's start and the current reset. Lines that share a scale
+  longer than what one holds stand inside it, empty where they hold no window, the axis's words
+  under the moments they name, moved out toward the empty part whole where the two would not fit
+  beside each other. While the window runs, its
+  line marks now: a hairline up the plot in the quiet ink, upright where the pace runs across,
+  which the legend names «Now» beside a hair of it, and no word stands over the plot. The top of its scale, «100%» or the
+  highest reading past it, is written once beside the plot, centred on a hairline in the rule's
+  ink at its level, so a line at 100 % meets the line its figure names: written over the plot
+  with nothing at its level, a line at 100 % read as stopping under the mark. A frame dragged
+  along the plot, or stretched with Shift and an arrow, narrows that line alone to the moments
+  it covers, its axis then naming them alone, and «Whole span», a compact button at the head's
+  start while the frame holds, takes it back to every window the line holds, the keyboard's place
+  kept; where the frame ends before the forecast's end the line runs to the plot's edge, its dot
+  there, and the forecast's hint says the reset stands past it. A window past its reset by the
+  page's clock, even one read before it, draws
+  neither the forecast nor the places past its readings nor now, its line held to the moment it
+  was read or to its reset where it was fresh then, and ended at its last reading where it was
+  silent by then, its restarts still marked on it; its readings, their marks and their key in
+  the legend are drawn in the neutral ink of marks at rest, as its bar is, which a forced palette
+  draws in its inactive ink: in the series' hue beside a muted bar, the last window's line read as
+  the share spent now. A 0 % has no fill,
   and a window with no figure draws the track alone; the fill stands apart from the ground and
   the track by lightness, so both read in grayscale and under a forced palette in its inks,
-  where the hatch and the rings take its ink too. Their table twins are `WindowBarTable` and
-  `StepLineTable`, each holding the forecast as well, and the second each restart as a row
-  before the reading at its moment.
+  where the hatch, the forecast's line and fill and the marks take its ink too. Their table twins
+  are `WindowBarTable` and `StepLineTable`, each holding the forecast as well, and the second each
+  restart and each reset between the windows it holds as a row before the reading at its moment.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, is held to about the
@@ -1323,17 +1460,31 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   scroll-driven animation, the heading row lagged a frame behind the rows and shook as the page
   scrolled. Each heading sorts by its column, and a line over the table says how many rows it
   shows of how many, how they are sorted, and downloads what it shows in that order.
+  A row of such a table is one line: its figures take what they need and its name the rest,
+  cut with an ellipsis and whole in its hint. The side panel's table of every value leaves its
+  names a narrow column, and there a value named by free text, a task or a session, takes two
+  lines at most as in a ranked list, then an ellipsis, whole in its hint, so the reference and
+  the start of the title stand together: cut to one line in a column of eight ems, a task's name
+  showed its reference alone. A pair there takes a line a part, a session's detail a line of
+  its own under its name, and the row's figures stand on the name's first line. Any other name
+  there, and every name of the section's own table, keeps to one line.
   `DonutChart` is a ring of how one whole splits into parts, one of the two drawings of every
   such chart beside its ranked bars: a sector a part, largest first from the top, five at most
   with the smaller past them folded into one rest in the folded tail's neutral; each part in the
   hue its value has on the page, and a legend beside it naming the parts in the ring's order,
   each with its figure and bare share, «6 h · 47%», at the end of its line in the quiet ink, the
-  figures of the lines ending where the others end. No words stand on a sector: the near-black
-  written there read badly on the darker hues, and the legend holds every number. A sector's
-  one hint gives its figure and share, and the rest's each part it holds; the sectors are one
-  Tab stop walked round with the arrows. Rows that are no part of the whole close it by name
-  and figure under the legend, their figures ending with the legend's. Its table twin is
-  `RankedBarsTable`.
+  figures of the lines ending where the others end. The share is the legend's to say, once: a
+  ring given figures that already carried it read «90 M · 60 % · 60 %». No words stand on a
+  sector: the near-black written there read badly on the darker hues, and the legend holds
+  every number. A sector's one hint gives its figure and share, and the rest's each part it
+  holds; it stands at the point of the sector's band by the pointer, on the band's middle where
+  the pointer stands round the ring, and at the middle of the sector under the keyboard: a
+  sector three quarters round the ring once had its hint at its middle, 70px from the pointer.
+  Each sector takes the pointer over its half of the gap to the next, and a sector too thin to
+  show past its gap still takes it there. The sectors are one Tab stop walked round with the
+  arrows. Rows that are no part of
+  the whole close it by name and figure under the legend, their figures ending with the
+  legend's. Its table twin is `RankedBarsTable`.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
@@ -1415,7 +1566,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   arrows show a panel as they reach its tab where it shows at once, and only
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
-  same control built again, and `check:ui-system` rejects one. A segment not
+  same control built again, and `check:ui-system` rejects one. A row that
+  scrolls sideways where its room is narrower than it — a card's sections, the
+  kinds of question over «Needs my answer» — scrolls in a `ChoiceStrip`, which
+  fades the end a choice is cut at and keeps the chosen one, and the one the
+  keyboard reaches, clear of that fade: the strip of its own faded nothing and
+  kept the chosen by the browser's nearest edge. A segment not
   pressed takes the hovered ground and the main ink under the pointer, a step
   under the pressed one's ground; the ink alone was a step of grey a reader
   pointing at a two-segment row did not see. A row of choices wider than half a
@@ -1447,6 +1603,39 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   dialog as a choice list does. A stray press reaches neither the trigger nor an entry. A
   menu does things to what it stands beside; picking the value a field holds is
   `ChoiceSelect`'s.
+- **Facet filter:** `FacetFilter` owns a filter's field and its menu, and
+  `FacetFilterChips` the values it holds as chips; the Work views and the Analytics bar
+  filter through them, each saying what its filter is over: the values no facet holds, the
+  facets, and each facet's values. The field is the way into the menu, with no button of
+  its own: a press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
+  itself does not, since Tab passes through to what the menu would cover. Escape closes the
+  menu, then clears the text, then leaves the field, one step a press. The menu takes two
+  steps, as Linear's does: it opens on the facets, each row marked with a chevron, and a
+  facet's row steps into that facet's values; a condition that holds values of its own, as
+  «Closed in a period» does, is a row among the conditions that steps into them the same way.
+  The values' step heads its list with the
+  facet's name as the way back; ← or Backspace from the start of the text goes back too,
+  and the highlight lands on the facet it left. Typing in the facets' step still finds a
+  value of any facet, the fast path for a reader who knows the word, and a pick made that
+  way lands in its facet's step with the value highlighted; inside a facet the text narrows
+  its values. A facet's values are asked for only while they show — the facet stepped into,
+  or every facet while text searches them all — so a host that reads them reads none for a
+  closed menu; what is not there is said under them, in the muted detail words and no row:
+  a wait once it has lasted, a read that failed, nothing found. Every row keeps to one line
+  by the one-line labels' rule, its words cut with an ellipsis where the menu is too narrow
+  and said whole in its hint. The menu is as wide as the field, up to 24rem, or as wide as
+  its host asks, and never past the window's end; it stands as tall as the window lets it,
+  down to 8px over its foot. While it shows it is the page's open popup, and the hints of
+  what lies under it keep quiet. A chip is a press that takes its value out; once the chips
+  without it are drawn, the focus goes to the chip before it, the next one when it was the
+  first, and the field when none is left, so it never falls to the page. ← from the start
+  of the text reaches the last chip, and Backspace there takes it out. Every bar composes
+  the two alike: the field stands in the bar's row and takes the room the row leaves, and
+  the chips stand in a line of their own under the row, the way to take every filter out
+  at that line's end, so the chips never compete with the field for one row's width. The
+  Analytics page once had a list of its own, a field for each dimension under a button: an
+  unplaced account's «<id> · аккаунт не определён» wrapped to two lines there, 52px beside
+  rows of 40px.
 - **Disclosure:** what shows more of something — the rest of a long text,
   earlier replies, a chain's or a lane's further rows, a folded thread — is the
   bare `text` weight, its words in line with what it opens. The ghost's fill is
@@ -1500,6 +1689,38 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `SearchCombobox`, the runs of the card's head, a path in free text.
   `production-title-surfaces.spec.ts` measures each surface. It is a directive because
   a component instance in every tile and row is a cost the board's budget refuses.
+- **Code in a title:** a work item's title may hold code between backticks, «Raise
+  `` `STORE_SCHEMA_VERSION` `` to 18», and every surface that draws a title draws it as
+  code: in the monospace face (`--font-family-mono`), without the backticks. One parse
+  cuts a title (`titleRuns.ts`): backticks pair from the left, a pair with something
+  between them is code, an empty pair or a backtick left alone stays text, and a
+  reference inside code is code. One primitive draws the runs (`textRuns.ts`):
+  `v-work-item-title` on a surface that knows it holds a title, and `v-text-runs` with the
+  runs its host hands it on a control that draws any text — `CommandList`,
+  `SearchCombobox`, an editor's suggestion, a dialog's context line — which never cuts a
+  string of its own. Code breaks at a space and after a `/` as the rest of the title does,
+  and never after a hyphen, which is held to the character after it; a word of it wider
+  than its line breaks inside and stays in its box. Its lines are the title's own lines, so
+  a surface that ends a title in an ellipsis or a clamp still does: drawn as a box of its
+  own, one long word of code was one line to the board's clamp and its tile grew to six.
+  A cut title's whole words are laid in the same runs, in the title's type, its code as
+  code, even where the title starts with it. Everything that is text rather than
+  drawing holds the title as written, backticks included: a name or a hint attribute, a
+  description, a download, and a copy — a selection inside a drawn title puts each piece
+  of code it holds whole on the clipboard between its backticks. The list's find reads a
+  title as it is drawn, without them. `production-title-code.spec.ts` measures the
+  surfaces. Analytics names a task by its reference and title, «MAIN-12 Raise
+  `` `X` ``», and hands that name with its runs (`valueRuns`, `lineRuns` in
+  `useSpendingWords`) to every place that draws it: a list's and a card's rows, a legend,
+  a small chart's name, the table twins, a hint's rows, a filter's choice and chip, a
+  tile of the rail, the overview's changes and the side panel's heading. A chart's name is
+  drawn by `PairName`, which cuts a pair's runs where its end starts; where nothing says a
+  name holds a title it is drawn as the text it is. The page draws no title as SVG text.
+  Its names as text — an accessible name, a hint's copy, a download, a sort, a table's
+  search — keep the backticks. `production-analytics-title-code.spec.ts` measures it. The
+  guard refuses a template that draws a title through `v-slash-breaks` too, unless
+  `title-breaks.mjs` registers why it is no work item's title: that directive draws code
+  as the backticks it was written with.
 - **Free text:** `RichText` owns every text an agent or a person wrote — a
   description, a comment, a report section, a question, an attempt's result, a
   ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,
@@ -1712,25 +1933,16 @@ cannot stand beside that, the bar takes its phone form, where the menu is its si
 alone. The filter's
 hint starts with «Filter:» and names what it narrows by, so it does not read as the
 search over every project, «Go to a task» in the navigation; it is whole where it fits
-and short where it would be cut. The field is the way into the filter's menu, with no button of its own: a
-press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
-itself does not, since Tab passes through to what the menu would cover. The menu takes
-two steps, as Linear's does: it opens on the facets — state, kind, priority, holder,
-project, goal or stage, label — under the conditions, and a facet's row, marked with a
-chevron, steps into
-that facet's values. «Project» offers the projects the work names, by name, and «No
+and short where it would be cut. The field is the shared facet filter (Shared component
+grammar): its facets are state, kind, priority, holder, project, goal or stage, and label,
+under the conditions. «Project» offers the projects the work names, by name, and «No
 project»; «Goal or stage» offers each container as «MAIN-12 · title» with its path of
 references after it, «MAIN-1 › MAIN-12», and keeps the container's whole subtree, the
-container included. Every value of every facet at once was a list a real space's
-labels made thousands of rows long. The values' step heads its list with the facet's
-name as the way back; ← or Backspace from the start of the text goes back too, and
-the highlight lands on the facet it left. Typing in the facets' step still finds a
-value of any facet, the fast path for a reader who knows the word, and a pick made
-that way lands in its facet's step with the value highlighted. Text always ends the
+container included. Every value of every facet at once was a list a real space's labels made
+thousands of rows long. Text always ends the
 menu with «Search for "…" in all projects», which hands it to the finder; with no
 value left that row is all the menu holds, one row tall, and Escape takes it away.
-The menu stands as tall as the window
-lets it, down to 8px over its foot. A group's head stays in sight while its values scroll, and
+A group's head stays in sight while its values scroll, and
 the label group's head says how the labels picked combine, «all» or «any», where the
 space has two to combine. Where typed text offers that group beside others it stands last, as the
 longest list, and until the list reaches it its head waits at the menu's lower edge, so the
@@ -2984,7 +3196,16 @@ whether it scrolls or not; with the room taken only while it scrolled, a section
 short of the bar.
 
 The bar holds what every part reads by: the period, the filters, how fresh the data is and the
-refresh. A period is «Now», «Today», this week, the past four weeks or a span of the reader's
+refresh. Which projects the figures are of stands beside the heading of every section the
+period's figures fill, after its «ⓘ», in the quiet ink: «Overview · project Billing» on a page
+scoped to one, by the name the context bar gives it, or «all projects»; the overview's «ⓘ» says
+the same as a sentence. A project's week beside the global one, with the project named only in
+the context bar, read as two answers for one week. The quota's sections say none: the quota is
+an account's, of no project, and their «ⓘ» says the chosen project does not change it. The bar
+has no room for those words: beside the period they took its line to two rows beside a span of
+days at 1440px in Russian, cut a span's name at 1200px and moved the refresh when a failure was
+said, and under it they pushed the table of tasks past a 1280×800 window.
+A period is «Now», «Today», this week, the past four weeks or a span of the reader's
 own: days chosen in the bar, or the moments a frame on a time axis bounds (Charts). «Now» is
 the last hour by the minute and «Today» the day so far by the hour, against the same hours of
 yesterday; both read again every 30 seconds while the tab is visible, a hidden tab asks
@@ -3003,12 +3224,14 @@ retry, and never a failure's words or a day of the reader's own period, whose fi
 the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
 bar's end at 1200px. The last thing a line gives up is itself: one that still runs past its end
 becomes the two rows below, with its words back, and a bar with room for one line keeps one line.
-The line is fitted as if a refresh had failed, so a failure said takes only the room the
-filters' chips had, the way to add a filter standing before them: it moves neither the bar's
-height nor any of its controls. Fitted for the bar as it stood, a failure moved «Add filter»
-260px and the age as far, gave up the failure's own words beside a span of days at 1440px, and
+The line is fitted as if a refresh had failed, so a failure said takes only room the filter's
+field has past its words: the field's end comes back, and the failure moves neither the bar's
+height nor the place of any other control. Fitted for the bar as it stood, a failure moved
+«Add filter» 260px and the age as far, gave up the failure's own words beside a span of days
+at 1440px, and
 turned a line of 1280px into two rows that moved the panel. Beside a span of days, in Russian,
-the line needs a 1360px window; at 1108px «Refresh» ran 188px past the bar's end, and pressing it
+the line needs a 1390px window, the filter's field taking 30px more than the button it replaced;
+at 1108px «Refresh» ran 188px past the bar's end, and pressing it
 scrolled the bar sideways. There, choosing such a span moves the panel down by the second row:
 one line wherever it fits was chosen over a bar of one height for every period.
 Below a bar 50rem wide, a window under about 1107px beside the expanded navigation, the bar is
@@ -3020,7 +3243,8 @@ beside the periods, the ends pushed the filters and then the freshness onto a th
 panel moved down 44px when a span of days was chosen. On a phone the bar is two rows: the periods
 across the whole first row, wrapping onto more lines of their track where one has no room for
 them, in columns of one width, as every wrapped row of segments does (Segmented choice); then the
-filter, a failure, the freshness and the refresh. Each wrapped line sharing its own room, the breaks
+filter, a failure, the freshness and the refresh; with a filter set, the chips' row right under
+them, before the reader's own days. Each wrapped line sharing its own room, the breaks
 of two lines missed each other: at 390px Analytics' five periods stood three over two.
 The reader's own days take a third row once chosen, which moves the panel down by it. The periods
 scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past the edge, and a row
@@ -3030,8 +3254,14 @@ window of about 375px or less, Analytics' freshness stands at the end of the per
 the periods wrapping in what it leaves: beside the filter, the freshness and the refresh, a failed
 refresh in Russian had room only for three lines there and ran 2px past the row's end. A refresh
 that fails keeps what is shown and says so in words before the age at every width, «Could not
-refresh» with a retry: given up on a short line, its words had left a red disc with no hint. The
-retry is reached at every width too: where the line has no room for «· Retry», the words themselves
+refresh» with a retry: given up on a short line, its words had left a red disc with no hint. A
+refresh whose period before could not be read, where what is shown has it, fails so too: shown,
+it took every change and the table's columns of the period before away, and the words that said
+so came in over the figures. So does a refresh whose accounts or overview steps of the period
+before could not be read, and a new view whose accounts or steps could not be read shows its
+answer without their marks and says the same words here: said in a note under the chart, the
+failure moved what stands under it, and room held for the note stood empty under every chart at
+rest. The retry is reached at every width too: where the line has no room for «· Retry», the words themselves
 are the retry, named «Could not refresh · Retry» with «Retry» as their hint, and take no room the
 words did not. Dropped there, a phone and a span of days in Russian offered no retry of its own,
 only the refresh beside it. Reading another space, period or filter dims what is shown until its
@@ -3040,10 +3270,51 @@ a refresh of the same view dims nothing. Records reach the store in batches, so 
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,
 and say «no data yet» in their hint rather than being drawn as a drop.
 
+The bar's filter is the shared facet filter (Shared component grammar), the one the Work views
+filter through, and placed as the Work bar places it. Its field, «Add a filter», stands on the
+bar's line after the period and takes the room the line leaves, as the Work filter takes what its
+row leaves; the chips it set stand in a row of their own under the line, with «Clear filters» at
+their end, as the Work bar ends the line under its row with the way out of its filter. Its facets
+are the page's dimensions in the rail's order, the project left out inside a project, and a
+dimension's values are its «none» as the read admits it — «No task» for work on no item, «The
+session itself» for a session's own run, «Unknown» for a value nobody can place, and none for a
+role, which every stretch has — then the values that spent anything in the period, each named as
+the page names it; a value a link names that the period did not spend still stands, chosen,
+under its id. A dimension's values are read when it is stepped into and again for a new period,
+and a filter set has its dimension's read to name its chip; the page used to read all ten at
+once to open its list. Several values of one dimension admit any of them, and the dimensions'
+filters all apply. «Add to filter» in a value's panel adds to the same filter, and an old link
+reads as it did. A chip says its dimension and its value, «Model: model-a»; every chip set is
+shown, and more than one row holds wrap onto the next. The field is never narrower than its
+words need, 176px, or on a short bar and on a phone its short «Filter», 62px with less air at
+its ends: the line gives up its other parts only once the field has given up the room past
+that, so the line's give-ups and its two rows come where they came before. The row of chips
+comes with the first filter set and goes with the last, and it is the one thing the filters
+change in the bar's height: a row of 28px and the bar's 8px gap, 36px at 1440 and at 1024px,
+and on a phone, where a chip grows to a finger's reach, 52px for one row and 180px for five
+chips over three rows with «Clear filters» under them. On a phone the row stands right under
+the field's, and the room of the reader's own days, which every period keeps there, moves under
+it: under that room, the chips stood 44px away from the field with no span of days chosen.
+At 1440px the field is 487px wide beside a week and the Work field 673px beside its views. It
+used to be as wide as its words, 176px, with the chips beside it on the line in the room left
+and those without room counted in «Filters: N», whose list held every chip and «Clear filters»:
+the field stood narrow beside an empty line, and a filter set stood behind a press.
+
+An item's work has two times, and each has one name wherever it stands. «Work on the clock»
+(«Работа по часам») is the time that passed while agents worked, which agents working side by
+side share; «Agent time» («Время агентов») adds up each agent's own, the time Analytics counts.
+A card's line says the first and, where agents worked side by side and the two differ, the
+second beside it; the card's Agents tab names them alike, and a task's side panel in Analytics
+says the second of all time. Under one name, «Work», a card's 7 h 38 min beside the 11 h 14 min
+Analytics gave the same task read as two answers to one question.
+
 Words are said once, where they belong. A value carries a short label, never a sentence. A
 caveat common to a section is said once, in an «ⓘ» at the section's heading, never per block:
-that a cost is an estimate at API prices and not a bill, that a minute's figures share each
-stretch of work out by its time in each minute, that the quota is on no period. A block does
+that the time of agents working at once adds up, two agents for an hour each making two hours,
+so a period's agent time may be longer than the period; that a cost is an estimate at API prices
+and not a bill, that a minute's figures share each
+stretch of work out by its time in each minute, that the period reaches the quota's step lines
+alone. A block does
 not say again what the bar or its section says, and detail — an id, a source, how old a
 reading is, how a figure was reached — is in the hints of the marks and values it belongs to.
 Each block used to say its caveats whole: the quota opened on two sentences of what does not
@@ -3058,10 +3329,17 @@ quota — «Five hours» and «Week» — and one for each dimension of the read
 organization, project, task, executor, role, launch class, model, effort and environment.
 «Account» is the subscription account the work was spent on (`seat`), «Organization» the
 organization it was billed to; an old link's `account` filter still filters by organization.
+«Executor» lists the sessions of agents that did the work; planning calls a session by the same
+word, so the name stays and its section's «ⓘ» says first what it means, «An executor is the
+agent session that did the work.», before the caveats every dimension's «ⓘ» says.
 An account is said by the name the owner gave it, and one known by its UUID by the name its
 weekly reset was given before; else by its organization's name, or the start of its id, with
 what tells it apart: the start of its UUID, or when its week resets in the reader's time for
-one known by that alone, «Lab · resets Thu 12:00». An organization's work no reading places
+one known by that alone, «Lab · resets Thu 12:00». Where the reset of an account known by its
+UUID is known too, it follows the start of the UUID, «1a2b3c4d · resets Thu 12:00», in the
+filter's choices, the section, the quota and wherever else the account is named: the provider
+names no account, and eight hex digits alone were no account its owner recognized.
+An organization's work no reading places
 on an account is «Lab · account not known», and an account two accounts' readings may run
 under says «may be two accounts» after its name. A tile is a summary of its own — the leading value, its share, how many values
 have a figure in the chosen measure and one bar of the split — so every breakdown is in view
@@ -3101,8 +3379,13 @@ measure of everything else on the page. Under its change the tokens cell and the
 what an hour of agent time took of them beside the period before's, «$17.9/h, was 8.1»; a
 period with no agent time has no such line
 and a period before with none gives no «was», the line's place kept either way, and the chart
-draws no second axis for it. Across the panel under the cells stands the period chart, with the
-period before as a short line at its height, and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
+draws no second axis for it. Across the panel under the cells stands the period chart, stacked
+by project, with the period before as a short line at its height; at a project's scope it is that
+project's one series of plain columns, which no legend names. The period before's steps and the
+accounts that mark its changes are read after the chart is drawn; when either could not be read the
+chart draws no such mark and the bar says the read failed, so nothing under the chart moves and
+nothing stands empty there. Stacked by task it named a few per
+cent of the time, the rest «Other», and the tasks have their own section; and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
 hovered ground under the pointer, and nothing moves. The overview may scroll: the chart's
@@ -3117,7 +3400,10 @@ organizations, projects, roles, models, efforts, environments, launch classes �
 whole, drawn as
 a ring or as ranked bars and switched with the table as «Ring | Bars | Table», the same numbers
 in each, opening on the ring: the ranked bars list the first twelve, and under them «All N»
-opens every value of the period in the side panel, and the ring (`DonutChart`) names its first
+opens every value of the period in the side panel. N counts the values as their tile and that
+table's heading row do, the values with a figure in the measure, so work with no value there
+is a row of the table and no part of N: counted with it, «All 31» stood beside the tile's
+«30 values». The ring (`DonutChart`) names its first
 parts and folds the smaller into one rest. Split by a second dimension it draws bars alone, since a ring of pairs would tell one
 value's pairs apart by hue alone. Named by free text — tasks and sessions, by their own or on
 either side of a pair — they are a list only, switched with the table as «Chart | Table»: the
@@ -3129,13 +3415,26 @@ pixels. And tasks are as many as the work done, hundreds a week, which a ring of
 parts folds into one rest no reader can take apart. Which dimensions are free text is one set
 in code, `FREE_TEXT_DIMENSIONS`. The small charts
 draw each leading value's days on one scale; the table lists every value with the figures
-of the period and of the period before. Work with no value in the dimension, or of a value
+of the period and of the period before. An account that spent in the period, whose
+organization's work no reading placed on an account («account not known») came to more in the
+period before than the account's own figure there, has «not known before» as its change and no
+percent, and with the page narrowed to accounts so has any figure of theirs beside the same work of
+their organizations the filter leaves out — the overview's tiles and the rail's tile of the
+overview, the table's lines and its total, the tokens by kind — none of them ever among what
+changed most: which account that work ran under is not known, so a percent read the readings
+starting to place the work as growth, a rise of thousands of percent on an account that had
+worked all along. The rail's tile says it in words of its own, «Not known before», where the
+table and the cards say «Account not known before»: beside the tile's total the whole phrase cut
+«6 h» into an ellipsis by 9px at 1440px. The Russian table says «Ранее неизвестен», as short as
+a figure, where the rail keeps «Раньше не определён». Work with no value in the dimension, or of a value
 nobody can place — an unknown model — is ranked where its figure puts it, in the neutral colour;
 a list of free text sets it apart after its values instead, with its bar on their scale. A value
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
 a day. That colour is its place in the period's ranking without the page's filters, so a
 filter that takes values away repaints none of those it leaves; another measure ranks again
-and may. Ranked over what the filter left, every survivor moved up a hue. The section runs in the panel's one scroll: the cells and the charts at their own height,
+and may. Ranked over what the filter left, every survivor moved up a hue. The day chart is a
+part of the section of its own, under the ranked chart and the small charts and 24px under the
+lower of them, as the table stands under it, whichever view either shows. The section runs in the panel's one scroll: the cells and the charts at their own height,
 and the table under them, held to about the window's height so it and its heading line stand
 in the window together, scrolling inside its frame with its heading row and total row at the
 frame's edges, so what focus brings into view stands clear of them. A «To the table» link over
@@ -3150,16 +3449,28 @@ measure, so the switch beside it wraps alike whichever measure stands and choosi
 nothing under the chart either. Under the measure «tokens» each value's tokens by kind follow
 its change: the name,
 the three measures, the period before and the change stand in the table's width as it opens,
-their headings taking a second line rather than that width, and the kinds are reached by the
-table's own sideways scroll.
+at 1024px and wider and under every measure, their headings taking a second line rather than
+that width, and the kinds are reached by the table's own sideways scroll. A change cell that
+says why it has no figure says it in a figure's width, in every language: «Ранее без цены»,
+«Без токенов», «Оба без цены», «No price before»; the heading over it names the period it is
+compared with, and the section's tiles say the whole sentence. In whole sentences, «Нет цены ни
+в одном периоде» made the change's column 215px wide and stood the change 76px past the frame
+at 1280px.
 
 The second dimension is the section's, not the table's: «Split by» in the section's heading
 chooses it, and the ranked bars, the small charts, the period columns and the table all read
 its pairs, «claude-opus-5-5 · high», each pair a value with its own colour and the tail folded
 into «other» as any series is. Chosen over the table alone, it left the charts beside a crossed
-table answering the first dimension only. A pair's name short of room on its line cuts its first
-part and keeps the separator and the second whole, «claude-opus-5-… · medium», because the second
-is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
+table answering the first dimension only. A refresh whose pairs could not be read again keeps
+them in every one of those parts, in the section and in the side panel of all its values, and the
+bar says «Could not refresh · Retry» as it says the page's own reads failed; the side panel, which
+stands over the bar, says the same words beside its field, in room the field's row keeps for them
+while the section is split, as a value's panel says its own beside its actions. Dropped, the pairs
+left the charts and the table gave its place to one line of words; held beside the table's download
+the words' room took a line of its own under the heading of a split section on a phone with nothing
+failed; said only in the bar, they stood under the side panel, unseen. A pair's name short of
+room on its line cuts its first part and keeps the separator and the second whole,
+«claude-opus-5-… · medium», because the second is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
 chart. In the ranked bars a pair's name takes a line of its own over its bar at every width, as any
 name does in a narrow chart: the second part is a whole value's name, as wide as a model's, and
 the one-line name column, two-fifths of the row, held «claude-opus-5-5» with 13 pixels of the task
@@ -3173,26 +3484,52 @@ figure counts add up to it and are the sectors of its ring, or its ranked bars, 
 ring; cache reads close the chart under its legend or its bars, no part of any share, and
 reasoning is part of output.
 
-The quota's two sections read where each account's quota stands now, which no space, period or
-filter changes, and read it again on the live interval whatever the period; that the space, the
-period and the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says
-once.
-Each tile names the tightest window of its kind across accounts — the most spent of those whose
-reset is still ahead, a fresh one before a silent one at the same share — by its account's
-name, with its share, its state in words beside the section's name and a thin `WindowBar` with
+The quota's two sections read where each account's quota stands now, which no space or filter
+changes,
+and read it again on the live interval whatever the period. The period reaches each window's step
+line alone: the read asks from the period's start (`from`), and the answer gives each window the
+windows before it that the period overlaps (`earlier`), so a line over «4 weeks» holds four weeks;
+the figures, the bars, the forecast and the tiles stay on the current window. That the filters do
+not reach it, that the period reaches only the lines, that it is the whole account's whatever
+space and project are chosen, and that its shares do not add up, the section's «ⓘ» says once. With the
+period set to «4 weeks» the owner asked why the charts still showed one week: the lines stood on
+no period, each its current window alone.
+Each tile names the tightest window of its kind across accounts — of those whose reset is still
+ahead, the one nearest its limit by its forecast: first one that runs out before its reset, the
+earliest run-out first; then the one whose forecast ends highest at the reset; then the one most
+spent, and a window with no forecast by its share after those with one; at the same share a fresh
+one before a silent one. The share alone once chose, and named an account at 72% whose week
+would end at 81% over one at 6% that ran out before its reset. The tile names it by its account's
+name, with its share, beside the section's name when it runs out where it does — a week by its
+day alone, «runs out ~Nov 24», since the rail is as wide as its entries need and the part of the
+day widened it by a fifth, which the bar's words add — and its state in words where it does not,
+and a thin `WindowBar` with
 its forecast's tail, which the bar's words and hint name «Forecast ·», since a tile has no room
-for a key. A tile with no window to name says why: no source read the work, the windows reset
-since they were read, or no reading. The panel has a group per account on a surface of its
+for a key. A tile with no window to name says why: no source read the work, the account in use
+has no five-hour window, the windows reset since they were read, or no reading. A source sends a
+five-hour window only for a plan that has one, so where no account's five hours stand and the
+account of the newest reading, of any window, has week readings in its current week and no
+five-hour reading since that week began, the five hours' tile names that account with «no
+window» beside the section's name, its hint saying the current account has no five-hour window,
+and the five hours' section says that over its accounts; «Reset since read» there read as a
+failure of the read, and the whole sentence on the tile's line was cut by a third. Where that account's own
+five hours reset inside its week, the tile says they reset and the window says it in its words. The panel has a group per account on a surface of its
 own, named as the page names an account, a menu beside the name, the facts beside them where
 there are any — its plan, and «May be two accounts: their readings run under one weekly
 reset» where they may — and its
 windows side by side where the width allows, 32px apart with a hairline in the rule's ink midway
 between two neighbours: 16px apart with nothing between, the moment ending one window's axis and
 the one starting the next stood a few pixels apart and read as one axis. Every window, the five hours, the week and a
-model's week, has the same three parts 12px apart: what stands now, the `StepLine` of its
-readings and «Breakdown», which opens what used it in the side panel.
-The menu beside an account's name, named «Account actions: Work», holds three entries and no
-more. «Rename» puts a field in the name's place that saves through the same names and rules as
+model's week, has its name on one line with «Breakdown», a compact button at the row's end that
+opens what used it in the side panel, the name cut short before the button wraps under it; then
+the same two parts 12px apart: what stands now and the `StepLine` of its readings. Windows side
+by side line their parts up row by row — the name's row, what stands now, the line's head, its
+plot and the line of the window before — each row as tall as the tallest of the pair's, so their
+plots start at one height whatever each holds, a past window open in a card's place too: laid
+out each on its own, a window past its reset, led by two lines, started its plot 41px under its
+running neighbour's.
+The menu beside an account's name, named «Account actions: Work», holds three entries at most.
+«Rename» puts a field in the name's place that saves through the same names and rules as
 Settings, by the account's key, and on the group of an organization no source read by the
 organization's: Enter or leaving it saves, Escape leaves the name as it was, either gives the
 focus back to the menu's button, and a save that fails keeps the field with the reason under it.
@@ -3201,48 +3538,124 @@ there, as the
 value panel's button does, and the section stays where it is; once the filter holds it, the entry
 is disabled and reads «Already in filter», and where no filter can take it the entry is absent.
 «Copy ID» copies the account's whole id with the copy's usual note. No hint says that id.
+An account with no name of its own has «Name» beside the menu, a button that opens the same
+field, and no «Rename» in the menu; once it has a name the button is gone and «Rename» is in the
+menu. One naming action stands for each state: found only inside the menu, the rename went unseen
+while every account stood as the start of its id, and with both at once «Name» said again what the
+menu said. The menu and «Name» are one unit on one centre line at every width: beside the name
+while both fit there, and on the next line together where they do not, the name keeping its own;
+as two items of the heading's row, a phone's wrapped «Name» alone, 40px under the menu at the
+name's end. The field stands on the name's edge and line, as wide as its line leaves up to a
+name's width, with the menu on its line; laid out at a name's width, a phone's field wrapped
+under the unseen name 12px past the edge, the menu 40px above it.
 What stands now leads with one line, the share as the window's figure and its state beside it,
-«41% used · up to date», «13% used · no data for 5 h», over its bar, its share solid and its forecast a
+«41% used · up to date», «13% used · reading 5 h ago», over its bar, its share solid and its forecast a
 hatched tail; then, right under that tail, its forecast in the text's ink after «Forecast ·», the
-name the step line's legend gives the hatch, its words starting where the lines under it do and
+name the step line's legend gives its dashed line, its words starting where the lines under it do and
 nothing of it in the card's inset — the five hours a point, lasting to the reset with the share spent by
 then, or running out at a time; a week a range, said as a range and never past 100 %, which a quota cannot pass: a low
 end there says the week runs out before its reset and about when its slower pace spends it, a
 high end there that it may, and ends said alike one value — and when it resets in absolute and
-relative time, quieter, each line 4px from the next. The bar's tail, the tile's and the step
-line's corridor are drawn from one mapping of the forecast (`forecastCourses`), so none of them
+relative time, quieter, each line 4px from the next. A run-out is said one way wherever the
+quota says it, in the window, its bar's and its line's words and the tile: five hours by the clock
+time, «Limit runs out at 14:05», and a week by its day and the part of the day it falls in at the
+page's offset — night to 06:00, morning to 12:00, day to 18:00, evening to midnight — «by the
+evening of Nov 24», never to the minute: a week's forecast moves by hours from one reading to the
+next, and its minute claimed what it could not know. The bar's tail, the tile's and the step
+line's forecast are drawn from one mapping of the forecast (`forecastCourses`), so none of them
 and none of their words disagree; a window past its reset by the page's clock forecasts nothing
 more, so none of them is drawn and its words say when it reset where they said its forecast.
+Such a window, with no reading since its reset, leads with that, «Reset at 21:20, no new
+readings», the share it ended at a quieter line under it, «90% by the reset», as a past window
+says it, with «the limit ran out before it» where a reading reached 100 % — never «before the
+reset: 90%», which read as what is left until a reset still to come — over its
+bar drawn in the neutral ink of marks at rest with no pace tick, which a forced palette draws in
+its inactive ink: led by its share over a bar in the series' hue, the last window's figure read as
+the share spent now. As a table its row says the same where the share stood, the reset's words
+and under them the share it ended at, with a dash for its pace and its forecast, and its window
+says no reset under the row. A reading after the reset starts a window that stands, which none
+of this touches.
+A window nothing reads now is no account gone quiet. A model's week and the usage credits come
+from the quota poll alone — the client gives the status line and the mod neither — and the
+answer says whether the poll is on and which kinds only it reads (`poll`). With the poll off and
+no reading of the poll in the window's current span, the card says so in place of its share,
+«Only the quota poll reads this window, and the poll is off», with the way to the switch,
+«Quota settings», and draws no bar, no facts, no readings and no «Breakdown»; an imported
+reading of an earlier window, drawn, read as «Reset at …, no new readings» of an account that
+went silent. Such a window is never the rail's tightest and its card forecasts nothing; the
+alerts, which take only a reading fresher than `fresh_for_seconds`, warn of nothing from its
+history.
+A window of money says the same on its line, and as a table the row says it where the share
+stood, a dash for the rest. With the poll on, every window is read as before.
 Its state is judged by the same clock: a reading older than the answer's `fresh_for_seconds`
 reads silent, on the tile and in the panel, though the answer called it fresh.
-Where steady use would stand is drawn — the bar's tick, the line's diagonal — and said in their
-hints, the bar's with how old the latest reading is and who read it, which its words for a
-screen reader say too, with the forecast. As a table, where no hint shows, the account's table
+Where steady use from the window's start would stand now is drawn — the bar's tick, the line's
+diagonal — and said in their hints, the bar's naming its tick, «Pace tick · steady use since the
+window started would be at 57% now», with how old the latest reading is and who read it, which its
+words for a screen reader say too, with the forecast. As a table, where no hint shows, the account's table
 holds each window's forecast, the readings' table ends with it, and the window says its latest
 reading in words under its reset, and that it has no pace where it has none. A window's step
-line is on no period of the page, so its scale is its own: it opens on «To now and the forecast»
-with a switch to the whole window (Charts), points at «now» and at its forecast by the reset
-past its readings, and a frame dragged along it narrows that line alone. An account no source
-read says so and draws no window; a silent window is as solid as a fresh one, says how long it
-has been silent and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
+line covers the page's period, never less than the current window: every window of its kind and
+account the period overlaps, each whole from its start to its reset, one after another, the count
+falling to nothing at each reset, the earlier ones in the neutral ink and the current one at the
+right end (Charts). How far back from now the period starts decides, not the period's own
+length: where it starts no further back than the window lasts — «Now», «Today» and «This week»
+for a week, «Now» for five hours — the line is that one window whole across the plot, as it always
+was, and the line under the card names the window before; where it starts further back, the line
+holds the period, so a custom day three weeks ago is reached. «This week» once drew two weeks
+where the week reset mid-week, the one before muted in the left half, since the answer holds every
+window that resets after the period's start, and the section's scale doubled with it. A period of the reader's own that ends before now changes
+nothing of that: the line still ends at the current window, the one the figures over it say, and
+only reaches further back. The two windows of one account always stand on one time axis, the
+owner's decision, even where that leaves a card's plot empty until its readings come: an
+account's weekly windows reset together. Over the period every line of an account ends at one
+moment, the latest reset among its windows in the section, each window at its real time, and a
+window with nothing read since its last reset stops there, the line empty from it to that end and
+its axis's last word «no readings since …» at the end. At a period no longer than a window, a
+card whose window reset with nothing read since, beside a live window of its account, shows the
+account's current window: the live one's span and moments, now marked where the live one marks
+it, its plot empty and saying what the card's lead says, «Reset at …, no new readings», and the
+line under it naming its last window, which opens as before. A model's week the source no longer
+reads once ended its line at its own last reset, a week before its neighbour's, the same reset
+85 px apart at 1440 pixels. An account none of whose windows in the section has a reading since
+its reset keeps its last window whole, muted, as before. Every line of a section runs over as long
+a time as the longest of them, the same time to a pixel in every card, so the two windows of an
+account side by side stand moment for moment as they stand row for row, and a line that holds less
+is empty before its first window. Accounts whose resets differ stand apart by that
+difference, as their windows always did: a scale from the earliest start to the latest reset
+would align those too, but it would also have shrunk every line inside its plot at a period no
+longer than a window. Its axis names the start of the first window it holds and the current
+window's reset, under the moments they stand at; it marks now while the window runs, points at
+«now» and at its forecast past its readings, and a frame dragged along it narrows that line alone,
+«Whole span» taking it back. Its words for a screen reader end with the windows before it, «Before
+it: Oct 10, 14:30 – Oct 17, 14:30, 27%; …», and its table holds their readings and a row for each
+reset between them. An account no source read says so and draws no window; a silent window is as solid as a fresh one, says how old its
+latest reading is and, in its bar's hint, since when it has not changed; a fresh 0 % draws an
 empty track and says «0% used · up to date». A window of money past a limit is a line of its name and
 its state, its age and its source in the line's hint as a window of a share keeps them in its
 bar's and in words as a table, with no figure. No share is added to another, of two windows or
 two accounts, and no dollar stands beside one.
 
-Under each window that names its start stands «Breakdown», a button that opens the
-side panel on that window of that account, titled «Five hours · Work»: the work Valkama
+In the heading row of each window that names its start stands «Breakdown», a button that opens
+the side panel on that window of that account, titled «Five hours · Work»: the work Valkama
 recorded on the account from the window's start to the answer's moment, held to the last five
 minutes, as ranked bars — the first five items by the API price estimate, each with its share
 of the account's estimate, and one line for the rest — or as a ring of every item that folds its
 own rest, chosen with «Ring | Bars» beside the breakdowns, or as the bars' table, which the
-panel's own «Chart | Table» under its title chooses and which hides «Ring | Bars»; the panel's
-width chooses first, as a page's does. It opens by task and offers projects and models; the
+panel's own «Chart | Table» under its title chooses and which hides «Ring | Bars»; it opens
+drawn at every width, as a page's charts do. It opens by task and offers projects and models; the
 choice of breakdown holds for that window when the panel turns to its table or opens again. By
 project or model it opens on the ring, as every split named by identifiers does, and a person's
 choice of drawing holds until the page is left; by task it is the list of free text alone, with
 no switch, the rest and the work on no task apart after the five under their rule. Its heading
-names the stretch it covers. That it is the API price estimate and not quota points, and that
+names the stretch it covers and what its lines add up to, said as a line's estimate is, «Window
+breakdown: 05:00 – 13:20 · ≈ $151.90»: the lines added up and nothing said their sum. With no
+lines it names no sum, and work its organization recorded with no account known, said apart, is
+not in it. It keeps the room of the headings a newer answer can give it, with no sum and with a
+sum of five figures before the point, so the breakdowns beside it and the lines under it stay
+where they stand when one does: a newer answer once made it a line longer, and the lines moved
+25px down under it. It keeps as well the room of its moments as a later day says them, each dated,
+since past midnight its start is a moment of another day. That it is the API price estimate and not quota points, and that
 work in claude.ai and the desktop app, which the window's share counts, is not in it, the
 section's «ⓘ» says once for every window and the panel's own «ⓘ» beside its «Chart | Table»
 says for this one, never as a line of the panel. It is read by account, the account's and its
@@ -3250,10 +3663,39 @@ organization's work on no known account, when its panel opens, never for a windo
 opened, so another account's work
 is never in it; work its organization recorded with no account known is a quiet line of its
 own, never counted to the account. No work, only such work, a wait and a read that failed, with
-its retry, each say so in the panel, and the quota's own figures stand meanwhile. It stands
+its retry, each say so in the panel, and the quota's own figures stand meanwhile. A read again
+that fails, a newer step of the window, keeps the lines and says «Could not refresh; data as of
+13:20 may be out of date. Retry» under them, in room the block keeps for those words while any
+answer stands, so nothing moves when it is said or when the next answer replaces it: said in room
+of its own it took 36px under the lines and gave them back, and a panel scrolled to its end moved
+by as much. It stands
 apart from the window's bar and readings, on no axis of theirs: under the window it was a block
 as tall as the window again, and every window of every account read what used it whether or not
 anyone asked.
+
+Under every window of a share stands one quiet line of how the window before it ended, as the
+answer's `previous` says: «Previous window: until Nov 7, 14:30 — 9%», the moment it reset and its
+last share, with «ran out» where it did; or «Previous window: no readings» where
+the store keeps none, which is words and no control, as tall as a line with a window on one row and
+its words level with that button's in a window beside it. Where the step line over it holds that window
+already, as it does over a period longer than the window, no such line stands: it named a window
+drawn right above it. The line is one row, never wrapped or cut,
+at 1440 and 1024 pixels; a phone-wide window narrower than the line gives it a second row from
+the same start, where on one row it stood past the window and scrolled the panel sideways. The
+line with a window is a button that shows that window in the card,
+read when asked (`GET /api/analytics/quota/window`) and never for a window nobody opened. While a
+past window is open, nothing of the current window stands in the card — its share, its bar, its
+facts, its forecast, its readings and «Breakdown» are hidden, not mixed with the past window's —
+and the card says plainly which window it shows: «Past window: Oct 31, 14:30 – Nov 7, 14:30» as
+its heading and the open view's accessible name, its share by the reset, with that the limit ran
+out before it where it did, and the `StepLine` of its readings drawn as an ended window, on an
+axis of its own from its start to its reset, or its readings' table. «Earlier», named by the
+window it steps to, shows the window before the one shown while the store keeps one, and «No
+readings earlier» once it does not; «Current window» returns. The focus goes to «Current window»
+on opening, stays on «Earlier» while it steps back, and returns to the line on closing. A wait, a
+read that failed with its retry, and a window aged out of the store since the line was read each
+say so in the view, and the window shown before stays meanwhile. Once a window reset, the page
+used to say nothing of how it had ended.
 
 A value pressed on the page — a bar, a sector, a segment of a day, a legend entry, a name in a
 table, a line of the overview's cards — opens its side panel on the right, the shared resizable
@@ -3264,15 +3706,29 @@ opens it again with no focus ring; the overlay host gives it the focus, Escape c
 page under it is held, and the focus returns to what opened it. On a narrow window it takes the
 whole width. It names the value in full, and for a task «Open the card» opens the card over the
 page as any reference to the task does. Its figures are the time, the tokens, the cost and the
-value's share of the whole in the page's measure. What qualifies them — that the cost is an
+value's share of the whole in the page's measure, under a heading that names their period as the
+page names one, «Figures · Nov 9 – 11»; under them a task has its figures of all time, «All
+time», its agent time and its cost, «Agent time 11 h 14 min» and «Cost ≈ $120.00», read and said
+as its card's line reads and says them and by its names: a task's own work, an epic's whole scope
+under «All time, on the epic», as its card says «on the epic». Where its card reads nothing, an
+attached store's item, the panel reads nothing and has no such block. Without either, a week's
+cost in the panel beside the card's larger one read as two answers to one question. What
+qualifies them — that the cost is an
 estimate at API prices, what the tokens count and, read by the minute, that a minute's figures
 are shared out — the section's «ⓘ» says under the panel, so the «ⓘ» «About these figures» that
 ends the figures' heading says it for the value's own read, once and in that «ⓘ» alone,
 never as a line of the panel. Its days are the page's period and step with
-the period before marked, one series in the value's colour; under them dense ranked bars say the
+the period before marked, one series in the value's colour, its steps read with the panel's
+answers; when they could not be read the days draw no mark and the panel says so beside its actions,
+as a read again that failed: said in a note under the days, it moved the lists under them 25px down;
+under them dense ranked bars say the
 models and the accounts it ran on, each in its colour on the page. Its reads are the page's with
-the value's filter added, and wait and fail as the page's do. «Add to filter» adds the value to
-its dimension's filter beside the values already there, as choosing it in the filter's field
+the value's filter added, and wait and fail as the page's do: a read again that fails keeps what
+the panel shows and says «Could not refresh · Retry» beside its actions, in room their row keeps
+for it while nothing failed, so nothing under them moves when it is said or when the next answer
+takes it away; said in room of its own on a phone, it took a line and moved the panel's figures
+36px down. «Add to filter» adds the value to
+its dimension's filter beside the values already there, as choosing it in the filter's menu
 does, so A and B and then C is A, B and C: the page stays on its section and the panel closes, a
 step of the history too. A value the filter holds already offers it disabled, «Already in
 filter»; a filter the link cannot hold says why in the panel. A press with a modifier or the
@@ -3280,15 +3736,19 @@ middle button on a task still opens its card in a new tab, and a day, an hour or
 narrows the page. «All N» opens the section's whole table in the panel, every value with the
 period's figures and those of the period before, sorted as the table sorts and with a field that
 finds a value by its name; a value pressed there opens its own panel in its place, a step of the
-history. A card opened from the panel stands over the page while the panel waits closed under
+history. While the field finds some, the total under the rows is theirs, «Total of those found»,
+and the period's own stands under it as a row of its own, «Total for the period»: the period's
+total alone under one found row read as that row's. Both stay at the frame's bottom edge. A card opened from the panel stands over the page while the panel waits closed under
 it, and the panel opens again when the card closes: two surfaces of one layer paint in the order
 they were first drawn, and the panel stood over the card.
 
 A cost is always an estimate at API prices and is written as one, with «≈», and the section's
 «ⓘ» says once that it is not a bill; cached reads are counted apart from the tokens processed
-anew and never summed into them. In a table, the tokens a cost leaves without a price stand as a
-quieter second line under its amount, which keeps to the row's line, and a window too narrow for
-them may scroll the table sideways with its names kept in place.
+anew and never summed into them. In a table, the tokens a cost leaves without a price stand in
+the quieter ink under its amount, which keeps to the row's line, and wrap inside the width the
+column's figures give them, between words and never inside a count: the row is taller and the
+column as wide as its figures. Kept to one line of their own, they made the cost's column 192px
+wide and stood the table 218px past its frame at 1280px.
 
 ### Agent decisions
 

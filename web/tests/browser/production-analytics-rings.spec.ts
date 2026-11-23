@@ -8,7 +8,9 @@
  * ranked bars again; a sector of a value pressed opens the value's side panel over the view; a
  * sector reached from the keyboard shows its focus ring, in the forced palette's highlight there,
  * and a pointer press shows none. At 1440 and 360 pixels the ring stands inside its column and its
- * legend clear of it, and no words stand on a sector. Each run prints what it measured and keeps a
+ * legend clear of it, and no words stand on a sector. At 1440 and 1024 pixels, in English and in
+ * Russian, the legend of the tokens by kind names every kind whole, the two cache writes told apart,
+ * and says each kind's share once after its figure. Each run prints what it measured and keeps a
  * picture of each section.
  */
 import { expect } from '@playwright/test'
@@ -52,15 +54,20 @@ const WEEK: TimedStretch[] = [
 const ring = (page: Page) => page.locator('.analytics-panel .donut-chart').first()
 
 /** Opens a section at a width and waits for its ring, shown as the chart rather than the table. */
-async function openRing(page: Page, state: Record<string, string>, width: number) {
-  await serve(page, WEEK)
+async function openRing(
+  page: Page,
+  state: Record<string, string>,
+  width: number,
+  { stretches = WEEK, ringName = 'Ring' }: { ringName?: string; stretches?: TimedStretch[] } = {},
+) {
+  await serve(page, stretches)
   await page.setViewportSize({ width, height: 900 })
   // A phone opens on the rail: its chosen section is a press away.
   await openPanel(page, pageAt(state))
-  // A narrow page starts on the table; the ring is a press away.
+  // The ring, where the section opens on its bars, is a press away.
   const section = page.locator('.analytics-panel .chart-section').first()
   await expect(section).toBeVisible()
-  const chart = section.getByRole('radio', { name: 'Ring', exact: true })
+  const chart = section.getByRole('radio', { name: ringName, exact: true })
   if (!(await chart.isChecked())) await chart.click()
   await expect(ring(page).locator('.donut-sector').first()).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
@@ -238,6 +245,76 @@ for (const width of [1440, 360])
     await expect(kinds.locator('.donut-note-name')).toHaveText(['Cache read', 'Reasoning'])
     await kinds.screenshot(shot(info, `ring-kinds-${width}.png`))
   })
+
+/**
+ * A week of tokens of every kind, the two cache writes among them: what the tokens figure counts
+ * is 150 M — cache writes for 5 minutes 90 M, output 30 M, cache writes for an hour 24 M and
+ * input 6 M — and the cache reads and the reasoning stand apart.
+ */
+const KINDS: TimedStretch[] = [
+  {
+    at: new Date(2026, 10, 9, 10),
+    group: { model: value('model-a') },
+    spend: {
+      seconds: 3600,
+      cost: 20,
+      kinds: {
+        input: 6_000_000,
+        cached_read: 2_000_000_000,
+        cache_write_5m: 90_000_000,
+        cache_write_1h: 24_000_000,
+        output: 30_000_000,
+        reasoning: 10_000_000,
+      },
+    },
+  },
+]
+
+/** The kinds the legend names, largest first, in each language the page speaks. */
+const KIND_NAMES = {
+  en: ['Cache write, 5 min', 'Output', 'Cache write, 1 h', 'Input'],
+  ru: ['Запись в кэш, 5 мин', 'Выход', 'Запись в кэш, 1 ч', 'Вход'],
+}
+/** The view the section draws its ring in, by the name of its choice. */
+const RING_VIEW = { en: 'Ring', ru: 'Кольцо' }
+
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [1440, 1024])
+    test(`at ${width} pixels in ${locale} the legend of the tokens by kind names every kind whole and its share once`, async ({
+      page,
+    }, info) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      const kinds = await openRing(page, { by: 'token_kind' }, width, {
+        stretches: KINDS,
+        ringName: RING_VIEW[locale],
+      })
+      const legend = ring(page).locator('[data-hint-list="legend"]')
+      const entries = legend.getByRole('listitem')
+      const names = legend.locator('[data-series] [data-part="name"]')
+      await expect(entries).toHaveCount(4)
+      await expect(names).toHaveText(KIND_NAMES[locale])
+      const seen = await entries.evaluateAll((all) =>
+        all.map((entry) => {
+          const name = entry.querySelector<HTMLElement>('[data-part="name"]')
+          const figure = entry.querySelector<HTMLElement>('[data-part="figure"]')
+          const list = entry.closest('[data-hint-list]')?.getBoundingClientRect()
+          return {
+            name: name?.textContent ?? '',
+            cut: name ? name.scrollWidth - name.clientWidth : Number.NaN,
+            figure: figure?.textContent ?? '',
+            figurePast: figure && list ? figure.getBoundingClientRect().right - list.right : 0,
+            shares: (entry.textContent?.match(/%/gu) ?? []).length,
+          }
+        }),
+      )
+      await record(info, `ring kinds legend ${locale} ${width}`, seen)
+      for (const one of seen) {
+        expect.soft(one.cut, `«${one.name}» cut at ${width}px`).toBeLessThanOrEqual(0)
+        expect.soft(one.figurePast, `«${one.figure}» past the legend`).toBeLessThanOrEqual(0.5)
+        expect.soft(one.shares, `«${one.figure}»: one share`).toBe(1)
+      }
+      await kinds.screenshot(shot(info, `ring-kinds-legend-${locale}-${width}.png`))
+    })
 
 /**
  * Moves focus onto the ring's second sector from the keyboard, then presses the largest in its

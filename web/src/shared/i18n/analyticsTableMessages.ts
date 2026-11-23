@@ -15,6 +15,7 @@ export const analyticsTableMessages = {
       down: '↓ {change}',
       same: 'The same',
       none: 'Nothing before',
+      unplaced: 'Account not known before',
       absent: {
         tokens: {
           before: 'No tokens before',
@@ -40,17 +41,18 @@ export const analyticsTableMessages = {
       up: '↑ {change}',
       down: '↓ {change}',
       same: 'Столько же',
-      none: 'Раньше ничего',
+      none: 'Ранее ничего',
+      unplaced: 'Ранее неизвестен',
       absent: {
         tokens: {
-          before: 'Раньше токены не учтены',
-          now: 'Сейчас токены не учтены',
-          both: 'Токены не учтены ни в одном периоде',
+          before: 'Ранее без токенов',
+          now: 'Без токенов',
+          both: 'Оба без токенов',
         },
         cost: {
-          before: 'Раньше нет цены',
-          now: 'Сейчас нет цены',
-          both: 'Нет цены ни в одном периоде',
+          before: 'Ранее без цены',
+          now: 'Без цены',
+          both: 'Оба без цены',
         },
       },
     },

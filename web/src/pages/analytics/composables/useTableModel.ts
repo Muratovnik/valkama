@@ -7,30 +7,41 @@
  *
  * With the measure «tokens» it adds the tokens of each value by kind (`kindsByValue`), so what the
  * tiles say of the kinds stands value by value. Under the rows is the total of every column, from
- * the read's own total. A cell carries the number it sorts by: the figure in its measure, null
- * where the read holds none, which sorts after every figure whichever way the column runs.
+ * the read's own total, and for rows a search kept, their own total (`totalOf`). A cell carries the number it sorts by: the figure in its measure, null
+ * where the read holds none, which sorts after every figure whichever way the column runs. A
+ * row's figure that says nothing of how much reads as none (`entrySpent`), and sorts by what it
+ * is; a total says what it holds.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FigureWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { kindsByValue, kindsOf, TOKEN_KINDS } from '@/pages/analytics/utils/tokenKinds.ts'
+import {
+  kindsByValue,
+  kindsOf,
+  kindsTogether,
+  TOKEN_KINDS,
+} from '@/pages/analytics/utils/tokenKinds.ts'
 import type { TokenKind } from '@/pages/analytics/utils/tokenKinds.ts'
 import {
-  changeOf,
   comparedLines,
+  entrySpent,
   figureOf,
+  lineChangeOf,
   measureOf,
   spentAnything,
   spentOf,
+  spentTogether,
+  unplacedBefore,
 } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { LineChange, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import type { TextRun } from '@/shared/ui/textRuns.ts'
 
 /** A cell's figure and what it leaves out (`FigureWords`), which the cell says under it. */
 export interface TableCell extends FigureWords {
@@ -68,6 +79,8 @@ export interface TableLine {
   detail?: string
   /** The end of a pair's name that stays whole while the rest is cut (`PairName`). */
   nameEnd?: string
+  /** The name in runs, where it holds a task's title (`pairRuns`): its code is drawn as code. */
+  nameRuns?: readonly TextRun[]
 }
 
 /** What the rows of a table are, as its heading row counts them. */
@@ -121,21 +134,30 @@ export interface TableSource {
 /** A kind the read does not report is absent, not zero. */
 const ABSENT = '—'
 
-/** How a change sorts: by its share; from nothing as the largest rise; with no figure, never. */
-function changeRank(change: Change | null): number | null {
+/**
+ * How a change sorts: by its share; from nothing as the largest rise; with no figure, or none
+ * known, never.
+ */
+function changeRank(change: LineChange | null): number | null {
   if (!change) return null
   if (change.direction === 'none') return Number.POSITIVE_INFINITY
-  return change.direction === 'absent' ? null : change.ratio
+  return change.direction === 'absent' || change.direction === 'unplaced' ? null : change.ratio
 }
 
 export function useTableModel(source: () => TableSource) {
   const { t } = useI18n()
   const words = useSpendingWords()
 
-  const figureCell = (key: string, measure: Measure, spent: Spent, chosen: boolean) => ({
+  /** A figure's cell: a row's as an entry says it (`entrySpent`), a total's as it is. */
+  const figureCell = (
+    key: string,
+    measure: Measure,
+    spent: Spent,
+    { chosen, total }: { chosen: boolean; total: boolean },
+  ) => ({
     key,
     chosen,
-    ...words.lineFigureWords(measure, spent),
+    ...words.lineFigureWords(measure, total ? spent : entrySpent(measure, spent)),
     sort: figureOf(measure, spent),
   })
 
@@ -176,6 +198,7 @@ export function useTableModel(source: () => TableSource) {
       rest: line.kind !== 'category',
       name: words.pairLabel(by, line.value, line.second),
       nameEnd: words.pairEnd(line.second) || undefined,
+      nameRuns: words.pairRuns(by, line.value, line.second),
       valueName: words.valueLabel(by, line.value),
       detail: words.valueDetail(by, line.value),
     }
@@ -205,13 +228,21 @@ export function useTableModel(source: () => TableSource) {
         : []),
       ...kindColumns(),
     ]
-    const cellsOf = (now: Spent, before: Spent | null, tokens: UsageTokens): TableCell[] => {
-      const change = before ? changeOf(measure, now, before) : null
-      return [
-        ...MEASURES.map((key) => figureCell(key, key, now, key === measure)),
+    // A value's change is its line's (`comparedLines`); the total's, the tiles' own rule beside
+    // what a read narrowed to accounts left out on no account (`unplacedBefore`). A row's figures
+    // are entries, a total's say what they hold (`figureCell`).
+    const cellsOf =
+      (total: boolean) =>
+      (
+        now: Spent,
+        before: Spent | null,
+        tokens: UsageTokens,
+        change: LineChange | null,
+      ): TableCell[] => [
+        ...MEASURES.map((key) => figureCell(key, key, now, { chosen: key === measure, total })),
         ...(before && change
           ? [
-              figureCell('before', measure, before, true),
+              figureCell('before', measure, before, { chosen: true, total }),
               {
                 key: 'change',
                 chosen: false,
@@ -222,25 +253,52 @@ export function useTableModel(source: () => TableSource) {
           : []),
         ...kindCells(tokens),
       ]
-    }
-    const lines = comparedLines({
+    const rowCells = cellsOf(false)
+    const totalCells = cellsOf(true)
+    const compared = comparedLines({
       rows: usage.rows,
       before: comparison?.rows ?? null,
       dimension: by,
       measure,
       name: (value) => words.valueLabel(by, value),
       across,
-    }).map((line) =>
+      unplaced: comparison?.unplaced?.rows ?? null,
+    })
+    const lines = compared.map((line) =>
       lineOf(line, [
-        cellsOf(line.now, line.before, kindsOf(kinds, line.key)),
+        rowCells(line.now, line.before, kindsOf(kinds, line.key), line.change),
         whenOf(measure, line.now, line.before),
       ]),
     )
-    const total = cellsOf(
+    const before = comparison ? spentOf(comparison.total) : null
+    const total = totalCells(
       spentOf(usage.total),
-      comparison ? spentOf(comparison.total) : null,
+      before,
       usage.total.tokens,
+      before ? lineChangeOf(measure, spentOf(usage.total), before, unplacedBefore(usage)) : null,
     )
+    /**
+     * The total of the rows whose keys are given, column by column, as `total` is the period's: its
+     * change beside the work on no account their own changes were held to, each line of it once.
+     */
+    const totalOf = (keys: readonly string[]) => {
+      const held = new Set(keys)
+      const found = compared.filter((line) => held.has(line.key))
+      const now = spentTogether(found.map((line) => line.now))
+      const was = comparison
+        ? spentTogether(found.flatMap((line) => (line.before ? [line.before] : [])))
+        : null
+      const left = new Map(
+        found.flatMap(({ unplaced }) => (unplaced ? [[unplaced.key, unplaced.spent]] : [])),
+      )
+      const loose = left.size ? spentTogether([...left.values()]) : undefined
+      return totalCells(
+        now,
+        was,
+        kindsTogether(kinds, [...held]),
+        was ? lineChangeOf(measure, now, was, loose) : null,
+      )
+    }
     // The period compared with is named in its column's heading, so the title need not say it.
     const title = across
       ? t('analytics.table.crossTitle', {
@@ -248,7 +306,7 @@ export function useTableModel(source: () => TableSource) {
           across: t(`analytics.byDimension.${across}`),
         })
       : t('analytics.table.title', { by: t(`analytics.byDimension.${by}`) })
-    return { title, columns, lines, total, firstSort: measure as string }
+    return { title, columns, lines, total, totalOf, firstSort: measure as string }
   }
 
   /**

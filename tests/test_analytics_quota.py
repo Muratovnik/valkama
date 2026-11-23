@@ -27,6 +27,7 @@ from collections.abc import Iterator
 from server import http_surface
 from server.analytics import api, quota, usage
 from server.quota import names, samples
+from server.quota import settings as quota_settings
 from tests.analytics_fixtures import START, UsageStore
 
 ORG_A = "org-a"
@@ -404,6 +405,30 @@ class WindowTests(_Quota):
         )
 
 
+class PollTests(_Quota):
+    """The answer says whether the poll is on and which kinds it alone of the live sources reads."""
+
+    def test_the_answer_says_the_poll_is_off_until_the_owner_turns_it_on(self) -> None:
+        read = self.quota()["poll"]
+        self.assertEqual({"on": False, "only": ["extra_usage", "week_model"]}, read)
+        quota_settings.write(self.conn, {"poll": True})
+        self.assertEqual({"on": True, "only": ["extra_usage", "week_model"]}, self.quota()["poll"])
+
+    def test_only_the_poll_names_a_models_week_and_the_usage_credits(self) -> None:
+        # Held against the sources' own vocabularies, not the module's set: every other live
+        # source names neither kind, and the poll names both.
+        others = {
+            kind
+            for source, kinds in samples.SOURCE_WINDOWS.items()
+            if source != "poll"
+            for kind in kinds.values()
+        }
+        self.assertNotIn("week_model", others)
+        self.assertNotIn("extra_usage", others)
+        self.assertIn("five_hour", others)
+        self.assertEqual({"week_model", "extra_usage"}, set(samples.POLL_ONLY))
+
+
 class SumTests(_Quota):
     def build(self) -> dict:
         self.poll(ago(minutes=4), five(13), week(29))
@@ -508,9 +533,10 @@ class ConventionTests(_Quota):
                 self.assertEqual(
                     (status, body), self.answer_of(api.USAGE_PATH, {**period, **parameters})
                 )
-        # The usage read's own parameters are not this read's.
+        # The usage read's own parameters are not this read's, but for `from`, the start of
+        # the period whose earlier windows each window holds (`test_analytics_quota_period`).
         status, body = self.answer_of(api.QUOTA_PATH, period)
-        self.assertEqual((400, "from is not a parameter"), (status, body["error"]["message"]))
+        self.assertEqual((400, "to is not a parameter"), (status, body["error"]["message"]))
 
 
 class HttpTests(_Quota):

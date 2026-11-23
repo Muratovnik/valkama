@@ -1,7 +1,7 @@
 /**
- * The head of an item's Agents tab, or another part of the card that reads its numbers, mounted
- * on its own the way the inspector provides it: the item's read has answered with the usage a
- * spec hands it and never reads again.
+ * The head of an item's Agents tab, the usage line of its card (`InspectorUsageLine`), or another
+ * part of the card that reads its numbers, mounted on its own the way the inspector provides it:
+ * the item's read has answered with the usage a spec hands it and never reads again.
  */
 import { computed, defineComponent, h, ref } from 'vue'
 import type { Component } from 'vue'

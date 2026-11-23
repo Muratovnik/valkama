@@ -8,12 +8,16 @@
  * what it spent, read with
  * the page's period, steps and filters and its own filter (`useValueRead`):
  *
- * - its figures, the agent time, the tokens and the cost, and its share of the whole the page
- *   shows in the page's measure, with what qualifies them — that the cost is an estimate at API
+ * - its figures under a heading that names their period as the page names one, «Figures · Nov 9 –
+ *   11»: the agent time, the tokens and the cost, its share of the whole the page shows in the
+ *   page's measure, with what qualifies them — the time of agents at once added up, the cost an estimate at API
  *   prices, what the tokens count and, read by the minute, that a minute's figures are shared out
  *   (`useSectionCaveats`, of the value's own read) — said once in the «ⓘ» that ends their
  *   heading's line, «About these figures», never as a line of the panel: the section's «ⓘ» that
  *   says them on the page stands under the panel;
+ * - for a task, its figures of all time, the agents' time and the cost, as its card reads and
+ *   says them and by the card's names for them (`useTaskAllTime`): a goal's or a stage's of its whole tree,
+ *   the agents' time the card's «Agent time», never its «Work on the clock»;
  * - its period step by step, with the period before marked (`ValueDays`);
  * - the models and the accounts it ran on, ranked in the page's measure, each in its hue of the
  *   page with its share of the value's own figure after its amount (`RankedBars`, dense); a value
@@ -22,37 +26,41 @@
  * A task deleted since has no card to open. The first read's wait is
  * one quiet line, reported to the panel's status region (`useReadWaitReport`); a first read that
  * failed says so with a retry, and a read again that failed keeps what it showed and says so as the
- * page's bar does (`RefreshFailed`). A value with nothing in the period says that.
+ * page's bar does (`RefreshFailed`), in room the actions' row keeps for it while nothing failed:
+ * on a phone, said in room of its own, it took a line under the actions and moved the figures
+ * 36px down, and gave it back with the next answer. A period before that could not be read is said
+ * there too: as a note under the days it moved the lists under them 25px down. A value with
+ * nothing in the period says that.
  *
  * What a reader of the panel selects it by: the content is `data-detail="value"`, each part of it
- * `data-part` (`actions`, `figures`, `days`, `model`, `account`) and each figure `data-figure`
- * (`time`, `tokens`, `cost`, `share`).
+ * `data-part` (`actions`, `figures`, `all-time`, `days`, `model`, `account`) and each figure
+ * `data-figure` (`time`, `tokens`, `cost`, `share`; of all time `agents`, `cost` or `failed`).
  */
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
 import ValueDays from '@/pages/analytics/components/ValueDays.vue'
+import ValueFigures from '@/pages/analytics/components/ValueFigures.vue'
 import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
-import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { usePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { useTaskAllTime } from '@/pages/analytics/composables/useTaskAllTime.ts'
 import {
   useValueRead,
   valueBreakdowns,
-  valueFilters,
   valueSteps,
 } from '@/pages/analytics/composables/useValueRead.ts'
 import type { ValueBreakdown } from '@/pages/analytics/composables/useValueRead.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import {
-  belowUnit,
   breakdownOf,
+  drawnLines,
   figureOf,
   measureOf,
   spendingLines,
@@ -75,6 +83,7 @@ import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
+import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -111,10 +120,15 @@ const { state, retry } = useValueRead({
   value: () => props.value,
   page: () => props.page,
   filters: () => props.filters,
+  compared: () => props.compared,
 })
 
 const answers = computed(() => (state.value.status === 'ready' ? state.value.answers : null))
 const steps = computed(() => (answers.value ? valueSteps(answers.value) : null))
+/** The steps of the period before, read with the answers. */
+const before = computed(() => (state.value.status === 'ready' ? state.value.before : null))
+/** Whether those steps were asked and could not be read. */
+const beforeFailed = computed(() => state.value.status === 'ready' && state.value.beforeFailed)
 
 /**
  * The value as the answers name it, with its title and number; as its id alone, or as work with
@@ -125,6 +139,8 @@ const named = computed<UsageGroupValue>(() => {
   return found ?? { id: props.value, unknown: false }
 })
 const name = computed(() => words.valueLabel(props.by, named.value))
+/** The name in runs, where it holds a task's title: its code is drawn as code in the heading. */
+const nameRuns = computed(() => words.valueRuns(props.by, named.value))
 watch(name, (title) => emit('named', title), { immediate: true })
 const card = computed(() => actions.taskLink(props.by, named.value))
 /** A middle press on the card's link opens it elsewhere, and is a press on it all the same. */
@@ -160,6 +176,16 @@ const shows = computed(() => {
   return usage.rows.length ? 'spent' : 'empty'
 })
 
+/** A task's figures of all time, as its card says them (`useTaskAllTime`). */
+const allTime = useTaskAllTime({
+  item: () => {
+    const reference = card.value ? named.value.reference : null
+    const kind = named.value.kind
+    return reference ? { reference, container: kind === 'goal' || kind === 'stage' } : null
+  },
+  readAt: () => props.readAt,
+})
+
 const spent = computed(() => (steps.value ? spentOf(steps.value.total) : null))
 /** Its share of what the page shows in the page's measure; none where that is nothing. */
 const share = computed(() => {
@@ -178,20 +204,31 @@ const figures = computed(() => {
     text: words.lineFigure(measure, own),
   }))
   const ratio = share.value
-  return ratio === null
-    ? each
-    : [
-        ...each,
-        {
-          key: 'share',
-          name: t('analytics.detail.share'),
-          text: t('analytics.detail.shareOf', {
-            share: words.share(ratio),
-            measure: words.measure(props.measure),
-          }),
-        },
-      ]
+  return [
+    ...each,
+    ...(ratio === null
+      ? []
+      : [
+          {
+            key: 'share',
+            name: t('analytics.detail.share'),
+            text: t('analytics.detail.shareOf', {
+              share: words.share(ratio),
+              measure: words.measure(props.measure),
+            }),
+          },
+        ]),
+  ]
 })
+/** The figures' heading, with the period they are of as the page names a period. */
+const figuresTitle = computed(() => {
+  const period = steps.value?.period
+  const figures = t('analytics.detail.figures')
+  return period
+    ? t('analytics.detail.figuresOf', { figures, period: words.period(period.from, period.to) })
+    : figures
+})
+
 /** What qualifies the figures, as the section's «ⓘ» under the panel says it of the page's. */
 const about = computed(() => (steps.value ? caveats.spending(steps.value) : []))
 
@@ -217,19 +254,19 @@ function rankedOf(breakdown: ValueBreakdown, usage: Usage): RankedRow[] {
     Number.POSITIVE_INFINITY,
   )
   const whole = all.reduce((sum, line) => sum + weight(line), 0)
-  return all
+  const listed = all
     .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
     .sort((left, right) => weight(right) - weight(left))
-    .map((line) => ({
-      key: line.key,
-      label: words.lineLabel(breakdown, line),
-      detail: words.valueDetail(breakdown, line.value),
-      value: weight(line),
-      valueText: words.lineShare(props.measure, line.spent, whole),
-      belowUnit: belowUnit(props.measure, line.spent),
-      slot: hues.get(line.key) ?? 'other',
-      quiet: line.kind !== 'category',
-    }))
+  return drawnLines(props.measure, listed).map((line) => ({
+    key: line.key,
+    label: words.lineLabel(breakdown, line),
+    labelRuns: words.lineRuns(breakdown, line),
+    detail: words.valueDetail(breakdown, line.value),
+    value: weight(line),
+    valueText: words.lineShare(props.measure, line.spent, whole),
+    slot: hues.get(line.key) ?? 'other',
+    quiet: line.kind !== 'category',
+  }))
 }
 
 const lists = computed(() =>
@@ -253,10 +290,6 @@ const lists = computed(() =>
     ]
   }),
 )
-
-/** The panel's own width decides whether its chart opens as its table. */
-const body = ref<HTMLElement | null>(null)
-const narrow = useNarrowCharts(body)
 </script>
 
 <template>
@@ -265,6 +298,12 @@ const narrow = useNarrowCharts(body)
     :close-label="t('analytics.detail.close')"
     @close="emit('close')"
   >
+    <template
+      v-if="nameRuns"
+      #title
+    >
+      <span v-text-runs="nameRuns" />
+    </template>
     <template #facts>
       <div
         class="value-actions"
@@ -287,6 +326,7 @@ const narrow = useNarrowCharts(body)
         </VButton>
         <RefreshFailed
           :failed="failedAgain"
+          held
           @retry="retry"
         />
       </div>
@@ -298,7 +338,6 @@ const narrow = useNarrowCharts(body)
       </FieldError>
     </template>
     <div
-      ref="body"
       class="value-detail"
       data-detail="value"
     >
@@ -336,30 +375,28 @@ const narrow = useNarrowCharts(body)
         <PanelLevel
           level="block"
           data-part="figures"
-          :title="t('analytics.detail.figures')"
+          :title="figuresTitle"
           :about="about"
           :about-label="t('analytics.detail.about')"
         >
-          <dl class="value-figures">
-            <div
-              v-for="figure in figures"
-              :key="figure.key"
-              class="value-figure"
-              :data-figure="figure.key"
-            >
-              <dt class="value-figure-name">{{ figure.name }}</dt>
-              <dd class="value-figure-text">{{ figure.text }}</dd>
-            </div>
-          </dl>
+          <ValueFigures :figures="figures" />
+        </PanelLevel>
+        <PanelLevel
+          v-if="allTime"
+          level="block"
+          data-part="all-time"
+          :title="allTime.title"
+        >
+          <ValueFigures :figures="allTime.figures" />
         </PanelLevel>
         <ValueDays
           v-if="steps"
           data-part="days"
-          :compared="compared"
-          :filters="valueFilters(filters, by, value)"
+          :before="before"
+          :before-failed="beforeFailed"
           :measure="measure"
           :name="name"
-          :narrow="narrow"
+          :name-runs="nameRuns"
           :read-at="readAt"
           :hue="hue"
           :usage="steps"
@@ -422,28 +459,5 @@ const narrow = useNarrowCharts(body)
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
   align-items: center;
-}
-
-/* The figures, a name and its figure to a line, the figures in one column of tabular numbers. */
-.value-figures {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-1) var(--space-4);
-  margin: 0;
-  font: var(--font-detail);
-}
-
-.value-figure {
-  display: contents;
-
-  & .value-figure-name {
-    color: var(--color-text-muted);
-  }
-
-  & .value-figure-text {
-    margin: 0;
-    color: var(--color-text);
-    font-variant-numeric: tabular-nums;
-  }
 }
 </style>

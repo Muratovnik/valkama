@@ -9,13 +9,14 @@
  * The name gives the figures its room down to its floor, eight of the table's ems, and is cut
  * there, its whole words laid over it under the pointer and the keyboard's focus. It is cut only for
  * the figures: every column of figures is as wide as its cells ask and no wider. Where even the
- * floor leaves the figures too little, at a window of 900 pixels, the table scrolls sideways in
+ * floor leaves the figures too little, at a window of 860 pixels, the table scrolls sideways in
  * its frame with the names held at its start. Each run prints what it measured.
  *
- * A cost that leaves tokens without a price says how many on a second, quieter line under its
- * amount, the amount on the row's line beside the other figures. Its column is then as wide as
- * the longer of the two lines, not as both side by side; at 1280 the table may still scroll
- * sideways for it, and at 1670 it fits its frame.
+ * A cost that leaves tokens without a price says how many in the quieter ink under its amount,
+ * the amount on the row's line beside the other figures, and wraps inside the width the column's
+ * figures give it: the column is as wide as its figures, the row is taller, and the table fits its
+ * frame at 1280, 1440 and 1670. On one line of its own the remark set the column's width, and at
+ * 1280 the change stood 218 pixels past the frame.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -23,26 +24,14 @@ import type { Page } from '@playwright/test'
 import {
   expectNamesInView,
   openReport,
-  pageAt,
   record,
   scrolledNames,
   serve,
   shortfalls,
 } from './analyticsPage.ts'
 import { wholeText } from './hintFramesPage.ts'
-import { PARTLY_PRICED, TASKS } from './served/analyticsTableFit.ts'
+import { COST_PERIODS, PARTLY_PRICED, PERIODS, TASKS } from './taskTables.ts'
 import { test } from './test.ts'
-
-const PERIODS = {
-  today: pageAt({ by: 'work_item', period: 'today' }),
-  week: pageAt({ by: 'work_item' }),
-}
-
-/** The same periods under the measure «cost», whose period before and change say the remark too. */
-const COST_PERIODS = {
-  today: pageAt({ by: 'work_item', period: 'today', measure: 'cost' }),
-  week: pageAt({ by: 'work_item', measure: 'cost' }),
-}
 
 /** The remark beside a cost that leaves tokens out, as each language ends it. */
 const REMARK = {
@@ -57,7 +46,7 @@ const FLOOR_EMS = 8
 const DESKTOP = [1280, 1440, 1670, 1920]
 
 /** A window whose frame is narrower than the figures and the name's floor. */
-const NARROW = 900
+const NARROW = 860
 
 /**
  * How the table stands in its frame: how far it runs past the frame, to the fraction of a pixel,
@@ -192,7 +181,16 @@ const remarks = (page: Page, remark: RegExp) =>
                 column: cell.getBoundingClientRect().width,
               },
               figure: { top: firstBox(figure).top, bottom: lastBox(figure).bottom },
-              remark: { top: firstBox(words).top, bottom: lastBox(words).bottom },
+              remark: {
+                top: firstBox(words).top,
+                bottom: lastBox(words).bottom,
+                left: words.getBoundingClientRect().left,
+                right: words.getBoundingClientRect().right,
+              },
+              content: {
+                left: cell.getBoundingClientRect().left + Number.parseFloat(style.paddingLeft),
+                right: cell.getBoundingClientRect().right - Number.parseFloat(style.paddingRight),
+              },
               baseline: time ? lastBox(figure).bottom - firstBox(textOf(time)).bottom : null,
               ink: getComputedStyle(holder).color,
               figureInk: getComputedStyle(figureHolder).color,
@@ -340,11 +338,10 @@ for (const locale of ['ru', 'en'] as const)
       await serve(page, PARTLY_PRICED)
     })
 
-    // A cost that leaves tokens without a price says how many under its amount, on a second and
-    // quieter line of its cell, so its column is as wide as the longer of the two lines rather
-    // than both: said on the row's line, «≈ 1 109,00 $, 40 тыс. токенов без цены» was one line
-    // of 249 pixels. At 1280 the table may still scroll sideways for the remark; at 1670 it
-    // fits its frame.
+    // A cost that leaves tokens without a price says how many under its amount, in the quieter
+    // ink, wrapped inside the width the column's figures give it: said on the row's line,
+    // «≈ 1 109,00 $, 40 тыс. токенов без цены» was one line of 249 pixels, and on a line of its
+    // own the remark still made the column 192 pixels wide.
     for (const [measure, addresses] of Object.entries({ time: PERIODS, cost: COST_PERIODS }))
       for (const [period, address] of Object.entries(addresses)) {
         // Three rows and the total say the remark in the cost; under the cost, «Today»'s period
@@ -362,17 +359,11 @@ for (const locale of ['ru', 'en'] as const)
           const rows = new Set(stand.cells.map((cell) => cell.row))
           expect(rows.size, 'the rows that say the remark').toBe(4)
           expect(stand.cells, 'the cells that say the remark').toHaveLength(saying)
-          // What a column's cells with the remark ask of it, laid out under each other: the
-          // longer of each one's figure and remark, with the cell's padding.
+          // What a column's cells with the remark ask of it: their figures, with the cell's
+          // padding; the remark asks nothing of its own.
           const longest = new Map<number, number>()
           for (const { column, widths } of stand.cells)
-            longest.set(
-              column,
-              Math.max(
-                longest.get(column) ?? 0,
-                Math.max(widths.figure, widths.remark) + widths.padding,
-              ),
-            )
+            longest.set(column, Math.max(longest.get(column) ?? 0, widths.figure + widths.padding))
           for (const cell of stand.cells) {
             const where = `«${cell.text}»`
             expect.soft(cell.shown, `${where}: the remark is not shown`).toBe(true)
@@ -389,17 +380,19 @@ for (const locale of ['ru', 'en'] as const)
             expect
               .soft(cell.ink, `${where}: the remark in the figure's ink`)
               .not.toBe(cell.figureInk)
-            // The column is as wide as the longest line of its cells — the longer of a figure
-            // and its remark, or what its other cells and its heading ask — and narrower than
-            // this figure and its remark side by side.
-            const { figure, remark, padding, column } = cell.widths
+            // The column is as wide as its figures, or what its other cells and its heading
+            // ask, and the remark wraps inside it.
+            const { column } = cell.widths
             const asked = Math.max(longest.get(cell.column) ?? 0, stand.others[cell.column] ?? 0)
             expect
-              .soft(column, `${where}: its column wider than its longest line`)
+              .soft(column, `${where}: its column wider than its figures ask`)
               .toBeLessThanOrEqual(asked + 1)
             expect
-              .soft(column, `${where}: its column as wide as the figure and the remark together`)
-              .toBeLessThan(figure + remark + padding - 1)
+              .soft(cell.remark.left, `${where}: the remark past its cell's start`)
+              .toBeGreaterThanOrEqual(cell.content.left - 0.5)
+            expect
+              .soft(cell.remark.right, `${where}: the remark past its cell's end`)
+              .toBeLessThanOrEqual(cell.content.right + 0.5)
           }
           // A row without the remark keeps the height of one line; one with it is taller.
           const taller = stand.heights.filter((_, index) => rows.has(index))
@@ -418,16 +411,21 @@ for (const locale of ['ru', 'en'] as const)
             analytics.getByRole('cell', { name: new RegExp(`^≈.+${REMARK[locale].source}`, 'u') }),
           ).toHaveCount(stand.cells.filter((cell) => cell.text.startsWith('≈')).length)
 
-          // With the room of 1670 pixels the table fits its frame, the change inside it.
-          await openReport(page, 1670, address)
-          await page.evaluate(() => document.fonts.ready)
-          const at = await fit(page)
-          await record(info, `task table unpriced ${locale} ${measure} ${period}`, { stand, at })
-          expect.soft(at.past, 'at 1670px: the table past its frame').toBeLessThanOrEqual(0.5)
-          expect.soft(at.scroll, 'at 1670px: the table scrolls past its frame').toBe(0)
-          expect
-            .soft(at.changePast, 'at 1670px: the change past the frame')
-            .toBeLessThanOrEqual(0.5)
+          // The table fits its frame at each desktop width, the change inside it.
+          const seen: Record<number, Awaited<ReturnType<typeof fit>>> = {}
+          for (const width of [1280, 1440, 1670]) {
+            await openReport(page, width, address)
+            await page.evaluate(() => document.fonts.ready)
+            const at = await fit(page)
+            seen[width] = at
+            const where = `at ${width}px`
+            expect.soft(at.past, `${where}: the table past its frame`).toBeLessThanOrEqual(0.5)
+            expect.soft(at.scroll, `${where}: the table scrolls past its frame`).toBe(0)
+            expect
+              .soft(at.changePast, `${where}: the change past the frame`)
+              .toBeLessThanOrEqual(0.5)
+          }
+          await record(info, `task table unpriced ${locale} ${measure} ${period}`, { stand, seen })
         })
       }
   })

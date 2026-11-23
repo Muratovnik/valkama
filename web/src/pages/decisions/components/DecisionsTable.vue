@@ -27,12 +27,13 @@ import { MOST } from '@/pages/decisions/composables/useDecisionsRead.ts'
 import SectionTable from '@/widgets/section-table/components/SectionTable.vue'
 import { useColumnSort } from '@/widgets/section-table/composables/useColumnSort.ts'
 
+import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts'
+
 import type { Decision } from '@/shared/api/decisionsApi.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { opensInPlace } from '@/shared/lib/linkPress.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { useComposedText } from '@/shared/lib/useComposedText.ts'
-import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const props = defineProps<{
   items: readonly Decision[]
@@ -161,7 +162,7 @@ function follow(row: (typeof rows.value)[number], event: MouseEvent) {
           >
           <template v-else>{{ row.decision.item.reference }}</template>
           <span
-            v-slash-breaks="row.decision.item.title"
+            v-work-item-title="row.decision.item.title"
             class="chart-detail"
           />
         </th>

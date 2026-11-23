@@ -3,11 +3,15 @@
  * it asks at the caller's offset and nothing else, takes an answer of every state a window has,
  * and refuses what the contract says no answer holds — a field nobody declared, a percent or a
  * forecast on a window of money, a point forecast for a week, a sum across accounts, an account
- * with no source that still has windows, an account whose id does not say its own fields.
+ * with no source that still has windows, an account whose id does not say its own fields. How the
+ * window before a window ended is its own object or an explicit `null`, never missing; one past
+ * window is asked by the account, the window and the moment it reset by, and nothing else. Over a
+ * period the read asks from its start, and each window may hold the windows before it the period
+ * overlaps, each whole, its restarts at its own readings.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchQuota, validateQuotaAnswer } from '@/shared/api/analyticsApi.ts'
+import { fetchQuota, fetchQuotaWindow, validateQuotaAnswer } from '@/shared/api/analyticsApi.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
 import { uiDegraded } from '@/shared/api/platformUiState.ts'
 
@@ -41,6 +45,9 @@ function withWindow(account: number, window: number, change: (value: object) => 
   )
   return quotaAnswer({ ...quota, accounts } as Quota)
 }
+
+/** The answer with «Work»'s five hours holding `earlier`, the windows before it over a period. */
+const over = (earlier: unknown) => withWindow(0, 0, (window) => ({ ...window, earlier }))
 
 describe('the quota read', () => {
   it('asks for every account at the caller’s offset, and nothing else', async () => {
@@ -199,5 +206,133 @@ describe('the quota read', () => {
   it('says what failed when the read is refused', async () => {
     answer({ error: { code: 'invalid_request', message: 'utc_offset' } }, 400)
     await expect(fetchQuota(9999)).rejects.toThrow(/\/api\/analytics\/quota: HTTP 400/u)
+  })
+
+  it('takes how the window before ended, or an explicit none, and refuses it missing', () => {
+    const ended = {
+      started_at: '2026-11-11T05:00:00.000+03:00',
+      resets_at: '2026-11-11T10:00:00.000+03:00',
+      latest: { at: '2026-11-11T09:40:00.000+03:00', used_percent: 100, source: 'poll' },
+      ran_out: true,
+    }
+    expect(
+      validateQuotaAnswer(withWindow(0, 0, (window) => ({ ...window, previous: ended })))
+        .accounts[0]?.windows[0],
+    ).toMatchObject({ previous: { ran_out: true, latest: { used_percent: 100 } } })
+    expect(
+      validateQuotaAnswer(quotaAnswer(quotaAt(NOW, 180))).accounts[0]?.windows[0],
+    ).toMatchObject({ previous: null })
+    const missing = withWindow(0, 0, (window) => ({ ...window, previous: undefined }))
+    expect(() => validateQuotaAnswer(missing)).toThrow(/accounts\[0\]\.windows\[0\]/u)
+    const unknown = withWindow(0, 0, (window) => ({ ...window, previous: { ...ended, total: 1 } }))
+    expect(() => validateQuotaAnswer(unknown)).toThrow(/previous\.total: unknown field/u)
+    const noRetention = Object.fromEntries(
+      Object.entries(quotaAt(NOW, 180)).filter(([key]) => key !== 'retained_from'),
+    )
+    expect(() => validateQuotaAnswer(quotaAnswer(noRetention as Quota))).toThrow(
+      /quota\.retained_from/u,
+    )
+  })
+
+  it('asks over a period from its start, and the plain read without one', async () => {
+    const fetchMock = answer(quotaAnswer(quotaAt(NOW, 180)))
+    await fetchQuota(180, undefined, '2026-10-14T21:00:00.000Z')
+    const url = new URL(requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? ''), 'https://example.test')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      utc_offset: '180',
+      from: '2026-10-14T21:00:00.000Z',
+    })
+    await fetchQuota(180)
+    const plain = new URL(
+      requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? ''),
+      'https://example.test',
+    )
+    expect(Object.fromEntries(plain.searchParams)).toEqual({ utc_offset: '180' })
+  })
+
+  it('takes the windows before a window over a period, each whole, and refuses a field or restart they do not hold', () => {
+    const before = {
+      started_at: '2026-11-11T00:00:00.000+03:00',
+      resets_at: '2026-11-11T05:00:00.000+03:00',
+      readings: [
+        { at: '2026-11-11T01:00:00.000+03:00', used_percent: 40, source: 'poll' },
+        { at: '2026-11-11T03:00:00.000+03:00', used_percent: 10, source: 'poll' },
+      ],
+      restarts: ['2026-11-11T03:00:00.000+03:00'],
+    }
+    expect(validateQuotaAnswer(over([before])).accounts[0]?.windows[0]).toMatchObject({
+      earlier: [{ resets_at: before.resets_at, restarts: before.restarts }],
+    })
+    expect(validateQuotaAnswer(over([])).accounts[0]?.windows[0]).toMatchObject({ earlier: [] })
+    expect(() => validateQuotaAnswer(over([{ ...before, latest: before.readings[1] }]))).toThrow(
+      /earlier\[0\]\.latest: unknown field/u,
+    )
+    expect(() =>
+      validateQuotaAnswer(over([{ ...before, restarts: ['2026-11-11T02:00:00.000+03:00'] }])),
+    ).toThrow('a restart is the moment of one of the readings')
+    // A window before the current one always ran to its reset: one with none fits no window.
+    expect(() => validateQuotaAnswer(over([{ ...before, resets_at: null }]))).toThrow(
+      /accounts\[0\]\.windows\[0\]: unknown value/u,
+    )
+    expect(() => validateQuotaAnswer(over([before]))).not.toThrow()
+  })
+})
+
+describe('one past quota window', () => {
+  const asked = {
+    account: 'org-a/acct-a',
+    kind: 'week_model' as const,
+    model: 'model-a',
+    before: '2026-11-11T05:00:00.000+03:00',
+    utcOffset: 180,
+  }
+  const pastAnswer = (window: unknown) => ({
+    interface_version: 'valkama-analytics-api',
+    quota_window: {
+      now: '2026-11-11T08:30:00.000Z',
+      utc_offset: 180,
+      fresh_for_seconds: 900,
+      retained_from: '2025-11-11T11:30:00.000+03:00',
+      account: asked.account,
+      kind: asked.kind,
+      model: asked.model,
+      before: asked.before,
+      window,
+    },
+  })
+
+  it('asks by the account, the window, its model and the moment, at the caller’s offset', async () => {
+    const fetchMock = answer(pastAnswer(null))
+    const found = await fetchQuotaWindow(asked)
+    const url = new URL(requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? ''), 'https://example.test')
+    expect(url.pathname).toBe('/api/analytics/quota/window')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      account: 'org-a/acct-a',
+      kind: 'week_model',
+      model: 'model-a',
+      before: '2026-11-11T05:00:00.000+03:00',
+      utc_offset: '180',
+    })
+    expect(found.window).toBeNull()
+    // A window of no model names none.
+    const week = answer(pastAnswer(null))
+    await fetchQuotaWindow({ ...asked, kind: 'week', model: null })
+    const weekUrl = new URL(requestUrl(week.mock.calls.at(-1)?.[0] ?? ''), 'https://example.test')
+    expect(weekUrl.searchParams.has('model')).toBe(false)
+  })
+
+  it('takes a past window as a current one is given, and refuses a field nobody declared', async () => {
+    const week = quotaAt(NOW, 180).accounts[0]?.windows[1]
+    answer(pastAnswer({ ...week, even_percent: null, forecast: null }))
+    const found = await fetchQuotaWindow(asked)
+    expect(found.window).toMatchObject({ kind: 'week', forecast: null })
+    answer(pastAnswer({ ...week, total_percent: 3 }))
+    await expect(fetchQuotaWindow(asked)).rejects.toThrow(
+      /analytics\.quotaWindow\.quota_window\.window\.total_percent: unknown field/u,
+    )
+    answer({ error: { code: 'invalid_request', message: 'kind' } }, 400)
+    await expect(fetchQuotaWindow(asked)).rejects.toThrow(
+      /\/api\/analytics\/quota\/window: HTTP 400/u,
+    )
   })
 })
