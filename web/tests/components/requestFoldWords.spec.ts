@@ -11,7 +11,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import RequestFold from '@/features/input-requests/components/RequestFold.vue'
-import { spokenRequest } from '@/features/input-requests/utils/spokenFields.ts'
+import { answeredFields, spokenRequest } from '@/features/input-requests/utils/spokenFields.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { validateInputRequestDetail } from '@/shared/api/inputRequestModel.ts'
@@ -89,6 +89,36 @@ describe('spokenRequest', () => {
   it('keeps every word of a question an agent composed', () => {
     const request = read(agentAsked)
     expect(spoken(request, 'ru')).toBe(request)
+  })
+})
+
+function answered(request: Request, locale: 'en' | 'ru') {
+  const words = i18n(locale).global
+  return answeredFields(
+    request,
+    (key) => words.t(key),
+    (key) => words.te(key),
+  ).map((field) => [field.label, field.options.map((option) => option.label)])
+}
+
+describe('answeredFields', () => {
+  it('offers a goal’s answers on its form as its buttons name them, and keeps what to type', () => {
+    const request = read(proposed)
+    const typed = request.fields.slice(1).map((field) => [field.label, []])
+    expect(answered(request, 'ru')).toEqual([
+      ['Ответ', ['Делать', 'Позже…', 'Не делать']],
+      ...typed,
+    ])
+    expect(answered(request, 'en')[0]).toEqual(['Answer', ['Do', 'Later…', 'Don’t do']])
+    expect(typed).toHaveLength(2)
+  })
+
+  it('keeps a session’s consent and a question an agent composed as the server wrote them', () => {
+    const request = read(proposed)
+    const consent: Request = { ...request, purpose: 'consent' }
+    expect(answeredFields(consent, String, () => true)).toBe(consent.fields)
+    const agents = read(agentAsked)
+    expect(answeredFields(agents, String, () => true)).toBe(agents.fields)
   })
 })
 

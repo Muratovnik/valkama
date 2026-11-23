@@ -53,6 +53,7 @@ const WORDS: Record<string, string> = {
   later: 'Later…',
   drop: 'Don’t do',
   out: 'Move out of the goal',
+  stay: 'Leave it where it was',
   allow: 'Allow',
   keep: 'Keep',
   cancel: 'Cancel',
@@ -95,6 +96,15 @@ const cancelling = (purpose: Purpose) =>
   kindRecord(asked(purpose, ASKED.find(([one]) => one === purpose)?.[1] ?? []), word)
     .answers.filter((answer) => answer.cancels)
     .map((answer) => [answer.answer.answer, answer.cancels?.field])
+
+/** The labels of a task's answers, asked by the service with the prompt `key`. */
+function task(key: 'task_filed' | 'task_moved_in' | 'task_moved_to') {
+  const entry = asked('task', [choice('do', 'later', 'out', 'drop'), text('until', 'later')])
+  const values = { reference: 'MAIN-12', goal: 'MAIN-3', title: 'Export it' }
+  entry.request.prompt_message =
+    key === 'task_moved_to' ? { key, values: { ...values, state: 'review' } } : { key, values }
+  return kindRecord(entry, word).answers.map((answer) => answer.label)
+}
 
 describe('the answers of a kind', () => {
   it('stand in the kinds table’s words and order', () => {
@@ -159,6 +169,14 @@ describe('the answers of a kind', () => {
     expect(group.answers.map(({ needsTicked }) => needsTicked)).toEqual([true, true, undefined])
     // Only a group offers findings to tick; a goal with a field of the same name does not.
     expect(ticksOf(asked('goal', [choice('do', 'later', 'drop'), findings]))).toBeNull()
+  })
+
+  it('of a task an agent moves into a goal leave it where it was, as its question says', () => {
+    // It stands where it was until the answer: `out` keeps it there rather than moving it out
+    // of a goal it never stood in. A task filed in the goal, or moved on inside it, moves out.
+    expect(task('task_moved_in')).toEqual(['Do', 'Later…', 'Leave it where it was', 'Don’t do'])
+    expect(task('task_filed')).toEqual(['Do', 'Later…', 'Move out of the goal', 'Don’t do'])
+    expect(task('task_moved_to')).toEqual(['Do', 'Later…', 'Move out of the goal', 'Don’t do'])
   })
 
   it('keep an option the server adds under its own label, after the known ones', () => {

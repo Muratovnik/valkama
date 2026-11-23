@@ -2710,12 +2710,21 @@ The kind follows the question's purpose: a review shows the task's outcome under
 and answers Accept or Return to work; a group of findings shows the goal it proposes with its
 conditions, its findings and why, and a goal its description, conditions and how much open work
 stands under it, both answering Do, Later… or Don't do; a task in a goal shows its description,
-its goal by number and title and the goal's conditions, and adds Move out of the goal; a condition
+its goal by number and title and the goal's conditions, and adds Move out of the goal, or Leave it
+where it was for a task an agent moves into the goal, which stands where it was until then; a
+condition
 shows what is removed and what each rewritten step was and becomes, with the reason, and answers Allow or Keep; a cancel shows what closes, who holds it
 and what the sessions at work answered, and answers Cancel or Keep; a confirmation answers I
 confirm or Leave it open, which says both things the server does on that answer, handing the goal
 to the next session in its space or, with nothing under it, only not closing it; and a return
-answers as a goal does. A question of any
+answers as a goal does. What Valkama itself asks names its answers in these words, and its card's
+form offers them in these words too: «Делать, позже или не делать?» over Делать, Позже… and Не
+делать, where it read «отложить» over «Позже…» and, in English, «Take it on, put it off, or drop
+it» over Do, Later… and Don't do. It stands under a head that already names its card by number and
+title, so it calls that card «this» and says neither again: repeated, the title filled the lines
+a phone shows before «Show all», and the ask at the end folded away under it. The ask follows the
+first sentence, before the agent's reason and what the sessions answered, which may run long. A
+question of any
 other purpose, or without the field its kind answers in, stays a choice of options. What the
 question does not carry, as a card's outcome or description, is read from its card when the
 record first comes into view. A task's goal is read after that card, by the reference the card

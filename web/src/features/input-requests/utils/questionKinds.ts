@@ -71,6 +71,15 @@ const ANSWERS: Record<Exclude<QuestionKind, 'choice'>, readonly string[]> = {
 /** The answers that cannot be taken back: each cancels work, so its first press only asks. */
 const ASKS_FIRST = new Set(['cancel', 'drop'])
 
+/**
+ * The word an answer is named by: its option id, but for `out` on a task an agent moves into a
+ * goal, which stands where it was until the answer. There `out` leaves it where it was (`stay`),
+ * as the question says, instead of moving it out of a goal it never stood in.
+ */
+export function answerWord(request: InputRequestEntry['request'], option: string): string {
+  return option === 'out' && request.prompt_message?.key === 'task_moved_in' ? 'stay' : option
+}
+
 /** The kind a question is shown as: its purpose's, or a choice of options. */
 export function kindOf(entry: InputRequestEntry): QuestionKind {
   const { purpose } = entry.request
@@ -92,8 +101,9 @@ export function ticksOf(entry: InputRequestEntry): Ticks | null {
 
 /**
  * A question as the record of its kind, with the answers its buttons write. `word` names an
- * answer by its option id in the person's language. A question whose purpose names a kind but
- * that offers no field to answer it in stays a choice of options, which its form answers.
+ * answer by its word (`answerWord`) in the person's language. A question whose purpose names a
+ * kind but that offers no field to answer it in stays a choice of options, which its form
+ * answers.
  */
 export function kindRecord(
   entry: InputRequestEntry,
@@ -112,7 +122,7 @@ export function kindRecord(
   const answers = offered.map((option): KindAnswer => {
     const known = order.includes(option.id)
     return {
-      label: known ? word(option.id) : option.label,
+      label: known ? word(answerWord(entry.request, option.id)) : option.label,
       answer: { [ANSWER_FIELD]: option.id },
       ...(cancels(option.id) ? { cancels: { field: CANCELS_FIELD } } : {}),
       ...(ticks ? { ticks } : {}),
