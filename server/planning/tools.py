@@ -267,6 +267,15 @@ _COMMENT_FORM = (
     " that reply's root, and applied names the root it joined in reply_to or"
     " reply_to_request. A reply carries no checklist_item_id; its root does."
 )
+#: What `until` takes wherever work is put off: a defer, and a later group, which puts
+#: its items off as a defer does.
+_UNTIL = _text(
+    deferral.UNTIL_LIMIT,
+    description="A day YYYY-MM-DD, coming back at 00:00 UTC; a time with its zone, such as"
+    " 2026-12-01T09:00:00Z; a count of new comments from 1 to 999, such as 3 comments; a"
+    " count and a day or time, whichever comes first, such as 2026-12-01 or 3 comments; or"
+    " the reference or work_item_id of the open item whose close it waits on.",
+)
 #: What a batch's defer takes, and what putting work off does.
 _DEFER_FORM = (
     "Put the item off until a day (YYYY-MM-DD, returning at 00:00 UTC), a time, a count"
@@ -581,11 +590,8 @@ TOOLS = [
                     },
                     "answer": {"type": "string", "enum": list(groups.ANSWERS)},
                     "until": {
-                        "type": "string",
-                        "maxLength": deferral.UNTIL_LIMIT,
-                        "description": "With later alone: a day YYYY-MM-DD, a count of new"
-                        " comments such as 3 comments, both as 2026-12-01 or 3 comments, or"
-                        " the item it waits on.",
+                        **_UNTIL,
+                        "description": "With later alone. " + _UNTIL["description"],
                     },
                     "why": {"type": "string", "maxLength": groups.WHY_LIMIT},
                 },
@@ -1301,15 +1307,7 @@ TOOLS = [
                 "type": "object",
                 "description": _DEFER_FORM,
                 "properties": {
-                    "until": {
-                        "type": "string",
-                        "maxLength": deferral.UNTIL_LIMIT,
-                        "description": "A day YYYY-MM-DD, coming back at 00:00 UTC; a time"
-                        " with its zone, such as 2026-12-01T09:00:00Z; a count of new comments"
-                        " from 1 to 999, such as 3 comments; a count and a day or time,"
-                        " whichever comes first, such as 2026-12-01 or 3 comments; or the"
-                        " reference or work_item_id of the open item whose close it waits on.",
-                    },
+                    "until": _UNTIL,
                     "reason": _text(service.PUT_OFF_REASON_LIMIT),
                     "force": _FORCE,
                 },
