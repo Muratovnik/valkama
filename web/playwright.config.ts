@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test'
 import { appBuild, appPort, harnessPort, runResults } from './tests/browser/browserRun.ts'
 import { clipboardIgnore } from './tests/browser/clipboardSpecs.ts'
 import { python, serverStore, storeEnvironment } from './tests/browser/serverStore.ts'
-import { timedProject, timedTitle } from './tests/browser/timedChecks.ts'
+import { timedProject, timedSpecs, timedTitle } from './tests/browser/timedChecks.ts'
 
 // Every path below is absolute and every server starts in `web/`, because Playwright
 // resolves a relative one against the configuration that is loaded, and the probe's
@@ -117,9 +117,10 @@ export default store
         {
           // The tests of the production specs that bound a time (`timedChecks.ts`), once every
           // project above has ended, whatever it ended in, as a teardown is run, and one at a
-          // time: the other workers are the heaviest work beside a test.
+          // time: the other workers are the heaviest work beside a test. Playwright runs it whole,
+          // so it takes the specs the runner's list names (`timedSpecs`).
           name: timedProject,
-          testMatch: production,
+          testMatch: timedSpecs(production, process.env),
           grep: timedTitle,
           workers: 1,
           use: inEnglish,

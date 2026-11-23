@@ -6,11 +6,12 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { timedProject, timedTag, timedTitle } from './browser/timedChecks.ts'
+import { timedList, timedProject, timedSpecs, timedTag, timedTitle } from './browser/timedChecks.ts'
 
 /** The projects of `playwright.config.ts` as a mocked-app run loads them. */
 async function projects() {
   vi.stubEnv('VALKAMA_BROWSER_STORE', undefined)
+  vi.stubEnv(timedList, undefined)
   try {
     const { default: config } = await import('../playwright.config.ts')
     return config.projects ?? []
@@ -46,6 +47,22 @@ describe('the timed browser tests', () => {
     expect(String(timed?.testMatch)).toBe(String(production?.testMatch))
     expect(timed?.grep).toBe(timedTitle)
     expect(production?.grepInvert).toBe(timedTitle)
+  })
+
+  it('take only the production specs a run’s list names, since Playwright runs them whole', () => {
+    const production = /(?:^|[\\/])production-(?!locale\.)[a-z0-9-]+\.spec\.ts$/
+    const list =
+      'production-a.spec.ts\r\nui-b.spec.ts\nproduction-locale.spec.ts\nproduction-c.d.spec.ts\n'
+    const taken = timedSpecs(production, { [timedList]: 'list.txt' }, () => list)
+    const at = (name: string) => taken.test(`C:\\web\\tests\\browser\\${name}`)
+    expect(at('production-a.spec.ts')).toBe(true)
+    expect(at('production-ab.spec.ts')).toBe(false)
+    expect(at('ui-b.spec.ts')).toBe(false)
+    expect(at('production-locale.spec.ts')).toBe(false)
+    expect(String(taken).endsWith(String.raw`\.spec\.ts$/`)).toBe(true)
+    expect(timedSpecs(production, {}, () => list)).toBe(production)
+    const none = timedSpecs(production, { [timedList]: 'list.txt' }, () => 'ui-b.spec.ts\n')
+    expect(none.test('production-a.spec.ts')).toBe(false)
   })
 
   it('are told by the tag as a word among the tags', () => {

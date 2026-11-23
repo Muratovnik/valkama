@@ -7,6 +7,7 @@ import type { PlaywrightTestConfig } from '@playwright/test'
 import { lockedCommand, spawnInherited } from '../heavyLock.ts'
 import { harnessPort } from './browserRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
+import { timedList } from './timedChecks.ts'
 
 /**
  * `npm run test:browser:allowed`: every browser spec but the ones that write the system
@@ -25,6 +26,7 @@ import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
  * The same run ends with the tests that bound a time (`timedChecks.ts`), the listed specs' and
  * no others, after every other test has ended and one at a time, in the project `timed`; the
  * run fails when a test of either part does, and the timed ones run whatever the rest ended in.
+ * Playwright runs that project whole, so `--grep` and its other filters of tests do not reach it.
  *
  * A run holds the machine's heavy-test lock, `tests/machine_lock.py`, for as long as Playwright
  * runs, asking for the whole machine, so any other heavy run of any checkout waits for it and
@@ -61,10 +63,16 @@ export interface ProjectRule {
 export interface RunnerIo {
   /**
    * Runs Playwright with these arguments and resolves with its exit code; `clipboard` says
-   * whether its configuration may select the clipboard specs, and `lock` names the run that
-   * holds the heavy-test lock while Playwright runs, or is null for no lock.
+   * whether its configuration may select the clipboard specs, `lock` names the run that
+   * holds the heavy-test lock while Playwright runs, or is null for no lock, and `list` is the
+   * list file it runs, which its configuration reads for the timed project (`timedList`).
    */
-  playwright: (args: readonly string[], clipboard: boolean, lock: string | null) => Promise<number>
+  playwright: (
+    args: readonly string[],
+    clipboard: boolean,
+    lock: string | null,
+    list: string,
+  ) => Promise<number>
   /** The projects of the configuration Playwright will load, the clipboard specs let in. */
   projects: () => Promise<readonly ProjectRule[]>
   /** A list file's text, or null when there is no such file. */
@@ -185,27 +193,26 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
   const lock = request.playwright.includes('--list')
     ? null
     : `npm run test:browser:allowed, ${batch}, harness port ${harnessPort}`
+  const list = io.writeList(specs)
   return io.playwright(
-    [
-      'test',
-      `--test-list=${io.writeList(specs)}`,
-      `--reporter=line,${summary}`,
-      ...request.playwright,
-    ],
+    ['test', `--test-list=${list}`, `--reporter=line,${summary}`, ...request.playwright],
     request.withClipboard.length > 0,
     lock,
+    list,
   )
 }
 
 /**
  * The environment Playwright runs in: this one, with `clipboardOptIn` set to `1` when the run
- * may select a clipboard spec and removed when it may not, whatever the caller's shell held.
+ * may select a clipboard spec and removed when it may not, whatever the caller's shell held, and
+ * `timedList` naming the list file the run runs.
  */
 export function playwrightEnvironment(
   base: NodeJS.ProcessEnv,
   clipboard: boolean,
+  list: string,
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...base, [clipboardOptIn]: '1' }
+  const env: NodeJS.ProcessEnv = { ...base, [clipboardOptIn]: '1', [timedList]: list }
   if (!clipboard) delete env[clipboardOptIn]
   return env
 }
@@ -254,12 +261,12 @@ async function configProjects(): Promise<ProjectRule[]> {
 
 /** The real file system and Playwright, run from `web/` with this process's Node. */
 export const realIo: RunnerIo = {
-  playwright: (args, clipboard, lock) => {
+  playwright: (args, clipboard, lock, list) => {
     const command = [process.execPath, join(web, 'node_modules/@playwright/test/cli.js'), ...args]
     // It declares no CPUs, so it asks for the whole machine: the browsers take whatever it has.
     return spawnInherited(lock === null ? command : lockedCommand(lock, command), {
       cwd: web,
-      env: playwrightEnvironment(process.env, clipboard),
+      env: playwrightEnvironment(process.env, clipboard, list),
     })
   },
   projects: configProjects,

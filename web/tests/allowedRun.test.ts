@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { playwrightEnvironment, realIo, runAllowed } from './browser/allowedRun.ts'
 import type { ProjectRule, RunnerIo } from './browser/allowedRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './browser/clipboardSpecs.ts'
+import { timedList } from './browser/timedChecks.ts'
 import { spawnInherited } from './heavyLock.ts'
 
 // The process start the real runner goes through, stood in for: no Playwright starts here.
@@ -39,8 +40,9 @@ const projects: ProjectRule[] = [
 function runner(lists: Record<string, string> = {}, more: readonly string[] = []) {
   const written: string[][] = []
   const said: string[] = []
-  const playwright = vi.fn((_args: readonly string[], _clipboard: boolean, _lock: string | null) =>
-    Promise.resolve(0),
+  const playwright = vi.fn(
+    (_args: readonly string[], _clipboard: boolean, _lock: string | null, _list: string) =>
+      Promise.resolve(0),
   )
   const io: RunnerIo = {
     playwright,
@@ -203,11 +205,20 @@ describe('the allowed browser run', () => {
 
   it('runs Playwright with the opt-in set only when asked, whatever the shell held', () => {
     const shell = { PATH: '/bin', [clipboardOptIn]: '1' }
-    expect(playwrightEnvironment(shell, false)).toEqual({ PATH: '/bin' })
-    expect(playwrightEnvironment({ PATH: '/bin' }, true)).toEqual({
+    expect(playwrightEnvironment(shell, false, 'list.txt')).toEqual({
       PATH: '/bin',
-      [clipboardOptIn]: '1',
+      [timedList]: 'list.txt',
     })
+    expect(
+      playwrightEnvironment({ PATH: '/bin', [timedList]: 'old.txt' }, true, 'list.txt'),
+    ).toEqual({ PATH: '/bin', [clipboardOptIn]: '1', [timedList]: 'list.txt' })
+  })
+
+  it('names the list it runs to Playwright, which runs the timed project whole', async () => {
+    const batch = runner({ 'batch.txt': 'ui-buttons.spec.ts\n' })
+    expect(await runAllowed(['--specs=batch.txt'], batch.io)).toBe(0)
+    expect(batch.playwright.mock.calls[0]?.[3]).toBe('list.txt')
+    expect(batch.playwright.mock.calls[0]?.[0]).toContain('--test-list=list.txt')
   })
 
   it('holds the heavy-test lock for a run, naming what it runs, and for --list holds none', async () => {
@@ -247,7 +258,9 @@ describe('the allowed browser run', () => {
   })
 
   it('runs Playwright through the gate declaring no CPUs, so it asks for the whole machine', async () => {
-    expect(await realIo.playwright(['--workers=4'], false, 'the whole browser suite')).toBe(0)
+    expect(
+      await realIo.playwright(['--workers=4'], false, 'the whole browser suite', 'list.txt'),
+    ).toBe(0)
     expect(spawnInherited).toHaveBeenCalledTimes(1)
     const [call] = vi.mocked(spawnInherited).mock.calls
     const command = call?.[0] ?? []
