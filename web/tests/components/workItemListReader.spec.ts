@@ -131,6 +131,13 @@ describe('the list as one Tab stop', () => {
     expect(named()).toBe('Ref')
     await press('ArrowRight')
     expect(named()).toBe('Title')
+    // The title's choice of order stays in its heading, hidden in a fit that offers the folded
+    // sorts as buttons, and the keys pass it by to the next heading's sort.
+    expect(document.querySelector('thead [hidden] [role="combobox"]')).not.toBeNull()
+    await press('ArrowRight')
+    expect(named()).toBe('Goal and stage')
+    await press('ArrowLeft')
+    expect(named()).toBe('Title')
     await press('End')
     expect(document.activeElement).toBe(heads().at(-1))
     await press('Home')

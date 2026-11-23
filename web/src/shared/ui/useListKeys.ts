@@ -185,7 +185,11 @@ export function useListKeys(
     if (!row) void nextTick(() => targetOf(id)?.focus({ preventScroll: true }))
   }
 
-  const headControls = () => [...(root.value?.querySelectorAll<HTMLElement>(HEAD) ?? [])]
+  /** The head's controls a key can reach: not one in a part of the head that is hidden. */
+  const headControls = () =>
+    [...(root.value?.querySelectorAll<HTMLElement>(HEAD) ?? [])].filter(
+      (control) => !control.closest('[hidden]'),
+    )
 
   /** ↑ from the first row: the heading above the cell focus was in, or the head's first control. */
   function enterHead(event: KeyboardEvent): boolean {

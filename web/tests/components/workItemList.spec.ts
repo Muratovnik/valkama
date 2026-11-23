@@ -341,6 +341,17 @@ describe('the list head on a narrow list', () => {
     expect(wrapper.emitted('sort')).toEqual([[{ key: 'updated', descending: false }]])
   })
 
+  it('keeps one choice of order through every level, hidden where the folded sorts are buttons', async () => {
+    const wrapper = head('title')
+    const choice = wrapper.get('.list-sort-choice').element
+    expect(choice.hasAttribute('hidden')).toBe(false)
+    for (const level of ['full', 'wide', 'narrow', 'bare'] as const) {
+      await wrapper.setProps({ level })
+      expect(wrapper.get('.list-sort-choice').element, level).toBe(choice)
+      expect(choice.hasAttribute('hidden'), level).toBe(level === 'full' || level === 'wide')
+    }
+  })
+
   it('shows its words in every level but the last, which bares the choice to its chevron', () => {
     const named = head('title').get('.list-sort-choice')
     expect(named.classes()).not.toContain('bare')

@@ -77,7 +77,8 @@ test('a list 1100px wide stands goal and stage after the title', async ({ page }
   await expect(rowOf(page, 'MAIN-2').locator('.list-goal')).toHaveText('Launch')
   await expect(rowOf(page, 'MAIN-4').locator('.list-goal')).toHaveText('—')
   await expect(listOf(page).locator('.list-title .list-facts')).toHaveCount(0)
-  const heads = await listOf(page).locator('thead th').allTextContents()
+  // What each heading shows: the title's choice of order stays in its heading, hidden here.
+  const heads = await listOf(page).locator('thead th').allInnerTexts()
   expect(heads.map((head) => head.trim()).slice(1, 3)).toEqual(['Title', 'Goal and stage'])
   const overflow = await listOf(page).evaluate((list) => list.scrollWidth - list.clientWidth)
   expect(overflow, 'nothing is pushed past the list edge').toBeLessThanOrEqual(0)

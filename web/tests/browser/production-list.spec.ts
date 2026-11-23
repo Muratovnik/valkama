@@ -79,7 +79,11 @@ for (const [width, headings, foldedSorts, choice] of [
     // What gives way is folded under the title, not dropped: its sort is in the
     // title's heading and its value on a line of facts under each title.
     await expect(list.locator('thead .list-sort.folded')).toHaveCount(foldedSorts)
-    await expect(list.locator('thead .list-sort-choice')).toHaveCount(choice ? 1 : 0)
+    // The choice stays in the title's heading at every width; it is shown where it is offered.
+    await expect(list.locator('thead .list-sort-choice').filter({ visible: true })).toHaveCount(
+      choice ? 1 : 0,
+    )
+    await expect(list.locator('thead .list-sort-choice')).toHaveCount(1)
     const facts = await list.locator('tbody .list-facts').count()
     expect(facts > 0).toBe(foldedSorts > 0 || choice)
     // One line of head, as tall as the control row the rows scroll under.

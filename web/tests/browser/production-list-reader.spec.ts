@@ -11,7 +11,8 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { boardRoute } from './boardPage.ts'
+import { boardRoute, openList, serve } from './boardPage.ts'
+import { frames } from './frames.ts'
 import { brief, identity, serveSpace, stateOf, stillFrames } from './longSpace.ts'
 import { test } from './test.ts'
 
@@ -127,4 +128,27 @@ test('a press on the arrow folds a goal as ← and ← do, focus on its open row
   await expect(rowOf(page, 'MAIN-2')).toHaveCount(0)
   const seen = await page.evaluate(() => (globalThis as unknown as { seen: string[] }).seen)
   expect(seen).toEqual(['MAIN-1:true'])
+})
+
+test('the choice of order keeps the focus an order was chosen with, and keeps it at a new width', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 })
+  await installBackend(page)
+  await serve(page)
+  await openList(page)
+  const head = page.locator('.work-item-list thead')
+  const choice = head.getByRole('combobox', { name: 'Sort by' })
+  await expect(choice).toHaveText('Order')
+  await choice.focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('option', { name: 'Updated', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await expect(choice).toHaveText('Updated')
+  // A new order tries every wider fit again, and the list closes on the control it was chosen by.
+  await expect(choice).toBeFocused()
+  // So does a new width, once the list has measured it.
+  await page.setViewportSize({ width: 430, height: 800 })
+  await frames(head)
+  await expect(choice).toBeFocused()
 })

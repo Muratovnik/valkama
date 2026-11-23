@@ -23,6 +23,7 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { atListWidth } from '../fixtures/listRoom.ts'
+import { listHeads as heads } from '../support/listHeads.ts'
 import { goalRow, serveGoalVolumes, spentOf } from '../support/volumesDouble.ts'
 
 const named = (id: string, name: string) => ({
@@ -61,7 +62,6 @@ afterEach(() => {
 })
 
 const i18n = () => createI18n({ legacy: false, locale: 'en', messages })
-const heads = () => [...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())
 const rows = () => [...document.querySelectorAll<HTMLElement>('tbody tr')]
 const referenceOf = (row: HTMLElement) =>
   row.dataset.reference ?? row.querySelector<HTMLElement>('[data-reference]')?.dataset.reference
