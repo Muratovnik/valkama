@@ -25,6 +25,16 @@ function sentence(text: string): string {
   return SENTENCE_END.test(said) ? said : `${said}.`
 }
 
+/**
+ * What put-off work waits for, as said after «until»: the day, time or card as named, the count
+ * of new comments, or both, whichever comes first.
+ */
+function putOffUntil(say: Say, until: string | null, comments: number | null): string {
+  if (comments === null) return until ?? ''
+  const counted = say('composed.until.comments', { n: comments }, comments)
+  return until === null ? counted : say('composed.until.either', { until, comments: counted })
+}
+
 type Listed = { reason: string | null; reference: string }[]
 type Confirmation = Extract<PromptMessage, { key: 'confirm_asked' }>['values']
 
@@ -105,15 +115,21 @@ function promptText(message: PromptMessage, say: Say, state: StateWords): string
       return say(`${Q}.task_moved_to`, { ...values, state: state(key), title: sentence(title) })
     }
     case 'put_off_asked': {
-      const { kind, title, reason, ...values } = message.values
+      const { kind, title, reason, reference, until, comments } = message.values
       return say(`${Q}.put_off_asked.${kind}`, {
-        ...values,
+        reference,
+        until: putOffUntil(say, until, comments),
         title: sentence(title),
         reason: sentence(reason),
       })
     }
     case 'put_off_came': {
-      const { reference, until, item } = message.values
+      const { reference, until, item, comments } = message.values
+      if (comments !== null)
+        return say(`${Q}.put_off_came.comments`, {
+          reference,
+          comments: putOffUntil(say, null, comments),
+        })
       return item === null
         ? say(`${Q}.put_off_came.until`, { reference, until })
         : say(`${Q}.put_off_came.item`, { reference, item })
@@ -172,9 +188,12 @@ function whatText(message: WhatMessage, say: Say): string {
         : say(`${D}.accepted_under`, { reference, under })
     }
     case 'moved':
-    case 'closed':
-    case 'put_off': {
+    case 'closed': {
       return say(`${D}.${message.key}`, message.values)
+    }
+    case 'put_off': {
+      const { until, comments, ...values } = message.values
+      return say(`${D}.put_off`, { ...values, until: putOffUntil(say, until, comments) })
     }
     case 'cancelled': {
       const { reference, question } = message.values

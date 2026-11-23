@@ -99,6 +99,8 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card-goal.json': (value) => validatePlanningWorkItemPayload(value),
   'card-deferred.json': (value) => validatePlanningWorkItemPayload(value),
   'card-returned.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-deferred-comments.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-returned-comments.json': (value) => validatePlanningWorkItemPayload(value),
   'card-converted.json': (value) => validatePlanningWorkItemPayload(value),
   'commit-attached.json': validateAttachedCommit,
   'decisions.json': validateDecisionsPage,
@@ -287,6 +289,12 @@ describe('the server fixtures', () => {
       'deleted',
     ])
     expect(back.events.at(-1)?.action).toBe('returned')
+  })
+
+  it('say what work put off until new comments waits for, and that they came', () => {
+    const { deferred } = cardItem('card-deferred-comments.json')
+    expect([deferred?.until_item, deferred?.until_comments]).toEqual([null, 2])
+    expect(cardItem('card-returned-comments.json').returned?.because).toBe('comments')
   })
 
   it('read a task converted into a goal as the goal it became', () => {

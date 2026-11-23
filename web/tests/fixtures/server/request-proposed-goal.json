@@ -46,7 +46,7 @@
       },
       {
         "id": "until",
-        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "label": "Until: a day YYYY-MM-DD, a count such as 3 comments, both as 2026-12-01 or 3 comments, or the item it waits on",
         "options": [],
         "required": true,
         "type": "text",

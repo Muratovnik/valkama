@@ -443,6 +443,29 @@ class _Scenario:
             ),
         }
 
+    def counted(self) -> dict[str, dict]:
+        """A card put off until a day or two new comments, with one written, and one that
+        came back with the one new comment it waited for."""
+
+        counting, answered = (
+            str(self.tool("create_work_item", space=SPACE, title=title)["reference"])
+            for title in ("Counting card", "Answered card")
+        )
+        for ref, until in ((counting, "2099-01-01 or 2 comments"), (answered, "1 comment")):
+            self.http(
+                "/api/planning/work-item/apply",
+                {"id": ref, "defer": {"until": until, "reason": "Waits for news."}},
+            )
+            self.http("/api/planning/work-item/apply", {"id": ref, "comment": {"body": "News."}})
+        return {
+            "card-deferred-comments": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=counting)}"
+            ),
+            "card-returned-comments": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=answered)}"
+            ),
+        }
+
     def converted(self) -> dict[str, dict]:
         """A bug at work converted into a goal, read as the card reads the goal it became.
 
@@ -1263,6 +1286,8 @@ class _Scenario:
             ),
             # After them all too: the cards it files take numbers no answer above holds.
             **self.written(),
+            # After them all as well, for the same reason: work put off until new comments.
+            **self.counted(),
             # The decisions the agents took on their own in the answers above, each with the
             # key its line was composed of, and every key the service composes.
             "decisions": self.http(f"/api/planning/decisions?{urlencode({'space': SPACE})}"),

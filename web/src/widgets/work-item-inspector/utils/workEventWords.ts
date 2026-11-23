@@ -1,8 +1,9 @@
 /**
  * What the lines of the work model's events say to a reader, by the shapes the service writes
- * them in: an acceptance's basis (`inherited`, `label_rule: docs`), work put off until a day or a
- * card's close (`until 2026-12-01: why`, `until MAIN-12`), and why it came back (`date
- * 2026-12-01`, `completed MAIN-12`), a triage review's mark (`seen`, `cleared`), a card that left
+ * them in: an acceptance's basis (`inherited`, `label_rule: docs`), work put off until a day, a
+ * count of new comments, both, or a card's close (`until 2026-12-01: why`, `until 3 comments`,
+ * `until 2026-12-01 or 3 comments`, `until MAIN-12`), and why it came back (`date 2026-12-01`,
+ * `comments 3`, `completed MAIN-12`), a triage review's mark (`seen`, `cleared`), a card that left
  * for another goal (`MAIN-12: moved under MAIN-3`), a part split off (`MAIN-15: 2 steps`) and a
  * change of kind (`task -> stage; leftover MAIN-15: 2 steps; projects dropped: alpha`).
  *
@@ -30,20 +31,56 @@ export function acceptedWords(detail: string, t: CountedTranslate) {
   return label ? t('history.event.byLabel', { basis: word, label }) : word
 }
 
+/** What put-off work waits for: a moment, a count of new comments or both, or a card alone. */
+export type PutOffCondition = { comments: number | null; item: string | null; until: string | null }
+
+/**
+ * The condition put-off work waits for, as said after «Put off»: until a card closes, until a day
+ * or a time, until a count of new comments, or a day or a count, whichever comes first.
+ */
+export function putOffWords(
+  condition: PutOffCondition,
+  t: CountedTranslate,
+  day: (value: string) => string,
+): string {
+  if (condition.item) return t('workItem.closeActions.deferred.card', { reference: condition.item })
+  const moment =
+    condition.until === null
+      ? null
+      : t('workItem.closeActions.deferred.day', { date: day(condition.until) })
+  if (condition.comments === null) return moment ?? ''
+  const n = condition.comments
+  const counted = t('workItem.closeActions.deferred.comments', { n }, n)
+  return moment === null
+    ? counted
+    : t('workItem.closeActions.deferred.either', { day: moment, comments: counted })
+}
+
+/** `3 comments`, `1 comment`, or a moment and one of them joined by `or`, as `until` names it. */
+const COUNTED = /^(?:(\S+) or )?(\d+) comments?$/u
+
+/** The condition an `until` of a note names: a count with its moment, a card, or a moment. */
+function namedCondition(until: string): PutOffCondition {
+  const [, moment = null, count] = COUNTED.exec(until) ?? []
+  if (count !== undefined) return { comments: Number(count), item: null, until: moment }
+  if (REFERENCE.test(until)) return { comments: null, item: until, until: null }
+  return { comments: null, item: null, until }
+}
+
 /**
  * `until X` or `until X: why`, as a move into the put-off state notes it: until a card's close
- * when X is a reference, until a day or a time otherwise. Null for a note of another shape.
+ * when X is a reference, until a count of new comments, alone or with a day or a time, or until a
+ * day or a time otherwise. Null for a note of another shape.
  */
 export function untilWords(
   note: string,
   t: CountedTranslate,
   day: (value: string) => string,
 ): string | null {
-  const [, until = '', why = ''] = /^until (\S+)(?:: ([\s\S]*))?$/u.exec(note) ?? []
+  const [, until = '', why = ''] =
+    /^until ((?:\S+ or )?\d+ comments?|\S+)(?:: ([\s\S]*))?$/u.exec(note) ?? []
   if (!until) return null
-  const said = REFERENCE.test(until)
-    ? t('workItem.closeActions.deferred.card', { reference: until })
-    : t('workItem.closeActions.deferred.day', { date: day(until) })
+  const said = putOffWords(namedCondition(until), t, day)
   return why.trim() ? t('history.event.why', { until: said, why: why.trim() }) : said
 }
 
@@ -69,10 +106,15 @@ export function serviceNoteWords(note: string, t: CountedTranslate): string | nu
   return REFERENCE.test(left) ? t('history.event.movedOut', { reference: left, why }) : null
 }
 
-/** `date 2026-12-01`, or `completed MAIN-12` and the like, as work that came back says why. */
+/**
+ * `date 2026-12-01`, `comments 3`, or `completed MAIN-12` and the like, as work that came back
+ * says why.
+ */
 export function returnedWords(detail: string, t: CountedTranslate, day: (value: string) => string) {
   const [, because = '', what = ''] = /^([a-z]+) (\S+)$/u.exec(detail) ?? []
   if (because === 'date') return t('history.event.cameDay', { date: day(what) })
+  if (because === 'comments' && /^[1-9]\d*$/u.test(what))
+    return t('history.event.cameComments', { n: Number(what) }, Number(what))
   if (CAME.has(because) && REFERENCE.test(what))
     return t(`history.event.cameCard.${because}`, { reference: what })
   return detail

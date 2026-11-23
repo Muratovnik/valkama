@@ -27,6 +27,7 @@ export const historyEventMessages = {
       byLabel: '{basis} “{label}”',
       why: '{until} — {why}',
       cameDay: 'the day {date} came',
+      cameComments: '{n} new comment came | {n} new comments came',
       cameCard: {
         completed: '{reference} is done',
         cancelled: '{reference} is cancelled',
@@ -68,6 +69,8 @@ export const historyEventMessages = {
       byLabel: '{basis} «{label}»',
       why: '{until} — {why}',
       cameDay: 'наступило {date}',
+      cameComments:
+        'появился {n} новый комментарий | появились {n} новых комментария | появилось {n} новых комментариев',
       cameCard: {
         completed: '{reference} выполнена',
         cancelled: '{reference} отменена',

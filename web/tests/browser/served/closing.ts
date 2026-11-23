@@ -44,8 +44,8 @@ export const closingSpace = (model: Read) => {
   }
 }
 
-/** The card's task put off until a day, with why it waits. */
-export const deferredCard = (read: Read) => ({
+/** The card's task put off until a day, or what `until` gives, with why it waits. */
+export const deferredCard = (read: Read, until: object = {}) => ({
   ...read,
   state: LATER,
   claim_ref: '',
@@ -54,10 +54,12 @@ export const deferredCard = (read: Read) => ({
   deferred: {
     until: '2099-01-02T00:00:00Z',
     until_item: null,
+    until_comments: null,
     reason: 'After the release',
     since: now,
     by: { author: 'owner', session_id: null },
     reached_at: null,
+    ...until,
   },
 })
 

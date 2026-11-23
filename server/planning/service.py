@@ -2381,10 +2381,12 @@ def defer_work_item(
     gated: bool = False,
     decided: Decided | None = None,
 ) -> dict:
-    """Put an item off until a day, a time or another item's close (`deferral`).
+    """Put an item off until a day, a time, a count of new comments, a count or a day or
+    time whichever comes first, or another item's close (`deferral`).
 
     It moves to the first deferred state its workflow reaches, and the move records
-    `deferred: until 2026-12-01: <reason>`; like every move there it takes the basis
+    `deferred: until 2026-12-01: <reason>` (`until 3 comments`, `until 2026-12-01 or 3
+    comments`); like every move there it takes the basis
     away and ends the claims. The condition is written beside it in the same write,
     under the call that put it off. An item put off already takes the new condition,
     and the question whether to take it up again ends with the old one. A claim of
@@ -2408,7 +2410,8 @@ def defer_work_item(
             f"[{deferral.TAG}] {named} is closed: reopen it before putting it off"
         )
     why = _put_off_reason(reason)
-    until_at, until_item, said = _condition(conn, row, until)
+    condition = _condition(conn, row, until)
+    said = condition.said
     target: sqlite3.Row | None = (
         current if current["category"] == "deferred" else states.reachable(conn, row, "deferred")
     )
@@ -2427,7 +2430,7 @@ def defer_work_item(
         transitions.refuse([found for found in refusals if found[0] not in _DEFER_SPARES], False)
         answer = read_model.present(conn, row, full=True)
         answer["warnings"] = warnings
-        answer["waits_for_owner"] = _ask_about_put_off(conn, row, said, why, author).answer()
+        answer["waits_for_owner"] = _ask_about_put_off(conn, row, condition, why, author).answer()
         return answer
     answer = _transition(
         conn,
@@ -2443,14 +2446,15 @@ def defer_work_item(
             conn,
             _last_event(conn, identity, "transitioned"),
             "goal_defer",
-            _put_off_what(named, said, why),
+            _put_off_what(named, condition, why),
         )
     questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
     deferral.put(
         conn,
         identity,
-        until_at=until_at,
-        until_item_id=until_item,
+        until_at=condition.until_at,
+        until_item_id=condition.until_item,
+        until_comments=condition.comments,
         reason=why,
         call_id=calls.call_id(conn, identity),
         since=deferral.stamp(leases.utc_now()),
@@ -2469,8 +2473,8 @@ def defer_again(conn: sqlite3.Connection, identity: str, until: object) -> None:
     """Put work that came back off again until `until`, as the owner's answer `later` says.
 
     The item stays where it stands; its condition is the new one, set by the call of
-    the answer, not yet come, with the reason and the start it was put off with. The
-    answer's own event is the history of it.
+    the answer, not yet come, with the reason and the start it was put off with. A count
+    of new comments starts with the answer. The answer's own event is the history of it.
     """
 
     row = _row_for_write(conn, identity, None)
@@ -2479,12 +2483,13 @@ def defer_again(conn: sqlite3.Connection, identity: str, until: object) -> None:
         raise model.PlanningError(
             f"[{deferral.TAG}] {read_model.reference(conn, row)} is not put off"
         )
-    until_at, until_item, _said = _condition(conn, row, until)
+    condition = _condition(conn, row, until)
     deferral.put(
         conn,
         identity,
-        until_at=until_at,
-        until_item_id=until_item,
+        until_at=condition.until_at,
+        until_item_id=condition.until_item,
+        until_comments=condition.comments,
         reason=kept.reason,
         call_id=calls.call_id(conn, identity),
         since=kept.since,
@@ -2496,9 +2501,10 @@ def return_due(
 ) -> int:
     """Bring back the put-off work whose condition came and nothing acted on; how much.
 
-    A day or time that passed, or an item that closed by a path that did not bring
-    its waiting back. Read with `leases.utc_now`, at most `limit` items, of one
-    space's items when `space_id` names it. The sweep's `returns` step and the
+    A day or time that passed, a count of comments reached by a write that did not bring
+    it back, or an item that closed by a path that did not bring its waiting back. Read
+    with `leases.utc_now`, at most `limit` items, of one space's items when `space_id`
+    names it. The sweep's `returns` step and the
     take-next queue call it; a read never does.
     """
 
@@ -2508,6 +2514,14 @@ def return_due(
     for due in found:
         return_deferred(conn, due)
     return len(found)
+
+
+def _return_counted(conn: sqlite3.Connection, identity: str) -> None:
+    """Bring the item back when a comment just written on it brought its condition: the
+    count it waits for, or a moment that passed before it, which came first."""
+
+    for due in deferral.due(conn, deferral.stamp(leases.utc_now()), 1, work_item_id=identity):
+        return_deferred(conn, due)
 
 
 def _return_waiting(conn: sqlite3.Connection, items: list[str], because: str) -> list[str]:
@@ -2527,7 +2541,7 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
     The return is Valkama's own call (`deferral.RETURN_TOOL`), so the history names
     the server and why. Under no accepted chain the item moves to the first triage
     state it reaches, with `transitioned` (`triage: returned, date 2026-12-01`) and
-    `returned` (`date 2026-12-01`, `completed MAIN-12`) side by side, and its
+    `returned` (`date 2026-12-01`, `comments 3`, `completed MAIN-12`) side by side, and its
     condition goes with the move; a goal, where the owner decides on goals an agent
     proposes, waits there on the owner's question about it, as such a goal does.
     Under goals and stages all accepted and open, or
@@ -2556,8 +2570,14 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
                 gone=due.because == deferral.DELETED,
             ):
                 return None
-            moment = deferral.said(str(due.until_at)) if item is None else None
-            condition = f"{item} closed" if moment is None else moment
+            moment = deferral.said(str(due.until_at)) if due.because == deferral.DATE else None
+            counted = due.until_comments if due.because == deferral.COMMENTS else None
+            if moment is not None:
+                condition = moment
+            elif counted is not None:
+                condition = f"{counted} new comment{'' if counted == 1 else 's'}"
+            else:
+                condition = f"{item} closed"
             questions.ask(
                 conn,
                 due.work_item_id,
@@ -2568,14 +2588,15 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
                     " off again, or drop it.",
                     reference=reference,
                     until=moment,
-                    item=item,
+                    item=None if moment is not None or counted is not None else item,
+                    comments=counted,
                 ),
                 fields=request_model.fields(list(request_model.RETURN_FIELDS)),
                 author=deferral.AUTHOR,
                 purpose=deferral.RETURN,
             )
             return reference
-        said = deferral.because_text(due.because, due.until_at, item)
+        said = deferral.because_text(due, item)
         _transition(
             conn,
             due.work_item_id,
@@ -2626,26 +2647,32 @@ def _goal_defer(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
     return participation.load(conn).mode(str(row["planning_space_id"]), "goal_defer")
 
 
-def _put_off_what(reference: str, until: str, why: str) -> composed.Text:
+def _put_off_what(reference: str, condition: _Condition, why: str) -> composed.Text:
     """What the summary of decisions says of putting a goal or stage off."""
 
     return composed.decision(
         "put_off",
-        f"put off {reference} until {until}: {why}",
+        f"put off {reference} until {condition.said}: {why}",
         reference=reference,
-        until=until,
+        until=condition.named,
+        comments=condition.comments,
         reason=why,
     )
 
 
 def _ask_about_put_off(
-    conn: sqlite3.Connection, row: sqlite3.Row, until: str, why: str, author: str | None
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    condition: _Condition,
+    why: str,
+    author: str | None,
 ) -> pending.Waiting:
     """Ask the owner whether to put off an accepted goal or stage an agent puts off until
-    `until`, which waits on the answer (`requests.carry_out`): keep it, put it off, the
+    `condition`, which waits on the answer (`requests.carry_out`): keep it, put it off, the
     agent's condition standing when the answer names none, or drop it."""
 
     reference = read_model.reference(conn, row)
+    until = condition.said
     return pending.ask(
         conn,
         str(row["work_item_id"]),
@@ -2653,7 +2680,7 @@ def _ask_about_put_off(
         pending.Proposal(
             "defer",
             {"until": until, "reason": why},
-            _put_off_what(reference, until, why),
+            _put_off_what(reference, condition, why),
             reason=why,
             proposed={"until": until},
         ),
@@ -2666,7 +2693,8 @@ def _ask_about_put_off(
             reference=reference,
             kind=_container_word(row),
             title=str(row["title"]),
-            until=until,
+            until=condition.named,
+            comments=condition.comments,
             reason=why,
         ),
         fields=request_model.fields(request_model.put_off_fields(until)),
@@ -2674,31 +2702,46 @@ def _ask_about_put_off(
     )
 
 
-def _condition(
-    conn: sqlite3.Connection, row: sqlite3.Row, until: object
-) -> tuple[str | None, str | None, str]:
-    """The condition `until` names for the item: the moment or the item it waits on,
-    and how a person reads it."""
+@dataclasses.dataclass(frozen=True)
+class _Condition:
+    """The condition `until` named for an item: the moment, the count of new comments or
+    both, or the item it waits on alone; how a person reads it (`said`), and the moment or
+    reference a composed text names beside the count (`named`, null for a count alone)."""
+
+    until_at: str | None
+    until_item: str | None
+    comments: int | None
+    said: str
+    named: str | None
+
+
+def _condition(conn: sqlite3.Connection, row: sqlite3.Row, until: object) -> _Condition:
+    """The condition `until` names for the item, refused with what it may name."""
 
     if until is None or (isinstance(until, str) and not until.strip()):
         raise model.PlanningError(
-            f"[{deferral.TAG}] defer needs until: a day YYYY-MM-DD, a time with its zone, or"
-            " the reference of the open item it waits on"
+            f"[{deferral.TAG}] defer needs until: a day YYYY-MM-DD, a time with its zone, a"
+            " count of new comments such as 3 comments, a count or a day whichever comes"
+            " first such as 2026-12-01 or 3 comments, or the reference of the open item it"
+            " waits on"
         )
     text = model.text_field(until, "until", limit=64)
-    at = deferral.moment(text, leases.utc_now())
-    if at is not None:
-        return at, None, deferral.said(at)
+    found = deferral.until(text, leases.utc_now())
+    if found is not None:
+        moment = None if found.until_at is None else deferral.said(found.until_at)
+        return _Condition(found.until_at, None, found.comments, found.said(), moment)
     try:
         waited = read_model.item_row(conn, text)
     except model.PlanningError as error:
         raise model.PlanningError(
-            f"[{deferral.TAG}] until {text} is no day, time or work item: send a day"
-            " YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, or an item's"
-            " reference"
+            f"[{deferral.TAG}] until {text} is no day, time, count of comments or work item:"
+            " send a day YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, a"
+            " count such as 3 comments, a count or a day such as 2026-12-01 or 3 comments,"
+            " or an item's reference"
         ) from error
     deferral.check_item(conn, row, waited)
-    return None, str(waited["work_item_id"]), read_model.reference(conn, waited)
+    reference = read_model.reference(conn, waited)
+    return _Condition(None, str(waited["work_item_id"]), None, reference, reference)
 
 
 def _cancel_listing(
@@ -5289,6 +5332,8 @@ def comment_work_item(
     the same item. Threads are one level deep, so a reply to a reply stands under
     that reply's root, and the answer names the root it joined. `awaits_reply`
     says the writer waits for an answer in that thread; a read says whether one came.
+    Work put off until a count of new comments that this one reaches comes back in the
+    same write (`deferral`).
     """
 
     if not conn.in_transaction:
@@ -5320,6 +5365,7 @@ def comment_work_item(
         ),
     )
     words.bring_current(conn)
+    _return_counted(conn, str(row["work_item_id"]))
     # Both parents always: the root a reply joined, and null for a new root.
     return {
         "work_item": read_model.reference(conn, row),
@@ -5526,6 +5572,7 @@ def report_work_item(
         raise
     conn.execute("RELEASE planning_report")
     words.bring_current(conn)
+    _return_counted(conn, identity)
     return read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
 
 

@@ -154,10 +154,11 @@ describe('a record of the work model', () => {
     expect(() => validateWorkItemBrief({ ...brief(), cancelled_blockers: ['main 5'] })).toThrow()
   })
 
-  it('reads what put-off work waits on, one of a moment or an item, and why work came back', () => {
+  it('reads what put-off work waits on, a moment, a count or both, or an item, and why it came back', () => {
     const put = {
       until: null,
       until_item: 'MAIN-5',
+      until_comments: null,
       reason: 'The budget comes in January.',
       since: '2026-01-02T03:04:05Z',
       by: { author: 'user', session_id: null },
@@ -171,8 +172,17 @@ describe('a record of the work model', () => {
     for (const deferred of [
       { ...put, until: '2026-12-01T00:00:00Z' },
       { ...put, until_item: null },
+      { ...put, until_comments: 3 },
+      { ...put, until_item: null, until_comments: 0 },
+      { ...put, until_item: null, until_comments: 1000 },
     ]) {
       expect(() => validateWorkItemRecord({ ...record, deferred })).toThrow()
+    }
+    for (const deferred of [
+      { ...put, until_item: null, until_comments: 3 },
+      { ...put, until_item: null, until: '2026-12-01T00:00:00Z', until_comments: 999 },
+    ]) {
+      expect(validateWorkItemRecord({ ...record, deferred }).deferred).toEqual(deferred)
     }
     // A cause this build does not know, and a day that came with no item named.
     expect(() =>
@@ -181,6 +191,10 @@ describe('a record of the work model', () => {
     expect(
       validateWorkItemRecord({ ...came, returned: { ...back, because: 'date', item: null } }),
     ).toBeTruthy()
+    expect(
+      validateWorkItemRecord({ ...came, returned: { ...back, because: 'comments', item: null } })
+        .returned?.because,
+    ).toBe('comments')
   })
 })
 

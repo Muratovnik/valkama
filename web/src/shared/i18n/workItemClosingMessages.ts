@@ -79,6 +79,8 @@ export const workItemClosingMessages = {
         label: 'Put off',
         day: 'until {date}',
         card: 'until {reference} closes',
+        comments: 'until {n} new comment | until {n} new comments',
+        either: '{day} or {comments}, whichever comes first',
       },
     },
   },
@@ -152,6 +154,9 @@ export const workItemClosingMessages = {
         label: 'Отложено',
         day: 'до {date}',
         card: 'до закрытия {reference}',
+        comments:
+          'до {n} нового комментария | до {n} новых комментариев | до {n} новых комментариев',
+        either: '{day} или {comments} — что наступит раньше',
       },
     },
   },

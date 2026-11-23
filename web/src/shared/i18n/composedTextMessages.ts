@@ -28,6 +28,8 @@ export const composedTextMessages = {
         until:
           '{reference} was put off until {until}; that has come. Do it, put it off again, or drop it.',
         item: '{reference} was put off until {item} closed; that has come. Do it, put it off again, or drop it.',
+        comments:
+          '{reference} was put off until {comments}; that has come. Do it, put it off again, or drop it.',
       },
       cancel_asked: {
         cancel_outside: 'An agent cancels {reference}, filed outside its own work: {title}',
@@ -85,6 +87,10 @@ export const composedTextMessages = {
       answers: { do: 'do', later: 'later', drop: 'drop' },
       items: '{n} item | {n} items',
     },
+    until: {
+      comments: '{n} new comment | {n} new comments',
+      either: '{until} or {comments}, whichever comes first',
+    },
   },
   ru: {
     question: {
@@ -106,6 +112,8 @@ export const composedTextMessages = {
         until:
           '{reference} отложили до {until}, и этот срок настал. Делать, отложить снова или не делать?',
         item: '{reference} отложили до закрытия {item}, и это время настало. Делать, отложить снова или не делать?',
+        comments:
+          '{reference} отложили до {comments}, и это условие выполнено. Делать, отложить снова или не делать?',
       },
       cancel_asked: {
         cancel_outside: 'Агент отменяет {reference} (заведено вне его собственной работы): {title}',
@@ -163,6 +171,10 @@ export const composedTextMessages = {
       group: 'группа «{title}»: {answer}, {count}',
       answers: { do: 'делать', later: 'позже', drop: 'не делать' },
       items: '{n} находка | {n} находки | {n} находок',
+    },
+    until: {
+      comments: '{n} нового комментария | {n} новых комментариев | {n} новых комментариев',
+      either: '{until} или {comments} — что наступит раньше',
     },
   },
 } as const

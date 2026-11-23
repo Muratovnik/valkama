@@ -61,24 +61,33 @@ export const lapsedClaimField = () =>
 const REFERENCE = () => boundedText(/^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u, 20)
 
 /**
- * The condition of an item put off, only while it stands in a deferred state: the moment
- * or the item it waits on, one of the two; why, since when and who put it off; and when
- * the condition came while the owner is asked whether to take it up again.
+ * The condition of an item put off, only while it stands in a deferred state: the moment, the
+ * count of new comments or both, whichever comes first, or the item it waits on alone; why,
+ * since when and who put it off; and when the condition came while the owner is asked whether to
+ * take it up again.
  */
 export const deferredField = () =>
   strictObject({
     until: boundedText(ISO, 96).nullable(),
     until_item: REFERENCE().nullable(),
+    until_comments: positiveInt().max(999).nullable(),
     reason: blankable(400),
     since: boundedText(ISO, 96),
     by: strictObject({ author: blankable(128).nullable(), session_id: blankable(200).nullable() }),
     reached_at: boundedText(ISO, 96).nullable(),
-  }).refine((found) => (found.until === null) !== (found.until_item === null), {
-    message: 'expected a moment or an item to wait on',
-  })
+  }).refine(
+    (found) =>
+      found.until_item === null
+        ? found.until !== null || found.until_comments !== null
+        : found.until === null && found.until_comments === null,
+    { message: 'expected a moment, a count of comments or both, or an item alone' },
+  )
 
-/** Why an item in triage came back from being put off: the day, or what became of the item. */
-const RETURN_CAUSES = ['date', 'completed', 'cancelled', 'deleted'] as const
+/**
+ * Why an item in triage came back from being put off: the day, the count of new comments, or what
+ * became of the item.
+ */
+const RETURN_CAUSES = ['date', 'comments', 'completed', 'cancelled', 'deleted'] as const
 
 /** Why and when an item came back, only while its newest move is the return. */
 export const returnedField = () =>

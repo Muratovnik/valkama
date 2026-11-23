@@ -244,10 +244,12 @@ _COMMENT_FORM = (
 )
 #: What a batch's defer takes, and what putting work off does.
 _DEFER_FORM = (
-    "Put the item off until a day (YYYY-MM-DD, returning at 00:00 UTC), a time, or"
-    " another open item's close: until and reason are both required. It moves to its"
-    " deferred state, loses its basis and its claims; nothing takes it from the queue."
-    " When the day comes or that item closes, is cancelled or deleted, it returns to"
+    "Put the item off until a day (YYYY-MM-DD, returning at 00:00 UTC), a time, a count"
+    " of new comments on it, a count or a day whichever comes first, or another open"
+    " item's close: until and reason are both required. It moves to its deferred state,"
+    " loses its basis and its claims; nothing takes it from the queue. When the day comes,"
+    " the count of comments and replies written after the put-off, a person's or an"
+    " agent's, is reached, or that item closes, is cancelled or deleted, it returns to"
     " triage, or, under goals and stages all accepted, waits as a question to the owner:"
     " do it, later or drop it. An item merged away passes the wait to the item it merged"
     " into. A claim or any transition out of deferred, a cancel included, ends the wait,"
@@ -554,8 +556,9 @@ TOOLS = [
                     "answer": {"type": "string", "enum": list(groups.ANSWERS)},
                     "until": {
                         "type": "string",
-                        "description": "With later alone: a day YYYY-MM-DD or the item it"
-                        " waits on.",
+                        "description": "With later alone: a day YYYY-MM-DD, a count of new"
+                        " comments such as 3 comments, both as 2026-12-01 or 3 comments, or"
+                        " the item it waits on.",
                     },
                     "why": {"type": "string", "maxLength": groups.WHY_LIMIT},
                 },
@@ -1262,8 +1265,10 @@ TOOLS = [
                         "type": "string",
                         "maxLength": 64,
                         "description": "A day YYYY-MM-DD, coming back at 00:00 UTC; a time"
-                        " with its zone, such as 2026-12-01T09:00:00Z; or the reference or"
-                        " work_item_id of the open item whose close it waits on.",
+                        " with its zone, such as 2026-12-01T09:00:00Z; a count of new comments"
+                        " from 1 to 999, such as 3 comments; a count and a day or time,"
+                        " whichever comes first, such as 2026-12-01 or 3 comments; or the"
+                        " reference or work_item_id of the open item whose close it waits on.",
                     },
                     "reason": _STR,
                     "force": _FORCE,

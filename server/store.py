@@ -293,7 +293,15 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
 # them, and its rows would read in English alone; the ratchet makes it refuse a store at
 # 24. The work-model migration carries a store at 18 straight to 24, and one at 17 too,
 # through 18's rename first; the requests it carries keep their text and gain no key.
-STORE_SCHEMA_VERSION = 24
+#
+# 25 lets work put off come back after a count of new comments, alone or with a day or a
+# time, whichever comes first: a condition (`work_item_deferrals`) gains the count
+# (`until_comments`) and the newest comment's id when it started (`comments_after`), and
+# may hold no moment and no item. A build at 24 reads every condition by its moment or its
+# item, so it would take a count alone for an item it cannot name and never bring that
+# work back; the ratchet makes it refuse a store at 25. The work-model migration creates
+# the table empty from the fresh declaration, and carries a store at 18 straight to 25.
+STORE_SCHEMA_VERSION = 25
 
 
 class StoreTooNewError(RuntimeError):

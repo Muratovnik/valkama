@@ -20,6 +20,8 @@ const written = (max: number) => z.string().min(1).max(max)
 const step = written(1000)
 /** A day, a time with its zone, or an item's reference, as the agent named it. */
 const until = written(64)
+/** A count of new comments put-off work waits for. */
+const comments = positiveInt().max(999)
 /** A session, named as a holder is. */
 const session = written(512)
 /** A child of a goal or stage that closed without being done, or left it, with its reason. */
@@ -48,10 +50,16 @@ export const promptMessageSchema = z.discriminatedUnion('key', [
     reference,
     kind: z.enum(['goal', 'stage']),
     title,
-    until,
+    until: until.nullable(),
+    comments: comments.nullable(),
     reason: written(400),
   }),
-  message('put_off_came', { reference, until: until.nullable(), item: reference.nullable() }),
+  message('put_off_came', {
+    reference,
+    until: until.nullable(),
+    item: reference.nullable(),
+    comments: comments.nullable(),
+  }),
   message('cancel_asked', {
     reference,
     point: z.enum(['cancel_outside', 'cancel_shared']),
@@ -86,7 +94,12 @@ export const whatMessageSchema = z.discriminatedUnion('key', [
   message('moved', { reference, under: reference }),
   message('cancelled', { reference, question: boundedText(UUID, 36).nullable() }),
   message('closed', { reference }),
-  message('put_off', { reference, until, reason: written(400) }),
+  message('put_off', {
+    reference,
+    until: until.nullable(),
+    comments: comments.nullable(),
+    reason: written(400),
+  }),
   message('steps', {
     changes: boundedList(
       strictObject({

@@ -33,9 +33,11 @@ from dataclasses import dataclass
 #: - `goal_proposed`: an agent proposes the goal; `goal_came_back`: a goal came back from
 #:   being put off.
 #: - `put_off_asked`: an agent puts off an accepted goal or stage (`kind`, `goal` or
-#:   `stage`) until `until`, a day, a time or a reference, for its `reason`.
-#: - `put_off_came`: what `reference` was put off until has come: the moment `until`, or
-#:   the close of the item `item`; the other is null.
+#:   `stage`) until `until`, a day, a time or a reference, or `comments`, a count of new
+#:   comments, or both, whichever comes first; the one not named is null. `reason` is
+#:   the agent's.
+#: - `put_off_came`: what `reference` was put off until has come: the moment `until`,
+#:   `comments` new comments, or the close of the item `item`; the other two are null.
 #: - `cancel_asked`: an agent cancels `reference` at `point` (`cancel_outside` or
 #:   `cancel_shared`), with its `reason` or null; `sessions_asked` says the sessions at
 #:   work were asked as well; when a round of consent passed it to the owner,
@@ -57,8 +59,8 @@ QUESTIONS: Mapping[str, tuple[str, ...]] = {
     "task_moved_to": ("reference", "goal", "state", "title"),
     "goal_proposed": ("reference", "title"),
     "goal_came_back": ("reference", "title"),
-    "put_off_asked": ("reference", "kind", "title", "until", "reason"),
-    "put_off_came": ("reference", "until", "item"),
+    "put_off_asked": ("reference", "kind", "title", "until", "comments", "reason"),
+    "put_off_came": ("reference", "until", "item", "comments"),
     "cancel_asked": (
         "reference",
         "point",
@@ -84,7 +86,8 @@ QUESTIONS: Mapping[str, tuple[str, ...]] = {
 #: - `cancelled`: it cancelled `reference`, following the owner's answer to the question
 #:   `question`, or null.
 #: - `closed`: it confirmed the goal `reference`.
-#: - `put_off`: it put `reference` off until `until` for its `reason`.
+#: - `put_off`: it put `reference` off until `until` or `comments`, or both, as
+#:   `put_off_asked` names them, for its `reason`.
 #: - `steps`: it changed steps of a goal or stage: each of `changes` is `{change, before,
 #:   after}`, `change` being `removed` (`after` null), `rewrote` or `clarified`; `reason`,
 #:   or null, is why the steps were removed or rewritten.
@@ -96,7 +99,7 @@ DECISIONS: Mapping[str, tuple[str, ...]] = {
     "moved": ("reference", "under"),
     "cancelled": ("reference", "question"),
     "closed": ("reference",),
-    "put_off": ("reference", "until", "reason"),
+    "put_off": ("reference", "until", "comments", "reason"),
     "steps": ("changes", "reason"),
     "chose": ("labels",),
     "group": ("title", "answer", "count"),
