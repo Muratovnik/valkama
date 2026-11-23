@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { walkFocus } from '@/shared/lib/moveFocus.ts'
-import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+import { placeFocus, showAcross } from '@/shared/lib/scriptedFocus.ts'
 
 // The browser's own focus, watched under the helper. happy-dom lays nothing out, so a frame
 // states its widths, and showing a node does what the browser does to show it: centre it,
@@ -35,7 +35,7 @@ function frame(left: number, node: Centred = document.createElement('button'), b
 
 const NEAREST = { block: 'nearest', inline: 'nearest' }
 
-it('a placed focus leaves a frame that scrolls across where it stood, and still shows its target', () => {
+it('a placed focus in sight leaves a frame that scrolls across where it stood, and still shows its target', () => {
   const { box, node, shown, centred } = frame(30)
   placeFocus(node, { focusVisible: true })
   expect(document.activeElement).toBe(node)
@@ -85,4 +85,52 @@ it('a walk with the arrows goes across, to the nearest edge', () => {
   expect(document.activeElement).toBe(node)
   expect(shown).toHaveBeenCalledExactlyOnceWith(NEAREST)
   expect(box.scrollLeft).toBe(250)
+})
+
+/** Lays `node` out at `left`..`right` of the content, read through where `box` stands across. */
+function laidOut(box: HTMLElement, node: Element, left: number, right: number) {
+  box.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, width: 100 })
+  node.getBoundingClientRect = () =>
+    DOMRect.fromRect({ x: left - box.scrollLeft, width: right - left })
+}
+
+it('a placed focus past the end of a frame the reader scrolls brings it in by that edge', () => {
+  const { box, node } = frame(0)
+  box.style.overflowX = 'auto'
+  laidOut(box, node, 150, 180)
+  placeFocus(node)
+  // Not held at 0, where the target stays out of sight, nor centred at 250: its end at the frame's.
+  expect(box.scrollLeft).toBe(80)
+})
+
+it('a target in sight moves nothing, and a box that only clips is held', () => {
+  const shown = frame(0)
+  shown.box.style.overflowX = 'auto'
+  laidOut(shown.box, shown.node, 20, 50)
+  placeFocus(shown.node)
+  expect(shown.box.scrollLeft).toBe(0)
+  const clipped = frame(0)
+  clipped.box.style.overflowX = 'hidden'
+  laidOut(clipped.box, clipped.node, 150, 180)
+  placeFocus(clipped.node)
+  expect(clipped.box.scrollLeft).toBe(0)
+})
+
+it('a region before the start of its frame comes in by the start, clear by the reach asked', () => {
+  const { box, node } = frame(200)
+  box.style.overflowX = 'auto'
+  laidOut(box, node, 170, 190)
+  showAcross(node, 4)
+  expect(box.scrollLeft).toBe(166)
+  // A region wider than its frame past its end shows its start; one that covers it moves nothing.
+  const wide = frame(0)
+  wide.box.style.overflowX = 'scroll'
+  laidOut(wide.box, wide.node, 120, 300)
+  showAcross(wide.node)
+  expect(wide.box.scrollLeft).toBe(120)
+  const covering = frame(150)
+  covering.box.style.overflowX = 'auto'
+  laidOut(covering.box, covering.node, 100, 300)
+  showAcross(covering.node)
+  expect(covering.box.scrollLeft).toBe(150)
 })

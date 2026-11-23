@@ -119,3 +119,36 @@ export async function drag(page: Page, { from, level, midway, refused, to, where
   }
   await page.mouse.up()
 }
+
+/**
+ * Where the board `where` stands across, whether the open column or strip of `state`, the control focus
+ * is on and its ring (null when none is drawn) stand inside the board's frame, and how far the
+ * column's end stands from the frame's.
+ */
+export async function sight(where: Locator, state: string) {
+  return where.evaluate((node, key) => {
+    const frame = node.getBoundingClientRect()
+    const start = frame.left + node.clientLeft
+    const end = start + node.clientWidth
+    const inside = (left: number, right: number) => left >= start - 0.5 && right <= end + 0.5
+    const column = node
+      .querySelector(`.work-item-column[data-state="${key}"], .column-fold[data-state="${key}"]`)
+      ?.getBoundingClientRect()
+    const focused = document.activeElement
+    const box = focused?.getBoundingClientRect()
+    const style = focused?.matches(':focus-visible') ? getComputedStyle(focused) : null
+    const reach = (value: CSSStyleDeclaration) =>
+      Math.max(0, Number.parseFloat(value.outlineWidth) + Number.parseFloat(value.outlineOffset))
+    const ring =
+      box && style && style.outlineStyle !== 'none'
+        ? inside(box.left - reach(style), box.right + reach(style))
+        : null
+    return {
+      across: Math.round(node.scrollLeft),
+      track: column ? inside(column.left, column.right) : null,
+      end: column ? Math.round(end - column.right) : null,
+      focus: box ? inside(box.left, box.right) : null,
+      ring,
+    }
+  }, state)
+}

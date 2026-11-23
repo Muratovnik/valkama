@@ -3536,10 +3536,14 @@ the next Tab to the start of a long form — why a write or a read did not go th
 just written, a list's heading — carry `.focus-landing` from `base.css`: the ring stands 4px
 clear of the words and turns at a control's corner, so one line never closes into a capsule.
 Wherever the interface puts focus (`placeFocus`; lint refuses a bare `focus()` in the app), a
-frame that scrolls sideways stays where the reader left it, and what takes focus is shown up and down as the browser shows it: opening the board's folded
-column at 390px once slid the board 441px to centre the button that folds it again, and the
-tiles' links went off the screen. Only a walk with the arrows takes a frame across, as far as
-the place walked to needs. A text field shows focus by turning its own
+frame that scrolls sideways moves only as far as it must to show what takes focus and its ring,
+by the nearest edge, and not at all when that is in sight; up and down it is shown as the
+browser shows it. Opening the board's folded column at 390px once slid the board 441px to
+centre the button that folds it again, and the tiles' links went off the screen; held where
+it stood instead, the board left that column, the button and its ring past its end. So the
+board brings a column it opens or folds in whole by its nearest edge before focus lands on
+what undoes it, and a walk with the arrows takes a frame across as far as the place walked to
+needs. A text field shows focus by turning its own
 edge the focus colour, for a press as for Tab, and that colour holds 3:1 on every
 ground and fill it stands against.
 

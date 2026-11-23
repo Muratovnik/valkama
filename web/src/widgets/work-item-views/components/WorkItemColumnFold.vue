@@ -42,6 +42,7 @@ const countId = `${useId()}-count`
     :aria-label="label"
     :aria-describedby="countId"
     :data-column-fold="props.state.state_id"
+    :data-column-track="props.state.state_id"
     :data-state="props.state.key"
     @click="emit('unfold')"
   >

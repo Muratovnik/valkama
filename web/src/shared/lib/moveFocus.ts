@@ -27,9 +27,8 @@ export function moveFocus(
 
 /**
  * Takes focus where the reader walked with the arrows, and shows it by the nearest edge both
- * ways: a walk may go across a frame that scrolls sideways, to a column or a cell past its end,
- * which a placed focus otherwise leaves where it stood (`placeFocus`). Ringed as
- * `moveFocus` rings.
+ * ways, up and down as well as across, where a placed focus is shown up and down as the
+ * browser shows it (`placeFocus`). Ringed as `moveFocus` rings.
  */
 export function walkFocus(target: HTMLElement | SVGElement | null | undefined) {
   if (!target) return
