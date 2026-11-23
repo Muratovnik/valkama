@@ -44,6 +44,14 @@ A check that can fail:
   register matched both ways — not the implementation's own wording.
 - A check waits on a condition or on the clock it controls (`page.clock`, fake
   timers), never on a fixed pause.
+- A check that bounds time measures it on the clock other work on the machine
+  moves least: a delay of the product's on the page's clock (`page.clock`, fake
+  timers), which only the test moves, and a cost on the processor time of the
+  thread that pays it (DevTools' `ThreadTime` for the page's main thread), which
+  leaves out the time the thread waits for a processor. The wall clock counts
+  whatever else the machine runs. A guard over source files reads and scans them
+  as its file loads, not in a test's body, where the test's timeout counts the
+  wall.
 
 When many tests fail at once, sort every failure before changing anything:
 
