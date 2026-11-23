@@ -47,7 +47,7 @@ import sysconfig
 import tempfile
 import urllib.request
 import zipfile
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import ModuleType
@@ -222,7 +222,10 @@ def _build_hint(own: OwnEnvironment) -> str:
 
 
 def require_toolchain(
-    interpreter: Interpreter, pinned: Mapping[str, str], own: OwnToolchain
+    interpreter: Interpreter,
+    pinned: Mapping[str, str],
+    own: OwnToolchain,
+    only: Collection[str] | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """How to start each tool, or one refusal naming everything missing.
 
@@ -231,12 +234,23 @@ def require_toolchain(
     environment's requirements file and checked against what is installed
     there. A console script is looked up in its environment's scripts directory
     alone: a same-named one on PATH belongs to some other environment.
+
+    `only` names the tools to check, and the default is every tool. A tool left
+    out is neither checked nor resolved, so an environment that only a tool
+    outside the selection needs may be absent. The running interpreter's pins
+    are checked either way.
     """
 
+    if only is not None:
+        unknown = sorted(set(only) - set(TOOLS))
+        if unknown:
+            raise ValueError(f"not a gate tool: {', '.join(unknown)}")
     problems = _pin_problems(interpreter, pinned)
     commands: dict[str, tuple[str, ...]] = {}
     hints: dict[OwnEnvironment, str] = {}
     for name, tool in TOOLS.items():
+        if only is not None and name not in only:
+            continue
         environment, wanted, source = interpreter, pinned, REQUIREMENTS.name
         if tool.environment is not None:
             hints[tool.environment] = _build_hint(tool.environment)
