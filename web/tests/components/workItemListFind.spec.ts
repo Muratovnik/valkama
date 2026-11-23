@@ -11,18 +11,32 @@
  * read through `rowWords`, watched here for how often the find reads them.
  */
 import { flushPromises, mount } from '@vue/test-utils'
-import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import { rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
 
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import { claimOverlayOwnership, releaseOverlayOwnership } from '@/shared/ui/overlayStack.ts'
 
 import { boardItem } from '../fixtures/board.ts'
-import { keptOrder } from '../support/listOrder.ts'
+import {
+  bar,
+  count,
+  current,
+  field,
+  findKeys,
+  items,
+  key,
+  list,
+  open,
+  others,
+  painted,
+  press,
+  rowButton,
+  stubHighlights,
+  typeIn,
+} from '../support/listFind.ts'
 import { measuredBoxes } from '../support/measuredBoxes.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
@@ -32,100 +46,15 @@ vi.mock('@/widgets/work-item-views/utils/listRowWords.ts', async (original) => {
 })
 const reads = vi.mocked(rowWords)
 
-class TestHighlight extends Set<AbstractRange> {
-  priority = 0
-  constructor(...ranges: AbstractRange[]) {
-    super(ranges)
-  }
-}
-const painted = new Map<string, TestHighlight>()
-
 beforeEach(() => {
-  painted.clear()
+  stubHighlights()
   reads.mockClear()
-  vi.stubGlobal('Highlight', TestHighlight)
-  vi.stubGlobal('CSS', Object.assign(Object.create(CSS) as typeof CSS, { highlights: painted }))
 })
 
 afterEach(() => {
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
-
-// The list sorts by Updated, newest first: these read MAIN-4, 3, 2, 1. «login»
-// is in MAIN-4 twice and in MAIN-1 once, and in none of the rows' other words.
-const titles = [
-  'Fix the login page',
-  'Café wifi drops',
-  'Nothing to see',
-  'Login, then login again',
-]
-const items = titles.map((title, index) =>
-  boardItem(index + 1, 'backlog', { title, updated_at: `2026-10-0${index + 1}T10:00:00Z` }),
-)
-
-async function list(locale: 'en' | 'ru' = 'en', shown: WorkItemBrief[] = items) {
-  const plugin = i18n()
-  plugin.global.locale.value = locale
-  const host = keptOrder()
-  const wrapper = host.hold(
-    mount(WorkItemList, {
-      attachTo: document.body,
-      global: { plugins: [plugin] },
-      props: { items: shown, links: [], ...host.props },
-    }),
-  )
-  await flushPromises()
-  return wrapper
-}
-
-type List = VueWrapper
-
-const rowButton = (wrapper: List, reference: string) =>
-  wrapper.get<HTMLButtonElement>(`tbody .list-open[data-reference="${reference}"]`).element
-const bar = () => document.querySelector<HTMLElement>('[role="search"]')
-const field = () => bar()?.querySelector('input') ?? null
-const count = () => bar()?.querySelector('.list-find-now')?.textContent?.trim()
-
-function key(target: EventTarget, init: KeyboardEventInit) {
-  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
-  target.dispatchEvent(event)
-  return event
-}
-const findKeys = (init: KeyboardEventInit = {}) =>
-  key(document.activeElement ?? document.body, { code: 'KeyF', ctrlKey: true, key: 'f', ...init })
-
-async function typeIn(term: string) {
-  const input = field()
-  if (!input) throw new Error('no find bar to type in')
-  input.value = term
-  input.dispatchEvent(new Event('input', { bubbles: true }))
-  await flushPromises()
-}
-
-async function open(wrapper: List, term: string) {
-  rowButton(wrapper, 'MAIN-2').focus()
-  findKeys()
-  await flushPromises()
-  if (!field()) throw new Error('Ctrl+F opened no find bar')
-  await typeIn(term)
-}
-
-async function press(init: KeyboardEventInit) {
-  key(document.activeElement ?? document.body, init)
-  await flushPromises()
-}
-
-/** The row a mark is drawn in, by its reference, and the mark's words. */
-function markOf(range: AbstractRange) {
-  const node = range.startContainer
-  const element = node instanceof Element ? node : node.parentElement
-  const row = element?.closest('tr')?.querySelector<HTMLElement>('.list-open')
-  return { row: row?.dataset.reference, text: (range as Range).toString() }
-}
-const marksIn = (name: string) => [...(painted.get(name) ?? [])].map((range) => markOf(range))
-const current = () => marksIn('list-find-current')
-const others = () => marksIn('list-find')
 
 describe('Ctrl+F on the list', () => {
   it('opens the list’s find bar in place of the browser’s, a named search with its field focused', async () => {
