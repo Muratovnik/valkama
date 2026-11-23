@@ -11,6 +11,10 @@ const STAND_MS = 1000
  * so that from now on only the test moves it (`page.clock.runFor`): every delay of the page's own
  * then runs as long as the test says, however long the machine takes over the test's own steps.
  * It first runs on for `STAND_MS`, since the clock can only be stopped ahead of where it stands.
+ *
+ * That leap ages whatever the page has under way as it stands: a wait that began before it, such
+ * as a download still arriving, is `STAND_MS` older on the page's clock than on the wall, so a
+ * check whose verdict depends on such a wait lets it end before the clock stands.
  */
 export async function standClock(page: Page) {
   await page.clock.pauseAt((await page.evaluate(() => Date.now())) + STAND_MS)

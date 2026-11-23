@@ -20,6 +20,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { installBackend } from './backend.ts'
+import { CARD_CHUNK, cardCodeResident } from './cardCode.ts'
 import { watchLoading } from './loadingWatch.ts'
 import type { LoadingWatch } from './loadingWatch.ts'
 import { standClock } from './pageClock.ts'
@@ -96,16 +97,23 @@ async function switchBoard(page: Page, read: Read): Promise<LoadingWatch> {
   return watched()
 }
 
-/** Open a card from the board, with its read answering as `read` does. */
+/**
+ * Open a card from the board, with its read answering as `read` does. The card's code is
+ * resident first, as the board's download leaves it: a card opened while it still downloads
+ * waits on the download too, which `production-lazy.spec.ts` reads, and a page clock stood across
+ * that download would date it from before the stand's leap ahead (`standClock`).
+ */
 async function openCard(page: Page, read: Read): Promise<LoadingWatch> {
   await installBackend(page)
   await page.route('**/api/modules/planning/work-item?*', async (route) => {
     await read.hold()
     await route.fallback()
   })
+  const code = page.waitForResponse(CARD_CHUNK)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   const tile = page.locator('.work-item-tile').filter({ hasText: workItem.title }).first()
   await expect(tile).toBeVisible()
+  await cardCodeResident(page, code)
   const watched = await watchLoading(page)
   await read.pressing?.()
   await tile.click()

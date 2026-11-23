@@ -16,6 +16,7 @@ import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platfor
 import { pageAt, record, serve, serveTask } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import type { BackendOptions } from './backend.ts'
+import { CARD_CHUNK } from './cardCode.ts'
 import { globalScope, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
@@ -166,9 +167,7 @@ test('a card over Settings whose space cannot be read says so as the board does,
   await expect(drawer.locator('.card-priority')).toContainText('Urgent')
 })
 
-/** The card's own code, which downloads on demand: Settings never asks for it before a card. */
-const CARD_CHUNK = /\/assets\/WorkItemInspector-[\w-]+\.js$/
-
+// The card's own code downloads on demand: Settings never asks for it before a card.
 test('a card opened over Settings before its code arrives waits in its frame there, then shows', async ({
   page,
 }) => {
