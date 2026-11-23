@@ -23,7 +23,8 @@
  * while it is fitted (`held`): the page draws its room unseen, so news said moves nothing.
  *
  * On a phone the bar is two rows: the periods across the whole of the first, on as many lines as
- * they need, each line shared among its periods, so every period stands whole; under it the
+ * they need, in columns of one width (`SegmentedControl`'s `wrap`), so every period stands whole
+ * and the lines break at the same edges; under it the
  * filters and the line's end. The reader's own days take a third row once they are chosen. The
  * line's end lends its parts to the second row, where the page places them on the bar's grid of
  * four columns. A page whose second row has no room for its news on the narrowest phone stands a
@@ -159,6 +160,7 @@ defineExpose({ gave: room.gave })
         :label="words.label"
         :model-value="period"
         :options="periods"
+        wrap
         @update:model-value="(chosen) => emit('period', chosen)"
       />
       <PeriodOwnDays
@@ -216,8 +218,6 @@ defineExpose({ gave: room.gave })
 
 .period-bar-periods {
   flex: none;
-  flex-wrap: wrap;
-  max-width: 100%;
 }
 
 .period-bar-end {
@@ -265,14 +265,16 @@ defineExpose({ gave: room.gave })
   }
 }
 
-/* A phone: two rows. The periods across the whole first row, wrapping onto a second line of the
-   track where one line has no room for them, each line shared among its periods; the filters and
-   the line's end the row under it. The periods' row scrolled sideways instead, beside the line's
-   end: at 390px it opened on «Сегодня» cut by 14px and hid «Свой» past its edge. The reader's own
-   days take a row of their own only once they are chosen: a row held for them under every other
-   period stood as a band of 72px between the filters and the figures. The line's end lends the
-   second row its parts, which the page places on the four columns: the first as wide as its row
-   leaves it, the three after it as wide as what stands in them. */
+/* A phone: two rows. The periods across the whole first row, shared among them on its one line
+   and wrapping onto more lines of the track where it has no room for them, in columns of one
+   width (`wrap`); the filters and the line's end the row under it. Each wrapped line sharing its
+   own room, the breaks of two lines missed each other: at 390px Analytics' five stood three over
+   two, the four of Agent decisions three over one. The periods' row scrolled sideways instead,
+   beside the line's end: at 390px it opened on «Сегодня» cut by 14px and hid «Свой» past its
+   edge. The reader's own days take a row of their own only once they are chosen: a row held for
+   them under every other period stood as a band of 72px between the filters and the figures. The
+   line's end lends the second row its parts, which the page places on the four columns: the first
+   as wide as its row leaves it, the three after it as wide as what stands in them. */
 @container (width <= 30rem) {
   .period-bar-line {
     display: grid;
@@ -286,9 +288,6 @@ defineExpose({ gave: room.gave })
   }
 
   .period-bar-periods {
-    --segmented-option-grow: 1;
-
-    flex-wrap: wrap;
     grid-area: 1 / 1 / 2 / -1;
   }
 

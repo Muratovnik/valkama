@@ -1422,12 +1422,20 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   settings row is a wide row (`SettingsRow`'s `wide`): the choice stands beside
   the name in the half every row's control stands in where its words fit there,
   and under the name, as every row of a narrow workspace does, where they do not;
-  it wraps only where that line cannot hold it either, its segments then standing
-  in columns of one width that fill every line, or in one column where no such
-  columns fit. Held to the half, Participation's set wrapped onto a second
-  line at 1280px; reaching toward the name instead, the choices of one column
-  started at three edges at 1024px. Each wrapped line sharing its own room, the
-  set broke a phone's two lines 17px apart and stood three over one at 430px.
+  it wraps only where that line cannot hold it either. Wrapped, a row of
+  segments (`SegmentedControl`'s `wrap`) stands in columns of one width on the
+  fewest lines the room allows, and in the fewest columns that keep to that many
+  lines (`segmentColumns`): every line but the last is full, and the last, short
+  only where no number of columns divides the segments, keeps its segments under
+  the columns above. Four stand two over two, never three over one; five in room
+  for three or four stand three over two, and in room for two, two, two and one;
+  where not even two columns fit, one column. Held to the half, Participation's
+  set wrapped onto a second line at 1280px; reaching toward the name instead, the
+  choices of one column started at three edges at 1024px. Each wrapped line
+  sharing its own room, the set broke a phone's two lines 17px apart and stood
+  three over one at 430px. Held to columns that fill every line, the five
+  periods of Analytics would have had none but one, five lines tall in a bar that
+  stays on the screen.
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
@@ -3010,8 +3018,10 @@ freshness with the refresh at its end. One row cannot hold them there: at 1024px
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
 panel moved down 44px when a span of days was chosen. On a phone the bar is two rows: the periods
-across the whole first row, wrapping onto a second line of their track where one has no room for
-them, each line shared among its periods; then the filter, a failure, the freshness and the refresh.
+across the whole first row, wrapping onto more lines of their track where one has no room for
+them, in columns of one width, as every wrapped row of segments does (Segmented choice); then the
+filter, a failure, the freshness and the refresh. Each wrapped line sharing its own room, the breaks
+of two lines missed each other: at 390px Analytics' five periods stood three over two.
 The reader's own days take a third row once chosen, which moves the panel down by it. The periods
 scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past the edge, and a row
 held for the reader's own days under every other period stood as an empty band of 72px over the

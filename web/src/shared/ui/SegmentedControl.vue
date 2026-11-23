@@ -31,12 +31,13 @@
  * tag, and shares that width among the segments by `--segmented-option-grow`.
  *
  * A row that may be wider than what holds it, as a settings row's choice (`SettingsRow`'s
- * `wide`), says so (`wrap`): it stays one line where that line holds it, and where it does
- * not its segments stand in columns of one width, as wide as what holds it, and only as many
- * as fill every line, or else in one column (`segmentColumns`). Each host used to state the
- * wrap and only some the sharing: on a phone the scope choice of Participation stood its two
- * segments 135 and 110px wide on lines of 240. Each line then shared its own room, and the
- * set's four broke their two lines 17px apart.
+ * `wide`), or the periods of a page's bar (`PeriodBar`), says so (`wrap`): it stays one line
+ * where that line holds it, and where it does not its segments stand in columns of one width,
+ * as wide as what holds it, on the fewest lines the room allows, a line short of the others
+ * only the last (`segmentColumns`). Each host used to state the wrap and only some the sharing:
+ * on a phone the scope choice of Participation stood its two segments 135 and 110px wide on
+ * lines of 240. Each line then shared its own room, and the set's four broke their two lines
+ * 17px apart; the periods, wrapped by their bar, stood three over two at 390px.
  *
  * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
  * lays its bar out by the row's whole width, as the Analytics periods, reads that width. A row
@@ -338,17 +339,15 @@ function move(event: KeyboardEvent) {
 }
 
 /* Wrapped, the row stands in columns of one width (`useSegmentColumns`) across what holds it,
-   each centring its words. Each segment starts a pixel short of its column and grows back into
-   it, so the columns of a line never sum past the track's room in a rounding and send the last
-   of them to the next. */
+   each centring its words: a grid, so a last line short of the others keeps its segments under
+   the columns above instead of growing them into the room it leaves, and a rounding never sends
+   a line's last segment to the next. */
 .segmented.wrap.columns {
+  display: grid;
+  grid-template-columns: repeat(var(--segmented-columns), minmax(0, 1fr));
   inline-size: 100%;
 
   .segmented-option {
-    flex: 1 1
-      calc(
-        (100% - (var(--segmented-columns) - 1) * var(--space-half)) / var(--segmented-columns) - 1px
-      );
     min-width: 0;
     padding-inline: calc(var(--segmented-column-padding));
   }

@@ -75,6 +75,11 @@ export const questionKindMessages = {
         items: 'Findings in this group',
         reason: 'Why you object',
       },
+      typed: {
+        until:
+          'Until: a day YYYY-MM-DD, a count such as 3 comments, both as 2026-12-01 or 3 comments, or the item it waits on',
+        cancels: 'The list token, for a goal or stage with open work under it',
+      },
     },
   },
   ru: {
@@ -145,6 +150,11 @@ export const questionKindMessages = {
         cancels: 'Ключ списка',
         items: 'Находки группы',
         reason: 'Причина возражения',
+      },
+      typed: {
+        until:
+          'До: день ГГГГ-ММ-ДД, число новых комментариев как 3 comments, то и другое как 2026-12-01 or 3 comments или номер карточки, которой ждать',
+        cancels: 'Ключ списка — для цели или этапа, под которыми есть открытая работа',
       },
     },
   },
