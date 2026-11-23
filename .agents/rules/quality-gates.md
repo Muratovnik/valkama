@@ -32,10 +32,12 @@ Each command below runs in `web/`:
   `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> npx playwright test
   --config tests/browser/probe.config.ts`. Name the file
   `ui-<name>.spec.mts` or `production-<name>.spec.mts` for the project it runs
-  in. It imports `expect` and the types from `@playwright/test` and the app
-  through `@/` as a spec does, and the suite's own `test` and helpers by a path
-  relative to itself, such as `../../web/tests/browser/test.ts` from
-  `tmp/<name>/`, so it needs no configuration and no `package.json` of its own.
+  in. Both run in `en-US`: a probe that reads the Russian interface sets
+  `test.use({ locale: 'ru-RU' })`. It imports `expect` and the types from
+  `@playwright/test` and the app through `@/` as a spec does, and the suite's
+  own `test` and helpers by a path relative to itself, such as
+  `../../web/tests/browser/test.ts` from `tmp/<name>/`, so it needs no
+  configuration and no `package.json` of its own.
   The `.mts` is what makes it an ES module, as every module of the suite is: a
   `.spec.ts` there is a CommonJS script, and its first import of a suite module
   the run has already loaded, through the configuration or the global setup,
