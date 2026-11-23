@@ -1058,7 +1058,10 @@ def prepare_store(
             raise ProbeError(f"could not create a store: {output.strip()[-800:]}")
         return base, {"source": None}
     isolated.copy_store(source, home)
-    isolated.copy_registry(migration, registry)
+    named = isolated.registry_named()
+    isolated.copy_registry(
+        migration, named if registry is None else [registry / path.name for path in named]
+    )
     carried = migration / "AppData" / "Local" / "Valkama"
     arguments = ["migrate", "work-model"]
     if (carried / "projects.json").is_file():

@@ -107,7 +107,11 @@ the same way in a directory with no Git history of its own. The server
 writes to `logs/serve.log`. `serve` warns before it starts when `web/dist` may be
 older than `web/src`; rebuild before you look at the interface it serves. A store copy holds your real data, so it goes with
 the profile when the server stops or dies. It stays on disk while the server is
-running, however long that is: run `stop` when you are done.
+running, however long that is: run `stop` when you are done. A copy of a store
+Valkama 2.9 left is carried to this build's schema before the server starts, by the
+commands of the migration itself run on the copy and your copied project registry:
+`projects upgrade`, `projects map-items` and `migrate work-model`. Each writes its
+log under `logs/`, and one that fails stops the start, naming its log.
 
 Between commits, `tests/affected.py` picks the Python test modules a change
 reaches and runs them:
