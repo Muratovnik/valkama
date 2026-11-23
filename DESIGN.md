@@ -974,7 +974,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   table's end. Sideways scroll is the last resort: only a table of figures whose
   least does not fit and that does not stack scrolls, at its second step, its
   names held at the frame's start. Analytics' tables take no third step: their owner chose a
-  second line and the sideways scroll for them. Stacked by a phone's width alone, Agent decisions left «What
+  second line and the sideways scroll for them. The tables of one section stand at one step and
+  on one set of columns: their names' column takes the width the widest of theirs takes there, and
+  the figures share the rest alike, so a column stands at one edge in each; laid out by its own
+  words, each of the two tables of the work outside goals in Volumes stood its categories up to
+  25px off the other's. Stacked by a phone's width alone, Agent decisions left «What
   was decided» past the frame at 1024 and 760; held to their widths, the goals
   of Volumes left «Left ≈» past it at 1280, under a scroll bar below the
   fold.
