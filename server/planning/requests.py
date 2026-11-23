@@ -54,6 +54,10 @@ from . import (
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
+#: The longest prompt a question carries.
+PROMPT_LIMIT = 8000
+#: The longest session or execution id a question names.
+SESSION_ID_LIMIT = 128
 #: How many sessions an agent's call asks at once (`addressees`).
 MOST_ADDRESSEES = 5
 #: How often one session may ask one other session within the hour.
@@ -536,14 +540,14 @@ def _bindings(
     execution = None
     session = None
     if execution_id is not None:
-        execution = model.text_field(execution_id, "execution_id", limit=128)
+        execution = model.text_field(execution_id, "execution_id", limit=SESSION_ID_LIMIT)
         row = conn.execute(
             "SELECT work_item_id FROM executions WHERE execution_id=?", (execution,)
         ).fetchone()
         if row is None or row["work_item_id"] != item["work_item_id"]:
             raise model.PlanningError("execution must belong to this work item")
     if session_id is not None:
-        session = model.text_field(session_id, "session_id", limit=128)
+        session = model.text_field(session_id, "session_id", limit=SESSION_ID_LIMIT)
         exists = conn.execute("SELECT 1 FROM sessions WHERE id=?", (session,)).fetchone()
         linked = conn.execute(
             "SELECT 1 FROM execution_sessions l JOIN executions e ON e.execution_id=l.execution_id WHERE l.session_id=? AND e.work_item_id=?",
@@ -625,7 +629,7 @@ def _request_parts(kind: object, prompt: object, fields: object) -> tuple[str, s
     recommend an answer in every required field."""
 
     parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
-    parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
+    parsed_prompt = model.multiline_field(prompt, "prompt", limit=PROMPT_LIMIT)
     if not parsed_prompt:
         raise model.PlanningError("prompt is required")
     parsed_fields = request_model.fields(fields)
@@ -774,7 +778,7 @@ def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
     settings = participation.load(conn)
     asked: list[str] = []
     for value in sessions:
-        session = model.text_field(value, "sessions", limit=128)
+        session = model.text_field(value, "sessions", limit=SESSION_ID_LIMIT)
         if session in asked:
             raise model.PlanningError(f"session {session} is named twice; ask it once")
         if session == own:
@@ -933,7 +937,7 @@ def list_question(value: object) -> tuple[str, list[dict]]:
         or not 1 <= len(value["options"]) <= MAX_LIST_OPTIONS
     ):
         raise model.PlanningError("list requires label and options and takes nothing else")
-    label = model.text_field(value["label"], "list.label", limit=200)
+    label = model.text_field(value["label"], "list.label", limit=request_model.MAX_LABEL)
     field = {
         "id": LIST_FIELD,
         "label": label,

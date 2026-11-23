@@ -62,10 +62,16 @@ def whole_store_read() -> Iterator[None]:
         raise
 
 
+#: The longest text a caller may name a work item by: its reference or its id.
+REFERENCE_LIMIT = 64
+#: The longest text a caller may name a space by: its key, its name or its id.
+SPACE_REFERENCE_LIMIT = 200
+
+
 def item_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
     """The item a caller named, by UUID or by what a person types."""
 
-    text = model.text_field(reference, "work item", limit=64)
+    text = model.text_field(reference, "work item", limit=REFERENCE_LIMIT)
     row = conn.execute("SELECT * FROM work_items WHERE work_item_id = ?", (text,)).fetchone()
     if row is not None:
         return row
@@ -92,7 +98,7 @@ def item_by_id(conn: sqlite3.Connection, work_item_id: str) -> sqlite3.Row:
 def space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
     """The space a caller named by its id, key or name."""
 
-    text = model.text_field(reference, "planning space", limit=200)
+    text = model.text_field(reference, "planning space", limit=SPACE_REFERENCE_LIMIT)
     row = conn.execute(
         "SELECT * FROM planning_spaces WHERE planning_space_id = ? OR key = ? OR name = ?",
         (text, text, text),

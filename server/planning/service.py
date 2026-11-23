@@ -72,6 +72,9 @@ MAX_LIST_PAGE = 1000
 #: The same bound for one page of a search.
 MAX_SEARCH_PAGE = 200
 
+#: The longest query a search reads.
+MAX_QUERY = 200
+
 # -- reading -----------------------------------------------------------------
 
 
@@ -492,7 +495,7 @@ def search_work_items(
     an earlier build wrote -- every query is read as a phrase.
     """
 
-    text = model.text_field(query, "query", limit=200)
+    text = model.text_field(query, "query", limit=MAX_QUERY)
     space_id = (
         str(read_model.space_row(conn, space)["planning_space_id"]) if space is not None else None
     )
@@ -832,7 +835,7 @@ def create_work_item(
         started=True if starts else None,
         description=model.multiline_field(description, "work_item.description"),
         labels=tagged,
-        source=model.text_field(source, "work_item.source", limit=512, required=False),
+        source=model.text_field(source, "work_item.source", limit=model.MAX_SOURCE, required=False),
     )
     item_projects.replace(conn, item_id, changes)
     opened = target["category"] == model.SERVICE_CATEGORY
@@ -1298,7 +1301,9 @@ def update_work_item(
         parameters.append(model.multiline_field(description, "work_item.description"))
     if source is not None:
         updates.append("source = ?")
-        parameters.append(model.text_field(source, "work_item.source", limit=512, required=False))
+        parameters.append(
+            model.text_field(source, "work_item.source", limit=model.MAX_SOURCE, required=False)
+        )
     if priority is not None:
         updates.append("priority = ?")
         parameters.append(model.priority(priority))
@@ -2742,7 +2747,7 @@ def _condition(conn: sqlite3.Connection, row: sqlite3.Row, until: object) -> _Co
             " first such as 2026-12-01 or 3 comments, or the reference of the open item it"
             " waits on"
         )
-    text = model.text_field(until, "until", limit=64)
+    text = model.text_field(until, "until", limit=deferral.UNTIL_LIMIT)
     found = deferral.until(text, leases.utc_now())
     if found is not None:
         moment = None if found.until_at is None else deferral.said(found.until_at)
@@ -2757,6 +2762,10 @@ def _condition(conn: sqlite3.Connection, row: sqlite3.Row, until: object) -> _Co
     deferral.check_item(conn, row, waited)
     reference = read_model.reference(conn, waited)
     return _Condition(None, str(waited["work_item_id"]), None, reference, reference)
+
+
+#: The longest `cancels`, the list_token a refusal of a cancel names.
+CANCELS_LIMIT = 64
 
 
 def _cancel_listing(
@@ -2790,7 +2799,7 @@ def _cancel_listing(
                 " leave it out"
             )
         return None
-    sent = None if cancels is None else model.text_field(cancels, "cancels", limit=64)
+    sent = None if cancels is None else model.text_field(cancels, "cancels", limit=CANCELS_LIMIT)
     listing = closing.cancel_list(conn, row)
     if listing is None:
         return None
@@ -2847,6 +2856,10 @@ def filed_by_caller(conn: sqlite3.Connection, identity: str) -> bool:
     )
 
 
+#: The longest `following`, the request_id of the answer a cancel follows.
+FOLLOWING_LIMIT = 64
+
+
 def _following(
     conn: sqlite3.Connection, row: sqlite3.Row, following: object, cancel: bool
 ) -> str | None:
@@ -2865,7 +2878,7 @@ def _following(
             "[participation] following names the owner's answer a cancel follows from:"
             " leave it out of any other move"
         )
-    named = model.text_field(following, "following", limit=64)
+    named = model.text_field(following, "following", limit=FOLLOWING_LIMIT)
     chain = [
         identity for identity, _kind, _category in item_tree.above(conn, str(row["work_item_id"]))
     ]
@@ -3265,11 +3278,11 @@ def _to_check(value: object, into_review: bool, target: sqlite3.Row) -> str:
             f"to_check goes with a move into review, which asks it; a move to {target['name']}"
             " asks nothing: leave it out"
         )
-    return model.multiline_field(value, "to_check", limit=_TO_CHECK_LIMIT)
+    return model.multiline_field(value, "to_check", limit=TO_CHECK_LIMIT)
 
 
 #: The most characters `to_check` holds: as many as any question's prompt.
-_TO_CHECK_LIMIT = 8000
+TO_CHECK_LIMIT = 8000
 
 
 def _destination(
@@ -4842,6 +4855,8 @@ def link_work_items(
 
 #: The most items one merge folds into the item that survives it.
 MAX_MERGE_ITEMS = 20
+#: The longest reason a merge records on both sides.
+MERGE_REASON_LIMIT = 512
 
 
 @_marked
@@ -4901,7 +4916,7 @@ def merge_work_items(
                 " has no cancelled state it can move to"
             )
         cancels.append(target)
-    note = model.text_field(reason, "reason", limit=512, required=False)
+    note = model.text_field(reason, "reason", limit=MERGE_REASON_LIMIT, required=False)
     conn.execute("SAVEPOINT planning_merge")
     try:
         answer = _fold(
@@ -5320,6 +5335,11 @@ def _counts(moved: dict[str, int]) -> str:
     return f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
+#: The longest value and label a ref carries.
+REF_VALUE_LIMIT = 512
+REF_LABEL_LIMIT = 200
+
+
 def attach_ref(
     conn: sqlite3.Connection,
     reference: str,
@@ -5336,8 +5356,8 @@ def attach_ref(
         (
             str(row["work_item_id"]),
             model.ref_kind(kind),
-            model.text_field(value, "work_item_ref.value", limit=512),
-            model.text_field(label, "work_item_ref.label", limit=200, required=False),
+            model.text_field(value, "work_item_ref.value", limit=REF_VALUE_LIMIT),
+            model.text_field(label, "work_item_ref.label", limit=REF_LABEL_LIMIT, required=False),
             model.actor(author),
             calls.call_id(conn, str(row["work_item_id"])),
         ),
@@ -5347,6 +5367,12 @@ def attach_ref(
         "kind": model.ref_kind(kind),
         "value": value,
     }
+
+
+#: The longest comment body.
+COMMENT_LIMIT = 8000
+#: The longest `reply_to_request`, the id of the question a reply answers.
+REPLY_TO_REQUEST_LIMIT = 64
 
 
 def comment_work_item(
@@ -5389,7 +5415,7 @@ def comment_work_item(
         (
             str(row["work_item_id"]),
             model.actor(author),
-            model.multiline_field(body, "comment.body", limit=8000),
+            model.multiline_field(body, "comment.body", limit=COMMENT_LIMIT),
             step["id"] if step else None,
             step["text"] if step else None,
             calls.call_id(conn, str(row["work_item_id"])),
@@ -5428,7 +5454,9 @@ def _thread_parent(
         raise model.PlanningError("reply_to and reply_to_request exclude each other")
     identity = str(row["work_item_id"])
     if reply_to_request is not None:
-        question = model.text_field(reply_to_request, "reply_to_request", limit=64)
+        question = model.text_field(
+            reply_to_request, "reply_to_request", limit=REPLY_TO_REQUEST_LIMIT
+        )
         found = conn.execute(
             "SELECT 1 FROM work_item_requests WHERE request_id = ? AND work_item_id = ?",
             (question, identity),

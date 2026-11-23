@@ -17,6 +17,9 @@ from collections.abc import Mapping
 
 from . import model
 
+#: The longest text a caller may name a state by: its key, its id or a category.
+REFERENCE_LIMIT = 64
+
 
 def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sqlite3.Row:
     """The state a caller named: its id, its key, or a category only one state has.
@@ -33,7 +36,7 @@ def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sq
     replacement and the workflow's states.
     """
 
-    text = model.text_field(reference, "workflow state", limit=64)
+    text = model.text_field(reference, "workflow state", limit=REFERENCE_LIMIT)
     model.refuse_retired("state", text, lambda: _unknown(text, public_states(conn, workflow_id)))
     row = _named(conn, workflow_id, text)
     if row is None:
@@ -77,7 +80,7 @@ def filter_ids(conn: sqlite3.Connection, workflow_ids: list[str], reference: obj
     that reads as no work.
     """
 
-    text = model.text_field(reference, "workflow state", limit=64)
+    text = model.text_field(reference, "workflow state", limit=REFERENCE_LIMIT)
     known: dict[str, sqlite3.Row] = {}
     for workflow_id in workflow_ids:
         for state in public_states(conn, workflow_id):

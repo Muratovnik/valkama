@@ -275,7 +275,7 @@ def _check_until(conn: sqlite3.Connection, until: str) -> None:
     """Refuse an `until` that putting off would refuse: no form `deferral.until` reads, and
     no item's reference."""
 
-    text = model.text_field(until, "until", limit=64)
+    text = model.text_field(until, "until", limit=deferral.UNTIL_LIMIT)
     if deferral.until(text, leases.utc_now()) is not None:
         return
     try:

@@ -103,7 +103,7 @@ def _resources(routing: PlanningRouting) -> list[dict]:
 def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
     if set(parameters) - {"q", "limit"} or "q" not in parameters:
         raise api.PlanningHttpError(400, "invalid_request", "search requires q and optional limit")
-    query = model.text_field(_one(parameters, "q"), "query", limit=200)
+    query = model.text_field(_one(parameters, "q"), "query", limit=service.MAX_QUERY)
     limit = _limit(parameters, 50, SEARCH_CEILING)
     items: list[dict] = []
     coverage: list[dict] = []

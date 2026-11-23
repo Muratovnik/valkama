@@ -1784,7 +1784,7 @@ class AskingSessionsTests(WireCallTestCase):
         ]
         schema = tool["inputSchema"]["properties"]["addressees"]
         self.assertEqual(
-            ("array", 1, 5, {"type": "string"}),
+            ("array", 1, 5, {"type": "string", "maxLength": 128}),
             (schema["type"], schema["minItems"], schema["maxItems"], schema["items"]),
         )
         for said in (
@@ -2653,6 +2653,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
                 "properties": {
                     "id": {
                         "type": "string",
+                        "maxLength": 64,
                         "description": "A work item, by its reference (MAIN-142) or its"
                         " work_item_id.",
                     },
