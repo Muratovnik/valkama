@@ -31,7 +31,8 @@
  * tag, and shares that width among the segments by `--segmented-option-grow`.
  *
  * A row that may be wider than what holds it, as a settings row's choice (`SettingsRow`'s
- * `wide`), or the periods of a page's bar (`PeriodBar`), says so (`wrap`): it stays one line
+ * `wide`), Settings' sections, or the periods of a page's bar (`PeriodBar`), says so (`wrap`):
+ * it stays one line
  * where that line holds it, and where it does not its segments stand in columns of one width,
  * as wide as what holds it, on the fewest lines the room allows, a line short of the others
  * only the last (`segmentColumns`). Each host used to state the wrap and only some the sharing:

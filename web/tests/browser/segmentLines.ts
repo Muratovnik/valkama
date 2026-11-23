@@ -15,7 +15,10 @@ export interface SegmentLines {
   start: number
 }
 
-/** The rows the selectors name, each a radio group; a row not drawn has no lines. */
+/**
+ * The rows the selectors name, each a radio group or a tab list, its segments its radios or its
+ * tabs; a row not drawn has no lines.
+ */
 export function segmentLines(page: Page, tracks: readonly string[]): Promise<SegmentLines[]> {
   return page.evaluate(
     (selectors) =>
@@ -25,7 +28,7 @@ export function segmentLines(page: Page, tracks: readonly string[]): Promise<Seg
         const style = getComputedStyle(track)
         const box = track.getBoundingClientRect()
         const lines = new Map<number, [number, number][]>()
-        for (const segment of track.querySelectorAll('[role="radio"]')) {
+        for (const segment of track.querySelectorAll('[role="radio"], [role="tab"]')) {
           const { left, right, top } = segment.getBoundingClientRect()
           lines.set(Math.round(top), [...(lines.get(Math.round(top)) ?? []), [left, right]])
         }

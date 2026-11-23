@@ -7,6 +7,7 @@ import { installAlerts, READINESS_CASES } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
 import { frames } from './frames.ts'
 import { spaceScope } from './planningFixtures.ts'
+import { missesOf, segmentLines } from './segmentLines.ts'
 import { test } from './test.ts'
 
 /**
@@ -280,4 +281,50 @@ for (const width of WIDTHS)
       },
     ]
     for (const { what, toggle, column } of cases) await expectFoldOnEdge(page, toggle, column, what)
+  })
+
+const SECTIONS = { en: 'Settings section', ru: 'Раздел настроек' } as const
+
+/**
+ * Settings' section tabs are a row of segments that may wrap (DESIGN.md, Segmented choice): where
+ * one line cannot hold them they stand in columns of one width, every line but the last full and
+ * each tab under the one at its place on the first line. Wrapped by a style of their own, each
+ * line kept its tabs' own widths: General and Participation stood over a Diagnostics that ended
+ * at neither of their edges from 360 to 430px. The widths go down and back up, so the row is laid
+ * out again from either side, and at 1280px it stands on one line.
+ */
+for (const locale of ['en', 'ru'] as const)
+  test(`the section tabs line their lines up at every width in ${locale}`, async ({ page }) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await installBackend(page)
+    await openSettings(page, 360)
+    const track = `[role="tablist"][aria-label="${SECTIONS[locale]}"]`
+    await expect(page.locator(`${track} [role="tab"]`)).toHaveCount(3)
+    await page.evaluate(() => document.fonts.ready)
+    /** How many tabs each line holds. */
+    const lines = async () => {
+      const [tabs] = await segmentLines(page, [track])
+      return tabs?.lines.map((line) => line.length) ?? []
+    }
+    // The tabs do not fit one line of the narrowest phone: the case this is about.
+    await expect
+      .poll(async () => {
+        const shape = await lines()
+        return shape.length
+      })
+      .toBeGreaterThan(1)
+    for (const width of [360, 380, 390, 430, 480, 600, 768, 1024, 1280, 768, 430, 390, 360]) {
+      await page.setViewportSize({ width, height: 900 })
+      await expect
+        .poll(
+          async () => {
+            const [tabs] = await segmentLines(page, [track])
+            return tabs?.lines.flat().length === 3 ? missesOf(tabs) : ['the three tabs not drawn']
+          },
+          { message: `${locale} at ${width}px` },
+        )
+        .toEqual([])
+    }
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await expect.poll(lines).toEqual([3])
   })
