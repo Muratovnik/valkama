@@ -133,6 +133,14 @@ waiting for the heavy-test lock <file>: <who holds its CPUs, how many are free, 
 took the heavy-test lock after 41 s: 2 of 32 CPUs, the machine 31% busy, alone
 ```
 
+A command of its own goes through the gate as `python tests/machine_lock.py run
+--run <what it is> [--cpus N] -- <command>`. The gate finds the command's
+program on `PATH` before it waits, so a name it cannot find fails at once, and
+`npx` starts as the `npx.cmd` it is; Windows finds only an `.exe` by a bare
+name, and looks in its own directory before `PATH`. The Windows `timeout` is
+refused there, since it runs no command: a `timeout` found first on `PATH`, as
+Git's, is the one used.
+
 `tests/commit_subjects.py` reads the subject of every commit `HEAD` reaches,
 merges included. Twice an integration branch reached the merge into `main`
 carrying `merge: …` and Git's default merge subject, the release audit passed

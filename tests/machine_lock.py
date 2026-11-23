@@ -84,6 +84,7 @@ import getpass
 import json
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -720,7 +721,21 @@ def hold_until_exit(
     os.environ.update(marker(path))
 
 
+def _windows_timeout(program: Path) -> bool:
+    """Whether a program is Windows' own `timeout`, which a bare `timeout` finds first there."""
+
+    windows = os.environ.get("SYSTEMROOT")
+    if sys.platform != "win32" or not windows or program.stem.lower() != "timeout":
+        return False
+    return program.resolve().is_relative_to(Path(windows).resolve())
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run a command at the gate. Its program is found before the run waits for a place, so
+    a name the machine does not know, or the Windows `timeout`, fails at once rather than
+    after the wait; and a program found by an extension of `PATHEXT`, such as `npx.cmd`,
+    starts by its path, since Windows finds only an `.exe` by a bare name."""
+
     parser = argparse.ArgumentParser(
         description="Run a command holding a place at the heavy-test gate."
     )
@@ -750,6 +765,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("name the command to run after --")
     if options.cpus is not None and options.cpus < 1:
         parser.error("--cpus is a whole number from 1")
+    program = shutil.which(command[0])
+    if program is None:
+        _say(f"could not start {command[0]}: no such program")
+        return 127
+    if _windows_timeout(Path(program)):
+        parser.error(
+            f"{program} is the Windows timeout, which waits for a key and runs no command:"
+            " put the limit inside the command, as bash -c 'timeout 900 ...'"
+        )
+    command = [program, *command[1:]]
     with held(options.run, path=options.path, pid=options.pid, cpus=options.cpus):
         environment = {**os.environ, **marker(options.path)}
         try:
