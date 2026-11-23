@@ -52,6 +52,7 @@ const foldLabel = (state: WorkflowState) =>
       <span
         v-else
         class="lanes-state"
+        :data-column-track="state.state_id"
       >
         <span
           class="lanes-state-words"

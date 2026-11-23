@@ -15,7 +15,9 @@
  * A goal or a stage stands as a tile only while nobody has accepted it (`standsAsTile`);
  * after that it is a lane. A column of work put off starts folded to a strip of its name
  * and count (`useColumnFolds`), flat and over the lanes alike, and a press on the strip or
- * on the open column's head moves focus to the control that undoes it.
+ * on the open column's head brings that column in and moves focus to the control that undoes
+ * it. What a state's column stands in across — the open column, the strip, the head over the
+ * lanes — carries `data-column-track` with the state's id.
  */
 import { computed, nextTick, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -50,7 +52,7 @@ import type {
   WorkflowState,
   WorkItemBrief,
 } from '@/shared/api/planningModel.ts'
-import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+import { placeFocus, showAcross } from '@/shared/lib/scriptedFocus.ts'
 import { useStandingName, useStateName } from '@/shared/lib/useStateName.ts'
 
 const props = withDefaults(
@@ -167,12 +169,20 @@ const { columnWidth } = useColumnFit(
   () => folded.value.size,
 )
 
-/** Fold or open a column, and give focus to what undoes it. */
+/**
+ * Fold or open a column, bring it in, and give focus to what undoes it. The open columns share
+ * the width the strips leave, so a fold or an opening resizes the columns before it and moves
+ * it: at a phone's width the column just opened stood wholly past the board's end, and the
+ * strip just folded, on a board scrolled to that column, before its start. So its track, open
+ * or folded, comes in whole by its nearest edge (`showAcross`) before focus lands in it.
+ */
 function fold(state: WorkflowState) {
   folds.toggle(state)
-  void nextTick(() =>
-    placeFocus(root.value?.querySelector<HTMLElement>(`[data-column-fold="${state.state_id}"]`)),
-  )
+  void nextTick(() => {
+    const track = root.value?.querySelector(`[data-column-track="${state.state_id}"]`)
+    if (track) showAcross(track)
+    placeFocus(root.value?.querySelector<HTMLElement>(`[data-column-fold="${state.state_id}"]`))
+  })
 }
 
 const nameOf = useStateName()

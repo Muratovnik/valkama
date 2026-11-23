@@ -84,6 +84,7 @@ useIntersectionObserver(
 <template>
   <section
     class="work-item-column"
+    :data-column-track="props.state.state_id"
     :data-state="props.state.key"
     :data-category="props.state.category"
   >

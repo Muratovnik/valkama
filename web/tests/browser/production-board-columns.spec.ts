@@ -3,7 +3,8 @@
  * application, in English and in Russian, at a desk's width and a phone's.
  *
  * «Deferred» starts folded to a strip with its count and opens on a press, which at a phone's
- * width leaves the board where it stood while a walk with the arrows takes it across; a goal or stage
+ * width brings the opened column in by its nearest edge and focus to what folds it again, in
+ * sight with its ring, as folding it back brings the strip in; a goal or stage
  * stands as a tile only while it is not accepted, in «Triage» or «Deferred»; a tile that stands
  * ready and the queue would still not give is muted and says why with a sign and a word, the
  * whole sentence its name; a drag to another column moves the tile, a drop in its own moves
@@ -16,7 +17,7 @@ import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { boardRoute, cell, drag, lane, shot, tiles } from './boardPage.ts'
+import { boardRoute, cell, drag, lane, shot, sight, tiles } from './boardPage.ts'
 import { identity, now, planningReadModel } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
@@ -326,23 +327,78 @@ async function place(page: Page, state: string) {
   }, state)
 }
 
+/** Presses `control` with the pointer or, focused first, with Enter from the keyboard. */
+async function press(page: Page, control: ReturnType<Page['getByRole']>, how: 'pointer' | 'key') {
+  if (how === 'pointer') {
+    await control.click()
+    return
+  }
+  await control.focus()
+  await page.keyboard.press('Enter')
+}
+
 for (const locale of ['en', 'ru'] as const)
-  test(`opening Deferred at 390px leaves the board where it stood, its tiles in sight (${locale})`, async ({
+  for (const [width, along] of [
+    // By the nearest edge: a column past the frame's end stops at it; one in sight moves nothing.
+    [390, { end: 0 }],
+    [1280, { across: 0 }],
+  ] as const)
+    for (const how of ['pointer', 'key'] as const)
+      test(`opening Deferred brings its column in with focus on what folds it, its ring in sight (${locale}, ${width}px, ${how})`, async ({
+        page,
+      }) => {
+        await serve(page, locale, width)
+        await page.goto(boardRoute())
+        await expect(board(page).locator('.column-fold')).toHaveCount(1)
+        const before = await sight(board(page), 'deferred')
+        expect(before).toMatchObject({ across: 0, track: true })
+        await press(
+          page,
+          page.getByRole('button', { name: WORDS[locale].unfold, exact: true }),
+          how,
+        )
+        const fold = page.getByRole('button', { name: WORDS[locale].fold, exact: true })
+        await expect(fold).toBeFocused()
+        // In whole; a press draws no ring, a key does, and it is in sight.
+        expect(await sight(board(page), 'deferred')).toMatchObject({
+          track: true,
+          focus: true,
+          ring: how === 'key' || null,
+          ...along,
+        })
+      })
+
+for (const locale of ['en', 'ru'] as const)
+  test(`folding Deferred back on a board scrolled to it brings the strip in, focused (${locale}, 390px)`, async ({
     page,
   }) => {
     await serve(page, locale, 390)
     await page.goto(boardRoute())
-    await expect(board(page).locator('.column-fold')).toHaveCount(1)
-    const before = await place(page, 'triage')
-    expect(before.shown.length).toBeGreaterThan(0)
-    expect(before).toEqual({ across: 0, shown: before.shown.map(() => true), focused: null })
     await page.getByRole('button', { name: WORDS[locale].unfold, exact: true }).click()
-    // Focus goes to what folds it again, and the board does not slide to show it.
-    await expect(page.getByRole('button', { name: WORDS[locale].fold, exact: true })).toBeFocused()
-    await expect.poll(() => place(page, 'triage')).toEqual(before)
+    const fold = page.getByRole('button', { name: WORDS[locale].fold, exact: true })
+    await expect(fold).toBeFocused()
+    // The reader stands the board at the open column's start, as a swipe to it leaves it.
+    await board(page).evaluate((node) => {
+      const column = node.querySelector('.work-item-column[data-state="deferred"]')
+      if (column)
+        node.scrollLeft +=
+          column.getBoundingClientRect().left - node.getBoundingClientRect().left - node.clientLeft
+    })
+    const swiped = await sight(board(page), 'deferred')
+    expect(swiped.track).toBe(true)
+    expect(swiped.across).toBeGreaterThan(0)
+    await page.keyboard.press('Enter')
+    await expect(
+      page.getByRole('button', { name: WORDS[locale].unfold, exact: true }),
+    ).toBeFocused()
+    expect(await sight(board(page), 'deferred')).toMatchObject({
+      track: true,
+      focus: true,
+      ring: true,
+    })
   })
 
-// The control for the case above: a walk the reader makes does take the board across.
+// The arrows take the board across too: a walk to a column past its edge brings it in.
 test('a walk across to a column past the edge of the board brings it in (390px)', async ({
   page,
 }) => {
