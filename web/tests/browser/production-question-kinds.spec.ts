@@ -6,12 +6,15 @@
  * away says so; and the tabs over the list show one kind's questions, drop a kind with none, give
  * way to «All» when the open kind empties, and are what «Question N of M» counts. A task in a goal shows its goal and the goal's conditions, the goal
  * read by the reference the task's card names it by, at a phone's width in both languages too.
+ * Every kind's answers stand inside its record at the row's end, in both languages, wrapping
+ * inside the row where they are wider than its line.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { everyKind, ofPurpose, openKinds } from './questionKindsPage.ts'
+import { expectInside } from './requestRow.ts'
 import { held } from './served/preview.ts'
 import { briefAnswer, itemAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
@@ -215,6 +218,52 @@ for (const width of WIDTHS) {
     await expect(place).toHaveText('Question 1 of 2')
   })
 }
+
+/** A task an agent moves into a goal: its four answers are the widest row a kind has. */
+const movedIn = () =>
+  ofPurpose('task', {
+    prompt: 'The moved-in question',
+    prompt_message: {
+      key: 'task_moved_in',
+      values: { reference: 'MAIN-12', goal: 'MAIN-3', title: 'Export it' },
+    },
+  })
+
+/** The record's answers inside its row, the last of them ending it. */
+async function endsRow(record: Locator, what: string) {
+  const row = record.locator('.request-actions')
+  await expectInside(row, what)
+  const [rowBox, last] = await Promise.all([
+    row.boundingBox(),
+    record.locator('.request-pair').getByRole('button').last().boundingBox(),
+  ])
+  if (!rowBox || !last) throw new Error(`${what}: the row or its last answer is not drawn`)
+  expect(Math.abs(last.x + last.width - (rowBox.x + rowBox.width)), what).toBeLessThanOrEqual(1)
+}
+
+for (const locale of ['ru', 'en'] as const)
+  for (const width of WIDTHS)
+    test(`at ${width}px in ${locale} every kind's answers stand inside its record, at the row's end`, async ({
+      page,
+    }) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      const entries = [...everyKind(), movedIn()]
+      const { dialog } = await openKinds(page, entries, width)
+      const records = dialog.locator('.request-card')
+      await expect(records).toHaveCount(entries.length)
+      for (let at = 0; at < entries.length; at += 1) {
+        const record = records.nth(at)
+        await record.scrollIntoViewIfNeeded()
+        await endsRow(record, `${locale} ${width}px, record ${at + 1}`)
+      }
+      // The last answer asks first, and the row keeps its boxes while it asks.
+      const moved = records.filter({
+        hasText: /(?:moves this task into|переносит эту задачу в) MAIN-3/u,
+      })
+      await moved.getByRole('button', { name: /^(?:Не делать|Don’t do)$/u }).click()
+      await expect(moved.getByRole('alert')).toBeVisible()
+      await endsRow(moved, `${locale} ${width}px, asking`)
+    })
 
 test('a list of one kind offers no tabs: All would be that kind again', async ({ page }) => {
   const { dialog, record } = await openKinds(page, [ofPurpose(null), ofPurpose(null)], 1280)

@@ -196,6 +196,16 @@ describe('the answers of a kind', () => {
   })
 })
 
+describe('the words of a task an agent moves into a goal', () => {
+  it('leave it where it was, the clause set off by commas in Russian', () => {
+    // «где была» is a subordinate clause, which Russian punctuation sets off with a comma.
+    expect([
+      messages.en.requests.kinds.answers.stay,
+      messages.ru.requests.kinds.answers.stay,
+    ]).toEqual(['Leave it where it was', 'Оставить, где была'])
+  })
+})
+
 describe('the words of a confirmation', () => {
   it('leave the goal open in both of the server’s cases, in both languages', () => {
     // The server answers `leave` by handing the goal to the next session, or, with nothing under

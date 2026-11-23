@@ -244,6 +244,42 @@ function expectOneLineWhereItFits(measured: Row, asking: number, what: string) {
 }
 
 /**
+ * A question's row of answers stands inside its record, whole: the row is no wider than the
+ * question's foot, every button stands inside the record's frame, and none cuts its words to keep
+ * a line. Measured against the frame, not the row, since a row that cannot wrap widens itself
+ * past the foot with what it holds: at 390px in Russian the four answers of a task an agent moves
+ * into a goal ran 121px past the record, «Не делать» out of the window.
+ */
+export async function expectInside(row: Locator, what: string) {
+  const { cut, foot, frame, members, rowRight } = await row.evaluate((node) => {
+    const box = (element: Element | null) => {
+      const { left, right } = (element ?? node).getBoundingClientRect()
+      return { left, right }
+    }
+    const shown = [...node.querySelectorAll<HTMLElement>('button')].filter(
+      (button) => button.getClientRects().length > 0,
+    )
+    return {
+      cut: shown
+        .filter((button) => button.scrollWidth > button.clientWidth + 0.5)
+        .map((button) => (button.textContent ?? '').trim()),
+      foot: box(node.closest('.request-foot')),
+      frame: box(node.closest('.request-card')),
+      members: shown.map((button) => ({ ...box(button), name: (button.textContent ?? '').trim() })),
+      rowRight: box(node).right,
+    }
+  })
+  expect(rowRight - foot.right, `${what}: the row is no wider than the foot`).toBeLessThanOrEqual(
+    0.5,
+  )
+  for (const { left, name, right } of members) {
+    expect(right - frame.right, `${what}: ${name} ends inside the record`).toBeLessThanOrEqual(0.5)
+    expect(frame.left - left, `${what}: ${name} starts inside the record`).toBeLessThanOrEqual(0.5)
+  }
+  expect(cut, `${what}: no button cuts its words`).toEqual([])
+}
+
+/**
  * The rules of the row, every one: no empty band, the pair at the end and what comes before it
  * at the start, one line where it all fits. A row that declines nothing (`declinable` false, a
  * list under a comment) also keeps no place for the asking.
