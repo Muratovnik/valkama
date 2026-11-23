@@ -130,8 +130,9 @@ const { filtersRefused, refuse, reportRefused } = useRefusal(() => view.value)
 /**
  * Writes a change of the view into its address; false, with nothing written, if it does not fit.
  * A section opened — from the rail or a card's heading — a narrowing and the side panel opened or
- * closed are new places Back returns from (`push`); the period, the measure, the filters and the second dimension change
- * the place in hand (`replace`). Each caller names which, so none falls to a default.
+ * closed are new places Back returns from (`push`); the period, the measure, the filters and the
+ * second dimension change the place in hand (`replace`). Each caller names which, so none falls
+ * to a default.
  */
 function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace'): boolean {
   const changed = { ...view.value, ...next }
@@ -150,24 +151,15 @@ function narrowToPeriod(span: OwnPeriod, label: string, framed = false) {
   refuse('days', t('analytics.drill.full', { value: label }))
 }
 
-/** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
 /** What the context strip narrows every read of the page to; the quota is an account's and is not. */
 const scope = () => ({ space: props.space, projectId: props.projectId })
+/** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
 const shared = provideSharedUsage({ view: () => view.value, scope })
 /** What the page's colours are ranked over: the period without its filters (`useColourPlaces`). */
-const places = provideColourPlaces({
-  shared,
-  view: () => view.value,
-  scope,
-})
+const places = provideColourPlaces({ shared, view: () => view.value, scope })
 /** The page's one status region for its read waits: it says the word while any of them shows. */
 const { shown: readWaitShown } = provideReadWaits()
-const read = useUsageRead({
-  places,
-  shared,
-  view: () => view.value,
-  scope,
-})
+const read = useUsageRead({ places, shared, view: () => view.value, scope })
 
 const today = computed(() => localDay(read.askedAt.value))
 

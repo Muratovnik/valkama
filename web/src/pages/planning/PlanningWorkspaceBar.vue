@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { CensusExclusion } from '@/pages/planning/composables/usePlanningCensus.ts'
 import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import { useWorkBarLine } from '@/pages/planning/composables/useWorkBarLine.ts'
 import PlanningClosedDays from '@/pages/planning/PlanningClosedDays.vue'
 import PlanningViewMenu from '@/pages/planning/PlanningViewMenu.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
@@ -120,46 +121,15 @@ const countsBusy = computed(() => (props.busy || props.reading ? true : undefine
 /** The held condition's count, which a space still being read does not have. */
 const heldCount = computed(() => (props.reading ? null : props.counts.held))
 
-/** «319 открытых из 1267», or what the filter let through of the open work. */
-const countsText = computed(() => {
-  const { matchedOpen, open, total } = props.counts
-  return props.filtered
-    ? t('workItem.filter.matched', { matched: matchedOpen, open }, open)
-    : t('workItem.filter.open', { open, total }, open)
-})
-/**
- * Named apart as not this space's work, «и 3 из других пространств»: a fact of its own, so the
- * line breaks before it where both do not fit. Held to the count in one fact, the line ran
- * 15px past a phone's screen and its end was cut.
- */
-const elsewhereText = computed(() =>
-  props.counts.elsewhere ? t('workItem.filter.elsewhere', { count: props.counts.elsewhere }) : '',
-)
+/** The facts of the line under the row (`useWorkBarLine`). */
+const {
+  closed: closedText,
+  counts: countsText,
+  elsewhere: elsewhereText,
+  rows: rowsText,
+} = useWorkBarLine(() => props)
 /** The space the line breaks at between two facts with no separator; markup drops a bare one. */
 const BETWEEN = ' '
-/**
- * The closed items a filter let through, said only when it let through no open
- * one: beside open matches they are the views' own extra items and the line
- * does not carry them.
- */
-const closedText = computed(() => {
-  const closed = props.counts.matchedClosed
-  return props.filtered && props.counts.matchedOpen === 0 && closed
-    ? t('workItem.filter.closedToo', { closed }, closed)
-    : ''
-})
-/**
- * The goals the grouped board draws as rows, counted by the census exclusion the
- * counts already use: the board's columns do not hold them.
- */
-const rowsText = computed(() => {
-  const left = props.exclusion
-  // Only a board in lanes by goal or by stage draws its containers as rows.
-  const lanes = props.grouping === 'goal' || props.grouping === 'stage'
-  return lanes && left?.kind === 'lane-heads'
-    ? t('workItem.countsExclude.laneHeads', { goals: left.count }, left.count)
-    : ''
-})
 
 /** The filter on the shared field and chips (`useWorkFilter`). */
 const work = useWorkFilter({
