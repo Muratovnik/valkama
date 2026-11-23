@@ -11,8 +11,11 @@ const OWN_RULE = `.trimmed-word {
   overflow: clip visible;
 }`
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanTrimmedWords(collectVueSources())
+
 test('the tree as it stands trims in one rule only', () => {
-  assert.deepEqual(scanTrimmedWords(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
 })
 
 test('a component that trims a word of its own is refused, however it spells the trim', () => {

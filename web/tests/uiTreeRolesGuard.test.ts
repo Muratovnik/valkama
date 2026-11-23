@@ -79,6 +79,9 @@ test('the owner writes them, a binding of its attributes and a comment pass', ()
   )
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanTreeRoles(collectVueSources())
+
 test('the tree writes the tree roles in their owner alone', () => {
-  assert.deepEqual(scanTreeRoles(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
 })

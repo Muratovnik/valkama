@@ -40,6 +40,9 @@ test('the import, a comment or another directive passes', () => {
     assert.deepEqual(scanTooltipImports([component('', template)]), [], template)
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanTooltipImports(collectVueSources())
+
 test('every template of the product tree that writes v-tooltip imports it', () => {
-  assert.deepEqual(scanTooltipImports(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
 })

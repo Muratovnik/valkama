@@ -26,7 +26,9 @@ const KNOWN = [
   'shared/lib/uiSystem.ts',
 ]
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const files = new Map(collectVueSources().map(({ file, source }) => [file, source]))
+
 test('the product-tree walk reads the product', () => {
-  const files = new Map(collectVueSources().map(({ file, source }) => [file, source]))
   for (const file of KNOWN) assert.ok(files.get(file)?.trim(), `${file} is read and not empty`)
 })

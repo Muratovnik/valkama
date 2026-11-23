@@ -80,7 +80,10 @@ test('a name and a clipped hint pass; a detail passes only from the register', (
   )
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanTooltipKinds(collectVueSources())
+
 test('every detail of the product tree says why its words are not on the screen', () => {
-  assert.deepEqual(scanTooltipKinds(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
   for (const [what, why] of DETAIL_TOOLTIPS) assert.ok(why.trim().length > 10, what)
 })

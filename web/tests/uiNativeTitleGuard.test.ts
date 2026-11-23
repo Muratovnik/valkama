@@ -89,6 +89,9 @@ test('a registered exception passes with its reason, and one that is gone is ref
   ])
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanNativeTitles(collectVueSources())
+
 test('the product tree gives no element a native title', () => {
-  assert.deepEqual(scanNativeTitles(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
 })

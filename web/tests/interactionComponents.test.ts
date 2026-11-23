@@ -51,17 +51,17 @@ const sets = (name: string, value: string) => new RegExp(`\\s:?${name}\\s*=\\s*"
 const union = (code: string, prop: string) =>
   new RegExp(`\\b${prop}\\?:\\s*([^\\n;]+)`).exec(code)?.[1].match(/'[\w-]+'/g) ?? []
 
+/** The product's files that render Vue Flow, read as the file loads (`collectVueSources`). */
+const flowRenderers = collectVueSources()
+  .filter(({ file, source }) => renders('VueFlow').test(uncommented(file, source)))
+  .map(({ file }) => file)
+
 test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-editable', () => {
   // A pointer lights nothing: hovering a card dims no other card.
   assert.doesNotMatch(graph, /@node-enter|@node-leave|pointer-enter/)
   assert.doesNotMatch(graphField, /node-mouse-enter|node-mouse-leave/)
   // Vue Flow is configured in one place, the field, and nowhere else in the product.
-  assert.deepEqual(
-    collectVueSources()
-      .filter(({ file, source }) => renders('VueFlow').test(uncommented(file, source)))
-      .map(({ file }) => file),
-    ['widgets/work-item-graph/components/GraphField.vue'],
-  )
+  assert.deepEqual(flowRenderers, ['widgets/work-item-graph/components/GraphField.vue'])
   // The camera controls are Vue Flow's, and find the field's camera by the id the field has.
   assert.match(graphControls, renders('ControlButton'))
   const flowId = /useVueFlow\(\s*\{\s*id:\s*([\w.]+)\s*\}/.exec(graphControls)?.[1]

@@ -57,7 +57,10 @@ test('a registered read passes, and a registered one that is gone is refused', (
   ])
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanStateNames(collectVueSources())
+
 test('the product tree prints no state name but through the function, and its register is exact', () => {
-  assert.deepEqual(scanStateNames(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
   for (const reason of STATE_NAME_READS.values()) assert.ok(reason.length > 20)
 })

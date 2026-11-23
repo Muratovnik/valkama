@@ -123,6 +123,9 @@ test('the token, an outline for no focus state, an offset and a comment are not 
   assert.deepEqual(scanFocusRingWidths(scripts), [])
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanFocusRingWidths(collectVueSources())
+
 test('every focus ring in the tree takes its width from the token', () => {
-  assert.deepEqual(scanFocusRingWidths(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
 })

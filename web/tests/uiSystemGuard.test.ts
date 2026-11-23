@@ -9,8 +9,7 @@ import { test } from 'vitest'
 import { scanUiTree } from '../scripts/check-ui-system.mjs'
 import { scanBorderBudget, scanControlSizes, scanHiddenRules } from '../scripts/ui-system/lines.mjs'
 import { SEMANTIC_TONES } from '../scripts/ui-system/semantic-colors.mjs'
-import { collectVueSources } from '../scripts/ui-system/sources.mjs'
-import { FILL_BUDGET, scanMeaningFills } from '../scripts/ui-system/styles.mjs'
+import { scanMeaningFills } from '../scripts/ui-system/styles.mjs'
 
 /** One file with one style block, which is what most of these fixtures are. */
 const styled = (name: string, css: string) => ({
@@ -240,15 +239,6 @@ test('a meaning colour that fills an area is a recorded exception, exactly', () 
     ),
   ]
   assert.deepEqual(scanMeaningFills(marks, new Map()), [])
-})
-
-test('the product tree fills with a meaning colour only where the ledger says', () => {
-  // The product tree against the real ledger; the switch is not on it, so a
-  // switch painted a hue again fails here. The fill rule alone reads it in a
-  // few milliseconds, where every rule took over a second and ran out of time
-  // on a busy machine; the whole guard runs over the tree as its own gate step.
-  assert.equal(FILL_BUDGET.has('shared/ui/ToggleSwitch.vue'), false)
-  assert.deepEqual(scanMeaningFills(collectVueSources(), FILL_BUDGET), [])
 })
 
 test('a hairline drawn as a ground is counted as the line it is', () => {

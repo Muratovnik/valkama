@@ -38,8 +38,11 @@ const scan = (file: string, css: string, register?: ReadonlyMap<string, string>)
     register ?? new Map(),
   )
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanOneLineCopies(collectVueSources(), ONE_LINE_COPIES)
+
 test('the tree as it stands ends a line in an ellipsis through the shared rule only', () => {
-  assert.deepEqual(scanOneLineCopies(collectVueSources(), ONE_LINE_COPIES), [])
+  assert.deepEqual(productFindings, [])
 })
 
 test('a rule of its own that ends text in an ellipsis is refused, however it is written', () => {
