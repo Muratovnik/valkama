@@ -30,10 +30,17 @@ Each command below runs in `web/`:
   the whole file name when it begins another.
 - A probe spec kept outside the suite, such as in a worktree's ignored
   `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> npx playwright test
-  --config tests/browser/probe.config.ts`. Name the file `ui-…` or
-  `production-…` for the project it runs in; it imports `@playwright/test`, `@/`
-  and the suite's own `test` from `web/tests/browser/test.ts` as a spec does, so
-  it needs no configuration of its own.
+  --config tests/browser/probe.config.ts`. Name the file
+  `ui-<name>.spec.mts` or `production-<name>.spec.mts` for the project it runs
+  in. It imports `expect` and the types from `@playwright/test` and the app
+  through `@/` as a spec does, and the suite's own `test` and helpers by a path
+  relative to itself, such as `../../web/tests/browser/test.ts` from
+  `tmp/<name>/`, so it needs no configuration and no `package.json` of its own.
+  The `.mts` is what makes it an ES module, as every module of the suite is: a
+  `.spec.ts` there is a CommonJS script, and its first import of a suite module
+  the run has already loaded, through the configuration or the global setup,
+  fails. `web/tests/probeConfig.test.ts` lists such a probe through the
+  configuration.
 - The whole suite, or a batch of it: `npm run test:browser:allowed`, never
   Playwright handed a list of names. Playwright given no spec runs every spec
   its configuration selects, and the list of the whole suite does not fit a
