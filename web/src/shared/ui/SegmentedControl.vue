@@ -32,9 +32,11 @@
  *
  * A row that may be wider than what holds it, as a settings row's choice (`SettingsRow`'s
  * `wide`), says so (`wrap`): it stays one line where that line holds it, and where it does
- * not its segments wrap and share each line evenly, every line as wide as what holds it.
- * Each host used to state the wrap and only some the sharing: on a phone the scope choice of
- * Participation stood its two segments 135 and 110px wide on lines of 240.
+ * not its segments stand in columns of one width, as wide as what holds it, and only as many
+ * as fill every line, or else in one column (`segmentColumns`). Each host used to state the
+ * wrap and only some the sharing: on a phone the scope choice of Participation stood its two
+ * segments 135 and 110px wide on lines of 240. Each line then shared its own room, and the
+ * set's four broke their two lines 17px apart.
  *
  * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
  * lays its bar out by the row's whole width, as the Analytics periods, reads that width. A row
@@ -47,9 +49,10 @@
  * to a line as fit — the Analytics figures, each the measure its charts show. The segment's
  * words are still its name, so a tile says in words whatever it draws.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { TabIds } from '@/shared/ui/tabIds.ts'
+import { useSegmentColumns } from '@/shared/ui/useSegmentColumns.ts'
 
 // The segment shape stays inline: naming it would have to be exported for the
 // generic component's own declaration, and an export nothing imports is dead
@@ -96,6 +99,18 @@ function select(option: { value: T; disabled?: boolean }) {
   if (option.disabled || isCurrent(option)) return
   emit('update:modelValue', option.value)
 }
+
+const track = ref<HTMLElement | null>(null)
+/** The columns of a wrapped row, or null while it stands on one line. */
+const columns = useSegmentColumns(
+  track,
+  () => props.wrap,
+  () => props.options.map((option) => option.label).join('\n'),
+)
+const columned = computed(() => columns.value !== null)
+const columnsStyle = computed(() =>
+  columns.value === null ? undefined : { '--segmented-columns': columns.value },
+)
 
 /** A tab list over a panel, or a radio group of values. */
 const groupRole = computed(() => (props.tabs ? 'tablist' : 'radiogroup'))
@@ -167,9 +182,11 @@ function move(event: KeyboardEvent) {
 
 <template>
   <div
+    ref="track"
     class="segmented"
     :role="groupRole"
-    :class="[`size-${size}`, { fit, wrap }]"
+    :class="[`size-${size}`, { fit, wrap, columns: columned }]"
+    :style="columnsStyle"
     :aria-label="label"
   >
     <button
@@ -206,6 +223,15 @@ function move(event: KeyboardEvent) {
    they shared. A control that wraps another control cannot size the inner one
    and stay the same height as its neighbours. */
 .segmented {
+  /* The pressed segment's weight, which a wrapped row's columns are measured in as well. */
+  --segmented-chosen-weight: 600;
+
+  /* The least room a wrapped row's column leaves on each side of its centred words. */
+  --segmented-column-padding: var(--space-3);
+
+  /* How many columns a wrapped row stands in; the row's own style says, once it is measured. */
+  --segmented-columns: 1;
+
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-half);
@@ -299,15 +325,32 @@ function move(event: KeyboardEvent) {
 }
 
 /* A row that may be wider than what holds it (`wrap`) wraps only where one line cannot hold
-   it, and each line's segments then share its width: a segment grows into the room its line
-   leaves, so a segment alone on a line is as wide as the line. On one line the track is as
-   wide as its segments and leaves none to share. */
+   it. On one line the track is as wide as its segments and leaves none to share. Until its
+   columns are worked out, as where nothing lays the page out, each wrapped line's segments
+   grow into the room it leaves. */
 .segmented.wrap {
   flex-wrap: wrap;
   max-inline-size: 100%;
 
   .segmented-option {
     flex-grow: 1;
+  }
+}
+
+/* Wrapped, the row stands in columns of one width (`useSegmentColumns`) across what holds it,
+   each centring its words. Each segment starts a pixel short of its column and grows back into
+   it, so the columns of a line never sum past the track's room in a rounding and send the last
+   of them to the next. */
+.segmented.wrap.columns {
+  inline-size: 100%;
+
+  .segmented-option {
+    flex: 1 1
+      calc(
+        (100% - (var(--segmented-columns) - 1) * var(--space-half)) / var(--segmented-columns) - 1px
+      );
+    min-width: 0;
+    padding-inline: calc(var(--segmented-column-padding));
   }
 }
 
@@ -322,7 +365,7 @@ function move(event: KeyboardEvent) {
 
 .segmented-option.active {
   color: var(--color-text);
-  font-weight: 600;
+  font-weight: var(--segmented-chosen-weight);
   background: var(--color-surface-active);
 
   /* A forced palette clears that ground and repaints the word, and the weight alone does

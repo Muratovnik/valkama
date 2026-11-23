@@ -306,13 +306,83 @@ for (const locale of ['en', 'ru'] as const)
         ).toBeLessThanOrEqual(1)
     })
 
+/** A wide choice as it stands: the room its track gives, and each line's segment edges. */
+interface ChoiceLines {
+  end: number
+  lines: [number, number][][]
+  start: number
+}
+
+/** The scope, the set and the launch place, each as it stands; a choice not drawn has no lines. */
+function choiceLines(page: Page): Promise<ChoiceLines[]> {
+  return page.evaluate(() =>
+    [
+      '.settings-row:has(.settings-scope-segments)',
+      '[data-participation-row="set"]',
+      '[data-participation-row="launch"]',
+    ].map((selector) => {
+      const track = document.querySelector(selector)?.querySelector('[role="radiogroup"]')
+      if (!track) return { end: 0, lines: [], start: 0 }
+      const style = getComputedStyle(track)
+      const box = track.getBoundingClientRect()
+      const lines = new Map<number, [number, number][]>()
+      for (const segment of track.querySelectorAll('[role="radio"]')) {
+        const { left, right, top } = segment.getBoundingClientRect()
+        lines.set(Math.round(top), [...(lines.get(Math.round(top)) ?? []), [left, right]])
+      }
+      return {
+        end: box.right - Number.parseFloat(style.paddingRight),
+        lines: [...lines.values()],
+        start: box.left + Number.parseFloat(style.paddingLeft),
+      }
+    }),
+  )
+}
+
+const near = (one: number | undefined, other: number | undefined) =>
+  one !== undefined && other !== undefined && Math.abs(one - other) <= 1
+
 /**
- * Where a wide choice cannot stand on one line, as on a phone, its segments wrap and share
- * each line evenly: every line's segments reach from the track's start to its end. Wrapped
- * with each segment at its own width, the scope's two stood 135 and 110px on lines of 240.
+ * Every way a wrapped choice's lines miss each other: a line that does not reach from the
+ * track's start to its end, or that holds another count of segments than the first, or a
+ * segment edge more than a pixel from the edge over or under it on the first line. A choice on
+ * one line misses nothing.
+ */
+function missesOf({ end, lines, start }: ChoiceLines): string[] {
+  const [first = []] = lines
+  if (lines.length < 2) return []
+  return lines.flatMap((line, at) => [
+    ...(near(line[0]?.[0], start) && near(line.at(-1)?.[1], end)
+      ? []
+      : [`line ${at} spans ${JSON.stringify(line)} of ${start}..${end}`]),
+    ...(line.length === first.length ? [] : [`line ${at} holds ${line.length} of ${first.length}`]),
+    ...line
+      .filter(
+        ([left, right], index) =>
+          !(near(left, first[index]?.[0]) && near(right, first[index]?.[1])),
+      )
+      .map((edges) => `line ${at} segment at ${edges.join('..')} misses the first line`),
+  ])
+}
+
+/** The misses of each choice, or the choices themselves while one is not drawn yet. */
+async function wrappedMisses(page: Page) {
+  const choices = await choiceLines(page)
+  return choices.every((choice) => choice.lines.length > 0)
+    ? choices.map((choice) => missesOf(choice))
+    : choices
+}
+
+/**
+ * Where a wide choice cannot stand on one line its segments wrap, and its lines line up: each
+ * reaches from the track's start to its end and breaks where the others do, or the segments
+ * stand one to a line. Wrapped with each segment at its own width, the scope's two stood 135 and
+ * 110px on lines of 240; each line then grown to the track, the set's four broke a phone's two
+ * lines 17px apart in English, and at 430px stood three over one. The widths go up and back down,
+ * so the row is laid out again from either side.
  */
 for (const locale of ['en', 'ru'] as const)
-  test(`a wide choice that wraps at 390px fills each of its lines in ${locale}`, async ({
+  test(`a wide choice that wraps lines its lines up at every width in ${locale}`, async ({
     page,
   }) => {
     await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -320,36 +390,40 @@ for (const locale of ['en', 'ru'] as const)
     await installParticipation(page)
     await open(page, 390)
     await expect(row(page, 'launch').getByRole('radio').first()).toBeVisible()
-    const choices = await page.evaluate(() =>
-      [
-        '.settings-row:has(.settings-scope-segments)',
-        '[data-participation-row="set"]',
-        '[data-participation-row="launch"]',
-      ].map((selector) => {
-        const track = document.querySelector(selector)?.querySelector('[role="radiogroup"]')
-        if (!track) return { lines: 0, ragged: [] }
-        const style = getComputedStyle(track)
-        const box = track.getBoundingClientRect()
-        const start = box.left + Number.parseFloat(style.paddingLeft)
-        const end = box.right - Number.parseFloat(style.paddingRight)
-        const lines = new Map<number, DOMRect[]>()
-        for (const segment of track.querySelectorAll('[role="radio"]')) {
-          const rect = segment.getBoundingClientRect()
-          lines.set(Math.round(rect.top), [...(lines.get(Math.round(rect.top)) ?? []), rect])
-        }
-        const ragged = [...lines.values()]
-          .map((line) => [line[0]?.left ?? Number.NaN, line.at(-1)?.right ?? Number.NaN])
-          .filter(
-            ([left = 0, right = 0]) => Math.abs(left - start) > 1 || Math.abs(right - end) > 1,
-          )
-        return { lines: lines.size, ragged }
-      }),
-    )
-    expect(choices.map((choice) => choice.lines)).not.toContain(0)
-    // The scope's two segments do not fit one line of a phone's row: the case this is about.
-    expect(choices[0]?.lines).toBeGreaterThan(1)
-    expect(choices.map((choice) => choice.ragged)).toEqual([[], [], []])
+    // The set does not fit one line of a phone's row: the case this is about.
+    const [, phoneSet] = await choiceLines(page)
+    expect(phoneSet?.lines.length).toBeGreaterThan(1)
+    for (const width of [390, 430, 480, 600, 768, 1024, 768, 600, 480, 430, 390]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await expect
+        .poll(() => wrappedMisses(page), { message: `${locale} at ${width}px` })
+        .toEqual([[], [], []])
+    }
   })
+
+/** Each of the set's segments chosen from the keyboard on a phone leaves its lines lined up. */
+test('each segment of a wrapped set chosen by the arrows keeps its lines lined up', async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
+  await installBackend(page)
+  await installParticipation(page)
+  await open(page, 390)
+  const set = row(page, 'set')
+  await expect(set.getByRole('radio')).toHaveCount(4)
+  await set.locator('[role="radio"][tabindex="0"]').focus()
+  const chosen = new Set<string>()
+  for (let pressed = 0; pressed < 4; pressed += 1) {
+    await page.keyboard.press('ArrowRight')
+    const focused = set.locator('[role="radio"]:focus-visible')
+    await expect(focused).toHaveAttribute('aria-checked', 'true')
+    chosen.add((await focused.textContent()) ?? '')
+    await expect.poll(() => wrappedMisses(page)).toEqual([[], [], []])
+    const [, phoneSet] = await choiceLines(page)
+    expect(phoneSet?.lines.length).toBeGreaterThan(1)
+  }
+  expect(chosen.size).toBe(4)
+})
 
 const ground = (place: Locator) => place.evaluate((one) => getComputedStyle(one).backgroundColor)
 
