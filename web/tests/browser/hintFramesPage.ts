@@ -79,17 +79,19 @@ export const watchHints = (page: Page) =>
  * What the page noted since the last call (`watchHints`), up to the next frame. A wait on the
  * document, such as a hint's count, ends as soon as the hint is added or removed, before the frame
  * that draws it; the next frame's own note comes first, as it asked for that frame before this did.
+ * Where the page's clock stands (`standClock`) no frame comes until the test runs the clock, and
+ * the frames it ran are already noted, so the read waits for none.
  */
 export const watched = (page: Page) =>
-  page.evaluate(async () => {
-    await new Promise((done) => requestAnimationFrame(done))
+  page.evaluate(async (frame) => {
+    if (frame) await new Promise((done) => requestAnimationFrame(done))
     const host = window as unknown as Watched
     return {
       arrivals: host.arrivals.splice(0),
       changes: host.changes.splice(0),
       frames: host.hintLog.splice(0),
     }
-  })
+  }, !stands(page))
 
 /** A point inside `within` where the pointer is on nothing that shows a hint or acts. */
 export const quietPoint = (within: Locator) =>
