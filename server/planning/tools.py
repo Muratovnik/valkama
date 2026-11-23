@@ -219,6 +219,83 @@ _WHY = {
     "description": "Markdown: why you recommend it, shown where the owner points at the"
     " recommendation. Give it whenever you recommend; taken only beside recommended.",
 }
+#: One field of a question to the owner or to agent sessions.
+_REQUEST_FIELD = {
+    "type": "object",
+    "properties": {
+        "id": _STR,
+        "label": _STR,
+        "type": {
+            "type": "string",
+            "enum": ["text", "choice", "multi_choice", "boolean", "verdict"],
+            "description": "verdict: one row of a review, a point the owner accepts, puts off or"
+            " rejects; its options is [] and its answer accept, later or reject.",
+        },
+        "required": _BOOL,
+        "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": request_model.MAX_OPTION_DESCRIPTION,
+            "description": "Markdown: what the field asks, or the point a verdict decides.",
+        },
+        "group": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "The section heading; the fields of one group stand together."
+            " A field under another leaves it out.",
+        },
+        "under": {
+            "type": "object",
+            "description": "Shown and answered only while the answer of an earlier verdict,"
+            " choice or multi_choice field holds option: accept, later or reject under a"
+            " verdict, an option id otherwise. One level. Put the steps or ways of a point"
+            " here, as one more entry of fields, never in a label or a description.",
+            "properties": {"field": _STR, "option": _STR},
+            "required": ["field", "option"],
+        },
+        "recommended": {
+            "type": "string",
+            "enum": list(request_model.VERDICTS),
+            "description": "On a verdict only: what the asker recommends. A choice or"
+            " multi_choice recommends on its options.",
+        },
+        "why": _WHY,
+        "options": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": _STR,
+                    "label": _STR,
+                    "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": request_model.MAX_OPTION_DESCRIPTION,
+                        "description": "Markdown: what choosing this option means or costs.",
+                    },
+                    "recommended": {
+                        "type": "boolean",
+                        "description": "The option the asker recommends. At most one in a"
+                        " choice field; any number in a multi_choice field.",
+                    },
+                    "why": _WHY,
+                },
+                "required": ["id", "label"],
+            },
+        },
+    },
+    "required": ["id", "label", "type", "required", "options"],
+}
+#: A question's fields, as create_work_item_request and a batch's questions take them.
+#: One schema for both: an agent shown a bare object guesses the keys and is refused.
+_REQUEST_FIELDS = {
+    "type": "array",
+    "minItems": 1,
+    "maxItems": request_model.MAX_FIELDS,
+    "items": _REQUEST_FIELD,
+}
 #: What got in the way of the work, kept apart from what the work did.
 _FRICTION = {
     "type": "string",
@@ -1180,7 +1257,7 @@ TOOLS = [
                     "properties": {
                         "kind": {"type": "string", "enum": ["question", "decision"]},
                         "prompt": _STR,
-                        "fields": {"type": "array", "items": {"type": "object"}},
+                        "fields": _REQUEST_FIELDS,
                         "execution_id": _STR,
                         "session_id": _STR,
                         "expires_at": _STR,
@@ -1300,74 +1377,6 @@ TOOLS = [
     ),
 ]
 
-_REQUEST_FIELD = {
-    "type": "object",
-    "properties": {
-        "id": _STR,
-        "label": _STR,
-        "type": {
-            "type": "string",
-            "enum": ["text", "choice", "multi_choice", "boolean", "verdict"],
-            "description": "verdict: one row of a review, a point the owner accepts, puts off or"
-            " rejects; its options is [] and its answer accept, later or reject.",
-        },
-        "required": _BOOL,
-        "description": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": request_model.MAX_OPTION_DESCRIPTION,
-            "description": "Markdown: what the field asks, or the point a verdict decides.",
-        },
-        "group": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "description": "The section heading; the fields of one group stand together."
-            " A field under another leaves it out.",
-        },
-        "under": {
-            "type": "object",
-            "description": "Shown and answered only while the answer of an earlier verdict,"
-            " choice or multi_choice field holds option: accept, later or reject under a"
-            " verdict, an option id otherwise. One level. Put the steps or ways of a point"
-            " here, as one more entry of fields, never in a label or a description.",
-            "properties": {"field": _STR, "option": _STR},
-            "required": ["field", "option"],
-        },
-        "recommended": {
-            "type": "string",
-            "enum": list(request_model.VERDICTS),
-            "description": "On a verdict only: what the asker recommends. A choice or"
-            " multi_choice recommends on its options.",
-        },
-        "why": _WHY,
-        "options": {
-            "type": "array",
-            "maxItems": 20,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "id": _STR,
-                    "label": _STR,
-                    "description": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": request_model.MAX_OPTION_DESCRIPTION,
-                        "description": "Markdown: what choosing this option means or costs.",
-                    },
-                    "recommended": {
-                        "type": "boolean",
-                        "description": "The option the asker recommends. At most one in a"
-                        " choice field; any number in a multi_choice field.",
-                    },
-                    "why": _WHY,
-                },
-                "required": ["id", "label"],
-            },
-        },
-    },
-    "required": ["id", "label", "type", "required", "options"],
-}
 TOOLS.extend(
     [
         _tool(
@@ -1388,12 +1397,7 @@ TOOLS.extend(
                 "id": WORK_ITEM_REFERENCE,
                 "kind": {"type": "string", "enum": ["question", "decision"]},
                 "prompt": _STR,
-                "fields": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": request_model.MAX_FIELDS,
-                    "items": _REQUEST_FIELD,
-                },
+                "fields": _REQUEST_FIELDS,
                 "author": _AUTHOR,
                 "execution_id": _STR,
                 "session_id": _STR,

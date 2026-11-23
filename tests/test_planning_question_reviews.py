@@ -967,6 +967,42 @@ class BatchAndSchemaTests(ReviewCase):
         self.assertEqual(["accept", "later", "reject"], field["properties"]["recommended"]["enum"])
         self.assertEqual(["field", "option"], field["properties"]["under"]["required"])
 
+    def test_a_batch_question_shows_the_fields_create_work_item_request_shows(self) -> None:
+        schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in tools.TOOLS}
+        batch = schemas["apply_work_item_changes"]["questions"]["items"]["properties"]
+        self.assertEqual(schemas["create_work_item_request"]["fields"], batch["fields"])
+
+    def test_a_batch_question_written_from_its_schema_alone_is_taken_at_once(self) -> None:
+        schema = {tool["name"]: tool for tool in tools.TOOLS}["apply_work_item_changes"]
+        question = schema["inputSchema"]["properties"]["questions"]["items"]
+        field = question["properties"]["fields"]["items"]
+        option = field["properties"]["options"]["items"]
+        # Only the keys the schema marks required, each of the type it names.
+        written = {
+            "id": "path",
+            "label": "Which path?",
+            "type": "choice",
+            "required": True,
+            "options": [{"id": "left", "label": "Left"}, {"id": "right", "label": "Right"}],
+        }
+        self.assertEqual(set(field["required"]), set(written))
+        self.assertIn(written["type"], field["properties"]["type"]["enum"])
+        self.assertEqual(set(option["required"]), set(written["options"][0]))
+        applied = mcp_surface.run_tool_call(
+            self.conn,
+            "apply_work_item_changes",
+            {
+                "id": self.reference,
+                "questions": [{"kind": "question", "prompt": "Which?", "fields": [written]}],
+            },
+        )
+        self.conn.commit()
+        assert isinstance(applied, dict)
+        [asked] = applied["applied"]["questions"]
+        [stored] = self.tool("get_work_item_request", id=asked["request_id"])["fields"]
+        self.assertEqual(("path", "choice"), (stored["id"], stored["type"]))
+        self.assertEqual(["left", "right"], [entry["id"] for entry in stored["options"]])
+
 
 if __name__ == "__main__":
     unittest.main()
