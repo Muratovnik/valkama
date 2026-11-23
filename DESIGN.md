@@ -974,7 +974,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   table's end. Sideways scroll is the last resort: only a table of figures whose
   least does not fit and that does not stack scrolls, at its second step, its
   names held at the frame's start. Analytics' tables take no third step: their owner chose a
-  second line and the sideways scroll for them. Stacked by a phone's width alone, Agent decisions left «What
+  second line and the sideways scroll for them. The tables of one section stand at one step and
+  on one set of columns: their names' column takes the width the widest of theirs takes there, and
+  the figures share the rest alike, so a column stands at one edge in each; laid out by its own
+  words, each of the two tables of the work outside goals in Volumes stood its categories up to
+  25px off the other's. Stacked by a phone's width alone, Agent decisions left «What
   was decided» past the frame at 1024 and 760; held to their widths, the goals
   of Volumes left «Left ≈» past it at 1280, under a scroll bar below the
   fold.
@@ -3026,9 +3030,17 @@ The reader's own days take a third row once chosen, which moves the panel down b
 scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past the edge, and a row
 held for the reader's own days under every other period stood as an empty band of 72px over the
 panel; the period bar of Agent decisions and Volumes is the same bar. On the narrowest phone, a
-window of about 375px or less, Analytics' freshness stands at the end of the periods' row instead,
-the periods wrapping in what it leaves: beside the filter, the freshness and the refresh, a failed
-refresh in Russian had room only for three lines there and ran 2px past the row's end. A refresh
+bar under 18rem in a window of about 380px or less, Analytics' freshness stands in the periods'
+row instead (`beside`): beside the filter, the freshness and the refresh, a failed refresh in
+Russian had room only for three lines there and ran 2px past the row's end. It stands in the cell
+the periods' short last line leaves, past «Custom», the periods keeping the whole row two over two
+over one; only where their count leaves no such cell does it take the row's end, the periods
+wrapping in what it leaves. Standing at that end whatever their count, it left them 182 to 206px,
+one column of five lines. In that cell the freshness never reads as a period: it is words, not a
+button; it takes no ground, edge or pressed state of its own, the track's ground under it being
+the periods'; it is in the muted detail ink, never a segment's; it sits on the last line's height,
+as far from the track's end as a period's words from its column's edge; and assistive technology
+reads it as the freshness, outside the choice, which holds the periods alone. A refresh
 that fails keeps what is shown and says so in words before the age at every width, «Could not
 refresh» with a retry: given up on a short line, its words had left a red disc with no hint. The
 retry is reached at every width too: where the line has no room for «· Retry», the words themselves
@@ -3455,8 +3467,12 @@ that stays, whatever rows the bar takes.
 Under the goals, the work outside goals: the scope's tasks under no goal, by project and by
 label, each row saying how many stand in each category, the count of them beside the heading.
 Where its columns do not fit the frame even at their least, a row is a block of its own (Rows and
-tables): its name across it, then its figures in columns alike in every block, each beside its
-category's name.
+tables): its name across it, then its figures above zero in columns alike in every block, each
+beside its category's name. A block's zeros are not drawn, and are still read with their
+categories, as the columns of the wide table keep and show theirs: drawn, a block was eight lines
+of mostly zeros, and the section ran the page six times longer on a phone. A row stands for tasks
+it counts, so a block draws one figure at least; a row with none would draw all its zeros rather
+than stand as a name alone.
 Then the flow: how many tasks came in and came to a close in the period, the owner's decisions
 and the commits, for the period and day by day, newest first, with the pace of the scope's tasks
 over them in the words of a chain's. Then the estimates: the done tasks they are judged by,

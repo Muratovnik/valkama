@@ -58,6 +58,7 @@ function selectSection(section: SettingsSection) {
         :options="sectionOptions"
         :label="t('settings.sectionLabel')"
         :tabs="tabs"
+        wrap
         @update:model-value="selectSection"
       />
     </header>
@@ -102,11 +103,5 @@ function selectSection(section: SettingsSection) {
 
 .settings-page-panel {
   min-width: 0;
-}
-
-.settings-page-sections {
-  flex-wrap: wrap;
-  min-width: 0;
-  max-width: 100%;
 }
 </style>
