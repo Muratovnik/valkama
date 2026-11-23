@@ -1766,7 +1766,12 @@ def file_part(conn: sqlite3.Connection, row: sqlite3.Row, part: Part, author: st
     )
     item_projects.replace(conn, identity, part.projects)
     if part.deferred is not None:
-        deferral.restore(conn, identity, part.deferred)
+        # A part has no comments yet, so its count starts from none: a baseline kept
+        # from the task's comments could outlast them, which a delete of the task takes.
+        kept = part.deferred
+        if kept.until_comments is not None:
+            kept = dataclasses.replace(kept, comments_after=0)
+        deferral.restore(conn, identity, kept)
     _log(conn, identity, "created", str(part.state["key"]), author)
     if part.basis is not None:
         _log(conn, identity, "accepted", part.basis, author)

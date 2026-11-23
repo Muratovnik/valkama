@@ -858,11 +858,43 @@ class SplittingTests(ConvertingTree):
         )
         p = str(self.split(AS_A, t, [])["reference"])
         self.assertEqual(("deferred", None), (self.category(p), self.basis(p)))
-        names = ("until", "until_item", "reason", "since")
+        names = ("until", "until_item", "until_comments", "reason", "since")
         self.assertEqual(
             {name: self.record(t)["deferred"][name] for name in names},
             {name: self.record(p)["deferred"][name] for name in names},
         )
+
+    def test_a_part_of_work_put_off_until_comments_counts_its_own_from_none(self) -> None:
+        t = self.made("t", parent=self.goal, steps=["u1"])
+        self.agent("apply_work_item_changes", AS_A, id=t, comment={"body": "before"})
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=t,
+            defer={"until": "2 comments", "reason": "after word"},
+        )
+        p = str(self.split(AS_A, t, [])["reference"])
+
+        def counted(reference: str) -> tuple:
+            return tuple(
+                self.conn.execute(
+                    "SELECT until_comments, comments_after, reached_at"
+                    " FROM work_item_deferrals WHERE work_item_id = ?",
+                    (self.identity(reference),),
+                ).fetchone()
+            )
+
+        # The task's baseline is its own newest comment; the part has none, so it counts
+        # from none.
+        self.assertEqual(2, counted(t)[0])
+        self.assertGreater(counted(t)[1], 0)
+        self.assertEqual((2, 0, None), counted(p))
+        self.agent("apply_work_item_changes", AS_A, id=p, comment={"body": "one"})
+        self.assertEqual((2, 0, None), counted(p))
+        self.agent("apply_work_item_changes", AS_A, id=p, comment={"body": "two"})
+        came = self.record(p)["deferred"]
+        self.assertTrue(came is None or came["reached_at"] is not None, came)
+        self.assertIsNone(counted(t)[2], "the task's own count is its own")
 
     def test_a_part_of_an_accepted_task_outside_an_accepted_chain_takes_its_basis(
         self,

@@ -450,26 +450,35 @@ class DeferralFieldTests(CardCase):
     def test_the_card_carries_when_it_comes_back_and_the_full_record_why(self) -> None:
         card = self.read()
         self.assertEqual(
-            {"until": "2099-01-01T00:00:00Z", "until_item": None, "reached_at": None},
+            {
+                "until": "2099-01-01T00:00:00Z",
+                "until_item": None,
+                "until_comments": None,
+                "reached_at": None,
+            },
             card["deferred"],
         )
         full = self.http()
         self.assertEqual(self.reason, full["deferred"]["reason"])
         self.assertEqual(HOLDER, full["deferred"]["by"]["session_id"])
         self.assertEqual(
-            {"until", "until_item", "reason", "since", "by", "reached_at"}, set(full["deferred"])
+            {"until", "until_item", "until_comments", "reason", "since", "by", "reached_at"},
+            set(full["deferred"]),
         )
         placed = set(read_model.CARD_FIELDS) | set(read_model.PARTS) | set(read_model.OFF_CARD)
         self.assertEqual(set(), set(self.http(sessions="true")) - placed)
-        # A moment, or a reference in its place, and the moment it came: the reason,
-        # however long, stays off the card.
+        # A moment and a count, or a reference in their place, and the moment it came:
+        # the reason, however long, stays off the card.
         widest = {
             "until": "2099-01-01T00:00:00Z",
             "until_item": None,
+            "until_comments": 999,
             "reached_at": "2099-01-01T00:00:00Z",
         }
         self.assertLessEqual(len(compact(card["deferred"])), len(compact(widest)))
-        self.assertLessEqual(len(compact(widest)), 90)
+        # 90 characters for the moment and the reference, and the count's key and three
+        # figures beside them.
+        self.assertLessEqual(len(compact(widest)), 110)
 
     def test_an_item_that_came_back_carries_why_until_it_moves(self) -> None:
         waited = self.item("Waited on")
