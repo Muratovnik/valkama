@@ -22,6 +22,10 @@ import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
  * whole or not at all. Playwright runs with `clipboardOptIn` set when `--with-clipboard` names
  * a spec, and without it otherwise.
  *
+ * The same run ends with the tests that bound a time (`timedChecks.ts`), the listed specs' and
+ * no others, after every other test has ended and one at a time, in the project `timed`; the
+ * run fails when a test of either part does, and the timed ones run whatever the rest ended in.
+ *
  * A run holds the machine's heavy-test lock, `tests/machine_lock.py`, for as long as Playwright
  * runs, asking for the whole machine, so any other heavy run of any checkout waits for it and
  * says whose run it waits for. A run under `--list` runs no test, and takes no lock.

@@ -11,7 +11,8 @@
  * thread that long fails. The bound is on that thread's own processor time, as DevTools reads it,
  * not on the wall: a machine busy with other work stretched the wall time past 500ms for a screen
  * that took under 200ms alone, and it stretches what the thread spent far less, since it only
- * slows the thread while it runs. The wall time is attached beside it.
+ * slows the thread while it runs. The wall time is attached beside it. It is a timed test
+ * (`timedChecks.ts`): it runs after the rest of the run, alone.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -139,27 +140,29 @@ async function openBlocks(
   return { ...opened, waiting }
 }
 
-test('at 1280px the first screen of a hundred blocks comes before the wait would show', async ({
-  page,
-}, testInfo) => {
-  await timeFirstScreen(page)
-  let cost = Number.NaN
-  await openBlocks(page, blocks(100), {
-    width: 1280,
-    locale: 'en',
-    press: async (rail) => {
-      cost = await pressForFirstScreen(page, rail)
-    },
-  })
-  const marks = await page.evaluate(
-    () => (window as unknown as { firstScreenMarks: Record<string, number> }).firstScreenMarks,
-  )
-  const ms = (at = 0) => Math.round(at - (marks.press ?? 0))
-  const body = `main thread's processor time, press to the frame after the first block: ${cost} ms; on the wall, press to the first block in the document: ${ms(marks.inDocument)} ms, to the frame after it: ${ms(marks.onScreen)} ms`
-  await testInfo.attach('first-screen', { body, contentType: 'text/plain' })
-  console.log(`first screen of 100 blocks at 1280px: ${body}`)
-  expect(cost).toBeLessThan(500)
-})
+test(
+  'at 1280px the first screen of a hundred blocks comes before the wait would show',
+  { tag: '@timed' },
+  async ({ page }, testInfo) => {
+    await timeFirstScreen(page)
+    let cost = Number.NaN
+    await openBlocks(page, blocks(100), {
+      width: 1280,
+      locale: 'en',
+      press: async (rail) => {
+        cost = await pressForFirstScreen(page, rail)
+      },
+    })
+    const marks = await page.evaluate(
+      () => (window as unknown as { firstScreenMarks: Record<string, number> }).firstScreenMarks,
+    )
+    const ms = (at = 0) => Math.round(at - (marks.press ?? 0))
+    const body = `main thread's processor time, press to the frame after the first block: ${cost} ms; on the wall, press to the first block in the document: ${ms(marks.inDocument)} ms, to the frame after it: ${ms(marks.onScreen)} ms`
+    await testInfo.attach('first-screen', { body, contentType: 'text/plain' })
+    console.log(`first screen of 100 blocks at 1280px: ${body}`)
+    expect(cost).toBeLessThan(500)
+  },
+)
 
 for (const { width, locale } of CASES) {
   const words = WORDS[locale]
