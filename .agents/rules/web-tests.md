@@ -49,7 +49,12 @@ A check that can fail:
   timers), which only the test moves, and a cost on the processor time of the
   thread that pays it (DevTools' `ThreadTime` for the page's main thread), which
   leaves out the time the thread waits for a processor. The wall clock counts
-  whatever else the machine runs. A guard over source files reads and scans them
+  whatever else the machine runs. A browser test whose bound other work still
+  moves, a processor time or a wall time, carries the tag `timedTag`
+  (`web/tests/browser/timedChecks.ts`), so it runs after the rest of the run and
+  alone; a bound on the page's clock needs none. No call of the test's own lands
+  inside the window it measures: a kept trace snapshots the page for each one, on
+  the thread being measured. A guard over source files reads and scans them
   as its file loads, not in a test's body, where the test's timeout counts the
   wall.
 
