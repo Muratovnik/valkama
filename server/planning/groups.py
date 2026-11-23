@@ -158,7 +158,7 @@ def _read(raw: Mapping[str, object]) -> tuple[Group, list[str]]:
         if answer == request_model.RETURN_LATER:
             wrong.append("later needs until")
     elif not isinstance(until, str):
-        wrong.append("until is a day YYYY-MM-DD or an item's reference")
+        wrong.append(f"until is {deferral.FORMS}")
     elif answer != request_model.RETURN_LATER:
         wrong.append("until goes with later alone")
     named = until if isinstance(until, str) and until else None
@@ -272,15 +272,19 @@ def _not_waiting(
 
 
 def _check_until(conn: sqlite3.Connection, until: str) -> None:
-    """Refuse an `until` that names no day, time or work item, as putting off reads it."""
+    """Refuse an `until` that putting off would refuse: no form `deferral.until` reads, and
+    no item's reference."""
 
     text = model.text_field(until, "until", limit=64)
-    if deferral.moment(text, leases.utc_now()) is not None:
+    if deferral.until(text, leases.utc_now()) is not None:
         return
     try:
         read_model.item_row(conn, text)
     except model.PlanningError as error:
-        raise model.PlanningError(f"{_FORM}: until {text} is no day, time or work item") from error
+        raise model.PlanningError(
+            f"{_FORM}: until {text} is no day, time, count of comments or work item:"
+            f" send {deferral.FORMS}"
+        ) from error
 
 
 def _decides(
@@ -514,9 +518,7 @@ def carry_out(
     if answer == request_model.RETURN_LATER and not (
         answers.get(request_model.RETURN_UNTIL) or action.params.get("until")
     ):
-        raise model.PlanningError(
-            f"{ANSWER_TAG} later needs until: a date (2026-12-01) or an item reference"
-        )
+        raise model.PlanningError(f"{ANSWER_TAG} later needs until: {deferral.FORMS}")
     done: dict = {"answer": answer, "moved_out": [], "skipped": []}
     why = pending.inapplicable(conn, action)
     if why is not None:

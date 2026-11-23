@@ -2740,9 +2740,7 @@ def _condition(conn: sqlite3.Connection, row: sqlite3.Row, until: object) -> _Co
     except model.PlanningError as error:
         raise model.PlanningError(
             f"[{deferral.TAG}] until {text} is no day, time, count of comments or work item:"
-            " send a day YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, a"
-            " count such as 3 comments, a count or a day such as 2026-12-01 or 3 comments,"
-            " or an item's reference"
+            f" send {deferral.FORMS}"
         ) from error
     deferral.check_item(conn, row, waited)
     reference = read_model.reference(conn, waited)

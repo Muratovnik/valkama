@@ -228,6 +228,13 @@ def comments_said(count: int) -> str:
     return f"{count} comment" if count == 1 else f"{count} comments"
 
 
+#: The forms `until` takes, in the words a refusal gives them: a day, a time, a count,
+#: both, or an item's reference.
+FORMS = (
+    "a day YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, a count such as"
+    " 3 comments, a count or a day such as 2026-12-01 or 3 comments, or an item's reference"
+)
+
 #: What a condition joined by ` or ` that is not one count and one moment is refused with.
 _ONE_OR_BOTH = (
     "is no condition: join one count and one day or time, such as 2026-12-01 or 3 comments"

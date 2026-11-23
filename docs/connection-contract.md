@@ -634,9 +634,10 @@ A review of work in `triage` proposes tasks that belong together as one new goal
 `items` names 1 to 20 distinct tasks that wait in the triage stack: in `triage`,
 under no goal or stage, in the goal's space, with no question of the owner open
 on them. A task alone is one of priority `high` or `urgent`, its priority read
-when the group is written. `answer` is `do`, `later` or `drop`; `until`, a day or
-an item's reference as `defer` takes it, comes with `later` and only with it; `why` is one
-line of up to 386 characters, the longest that `agent: later: <why>` holds whole
+when the group is written. `answer` is `do`, `later` or `drop`; `until`, a day, a time,
+a count of new comments, both, or an item's reference as `defer` takes it, comes with
+`later` and only with it; `why` is one line of up to 386 characters, the longest that
+`agent: later: <why>` holds whole
 as a defer reason. A longer one is refused and no reason is cut. The goal names
 its conditions in `checklist` and
 no `parent`, `acceptance`, `claim` or `state`. The goal is created in `triage`,
@@ -717,7 +718,7 @@ and the action `dropped`.
 | `[group]` | 400 | the form: `[group] a group is a new goal without a parent, with its conditions in checklist and 1 to 20 items: <what is wrong>` |
 | `[group]` | 409 | a task alone below `high`: `[group] a group of one takes a task of priority high or urgent: MAIN-41 is medium` |
 | `[group]` | 409 | a task that does not wait in the stack: `[group] MAIN-41 is not waiting for a triage review: <why>`, the why being `it is in another space`, `it is a goal or stage`, `it is not in triage`, `it lies under MAIN-3` or `it waits for the owner's answer` |
-| `[triage]` | 400 | the owner's answer: `do` or `later` with no task ticked, `[triage] tick what is to be done, or answer drop`; `later` with no `until` of its own or the agent's, `[triage] later needs until: a date (2026-12-01) or an item reference` |
+| `[triage]` | 400 | the owner's answer: `do` or `later` with no task ticked, `[triage] tick what is to be done, or answer drop`; `later` with no `until` of its own or the agent's, `[triage] later needs until: a day YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, a count such as 3 comments, a count or a day such as 2026-12-01 or 3 comments, or an item's reference` |
 | `cancel_list` | 409 | `drop` while open work not in `triage` stands under the goal, and `cancels` is missing or names another list: the list and its `list_token`, as a cancel's first call hands them over |
 
 Either `[group]` refusal creates nothing and spends no number; a `[triage]` or

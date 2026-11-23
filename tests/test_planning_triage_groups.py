@@ -223,6 +223,50 @@ class AgentGroupTests(GroupHarness):
         )
         self.assertEqual([], self.owners_list())
 
+    def test_a_later_group_takes_the_comment_counts_that_putting_off_takes(self) -> None:
+        self.at(participation.MINIMAL)
+        for title, until in (
+            ("Counted fixes", "3 comments"),
+            ("Dated and counted fixes", "2026-12-01 or 3 comments"),
+        ):
+            with self.subTest(until=until):
+                tasks = self.findings(2)
+                answer = self.group(tasks, "later", title=title, group={"until": until})
+                goal = str(answer["reference"])
+                self.assertEqual(("deferred", None, None), self.where(goal))
+                self.assertEqual(
+                    [f"deferred: until {until}: agent: later: {WHY}"],
+                    self.events(goal, "transitioned"),
+                )
+                counted = self.conn.execute(
+                    "SELECT until_comments FROM work_item_deferrals WHERE work_item_id = ?",
+                    (self.item_id(goal),),
+                ).fetchone()
+                self.assertEqual(3, counted["until_comments"])
+                for task in tasks:
+                    self.assertEqual(("triage", None, goal), self.where(task))
+
+    def test_a_later_group_refuses_an_until_that_is_no_form_of_putting_off(self) -> None:
+        self.at(participation.MINIMAL)
+        tasks = self.findings(2)
+        before = (self.counts(), self.items())
+        for until in ("three comments", "soon"):
+            with self.subTest(until=until):
+                status, code, message = self.refusal(
+                    functools.partial(self.group, tasks, "later", group={"until": until})
+                )
+                self.assertEqual((400, "invalid_request"), (status, code))
+                self.assertTrue(
+                    message.endswith(
+                        f"until {until} is no day, time, count of comments or work item: send"
+                        " a day YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z,"
+                        " a count such as 3 comments, a count or a day such as 2026-12-01 or"
+                        " 3 comments, or an item's reference"
+                    ),
+                    message,
+                )
+        self.assertEqual(before, (self.counts(), self.items()))
+
     def test_the_longest_why_is_written_whole_by_later_and_drop(self) -> None:
         self.at(participation.MINIMAL)
         self.assertEqual(386, len(LONGEST_WHY))
@@ -504,7 +548,9 @@ class OwnerAnswerTests(GroupHarness):
                 "later",
                 tasks,
                 {},
-                "[triage] later needs until: a date (2026-12-01) or an item reference",
+                "[triage] later needs until: a day YYYY-MM-DD, a time with its zone such as"
+                " 2026-12-01T09:00:00Z, a count such as 3 comments, a count or a day such as"
+                " 2026-12-01 or 3 comments, or an item's reference",
             ),
         )
         for answer, items, more, message in cases:
