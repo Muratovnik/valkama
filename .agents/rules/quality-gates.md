@@ -53,7 +53,10 @@ Each command below runs in `web/`:
   missing list file before Playwright starts, and ends with each project's count
   and the total, to compare with what the run was meant to select. `--list`
   shows the selection without running it; `--specs=<file>` runs the specs a file
-  names, one a line.
+  names, one a line, each bare and relative to `web/tests/browser`
+  (`production-list.spec.ts`, not `tests/browser/production-list.spec.ts`). A
+  Playwright option takes its value after `=`, as in `--grep=freshness`: the
+  runner refuses a separate value.
 
 The specs that write the system clipboard or are granted it are named in
 `web/tests/browser/clipboardSpecs.ts`, and they run only when asked for: with
