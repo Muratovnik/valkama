@@ -42,6 +42,8 @@ NO_LENGTH_OF_THEIR_OWN = {
     ("apply_work_item_changes", "questions[].expires_at"): "read as an ISO timestamp",
     ("create_work_item_request", "fields[].under.field"): "names an earlier field's id",
     ("create_work_item_request", "fields[].under.option"): "names an option's id",
+    ("apply_work_item_changes", "questions[].fields[].under.field"): "names an earlier field's id",
+    ("apply_work_item_changes", "questions[].fields[].under.option"): "names an option's id",
     ("apply_work_item_changes", "commits[].repository"): "names a registered project",
     ("apply_work_item_changes", "commits[].hash"): "held to the shape of a hash",
     # The two reasons below are recorded in an event detail of a fixed size, and the
@@ -313,6 +315,25 @@ class SchemaLimitTests(unittest.TestCase):
             "questions[].prompt": lambda v: ask(prompt=v),
             "questions[].execution_id": lambda v: ask(execution_id=v),
             "questions[].session_id": lambda v: ask(session_id=v),
+            "questions[].fields[].id": lambda v: ask(fields=[{**FIELD, "id": v}]),
+            "questions[].fields[].label": lambda v: ask(fields=[{**FIELD, "label": v}]),
+            "questions[].fields[].description": lambda v: ask(fields=[{**FIELD, "description": v}]),
+            "questions[].fields[].group": lambda v: ask(fields=[{**FIELD, "group": v}]),
+            "questions[].fields[].why": lambda v: ask(
+                kind="decision", fields=[{**VERDICT, "why": v}]
+            ),
+            "questions[].fields[].options[].id": lambda v: ask(
+                fields=[{**FIELD, "options": [{**OPTION, "id": v}]}]
+            ),
+            "questions[].fields[].options[].label": lambda v: ask(
+                fields=[{**FIELD, "options": [{**OPTION, "label": v}]}]
+            ),
+            "questions[].fields[].options[].description": lambda v: ask(
+                fields=[{**FIELD, "options": [{**OPTION, "description": v}]}]
+            ),
+            "questions[].fields[].options[].why": lambda v: ask(
+                fields=[{**FIELD, "options": [{**OPTION, "recommended": True, "why": v}]}]
+            ),
             "summary.done": lambda v: batch(summary={"done": v, "next": "Nothing."}),
             "summary.next": lambda v: batch(summary={"done": "All.", "next": v}),
             "summary.why": lambda v: batch(summary={"done": "All.", "next": "None.", "why": v}),
