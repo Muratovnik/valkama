@@ -51,7 +51,7 @@ describe('the pauses read', () => {
     const refused = [
       { ...pausesAnswer(PAUSES), extra: 1 },
       { ...pausesAnswer(PAUSES), interface_version: 'valkama-usage-api' },
-      pausesAnswer({ ...PAUSES, interface_version: 'valkama-usage' }),
+      pausesAnswer({ ...PAUSES, interface_version: 'valkama-usage' } as never),
       pausesAnswer(pausesOf([{ ...one, read_share: 1.5 }])),
       pausesAnswer(pausesOf([{ ...one, wait: 'idle' } as never])),
       pausesAnswer(pausesOf([{ ...one, role: 'agent' } as never])),
