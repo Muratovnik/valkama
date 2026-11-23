@@ -4,7 +4,7 @@
  * `action` its kind's content reads.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
@@ -168,13 +168,20 @@ export const everyKind = () => [
 
 /**
  * The list open over the board at a width, with the clock under the test's hand. `prepare` adds
- * routes of the test's own, over the backend's, before the page first asks.
+ * routes of the test's own, over the backend's, before the page first asks; `press` is how the
+ * rail's «Needs my answer» is pressed once the card has been left, a click by default.
  */
 export async function openKinds(
   page: Page,
   entries: InputRequestEntry[],
   width: number,
-  prepare?: () => Promise<unknown>,
+  {
+    prepare,
+    press = (rail) => rail.click(),
+  }: {
+    prepare?: () => Promise<unknown>
+    press?: (rail: Locator) => Promise<unknown>
+  } = {},
 ) {
   await page.setViewportSize({ width, height: 900 })
   await page.clock.install()
@@ -187,7 +194,7 @@ export async function openKinds(
   })
   await page.keyboard.press('Escape')
   await expect(opened.drawer).toHaveCount(0)
-  await page.getByRole('button', { name: /^(?:Needs my answer|Ждут моего ответа)/u }).click()
+  await press(page.getByRole('button', { name: /^(?:Needs my answer|Ждут моего ответа)/u }))
   const dialog = page.getByRole('dialog', { name: /^(?:Needs my answer|Ждут моего ответа)$/u })
   const record = (prompt: string) => dialog.locator('.request-card').filter({ hasText: prompt })
   return { ...opened, dialog, record }
