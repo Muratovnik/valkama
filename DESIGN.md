@@ -2384,7 +2384,7 @@ fits beside it, otherwise taking a line of its own under the name, starting wher
 Where even the name's last word and the start are wider than the head's column, as beside three
 44px icons at 320–370px or two beside a long name at 320px, the start stands on a line of its own
 under the name, from its left edge, and the date under it. A line that says who in a phrase,
-«Answered by agent kolo» over an answer, is one unit the same way.
+«Answered by agent worker-b» over an answer, is one unit the same way.
 What can be done to an entry stands at the end of that line, as icons in the muted
 ink that always show, since a phone has no pointer to bring them out with (`EntryHead`,
 `EntryAction`): Reply, the mark and its removal, Make task outcome, Change answer, and on the
@@ -2794,8 +2794,15 @@ line, and on a narrow screen the way back over the section names nothing a secon
 sentence longer than 90 characters, and each caveat stands in its section's «ⓘ» alone.
 
 The rail holds a tile for the overview, one for the token kinds, two for the subscription
-quota — «Five hours» and «Week» — and one for each dimension of the read: account,
-organization, project, task, executor, role, launch class, model, effort and environment.
+quota — «Five hours» and «Week» —, an entry for «Pauses» and one tile for each dimension of the
+read: account, organization, project, task, executor, role, launch class, model, effort and
+environment. «Pauses» shows how much of the prompt cache a model request read after a pause of
+each length, a table per client, role, model and sign-in with a line per bucket of pause, so the
+five-minute and one-hour cliffs read at the same height in every table. Its read goes back to
+the transcripts and takes seconds over a week, so its entry carries no figure and the section
+asks its read only while it is on show: when it opens, when the period changes and on the bar's
+refresh; the filters and the measure do not reach it. What the pause waited on — the machine,
+a person or a keep-warm wake — is chosen in its heading, the machine first.
 «Account» is the subscription account the work was spent on (`seat`), «Organization» the
 organization it was billed to; an old link's `account` filter still filters by organization.
 «Executor» lists the sessions of agents that did the work; planning calls a session by the same

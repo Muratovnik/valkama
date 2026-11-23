@@ -7,6 +7,7 @@ import { analyticsFigureMessages } from '@/shared/i18n/analyticsFigureMessages.t
 import { analyticsFilterMessages } from '@/shared/i18n/analyticsFilterMessages.ts'
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
+import { analyticsPausesMessages } from '@/shared/i18n/analyticsPausesMessages.ts'
 import { analyticsQuotaMessages } from '@/shared/i18n/analyticsQuotaMessages.ts'
 import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
 import { analyticsTimeMessages } from '@/shared/i18n/analyticsTimeMessages.ts'
@@ -196,6 +197,7 @@ export const analyticsMessages = {
       detail: analyticsDetailMessages.en,
       overview: analyticsOverviewMessages.en,
       panel: analyticsPanelMessages.en,
+      pauses: analyticsPausesMessages.en,
       quota: analyticsQuotaMessages.en,
       time: analyticsTimeMessages.en,
     },
@@ -382,6 +384,7 @@ export const analyticsMessages = {
       detail: analyticsDetailMessages.ru,
       overview: analyticsOverviewMessages.ru,
       panel: analyticsPanelMessages.ru,
+      pauses: analyticsPausesMessages.ru,
       quota: analyticsQuotaMessages.ru,
       time: analyticsTimeMessages.ru,
     },
