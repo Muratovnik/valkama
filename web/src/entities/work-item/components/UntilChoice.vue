@@ -48,8 +48,10 @@ export function untilProblem(value: string, today: string): string | null {
  * empty while nothing is chosen. Every comment and reply written on the card after it is put off
  * counts. A question's «Later…» and a card's «Put off» both ask it here.
  *
- * With a day and a count both chosen, a line under them (`data-until="either"`) says the work
- * comes back on whichever comes first.
+ * With a day and a count both chosen, a line (`data-until="either"`) says the work comes back on
+ * whichever comes first. It follows the day and the count it qualifies, before the card: stacked,
+ * it stands right under them; on a line, where the card may stand beside them, it ends the line's
+ * fields across their whole width. Under the card, stacked, it read as a word about the card.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -115,6 +117,13 @@ function chooseCard(reference: string) {
       :disabled="disabled"
       @update:model-value="(count) => chooseCount(String(count))"
     />
+    <p
+      v-if="chosen.day && chosen.count"
+      class="until-either"
+      data-until="either"
+    >
+      {{ t('requests.kinds.untilFirst') }}
+    </p>
     <SearchCombobox
       class="until-card"
       :label="t('requests.kinds.untilCard')"
@@ -126,13 +135,6 @@ function chooseCard(reference: string) {
       @search="cards.search"
       @update:model-value="chooseCard"
     />
-    <p
-      v-if="chosen.day && chosen.count"
-      class="until-either"
-      data-until="either"
-    >
-      {{ t('requests.kinds.untilFirst') }}
-    </p>
   </div>
 </template>
 
@@ -172,11 +174,16 @@ function chooseCard(reference: string) {
   min-width: 0;
 }
 
-/* Under the fields, across the whole line. */
+/* Under the day and the count. On a line it ends the fields across the whole line, after the
+   card that may stand beside them. */
 .until-either {
   flex: 1 0 100%;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+
+  .is-line > & {
+    order: 1;
+  }
 }
 </style>

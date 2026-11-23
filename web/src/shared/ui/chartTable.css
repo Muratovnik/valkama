@@ -25,6 +25,9 @@
 }
 
 .chart-table {
+  /* The width the names' column shares with the other tables of its box (below). */
+  --table-names-inline-size: auto;
+
   width: 100%;
   color: var(--color-text-muted);
   font: var(--font-line);
@@ -80,6 +83,12 @@
     vertical-align: top;
     max-inline-size: 100%;
   }
+}
+
+/* The names' column takes the width the tables of its box share (`useTableFit`), so two tables
+   of one section stand on one set of columns; a table alone keeps its own. */
+.chart-heading:first-child {
+  inline-size: var(--table-names-inline-size);
 }
 
 /* In a table wider than its frame the name heading each row, and the heading over the names,

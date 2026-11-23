@@ -48,7 +48,10 @@
  * is only what is offered there, and with nothing offered the way on ends the comment's line.
  *
  * A question of a kind other than a choice is answered by its own row of buttons (`answers`),
- * one press each, standing where the two answers do and wrapping as one as they do. Nobody
+ * one press each, standing where the two answers do and wrapping as one as they do. Wider
+ * together than a whole line, they wrap among themselves inside it, each line ending at the
+ * row's end: held to one line, a task's four answers ran 121px past the record at 390px in
+ * Russian, its last answer out of the window. Nobody
  * declines it, but an answer that cannot be taken back asks first, as Don't answer does, and
  * in the same way: its own box says Back, so a second press without moving only goes back, the
  * box beside it says the answer in the danger's ink, and the asking, in its own words, takes the
@@ -235,7 +238,7 @@ defineExpose({ focusWayOut })
     </div>
     <div
       v-if="byAnswers"
-      class="request-pair"
+      class="request-pair is-answers"
     >
       <VButton
         v-for="(answer, index) in answers"
@@ -427,6 +430,17 @@ defineExpose({ focusWayOut })
   flex: none;
   gap: var(--space-2);
   align-items: center;
+}
+
+/* A kind's answers shrink only on a line they cannot fit as one: a row breaks its lines by each
+   part's whole width, so beside what comes before them they still go to the next line together,
+   and only there, wider than all of it, wrap inside it, each line ending at the row's end. The
+   two answers never do: they wrap as one. */
+.request-pair.is-answers {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 /* Why an answer is unavailable: a line of its own under the answers, at their end. */

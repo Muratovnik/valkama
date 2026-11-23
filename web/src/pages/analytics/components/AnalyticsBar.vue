@@ -34,8 +34,11 @@
  *
  * On a phone the periods take the first row whole; under it the filter, a failure, the freshness
  * and the read again, by its icon; with a filter set, the chips' row right under them; and, once
- * chosen, the reader's own days. On the narrowest
- * phone the freshness stands at the end of the periods' row, leaving a failure its room.
+ * chosen, the reader's own days. On the narrowest phone the freshness stands in the periods' row,
+ * leaving a failure its room: in the cell their short last line leaves, past «Custom», or at the
+ * row's end where they leave no such cell. It stays the freshness there, never a period: words in
+ * the muted detail ink on the track's ground, with no ground, edge or press of their own, and
+ * outside the choice for assistive technology.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -200,7 +203,7 @@ const freshHint = computed(() =>
         :short="short"
       />
     </template>
-    <template #end="{ held, short }">
+    <template #end="{ cell, held, short }">
       <RefreshFailed
         class="analytics-bar-failed"
         :brief="brief"
@@ -210,7 +213,7 @@ const freshHint = computed(() =>
       <p
         v-tooltip.detail="freshHint"
         class="analytics-bar-fresh"
-        :class="{ 'analytics-bar-fresh-live': live }"
+        :class="{ 'analytics-bar-fresh-live': live, 'analytics-bar-fresh-cell': cell }"
         :data-widest="freshRoom"
       >
         <span class="analytics-bar-fresh-shown">
@@ -323,14 +326,23 @@ const freshHint = computed(() =>
   }
 }
 
-/* The narrowest phone (`PeriodBar`'s `beside`): the freshness at the end of the periods' row, on
-   their first line, so a failure has the row under them beside the filter and the read again. */
+/* The narrowest phone (`PeriodBar`'s `beside`): the freshness in the periods' row, so a failure
+   has the row under them beside the filter and the read again. At the row's end, on their first
+   line, where the periods leave it the third and fourth columns; in the cell their short last
+   line leaves where they keep the whole row (`cell`), on that line's height and as far from the
+   track's end as a period's words from its column's edge. It is not drawn as a segment: the
+   track's ground under it is the periods', and it takes none of its own. */
 @container (width < 18rem) {
   .analytics-bar-fresh {
     grid-area: 1 / 3 / 2 / 5;
     align-content: center;
     align-self: start;
     min-block-size: var(--size-control-height-compact);
+  }
+
+  .analytics-bar-fresh-cell {
+    align-self: end;
+    padding-inline-end: var(--space-3);
   }
 }
 

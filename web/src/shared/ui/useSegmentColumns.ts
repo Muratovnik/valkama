@@ -11,6 +11,10 @@
  * come out a hair short of laid-out ones, so the row goes back to its one line only in more room
  * than that, or it would stand on the line, wrap, and stand on it again. New words or a font that
  * arrives put the row back on its one line to be measured afresh.
+ *
+ * What the row would stand in across another width (`columnsAt`) is read off the same measure, so
+ * a host that lays the row out by how its lines fall reads them for the width it would give it,
+ * not for the one it gives it now.
  */
 import { nextTick, shallowRef, watch } from 'vue'
 import type { Ref } from 'vue'
@@ -54,8 +58,10 @@ function measureRow(track: HTMLElement, segments: readonly HTMLElement[]): RowMe
 }
 
 /**
- * The count of columns, or null while the row stands on its one line. `wrap` says whether the
- * row may wrap at all; `words` changes whenever its segments' words do.
+ * The count of columns, or null while the row stands on its one line (`columns`), and the count
+ * the row would stand in across a track of another width, null on one line there or before the
+ * row is measured (`columnsAt`). `wrap` says whether the row may wrap at all; `words` changes
+ * whenever its segments' words do.
  */
 export function useSegmentColumns(
   track: Readonly<Ref<HTMLElement | null>>,
@@ -63,38 +69,58 @@ export function useSegmentColumns(
   words: () => string,
 ) {
   const columns = shallowRef<number | null>(null)
-  let measured: RowMeasure | null = null
+  const measured = shallowRef<RowMeasure | null>(null)
   /** The room the one line was last seen to wrap in. */
   let wrapsAt = 0
 
-  function measure() {
-    const node = track.value
-    const segments = node ? [...node.children].filter((one) => one instanceof HTMLElement) : []
-    if (!node || !wrap() || segments.length < 2) {
-      columns.value = null
-      return
-    }
+  const segmentsOf = (node: HTMLElement) =>
+    [...node.children].filter((one) => one instanceof HTMLElement)
+  const inset = (node: HTMLElement) => {
     const style = getComputedStyle(node)
-    const room = node.clientWidth - px(style.paddingInlineStart) - px(style.paddingInlineEnd)
-    if (columns.value === null || !measured) {
-      const top = segments[0]?.offsetTop
-      if (segments.every((segment) => segment.offsetTop === top)) return
-      wrapsAt = room
-      measured = measureRow(node, segments)
-    }
-    const { gap, line, widest } = measured
-    const count = segmentColumns({
-      count: segments.length,
+    return px(style.paddingInlineStart) + px(style.paddingInlineEnd)
+  }
+
+  /** The columns in `room`, by the row's measure, or null where its one line fits. */
+  function countIn(row: RowMeasure, count: number, room: number) {
+    const { gap, line, widest } = row
+    const fit = segmentColumns({
+      count,
       gap,
       line: room <= wrapsAt ? Number.POSITIVE_INFINITY : line,
       room,
       widest,
     })
-    columns.value = count === segments.length ? null : count
+    return fit === count ? null : fit
+  }
+
+  function measure() {
+    const node = track.value
+    const segments = node ? segmentsOf(node) : []
+    if (!node || !wrap() || segments.length < 2) {
+      columns.value = null
+      return
+    }
+    const room = node.clientWidth - inset(node)
+    if (columns.value === null || !measured.value) {
+      const top = segments[0]?.offsetTop
+      if (segments.every((segment) => segment.offsetTop === top)) return
+      wrapsAt = room
+      measured.value = measureRow(node, segments)
+    }
+    columns.value = countIn(measured.value, segments.length, room)
+  }
+
+  /** The columns across a track `width` px wide, its padding included. */
+  function columnsAt(width: number): number | null {
+    const node = track.value
+    const row = measured.value
+    if (!node || !row || !wrap()) return null
+    const count = segmentsOf(node).length
+    return count < 2 ? null : countIn(row, count, width - inset(node))
   }
 
   async function afresh() {
-    measured = null
+    measured.value = null
     wrapsAt = 0
     columns.value = null
     await nextTick()
@@ -109,5 +135,5 @@ export function useSegmentColumns(
     afresh,
   )
 
-  return columns
+  return { columns, columnsAt }
 }

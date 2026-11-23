@@ -22,6 +22,14 @@
  * stacked by the width of a phone alone left «What was decided» past its frame at 1024 and 760,
  * and the goals of Volumes, held to their columns, left «Осталось ≈» past it at 1280.
  *
+ * A box of more than one table, as the work outside goals by project and by label, stands them on
+ * one set of columns: at the step they stand at, the first column of each, their names, takes the
+ * width the widest of them takes there (`--table-names-inline-size` on each table, which
+ * `chartTable.css` gives the column's heading), and the figures share the rest alike, since they
+ * are the same columns under the same headings. Laid out by its own words, the labels' column stood
+ * wider than the projects', and every category after it up to 25px off. Where the names' width
+ * would push a table past its frame, each keeps its own.
+ *
  * Each step is read in its own layout and the answer is set before the browser paints, so no frame
  * shows the table wider than its frame. That happens once what the table holds changes (`holds`),
  * once a font arrives, and whenever the box around it changes size. Laid out again, a table of seven
@@ -33,6 +41,9 @@ import { ref, watch } from 'vue'
 import type { Ref, WatchSource } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
+
+/** The width the box's tables share for their names' column, set on each of them. */
+const NAMES = '--table-names-inline-size'
 
 /** The steps a table is laid out at, narrowest last, and its block layout (`stack`). */
 export type TableFit = 'one' | 'two' | 'least' | 'stack'
@@ -79,6 +90,18 @@ export function useTableFit(
   const past = (tables: readonly Framed[], at: TableFit) =>
     tables.some(({ frame }) => (needs[at] ?? 0) > frame.offsetWidth)
 
+  /** Gives the tables of the box their widest names' width, where every table still fits. */
+  function shareNames(tables: readonly Framed[]) {
+    if (tables.length < 2 || fit.value === 'stack') return
+    const names = tables.map(
+      ({ table }) => table.querySelector('th')?.getBoundingClientRect().width ?? 0,
+    )
+    const shared = `${Math.max(...names)}px`
+    for (const { table } of tables) table.style.setProperty(NAMES, shared)
+    if (tables.some(({ frame, table }) => table.offsetWidth > frame.clientWidth))
+      for (const { table } of tables) table.style.removeProperty(NAMES)
+  }
+
   function measure() {
     const section = box.value
     if (!section) return
@@ -90,10 +113,13 @@ export function useTableFit(
     )
     if (!tables.length) return
     const { steps, otherwise } = rule()
+    // Each step is read with every table at its own names' width; the shared one comes after.
+    for (const { table } of tables) table.style.removeProperty(NAMES)
     // Set on the element as well as bound, so each measure reads its step now and the answer
     // stands on it before the next frame, whatever the binding does in between.
     fit.value = steps.find((at) => !past(tables, at) && stands(section, tables, at)) ?? otherwise
     section.dataset.fit = fit.value
+    shareNames(tables)
   }
 
   /** Reads every step again: what the table holds changed, or the type it is set in. */

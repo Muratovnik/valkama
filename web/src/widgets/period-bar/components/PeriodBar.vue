@@ -28,8 +28,11 @@
  * filters and the line's end. The reader's own days take a third row once they are chosen. The
  * line's end lends its parts to the second row, where the page places them on the bar's grid of
  * four columns. A page whose second row has no room for its news on the narrowest phone stands a
- * part of it at the end of the periods' row there instead (`beside`), on the third and fourth
- * columns the periods leave it.
+ * part of it in the periods' row there instead (`beside`): in the cell their short last line
+ * leaves, the periods keeping the whole row (`cell`, which the slots hear), or, where their count
+ * leaves no such cell, at the row's end, on the third and fourth columns the periods leave it.
+ * Beside them, the periods had 182–206px of a 360–380px window and stood in one column of five
+ * lines, where the whole row stands them two over two over one.
  *
  * What the page stands under the line (`under`), such as the chips of the filters set, is a row of
  * its own under it; on a phone it stands right under the filters' row, and the reader's own days
@@ -96,8 +99,11 @@ const emit = defineEmits<{
   period: [period: P]
 }>()
 
-/** What the slots are told: whether the bar is short of room for words, and being fitted. */
-type BarState = { held: boolean; short: boolean }
+/**
+ * What the slots are told: whether the bar is short of room for words, being fitted, and whether
+ * the part the page stands beside the periods stands in the cell their last line leaves.
+ */
+type BarState = { cell: boolean; held: boolean; short: boolean }
 defineSlots<{
   /** The page's filters, which take the room the rest of the line leaves. */
   default?: (state: BarState) => unknown
@@ -151,7 +157,23 @@ const twoRows = room.rows
 /** Whether the line is being fitted, news holding its room unseen. */
 const held = room.holding
 
-const state = computed<BarState>(() => ({ held: held.value, short: short.value }))
+/**
+ * Whether the periods, across the whole of their row, leave a cell on their last line for the
+ * part the page stands beside them: their count is no multiple of their columns there. Asked for
+ * the whole row's width, not the one they stand in, so the answer holds wherever they stand.
+ */
+const periodsRow = useTemplateRef<{ columnsAt: (width: number) => number | null }>('periods')
+const cell = computed(() => {
+  if (!props.beside) return false
+  const columns = periodsRow.value?.columnsAt(barWidth.value) ?? null
+  return columns !== null && props.periods.length % columns !== 0
+})
+
+const state = computed<BarState>(() => ({
+  cell: cell.value,
+  held: held.value,
+  short: short.value,
+}))
 
 /** Whether the line has given up a part, by its name in `order`. */
 defineExpose({ gave: room.gave })
@@ -166,6 +188,7 @@ defineExpose({ gave: room.gave })
       'period-bar-rows': twoRows,
       'period-bar-beside': beside,
       'period-bar-under': under,
+      'period-bar-cell': cell,
     }"
   >
     <div
@@ -173,6 +196,7 @@ defineExpose({ gave: room.gave })
       class="period-bar-line"
     >
       <SegmentedControl
+        ref="periods"
         class="period-bar-periods"
         size="compact"
         :label="words.label"
@@ -338,13 +362,20 @@ defineExpose({ gave: room.gave })
   }
 }
 
-/* The narrowest phone, a window of about 375px or less, where the page asks for it (`beside`):
-   the periods leave the third and fourth columns of their row to a part of the line's end, and
-   wrap in what they keep. At 360px a failed refresh in Russian, beside the filter, the freshness
-   and the read again, had room only for three lines and ran 2px past the row's end. */
+/* The narrowest phone, a window of about 380px or less, where the page asks for it (`beside`):
+   a part of the line's end stands in the periods' row. At 360px a failed refresh in Russian,
+   beside the filter, the freshness and the read again, had room only for three lines and ran 2px
+   past the row's end. The periods keep the whole row where their last line leaves a cell for it
+   (`cell`), which the page stands it in; otherwise they leave it the row's third and fourth
+   columns and wrap in what they keep. Leaving those columns whatever their count, they had too
+   little room for two columns and stood in one of five lines, 172px of track against 104. */
 @container (width < 18rem) {
   .period-bar-beside .period-bar-periods {
     grid-area: 1 / 1 / 2 / 3;
+  }
+
+  .period-bar-beside.period-bar-cell .period-bar-periods {
+    grid-area: 1 / 1 / 2 / -1;
   }
 }
 

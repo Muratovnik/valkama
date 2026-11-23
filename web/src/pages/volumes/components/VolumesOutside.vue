@@ -11,9 +11,13 @@
  * label (`-` for none, `*` for several projects), and each figure `data-category`. Where the
  * columns do not fit the frame, the headings and the names come down to their longest words
  * (`useTableFit`, `least`); where even that does not fit, each row stands as a block of its own
- * (`stack`), as the commits on no card do: its name on its first line, then its eight figures in
- * columns alike in every block, each beside its category's name, so nothing scrolls sideways.
- * Scrolling, the categories past the frame were out of sight until the table's end.
+ * (`stack`), as the commits on no card do: its name on its first line, then its figures above zero
+ * in columns alike in every block, each beside its category's name, so nothing scrolls sideways.
+ * Scrolling, the categories past the frame were out of sight until the table's end. A block's
+ * zeros are not drawn but still read, each with its column's heading (`data-zero`); every one
+ * drawn, a block was eight lines of mostly zeros, and the section ran the page six times longer
+ * on a phone. A row stands for tasks it counts, so it has a figure above zero; one with none
+ * would draw its zeros.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -31,6 +35,18 @@ const props = defineProps<{ outside: Volumes['outside'] }>()
 const { t } = useI18n()
 const words = useVolumesWords()
 
+type Categories = Volumes['outside']['by_label'][number]['categories']
+type StateCategory = (typeof STATE_CATEGORIES)[number]
+
+/** Whether a row counts anything, which lets its block leave its zeros undrawn. */
+const counts = (categories: Categories) =>
+  STATE_CATEGORIES.some((category) => (categories[category] ?? 0) > 0)
+
+/** A figure of zero in a row that counts something, which its block leaves undrawn. */
+function zero(row: { categories: Categories; counts: boolean }, category: StateCategory) {
+  return row.counts && !row.categories[category] ? '' : undefined
+}
+
 const tables = computed(() => [
   {
     key: 'project',
@@ -40,6 +56,7 @@ const tables = computed(() => [
       key: row.project.id ?? (row.project.combinations ? '*' : '-'),
       name: words.projectName(row.project, null),
       categories: row.categories,
+      counts: counts(row.categories),
     })),
   },
   {
@@ -50,6 +67,7 @@ const tables = computed(() => [
       key: row.label ?? '-',
       name: row.label ?? t('volumes.outside.noLabel'),
       categories: row.categories,
+      counts: counts(row.categories),
     })),
   },
 ])
@@ -126,6 +144,7 @@ const fit = useTableFit(root, [() => tables.value], () => ({
               data-numeric="true"
               :data-category="category"
               :data-label="t(`workItem.category.${category}`)"
+              :data-zero="zero(row, category)"
             >
               {{ row.categories[category] ?? 0 }}
             </td>
@@ -172,6 +191,17 @@ const fit = useTableFit(root, [() => tables.value], () => ({
 
   & .volumes-outside-name {
     grid-column: 1 / -1;
+  }
+
+  /* A block draws its figures above zero only: a zero is cut to nothing, out of the block's columns,
+     and read with its column's heading as every figure is. */
+  & .volumes-outside-figure[data-zero] {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   & .volumes-outside-figure {

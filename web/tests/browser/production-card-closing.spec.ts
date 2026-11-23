@@ -84,6 +84,22 @@ async function fitsWindow(page: Page, box: Locator) {
   expect((rect?.x ?? 0) + (rect?.width ?? 0)).toBeLessThanOrEqual(width)
 }
 
+/**
+ * The line that says which comes first stands right under the day and the count it qualifies,
+ * one gap of the fields' rows below the count, and before the card's field (DESIGN.md, Closing
+ * work from its card): under the card it read as a word about the card.
+ */
+async function eitherUnderTheCount(dialog: Locator) {
+  const count = await dialog.getByLabel('New comments').boundingBox()
+  const either = await dialog.locator('[data-until="either"]').boundingBox()
+  const card = await dialog.getByText('Until a card closes', { exact: true }).boundingBox()
+  if (!count || !either || !card) throw new Error('the count, the line or the card is not drawn')
+  const countEnd = count.y + count.height
+  expect(either.y).toBeGreaterThanOrEqual(countEnd - 0.5)
+  expect(either.y - countEnd).toBeLessThanOrEqual(8.5)
+  expect(either.y + either.height).toBeLessThanOrEqual(card.y + 0.5)
+}
+
 for (const width of [1280, 390]) {
   test(`a task is cancelled with its reason, asked in place, at ${width}px`, async ({
     page,
@@ -179,6 +195,7 @@ for (const width of [1280, 620, 390]) {
     await dialog.getByLabel('Until a day').fill('2099-01-02')
     await dialog.getByLabel('New comments').fill('3')
     await expect(dialog.locator('[data-until="either"]')).toBeVisible()
+    await eitherUnderTheCount(dialog)
     await dialog.getByLabel('Why it waits').fill('After the release')
     await fitsWindow(page, dialog)
     await page.screenshot(shot(info.outputPath(`dialogs-${width}-defer-comments.png`)))

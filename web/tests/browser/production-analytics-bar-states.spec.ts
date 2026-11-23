@@ -19,14 +19,30 @@
  * from a phone of 360px up. On a phone every period stands whole in its row, opened, chosen or
  * beside a failure.
  *
+ * On the narrowest phones, 360 to 390px, in both languages, the periods stand in two columns or
+ * more across the whole first row, and the bar is no taller than at 390px. Where the bar is
+ * narrower than 18rem the freshness stands in the cell the periods' short last line leaves, past
+ * «Свой» and inside the track, overlapping no period; wider, in the row under them. It reads as the
+ * freshness and not as a period: no button, no ground of its own, the muted detail ink, outside the
+ * choice. Standing beside the periods instead, the freshness left them one column of five lines.
+ * A refresh that fails there keeps the row under the periods, inside the bar's line.
+ *
  * The bar and the panel end on one right edge whether the panel scrolls or not.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import {
+  barState,
+  expectInPlace,
+  expectSaid,
+  failRefresh,
+  frames,
+  open,
+  serveFailing,
+} from './analyticsBarFailure.ts'
+import type { BarState } from './analyticsBarFailure.ts'
 import { pageAt, record } from './analyticsPage.ts'
-import { NOW, serveLive } from './liveDouble.ts'
-import { DAYS } from './served/analyticsBarStates.ts'
 import { test } from './test.ts'
 /** A preset, a live period, and the reader's own span of days. */
 const PERIODS = {
@@ -34,133 +50,6 @@ const PERIODS = {
   today: { period: 'today' },
   days: { period: 'custom', from: '2026-11-09', to: '2026-11-11' },
 } as const
-
-const frames = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise((done) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done))),
-      ),
-  )
-
-/**
- * The page over the double, the newest record 9 s old, with every usage read refused while
- * `fail` says so.
- */
-async function serveFailing(page: Page, width: number) {
-  await page.clock.install({ time: NOW })
-  const double = await serveLive(page, DAYS)
-  double.lastEventAt = new Date(NOW.getTime() - 9000)
-  let failing = false
-  // Registered last, so it is asked first: while failing, every read is refused.
-  await page.route('**/api/analytics/usage?*', (route) =>
-    failing
-      ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
-      : route.fallback(),
-  )
-  await page.setViewportSize({ width, height: 900 })
-  return (now: boolean) => {
-    failing = now
-  }
-}
-
-/** Opens a period with its answer on show and lets the bar settle. */
-async function open(page: Page, state: Record<string, string>) {
-  await page.goto(pageAt(state))
-  await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
-  await page.evaluate(() => document.fonts.ready)
-  await frames(page)
-}
-
-/** Presses the read again while reads are refused, and waits for the bar to say so. */
-async function failRefresh(page: Page) {
-  await page.locator('.analytics-refresh').click()
-  await expect(page.locator('.refresh-failed')).toBeVisible()
-  await frames(page)
-}
-
-/**
- * Where the bar's controls stand, its height, the top of what is under it, and the failure's
- * words: how wide they are drawn, and whether they are hidden from sight.
- */
-const barState = (page: Page) =>
-  page.evaluate(() => {
-    const box = (selector: string) => {
-      const found = document.querySelector(selector)?.getBoundingClientRect()
-      return found ? { left: found.left, top: found.top, right: found.right } : null
-    }
-    const words = document.querySelector('.refresh-failed-words')
-    let said = 0
-    if (words) {
-      const hidden =
-        getComputedStyle(words).clipPath !== 'none' || words.closest('.visually-hidden') !== null
-      said = hidden ? 0 : words.getBoundingClientRect().width
-    }
-    const mark = document.querySelector('.analytics-bar-fresh-mark')
-    return {
-      window: document.documentElement.clientWidth,
-      bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
-      body: document.querySelector('.analytics-body')?.getBoundingClientRect().top ?? 0,
-      line: box('.period-bar-line'),
-      controls: {
-        periods: box('.period-bar-periods'),
-        own: box('.period-bar-own'),
-        add: box('.analytics-filter-add'),
-        fresh: box('.analytics-bar-fresh'),
-        refresh: box('.analytics-refresh'),
-      },
-      failure: box('.refresh-failed'),
-      retry: box('.refresh-failed-retry'),
-      panel: box('.analytics-panel'),
-      said,
-      mark: mark !== null && getComputedStyle(mark).visibility === 'visible',
-    }
-  })
-
-type BarState = Awaited<ReturnType<typeof barState>>
-
-/** The failure is said in its words, and its retry stands, inside the bar's line and the window. */
-function expectSaid(name: string, state: BarState) {
-  expect.soft(state.said, `${name}: the failure's words`).toBeGreaterThan(40)
-  const line = state.line ?? { left: Number.NaN, right: Number.NaN }
-  const none = { left: Number.NaN, right: Number.NaN }
-  for (const [part, box] of [
-    ['failure', state.failure ?? none],
-    ['retry', state.retry ?? none],
-  ] as const) {
-    expect
-      .soft(box.left, `${name}: the ${part} before the line`)
-      .toBeGreaterThanOrEqual(line.left - 0.5)
-    expect
-      .soft(box.right, `${name}: the ${part} past the line`)
-      .toBeLessThanOrEqual(line.right + 0.5)
-    expect.soft(box.right, `${name}: the ${part} past the window`).toBeLessThanOrEqual(state.window)
-  }
-}
-
-/**
- * Every control of the bar stands where it stood, to the half pixel the bar counts as rounding
- * when it fits its line (`useBarRoom`). The filter's field takes the room the line leaves, so what
- * takes that room ends it sooner: its start stays, and its end comes back, never past where it
- * was (`DESIGN.md`).
- */
-function expectInPlace(name: string, after: BarState['controls'], before: BarState['controls']) {
-  for (const [control, was] of Object.entries(before)) {
-    const now = after[control as keyof BarState['controls']]
-    expect.soft(now === null, `${name}: ${control} shown`).toBe(was === null)
-    if (!was || !now) continue
-    const edges =
-      control === 'add' ? (['left', 'top'] as const) : (['left', 'top', 'right'] as const)
-    for (const edge of edges)
-      expect
-        .soft(Math.abs(now[edge] - was[edge]), `${name}: ${control}'s ${edge} moved`)
-        .toBeLessThanOrEqual(0.5)
-    if (control === 'add')
-      expect
-        .soft(now.right, `${name}: the field's end past where it was`)
-        .toBeLessThanOrEqual(was.right + 0.5)
-  }
-}
 
 const WIDTHS = [360, 390, 760, 1024, 1280, 1440, 1920] as const
 
@@ -344,6 +233,161 @@ for (const width of [390, 760, 1440] as const)
     seen.answered = await barState(page)
     expect((seen.answered as BarState).mark, 'the live mark once a read answers').toBe(true)
     await record(info, `bar-states mark ${width}`, seen)
+  })
+
+/** The periods' name in each language, which names their radio group. */
+const PERIODS_LABEL = { en: 'Period', ru: 'Период' } as const
+/** The narrowest phones and the phone over them, walked up. */
+const PHONES = [360, 370, 380, 390] as const
+
+/**
+ * The bar on a phone: its width inside its padding in the root's ems and its height, the periods' track and each
+ * segment's box, the freshness's box and its age's, how the freshness is drawn beside the tokens
+ * it is drawn in, and a failure's box with the bar's line.
+ */
+const phoneBar = (page: Page, label: string) =>
+  page.evaluate((name) => {
+    // This body is serialized and evaluated in the page, so a module-scope
+    // helper would not be in scope here.
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+    const rect = (found: Element | null | undefined) => {
+      const box = found?.getBoundingClientRect()
+      return box ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom } : null
+    }
+    /** What a property of the freshness's own reads as when it is set to `value`. */
+    const token = (fresh: HTMLElement, property: 'color' | 'fontSize', value: string) => {
+      const probe = document.createElement('span')
+      probe.style.setProperty(property === 'color' ? 'color' : 'font', value)
+      fresh.append(probe)
+      const read = getComputedStyle(probe)[property]
+      probe.remove()
+      return read
+    }
+    const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+    const bar = document.querySelector('.analytics-bar')
+    const barStyle = bar ? getComputedStyle(bar) : null
+    // What the bar's container queries measure: its width inside its padding.
+    const inside =
+      (bar?.clientWidth ?? 0) -
+      Number.parseFloat(barStyle?.paddingLeft ?? '0') -
+      Number.parseFloat(barStyle?.paddingRight ?? '0')
+    const track = document.querySelector(`[role="radiogroup"][aria-label="${name}"]`)
+    const trackStyle = track ? getComputedStyle(track) : null
+    const fresh = document.querySelector<HTMLElement>('.analytics-bar-fresh')
+    const drawn = fresh ? getComputedStyle(fresh) : null
+    return {
+      window: document.documentElement.clientWidth,
+      ems: inside / root,
+      bar: bar?.getBoundingClientRect().height ?? 0,
+      track: rect(track),
+      trackEnd:
+        (track?.getBoundingClientRect().right ?? Number.NaN) -
+        Number.parseFloat(trackStyle?.paddingRight ?? 'NaN'),
+      segments: [...(track?.querySelectorAll('[role="radio"]') ?? [])]
+        .map((one) => rect(one))
+        .filter((one) => one !== null),
+      fresh: rect(fresh),
+      age: rect(fresh?.querySelector('time')),
+      drawn: fresh &&
+        drawn && {
+          tag: fresh.tagName,
+          role: fresh.getAttribute('role'),
+          inChoice: fresh.closest('[role="radiogroup"]') !== null,
+          focusable: fresh.tabIndex >= 0,
+          ground: drawn.backgroundColor,
+          ink: drawn.color === token(fresh, 'color', 'var(--color-text-muted)'),
+          type: drawn.fontSize === token(fresh, 'fontSize', 'var(--font-detail)'),
+        },
+      failure: rect(document.querySelector('.refresh-failed')),
+      line: rect(document.querySelector('.period-bar-line')),
+    }
+  }, label)
+
+type PhoneBar = Awaited<ReturnType<typeof phoneBar>>
+type Box = NonNullable<PhoneBar['fresh']>
+
+/** How far two boxes overlap each way; overlapping when both are past half a pixel. */
+const overlaps = (one: Box, other: Box) =>
+  Math.min(one.right, other.right) - Math.max(one.left, other.left) > 0.5 &&
+  Math.min(one.bottom, other.bottom) - Math.max(one.top, other.top) > 0.5
+
+/**
+ * The periods in two columns or more, the bar no taller than `tallest`, and the freshness where
+ * the bar's width puts it: in the cell their last line leaves under 18rem, under them wider.
+ */
+function expectPhone(name: string, state: PhoneBar, tallest: number) {
+  expect(state.segments, `${name}: the periods`).toHaveLength(5)
+  const top = state.segments[0]?.top ?? Number.NaN
+  const columns = state.segments.filter((one) => Math.abs(one.top - top) <= 0.5).length
+  expect.soft(columns, `${name}: the periods' columns`).toBeGreaterThanOrEqual(2)
+  expect.soft(state.bar, `${name}: the bar's height`).toBeLessThanOrEqual(tallest + 0.5)
+  const fresh = state.fresh ?? { left: Number.NaN, top: Number.NaN, right: 0, bottom: 0 }
+  const age = state.age ?? fresh
+  const track = state.track ?? fresh
+  for (const [at, segment] of state.segments.entries())
+    expect.soft(overlaps(fresh, segment), `${name}: the freshness over period ${at}`).toBe(false)
+  expect.soft(age.right, `${name}: the age past the window`).toBeLessThanOrEqual(state.window)
+  if (state.ems < 18) {
+    const last = state.segments.at(-1) ?? fresh
+    expect
+      .soft(age.left, `${name}: the age before the free cell`)
+      .toBeGreaterThanOrEqual(last.right)
+    expect.soft(age.right, `${name}: the age past the track`).toBeLessThanOrEqual(state.trackEnd)
+    expect.soft(age.top, `${name}: the age over the last line`).toBeGreaterThanOrEqual(last.top)
+    expect.soft(age.bottom, `${name}: the age under the last line`).toBeLessThanOrEqual(last.bottom)
+  } else
+    expect
+      .soft(fresh.top, `${name}: the freshness under the periods`)
+      .toBeGreaterThanOrEqual(track.bottom)
+  expect.soft(state.drawn, `${name}: the freshness drawn as the freshness`).toEqual({
+    tag: 'P',
+    role: null,
+    inChoice: false,
+    focusable: false,
+    ground: 'rgba(0, 0, 0, 0)',
+    ink: true,
+    type: true,
+  })
+}
+
+for (const locale of ['ru', 'en'] as const)
+  test(`the periods stand in columns and the freshness by them on a phone in ${locale}`, async ({
+    page,
+  }, info) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    const fail = await serveFailing(page, 390)
+    await open(page, PERIODS.week)
+    const label = PERIODS_LABEL[locale]
+    await expect(page.getByRole('radiogroup', { name: label }).getByRole('radio')).toHaveCount(5)
+    const seen: Record<string, PhoneBar> = { 'reference 390': await phoneBar(page, label) }
+    const tallest = seen['reference 390']?.bar ?? Number.NaN
+    for (const width of PHONES) {
+      await page.setViewportSize({ width, height: 900 })
+      await frames(page)
+      const state = await phoneBar(page, label)
+      seen[width] = state
+      expectPhone(`${width}px`, state, tallest)
+    }
+    // A refresh that fails on the narrowest phone keeps the row under the periods.
+    await page.setViewportSize({ width: 360, height: 900 })
+    await frames(page)
+    const before = await phoneBar(page, label)
+    fail(true)
+    await failRefresh(page)
+    const after = await phoneBar(page, label)
+    seen['360 failed'] = after
+    await record(info, `bar-states phone ${locale}`, seen)
+    expectPhone('360px failed', after, tallest)
+    expect.soft(after.bar, "the failure: the bar's height").toBe(before.bar)
+    expect.soft(after.fresh, "the failure: the freshness's box").toEqual(before.fresh)
+    const failure = after.failure ?? { left: Number.NaN, top: Number.NaN, right: 0, bottom: 0 }
+    const line = after.line ?? failure
+    expect
+      .soft(failure.top, 'the failure under the periods')
+      .toBeGreaterThanOrEqual(after.track?.bottom ?? Number.NaN)
+    expect.soft(failure.left, 'the failure before the line').toBeGreaterThanOrEqual(line.left - 0.5)
+    expect.soft(failure.right, 'the failure past the line').toBeLessThanOrEqual(line.right + 0.5)
+    expect.soft(failure.right, 'the failure past the window').toBeLessThanOrEqual(after.window)
   })
 
 /** Where the bar's line ends, and the panel's content, and whether the panel scrolls. */
