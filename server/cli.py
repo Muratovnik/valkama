@@ -123,7 +123,8 @@ def migrate_main(
     Valkama 2.9 left, and no environment value or setting a spawned session could
     inherit lets it through. A dry run copies the store with `VACUUM INTO` and
     migrates the copy, in `into` when it is named and kept there, or in a directory
-    that goes when the run ends; the store itself is only read. A run that fails
+    that goes when the run ends; the store itself is only read. A SQLite the
+    migration refuses is refused before the copy too. A run that fails
     prints its report too, naming the step or the postconditions, and exits 1; one
     refused before it starts prints its report and exits with the refusal.
     """
@@ -140,6 +141,9 @@ def migrate_main(
         if store.store_generation(source) == "current":
             _print_report(store.migrate_work_model(source))
             return
+        refused = store_steps.new_report("work-model")
+        refused.update(dry_run=True, source=os.path.abspath(source))
+        store.refuse_an_old_sqlite(refused)
         with contextlib.ExitStack() as stack:
             directory = into or stack.enter_context(
                 tempfile.TemporaryDirectory(prefix="valkama-trial-", ignore_cleanup_errors=True)
