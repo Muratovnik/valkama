@@ -49,6 +49,12 @@ the whole profile goes when the server stops or fails. One process owns that:
 process handle, so it cannot stop a process that merely reused the number, and
 it cleans up when the server dies with nobody watching.
 
+A build serves a store only at its own schema, so a copy of a store Valkama 2.9
+left is first carried there by the transition's own commands, `projects upgrade`,
+`projects map-items` and `migrate work-model`, run on the copy and its registry;
+the file `map-items` writes stays inside the profile as well. Served unmigrated, the
+copy was refused with "run `valkama migrate work-model` once".
+
 `profile` makes the same home with no server, for a rehearsal run by hand: the
 store copy, the project registry, the installed Host Runtime (`~/.agent-host-runtime`),
 a copy of the global Git configuration and each `--copy PATH` of the caller's home.
@@ -108,6 +114,10 @@ CLIENT_HOMES = ("CLAUDE_CONFIG_DIR", "CODEX_HOME")
 
 #: Long enough for a large store copy to migrate before the listener opens.
 START_SECONDS = 180.0
+#: What `serve` waits beyond that for a copy of a 2.9 store to take the transition's
+#: commands first (`migrate_copy`): `map-items` asks Git for every commit a ref names,
+#: and the migration takes a verified recovery point before its steps.
+MIGRATE_SECONDS = 300.0
 STOP_SECONDS = 30.0
 #: A killed process's file handles outlast it for a moment on Windows.
 REMOVE_SECONDS = 10.0
@@ -752,23 +762,107 @@ def _stop_tree(process: object, port: int | None) -> list[str]:
     return []
 
 
-def copy_registry(home: Path) -> None:
-    """Bring the caller's project registry along with a store copy.
+def registry_files() -> list[Path]:
+    """The caller's project registry: its projection and the inventory beside it.
+
+    Asked in the caller's own environment, as the store is. Importing the package
+    `tests` moves `LOCALAPPDATA` into the suite's own directory, where no registry
+    is, so a copy made by a caller that reached this file through the package came
+    up without one. The package keeps the value it replaced, and the files are then
+    named under that one, by the product's own layout below `LOCALAPPDATA`.
+    """
+
+    found = [Path(project_registry.registry_path()), registry_owner.inventory_path()]
+    suite = sys.modules.get("tests")
+    moved_to = getattr(suite, "SUITE_LOCAL_APP_DATA", None)
+    if moved_to is None or os.environ.get("LOCALAPPDATA") != moved_to:
+        return found
+    # The product's own fallback when a process has no `LOCALAPPDATA` at all.
+    started_with = getattr(suite, "CALLER_LOCAL_APP_DATA", None) or str(
+        Path.home() / "AppData" / "Local"
+    )
+    return [Path(started_with) / path.relative_to(moved_to) for path in found]
+
+
+def copy_registry(home: Path, files: Sequence[Path]) -> None:
+    """Bring the caller's project registry, `registry_files`, along with a store copy.
 
     Every page of the app is reached through a project bound to a space. A copy
     without the registry said the project list could not be read and answered 503
-    on `/open/<number>`, so nothing in it could be looked at. The files are read
-    here, in the caller's own environment, and nothing is written back.
+    on `/open/<number>`, so nothing in it could be looked at. The files are only
+    read, and nothing is written back.
     """
 
     target = home / "AppData" / "Local" / "Valkama"
     target.mkdir(parents=True, exist_ok=True)
-    for found in (Path(project_registry.registry_path()), registry_owner.inventory_path()):
+    for found in files:
         if found.is_file():
             shutil.copy2(found, target / found.name)
 
 
-def supervise(out: Path, source: Path | None, command: Sequence[str] | None = None) -> None:
+def copy_home_store(source: Path, home: Path, registry: Sequence[Path]) -> None:
+    """The store copy and the registry it is read with, as `serve` and `profile` both take them."""
+
+    copy_store(source, home)
+    copy_registry(home, registry)
+
+
+#: The file `projects map-items` writes for the migration, inside the profile: it names
+#: the store's items and commits.
+ITEM_PROJECTS = "item-projects.json"
+
+
+def migration_steps(home: Path) -> list[tuple[str, ...]]:
+    """The transition's own commands, in its order, that carry a 2.9 store to the work model.
+
+    The registry first, then the file that gives each work item its projects, read
+    from the store, the registry and the registered repositories, then the migration
+    with that file. `docs/guides/store-upgrades.md` gives the order and each refusal.
+    """
+
+    item_projects = str(home / ITEM_PROJECTS)
+    return [
+        ("projects", "upgrade"),
+        ("projects", "map-items", "--output", item_projects),
+        ("migrate", "work-model", "--item-projects", item_projects),
+    ]
+
+
+def migrate_copy(home: Path, logs: Path) -> bool:
+    """Carry a copy Valkama 2.9 left to this build's schema, as the transition does; whether it ran.
+
+    A build serves a store only at its own schema, so a copy of a 2.9 store was
+    refused with "run `valkama migrate work-model` once". Each command runs in the
+    profile's environment, on the copy and the copied registry, and a failed one
+    stops the start, naming its log. A copy at this build's schema is left as it is,
+    and so is one the migration does not carry: the server refuses that itself.
+    """
+
+    try:
+        if store.store_generation(str(store_path(home))) != "2.9":
+            return False
+    except (store.StoreTooOldError, store.StoreTooNewError):
+        return False
+    environment = isolated_environment(home)
+    for arguments in migration_steps(home):
+        name = "-".join(arguments[:2])
+        log = logs / f"copy-{name}.log"
+        run = Run(name, [sys.executable, "valkama.py", *arguments], ROOT)
+        code = _run_step(run, log, environment)
+        if code != 0:
+            raise ServeError(
+                f"`valkama {' '.join(arguments[:2])}` on the store copy exited with code"
+                f" {code}: {_tail(log)}; see {log}"
+            )
+    return True
+
+
+def supervise(
+    out: Path,
+    source: Path | None,
+    command: Sequence[str] | None = None,
+    registry: Sequence[Path] = (),
+) -> None:
     """Own one server from start to cleanup; the last thing written says how it went."""
 
     home, stop_file = out / HOME, out / STOP
@@ -783,8 +877,8 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
     try:
         prepare_home(home)
         if source is not None:
-            copy_store(source, home)
-            copy_registry(home)
+            copy_home_store(source, home, registry)
+            migrate_copy(home, out / LOGS)
         argv = command or [sys.executable, "valkama.py", "serve", "--port", "0"]
         with log.open("wb") as output:
             server = subprocess.Popen(
@@ -863,8 +957,12 @@ def _clear_state(out: Path) -> None:
     (out / STOP).unlink(missing_ok=True)
 
 
-def start(out: Path, source: Path | None) -> int:
-    """Start a supervisor, wait until it says how the start went, and return."""
+def start(out: Path, source: Path | None, registry: Sequence[Path] = ()) -> int:
+    """Start a supervisor, wait until it says how the start went, and return.
+
+    The supervisor is handed the registry's files by name: its environment is the
+    caller's, which the package `tests` may have moved (`registry_files`).
+    """
 
     occupied = _occupied(out)
     if occupied is not None:
@@ -874,6 +972,8 @@ def start(out: Path, source: Path | None) -> int:
     argv = [sys.executable, __file__, SUPERVISE, "--out", str(out)]
     if source is not None:
         argv += ["--store-copy", str(source)]
+        for found in registry:
+            argv += ["--registry", str(found)]
     supervisor_log = out / LOGS / "supervisor.log"
     with supervisor_log.open("wb") as output:
         supervisor = subprocess.Popen(
@@ -885,7 +985,7 @@ def start(out: Path, source: Path | None) -> int:
             creationflags=_NO_WINDOW | _NEW_GROUP,
             start_new_session=sys.platform != "win32",
         )
-    deadline = time.monotonic() + START_SECONDS + STOP_SECONDS
+    deadline = time.monotonic() + MIGRATE_SECONDS + START_SECONDS + STOP_SECONDS
     while time.monotonic() < deadline:
         state = _read_state(out)
         if state is not None and state["state"] == "ready":
@@ -1103,8 +1203,14 @@ def _size(directory: Path) -> int:
     return sum(path.lstat().st_size for path in directory.rglob("*") if path.is_file())
 
 
-def build_profile(out: Path, source: Path, copies: Sequence[str]) -> tuple[list[Path], int]:
-    """Fill the new directory `out`: the links under the copied paths left out, and the port."""
+def build_profile(
+    out: Path, source: Path, copies: Sequence[str], registry: Sequence[Path]
+) -> tuple[list[Path], int]:
+    """Fill the new directory `out`: the links under the copied paths left out, and the port.
+
+    The store copy is left as the caller's store is: the rehearsal runs the
+    transition's commands on it by hand, each timed.
+    """
 
     caller, home = Path.home(), out / HOME
     # Every name is checked before the store, the longest copy, is taken.
@@ -1118,8 +1224,7 @@ def build_profile(out: Path, source: Path, copies: Sequence[str]) -> tuple[list[
     else:
         _say(f"there is no {runtime} to copy")
     _make_home(home)
-    copy_store(source, home)
-    copy_registry(home)
+    copy_home_store(source, home, registry)
     _copy_git_config(home / ".gitconfig")
     left_out: list[Path] = []
     for relative, path in named.items():
@@ -1129,7 +1234,7 @@ def build_profile(out: Path, source: Path, copies: Sequence[str]) -> tuple[list[
     return left_out, port
 
 
-def profile(out: Path, source: Path, copies: Sequence[str]) -> int:
+def profile(out: Path, source: Path, copies: Sequence[str], registry: Sequence[Path]) -> int:
     """Make a profile in the new directory `out`, or make nothing and say why."""
 
     started = time.monotonic()
@@ -1139,7 +1244,7 @@ def profile(out: Path, source: Path, copies: Sequence[str]) -> int:
         _say(f"{out} already exists; a profile is made only in a new directory")
         return 1
     try:
-        left_out, port = build_profile(out, source, copies)
+        left_out, port = build_profile(out, source, copies, registry)
     except (OSError, sqlite3.Error, RuntimeError, ValueError) as error:
         removed = remove_tree(out)
         _say(f"profile failed: {error}" + ("" if removed else f"; {out} is still on disk"))
@@ -1203,6 +1308,7 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("stop", help="stop that server, or remove a profile, and its home")
     supervise_command = commands.add_parser(SUPERVISE)
     supervise_command.add_argument("--store-copy")
+    supervise_command.add_argument("--registry", action="append", default=[], type=Path)
     for command in commands.choices.values():
         command.add_argument("--out", type=Path, required=True, help="where everything is written")
     return parser
@@ -1220,19 +1326,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     source = None if copy is None else Path(copy or store.db_path())
     if options.command == "profile":
         assert source is not None
-        return profile(out, source, options.copy)
+        return profile(out, source, options.copy, registry_files())
     out.mkdir(parents=True, exist_ok=True)
     if options.command == "gates":
         return gates(select_steps(options.only, owner=options.owner), out)
     if options.command == "stop":
         return stop(out)
     if options.command == SUPERVISE:
-        supervise(out, source)
+        supervise(out, source, registry=options.registry)
         return 0
     warning = bundle_warning(ROOT)
     if warning is not None:
         _say(warning)
-    return start(out, source)
+    return start(out, source, registry_files())
 
 
 if __name__ == "__main__":
