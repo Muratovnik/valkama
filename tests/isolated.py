@@ -1271,7 +1271,12 @@ def _parser() -> argparse.ArgumentParser:
 
     gates_command = commands.add_parser("gates", help="run the gates of the repository")
     gates_command.add_argument(
-        "--only", nargs="+", choices=names, metavar="NAME", help=f"any of: {', '.join(names)}"
+        "--only",
+        nargs="+",
+        action="extend",
+        choices=names,
+        metavar="NAME",
+        help=f"any of: {', '.join(names)}; a repeated --only adds its names",
     )
     gates_command.add_argument(
         "--owner", action="store_true", help="have the release audit enforce the owner policy"

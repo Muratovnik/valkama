@@ -556,16 +556,27 @@ class HeavyLockTests(Workspace):
         count.start()
         self.addCleanup(count.stop)
 
-    def gate_runs(self, *only: str) -> list[isolated.Run]:
-        """The runs `gates --only ...` would hand to `run_gates`."""
+    def gate_runs(self, *only: str, each: bool = False) -> list[isolated.Run]:
+        """The runs `gates --only ...` would hand to `run_gates`; with `each`, one `--only` a name."""
 
         tools = {name: (name,) for name in ("typos", "vulture", "mypy", "lint-imports", "semgrep")}
         with (
             mock.patch.object(isolated.release, "require_toolchain", return_value=tools),
             mock.patch.object(isolated, "run_gates", return_value=0) as run_gates,
         ):
-            quietly(isolated.main, ["gates", "--out", str(self.out), "--only", *only])
+            selection = (
+                [part for name in only for part in ("--only", name)] if each else ["--only", *only]
+            )
+            quietly(isolated.main, ["gates", "--out", str(self.out), *selection])
         return run_gates.call_args.args[0]
+
+    def test_a_repeated_only_adds_its_names_instead_of_replacing_them(self) -> None:
+        # `--only web --only desktop` kept the last flag alone and ran no web step.
+        repeated = [run.name for run in self.gate_runs("web", "desktop", each=True)]
+
+        self.assertEqual([run.name for run in self.gate_runs("web", "desktop")], repeated)
+        self.assertIn("desktop-test", repeated)
+        self.assertIn("web-typecheck", repeated)
 
     def test_of_the_whole_list_only_the_unittest_step_takes_the_lock(self) -> None:
         gated = [run.name for run in self.gate_runs("python", "web", "desktop") if run.gated]
