@@ -27,6 +27,7 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 from unittest import mock
@@ -322,7 +323,15 @@ OTHER_STATES = (
 
 
 def _step(text: str, holder: str) -> dict:
-    return {"claimed_by": holder, "done": False, "done_by": "", "id": f"step-{text}", "text": text}
+    """A checklist step as 2.9 wrote it, its id a UUID of its own."""
+
+    return {
+        "claimed_by": holder,
+        "done": False,
+        "done_by": "",
+        "id": str(uuid.uuid4()),
+        "text": text,
+    }
 
 
 def populate(conn: sqlite3.Connection) -> dict[str, str]:

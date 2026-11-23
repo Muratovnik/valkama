@@ -1454,9 +1454,9 @@ class ThroughTheCommandTests(Workspace):
             sorted(work_model.SPACE_PROJECTS), sorted(space["key"] for space in spaces)
         )
         self.assertEqual(items, sum(space["work_items"] for space in spaces))
-        listed = self.get_json(served["port"], "/api/planning/work-items?space=KEEP")
-        kept = next(space for space in spaces if space["key"] == "KEEP")
-        self.assertEqual(kept["work_items"], len(listed["work_items"]))
+        for space in spaces:
+            listed = self.get_json(served["port"], f"/api/planning/work-items?space={space['key']}")
+            self.assertEqual(space["work_items"], len(listed["work_items"]), space["key"])
         # The registry the copy was migrated with is the caller's, carried by `projects upgrade`.
         inventory = self.home / "AppData" / "Local" / "Valkama" / "project-registry.toml"
         self.assertTrue(inventory.read_bytes().startswith(b"schema_version = 2\n"))
