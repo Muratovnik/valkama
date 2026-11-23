@@ -59,11 +59,11 @@ async function leftFromDepth(page: Page, comments?: unknown[]) {
   return { back, body, drawer, place, reference }
 }
 
-/** Hold the chain's next answers back by this long, or for good. */
-const holdChain = (page: Page, delay: number | null) =>
+/** Hold the chain's next answers back: by this long, until this settles, or for good. */
+const holdChain = (page: Page, until: number | Promise<unknown> | null) =>
   page.route('**/api/planning/work-item/chain?*', async (route) => {
-    if (delay === null) return
-    await new Promise((done) => setTimeout(done, delay))
+    if (until === null) return
+    await (typeof until === 'number' ? new Promise((done) => setTimeout(done, until)) : until)
     await route.fallback()
   })
 
@@ -71,20 +71,17 @@ const holdChain = (page: Page, delay: number | null) =>
 const watchPaint = (page: Page) =>
   page.evaluateHandle(() => {
     const frames: {
-      at: number
       guessed: boolean
       left: boolean
       shown: boolean
       top: number
     }[] = []
-    const started = performance.now()
     let running = true
     const sample = () => {
       if (!running) return
       const body = document.querySelector('.drawer-frame-body')
       const tabs = document.querySelector('.drawer-frame-tabs')
       frames.push({
-        at: performance.now() - started,
         guessed: document.querySelector('.branch-map-canvas.guessed') !== null,
         // The member's card still has its Back; the parent the walk began from has none.
         left: document.querySelector('.head-back') !== null,
@@ -105,20 +102,35 @@ const watchPaint = (page: Page) =>
 test('Back on a slow chain read shows the card soon, and moves once to the place when it answers', async ({
   page,
 }) => {
+  // The card's wait for its chain is a timer, so it runs on the page's clock, which stands while
+  // the test looks: a busy machine stretches the wall, never this clock.
+  await page.clock.install()
   const { back, body, drawer, place, reference } = await leftFromDepth(page)
-  await holdChain(page, 1200)
+  const chain: { release?: () => void } = {}
+  await holdChain(page, new Promise<void>((done) => (chain.release = done)))
   const paint = await watchPaint(page)
+  const tabs = drawer.locator('.drawer-frame-tabs')
+  const painted = () => tabs.evaluate((node) => node.checkVisibility({ opacityProperty: true }))
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
   await pressWhereItStands(page, back)
+  // The record is in, the card has its head, and it waits for the chain unpainted.
+  await expect(drawer.getByRole('heading', { name: workItem.title, exact: true })).toBeAttached()
+  expect(await painted()).toBe(false)
+  // Blank for about as long as a normal read takes, and painted with the chain still held.
+  await page.clock.runFor(799)
+  expect(await painted()).toBe(true)
+  await expect(drawer.locator('.chain-row')).toHaveCount(0)
+
+  await page.clock.resume()
+  chain.release?.()
   const row = drawer.locator(`.chain-row[data-reference="${reference}"]`)
   await expect(row).toBeFocused()
   expect(Math.abs((await placeOf(body)) - place)).toBeLessThan(2)
   const frames = await paint.evaluate((running) => running.stop())
-
-  const painted = frames.filter(({ shown }) => shown)
-  // Blank for about as long as a normal read takes, long before the chain has answered.
-  expect(painted[0]?.at ?? Infinity).toBeLessThan(800)
   // As far as it could at first, then the place: one move, and none after.
-  expect(new Set(painted.map(({ top }) => Math.round(top))).size).toBeLessThanOrEqual(2)
+  const tops = frames.filter(({ shown }) => shown).map(({ top }) => Math.round(top))
+  expect(tops.length).toBeGreaterThan(0)
+  expect(new Set(tops).size).toBeLessThanOrEqual(2)
 })
 
 test('Back on a slow chain moves to the place though the browser has moved the card first', async ({

@@ -97,9 +97,11 @@ for (const { width, locale, under } of CASES) {
   }, testInfo) => {
     await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
     const entries = [ofPurpose(null), ofPurpose('triage')]
-    const { dialog } = await openKinds(page, entries, width, async () => {
-      await page.clock.setSystemTime(NOW)
-      await serveLines(page, entries, DUE)
+    const { dialog } = await openKinds(page, entries, width, {
+      prepare: async () => {
+        await page.clock.setSystemTime(NOW)
+        await serveLines(page, entries, DUE)
+      },
     })
     const lines = dialog.locator('[data-triage-due]')
     await expect(lines.locator('[data-triage-due-words]')).toHaveText([...WORDS[locale]])

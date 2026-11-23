@@ -3,8 +3,9 @@
  * card's, a cut text's whole words laid over it counting as a hint: every frame, every change of the count of hints, every arrival of the pointer and key,
  * all on the page's own clock, and the points and boxes they aim the pointer at.
  */
-import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
+
+import { resumeClock, standClock, stands } from './pageClock.ts'
 
 export interface Frame {
   at: number
@@ -135,16 +136,23 @@ export const hintsFadedIn = (page: Page) =>
     await Promise.all(hints.flatMap((hint) => hint.getAnimations().map((one) => one.finished)))
   })
 
-/** Real time passing in the page, `ms` long, while its frames are noted. */
+/**
+ * The page's time passing, `ms` long, while its frames are noted: run by the test on a clock that
+ * stands (`standClock`), and real time otherwise.
+ */
 export const pass = (page: Page, ms: number) =>
-  page.evaluate((wait) => new Promise((done) => setTimeout(done, wait)), ms)
+  stands(page)
+    ? page.clock.runFor(ms)
+    : page.evaluate((wait) => new Promise((done) => setTimeout(done, wait)), ms)
 
 /**
- * How long the hint manager waits on a pointer that stopped moving, in ms (`GRACE_MS` in
- * `hintManager.ts`): a hint stays that long after the pointer leaves its anchor, and on the way to
- * a hint what the pointer crosses takes over once it stands still on it that long.
+ * How far the page's clock runs between two moves of a stroke (`stroke`): a frame, as a pointer
+ * reports a hand's moves. A stroke's pace is the test's, never the machine's, and well inside the
+ * 120 ms the hint manager waits on a pointer that stopped (`GRACE_MS` in `hintManager.ts`): a hint
+ * stays that long after the pointer leaves its anchor, and on the way to a hint what the pointer
+ * crosses takes over once it stands still on it that long.
  */
-const GRACE_MS = 120
+const MOVE_MS = 16
 
 interface Point {
   x: number
@@ -224,36 +232,35 @@ const watchMoves = (page: Page, from: Point, to: Point) =>
     { start: from, end: to },
   )
 
-/** The moves the page noted since `watchMoves`, once the last one's frame came. */
+/** The moves the page noted since `watchMoves`; the frame after the last one has come. */
 const moved = (page: Page) =>
-  page.evaluate(async () => {
-    await new Promise(requestAnimationFrame)
-    return (window as unknown as { moves: Move[] }).moves.splice(0)
-  })
+  page.evaluate(() => (window as unknown as { moves: Move[] }).moves.splice(0))
 
 /**
  * Moves the pointer from `from`, where it stands, along `legs`, each in its own steps, the last
  * ending where the stroke goes: the moves the page heard.
+ *
+ * The page's clock stands for the stroke and runs `MOVE_MS` after each move, so the pointer moves
+ * at that pace by the page's clock, which a busy machine cannot slow down. A clock the test has
+ * not stopped (`standClock`) is stopped for the stroke and goes on with the wall after it.
  */
 export async function stroke(page: Page, from: Point, legs: readonly Leg[]) {
   const to = legs.at(-1) ?? from
+  const own = !stands(page)
+  if (own) await standClock(page)
   await watchMoves(page, from, to)
-  for (const leg of legs) await page.mouse.move(leg.x, leg.y, { steps: leg.steps })
-  return moved(page)
-}
-
-/**
- * The longest the pointer stood still on its way from `from` to `to`, in ms: from a move off both
- * to the next move. There each move restarts the grace of what it crosses; on either end none runs.
- */
-export function longestStill(moves: readonly Move[]) {
-  let longest = 0
-  for (const [at, move] of moves.entries()) {
-    const next = moves[at + 1]
-    if (next && move.on !== 'from' && move.on !== 'to')
-      longest = Math.max(longest, next.at - move.at)
+  let at = from
+  for (const leg of legs) {
+    for (let step = 1; step <= leg.steps; step += 1) {
+      const part = step / leg.steps
+      await page.mouse.move(at.x + (leg.x - at.x) * part, at.y + (leg.y - at.y) * part)
+      await page.clock.runFor(MOVE_MS)
+    }
+    at = leg
   }
-  return longest
+  const moves = await moved(page)
+  if (own) await resumeClock(page)
+  return moves
 }
 
 /**
@@ -270,56 +277,3 @@ export function crossing(moves: readonly Move[]) {
   }
   return on.at - off.at
 }
-
-/**
- * Runs `attempt`, a move of the pointer from a clean state and what the page showed along it,
- * until one went at the pace the hint manager's rules are about: `pause`, what the page measured of
- * it, under `GRACE_MS`. A slower one, as a loaded machine makes, legitimately lets those rules fire
- * and says nothing of them: it is noted on the test and done again, `tries` times at most, and then
- * the test fails on the pace it measured.
- */
-export async function paced<T extends { pause: number }>(
-  name: string,
-  attempt: (round: number) => Promise<T>,
-  tries = 5,
-): Promise<T> {
-  const pauses: number[] = []
-  for (let round = 1; round <= tries; round += 1) {
-    const done = await attempt(round)
-    if (done.pause < GRACE_MS) return done
-    pauses.push(Math.round(done.pause))
-    const note = `${name}: attempt ${round} of ${tries} redone, the pointer took ${pauses.at(-1)} ms where the hint manager waits ${GRACE_MS} ms`
-    test.info().annotations.push({ type: 'redone', description: note })
-    console.log(`redone ${note}`)
-  }
-  throw new Error(
-    `${name}: no attempt moved the pointer within the hint manager's ${GRACE_MS} ms; ` +
-      `it took ${pauses.join(', ')} ms, so none says whether the rule holds`,
-  )
-}
-
-/**
- * The pointer moved to `away`, on nothing with a hint, until no hover surface shows, and past the
- * time the next one would still open at once (`WARM_MS`): the state a test starts from.
- */
-export async function clear(page: Page, away: Point) {
-  await page.mouse.move(away.x, away.y)
-  await expect(page.locator('.tooltip-hint, .whole-text, .reference-preview')).toHaveCount(0)
-  await pass(page, 400)
-}
-
-/**
- * Moves the pointer from `from` onto `to` in `steps`, as `stroke` does, with the surface it raised
- * from `from` up. A stroke that stood still on the way as long as the grace is done again
- * (`paced`), once `again` has brought the pointer back to `from` and the surface up.
- */
-export const pacedStroke = (
-  page: Page,
-  name: string,
-  { from, to, again }: { from: Point; to: Leg; again: () => Promise<void> },
-) =>
-  paced(name, async (round) => {
-    if (round > 1) await again()
-    const moves = await stroke(page, from, [to])
-    return { moves, pause: longestStill(moves) }
-  })

@@ -27,7 +27,9 @@ the exception: the Python server serves `web/dist` alone, so they build there.
 Each command below runs in `web/`:
 
 - One spec: `npx playwright test <file> --workers=4`. A name is a prefix, so give
-  the whole file name when it begins another.
+  the whole file name when it begins another. Every test of the suite that bounds
+  a time (`web/tests/browser/timedChecks.ts`) runs after it, alone: Playwright runs
+  that project whole, and only the runner's list narrows it.
 - A probe spec kept outside the suite, such as in a worktree's ignored
   `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> npx playwright test
   --config tests/browser/probe.config.ts`. Name the file

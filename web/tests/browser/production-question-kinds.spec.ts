@@ -275,7 +275,9 @@ for (const { width, locale } of [
     const words = GOAL_WORDS[locale]
     await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
     const task = ofPurpose('task', { prompt: 'The task in its goal' })
-    const { record } = await openKinds(page, [task], width, () => serveGoal(page))
+    const { record } = await openKinds(page, [task], width, {
+      prepare: () => serveGoal(page),
+    })
     const one = record('The task in its goal')
     await one.scrollIntoViewIfNeeded()
     const subject = one.locator('[data-kind-subject="task"]')

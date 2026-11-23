@@ -12,16 +12,15 @@ import { middleOf, pastTheDelay } from './dayHintPage.ts'
 import type { Arrival, Frame } from './hintFramesPage.ts'
 import {
   boxOf,
-  clear,
   crossing,
   hint,
-  paced,
   pass,
   quietPoint,
   stroke,
   watched,
   watchHints,
 } from './hintFramesPage.ts'
+import { standClock } from './pageClock.ts'
 import { card, middle, ontoCard, openReported, reference, rest } from './previewPage.ts'
 import { test } from './test.ts'
 
@@ -60,42 +59,34 @@ const shownAlone = (frames: Frame[], surface: 'card' | 'hint') =>
 test('a hint, a card and a hint again take over from each other at once, one surface a frame', async ({
   page,
 }, info) => {
-  const { entry, link, onHead } = await cardAt(page)
+  // Each way the surface the pointer leaves holds for its grace, a timer, and the other takes over
+  // within it; both are read on the page's clock, which stands once the head's hint is up, so the
+  // pointer's way and every delay are the page's alone (`standClock`, `stroke`).
+  await page.clock.install()
+  const { link, onHead } = await cardAt(page)
   const onLink = await middle(link)
-  // Each way the surface the pointer leaves holds for its grace: a pointer slower than that between
-  // the two lets it go, as it should, and that attempt is done again (`paced`).
-  const { delays, toCard, toHint } = await paced('hint-card-hint', async (round) => {
-    // Off the head's hint, which the last attempt left up, onto nothing well away from it and its
-    // title's whole words.
-    if (round > 1) await clear(page, await quietPoint(entry))
-    await page.mouse.move(onHead.x, onHead.y)
-    await expect(hint(page)).toHaveCount(1)
-    await watched(page)
+  await page.mouse.move(onHead.x, onHead.y)
+  await expect(hint(page)).toHaveCount(1)
+  await standClock(page)
+  await watched(page)
 
-    // Straight from the head onto the reference, while the head's hint is up.
-    const movesToCard = await stroke(page, onHead, [{ ...onLink, steps: 3 }])
-    await expect(card(page)).toContainText('Keep the reader in place')
-    await pass(page, 200)
-    const toCard = await watched(page)
-    // And back onto the head, while the card is up.
-    const movesToHint = await stroke(page, onLink, [{ ...onHead, steps: 3 }])
-    await expect(hint(page)).toHaveCount(1)
-    await pass(page, 200)
-    const toHint = await watched(page)
-    // A frame is stamped as it starts, so one drawn after an arrival may read a little before it.
-    const delays = {
-      card: shownAlone(toCard.frames, 'card') - arrived(toCard),
-      hint: shownAlone(toHint.frames, 'hint') - arrived(toHint),
-    }
-    const crossed = { card: crossing(movesToCard), hint: crossing(movesToHint) }
-    await record(info, round === 1 ? 'hint-card-hint-frames' : `hint-card-hint-frames-${round}`, {
-      crossed,
-      delays,
-      toCard,
-      toHint,
-    })
-    return { delays, pause: Math.max(crossed.card, crossed.hint), toCard, toHint }
-  })
+  // Straight from the head onto the reference, while the head's hint is up.
+  const movesToCard = await stroke(page, onHead, [{ ...onLink, steps: 3 }])
+  await pass(page, 200)
+  await expect(card(page)).toContainText('Keep the reader in place')
+  const toCard = await watched(page)
+  // And back onto the head, while the card is up.
+  const movesToHint = await stroke(page, onLink, [{ ...onHead, steps: 3 }])
+  await pass(page, 200)
+  await expect(hint(page)).toHaveCount(1)
+  const toHint = await watched(page)
+  // A frame is stamped as it starts, so one drawn after an arrival may read a little before it.
+  const delays = {
+    card: shownAlone(toCard.frames, 'card') - arrived(toCard),
+    hint: shownAlone(toHint.frames, 'hint') - arrived(toHint),
+  }
+  const crossed = { card: crossing(movesToCard), hint: crossing(movesToHint) }
+  await record(info, 'hint-card-hint-frames', { crossed, delays, toCard, toHint })
 
   for (const [name, noted] of [
     ['hint to card', toCard],
@@ -116,20 +107,23 @@ test('a hint, a card and a hint again take over from each other at once, one sur
 test('the pointer can move onto a card, which stays there, and off it the card goes', async ({
   page,
 }, info) => {
+  // The card's grace is a timer, so the way onto the card and the card's going are read on the
+  // page's clock, which stands once the card is up (`standClock`, `ontoCard`).
+  await page.clock.install()
   const { drawer, link } = await cardAt(page)
   const quiet = await quietPoint(drawer)
   await rest(page, link)
   await expect(card(page)).toBeVisible()
+  await standClock(page)
   const onCard = middleOf(await boxOf(card(page)))
   await watched(page)
 
-  // What was noted starts over with each attempt (`ontoCard`).
-  await ontoCard(page, link, { ...onCard, steps: 6 }, () => watched(page))
+  await ontoCard(page, link, { ...onCard, steps: 6 })
   await pass(page, 700)
   const stayed = await watched(page)
 
   await page.mouse.move(quiet.x, quiet.y)
-  await expect(card(page)).toHaveCount(0)
+  await pass(page, 220)
   const left = await watched(page)
   const leftAt = left.arrivals.at(-1)?.at ?? Number.NaN
   const goneAt = left.frames.find((frame) => frame.surfaces.length === 0)?.at ?? Number.NaN
