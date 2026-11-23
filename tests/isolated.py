@@ -34,8 +34,8 @@ Each rule here is a way a hand-written wrapper went wrong:
   browser check once took screenshots of a bundle ten commits behind its sources.
 - The `unittest` step holds a place at the machine's heavy-test gate,
   `tests/machine_lock.py`, for its own duration and no longer, declaring the CPUs
-  the whole suite declares, and runs marked as under it, because the suite takes
-  that place itself. The whole suite beside another checkout's heavy runs failed
+  the suite's processes declare as `tests/parallel.py` runs them, and runs marked
+  as under it, because the runner takes that place itself. The whole suite beside another checkout's heavy runs failed
   timing budgets that hold alone, so the step waits until it fits, and what the
   gate said while it waited opens the step's log. No other step is held here; the
   Vitest run of `npm test` goes through the gate on its own and says so in its log.
@@ -177,12 +177,7 @@ GATE_STEPS = (
         "semgrep scan --config p/python --config p/security-audit --metrics off --error"
         " server valkama.py",
     ),
-    Step(
-        "unittest",
-        "python",
-        'python -m coverage run -m unittest discover -s . -p "test_*.py"',
-        gated=True,
-    ),
+    Step("unittest", "python", "python tests/parallel.py --coverage", gated=True),
     Step("coverage", "python", "python -m coverage report"),
     Step("web-test", "web", "npm test", "web"),
     Step("web-typecheck", "web", "npm run typecheck", "web"),
@@ -466,13 +461,14 @@ def run_gates(
     The modules are read again at each step, because another session's `npm ci`
     may have replaced them while the steps before it ran. A gated step waits
     at the heavy-test gate, the machine's unless `lock` names another file, needing
-    what the whole unittest suite declares, and runs marked as under it, so the
-    suite inside does not wait for its own step; what the gate said opens its log.
+    what the suite's processes declare as `tests/parallel.py` runs them by default,
+    and runs marked as under it, so the runner inside does not wait for its own
+    step; what the gate said opens its log.
     Given the start of a `record`, it writes the whole record into `out` at the end.
     """
 
     # Imported here, not at the top, for the reason `_refusal` gives.
-    from tests import WHOLE_SUITE_CPUS, machine_lock, run_record
+    from tests import machine_lock, parallel, run_record
 
     # A hold of the run that started this one covers the steps too, though their
     # environment was built without the caller's `VALKAMA_*`.
@@ -513,7 +509,7 @@ def run_gates(
                 holding: contextlib.AbstractContextManager[None] = machine_lock.held(
                     f"tests/isolated.py gates: the {run.name} step",
                     path=lock,
-                    cpus=WHOLE_SUITE_CPUS,
+                    cpus=parallel.declared_cpus(parallel.default_jobs()),
                     say=told,
                 )
                 step_environment = {**environment, **machine_lock.marker(lock)}
