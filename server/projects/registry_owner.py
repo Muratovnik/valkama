@@ -299,6 +299,17 @@ def parse_inventory(raw: bytes) -> list[dict[str, Any]]:
     return _projects(document["projects"], resolve_root=False)
 
 
+def read_inventory(inventory: Path) -> list[dict[str, Any]]:
+    """The registered projects: none on a machine where no project was added yet.
+
+    The first write creates the inventory, so its absence is an empty registry, not a
+    failure of the read.
+    """
+
+    raw = _read(inventory)
+    return [] if raw is None else parse_inventory(raw)
+
+
 def render_inventory(projects: list[dict[str, Any]]) -> bytes:
     lines = [f"schema_version = {SCHEMA_VERSION}"]
     if not projects:
