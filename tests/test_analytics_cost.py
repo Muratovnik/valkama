@@ -3,27 +3,28 @@
 Ninety days of 25,000 stretches of work: two hundred sessions with their subagents, three
 hundred items, four models. The budget is set from a measurement on the machine this was
 written on, with a margin of more than three times, so it fails on a read that went from
-one pass to a query per row, not on a slow afternoon. A machine busy with other work can still
-stretch one read past it, so the budget holds the quickest of a few reads: a read that is slow
-by design is slow every time.
+one pass to a query per row, not on a slow afternoon. It holds the processor time the reading
+thread spends (`tests.processor_time`), not the time on the wall: a read is worked out in the
+thread that asks for it, one at a time (`usage._ONE_AT_A_TIME`), so that is all it costs, and
+other work on the machine stretches the wall clock without moving it.
 """
 
 from __future__ import annotations
 
 import math
 import random
-import time
+from functools import partial
 
 from tests.analytics_fixtures import DAY, HOUR, UsageStore, day, stamp
+from tests.processor_time import processor_seconds
 
 STRETCHES = 25_000
 DAYS = 90
-#: Seconds. Measured at the day step at 0.23 s by project and model and 0.48 s by item
+#: Seconds of the reading thread's processor time. Measured on the wall of an idle machine,
+#: where the two agree, at the day step at 0.23 s by project and model and 0.48 s by item
 #: and executor, the slowest of five reads each, and at 0.68 s and 1.17 s under coverage,
 #: which is how the gate runs the suite: more than three times the slower of those.
 BUDGET = 4.0
-#: Reads of each grouping at most: the first one under the budget ends the measurement.
-READS = 3
 #: The period's stretches, the folders of the sessions on no item, one read of labels
 #: per labelled dimension and the freshness: the same however many stretches there are.
 MAX_STATEMENTS = 6
@@ -94,14 +95,9 @@ class CostTests(CostCase):
         self.addCleanup(self.conn.set_trace_callback, None)
         for grouping in ("project,model", "work_item,executor"):
             with self.subTest(grouping):
-                spent: list[float] = []
-                while len(spent) < READS and (not spent or min(spent) >= BUDGET):
-                    statements.clear()
-                    began = time.perf_counter()
-                    read = self.read(**self.period(grouping))
-                    spent.append(time.perf_counter() - began)
-                took = ", ".join(f"{one:.3f}" for one in spent)
-                self.assertLess(min(spent), BUDGET, f"{grouping} took {took} s")
+                statements.clear()
+                read, spent = processor_seconds(partial(self.read, **self.period(grouping)))
+                self.assertLess(spent, BUDGET, f"{grouping} took {spent:.3f} s of processor time")
                 self.assertEqual(DAYS, len(read["series"]))
                 self.assertGreater(len(read["rows"]), 3)
                 # SQLite answers a lookup by key in microseconds, so a query per row would
@@ -193,14 +189,10 @@ class SeatCostTests(SeatCostCase):
         statements: list[str] = []
         self.conn.set_trace_callback(statements.append)
         self.addCleanup(self.conn.set_trace_callback, None)
-        spent: list[float] = []
-        while len(spent) < READS and (not spent or min(spent) >= BUDGET):
-            statements.clear()
-            began = time.perf_counter()
-            read = self.read(**{"from": day(0), "to": day(YEAR), "group_by": "seat"})
-            spent.append(time.perf_counter() - began)
-        took = ", ".join(f"{one:.3f}" for one in spent)
-        self.assertLess(min(spent), BUDGET, f"by seat took {took} s")
+        read, spent = processor_seconds(
+            partial(self.read, **{"from": day(0), "to": day(YEAR), "group_by": "seat"})
+        )
+        self.assertLess(spent, BUDGET, f"by seat took {spent:.3f} s of processor time")
         self.assertEqual(
             # Work of the organization no reading places on an account is its own value.
             {"org-a/acct-1", "org-a/acct-2", "org-a/acct-3", "org-a/", None},
