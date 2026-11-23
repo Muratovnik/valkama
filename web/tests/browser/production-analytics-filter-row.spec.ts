@@ -8,7 +8,8 @@
  * whole, under the line, four short ones on one row; with no filter there is no row, and the row
  * that comes with the first filter is the one thing that makes the bar taller, by its own height
  * and the bar's 8px gap, the panel moving down by as much. On a phone the row stands right under
- * the field's, and the room of the reader's own days, which every period keeps, under it.
+ * the field's, and the reader's own days, once chosen, in a row of their own under it: the bar holds
+ * no empty row for them under every other period (DESIGN.md, the Analytics bar).
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -127,7 +128,7 @@ for (const lang of ['en', 'ru'] as const)
       })
   })
 
-test('on a phone the chips stand right under the field, the room of the days under them', async ({
+test('on a phone the chips stand right under the field, the days chosen under them', async ({
   page,
 }, info) => {
   await serve(page)
@@ -149,7 +150,7 @@ test('on a phone the chips stand right under the field, the room of the days und
       0,
     )
   }
-  // The days stand under the chips, and their room is kept whatever period is chosen.
+  // The days stand under the chips, in a row the bar takes only once they are chosen.
   expect(own.own ?? Number.NaN, 'the days under the chips').toBeGreaterThanOrEqual(own.rowBottom)
-  expect(own.bar, 'the bar beside a span of days').toBe(week.bar)
+  expect(own.bar, 'the bar beside a span of days').toBeGreaterThan(week.bar)
 })
