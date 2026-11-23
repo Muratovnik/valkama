@@ -968,9 +968,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   Agent decisions' and the commits on no card, stands as one block a record as
   soon as its columns do not fit, at any width, its cells on lines one after
   another and its headings a line of sort buttons over them (`SectionTable`'s
-  `stack`). Sideways scroll is the last resort: only a table of figures whose
-  least does not fit scrolls, at its second step, its names held at the
-  frame's start. Analytics' tables take no third step: their owner chose a
+  `stack`). The work outside goals in Volumes, a table of figures, stacks the
+  same way where even its least does not fit, each figure beside its
+  category's name; scrolling, its last categories stood out of sight until the
+  table's end. Sideways scroll is the last resort: only a table of figures whose
+  least does not fit and that does not stack scrolls, at its second step, its
+  names held at the frame's start. Analytics' tables take no third step: their owner chose a
   second line and the sideways scroll for them. Stacked by a phone's width alone, Agent decisions left «What
   was decided» past the frame at 1024 and 760; held to their widths, the goals
   of Volumes left «Left ≈» past it at 1280, under a scroll bar below the
@@ -3430,6 +3433,9 @@ that stays, whatever rows the bar takes.
 
 Under the goals, the work outside goals: the scope's tasks under no goal, by project and by
 label, each row saying how many stand in each category, the count of them beside the heading.
+Where its columns do not fit the frame even at their least, a row is a block of its own (Rows and
+tables): its name across it, then its figures in columns alike in every block, each beside its
+category's name.
 Then the flow: how many tasks came in and came to a close in the period, the owner's decisions
 and the commits, for the period and day by day, newest first, with the pace of the scope's tasks
 over them in the words of a chain's. Then the estimates: the done tasks they are judged by,

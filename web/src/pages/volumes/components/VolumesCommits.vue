@@ -203,7 +203,7 @@ const fit = useTableFit(root, [() => rows.value], () => ({ steps: ['one'], other
         :label="t('volumes.commits.label')"
         :words="emptyWords"
       >
-        <thead class="volumes-commits-head">
+        <thead class="volumes-stack-head">
           <tr>
             <th
               scope="col"
@@ -240,10 +240,10 @@ const fit = useTableFit(root, [() => rows.value], () => ({ steps: ['one'], other
         <tbody
           v-for="row in rows"
           :key="row.key"
-          class="volumes-commit"
+          class="volumes-stack-body"
           :data-commit="row.commit.hash"
         >
-          <tr class="volumes-commit-row">
+          <tr class="volumes-stack-row">
             <th
               scope="row"
               class="chart-cell chart-name volumes-commit-code"
@@ -277,7 +277,7 @@ const fit = useTableFit(root, [() => rows.value], () => ({ steps: ['one'], other
           </tr>
           <tr
             v-if="row.open"
-            class="volumes-commit-row"
+            class="volumes-stack-row"
           >
             <td
               class="chart-cell volumes-commit-line"
@@ -349,28 +349,12 @@ const fit = useTableFit(root, [() => rows.value], () => ({ steps: ['one'], other
   margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
-/* Where the columns do not fit (`stack`), a commit is a block whose cells flow on lines: the hash
-   and the subject, which takes what the hash leaves, with the action under it; the repository on
-   a line of its own, breaking between its words; then the session and the time. The headings name
-   nothing a block does not, so they are left to assistive technology. */
+/* Where the columns do not fit (`stack`, the section's block in `volumesSection.css`), a commit is
+   a block whose cells flow on lines: the hash and the subject, which takes what the hash leaves,
+   with the action under it; the repository on a line of its own, breaking between its words; then
+   the session and the time. The headings name nothing a block does not, so they are left to
+   assistive technology. */
 .volumes-commits[data-fit='stack'] {
-  & :is(.volumes-commit, .volumes-commit-row) {
-    display: block;
-  }
-
-  & .volumes-commit-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-3);
-    padding: var(--space-2) var(--space-3);
-
-    & > .chart-cell {
-      position: static;
-      min-inline-size: 0;
-      padding: 0;
-    }
-  }
-
   & .chart-cell.volumes-commit-subject {
     flex: 1 1 0;
     min-inline-size: min-content;
@@ -378,15 +362,6 @@ const fit = useTableFit(root, [() => rows.value], () => ({ steps: ['one'], other
 
   & :is(.volumes-commit-repository, .volumes-commit-line) {
     flex-basis: 100%;
-  }
-
-  & .volumes-commits-head {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    white-space: nowrap;
-    overflow: hidden;
-    clip-path: inset(50%);
   }
 }
 
