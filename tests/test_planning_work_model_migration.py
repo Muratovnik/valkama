@@ -3265,5 +3265,95 @@ class LiveServerTests(StoreCase):
         self.assertEqual((17, digest), (identity(self.path)[0], file_digest(self.path)))
 
 
+def old_sqlite_refusal(found: str) -> str:
+    """The refusal the migration gives on the SQLite `found`, written out in full."""
+
+    return (
+        f"this Python runs SQLite {found}, and the work-model migration needs SQLite 3.47.1"
+        " or newer: run it again with a Python whose SQLite is 3.47.1 or newer;"
+        " nothing was written"
+    )
+
+
+class OldSqliteTests(StoreCase):
+    """A SQLite older than 3.47.1 refuses the migration; the version is made up here."""
+
+    def running(self, version: str) -> contextlib.AbstractContextManager[Any]:
+        return mock.patch.object(store, "_running_sqlite", return_value=version)
+
+    def command(self, *arguments: str) -> tuple[str, dict]:
+        """Run the command expecting its refusal: the exit's message and the report."""
+
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_DB": self.path}),
+            contextlib.redirect_stdout(output),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            cli.main(["migrate", "work-model", "--item-projects", self.file, *arguments])
+        return str(raised.exception.code), json.loads(output.getvalue())
+
+    def test_sqlite_3_47_0_refuses_the_command_before_any_write(self) -> None:
+        before, digest = listed(self.directory.name), file_digest(self.path)
+        with self.running("3.47.0"):
+            message, report = self.command()
+        self.assertEqual(old_sqlite_refusal("3.47.0"), message)
+        self.assertEqual(("refused", message), (report["status"], report["message"]))
+        self.assertEqual("3.47.0", report["environment"]["sqlite"])
+        self.assertEqual({"from": 17, "to": store.STORE_SCHEMA_VERSION}, report["schema"])
+        self.assertEqual(self.path, report["store"])
+        self.assertNotIn("recovery_point", report)
+        self.assertEqual([], report["steps"])
+        self.assertEqual((17, digest), (identity(self.path)[0], file_digest(self.path)))
+        # Refused before the migration lock: not even its file appears beside the store.
+        self.assertEqual(before, listed(self.directory.name))
+
+    def test_sqlite_3_47_0_refuses_a_dry_run_before_the_copy(self) -> None:
+        before, digest = listed(self.directory.name), file_digest(self.path)
+        into = os.path.join(self.directory.name, "trial")
+        with (
+            self.running("3.47.0"),
+            mock.patch.object(store, "copy_store", wraps=store.copy_store) as copy,
+        ):
+            message, report = self.command("--dry-run", "--into", into)
+        self.assertEqual(old_sqlite_refusal("3.47.0"), message)
+        self.assertEqual(
+            (True, os.path.abspath(self.path), "refused", message),
+            (report["dry_run"], report["source"], report["status"], report["message"]),
+        )
+        copy.assert_not_called()
+        self.assertFalse(os.path.exists(into))
+        self.assertEqual((17, digest), (identity(self.path)[0], file_digest(self.path)))
+        self.assertEqual(before, listed(self.directory.name))
+
+    def test_the_versions_are_compared_by_number(self) -> None:
+        for found in ("3.45.1", "3.47.0", "3.5.9"):
+            with self.subTest(found=found), self.running(found):
+                report: dict[str, Any] = {}
+                with self.assertRaises(store.WorkModelPreconditionError) as raised:
+                    store.refuse_an_old_sqlite(report)
+                self.assertEqual(old_sqlite_refusal(found), str(raised.exception))
+                self.assertEqual("refused", raised.exception.report["status"])
+        for found in ("3.47.1", "3.53.4", "3.100.0", "4.0.0"):
+            with self.subTest(found=found), self.running(found):
+                report = {}
+                store.refuse_an_old_sqlite(report)
+                self.assertEqual({}, report)
+
+    def test_sqlite_3_47_1_lets_the_migration_run(self) -> None:
+        with self.running("3.47.1"):
+            report = self.migrate()
+        self.assertEqual(
+            ("migrated", "3.47.1"), (report["status"], report["environment"]["sqlite"])
+        )
+        self.assertEqual(store.STORE_SCHEMA_VERSION, identity(self.path)[0])
+
+    def test_a_current_store_is_reported_current_on_any_sqlite(self) -> None:
+        with self.running("3.47.1"):
+            self.migrate()
+        with self.running("3.47.0"):
+            self.assertEqual("current", self.migrate()["status"])
+
+
 if __name__ == "__main__":
     unittest.main()

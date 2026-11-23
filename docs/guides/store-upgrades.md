@@ -61,7 +61,14 @@ client, since each one runs its own server -- wait three minutes, and run:
 valkama migrate work-model --item-projects item-projects.json
 ```
 
-It migrates the configured store (`store` or `VALKAMA_DB`). First it checks that no
+It migrates the configured store (`store` or `VALKAMA_DB`). First it checks that the
+Python running it has SQLite 3.47.1 or newer, since the migration has crashed on an
+older one: an older SQLite refuses the run with "this Python runs SQLite `<version>`,
+and the work-model migration needs SQLite 3.47.1 or newer: run it again with a Python
+whose SQLite is 3.47.1 or newer; nothing was written", a `refused` report and exit
+code 1, and `--dry-run` refuses the same way before it copies the store. Python
+prints its SQLite with `python -c "import sqlite3; print(sqlite3.sqlite_version)"`.
+The service itself still runs on SQLite 3.43 or newer. Then it checks that no
 Valkama server is still running: the listener and each client's server mark the
 liveness file beside the store (`<store>.liveness`) once a minute, so a mark less
 than three minutes old refuses the run with "a Valkama server was running `<n>` s

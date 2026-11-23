@@ -1047,6 +1047,41 @@ def copy_store(source: str, directory: str) -> str:
     return destination
 
 
+#: The oldest SQLite the work-model migration runs on. On SQLite 3.45.1 the process
+#: ended with an access violation in the step that drops labels, while the word index
+#: deleted rows of its contentless FTS5 table by rowid; 3.47.1 and later ran the same
+#: store through. The cause is not pinned to one SQLite fix, so this is the
+#: oldest release seen to pass. The service itself needs only 3.43 (`planning.words`).
+WORK_MODEL_SQLITE = (3, 47, 1)
+
+
+def _running_sqlite() -> str:
+    """The version of the SQLite this interpreter runs, read here and nowhere else."""
+
+    return sqlite3.sqlite_version
+
+
+def refuse_an_old_sqlite(report: dict[str, Any]) -> None:
+    """Refuse the work-model migration on a SQLite older than `WORK_MODEL_SQLITE`.
+
+    Called before the migration lock, the copy of a dry run, the recovery point and
+    any write, so a refused run leaves nothing beside the store. Records the refusal
+    in `report` and raises `WorkModelPreconditionError`.
+    """
+
+    found = _running_sqlite()
+    if tuple(int(part) for part in found.split(".")) >= WORK_MODEL_SQLITE:
+        return
+    floor = ".".join(str(part) for part in WORK_MODEL_SQLITE)
+    message = (
+        f"this Python runs SQLite {found}, and the work-model migration needs SQLite"
+        f" {floor} or newer: run it again with a Python whose SQLite is {floor} or newer;"
+        " nothing was written"
+    )
+    report.update(status="refused", message=message)
+    raise WorkModelPreconditionError(message, report)
+
+
 def _environment(path: str) -> dict[str, Any]:
     """What the timing of a run depends on: the machine, the SQLite and the store's size."""
 
@@ -1068,7 +1103,7 @@ def _environment(path: str) -> dict[str, Any]:
         "processor": platform.processor(),
         "cpus": os.cpu_count(),
         "python": sys.version.split()[0],
-        "sqlite": sqlite3.sqlite_version,
+        "sqlite": _running_sqlite(),
         "fts5": fts5,
         "pages": pages,
         "page_size": page_size,
@@ -1162,7 +1197,8 @@ def migrate_work_model(
     The only way a store at Valkama 2.9's schema reaches this build: `connect()`
     refuses one with `WorkModelMigrationRequiredError`, which names this. A store of
     this build is left alone and reported `current`; any other is refused as
-    `store_generation` refuses it, untouched.
+    `store_generation` refuses it, untouched. A SQLite older than `WORK_MODEL_SQLITE`
+    is refused next (`refuse_an_old_sqlite`), before the lock and before any write.
 
     Under the store's migration lock the conditions to start are read first: that no
     Valkama server was seen running in the last `liveness.BREAK_SECONDS`
@@ -1243,6 +1279,8 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
         report.update(status="current", message=_ALREADY)
         return
     report["environment"] = _environment(path)
+    report["schema"]["from"] = _read_stored_version_without_write(path)
+    refuse_an_old_sqlite(report)
     with store_lock.migration_lock(path):
         # Again under the lock: another process may have run it meanwhile.
         if store_generation(path) == "current":
