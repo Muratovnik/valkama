@@ -13,7 +13,7 @@ import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import type { Leg } from './hintFramesPage.ts'
-import { clear, pacedStroke } from './hintFramesPage.ts'
+import { stroke } from './hintFramesPage.ts'
 import { now, spaceScope } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { SPACE, spaceModel } from './served/preview.ts'
@@ -76,31 +76,12 @@ export async function rest(page: Page, link: Locator) {
   await page.mouse.move(x, y, { steps: 3 })
 }
 
-/** A point at the window's corner, on nothing with a hint or a card. */
-const AWAY = { x: 5, y: 5 }
-
 /**
  * Moves the pointer from `link`, resting there with its card up, onto `to` in its steps, as a hand
- * on its way to the card does. A stroke that stood still on the way as long as the hint manager's
- * grace is done again (`pacedStroke`): the pointer goes away until the card has gone and rests on
- * `link` again, and once its card is up `ready` runs.
+ * on its way to the card does, at a pace the page's clock keeps (`stroke`).
  */
-export async function ontoCard(
-  page: Page,
-  link: Locator,
-  to: Leg,
-  ready: () => Promise<unknown> = () => Promise.resolve(),
-) {
-  await pacedStroke(page, 'onto the card', {
-    again: async () => {
-      await clear(page, AWAY)
-      await rest(page, link)
-      await expect(card(page)).toBeVisible()
-      await ready()
-    },
-    from: await middle(link),
-    to,
-  })
+export async function ontoCard(page: Page, link: Locator, to: Leg) {
+  await stroke(page, await middle(link), [to])
 }
 
 /**

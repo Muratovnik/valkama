@@ -26,11 +26,8 @@ import {
 } from './dayHintPage.ts'
 import {
   boxOf,
-  clear,
   crossing,
   hint,
-  paced,
-  pacedStroke,
   pass,
   quietPoint,
   stroke,
@@ -38,6 +35,7 @@ import {
   watchHints,
 } from './hintFramesPage.ts'
 import type { Watched } from './hintFramesPage.ts'
+import { standClock } from './pageClock.ts'
 import { test } from './test.ts'
 
 /** The copy-number button of an open item drawer, with the pointer resting away from it. */
@@ -53,60 +51,50 @@ async function drawerAt(page: Page) {
 
 test('a hint shows half a second after the pointer comes to rest, and at once by a key', async ({
   page,
-}, info) => {
+}) => {
+  // Both waits are the hint manager's timers, so they are read on the page's clock, which stands
+  // once the drawer is open: a busy machine stretches the test's steps, never this clock.
+  await page.clock.install()
   const { number, quiet } = await drawerAt(page)
+  await standClock(page)
   const at = middleOf(await boxOf(number))
   await page.mouse.move(at.x, at.y)
-  await expect(hint(page)).toHaveCount(1)
-  const pointed = await watched(page)
-  const arrived = pointed.arrivals.at(-1)?.at ?? Number.NaN
-  const shown = pointed.frames.find((frame) => frame.count > 0)?.at ?? Number.NaN
+  await pass(page, 449)
+  await expect(hint(page), 'a hint 449 ms after the pointer came to rest').toHaveCount(0)
+  await pass(page, 650 - 449)
+  await expect(hint(page), 'a hint 650 ms after the pointer came to rest').toHaveCount(1)
 
   // Away until no hint is warm, then by a key from the control after it.
   await page.mouse.move(quiet.x, quiet.y)
+  await pass(page, 1000)
   await expect(hint(page)).toHaveCount(0)
-  await pass(page, 600)
   await number.locator('xpath=following::button[1]').focus()
   await expect(hint(page)).toHaveCount(0)
-  await watched(page)
   await page.keyboard.press('Shift+Tab')
   await expect(number).toBeFocused()
-  await expect(hint(page)).toHaveCount(1)
-  const keyed = await watched(page)
-  const pressed = keyed.arrivals.find((one) => one.on === 'key Tab')?.at ?? Number.NaN
-  const opened = keyed.frames.find((frame) => frame.count > 0)?.at ?? Number.NaN
-  await record(info, 'hint-show-times', { rest: shown - arrived, key: opened - pressed })
-
-  expect(shown - arrived, 'from rest to the hint, in ms').toBeGreaterThanOrEqual(450)
-  expect(shown - arrived, 'from rest to the hint, in ms').toBeLessThanOrEqual(650)
-  expect(opened - pressed, 'from the key to the hint, in ms').toBeLessThanOrEqual(100)
+  await pass(page, 100)
+  await expect(hint(page), 'a hint 100 ms after the key').toHaveCount(1)
 })
 
 test('the pointer can move onto a hint, which stays there, and off it the hint goes', async ({
   page,
 }, info) => {
+  // The hint's grace runs on the page's clock, which stands once the drawer is open, so the way
+  // onto the hint and the hint's going are timed by it alone (`standClock`, `stroke`).
+  await page.clock.install()
   const { number, quiet } = await drawerAt(page)
+  await standClock(page)
   const anchor = await boxOf(number)
   const from = middleOf(anchor)
-  const raise = async () => {
-    await page.mouse.move(from.x, from.y)
-    await expect(hint(page)).toHaveCount(1)
-    await watched(page)
-  }
-  await raise()
+  await page.mouse.move(from.x, from.y)
+  await pass(page, 650)
+  await expect(hint(page)).toHaveCount(1)
+  await watched(page)
   const words = await number.getAttribute('data-tooltip')
   const onHint = middleOf(await boxOf(hint(page)))
 
-  // Straight from the element onto its hint, across the room between them; again from the start
-  // if the pointer stood still on the way (`pacedStroke`).
-  await pacedStroke(page, 'onto the hint', {
-    again: async () => {
-      await clear(page, quiet)
-      await raise()
-    },
-    from,
-    to: { ...onHint, steps: 6 },
-  })
+  // Straight from the element onto its hint, across the room between them.
+  await stroke(page, from, [{ ...onHint, steps: 6 }])
   await pass(page, 700)
   const stayed = await watched(page)
   const under = await page.evaluate(
@@ -115,7 +103,7 @@ test('the pointer can move onto a hint, which stays there, and off it the hint g
   )
 
   await page.mouse.move(quiet.x, quiet.y)
-  await expect(hint(page)).toHaveCount(0)
+  await pass(page, 220)
   const left = await watched(page)
   const leftAt = left.arrivals.at(-1)?.at ?? Number.NaN
   const goneAt = left.frames.find((frame) => frame.count === 0)?.at ?? Number.NaN
@@ -162,6 +150,9 @@ test('Escape over a hint in an open item drawer closes the hint and leaves the d
 test('moving between neighbouring legend entries of the day chart leaves no frame without a hint', async ({
   page,
 }, info) => {
+  // A stroke stops the page's clock while it moves (`stroke`), so the hint's grace on the way is
+  // timed by that clock alone; until then it keeps the wall's pace.
+  await page.clock.install()
   const days = await openDays(page, 1440)
   const keys = days.locator('.chart-legend .chart-key[data-tooltip]')
   expect(await keys.count(), 'legend entries with a hint').toBeGreaterThan(2)
@@ -174,25 +165,22 @@ test('moving between neighbouring legend entries of the day chart leaves no fram
   )
   const [first = boxes[0], ...rest] = boxes
   const start = middleOf(first ?? { left: 0, top: 0, right: 0, bottom: 0 })
-  // Off one entry its hint holds for its grace: a pointer slower than that to the next one lets it
-  // go, as it should, and the walk is done again (`paced`).
-  const { frames } = await paced('along the legend', async (round) => {
-    if (round > 1) await clear(page, { x: 0, y: 0 })
-    await page.mouse.move(start.x, start.y)
-    await expect(hint(page)).toHaveCount(1)
-    await watched(page)
-    const crossings: number[] = []
-    let from = start
-    for (const next of rest) {
-      const to = middleOf(next)
-      crossings.push(crossing(await stroke(page, from, [{ ...to, steps: 8 }])))
-      from = to
-    }
-    await expect(hint(page)).toContainText(rest.at(-1)?.words.split('\n')[0] ?? '')
-    await pass(page, 200)
-    return { ...(await watched(page)), pause: Math.max(0, ...crossings) }
-  })
-  await record(info, 'hint-legend-frames', { boxes, frames })
+  // Off one entry its hint holds for its grace, which the pointer's way to the next one keeps
+  // inside, by the page's clock (`stroke`).
+  await page.mouse.move(start.x, start.y)
+  await expect(hint(page)).toHaveCount(1)
+  await watched(page)
+  const crossings: number[] = []
+  let from = start
+  for (const next of rest) {
+    const to = middleOf(next)
+    crossings.push(crossing(await stroke(page, from, [{ ...to, steps: 8 }])))
+    from = to
+  }
+  await expect(hint(page)).toContainText(rest.at(-1)?.words.split('\n')[0] ?? '')
+  await pass(page, 200)
+  const { frames } = await watched(page)
+  await record(info, 'hint-legend-frames', { boxes, crossings, frames })
 
   expect(frames.length, 'frames noted').toBeGreaterThan(5)
   expect(
