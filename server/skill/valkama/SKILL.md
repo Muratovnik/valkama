@@ -110,21 +110,23 @@ A transition to any state but an active or blocked one releases it: no release.
 3. Transition to the completed state, or to review when the owner must check the
    result first. Review needs the same ticks and summary and `to_check`, what the
    owner is to check; the owner's answer completes the item or returns it to work.
-   A state is named by its key or by a category that one state has (`completed`,
-   `review`, `cancelled`); a name the workflow lacks is refused listing its
-   states.
+   Review is for a check the owner can make now: one possible only after a
+   condition (a day, another item's close, new comments) is put off instead, with
+   `defer` in place of `transition`, `until` the condition and `reason` what to
+   check then. A state is named by its key or by a category that one state has
+   (`completed`, `review`, `cancelled`); a name the workflow lacks is refused
+   listing its states.
 
 Steps 1 to 3 go in one `apply_work_item_changes` call. The transition to a
-completed or cancelled state also ends
-your claim and any step claims in that write, so the item stops reading as
-held; `applied.transition.released` names the holder, and the item's
-`last_claim_ref` keeps it. Reopening the item restores no claim: claim it again
-to work it. A terminal state is refused while a step is open or without a
-summary. It is also refused with `person_spoke` while the owner did something on
-the item that no agent has been told: the refusal quotes it. Read it, write what
-you did about it (a comment is enough), then close; a comment in the same call
-as the close does not count. `force: true` carries a refusal through and records
-it as `overridden`: use it only when the record would still be true.
+completed or cancelled state also ends your claim and any step claims in that
+write, so the item stops reading as held; `applied.transition.released` names the
+holder, and the item's `last_claim_ref` keeps it. Reopening the item restores no
+claim: claim it again to work it. A terminal state is refused while a step is open
+or without a summary. It is also refused with `person_spoke` while the owner did
+something on the item that no agent has been told: the refusal quotes it. Read it,
+write what you did about it (a comment is enough), then close; a comment in the
+same call as the close does not count. `force: true` carries a refusal through and
+records it as `overridden`: use it only when the record would still be true.
 
 **A goal or stage** completes only with nothing open under it (`children`). When
 the last item under one closes, it awaits confirmation and you hear it (the
@@ -183,19 +185,17 @@ A step's claim lapses with its session as a claim does, and Valkama releases it.
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, all or nothing, in the order its description
 gives; [the tool reference](references/tools.md#one-call-several-writes) lists
-every group.
-Every write to an item's fields, steps, refs, commits, links, discussion,
-summary and state goes
-through these groups; `questions` takes what `create_work_item_request` does.
-Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
-`{"body": "…"}`, `summary` `{"done": "…", "next": "…"}`, `transition`
-`{"state": "…"}`. Bare text fails in the client, as input not parsed as JSON. A
-refused step writes nothing and names the group and index to correct. Pass the
-`revision` of the last acknowledgement as `expected_revision` to refuse a stale
-write. A question cannot go in the call that closes its item: the close would end
-it unanswered in the same write. A reply can name only a comment
-that existed before the call; `applied` lists the ids of the comments and
-questions the call wrote.
+every group. Every write to an item's fields, steps, refs, commits, links,
+discussion, summary and state goes through these groups; `questions` takes what
+`create_work_item_request` does. Every group but `claim` and `subscribe` is JSON,
+never bare text: `comment` is `{"body": "…"}`, `summary`
+`{"done": "…", "next": "…"}`, `transition` `{"state": "…"}`. Bare text fails in
+the client, as input not parsed as JSON. A refused step writes nothing and names
+the group and index to correct. Pass the `revision` of the last acknowledgement as
+`expected_revision` to refuse a stale write. A question or a list cannot go in the
+call that closes its item: the close would end it unanswered in the same write. A
+reply can name only a comment that existed before the call; `applied` lists the
+ids of the comments and questions the call wrote.
 
 **Commits and refs.** Valkama attaches each commit your session makes to the
 task you hold and says so in the hook answer after the command; when it cannot
@@ -438,9 +438,9 @@ depend on it. A question the work cannot go on without belongs in the client,
 where the person answers now. Give a request to the owner no `execution_id`: one
 bound to an execution expires when it ends. Closing an item ends every request
 pending on it, a list under a comment too, `expired` with `item_completed` or
-`item_cancelled`, and reopening brings none back: keep the item open, in review for
-instance, while the answer or the ticks are still needed. A call that writes a list
-and closes its item is refused. The owner's own rules on where to ask come first.
+`item_cancelled`, and reopening brings none back: keep the item open, in review
+for instance, while the answer or the ticks are still needed. The owner's own
+rules on where to ask come first.
 
 ## When the owner decides
 
