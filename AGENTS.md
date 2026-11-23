@@ -95,6 +95,13 @@ split with it:
   every checkout on the machine, each declaring its CPUs, the runner all: a run
   waits until it fits, saying why when it starts and every minute.
   A defect that depends on a neighbouring worktree shows up only at this run.
+- Each worktree is made with `python tests/worktree.py add` and removed with
+  `python tests/worktree.py remove`. The first links its `web` and `desktop`
+  `node_modules` to the main checkout's where its lockfile is the main
+  checkout's, so it gets no copy of its own; the second takes those links out
+  before Git removes the worktree, which would leave them standing. `npm ci`
+  runs only in a package with no link: through one it empties the main
+  checkout's modules and those of every worktree sharing them.
 
 How to run one browser spec, a probe spec kept outside the suite, or the whole
 suite, and which specs that runner leaves out, is in

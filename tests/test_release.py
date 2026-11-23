@@ -42,6 +42,8 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
 
+from tests.worktree import link_directory
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -80,17 +82,6 @@ def _script(directory: Path, name: str) -> Path:
     path.write_bytes(b"")
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
     return path
-
-
-def link_directory(link: Path, target: Path) -> None:
-    """A junction on Windows, which takes no privilege, and a symbolic link elsewhere."""
-
-    if sys.platform == "win32":
-        import _winapi
-
-        _winapi.CreateJunction(str(target), str(link))
-    else:
-        link.symlink_to(target, target_is_directory=True)
 
 
 #: The real `subprocess.run`, for the Git calls a fake stage runner lets through, and Git

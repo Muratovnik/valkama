@@ -169,7 +169,10 @@ temporary directory, runs `npm ci` and every npm stage there, puts the web build
 back in `web/dist`, and removes the copy without entering a link in it. A gate's
 refusal says to remove a link before running `npm ci` in a worktree. `gates`
 still reads through a link, so a worktree may share modules as long as they match
-its own lockfile.
+its own lockfile. `tests/worktree.py` makes those links where a worktree's
+lockfile is the main checkout's byte for byte, and takes them out before
+`git worktree remove`, which deletes the rest of the worktree but leaves a
+junction behind, and the directory that holds it.
 
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.
