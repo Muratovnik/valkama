@@ -1419,10 +1419,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   settings row is a wide row (`SettingsRow`'s `wide`): the choice stands beside
   the name in the half every row's control stands in where its words fit there,
   and under the name, as every row of a narrow workspace does, where they do not;
-  it wraps only where that line cannot hold it either, its segments then sharing
-  each line evenly. Held to the half, Participation's set wrapped onto a second
+  it wraps only where that line cannot hold it either, its segments then standing
+  in columns of one width that fill every line, or in one column where no such
+  columns fit. Held to the half, Participation's set wrapped onto a second
   line at 1280px; reaching toward the name instead, the choices of one column
-  started at three edges at 1024px.
+  started at three edges at 1024px. Each wrapped line sharing its own room, the
+  set broke a phone's two lines 17px apart and stood three over one at 430px.
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
