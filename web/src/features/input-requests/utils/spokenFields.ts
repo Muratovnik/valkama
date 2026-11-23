@@ -16,7 +16,10 @@
  * list a cancel stops are typed there, so their names say what to type, as the service's do, in
  * the reader's language: in Russian the form asked «Until: a day YYYY-MM-DD…» in English. What
  * is typed stays the service's to read, so its words, «3 comments» and «or», stay as it reads
- * them. Every other field there keeps the words it was written in.
+ * them. The findings of a group are named there as under the answer, «Находки группы», where
+ * the form said «Items in this group»; the findings themselves keep the agent's labels. What a
+ * form had chosen when its question closed some other way is said in the same words
+ * (`unsentChoices`), so the line under the fold reads as the form it was chosen in.
  */
 import { answerWord } from '@/features/input-requests/utils/questionKinds.ts'
 
@@ -59,24 +62,26 @@ export function spokenRequest(request: Request, t: Translate, te: Knows): Reques
     : request
 }
 
-/** A purpose's field on its form: the answer as its buttons say it, a typed field what to type. */
+/**
+ * A purpose's field on its form: a typed field says what to type, every other one is named as
+ * under the answer, the answer in the words of its buttons.
+ */
 function answeredField(
   field: InputRequestField,
   request: Request,
   t: Translate,
   te: Knows,
 ): InputRequestField {
-  if (field.id === ANSWER_FIELD) return spokenField(field, request, t, te)
   return TYPED_WORDS.has(field.id)
     ? { ...field, label: t(`requests.kinds.typed.${field.id}`) }
-    : field
+    : spokenField(field, request, t, te)
 }
 
 /**
  * The fields a question's form answers it in: a purpose's answer in the words of its buttons,
- * the fields typed into saying what to type in the reader's words, every other field as the
- * service or the agent wrote it. A session's consent keeps the service's words: an agent
- * answers it, by those options.
+ * the fields typed into saying what to type in the reader's words, a group's findings under
+ * the reader's name for them, and every field of a question an agent composed as it wrote it.
+ * A session's consent keeps the service's words: an agent answers it, by those options.
  */
 export function answeredFields(request: Request, t: Translate, te: Knows): InputRequestField[] {
   return !request.purpose || request.purpose === CONSENT
