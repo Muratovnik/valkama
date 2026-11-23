@@ -267,6 +267,25 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertTrue(self._bind("alpha", "ROVER"))
         self.assertEqual({"alpha": ("ROVER", True)}, self._bindings())
 
+    def test_list_on_a_clean_profile_is_empty_and_writes_nothing(self) -> None:
+        profile = self.directory / "clean-profile"
+        profile.mkdir()
+
+        def listed() -> dict:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                cli.main(["projects", "list"])
+            return json.loads(output.getvalue())
+
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(profile)}):
+            self.assertEqual({"projects": []}, listed())
+            self.assertEqual([], list(profile.iterdir()))
+            with contextlib.redirect_stdout(io.StringIO()):
+                cli.main(
+                    ["projects", "add", "example", "--name", "Example", "--root", str(self.project)]
+                )
+            self.assertEqual({"projects": [self.entry]}, listed())
+
     def test_binding_uses_actual_store_and_project_identity(self) -> None:
         database = self.directory / "valkama.sqlite3"
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(database)}):

@@ -96,6 +96,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from server import git_worktrees, processes, store
+from server.ops import configuration
 from server.projects import project_registry, registry_owner
 from windows import release
 
@@ -103,6 +104,8 @@ HOME = "home"
 LOGS = "logs"
 STATE = "serve.json"
 STOP = "serve.stop"
+#: The configuration file a caller gives the server, before the supervisor copies it in.
+CONFIG = "serve-config.json"
 SUMMARY = "gates.txt"
 SUPERVISE = "supervise"
 PROFILE_ENV = "env.json"
@@ -767,6 +770,12 @@ def _stop_tree(process: object, port: int | None) -> list[str]:
     return []
 
 
+def registry_named() -> list[Path]:
+    """The project registry this process's environment names: its projection and inventory."""
+
+    return [Path(project_registry.registry_path()), registry_owner.inventory_path()]
+
+
 def registry_files() -> list[Path]:
     """The caller's project registry: its projection and the inventory beside it.
 
@@ -777,7 +786,7 @@ def registry_files() -> list[Path]:
     named under that one, by the product's own layout below `LOCALAPPDATA`.
     """
 
-    found = [Path(project_registry.registry_path()), registry_owner.inventory_path()]
+    found = registry_named()
     suite = sys.modules.get("tests")
     moved_to = getattr(suite, "SUITE_LOCAL_APP_DATA", None)
     if moved_to is None or os.environ.get("LOCALAPPDATA") != moved_to:
@@ -790,7 +799,7 @@ def registry_files() -> list[Path]:
 
 
 def copy_registry(home: Path, files: Sequence[Path]) -> None:
-    """Bring the caller's project registry, `registry_files`, along with a store copy.
+    """Bring a project registry, `files`, along with a store copy.
 
     Every page of the app is reached through a project bound to a space. A copy
     without the registry said the project list could not be read and answered 503
@@ -866,9 +875,17 @@ def supervise(
     out: Path,
     source: Path | None,
     command: Sequence[str] | None = None,
-    registry: Sequence[Path] = (),
+    config: Path | None = None,
+    registry: Sequence[Path] | None = None,
 ) -> None:
-    """Own one server from start to cleanup; the last thing written says how it went."""
+    """Own one server from start to cleanup; the last thing written says how it went.
+
+    `config` is a configuration file the server's profile takes as its own
+    `~/.valkama/config.json`: the caller's `VALKAMA_*` never reach the server.
+    `registry` names the project registry's files a store copy brings along; with
+    none named, it is the one this process's environment names (`registry_named`),
+    which is the environment `start` was given.
+    """
 
     home, stop_file = out / HOME, out / STOP
     stop_file.unlink(missing_ok=True)
@@ -881,8 +898,11 @@ def supervise(
     problems = []
     try:
         prepare_home(home)
+        if config is not None:
+            (home / configuration.CONFIG_DIRECTORY).mkdir(parents=True, exist_ok=True)
+            shutil.copy2(config, home / configuration.CONFIG_DIRECTORY / configuration.CONFIG_FILE)
         if source is not None:
-            copy_home_store(source, home, registry)
+            copy_home_store(source, home, registry_named() if registry is None else registry)
             migrate_copy(home, out / LOGS)
         argv = command or [sys.executable, "valkama.py", "serve", "--port", "0"]
         with log.open("wb") as output:
@@ -968,11 +988,22 @@ def _clear_state(out: Path) -> None:
     (out / STOP).unlink(missing_ok=True)
 
 
-def start(out: Path, source: Path | None, registry: Sequence[Path] = ()) -> int:
+def start(
+    out: Path,
+    source: Path | None,
+    environment: Mapping[str, str] | None = None,
+    config: Mapping[str, str] | None = None,
+    *,
+    registry: Sequence[Path] | None = None,
+) -> int:
     """Start a supervisor, wait until it says how the start went, and return.
 
-    The supervisor is handed the registry's files by name: its environment is the
-    caller's, which the package `tests` may have moved (`registry_files`).
+    The supervisor starts in `environment`, by default the caller's own. The
+    project registry a store copy brings along is the files `registry` names,
+    handed over by name, since the caller's environment may have been moved by the
+    package `tests` (`registry_files`). With none named it is the one the
+    supervisor's `LOCALAPPDATA` names, so a caller with a registry of its own can
+    name it there instead. `config` is the server's configuration file, by setting.
     """
 
     occupied = _occupied(out)
@@ -983,13 +1014,18 @@ def start(out: Path, source: Path | None, registry: Sequence[Path] = ()) -> int:
     argv = [sys.executable, __file__, SUPERVISE, "--out", str(out)]
     if source is not None:
         argv += ["--store-copy", str(source)]
-        for found in registry:
+        for found in registry or ():
             argv += ["--registry", str(found)]
+    if config is not None:
+        settings = out / CONFIG
+        settings.write_text(json.dumps(dict(config)), encoding="utf-8", newline="\n")
+        argv += ["--config", str(settings)]
     supervisor_log = out / LOGS / "supervisor.log"
     with supervisor_log.open("wb") as output:
         supervisor = subprocess.Popen(
             argv,
             cwd=ROOT,
+            env=None if environment is None else dict(environment),
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,
@@ -1345,7 +1381,8 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("stop", help="stop that server, or remove a profile, and its home")
     supervise_command = commands.add_parser(SUPERVISE)
     supervise_command.add_argument("--store-copy")
-    supervise_command.add_argument("--registry", action="append", default=[], type=Path)
+    supervise_command.add_argument("--config", type=Path)
+    supervise_command.add_argument("--registry", action="append", type=Path)
     for command in commands.choices.values():
         command.add_argument("--out", type=Path, required=True, help="where everything is written")
     return parser
@@ -1370,12 +1407,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if options.command == "stop":
         return stop(out)
     if options.command == SUPERVISE:
-        supervise(out, source, registry=options.registry)
+        supervise(out, source, config=options.config, registry=options.registry)
         return 0
     warning = bundle_warning(ROOT)
     if warning is not None:
         _say(warning)
-    return start(out, source, registry_files())
+    return start(out, source, registry=registry_files())
 
 
 if __name__ == "__main__":

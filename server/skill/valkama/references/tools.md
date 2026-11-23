@@ -84,10 +84,11 @@ says what it is:
 - `lapsed_claim` (`holder`, `reason`, `at`) names whose claim the sweep released,
   why and when, until the next claim; a step marked `by_previous_holder` was
   ticked by that holder and waits for a tick that confirms it (see Claims).
-- `deferred`, on work put off, says what it waits on: `until` or `until_item`,
-  and `reached_at` once that came and the owner is asked; `returned`, on work in
-  triage that came back, says why (`because`: `date`, `completed`, `cancelled`
-  or `deleted`, with the `item`) and when.
+- `deferred`, on work put off, says what it waits on: `until`, `until_comments`
+  (the count of new comments) or both, or `until_item` alone, and `reached_at`
+  once that came and the owner is asked; `returned`, on work in triage that came
+  back, says why (`because`: `date`, `comments`, `completed`, `cancelled` or
+  `deleted`, with the `item`) and when.
 - `triage_stack`, only on an item waiting for a triage review, is `{seen_at, seen_by}`:
   when a review marked it seen and who, both null while none did. `list_work_items`
   with `triage_stack: "unseen"` lists the items no review marked, oldest first, and
@@ -216,19 +217,6 @@ new text only says the same better: it is written at once, at any setting, and t
 summary of decisions shows it. A call whose `transition` closes the item while
 another of its writes waits is refused whole with `close_with_waiting`.
 
-## Claude Code's auto mode
-
-Valkama calls may share a response with any other
-tool. Valkama's hook records which session makes each call and leaves the call as
-you wrote it, so auto mode reviews every call in the response. An older Valkama
-release added your session to the input of each Valkama call instead, and a call
-beside it that needed the review then got no verdict: it failed with "another call
-in this response was changed by a hook", which says nothing about the failed call.
-If you see that failure, the older release is still installed: issue the failed
-call again exactly as it was, and for the rest of the session send Valkama calls in
-a response of their own, with the other tools in the next one. Another client or
-permission mode needs no such care.
-
 ## Creating an item
 
 `create_work_item` takes `title`, and optionally `space`, `projects`,
@@ -320,6 +308,7 @@ resolves its discussion, records its summary and moves its state:
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | edits the fields a transition does not own |
 | `convert` | `{"to": "stage", "leftover": {"title": "…", "steps": ["…"]}, "force": false}`, not with `transition`, `defer` or `move_out` | turns a task into a goal or stage, or one with nothing under it into a task ([work model](work-model.md#goals-and-stages)) |
 | `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
+| `checklist_reason` | `"…"`, at most 500 characters, only with `checklist` | says why a goal's or stage's step is removed or rewritten ([Writes that wait for the owner](#writes-that-wait-for-the-owner)) |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
 | `refs` | `[{"kind": "memory", "value": "…", "label": "…"}]` | attaches pointers: a `memory` record id or a `url` |
 | `commits` | `[{"repository": "alpha", "hash": "3f2a9c1", "label": "…", "remove": false}]` | attaches commits by hand, or detaches them |
@@ -331,7 +320,7 @@ resolves its discussion, records its summary and moves its state:
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
 | `triage_seen` | `true` or `false` | marks an item waiting for a triage review as seen, or takes the mark away; not with `transition`, `defer` or `move_out` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
-| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
+| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, a count of new comments (`3 comments`), a count or a day whichever comes first (`2026-12-01 or 3 comments`), or an open item's close ([work model](work-model.md#goals-and-stages)) |
 | `move_out` | `{"reason": "…", "force": false}`, not with `transition`, `defer` or `convert` | takes the item out of its goal or stage, to triage |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
@@ -540,6 +529,7 @@ match is weak, and an item with no attached commit cannot show.
 | `owner_only` | The owner answers this question in Valkama: leave it. Every question with a purpose but a `consent` request is theirs, and so is every question a waiting write carries. |
 | `not_asker` | Only the session that asked withdraws the question; one Valkama asked ends with the write that ends its wait. |
 | `[purpose]` | A question with a purpose (review, confirm, return, goal, task, cancel, condition), a `consent` request and a question a waiting write carries take one of their answers, and their answer is not changed or declined. |
+| `workflow_guard` with `[item_closed]` | An answer to a question or a list on a closed item stands: reopen the item to change it, and change an answer only when the owner asks. |
 | `[participation]` | Another write of that point waits for the owner on the item: wait for the answer, or withdraw that question first. Send `following` only with a cancel, naming an answered question of the owner on the item or above it. |
 | `close_with_waiting` | Close the item after the answer, or send the waiting change in a call of its own. |
 | `[checklist]` naming `checklist_reason` | Say why the change removes or rewrites a step of the goal or stage, or send a step that only says the same better by its `id` with `clarifies: true`. |
@@ -547,7 +537,7 @@ match is weak, and an item with no attached commit cannot show.
 | `[consent]` | Answer `agree`, `object` with a `reason`, or `moved_out` once `move_out` took your task out of what the cancel closes. |
 | `queue_off` | The refusal says `the owner hands out work in MAIN by hand: take the item they named with claim_work_item`: do that. |
 | `workflow_guard` or a claim refused with `[acceptance_question]` | Wait for the owner's answer, then take it. |
-| `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, or an open item other than this one and the goals and stages over it. |
+| `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, a count of 1 to 999 new comments (`3 comments`), one count and one day or time joined by `or` (`2026-12-01 or 3 comments`, never with an item), or an open item other than this one and the goals and stages over it. |
 | `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
 | `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
 | `[convert]` | Send the word the refusal names: `stage` for a task under a parent, `goal` for one without, a task kind for a goal or stage; move out what stands under a goal or stage first, and reopen a closed item. |

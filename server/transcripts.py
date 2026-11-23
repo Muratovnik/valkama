@@ -20,6 +20,9 @@ A copy is made in a hook only when it fits the hook's time budget; anything
 larger, or anything the hook could not finish, stays pending -- an ended session
 with no later `transcript_archived` row -- and `sweep` copies it from a
 long-lived process.
+
+A source outside the `transcript_roots` setting is never read
+(`server/transcript_roots.py`): its end stays pending, and `sweep` counts it.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from datetime import UTC, datetime
 
 from . import store
 from .hooks.normalize import HookEvent, normalize_path, timestamp
+from .transcript_roots import read_roots, readable
 
 ROOT_NAME = "transcripts"
 
@@ -88,6 +92,10 @@ class DeferredError(Exception):
 
 class SourceMissingError(Exception):
     """The transcript the client named is not a file that exists."""
+
+
+class OutsideRootsError(Exception):
+    """The transcript lies outside `transcript_roots`; it is not read, and stays pending."""
 
 
 def directory(store_path: str) -> str:
@@ -155,6 +163,7 @@ def copy(
     *,
     max_bytes: int | None = None,
     deadline: float | None = None,
+    roots: tuple[str, ...] | None = None,
 ) -> Copy:
     r"""Copy one transcript into the archive and return where it landed.
 
@@ -164,13 +173,17 @@ def copy(
     name exists already, the content is identical and the partial is dropped.
 
     `\\?\` and `\\?\UNC\` prefixes are dropped before the source is read.
-    Raises `SourceMissingError` when there is no such regular file,
+    Raises `OutsideRootsError`, before anything is read, when the source lies
+    outside `roots` (`read_roots()` unless given), `SourceMissingError` when
+    there is no such regular file,
     `DeferredError` when the file is over `max_bytes` or the copy reaches
     `deadline` (a `time.monotonic()` value), and `OSError` when the file cannot
     be read now. No file is left behind on any of them.
     """
 
     path = normalize_path(source)
+    if not readable(path, roots):
+        raise OutsideRootsError(path)
     try:
         info = os.stat(path)
     except (FileNotFoundError, NotADirectoryError) as missing:
@@ -308,7 +321,7 @@ def archive_event(
             max_bytes=HOOK_MAX_BYTES,
             deadline=deadline,
         )
-    except (DeferredError, SourceMissingError, OSError):
+    except (DeferredError, SourceMissingError, OutsideRootsError, OSError):
         return "pending"
     _record_copy(
         conn,
@@ -531,6 +544,8 @@ class SweepResult:
     archived: int = 0
     missing: int = 0
     unreadable: int = 0
+    #: Owed copies left pending because their source is outside `transcript_roots`.
+    outside: int = 0
     purged: int = 0
     orphans: int = 0
     stopped: str = ""
@@ -556,6 +571,7 @@ def sweep(
     root = root if root is not None else directory(store.db_path())
     now = now if now is not None else timestamp(time.time_ns())
     deadline = time.monotonic() + seconds if seconds is not None else None
+    roots = read_roots()
 
     def out_of_time() -> bool:
         return deadline is not None and time.monotonic() >= deadline
@@ -564,7 +580,7 @@ def sweep(
         for owed in pending(conn):
             if out_of_time():
                 return result
-            _copy_pending(conn, owed, root, result)
+            _copy_pending(conn, owed, root, result, roots)
         by_session: dict[str, list[Archive]] = {}
         for archive in current(conn).values():
             by_session.setdefault(archive.session_id, []).append(archive)
@@ -616,9 +632,18 @@ def _adoptable(root: str, owed: Pending, archives: dict[str, Archive]) -> Copy |
     return None
 
 
-def _copy_pending(conn: sqlite3.Connection, owed: Pending, root: str, result: SweepResult) -> None:
+def _copy_pending(
+    conn: sqlite3.Connection,
+    owed: Pending,
+    root: str,
+    result: SweepResult,
+    roots: tuple[str, ...],
+) -> None:
     try:
-        copied = copy(owed.transcript_path, root, owed.session_id, owed.agent_id)
+        copied = copy(owed.transcript_path, root, owed.session_id, owed.agent_id, roots=roots)
+    except OutsideRootsError:
+        result.outside += 1
+        return
     except SourceMissingError:
         adopted = _adoptable(root, owed, current(conn))
         if adopted is not None:

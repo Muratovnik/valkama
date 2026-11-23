@@ -33,6 +33,7 @@ rather than falling back to a default, and `python valkama.py doctor` says why.
 | `document_roots` | `VALKAMA_DOC_ROOTS` | none | document roots to search, separated by the path separator |
 | `claude_session_root` | `VALKAMA_CLAUDE_SESSION_ROOT` | none | where Claude Code keeps its session journals |
 | `codex_rollout_root` | `VALKAMA_CODEX_ROLLOUT_ROOT` | none | where Codex keeps its rollout journals |
+| `transcript_roots` | `VALKAMA_TRANSCRIPT_ROOTS` | none | the only directories session transcripts are read from — for the archive, usage and session titles — separated by the path separator; without it, a transcript is read wherever its client said it is |
 | `author` | `VALKAMA_AUTHOR` | `agent` | the name written into Planning claims and comments when an MCP tool call names no `author` |
 | `notify` | `VALKAMA_NOTIFY` | `on` | `off` stops the client hooks telling a working agent what a person did on its work items, and the watcher that wakes an idle session; see the [hook contract](../hook-contract.md#telling-the-agent-what-a-person-did) |
 

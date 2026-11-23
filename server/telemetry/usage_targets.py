@@ -22,7 +22,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import sessions, transcripts
+from .. import sessions, transcript_roots, transcripts
 from ..hooks.normalize import normalize_path
 from ..planning import agents
 
@@ -97,12 +97,17 @@ class Finder:
             " WHERE parent_session_id = '' ORDER BY status != 'active', last_seen DESC"
         ).fetchall()
         known = {str(row["id"]) for row in rows}
+        roots = transcript_roots.read_roots()
         for row in rows:
             session, client = str(row["id"]), sessions.client_family(row["client"])
             seen = str(row["last_seen"] or "")
             if self._settled.get(session) == seen:
                 continue
             path = normalize_path(str(row["transcript_path"] or ""))
+            if path and not transcript_roots.readable(path, roots):
+                # Its subagents' and child threads' files are found beside it, so
+                # nothing of the session but its archived copies is read.
+                path = ""
             kept = archives.get(session, {})
             if client not in (CLAUDE, CODEX) or not (path or kept):
                 continue

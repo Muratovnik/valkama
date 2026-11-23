@@ -545,7 +545,13 @@ def queue_refusal(ahead: Sequence[Entry]) -> str | None:
 
 
 def admission_line(
-    waited: float, need: int, capacity: int, busy: float | None, beside: Sequence[Entry]
+    waited: float,
+    need: int,
+    capacity: int,
+    busy: float | None,
+    beside: Sequence[Entry],
+    *,
+    name: str = "heavy-test lock",
 ) -> str:
     """What a run says as it goes in; `tests/run_record.py` reads its facts back."""
 
@@ -556,10 +562,7 @@ def admission_line(
         else f"beside {len(beside)} run{'s' if len(beside) > 1 else ''}:"
         f" {'; '.join(entry.named() for entry in beside)}"
     )
-    return (
-        f"took the heavy-test lock after {_duration(waited)}:"
-        f" {need} of {_cpus(capacity)}, {load}, {runs}"
-    )
+    return f"took the {name} after {_duration(waited)}: {need} of {_cpus(capacity)}, {load}, {runs}"
 
 
 def load_note(path: Path | None = None) -> str | None:
@@ -598,6 +601,7 @@ def held(
     measure: Callable[[], float | None] = busy_fraction,
     clock: Callable[[], float] = time.time,
     machine_cpus: int | None = None,
+    name: str = "heavy-test lock",
 ) -> Iterator[None]:
     """Hold a place at the gate for `run`, needing `cpus`, and wait as long as it takes.
 
@@ -606,6 +610,9 @@ def held(
     the whole machine. A run whose environment marks this very lock as held by an
     ancestor holds nothing and goes in at once. `measure`, `clock` and
     `machine_cpus` stand in for the machine's load, time and CPU count in a test.
+    `name` is what a waiter calls the lock: another tool that serializes its own
+    runs takes the same protocol with a lock file of its own, as
+    `tests/agent_probes.py` does for its home.
     """
 
     path = path or lock_path()
@@ -663,7 +670,7 @@ def held(
                         _leave(*ticket)
                         ticket = None
                     waited = time.monotonic() - started
-                    admitted = admission_line(waited, need, capacity, busy, going)
+                    admitted = admission_line(waited, need, capacity, busy, going, name=name)
                 elif ticket is None:
                     # A place in the queue, held while it measures too, so no later run
                     # goes in on the room this one is measuring.
@@ -678,7 +685,7 @@ def held(
                 continue
             if time.monotonic() >= next_report:
                 if next_report == started:
-                    say(f"waiting for the heavy-test lock {path}: {reason}")
+                    say(f"waiting for the {name} {path}: {reason}")
                 else:
                     say(f"still waiting after {_duration(time.monotonic() - started)}: {reason}")
                 next_report += report_every

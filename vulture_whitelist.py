@@ -68,5 +68,10 @@ _.xml  # unused variable (server\alerts\messages.py)
 # A key of the `/api/alerts/status` answer: the settings page reads it over HTTP.
 _.shortcut  # unused variable (server\alerts\readiness.py)
 
+# A probe session's record is written with `dataclasses.asdict` and read back by
+# key from its `session.json`, by the judge and by a person reading the run.
+_.setup_last_event  # unused variable (tests\agent_probes.py)
+_.dropped_hooks  # unused variable (tests\agent_probes.py)
+
 # unittest calls a package's `load_tests` by name when a run reaches the package.
 _.load_tests  # unused function (tests\__init__.py)

@@ -1,0 +1,108 @@
+{
+  "id": "G1",
+  "about": "A session with every kind of check to judge: a seeded task claimed, ticked and commented on, a finding filed from it, a file written, a subagent writing to another task, and a rubric.",
+  "clients": ["claude", "codex"],
+  "workspace": "../workspace",
+  "overlay": "../overlay",
+  "repos": ["app", "lib"],
+  "registry": {"space": "ALPHA", "projects": ["app", "lib"], "default": "app"},
+  "mcp": "tip",
+  "setup": [
+    {
+      "tool": "create_work_item",
+      "author": "worker-a",
+      "session": "setup",
+      "as": "n",
+      "args": {
+        "space": "ALPHA",
+        "kind": "task",
+        "title": "Say when the greeting is printed",
+        "description": "app/README.md should say the greeting is printed on start.",
+        "acceptance": "assignment",
+        "projects": ["app"],
+        "checklist": ["README says when"]
+      }
+    },
+    {
+      "tool": "create_work_item",
+      "author": "worker-a",
+      "session": "setup",
+      "as": "m",
+      "args": {
+        "space": "ALPHA",
+        "kind": "task",
+        "title": "Name the greeting's option",
+        "description": "lib should name the option the greeting reads.",
+        "acceptance": "assignment",
+        "projects": ["lib"]
+      }
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "{\"skill\": true, \"calls\": [{\"tool\": \"search_work_items\", \"args\": {\"space\": \"ALPHA\", \"query\": \"greeting marker-only-in-the-record\"}}, {\"tool\": \"claim_work_item\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\"}}, {\"tool\": \"apply_work_item_changes\", \"args\": {\"id\": \"{{n}}\", \"author\": \"worker-b\", \"checklist\": [{\"text\": \"README says when\", \"done\": true}], \"comment\": {\"body\": \"The README says it now.\", \"mentions\": [\"{{m}}\"]}}}, {\"tool\": \"create_work_item_request\", \"args\": {\"id\": \"{{m}}\", \"author\": \"worker-b\", \"kind\": \"question\", \"prompt\": \"Which name should the option have?\", \"fields\": [{\"id\": \"name\", \"label\": \"The option's name\", \"type\": \"choice\", \"required\": true, \"options\": [{\"id\": \"greeting\", \"label\": \"greeting\", \"description\": \"Keep the word the docs use.\", \"recommended\": true, \"why\": \"The docs already say greeting.\"}, {\"id\": \"hello\", \"label\": \"hello\"}]}]}}, {\"tool\": \"create_work_item\", \"args\": {\"space\": \"ALPHA\", \"kind\": \"bug\", \"title\": \"The greeting's docs name no default\", \"description\": \"docs/cli.md names no default for the greeting.\", \"labels\": [\"docs\"], \"projects\": [\"app\"], \"links\": [{\"other\": \"{{n}}\", \"kind\": \"discovered-from\"}], \"author\": \"worker-b\"}}], \"files\": {\"app/NOTES.md\": \"The greeting prints on start.\\n\"}, \"answer\": \"Did {{n}} and filed a finding.\"}"
+    },
+    {
+      "before": [
+        {
+          "tool": "apply_work_item_changes",
+          "author": "worker-c",
+          "session": "other",
+          "args": {"id": "{{n}}", "comment": {"body": "Another session read this."}}
+        }
+      ],
+      "prompt": "{\"subagent\": {\"calls\": [{\"tool\": \"apply_work_item_changes\", \"args\": {\"id\": \"{{m}}\", \"author\": \"worker-d\", \"comment\": {\"body\": \"The subagent looked at the option.\"}}}], \"report\": \"Finding: the option has no name. Friction: none.\"}, \"subagents\": [{\"background\": true, \"report\": \"Finding: the option has no default. Friction: none.\"}], \"answer\": \"Finished {{n}}; a subagent looked at {{m}}.\"}"
+    }
+  ],
+  "expect": {
+    "cards": [
+      {"check": "item", "item": "{{n}}", "where": {"claimed_by": {"includes": "probe"}, "checklist": {"includes": {"text": "README says when", "done": true}}, "seeded": true, "new": false, "projects": ["app"], "acceptance": "assignment"}},
+      {"check": "items", "as": "finding", "where": {"new": true, "kind": "bug", "created_by": "main", "labels": {"includes": "docs"}, "links": {"includes": {"kind": "discovered-from", "to": "{{n}}"}}, "text": {"matches": "(?i)default"}}, "count": 1},
+      {"check": "items", "where": {"seeded": true}, "count": 2},
+      {"check": "item", "item": "{{finding}}", "where": {"parent": null, "space": "ALPHA"}},
+      {"check": "comments", "on": "{{n}}", "where": {"new": true, "by": "main"}, "count": 1},
+      {"check": "comments", "on": "{{n}}", "where": {"by": "main", "mentions": {"includes": "{{m}}"}}, "count": 1},
+      {"check": "comments", "on": "{{n}}", "where": {"by": "other", "text": {"contains": "Another session"}}, "count": 1},
+      {"check": "requests", "on": "{{n}}", "count": 0},
+      {"check": "requests", "on": "{{m}}", "where": {"new": true, "by": "main", "kind": "question"}, "count": 1},
+      {"check": "spaces", "as": "space", "where": {"key": "ALPHA"}, "count": 1},
+      {"check": "writes", "where": {"by": "subagent", "item": "{{m}}"}, "count": {"min": 1}},
+      {"check": "writes", "where": {"by": "subagent", "item": {"not_in": ["{{m}}"]}}, "count": 0},
+      {"check": "registry", "where": {"root": "{{workspace}}/app", "space": "{{space}}"}, "count": 1}
+    ],
+    "record": [
+      {"check": "call", "tool": "claim_work_item", "target": "{{n}}", "by": "main"},
+      {"check": "call", "tool": "apply_work_item_changes", "target": "{{n}}", "args": {"checklist": {"present": true}, "transition": null}},
+      {"check": "no_call", "by": "subagent", "tool": "create_work_item"},
+      {"check": "no_call", "tool": "get_work_item", "after": {"tool": "claim_work_item"}},
+      {"check": "order", "first": {"tool": "search_work_items"}, "then": {"tool": "claim_work_item", "target": "{{n}}"}},
+      {"check": "call", "tool": "@file_change"},
+      {"check": "answer", "matches": "Finished {{n}}", "not_matches": "(?i)unavailable"},
+      {"check": "skill_loaded", "before": {"tool": "claim_work_item"}, "record_only": true},
+      {"check": "subagents", "count": 2},
+      {"check": "subagent_reports", "count": 2, "each": [{"matches": "(?i)friction"}, {"matches": "Finding"}, {"not_matches": "launched"}]},
+      {"check": "any", "of": [{"check": "answer", "contains": "not in the answer"}, {"check": "call", "tool": "create_work_item", "by": "main"}]}
+    ],
+    "files": [
+      {"check": "file", "path": "app/NOTES.md", "contains": "prints on start"},
+      {"check": "git", "repo": "app", "changed": ["NOTES.md"], "diff": {"matches": "(?m)^\\+The greeting prints"}, "commits": []},
+      {"check": "git", "repo": "lib", "clean": true},
+      {"check": "grep", "repo": "app", "glob": "*.md", "pattern": "prints on start", "count": {"min": 1}},
+      {"check": "new_files", "where": {"includes": "app/NOTES.md", "count": 1}},
+      {"check": "command", "cwd": "app", "run": ["python", "-c", "import pathlib, sys; sys.exit(0 if pathlib.Path('NOTES.md').is_file() else 3)"], "exit": 0}
+    ],
+    "fails": [
+      {"check": "item", "item": "{{n}}", "where": {"category": "completed"}},
+      {"check": "skill_loaded"}
+    ],
+    "reviewed": [
+      {"check": "item", "item": "{{n}}", "where": {"claimed_by": {"includes": "main"}}}
+    ]
+  },
+  "rubric": {
+    "reviewed": {
+      "shows": ["item:{{n}}", "item:{{m}}", "answer"],
+      "lines": ["The checklist holds one condition of the result.", "The answer names the task."]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "B1",
+  "about": "A workspace that is one repository outside the registry, with an MCP registration that fails.",
+  "clients": ["claude", "codex"],
+  "workspace": "../workspace",
+  "overlay": null,
+  "repos": ["."],
+  "registry": null,
+  "mcp": "failing",
+  "setup": [],
+  "turns": [{"prompt": "Say when the greeting is printed."}],
+  "expect": {
+    "start": [
+      {"check": "session", "event": "session_start", "client": "{{client}}"},
+      {"check": "dir_empty", "path": "{{store_dir}}/spool"}
+    ]
+  },
+  "rubric": {}
+}

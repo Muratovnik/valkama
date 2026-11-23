@@ -28,10 +28,10 @@ TOOL = re.compile(
     r"(?:work_item|planning_space)[a-z_]*)`"
 )
 LINK = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
-#: What a public document must not carry: private planning keys, a person's
-#: paths, and attribution to a tool.
+#: What a public document must not carry: a planning reference of any space but
+#: the examples' `MAIN`, a person's paths, and attribution to a tool.
 PRIVATE = (
-    re.compile(r"\b(?:AW|VAL)-\d+\b"),
+    re.compile(r"\b(?!MAIN-|UTF-|SHA-|ISO-)[A-Z][A-Z0-9]{1,9}-\d+\b"),
     re.compile(r"workbench", re.IGNORECASE),
     re.compile(r"[A-Za-z]:[\\/]Users[\\/]", re.IGNORECASE),
     re.compile(r"co-authored-by|generated with", re.IGNORECASE),
@@ -96,6 +96,32 @@ class SkillContentTests(unittest.TestCase):
             for pattern in PRIVATE:
                 with self.subTest(document=path.name, pattern=pattern.pattern):
                     self.assertIsNone(pattern.search(text))
+
+    def test_close_and_findings_come_back_after_compaction(self) -> None:
+        # After a compaction Claude Code gives a skill back as its first 5000
+        # tokens, about 20 000 characters; 17 000 leaves room for denser text.
+        text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        close = text.index("\n## Close\n")
+        findings = text.index("\n## Findings\n")
+        self.assertLess(close, findings)
+        end = text.find("\n## ", findings + 1)
+        self.assertGreater(end, findings)
+        self.assertLess(end, 17_000)
+
+    def test_the_tool_reference_names_every_batch_group(self) -> None:
+        # The table is the one list of the groups the skill points to; a group
+        # the schema gained or lost would otherwise go unnoticed there.
+        schema = next(t for t in tools.TOOLS if t["name"] == "apply_work_item_changes")
+        groups = set(schema["inputSchema"]["properties"]) - {
+            "id",
+            "author",
+            "expected_revision",
+            "verbose",
+        }
+        reference = (SKILL / "references" / "tools.md").read_text(encoding="utf-8")
+        section = reference.split("\n## One call, several writes\n", 1)[1].split("\n## ", 1)[0]
+        rows = set(re.findall(r"^\| `([a-z_]+)` \|", section, re.MULTILINE))
+        self.assertEqual(groups, rows)
 
     def test_it_ships_only_markdown(self) -> None:
         shipped = {path.suffix for path in SKILL.rglob("*") if path.is_file()}

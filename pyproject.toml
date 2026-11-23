@@ -377,6 +377,8 @@ files = [
   "valkama.py",
   "tests/isolated.py",
   "tests/affected.py",
+  "tests/agent_probes.py",
+  "tests/agent_probes_judge.py",
   "tests/commit_subjects.py",
   "tests/machine_lock.py",
   "tests/parallel.py",
